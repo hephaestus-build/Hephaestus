@@ -59,6 +59,7 @@ const sidebars: SidebarsConfig = {
 			items: [
 				"system-design",
 				"ingest-durability",
+				"transactions",
 				"workspace-context",
 				"sync-lifecycle",
 				"database-schema",

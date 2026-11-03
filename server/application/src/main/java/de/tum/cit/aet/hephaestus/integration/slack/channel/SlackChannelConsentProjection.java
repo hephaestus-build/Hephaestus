@@ -21,6 +21,8 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -56,6 +58,7 @@ public class SlackChannelConsentProjection {
         this.connections = connections;
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public synchronized void onConsentChanged(SlackChannelConsentChangedEvent event) {
         Optional<String> team = teamId(event.workspaceId());

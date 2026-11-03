@@ -22,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -115,6 +116,7 @@ public class GitLabTokenLifecycleService {
         }
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener
     public void onReplaced(ConnectionCredentialsReplacedEvent event) {
         if (event.kind() == IntegrationKind.GITLAB) {

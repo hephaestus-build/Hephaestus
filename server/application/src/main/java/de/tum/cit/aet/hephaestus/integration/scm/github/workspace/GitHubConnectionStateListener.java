@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -49,6 +51,7 @@ public class GitHubConnectionStateListener {
         this.monitoringExecutor = monitoringExecutor;
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onActivated(ConnectionLifecycleEvent.Activated event) {
         if (event.kind() != IntegrationKind.GITHUB) {

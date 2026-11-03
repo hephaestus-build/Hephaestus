@@ -36,6 +36,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -202,8 +203,9 @@ public class OutlineCollectionAdminService {
      * Kicks the resumed collection's targeted sync once {@link #updateState}'s transaction has committed,
      * so the async pass is guaranteed to read the ENABLED + PENDING row it is meant to converge.
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    void onCollectionResumed(OutlineCollectionResumedEvent event) {
+    public void onCollectionResumed(OutlineCollectionResumedEvent event) {
         kickCollectionSync(event.workspaceId(), event.collectionId());
     }
 

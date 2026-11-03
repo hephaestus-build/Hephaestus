@@ -26,6 +26,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -152,8 +154,9 @@ public class SlackDataSyncScheduler {
      * is no double-click path that fires two kicks for one channel. A kick that fails is logged and dropped —
      * the transition itself already succeeded, and the nightly pass is the retry net.
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    void onChannelConsentActivated(SlackChannelConsentService.SlackChannelActivatedEvent event) {
+    public void onChannelConsentActivated(SlackChannelConsentService.SlackChannelActivatedEvent event) {
         taskExecutor.execute(() -> {
             try {
                 syncChannelNow(event.workspaceId(), event.slackChannelId());

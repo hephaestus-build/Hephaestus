@@ -63,7 +63,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - Repositories return `Optional<T>` instead of `null`.
 - Services take their collaborators through the constructor, over `private final` fields. Do not use field injection with `@Autowired`. If a service depends on many collaborators, split the responsibility.
 - Set up loggers with `LoggerFactory.getLogger`. Use structured log messages.
-- Annotate the smallest unit of write work with `@Transactional`.
+- [Transactions and side effects](./transactions.md) owns where `@Transactional` goes and how work leaves a transaction.
 
 ### Coding conventions
 
