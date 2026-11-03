@@ -75,6 +75,11 @@ spec:
             - -c
             - {{ printf "%s=%v" $key $value | quote }}
             {{- end }}
+            {{- if not (hasKey .Values.postgresql.parameters "max_connections") }}
+            # The image derives this from memory alone, which says nothing about the pools of these roles.
+            - -c
+            - {{ printf "max_connections=%d" (max 100 (int (include "hephaestus.databaseConnectionsRequired" .))) | quote }}
+            {{- end }}
           env:
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "POSTGRES_USER" "key" "DATABASE_USERNAME") | nindent 12 }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "POSTGRES_PASSWORD" "key" "DATABASE_PASSWORD") | nindent 12 }}
