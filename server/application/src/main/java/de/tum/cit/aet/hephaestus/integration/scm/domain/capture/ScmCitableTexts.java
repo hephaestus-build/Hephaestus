@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Function;
 import org.eclipse.jgit.diff.RawText;
 import org.eclipse.jgit.lib.Constants;
@@ -32,6 +34,9 @@ import tools.jackson.databind.ObjectMapper;
 
 public final class ScmCitableTexts {
     private static final int MAX_TEXT_BYTES = 2 * 1024 * 1024;
+
+    /** The limitation of a change whose text files were not all captured. */
+    public static final String CHANGED_FILE_NOT_CAPTURED = "CHANGED_FILE_NOT_CAPTURED";
 
     private ScmCitableTexts() {}
 
@@ -88,10 +93,19 @@ public final class ScmCitableTexts {
         return end < 0 ? null : new SourceKind(path.substring(prefix.length(), end));
     }
 
-    public static List<CitableText> changed(
+    /**
+     * The citable texts of a change, and the text files over {@link #MAX_TEXT_BYTES} that it leaves out. A left out file
+     * is named, never cut: no citation into it can verify, and the capture of the change reports
+     * {@link #CHANGED_FILE_NOT_CAPTURED}, so a practice that needs the whole change does not run. A binary file is no
+     * text at any size, so leaving it out limits nothing.
+     */
+    public record ChangedTexts(List<CitableText> texts, Set<String> leftOut) {}
+
+    public static ChangedTexts changed(
             GitRepositoryManager git, ReviewRepositoryPreparer.PreparedReview prepared, Map<String, byte[]> files) {
         var paths = git.changedPaths(prepared.key(), prepared.target(), prepared.head());
         List<CitableText> texts = new ArrayList<>();
+        Set<String> leftOut = new TreeSet<>();
         for (CitationSide side : CitationSide.values()) {
             String commitSha = side == CitationSide.OLD ? prepared.target() : prepared.head();
             Map<String, byte[]> captured = Objects.requireNonNull(
@@ -107,11 +121,13 @@ public final class ScmCitableTexts {
                                     if (!mode.equals(FileMode.REGULAR_FILE) && !mode.equals(FileMode.EXECUTABLE_FILE))
                                         continue;
                                     var blob = repository.open(entry.getObjectId(0), Constants.OBJ_BLOB);
-                                    if (blob.getSize() > MAX_TEXT_BYTES)
-                                        throw new ItemCaptureException(
-                                                ItemCaptureCode.CAPTURE_FAILED,
-                                                "Changed file exceeds the citable text capture limit");
-                                    byte[] bytes = blob.getBytes(MAX_TEXT_BYTES);
+                                    if (blob.getSize() > MAX_TEXT_BYTES) {
+                                        try (var head = blob.openStream()) {
+                                            if (!RawText.isBinary(head)) leftOut.add(path);
+                                        }
+                                        continue;
+                                    }
+                                    byte[] bytes = blob.getBytes();
                                     if (!RawText.isBinary(bytes)) result.put(path, bytes);
                                 }
                             }
@@ -126,7 +142,7 @@ public final class ScmCitableTexts {
                 add(texts, PullRequestContentSource.DIFF, path, side, commitSha, staged, bytes);
             });
         }
-        return List.copyOf(texts);
+        return new ChangedTexts(List.copyOf(texts), Set.copyOf(leftOut));
     }
 
     public static List<CitableText> tree(Path root, String commitSha) {

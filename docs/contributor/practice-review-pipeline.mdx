@@ -139,6 +139,17 @@ The review-thread, inline-comment and general-comment sources are then `PARTIAL`
 `appliesWhen` stays undecided on a partial source, and a practice that declares such a source `COMPLETE` records a readiness refusal.
 A null value means that no provider read happened, as for work known only from webhooks. It proves nothing and limits nothing.
 
+A changed text file over 2 MiB on either side is left out of the server's capture and named in `change.json` as `left_out`.
+The sandbox still builds `diff.patch` from Git, so the session can read the file's change.
+The diff source is `PARTIAL`, with the limitation `CHANGED_FILE_NOT_CAPTURED`. What a practice can then claim:
+
+- A practice that declares the diff `COMPLETE` does not run, and records a readiness refusal.
+- A citation into the left out file cannot verify, so a result that rests on one is refused.
+- Does not apply cannot name the diff as consulted.
+- `appliesWhen` on the changed paths or the diff text stays undecided.
+
+A binary file is not text at any size, so leaving it out limits nothing.
+
 A practice of an item review stays Queued until capture records it as Ready or Withheld.
 The request does not make it Ready.
 
