@@ -16,8 +16,7 @@ import org.springframework.cache.support.SimpleCacheManager;
 
 class CacheConfigTest extends BaseUnitTest {
 
-    private static final List<String> EXPECTED_NAMES =
-            List.of("auth_jwt_revoked", "contributors", "mentor_practice_context", "pullRequestTemplates");
+    private static final List<String> EXPECTED_NAMES = List.of("auth_jwt_revoked", "contributors");
 
     @Test
     @DisplayName("cacheManager exposes exactly the declared caches by name")
@@ -36,29 +35,10 @@ class CacheConfigTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("non-personal practice context has a 5-minute TTL and 512-entry cap")
-    void mentorContextsHaveCorrectTtlAndSize() {
-        List<String> mentorCaches = CacheConfig.SPECS.stream()
-                .map(CacheConfig.CacheSpec::name)
-                .filter(name -> name.startsWith("mentor_"))
-                .toList();
-        assertThat(mentorCaches)
-                .as("only non-personal practice context is cached")
-                .containsExactly("mentor_practice_context");
-        for (String name : mentorCaches) {
-            CacheConfig.CacheSpec spec = findSpec(name);
-            assertThat(spec.ttl()).isEqualTo(Duration.ofMinutes(5));
-            assertThat(spec.maxSize()).isEqualTo(512L);
-        }
-    }
-
-    @Test
-    void contributorAndTemplateCachesHaveOneHourTtlAndThousandEntryLimit() {
-        for (String name : List.of("contributors", "pullRequestTemplates")) {
-            CacheConfig.CacheSpec spec = findSpec(name);
-            assertThat(spec.ttl()).isEqualTo(Duration.ofHours(1));
-            assertThat(spec.maxSize()).isEqualTo(1000L);
-        }
+    void contributorCacheHasOneHourTtlAndThousandEntryLimit() {
+        CacheConfig.CacheSpec spec = findSpec("contributors");
+        assertThat(spec.ttl()).isEqualTo(Duration.ofHours(1));
+        assertThat(spec.maxSize()).isEqualTo(1000L);
     }
 
     @Test
