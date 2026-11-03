@@ -536,12 +536,13 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
     }
 
     @Test
-    void findExistingSummary_aMarkedNoteThatIsNotTheCopy_isUnknown_notFoundOrAbsent() {
+    void findExistingSummary_ourMarkedNoteWithOtherWords_isFound() {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
         GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page = mockMrNotesPage(
                 List.of(
-                        // The marker with the text as written, not as it is posted: another copy, not this one.
+                        // Our note with the marker, its words rendered otherwise: the copy landed. A note by someone
+                        // else that carries the marker does not make it another copy.
                         note(
                                 "gid://gitlab/Note/1",
                                 EXPECTED.body()
@@ -554,8 +555,9 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
                 null);
         when(spec.execute()).thenReturn(Mono.just(page));
 
-        assertThat(channel.findExistingSummary(gitlabTarget(), EXPECTED).presence())
-                .isEqualTo(LookupPresence.UNKNOWN);
+        var lookup = channel.findExistingSummary(gitlabTarget(), EXPECTED);
+        assertThat(lookup.presence()).isEqualTo(LookupPresence.FOUND);
+        assertThat(Objects.requireNonNull(lookup.handle()).externalRef()).isEqualTo("gid://gitlab/Note/1");
     }
 
     @Test

@@ -131,8 +131,8 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             String revision = ScmVersion.reviewedHead(target.version());
             if (revision == null || !COMMIT_SHA.matcher(revision).matches()) return publication.notSent();
             String project = projectUrl(workspace, mr);
-            var scan = indexCopies(workspace, mr, publication.notes(), target, project, footer);
-            var found = packageReceipts(workspace, mr, publication, scan, footer);
+            var scan = indexCopies(workspace, mr, publication.notes(), target);
+            var found = packageReceipts(workspace, mr, publication, scan);
             if (!found.isEmpty()) {
                 // Even a partial submitted package is never followed by a second notification.
                 // A receipt is recorded only on a fenced copy.
@@ -254,8 +254,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         throw new FeedbackDeliveryException("GitLab pending note pagination did not reach its end");
     }
 
-    private List<CopyReceipt> packageReceipts(
-            long workspace, MrCoordinates mr, OnWorkPackage publication, Scan scan, Footer footer) {
+    private List<CopyReceipt> packageReceipts(long workspace, MrCoordinates mr, OnWorkPackage publication, Scan scan) {
         var result = new ArrayList<CopyReceipt>();
         for (var note : publication.notes()) {
             var copy = scan.copies().get(note.writeKey());
@@ -268,8 +267,9 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             String api = GitLabDiffVersionReader.mergeRequestApi(tokenService.resolveServerUrl(workspace), mr);
             for (var note : pages(workspace, api + "/notes")) {
                 String body = note.path("body").asString("");
-                if (summary.writeMarker() == null || !body.contains(summary.writeMarker())) continue;
-                if (!ScmFeedbackFormatter.sameCopy(body, footer.summary(summary))
+                String marker = summary.writeMarker();
+                if (marker == null || !body.contains(marker)) continue;
+                if (!ScmFeedbackFormatter.carries(body, marker)
                         || note.path("author").path("id").longValue() != scan.author()
                         || !note.path("id").isIntegralNumber()
                         || note.path("id").longValue() <= 0
@@ -295,10 +295,9 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         long workspace = target.item().workspaceId();
         if (gitLabProvider.isRateLimitCritical(workspace)) return null;
         try {
-            var footer = formatter.footer(target.item());
             var mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, kind()));
-            var scan = indexCopies(workspace, mr, publication.notes(), target, projectUrl(workspace, mr), footer);
-            return packageReceipts(workspace, mr, publication, scan, footer);
+            var scan = indexCopies(workspace, mr, publication.notes(), target);
+            return packageReceipts(workspace, mr, publication, scan);
         } catch (RuntimeException unknown) {
             return null;
         }
@@ -348,13 +347,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     }
 
     // Partial discussions, missing identity, or incomplete pagination cannot prove a copy absent.
-    private Scan indexCopies(
-            long scopeId,
-            MrCoordinates mr,
-            List<LineNote> items,
-            FeedbackTarget target,
-            String projectUrl,
-            Footer footer) {
+    private Scan indexCopies(long scopeId, MrCoordinates mr, List<LineNote> items, FeedbackTarget target) {
         Map<String, LineNote> expected = new HashMap<>();
         for (LineNote item : items) {
             expected.putIfAbsent(item.writeKey(), item);
@@ -386,7 +379,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                     throw new FeedbackDeliveryException("GitLab discussion lookup was incomplete");
                 }
                 for (Object discussion : discussions) {
-                    indexDiscussion(discussion, currentUserId, target, projectUrl, expected, copies, footer);
+                    indexDiscussion(discussion, currentUserId, target, expected, copies);
                 }
                 Object hasNextPage = pageInfo.get("hasNextPage");
                 if (Boolean.FALSE.equals(hasNextPage)) {
@@ -419,10 +412,8 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             @Nullable Object node,
             String currentUserId,
             FeedbackTarget target,
-            String projectUrl,
             Map<String, LineNote> expected,
-            Map<String, Copy> copies,
-            Footer footer) {
+            Map<String, Copy> copies) {
         if (!(node instanceof Map<?, ?> discussion)
                 || !(discussion.get("notes") instanceof Map<?, ?> connection)
                 || !(connection.get("nodes") instanceof List<?> notes)
@@ -449,8 +440,8 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             if (item != null
                     && note.get("author") instanceof Map<?, ?> author
                     && currentUserId.equals(author.get("id"))) {
-                copyForm = copyForm(note, body, item, target, projectUrl, footer);
-                rangePending = copyForm == CopyForm.LINE_NOTE && placesRange(body, footer, item);
+                copyForm = copyForm(note, body, item, target);
+                rangePending = copyForm == CopyForm.LINE_NOTE && placesRange(body, item);
             }
             String url = note.get("url") instanceof String noteUrl ? noteUrl : null;
             Copy previous = copies.get(key);
@@ -462,8 +453,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         }
     }
 
-    private @Nullable CopyForm copyForm(
-            Map<?, ?> note, String body, LineNote item, FeedbackTarget target, String projectUrl, Footer footer) {
+    private static @Nullable CopyForm copyForm(Map<?, ?> note, String body, LineNote item, FeedbackTarget target) {
         ItemVersion version = target.version();
         FeedbackAnchor diff = item.anchor();
         String revision = diff.side() == CitationSide.OLD ? version.baseVersion() : ScmVersion.reviewedHead(version);
@@ -471,14 +461,12 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         // Only a position the response answered with null proves an ordinary comment; a missing one
         // proves nothing.
         boolean unpositioned = note.containsKey("position") && note.get("position") == null;
-        if (unpositioned
-                && revision != null
-                && ScmFeedbackFormatter.sameCopy(body, locationBody(footer, projectUrl, revision, diff, item))) {
+        if (unpositioned && ScmFeedbackFormatter.carries(body, item.writeMarker())) {
             return CopyForm.FILE_NOTE;
         }
         boolean lineCopy = diff.endLine() != null
                 && revision != null
-                && (ScmFeedbackFormatter.sameCopy(body, postedBody(footer, item)) || placesRange(body, footer, item))
+                && ScmFeedbackFormatter.carries(body, item.writeMarker())
                 && note.get("position") instanceof Map<?, ?> position
                 && diff.path().equals(position.get(diff.side() == CitationSide.OLD ? "oldPath" : "newPath"))
                 && position.get(diff.side() == CitationSide.OLD ? "oldLine" : "newLine") instanceof Number line
@@ -510,8 +498,10 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 + ScmFeedbackFormatter.deliveryTag(item.writeKey());
     }
 
-    private boolean placesRange(String body, Footer footer, LineNote item) {
-        return ranged(item.anchor()) && ScmFeedbackFormatter.sameCopy(body, lineBody(footer, item));
+    private static boolean placesRange(String body, LineNote item) {
+        return ranged(item.anchor())
+                && ScmFeedbackFormatter.carries(body, RANGE_PLACEMENT)
+                && ScmFeedbackFormatter.carries(body, item.writeMarker());
     }
 
     private static boolean ranged(FeedbackAnchor anchor) {

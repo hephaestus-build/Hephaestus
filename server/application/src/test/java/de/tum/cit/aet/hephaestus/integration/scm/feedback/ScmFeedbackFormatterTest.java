@@ -227,6 +227,26 @@ class ScmFeedbackFormatterTest extends BaseUnitTest {
                 new WorkspaceSubdomainProperties(false, ""));
     }
 
+    @Test
+    void shouldCarryTheMarkerAmongTheHiddenMarkersThatEndACopy() {
+        String marker = "<!-- hephaestus-feedback-copy:a -->";
+        String posted = "Some words\\.\n\n" + ScmFeedbackFormatter.DISCLOSURE + "\n<sub>Footer.</sub>\n\n" + marker
+                + "\n<!-- hephaestus-diff-note-ck=a -->";
+        assertThat(ScmFeedbackFormatter.carries(posted, marker)).isTrue();
+        assertThat(ScmFeedbackFormatter.carries(posted, "<!-- hephaestus-diff-note-ck=a -->"))
+                .isTrue();
+        assertThat(ScmFeedbackFormatter.carries(posted, "<!-- hephaestus-feedback-copy:b -->"))
+                .isFalse();
+    }
+
+    @Test
+    void shouldNotCarryAMarkerThatOnlyTheWordsQuote() {
+        String marker = "<!-- hephaestus-feedback-copy:a -->";
+        assertThat(ScmFeedbackFormatter.carries(marker + "\nA reply below the quoted marker.", marker))
+                .isFalse();
+        assertThat(ScmFeedbackFormatter.carries("Words.", "")).isFalse();
+    }
+
     private static ItemRef item() {
         return new ItemRef(1L, 42L, new ItemKind("scm.pull_request"), 99L, null, null);
     }

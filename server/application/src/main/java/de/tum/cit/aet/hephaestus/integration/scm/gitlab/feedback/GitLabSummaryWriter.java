@@ -235,12 +235,6 @@ public class GitLabSummaryWriter implements SummaryWriter {
         if (marker == null || marker.isBlank()) {
             return SummaryLookup.unknown();
         }
-        String expectedBody;
-        try {
-            expectedBody = formatter.footer(target.item()).summary(expected);
-        } catch (RuntimeException unavailable) {
-            return SummaryLookup.unknown();
-        }
         long scopeId = target.integration().workspaceId();
         if (gitLabProvider.isRateLimitCritical(scopeId)) {
             return SummaryLookup.unknown();
@@ -294,7 +288,7 @@ public class GitLabSummaryWriter implements SummaryWriter {
                     if (!body.contains(marker)) continue;
                     if (note.get("author") instanceof Map<?, ?> author
                             && currentUserId.equals(author.get("id"))
-                            && ScmFeedbackFormatter.sameCopy(body, expectedBody)
+                            && ScmFeedbackFormatter.carries(body, marker)
                             && note.get("id") instanceof String noteId
                             && !noteId.isBlank()) {
                         return SummaryLookup.found(
