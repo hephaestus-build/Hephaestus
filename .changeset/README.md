@@ -31,7 +31,7 @@ Never change `CHANGELOG.md` directly.
 | --- | --- | --- |
 | `patch` | no action | bug fix, internal change, additive auto-applied migration |
 | `minor` | no action | New capability. Note any new *optional* env var / flag in the summary. |
-| `major` | must act first | required new env var, removed/renamed config, destructive/manual migration, dropped API — state the action + add a `.migration` fragment |
+| `major` | must act first | required new chart value, removed or renamed chart value, destructive/manual migration, dropped API — state the action + add a `.migration` fragment |
 
 **Pre-1.0 (now): never pick `major`.**
 It would produce 1.0.0. CI accepts that only from the changeset `release-1-0-0`, which the [release management guide](https://docs.hephaestus.build/contributor/release-management#cut-100) plans.
