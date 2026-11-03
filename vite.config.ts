@@ -474,6 +474,7 @@ export default defineConfig({
 			),
 			"db:draft-changelog": run("node scripts/db-utils.ts draft-changelog"),
 			"db:check-drift": run("node scripts/db-utils.ts check-drift"),
+			"db:reorder": run("node scripts/reorder-migrations.ts"),
 			"db:generate-erd-docs": run("node scripts/db-utils.ts generate-erd"),
 			"schema:github": run("node scripts/update-github-schema.ts"),
 			"schema:gitlab": run("node scripts/update-gitlab-schema.ts"),

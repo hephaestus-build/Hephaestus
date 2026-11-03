@@ -64,6 +64,10 @@ The build and generators use the rebased worktree's code and dependencies.
 The command fetches `main` and records its commit.
 It rebases onto that commit and restores the original branch if a handwritten file conflicts.
 It resolves conflicts only in `server/openapi.yaml`, both generated API client directories, and the configuration reference.
+
+It also moves this branch's migrations after the newest migration on `main` and in the merge queue, as `vp run db:reorder` does.
+The rename is staged beside the regenerated files.
+
 Then it reconciles dependencies with a frozen install and builds one fresh server JAR.
 That JAR supplies the spec and configuration metadata, and both clients are regenerated from the spec.
 The command does not push or change the merge queue.
@@ -118,6 +122,8 @@ The pre-push hook runs `vp run check:push` with one task worker.
 It compares the same paths as `check:affected` and runs selected format, lint, TypeScript and prose checks.
 It does not write source files.
 `git push --no-verify` skips the hook.
+A change under `db/changelog/next/` first checks that the branch's migrations sort after `origin/main` as last fetched and after the merge queue's.
+If the hook cannot read the queue, it says so and checks against `origin/main` only.
 
 For Node, it runs changed test files, existing source companion tests and the CI contract suites for workflow changes.
 This selection does not cover every fixture or resource input.
@@ -132,6 +138,7 @@ For frontend source files, the hook runs the changed test files and the colocate
 It does not follow the import graph: through the router, one component reaches most route tests, which take minutes on one worker.
 CI runs the complete unit project.
 A source without a colocated test runs no test here.
+The hook then prints that CI runs the tests that reach the change through imports.
 
 Shared inputs, test helpers, network mocks, deleted files and non-code resources select the complete unit project.
 The extension selects its unit project only.

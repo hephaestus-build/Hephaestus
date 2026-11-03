@@ -11,6 +11,7 @@ import {
 	frontendCommands,
 	pushScopes,
 	pushTasks,
+	skipsImportedTests,
 	toolingScopes,
 } from "./check-push.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
@@ -102,8 +103,11 @@ void test("a source change runs its changed and colocated tests, and resources r
 			"src/components/product-feedback/ProductFeedbackDialog.test.tsx",
 		],
 	]);
-	// A source without a colocated test leaves its tests to CI.
+	// A source without a colocated test leaves its tests to CI, and the hook says so.
 	assert.deepEqual(frontendCommands(["webapp/src/components/ui/button.tsx"]), []);
+	assert.equal(skipsImportedTests(["webapp/src/components/ui/button.tsx"]), true);
+	assert.equal(skipsImportedTests(["webapp/package.json"]), false);
+	assert.equal(skipsImportedTests(["scripts/reorder-migrations.ts"]), false);
 	for (const files of [
 		["webapp/public/a.svg"],
 		["webapp/src/deleted.ts"],
@@ -163,6 +167,8 @@ async function fixture() {
 	for (const file of [
 		"check-push.ts",
 		"check-affected.ts",
+		"reorder-migrations.ts",
+		"lib/changelog.ts",
 		"lib/env.ts",
 		"lib/git-environment.ts",
 		"lib/json.ts",
@@ -210,6 +216,25 @@ void test("a selected failing test blocks the push after static checks, with one
 		const calls = await readFile(f.calls, "utf8");
 		assert.match(calls, /"workers":"1","offline":"true"/u);
 		assert.doesNotMatch(result.stdout, /Push checks passed/u);
+	} finally {
+		await rm(f.directory, { recursive: true, force: true });
+	}
+});
+
+void test("a migration that sorts before the base's newest blocks the push before any check runs", async () => {
+	const f = await fixture();
+	try {
+		const next = path.join(f.directory, "server/application/src/main/resources/db/changelog/next");
+		await mkdir(next, { recursive: true });
+		await writeFile(path.join(next, "20261103000000-merged.xml"), "<databaseChangeLog/>\n");
+		f.git("add", ".");
+		f.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "main's migration");
+		await writeFile(path.join(next, "20261102000000-mine.xml"), "<databaseChangeLog/>\n");
+		const result = f.run();
+		assert.equal(result.status, 1, result.stdout + result.stderr);
+		assert.match(result.stderr, /20261102000000-mine\.xml/u);
+		assert.match(result.stderr, /vp run db:reorder/u);
+		await assert.rejects(readFile(f.calls, "utf8"), { code: "ENOENT" });
 	} finally {
 		await rm(f.directory, { recursive: true, force: true });
 	}
