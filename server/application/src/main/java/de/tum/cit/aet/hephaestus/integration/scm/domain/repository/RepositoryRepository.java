@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -124,6 +125,17 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
         ORDER BY r.nameWithOwner
         """)
     List<Repository> findAllByWorkspaceMonitors(@Param("workspaceId") Long workspaceId);
+
+    /** The ids of the repositories that {@link #isMonitored} accepts for this workspace. */
+    @Query("""
+        SELECT r.id FROM Repository r
+        WHERE EXISTS (
+            SELECT 1 FROM RepositoryToMonitor m
+            WHERE m.workspace.id = :workspaceId AND m.nameWithOwner = r.nameWithOwner
+                AND monitor_covers_repository(m.workspace.id, m.nativeId, r.nativeId, r.provider.id) = true
+        )
+        """)
+    Set<Long> findMonitoredRepositoryIds(@Param("workspaceId") long workspaceId);
 
     /** Requires the workspace monitor's exact path, native identity and configured SCM provider. */
     @Query("""

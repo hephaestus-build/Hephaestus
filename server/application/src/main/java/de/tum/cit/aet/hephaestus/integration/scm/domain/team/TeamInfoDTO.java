@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelInfoDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryInfoDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team.Privacy;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermission;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserInfoDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -67,7 +68,17 @@ public record TeamInfoDTO(
      * @return the DTO with scope-specific settings applied
      */
     public static TeamInfoDTO fromTeamWithScopeSettings(
-            Team team, boolean isHidden, Set<Label> scopeLabels, Set<Long> hiddenRepoIds, Set<Long> hiddenMemberIds) {
+            Team team,
+            boolean isHidden,
+            Set<Label> scopeLabels,
+            Set<Long> hiddenRepoIds,
+            Set<Long> monitoredRepoIds,
+            Set<Long> hiddenMemberIds) {
+        // A team's permissions span its whole organization; the workspace shows only the repositories it monitors.
+        List<TeamRepositoryPermission> monitored = team.getRepoPermissions().stream()
+                .filter(permission ->
+                        monitoredRepoIds.contains(permission.getRepository().getId()))
+                .toList();
         return new TeamInfoDTO(
                 team.getId(),
                 team.getName(),
@@ -78,7 +89,7 @@ public record TeamInfoDTO(
                 team.getOrganization(),
                 team.getHtmlUrl(),
                 isHidden,
-                team.getRepoPermissions().stream()
+                monitored.stream()
                         .map(permission -> RepositoryInfoDTO.fromPermissionWithScopeSettings(
                                 permission,
                                 hiddenRepoIds.contains(
@@ -92,6 +103,6 @@ public record TeamInfoDTO(
                         .map(UserInfoDTO::fromUser)
                         .toList(),
                 team.getMemberships().size(),
-                team.getRepoPermissions().size());
+                monitored.size());
     }
 }

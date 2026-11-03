@@ -12,11 +12,15 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamInfoDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermission;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermissionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
@@ -61,6 +65,12 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
     @Autowired
     private WorkspaceTeamLabelFilterRepository labelFilterRepository;
 
+    @Autowired
+    private RepositoryToMonitorRepository monitorRepository;
+
+    @Autowired
+    private TeamRepositoryPermissionRepository permissionRepository;
+
     private final AtomicLong nativeIds = new AtomicLong(200_000);
 
     private Workspace workspace;
@@ -77,7 +87,65 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
         team = createTeam("platform", org);
         repository = createRepository(org + "/service");
         label = createLabel("backend", repository);
+        connectActivitySource(workspace, ensureGitHubProvider());
+        monitor(workspace, repository);
         ensureAdminMembership(workspace);
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldNotFindARepositoryThatOnlyAnotherWorkspaceMonitors() {
+        User otherOwner = persistUser("team-settings-other-" + System.nanoTime());
+        String otherOrg = "team-settings-other-org-" + System.nanoTime();
+        Workspace other = createWorkspace(
+                "team-settings-other-" + System.nanoTime(), "Other", otherOrg, AccountType.ORG, otherOwner);
+        connectActivitySource(other, ensureGitHubProvider());
+        Repository unmonitored = createRepository(otherOrg + "/private");
+        Label unmonitoredLabel = createLabel("bug", unmonitored);
+        monitor(other, unmonitored);
+        permissionRepository.save(
+                new TeamRepositoryPermission(team, unmonitored, TeamRepositoryPermission.PermissionLevel.READ));
+        // A filter that an earlier version stored for that repository.
+        labelFilterRepository.save(new WorkspaceTeamLabelFilter(workspace, team, unmonitoredLabel));
+
+        webTestClient
+                .post()
+                .uri(
+                        "/workspaces/{slug}/teams/{teamId}/labels/{repositoryId}/{label}",
+                        workspace.getWorkspaceSlug(),
+                        team.getId(),
+                        unmonitored.getId(),
+                        unmonitoredLabel.getName())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+        webTestClient
+                .post()
+                .uri(
+                        "/workspaces/{slug}/team/{teamId}/repositories/{repositoryId}/visibility",
+                        workspace.getWorkspaceSlug(),
+                        team.getId(),
+                        unmonitored.getId())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(true)
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+
+        assertThat(repositorySettingsRepository.findByWorkspaceIdAndTeamIdAndRepositoryId(
+                        workspace.getId(), team.getId(), unmonitored.getId()))
+                .isEmpty();
+        assertThat(labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), team.getId()))
+                .extracting(filter -> filter.getLabel().getId())
+                .containsExactly(unmonitoredLabel.getId());
+        TeamInfoDTO listed = listedTeam();
+        assertThat(listed.repositories())
+                .noneSatisfy(info -> assertThat(info.id()).isEqualTo(unmonitored.getId()));
+        assertThat(listed.labels()).extracting(LabelInfoDTO::id).doesNotContain(unmonitoredLabel.getId());
     }
 
     @Test
@@ -247,6 +315,14 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
         created.setUpdatedAt(Instant.now());
         created.setProvider(ensureGitHubProvider());
         return repositoryRepository.save(created);
+    }
+
+    private void monitor(Workspace owner, Repository monitored) {
+        RepositoryToMonitor created = new RepositoryToMonitor();
+        created.setWorkspace(owner);
+        created.setNameWithOwner(monitored.getNameWithOwner());
+        created.setNativeId(monitored.getNativeId());
+        monitorRepository.save(created);
     }
 
     private Label createLabel(String name, Repository owner) {

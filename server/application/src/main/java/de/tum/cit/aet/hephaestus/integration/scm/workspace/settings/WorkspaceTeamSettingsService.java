@@ -141,10 +141,12 @@ public class WorkspaceTeamSettingsService {
             return Optional.empty();
         }
 
-        Optional<Repository> repoOpt = repositoryRepository.findById(repositoryId);
+        Optional<Repository> repoOpt = repositoryRepository.isMonitored(workspace.getId(), repositoryId)
+                ? repositoryRepository.findById(repositoryId)
+                : Optional.empty();
         if (repoOpt.isEmpty()) {
             log.warn(
-                    "Skipped repository visibility update: reason=repositoryNotFound," + " repositoryId={}",
+                    "Skipped repository visibility update: reason=repositoryNotMonitored, repositoryId={}",
                     repositoryId);
             return Optional.empty();
         }
@@ -173,9 +175,18 @@ public class WorkspaceTeamSettingsService {
 
     // Label Filter Settings
 
+    /** The repositories that team settings may name: only those the workspace monitors. */
+    @Transactional(readOnly = true)
+    public Set<Long> getMonitoredRepositoryIds(Long workspaceId) {
+        return repositoryRepository.findMonitoredRepositoryIds(workspaceId);
+    }
+
     @Transactional(readOnly = true)
     public Set<Label> getTeamLabelFilters(Long workspaceId, Long teamId) {
-        return labelFilterRepository.findLabelsByWorkspaceAndTeam(workspaceId, teamId);
+        Set<Long> monitored = repositoryRepository.findMonitoredRepositoryIds(workspaceId);
+        return labelFilterRepository.findLabelsByWorkspaceAndTeam(workspaceId, teamId).stream()
+                .filter(label -> monitored.contains(label.getRepository().getId()))
+                .collect(Collectors.toSet());
     }
 
     @Transactional(readOnly = true)
@@ -186,8 +197,12 @@ public class WorkspaceTeamSettingsService {
 
         List<WorkspaceTeamLabelFilter> filters =
                 labelFilterRepository.findByWorkspaceIdAndTeamIds(workspaceId, teamIds);
+        Set<Long> monitored = repositoryRepository.findMonitoredRepositoryIds(workspaceId);
 
+        // A filter stored for a repository that the workspace no longer monitors stays out of view.
         return filters.stream()
+                .filter(filter ->
+                        monitored.contains(filter.getLabel().getRepository().getId()))
                 .collect(Collectors.groupingBy(
                         filter -> filter.getTeam().getId(),
                         Collectors.mapping(WorkspaceTeamLabelFilter::getLabel, Collectors.toSet())));
@@ -210,9 +225,12 @@ public class WorkspaceTeamSettingsService {
             return Optional.empty();
         }
 
-        Optional<Label> labelOpt = labelRepository.findById(labelId);
+        Optional<Label> labelOpt = labelRepository
+                .findById(labelId)
+                .filter(found -> repositoryRepository.isMonitored(
+                        workspace.getId(), found.getRepository().getId()));
         if (labelOpt.isEmpty()) {
-            log.warn("Skipped label filter addition: reason=labelNotFound, labelId={}", labelId);
+            log.warn("Skipped label filter addition: reason=labelNotInMonitoredRepository, labelId={}", labelId);
             return Optional.empty();
         }
 
@@ -246,10 +264,12 @@ public class WorkspaceTeamSettingsService {
     @Transactional
     public Optional<WorkspaceTeamLabelFilter> addLabelFilterByName(
             Workspace workspace, Long teamId, Long repositoryId, String labelName) {
-        Optional<Label> labelOpt = labelRepository.findByRepositoryIdAndName(repositoryId, labelName);
+        Optional<Label> labelOpt = repositoryRepository.isMonitored(workspace.getId(), repositoryId)
+                ? labelRepository.findByRepositoryIdAndName(repositoryId, labelName)
+                : Optional.empty();
         if (labelOpt.isEmpty()) {
             log.warn(
-                    "Skipped label filter addition: reason=labelNotFoundInRepository, labelName={},"
+                    "Skipped label filter addition: reason=labelNotInMonitoredRepository, labelName={},"
                             + " repositoryId={}",
                     labelName,
                     repositoryId);

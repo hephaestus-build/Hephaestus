@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.workspace.team;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamInfoDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
@@ -28,18 +29,21 @@ public class TeamService {
     private final TeamRepositoryPermissionRepository permissionRepository;
     private final WorkspaceTeamSettingsService workspaceTeamSettingsService;
     private final ScmMemberRepository workspaceMembershipService;
+    private final RepositoryRepository repositoryRepository;
 
     public TeamService(
             TeamRepository teamRepository,
             WorkspaceTeamScopeResolver workspaceTeamScopeResolver,
             TeamRepositoryPermissionRepository permissionRepository,
             WorkspaceTeamSettingsService workspaceTeamSettingsService,
-            ScmMemberRepository workspaceMembershipService) {
+            ScmMemberRepository workspaceMembershipService,
+            RepositoryRepository repositoryRepository) {
         this.teamRepository = teamRepository;
         this.workspaceTeamScopeResolver = workspaceTeamScopeResolver;
         this.permissionRepository = permissionRepository;
         this.workspaceTeamSettingsService = workspaceTeamSettingsService;
         this.workspaceMembershipService = workspaceMembershipService;
+        this.repositoryRepository = repositoryRepository;
     }
 
     @Transactional(readOnly = true)
@@ -53,6 +57,7 @@ public class TeamService {
         Set<Long> hiddenTeamIds = workspaceTeamSettingsService.getHiddenTeamIds(workspaceId);
         Set<Long> hiddenRepoIds = workspaceTeamSettingsService.getHiddenRepositoryIds(workspaceId);
         Set<Long> hiddenMemberIds = workspaceMembershipService.findHiddenUserIdsByWorkspaceId(workspaceId);
+        Set<Long> monitoredRepoIds = repositoryRepository.findMonitoredRepositoryIds(workspaceId);
 
         List<Team> teams = teamRepository.findWithCollectionsByOrganizationIgnoreCaseAndProviderId(
                 scope.accountLogin(), scope.providerId());
@@ -62,7 +67,8 @@ public class TeamService {
                 workspaceTeamSettingsService.getTeamLabelFiltersForTeams(workspaceId, teamIds);
 
         return teams.stream()
-                .map(team -> convertToDTO(team, hiddenTeamIds, hiddenRepoIds, labelFiltersByTeam, hiddenMemberIds))
+                .map(team -> convertToDTO(
+                        team, hiddenTeamIds, hiddenRepoIds, monitoredRepoIds, labelFiltersByTeam, hiddenMemberIds))
                 .toList();
     }
 
@@ -101,6 +107,7 @@ public class TeamService {
         return permissionRepository
                 .findWithTeamByTeam_IdAndRepository_Id(teamId, repositoryId)
                 .filter(permission -> belongsToWorkspace(permission.getTeam(), workspace))
+                .filter(permission -> repositoryRepository.isMonitored(workspace.getId(), repositoryId))
                 .orElseThrow(
                         () -> new EntityNotFoundException("TeamRepositoryPermission", teamId + "/" + repositoryId));
     }
@@ -119,12 +126,14 @@ public class TeamService {
             Team team,
             Set<Long> hiddenTeamIds,
             Set<Long> hiddenRepoIds,
+            Set<Long> monitoredRepoIds,
             Map<Long, Set<Label>> labelFiltersByTeam,
             Set<Long> hiddenMemberIds) {
         boolean isHidden = hiddenTeamIds.contains(team.getId());
         Set<Label> workspaceLabels = labelFiltersByTeam.getOrDefault(team.getId(), Set.of());
 
-        return TeamInfoDTO.fromTeamWithScopeSettings(team, isHidden, workspaceLabels, hiddenRepoIds, hiddenMemberIds);
+        return TeamInfoDTO.fromTeamWithScopeSettings(
+                team, isHidden, workspaceLabels, hiddenRepoIds, monitoredRepoIds, hiddenMemberIds);
     }
 
     @Transactional(readOnly = true)
