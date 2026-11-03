@@ -1,16 +1,18 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Objects;
+import java.util.Properties;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
-import org.springframework.dao.DataAccessException;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.core.env.Environment;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -25,14 +27,13 @@ import tools.jackson.databind.json.JsonMapper;
  */
 public class QueryPlans {
     private static final JsonMapper JSON = JsonMapper.builder().build();
+    /** PostgreSQL cannot type a parameter without bound values, for example in {@code ? IS NULL}. */
+    private static final Set<String> UNTYPED_PARAMETER = Set.of("42P18", "42P08");
 
-    private final JdbcTemplate jdbc;
-    private final TransactionTemplate transaction;
+    private final Environment environment;
 
-    QueryPlans(JdbcTemplate jdbc, PlatformTransactionManager manager) {
-        this.jdbc = jdbc;
-        transaction = new TransactionTemplate(manager);
-        transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    QueryPlans(Environment environment) {
+        this.environment = environment;
     }
 
     /** One sequential scan that no index could replace, with the statement that needs it. */
@@ -40,28 +41,38 @@ public class QueryPlans {
 
     /**
      * Plans each distinct statement and returns the filtered sequential scans that no index could replace. A statement
-     * that PostgreSQL cannot plan without bound values, such as {@code ? IS NULL}, is skipped.
+     * with a parameter whose type PostgreSQL cannot infer without a value is skipped. Any other planning error fails.
      */
     public List<FullScan> fullScans(Collection<String> statements) {
         List<FullScan> scans = new ArrayList<>();
-        for (String sql : new LinkedHashSet<>(statements)) {
-            JsonNode plan = plan(sql);
-            if (plan != null) collect(plan, sql, scans);
+        // pgjdbc sends even a plain statement through the extended protocol, where the server reads $1 as a protocol
+        // parameter that has no value. The simple query protocol passes the placeholders to EXPLAIN as text.
+        Properties settings = new Properties();
+        settings.setProperty("user", environment.getRequiredProperty("spring.datasource.username"));
+        settings.setProperty("password", environment.getRequiredProperty("spring.datasource.password"));
+        settings.setProperty("preferQueryMode", "simple");
+        try (Connection connection = DriverManager.getConnection(
+                        environment.getRequiredProperty("spring.datasource.url"), settings);
+                Statement statement = connection.createStatement()) {
+            statement.execute("SET enable_seqscan = off");
+            for (String sql : new LinkedHashSet<>(statements)) {
+                JsonNode plan = plan(statement, sql);
+                if (plan != null) collect(plan, sql, scans);
+            }
+        } catch (SQLException failure) {
+            throw new IllegalStateException("Could not open a connection to plan statements", failure);
         }
         return scans;
     }
 
-    private @Nullable JsonNode plan(String sql) {
-        try {
-            return transaction.execute(status -> {
-                jdbc.execute("SET LOCAL enable_seqscan = off");
-                String json = jdbc.queryForObject(
-                        "EXPLAIN (GENERIC_PLAN, COSTS OFF, FORMAT JSON) " + numberedParameters(sql), String.class);
-                status.setRollbackOnly();
-                return JSON.readTree(Objects.requireNonNull(json)).get(0).get("Plan");
-            });
-        } catch (DataAccessException unplannable) {
-            return null;
+    private static @Nullable JsonNode plan(Statement statement, String sql) {
+        try (ResultSet plan =
+                statement.executeQuery("EXPLAIN (GENERIC_PLAN, COSTS OFF, FORMAT JSON) " + numberedParameters(sql))) {
+            plan.next();
+            return JSON.readTree(plan.getString(1)).get(0).get("Plan");
+        } catch (SQLException failure) {
+            if (UNTYPED_PARAMETER.contains(failure.getSQLState())) return null;
+            throw new IllegalStateException("Could not plan: " + sql, failure);
         }
     }
 
