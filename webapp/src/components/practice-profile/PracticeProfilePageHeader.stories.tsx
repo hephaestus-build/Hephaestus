@@ -26,6 +26,7 @@ const meta = {
 			at: inStoryYear("09-09T14:10"),
 			item: conversation("#releases"),
 			status: "COMPLETE",
+			progress: null,
 		},
 		counts: { STRENGTH: 7, MIXED: 3, DEVELOPING: 2, NO_OPPORTUNITY: 1, NOT_OBSERVED: 3 },
 		practiceCount: 16,
@@ -112,6 +113,7 @@ export const LongWorkLabel: Story = {
 			at: inStoryYear("09-09T14:10"),
 			item: document(1, "Queue retry policy for the notification pipeline"),
 			status: "COMPLETE",
+			progress: null,
 		},
 	},
 	play: async ({ canvas }) => {
@@ -129,6 +131,7 @@ export const ReviewInProgress: Story = {
 			at: inStoryYear("09-27T09:20"),
 			item: pullRequest(905),
 			status: "RUNNING",
+			progress: null,
 		},
 	},
 	play: async ({ canvas }) => {
@@ -145,6 +148,7 @@ export const LatestReviewFailed: Story = {
 			at: inStoryYear("09-25T11:13"),
 			item: pullRequest(890),
 			status: "FAILED",
+			progress: null,
 		},
 	},
 	play: async ({ canvas }) => {
@@ -211,12 +215,32 @@ export const FirstReviewRunning: Story = {
 			at: inStoryYear("09-09T14:10"),
 			item: pullRequest(12),
 			status: "RUNNING",
+			progress: null,
 		},
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Review running")).toBeVisible();
 		await expect(canvas.queryByRole("link", { name: /Review running/u })).toBeNull();
 		await expect(canvas.queryByText("No review yet")).toBeNull();
+	},
+};
+
+/** A first review between attempts: the chip says it continues, and how far it got. */
+export const FirstReviewContinuing: Story = {
+	args: {
+		latestReview: undefined,
+		activeReview: {
+			reviewId: "7a1e2a3b-0000-4000-8000-000000000103",
+			at: inStoryYear("09-09T14:10"),
+			item: pullRequest(12),
+			status: "QUEUED",
+			progress: { practicesEnded: 76, practicesTotal: 200, continuing: true },
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Review continuing")).toBeVisible();
+		await expect(canvas.getByText("76 of 200 practices finished")).toBeVisible();
+		await expect(canvas.queryByText("Review waiting")).toBeNull();
 	},
 };
 

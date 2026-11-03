@@ -382,6 +382,22 @@ export const Queued: Story = {
 	},
 };
 
+/** Between two attempts: the status line says the review moved on, and counts the practices it finished. */
+export const Continuing: Story = {
+	args: {
+		review: ready({
+			...reviewDetailQueued,
+			progress: { practicesEnded: 76, practicesTotal: 200, continuing: true },
+		}),
+	},
+	play: async () => {
+		const panelElement = await settledDrawerPanel();
+		await expect(panelElement.querySelector("[data-sheet-status]")).toHaveTextContent(
+			/Continuing.*76 of 200 practices finished/u,
+		);
+	},
+};
+
 export const BackingOff: Story = {
 	args: { review: ready(reviewDetailBackingOff) },
 	play: async () => {

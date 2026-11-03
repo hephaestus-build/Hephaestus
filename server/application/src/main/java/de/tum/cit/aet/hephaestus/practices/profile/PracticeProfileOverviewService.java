@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.MemberReviewReadinessService;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewProgressService;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewShownStatus;
@@ -43,6 +44,7 @@ public class PracticeProfileOverviewService {
     private final ProfileOverviewRepository overview;
     private final ResultSourceAuthorization sources;
     private final ProductReferenceQuery references;
+    private final ReviewProgressService progress;
 
     public PracticeProfileOverviewDTO getOverview(WorkspaceContext ws) {
         return visibility.asOneRead(ws.id(), () -> readOverview(ws));
@@ -77,22 +79,24 @@ public class PracticeProfileOverviewService {
                 .toList();
         return new PracticeProfileOverviewDTO(
                 new OverviewWindowDTO(window.since(), window.until()),
-                latest == null
-                        ? null
-                        : new ProfileReviewRefDTO(
-                                latest.review().getId(),
-                                latest.result().getRecordedAt(),
-                                latest.item(),
-                                ReviewShownStatus.of(
-                                        latest.review().getStatus(),
-                                        runtime.jobCounts(
-                                                        ws.id(),
-                                                        List.of(latest.review().getId()))
-                                                .getOrDefault(latest.review().getId(), Map.of()))),
+                latest == null ? null : latestRef(ws.id(), latest),
                 changes,
                 reviewed,
                 readiness.readiness(ws.id(), account.get()),
                 activeReview(ws.id(), account.get()));
+    }
+
+    private ProfileReviewRefDTO latestRef(long ws, ResultView latest) {
+        var review = latest.review();
+        var status = ReviewShownStatus.of(
+                review.getStatus(),
+                runtime.jobCounts(ws, List.of(review.getId())).getOrDefault(review.getId(), Map.of()));
+        return new ProfileReviewRefDTO(
+                review.getId(),
+                latest.result().getRecordedAt(),
+                latest.item(),
+                status,
+                progress.progress(ws, Map.of(review.getId(), status)).get(review.getId()));
     }
 
     // Behind the source fence a result passes: a review in flight has no result, so its work item alone is checked.
@@ -102,7 +106,12 @@ public class PracticeProfileOverviewService {
             return null;
         var item = references.items(ws, List.of(active.getItemId())).get(active.getItemId());
         if (item == null) return null;
+        var status = ReviewStatus.valueOf(active.getStatus());
         return new ProfileReviewRefDTO(
-                active.getReviewId(), active.getOrderedAt(), item, ReviewStatus.valueOf(active.getStatus()));
+                active.getReviewId(),
+                active.getOrderedAt(),
+                item,
+                status,
+                progress.progress(ws, Map.of(active.getReviewId(), status)).get(active.getReviewId()));
     }
 }

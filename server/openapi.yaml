@@ -20379,6 +20379,10 @@ components:
           format: date-time
         item:
           $ref: "#/components/schemas/ItemRef"
+        progress:
+          anyOf:
+          - $ref: "#/components/schemas/ReviewProgress"
+          - type: "null"
         reviewId:
           type: string
           format: uuid
@@ -20397,6 +20401,7 @@ components:
       required:
       - at
       - item
+      - progress
       - reviewId
       - status
     ProviderIdentityRef:
@@ -21667,6 +21672,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ReviewPractice"
+        progress:
+          anyOf:
+          - $ref: "#/components/schemas/ReviewProgress"
+          - type: "null"
         requestedBy:
           anyOf:
           - $ref: "#/components/schemas/AccountRef"
@@ -21733,6 +21742,7 @@ components:
       - orderedAt
       - origin
       - practices
+      - progress
       - requestedBy
       - results
       - startedBy
@@ -22065,6 +22075,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ReviewPractice"
+        progress:
+          anyOf:
+          - $ref: "#/components/schemas/ReviewProgress"
+          - type: "null"
         requestedBy:
           anyOf:
           - $ref: "#/components/schemas/AccountRef"
@@ -22142,6 +22156,7 @@ components:
       - orderedAt
       - origin
       - practices
+      - progress
       - requestedBy
       - results
       - runtime
@@ -23084,6 +23099,31 @@ components:
       - sourceKind
       - startLine
       - summary
+    ReviewProgress:
+      type: object
+      description: "How far an active item review got; absent for a scan, which lists\
+        \ its items in pages"
+      properties:
+        continuing:
+          type: boolean
+          description: "An attempt ended some of the practices, and the review waits\
+            \ to continue with the rest"
+        practicesEnded:
+          type: integer
+          format: int32
+          description: "Practices that an attempt ended, with a result or a recorded\
+            \ reason. Their results stay private until the review's last attempt admits\
+            \ them."
+        practicesTotal:
+          type: integer
+          format: int32
+          description: "Practices that the review's attempts work on. A practice decided\
+            \ before the first attempt, such as one withheld for readiness, is not\
+            \ counted."
+      required:
+      - continuing
+      - practicesEnded
+      - practicesTotal
     ReviewQueue:
       type: object
       properties:
@@ -23145,6 +23185,10 @@ components:
         jobId:
           type: string
           format: uuid
+        progress:
+          anyOf:
+          - $ref: "#/components/schemas/ReviewProgress"
+          - type: "null"
         reviewId:
           type: string
           format: uuid
@@ -23165,6 +23209,7 @@ components:
       - heldForBudget
       - item
       - jobId
+      - progress
       - reviewId
       - since
       - status
@@ -23764,6 +23809,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ReviewPractice"
+        progress:
+          anyOf:
+          - $ref: "#/components/schemas/ReviewProgress"
+          - type: "null"
         requestedBy:
           anyOf:
           - $ref: "#/components/schemas/AccountRef"
@@ -23830,6 +23879,7 @@ components:
       - orderedAt
       - origin
       - practices
+      - progress
       - requestedBy
       - results
       - startedBy

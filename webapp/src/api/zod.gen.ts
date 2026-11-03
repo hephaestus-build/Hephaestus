@@ -2937,29 +2937,6 @@ export const zProfileChange = z.object({
     ])
 });
 
-export const zProfileReviewRef = z.object({
-    at: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    item: zItemRef,
-    reviewId: z.uuid(),
-    status: z.enum([
-        'QUEUED',
-        'RUNNING',
-        'COMPLETE',
-        'PARTIAL',
-        'FAILED',
-        'CANCELLED'
-    ]).nullable()
-});
-
-export const zPracticeProfileOverview = z.object({
-    activeReview: zProfileReviewRef.nullable(),
-    changes: z.array(zProfileChange),
-    latestReview: zProfileReviewRef.nullable(),
-    reviewReadiness: zMemberReviewReadiness.nullable(),
-    reviewedItems: z.array(zItemRef),
-    window: zOverviewWindow
-});
-
 export const zProviderIdentityRef = z.object({
     avatarUrl: z.string().nullable(),
     displayName: z.string().nullable(),
@@ -3841,11 +3818,45 @@ export const zReviewProblem = z.object({
     summary: z.string()
 });
 
+/**
+ * How far an active item review got; absent for a scan, which lists its items in pages
+ */
+export const zReviewProgress = z.object({
+    continuing: z.boolean(),
+    practicesEnded: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    practicesTotal: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
+});
+
+export const zProfileReviewRef = z.object({
+    at: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+    item: zItemRef,
+    progress: zReviewProgress.nullable(),
+    reviewId: z.uuid(),
+    status: z.enum([
+        'QUEUED',
+        'RUNNING',
+        'COMPLETE',
+        'PARTIAL',
+        'FAILED',
+        'CANCELLED'
+    ]).nullable()
+});
+
+export const zPracticeProfileOverview = z.object({
+    activeReview: zProfileReviewRef.nullable(),
+    changes: z.array(zProfileChange),
+    latestReview: zProfileReviewRef.nullable(),
+    reviewReadiness: zMemberReviewReadiness.nullable(),
+    reviewedItems: z.array(zItemRef),
+    window: zOverviewWindow
+});
+
 export const zReviewQueueItem = z.object({
     developer: zReviewDeveloper.nullable(),
     heldForBudget: z.boolean(),
     item: zItemRef,
     jobId: z.uuid(),
+    progress: zReviewProgress.nullable(),
     reviewId: z.uuid(),
     since: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
     status: z.enum([
@@ -4087,6 +4098,7 @@ export const zReview = z.object({
         'BACKFILL'
     ]),
     practices: z.array(zReviewPractice),
+    progress: zReviewProgress.nullable(),
     requestedBy: zAccountRef.nullable(),
     results: zReviewResultCounts,
     startedBy: zItemEvent.nullable(),
@@ -4221,6 +4233,7 @@ export const zReviewSummary = z.object({
         'BACKFILL'
     ]),
     practices: z.array(zReviewPractice),
+    progress: zReviewProgress.nullable(),
     requestedBy: zAccountRef.nullable(),
     results: zReviewResultCounts,
     startedBy: zItemEvent.nullable(),
@@ -4343,6 +4356,7 @@ export const zReviewDetail = z.object({
         'BACKFILL'
     ]),
     practices: z.array(zReviewPractice),
+    progress: zReviewProgress.nullable(),
     requestedBy: zAccountRef.nullable(),
     results: zReviewResultCounts,
     runtime: zReviewRuntime.nullable(),

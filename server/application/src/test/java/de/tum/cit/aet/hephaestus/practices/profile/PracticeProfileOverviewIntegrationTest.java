@@ -162,6 +162,26 @@ class PracticeProfileOverviewIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldShowTheReaderThatTheirReviewContinuesWithHowManyPracticesItEnded() {
+        var review = data.continuingReview(scenario, reader, 2, 3);
+
+        get("/practice-profile/overview")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.activeReview.reviewId")
+                .isEqualTo(review.getId().toString())
+                .jsonPath("$.activeReview.status")
+                .isEqualTo("QUEUED")
+                .jsonPath("$.activeReview.progress.practicesEnded")
+                .isEqualTo(2)
+                .jsonPath("$.activeReview.progress.practicesTotal")
+                .isEqualTo(3)
+                .jsonPath("$.activeReview.progress.continuing")
+                .isEqualTo(true);
+    }
+
+    @Test
     void shouldNotReportAnotherMembersReviewInFlightEvenWhenTheReaderRequestedIt() {
         long other =
                 Objects.requireNonNull(data.member(scenario.workspace().getId()).getId());

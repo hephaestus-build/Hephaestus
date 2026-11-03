@@ -10,6 +10,10 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { type StatusDef, statusToneClass } from "@/components/common/status-def";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import {
+	REVIEW_CONTINUING_DEF,
+	reviewProgressWords,
+} from "@/components/practice-vocabulary/review-status-defs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { durationText } from "@/lib/dates";
 import { firstNonBlank } from "@/lib/text";
@@ -115,6 +119,10 @@ const QUEUE_INFO: readonly InfoLine[] = [
 	{
 		term: "Running",
 		text: "counts reviews that run now. The count opens them.",
+	},
+	{
+		term: "Continuing",
+		text: "marks a waiting review whose earlier attempts finished some of its practices. A slow AI provider can take several attempts. It counts as waiting.",
 	},
 	{
 		term: "On hold for budget",
@@ -314,7 +322,13 @@ function QueueTable({ queue, rows }: { queue: ReviewQueue; rows: readonly Review
 }
 
 function QueueRow({ queue, item }: { queue: ReviewQueue; item: ReviewQueueItem }) {
-	const def = QUEUE_ITEM_DEFS[queueItemState(item)];
+	const state = queueItemState(item);
+	// A review between attempts waits like any other, but it moved on: saying only "Waiting" reads as stuck.
+	const def =
+		state === "waiting" && item.progress?.continuing === true
+			? { ...REVIEW_CONTINUING_DEF, short: REVIEW_CONTINUING_DEF.label }
+			: QUEUE_ITEM_DEFS[state];
+	const progress = reviewProgressWords(item.progress);
 	const Icon = reviewedWorkIcon(item.item.kind, item.item.provider ?? undefined);
 	const StateIcon = def.icon;
 	return (
@@ -338,12 +352,22 @@ function QueueRow({ queue, item }: { queue: ReviewQueue; item: ReviewQueueItem }
 				</span>
 			</td>
 			<td className={cn(QUEUE_CELL, "pr-4 whitespace-nowrap", OVERVIEW_TYPE.label)}>
-				<span className="inline-flex items-center gap-1.5" title={def.label}>
+				<span
+					className="inline-flex items-center gap-1.5"
+					title={progress === undefined ? def.label : `${def.label}: ${progress}`}
+				>
 					<StateIcon
 						aria-hidden
 						className={cn("size-3.5 shrink-0", statusToneClass(def.badgeVariant))}
 					/>
 					{def.short}
+					{progress !== undefined && (
+						<span className="text-muted-foreground tabular-nums">
+							{`· ${item.progress?.practicesEnded ?? 0} of ${item.progress?.practicesTotal ?? 0}`}
+							{/* The title is not read on touch or by every screen reader, so the noun is in the text. */}
+							<span className="sr-only"> practices finished</span>
+						</span>
+					)}
 				</span>
 			</td>
 			<td

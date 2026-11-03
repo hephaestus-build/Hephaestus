@@ -256,6 +256,29 @@ export const OnHold: Story = {
 	},
 };
 
+/** A review between attempts waits like the others, but its row says that it moved on, and how far. */
+export const Continuing: Story = {
+	args: {
+		state: {
+			status: "ready",
+			queue: {
+				...idleReviewQueue,
+				waiting: 1,
+				head: [
+					{
+						...reviewQueueHead.waitingLong,
+						progress: { practicesEnded: 76, practicesTotal: 200, continuing: true },
+					},
+				],
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(rowsOf(canvas)[0]).toHaveTextContent(/Continuing· 76 of 200/u);
+		await expect(canvas.getByTitle("Continuing: 76 of 200 practices finished")).toBeVisible();
+	},
+};
+
 /** Many in line: still three rows, and "See all" opens the rest. */
 export const ManyItems: Story = {
 	args: {

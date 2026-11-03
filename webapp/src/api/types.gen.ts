@@ -4095,6 +4095,7 @@ export type ProfileReviewDetail = {
 export type ProfileReviewRef = {
     at: Date;
     item: ItemRef;
+    progress: ReviewProgress | null;
     reviewId: string;
     status: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'CANCELLED' | null;
 };
@@ -4607,6 +4608,7 @@ export type Review = {
     orderedAt: Date;
     origin: 'EVENT' | 'REQUEST' | 'SCHEDULE' | 'BACKFILL';
     practices: Array<ReviewPractice>;
+    progress: ReviewProgress | null;
     requestedBy: AccountRef | null;
     results: ReviewResultCounts;
     startedBy: ItemEvent | null;
@@ -4694,6 +4696,7 @@ export type ReviewDetail = {
     orderedAt: Date;
     origin: 'EVENT' | 'REQUEST' | 'SCHEDULE' | 'BACKFILL';
     practices: Array<ReviewPractice>;
+    progress: ReviewProgress | null;
     requestedBy: AccountRef | null;
     results: ReviewResultCounts;
     runtime: ReviewRuntime | null;
@@ -4923,6 +4926,24 @@ export type ReviewProblemDetail = {
     summary: string;
 };
 
+/**
+ * How far an active item review got; absent for a scan, which lists its items in pages
+ */
+export type ReviewProgress = {
+    /**
+     * An attempt ended some of the practices, and the review waits to continue with the rest
+     */
+    continuing: boolean;
+    /**
+     * Practices that an attempt ended, with a result or a recorded reason. Their results stay private until the review's last attempt admits them.
+     */
+    practicesEnded: number;
+    /**
+     * Practices that the review's attempts work on. A practice decided before the first attempt, such as one withheld for readiness, is not counted.
+     */
+    practicesTotal: number;
+};
+
 export type ReviewQueue = {
     activeWorkers: number;
     asOf: Date;
@@ -4941,6 +4962,7 @@ export type ReviewQueueItem = {
     heldForBudget: boolean;
     item: ItemRef;
     jobId: string;
+    progress: ReviewProgress | null;
     reviewId: string;
     since: Date;
     status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'TIMED_OUT' | 'CANCELLED';
@@ -5085,6 +5107,7 @@ export type ReviewSummary = {
     orderedAt: Date;
     origin: 'EVENT' | 'REQUEST' | 'SCHEDULE' | 'BACKFILL';
     practices: Array<ReviewPractice>;
+    progress: ReviewProgress | null;
     requestedBy: AccountRef | null;
     results: ReviewResultCounts;
     startedBy: ItemEvent | null;

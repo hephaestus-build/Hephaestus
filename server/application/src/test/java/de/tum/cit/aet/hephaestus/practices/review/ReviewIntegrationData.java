@@ -283,6 +283,109 @@ public class ReviewIntegrationData {
         return review;
     }
 
+    /**
+     * A running review of {@code practices} practices whose job waits for its next attempt, after earlier attempts
+     * staged the first {@code ended} of them.
+     */
+    @Transactional
+    public Review continuingReview(Scenario s, long subject, int ended, int practices) {
+        var review =
+                activeReview(s, subject, ReviewStatus.RUNNING, Instant.now().minusSeconds(600), null);
+        for (int i = 1; i < practices; i++) {
+            var practice = versions.create(new PracticeVersionService.NewPractice(
+                    s.workspace(),
+                    "s5-practice-" + UUID.randomUUID().toString().substring(0, 8),
+                    s.item().getKind(),
+                    DefinitionTestFixtures.definition(),
+                    null,
+                    0,
+                    s.account().getId()));
+            assignments.saveAndFlush(ReviewPractice.builder()
+                    .workspaceId(s.workspace().getId())
+                    .reviewId(review.getId())
+                    .practiceId(practice.getId())
+                    .practiceVersionId(practice.getCurrentVersion().getId())
+                    .status(ReviewPracticeStatus.QUEUED)
+                    .itemsListed(1)
+                    .listingComplete(true)
+                    .captureDecision(json.createObjectNode())
+                    .method(method())
+                    .build());
+            reviewItems.saveAndFlush(ReviewItem.builder()
+                    .workspaceId(s.workspace().getId())
+                    .reviewId(review.getId())
+                    .practiceId(practice.getId())
+                    .itemId(s.item().getId())
+                    .itemVersion(review.getItemVersion())
+                    .state(ReviewItemState.LISTED)
+                    .detail(json.createObjectNode().put("developerId", subject))
+                    .build());
+        }
+        var job = UUID.randomUUID();
+        jdbc.sql("""
+            INSERT INTO review_job(id,review_id,workspace_id,status,attempt,processing_status,trace_id,input,config_snapshot,submitted_at,available_at)
+            VALUES(:id,:review,:ws,'QUEUED',3,'NONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,now(),now())
+            """)
+                .param("id", job)
+                .param("review", review.getId())
+                .param("ws", s.workspace().getId())
+                .param("trace", job.toString().replace("-", ""))
+                .param(
+                        "input",
+                        json.writeValueAsString(Map.of("itemId", s.item().getId(), "assignments", List.of())))
+                .update();
+        // The first attempt bound every practice to the job; the attempts since staged the first `ended` of them.
+        jdbc.sql("UPDATE review_item SET job_id=:job WHERE workspace_id=:ws AND review_id=:review")
+                .param("job", job)
+                .param("ws", s.workspace().getId())
+                .param("review", review.getId())
+                .update();
+        jdbc.sql("""
+            UPDATE review_item SET state='STAGED' WHERE workspace_id=:ws AND review_id=:review AND practice_id IN (
+              SELECT practice_id FROM review_item WHERE workspace_id=:ws AND review_id=:review
+              ORDER BY practice_id LIMIT :ended)
+            """)
+                .param("ws", s.workspace().getId())
+                .param("review", review.getId())
+                .param("ended", ended)
+                .update();
+        return review;
+    }
+
+    /** A practice that the review withheld when it was created, before any attempt, as readiness does. */
+    @Transactional
+    public void withheldAtCreation(Scenario s, Review review) {
+        var practice = versions.create(new PracticeVersionService.NewPractice(
+                s.workspace(),
+                "s5-practice-" + UUID.randomUUID().toString().substring(0, 8),
+                s.item().getKind(),
+                DefinitionTestFixtures.definition(),
+                null,
+                0,
+                s.account().getId()));
+        assignments.saveAndFlush(ReviewPractice.builder()
+                .workspaceId(s.workspace().getId())
+                .reviewId(review.getId())
+                .practiceId(practice.getId())
+                .practiceVersionId(practice.getCurrentVersion().getId())
+                .status(ReviewPracticeStatus.QUEUED)
+                .itemsListed(1)
+                .listingComplete(true)
+                .captureDecision(json.createObjectNode())
+                .method(method())
+                .build());
+        reviewItems.saveAndFlush(ReviewItem.builder()
+                .workspaceId(s.workspace().getId())
+                .reviewId(review.getId())
+                .practiceId(practice.getId())
+                .itemId(s.item().getId())
+                .itemVersion(review.getItemVersion())
+                .state(ReviewItemState.WITHHELD)
+                .reason("OCCASION_EVIDENCE_UNAVAILABLE")
+                .detail(json.createObjectNode())
+                .build());
+    }
+
     private ReviewMethod method() {
         var slots = List.of(
                 new BoundModelSlot("chat", ModelKind.CHAT, null),

@@ -54,6 +54,7 @@ describe("review queue", () => {
 			item: reviewItem,
 			developer: null,
 			since: AS_OF,
+			progress: null,
 		} as const;
 		expect(queueItemState({ ...item, status: "RUNNING", heldForBudget: false })).toBe("running");
 		expect(queueItemState({ ...item, status: "QUEUED", heldForBudget: false })).toBe("waiting");

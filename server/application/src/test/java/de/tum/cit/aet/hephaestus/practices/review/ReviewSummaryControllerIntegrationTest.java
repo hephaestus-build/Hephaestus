@@ -370,6 +370,74 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldCountThePracticesThatEarlierAttemptsEndedWhileAReviewWaitsToContinue() {
+        var review = data.continuingReview(scenario, scenarioAccountId, 1, 3);
+
+        get("/practices/reviews?queueState=WAITING")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[0].id")
+                .isEqualTo(review.getId().toString())
+                .jsonPath("$.content[0].status")
+                .isEqualTo("QUEUED")
+                .jsonPath("$.content[0].progress.practicesEnded")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].progress.practicesTotal")
+                .isEqualTo(3)
+                .jsonPath("$.content[0].progress.continuing")
+                .isEqualTo(true);
+        get("/practices/reviews/" + review.getId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.progress.practicesEnded")
+                .isEqualTo(1)
+                .jsonPath("$.progress.continuing")
+                .isEqualTo(true);
+        get("/practices/reviews/queue")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.head[0].reviewId")
+                .isEqualTo(review.getId().toString())
+                .jsonPath("$.head[0].progress.practicesEnded")
+                .isEqualTo(1)
+                .jsonPath("$.head[0].progress.practicesTotal")
+                .isEqualTo(3)
+                .jsonPath("$.head[0].progress.continuing")
+                .isEqualTo(true);
+    }
+
+    @Test
+    void shouldNotCountAPracticeWithheldBeforeTheFirstAttemptAsFinished() {
+        var review = data.continuingReview(scenario, scenarioAccountId, 0, 2);
+        data.withheldAtCreation(scenario, review);
+
+        get("/practices/reviews/queue")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.head[0].progress.practicesEnded")
+                .isEqualTo(0)
+                .jsonPath("$.head[0].progress.practicesTotal")
+                .isEqualTo(2)
+                .jsonPath("$.head[0].progress.continuing")
+                .isEqualTo(false);
+    }
+
+    @Test
+    void shouldReportNoProgressForAFinishedReview() {
+        data.result(scenario, ResultOutcome.MET, Instant.parse("2026-10-20T00:00:00Z"));
+        get("/practices/reviews")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[0].progress")
+                .isEmpty();
+    }
+
+    @Test
     void shouldListOnlyReviewsWhoseJobIsInTheQueueStateAsTheQueueCountsIt() {
         var at = Instant.parse("2026-10-20T00:00:00Z");
         // One current result per practice, item and developer: each review's result ends before the next.

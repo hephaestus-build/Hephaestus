@@ -115,6 +115,7 @@ export const FirstReviewWaiting: Story = {
 			at: minutesBefore(3),
 			item: pullRequest(12),
 			status: "QUEUED",
+			progress: null,
 		},
 	},
 	play: async ({ canvas }) => {
@@ -130,6 +131,7 @@ export const FirstReviewRunning: Story = {
 			at: minutesBefore(1),
 			item: pullRequest(12),
 			status: "RUNNING",
+			progress: null,
 		},
 	},
 	play: async ({ canvas }) => {
@@ -147,6 +149,25 @@ export const FirstReviewRunning: Story = {
  * speaks, not the reason no automatic review starts.
  */
 /** While a first review runs where an admin approves feedback first, the page says so. */
+/** Between two attempts on a slow provider: it moved on, so it does not read as waiting to start. */
+export const FirstReviewContinuing: Story = {
+	args: {
+		activeReview: {
+			reviewId: "7a1e2a3b-0000-4000-8000-000000000103",
+			at: minutesBefore(40),
+			item: pullRequest(12),
+			status: "QUEUED",
+			progress: { practicesEnded: 76, practicesTotal: 200, continuing: true },
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Your first review is continuing")).toBeVisible();
+		await expect(canvas.getByText(/76 of 200 practices finished/u)).toBeVisible();
+		await expect(canvas.getByText(/several attempts/u)).toBeVisible();
+		await expect(canvas.queryByText(/waiting to start/u)).toBeNull();
+	},
+};
+
 export const FirstReviewRunningWithApproval: Story = {
 	args: {
 		readiness: { ...READY, approvalBeforePosting: true },
@@ -155,6 +176,7 @@ export const FirstReviewRunningWithApproval: Story = {
 			at: minutesBefore(1),
 			item: pullRequest(12),
 			status: "RUNNING",
+			progress: null,
 		},
 	},
 	play: async ({ canvas }) => {
@@ -180,6 +202,7 @@ export const FirstReviewRunningOnRequestOnly: Story = {
 			at: minutesBefore(1),
 			item: pullRequest(12),
 			status: "RUNNING",
+			progress: null,
 		},
 	},
 	play: async ({ canvas }) => {

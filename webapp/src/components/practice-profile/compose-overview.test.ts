@@ -73,6 +73,7 @@ const overview = (partial: Partial<Overview>): Overview => ({
 		at: AT,
 		item: pullRequest(425),
 		status: "COMPLETE",
+		progress: null,
 	},
 	...partial,
 });

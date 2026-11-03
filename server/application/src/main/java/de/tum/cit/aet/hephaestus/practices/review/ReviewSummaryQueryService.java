@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewItemCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewJobDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewPracticeDTO;
+import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewProgressDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewRefDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewResultCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewRuntimeDTO;
@@ -70,6 +71,7 @@ public class ReviewSummaryQueryService {
     private final ReviewItemRepository members;
     private final ItemTraceRepository events;
     private final JsonMapper json;
+    private final ReviewProgressService progressService;
 
     public Review require(long ws, UUID id) {
         return reviews.findByIdAndWorkspaceId(id, ws)
@@ -170,7 +172,8 @@ public class ReviewSummaryQueryService {
                                     .sum()),
                             Math.toIntExact(jobs.getOrDefault(ReviewJobStatus.QUEUED, 0L)
                                     + jobs.getOrDefault(ReviewJobStatus.RUNNING, 0L)),
-                            model));
+                            model,
+                            reads.progress.get(review.getId())));
         }
         return summaries;
     }
@@ -188,10 +191,18 @@ public class ReviewSummaryQueryService {
         final Map<Long, ItemRefDTO> items;
         final Map<UUID, ItemEventDTO> eventById;
         final Map<Long, AccountRefDTO> requesters;
+        final Map<UUID, ReviewProgressDTO> progress;
 
         SummaryReads(long ws, List<Review> page) {
             var ids = page.stream().map(Review::getId).toList();
             jobCounts = runtime.jobCounts(ws, ids);
+            progress = progressService.progress(
+                    ws,
+                    page.stream()
+                            .collect(Collectors.toMap(
+                                    Review::getId,
+                                    r -> ReviewShownStatus.of(
+                                            r.getStatus(), jobCounts.getOrDefault(r.getId(), Map.of())))));
             assignmentsByReview =
                     assignments.findByWorkspaceIdAndReviewIdInOrderByReviewIdAscPracticeIdAsc(ws, ids).stream()
                             .collect(Collectors.groupingBy(ReviewPractice::getReviewId));
@@ -349,7 +360,8 @@ public class ReviewSummaryQueryService {
                 runtimeDTO,
                 usage(ws, id),
                 times,
-                null);
+                null,
+                s.progress());
     }
 
     public ReviewUsageDTO usage(long ws, UUID id) {

@@ -26,6 +26,30 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         """, nativeQuery = true)
     List<ReviewPracticeCounts> practiceCounts(long ws, Collection<UUID> ids);
 
+    /**
+     * Each item review's practices that its attempts work on, and how many of them an attempt ended. An attempt binds
+     * a practice's items to its job, and the practice ends when none of them is still listed. A practice decided at
+     * creation, such as one withheld for readiness, has no job and is not counted, so a review that has not started
+     * ends nothing. A scan lists its items in pages, so its practices are not all known yet, and it has none here.
+     */
+    @Query(value = """
+        SELECT review_id AS reviewId,COUNT(*) AS practices,COUNT(*) FILTER(WHERE listed=0) AS ended FROM (
+          SELECT m.review_id,m.practice_id,COUNT(*) FILTER(WHERE m.state='LISTED') AS listed,
+            COUNT(*) FILTER(WHERE m.job_id IS NOT NULL) AS bound FROM review_item m
+          JOIN review q ON q.workspace_id=m.workspace_id AND q.id=m.review_id AND q.kind='ITEM'
+          WHERE m.workspace_id=:ws AND m.review_id IN (:ids) GROUP BY m.review_id,m.practice_id) p
+        WHERE listed>0 OR bound>0 GROUP BY review_id
+        """, nativeQuery = true)
+    List<ReviewProgressCounts> progress(long ws, Collection<UUID> ids);
+
+    interface ReviewProgressCounts {
+        UUID getReviewId();
+
+        long getPractices();
+
+        long getEnded();
+    }
+
     interface ReviewPracticeCounts extends PracticeCounts {
         UUID getReviewId();
     }
