@@ -35,7 +35,7 @@ Use this page when you add or change a server read or write.
    JPQL cannot express a common table expression, a window function, `DISTINCT ON`, `LATERAL` or a PostgreSQL operator.
    Native SQL maps columns to record components by position. Select the columns in the order of the components.
    Nothing checks native SQL before it runs. Thus, an integration test must run the query.
-4. Run the read in a read-only transaction. ADR 0075 owns transaction boundaries.
+4. Run the read in a read-only transaction.
    Read a list in one statement, or in a fixed number of statements.
    Do not call a repository in a loop. Do not read an entity to copy its fields into a DTO.
 5. Page in SQL. Use `Pageable` for a list that shows its total (`OffsetPageDTO`), and keyset pagination for a long append-only list (`CursorPageDTO`).

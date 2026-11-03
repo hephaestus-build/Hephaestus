@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-03
 **Authors:** Felix T.J. Dietrich
-**Relates to:** [Read and write the database](../contributor/read-and-write-the-database.mdx) (the how-to), ADR 0075 (transaction boundaries and read-only transactions), [ADR 0072](0072-few-dependencies-owned-slivers-kept-foundations.md) (dependencies).
+**Relates to:** [Read and write the database](../contributor/read-and-write-the-database.mdx) (the how-to), [ADR 0072](0072-few-dependencies-owned-slivers-kept-foundations.md) (dependencies).
 
 ## Context
 
@@ -64,7 +64,7 @@ A statement budget alone does not find that.
 ## Decision
 
 1. **A read for a screen or an API response returns a record shaped like that screen.**
-   The method is on a Spring Data repository and runs in a read-only transaction, as ADR 0075 defines.
+   The method is on a Spring Data repository and runs in a read-only transaction.
    It selects only what the screen shows, in one statement or a few, with keyset or offset pagination in SQL.
 2. **JPQL with an explicit `select new` when JPQL can say it. Native SQL into a record when it cannot.**
    JPQL cannot say a common table expression, a window function, `DISTINCT ON`, `LATERAL` or a PostgreSQL operator.
