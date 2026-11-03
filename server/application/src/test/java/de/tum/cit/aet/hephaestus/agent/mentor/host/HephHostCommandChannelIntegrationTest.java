@@ -219,7 +219,7 @@ class HephHostCommandChannelIntegrationTest {
 
         @Bean
         WorkerProperties workerProperties() {
-            return WorkerPropertiesFixtures.minimal("1", "4");
+            return WorkerPropertiesFixtures.minimal("4");
         }
     }
 }

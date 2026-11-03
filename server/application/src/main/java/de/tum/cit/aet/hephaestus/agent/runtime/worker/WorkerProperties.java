@@ -51,19 +51,11 @@ public record WorkerProperties(
     }
 
     /**
-     * Concurrency of this worker.
+     * Concurrency of this worker. {@code hephaestus.sandbox.max-concurrent-containers} is the one number for reviews.
      *
-     * @param reviewMax Number of practice reviews this worker runs at once. Accepts an integer or auto, which means
-     *     one less than the processor count and at least 1.
      * @param mentorMax Number of conversation turns this worker runs at once. Accepts an integer or auto, which means 8.
      */
-    public record Capacity(
-            @DefaultValue("auto") String reviewMax,
-            @DefaultValue("auto") String mentorMax) {
-        public int resolveReviewMax() {
-            return resolve(reviewMax, Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
-        }
-
+    public record Capacity(@DefaultValue("auto") String mentorMax) {
         /** A Heph turn mostly waits for its model, so its default does not follow the processor count. */
         public int resolveMentorMax() {
             return resolve(mentorMax, 8);

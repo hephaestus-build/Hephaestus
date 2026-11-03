@@ -15,7 +15,7 @@
 | `worker.resources.requests.cpu` | string | `"250m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
 | `worker.resources.requests.ephemeral-storage` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
 | `worker.resources.requests.memory` | string | `"2Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `worker.reviews` | integer | `5` | yes | `minimum: 1. maximum: 64` |
+| `worker.reviews` | integer | `5` | yes | `minimum: 1` |
 | `worker.rolloutStrategy` | string | `"RollingUpdate"` | yes | `enum: ["RollingUpdate","Recreate"]` |
 | `worker.runtime.nodeSelector` | object | `{}` | yes | `additionalProperties: {"type":"string","maxLength":63}` |
 | `worker.runtime.podOverhead.cpuMillis` | integer | `0` | yes | `minimum: 0` |

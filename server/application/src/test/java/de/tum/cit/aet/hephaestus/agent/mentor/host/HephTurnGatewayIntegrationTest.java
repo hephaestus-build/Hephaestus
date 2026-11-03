@@ -144,7 +144,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
             factory.registerSingleton("attemptTokenVerifier", verifier);
             factory.registerSingleton("sandboxGatewaySessions", new SandboxGatewaySessions());
             factory.registerSingleton("proxyAccounting", mock(ProxyAccounting.class));
-            factory.registerSingleton("workerProperties", WorkerPropertiesFixtures.minimal("1", "4"));
+            factory.registerSingleton("workerProperties", WorkerPropertiesFixtures.minimal("4"));
             factory.registerSingleton("agentControllerAdvice", new AgentControllerAdvice());
             factory.registerSingleton("globalControllerAdvice", new GlobalControllerAdvice());
         });

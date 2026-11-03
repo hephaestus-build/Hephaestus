@@ -7,6 +7,7 @@ on a schedule, that the cluster enforces them (the isolation probe, docs/admin/k
 § Sandbox prerequisites).
 */}}
 {{- if .Values.worker.enabled }}
+{{- include "hephaestus.workerMemoryFitsReviews" . }}
 {{- $name := include "hephaestus.name" (dict "root" . "component" "worker") }}
 {{- $port := include "hephaestus.gatewayPort" . | int }}
 {{- $sandboxes := include "hephaestus.sandboxNamespace" (dict "root" .) }}
