@@ -6,6 +6,8 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.function.Supplier;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -31,6 +33,14 @@ public class SqlStatementCounter implements BeanPostProcessor {
     public record Measurement<T>(T value, List<String> sql) {
         public long statements() {
             return sql.size();
+        }
+
+        /** Statements prepared more than once in this read: the shape of an N+1 or of a lookup that repeats. */
+        public Map<String, Long> repeated() {
+            Map<String, Long> repeated = new TreeMap<>();
+            sql.forEach(statement -> repeated.merge(statement, 1L, Long::sum));
+            repeated.values().removeIf(count -> count == 1);
+            return repeated;
         }
     }
 
