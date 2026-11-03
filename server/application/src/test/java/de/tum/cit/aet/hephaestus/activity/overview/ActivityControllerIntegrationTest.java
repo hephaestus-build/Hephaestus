@@ -1880,6 +1880,31 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
+    void shouldLeaveAHiddenMemberOutOfThePeopleAndTheTimelineUntilShownAgain() {
+        var hiddenIssue = issue(monitored, Issue.State.OPEN, ada);
+        var shownIssue = issue(monitored, Issue.State.OPEN, zoe);
+        record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, hiddenIssue.getId(), DAY);
+        record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, shownIssue.getId(), DAY);
+        long account = workspaceMembershipService.accountIdForUser(ada.getId());
+        workspaceMembershipService.updateMemberVisibility(workspace.getId(), account, true);
+
+        assertThat(members(uri -> uri))
+                .extracting(row -> row.person().id())
+                .contains(zoe.getId())
+                .doesNotContain(ada.getId());
+        assertThat(work(uri -> uri).content())
+                .extracting(ActivityWorkDTO::id)
+                .contains("work:" + shownIssue.getId())
+                .doesNotContain("work:" + hiddenIssue.getId());
+
+        workspaceMembershipService.updateMemberVisibility(workspace.getId(), account, false);
+        assertThat(members(uri -> uri)).extracting(row -> row.person().id()).contains(ada.getId(), zoe.getId());
+        assertThat(work(uri -> uri).content())
+                .extracting(ActivityWorkDTO::id)
+                .contains("work:" + hiddenIssue.getId(), "work:" + shownIssue.getId());
+    }
+
+    @Test
     void shouldReturnZeroCountsForOwnActivityBeforeTheFirstContribution() {
         var caller = userRepository
                 .findByLoginAndProviderId(
