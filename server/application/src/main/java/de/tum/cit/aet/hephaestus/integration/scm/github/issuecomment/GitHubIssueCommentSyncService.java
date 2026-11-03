@@ -10,6 +10,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.TRANSPORT_MAX_RETRIES;
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.adaptPageSize;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.Category;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
@@ -333,12 +335,12 @@ public class GitHubIssueCommentSyncService {
      * @return number of additional comments synced
      */
     @Transactional
-    public int syncRemainingComments(Long scopeId, Issue issue, String startCursor) {
+    public SyncResult syncRemainingComments(Long scopeId, Issue issue, String startCursor) {
         if (issue == null || issue.getRepository() == null) {
             log.warn(
                     "Skipped remaining comment sync: reason=issueOrRepositoryNull, issueId={}",
                     issue != null ? issue.getId() : "null");
-            return 0;
+            return SyncResult.completed(0);
         }
 
         // A caller can carry the issue across page transactions. Its provider proxy
@@ -352,7 +354,7 @@ public class GitHubIssueCommentSyncService {
         Optional<RepositoryOwnerAndName> parsedName = GitHubRepositoryNameParser.parse(nameWithOwner);
         if (parsedName.isEmpty()) {
             log.warn("Skipped remaining comment sync: reason=invalidRepoNameFormat, repoName={}", safeNameWithOwner);
-            return 0;
+            return SyncResult.completed(0);
         }
         RepositoryOwnerAndName ownerAndName = parsedName.get();
 
@@ -380,6 +382,7 @@ public class GitHubIssueCommentSyncService {
                 isPullRequest,
                 startCursor != null ? startCursor.substring(0, Math.min(20, startCursor.length())) + "..." : "null");
 
+        boolean rateLimited = false;
         while (hasMore) {
             pageCount++;
             if (pageCount >= MAX_PAGINATION_PAGES) {
@@ -424,7 +427,7 @@ public class GitHubIssueCommentSyncService {
                                 "Skipped remaining comment sync: reason=issueDeletedFromGitHub, repoName={}, issueNumber={}",
                                 safeNameWithOwner,
                                 issue.getNumber());
-                        return 0;
+                        return SyncResult.completed(0);
                     }
                     ClassificationResult classification = graphQlSyncHelper.classifyGraphQlErrors(response);
                     if (classification != null) {
@@ -439,6 +442,7 @@ public class GitHubIssueCommentSyncService {
                             retryAttempt++;
                             continue;
                         }
+                        rateLimited = classification.category() == Category.RATE_LIMITED;
                         break;
                     }
                     log.warn(
@@ -453,6 +457,7 @@ public class GitHubIssueCommentSyncService {
                 if (graphQlClientProvider.isRateLimitCritical(scopeId)) {
                     if (!graphQlSyncHelper.waitForRateLimitIfNeeded(
                             scopeId, "remaining comment sync", "issueNumber", issue.getNumber(), log)) {
+                        rateLimited = true;
                         break;
                     }
                 }
@@ -460,9 +465,11 @@ public class GitHubIssueCommentSyncService {
                 GHIssueCommentConnection connection =
                         response.field(commentsPath).toEntity(GHIssueCommentConnection.class);
 
-                if (connection == null
-                        || connection.getNodes() == null
-                        || connection.getNodes().isEmpty()) {
+                if (connection == null || connection.getNodes() == null) {
+                    break;
+                }
+                if (connection.getNodes().isEmpty()) {
+                    hasMore = false;
                     break;
                 }
 
@@ -493,7 +500,7 @@ public class GitHubIssueCommentSyncService {
                             "Skipped remaining comment sync: reason=issueDeletedFromGitHub, repoName={}, issueNumber={}",
                             safeNameWithOwner,
                             issue.getNumber());
-                    return 0;
+                    return SyncResult.completed(0);
                 }
                 log.error(
                         "Failed to sync remaining comments: repoName={}, issueNumber={}",
@@ -511,6 +518,7 @@ public class GitHubIssueCommentSyncService {
                         "issueNumber",
                         issue.getNumber(),
                         log))) {
+                    rateLimited = classification.category() == Category.RATE_LIMITED;
                     break;
                 }
                 retryAttempt++;
@@ -528,6 +536,6 @@ public class GitHubIssueCommentSyncService {
                 safeNameWithOwner,
                 issue.getNumber(),
                 totalSynced);
-        return totalSynced;
+        return SyncResult.ofListRead(hasMore, rateLimited, totalSynced);
     }
 }

@@ -847,6 +847,7 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
 
         Integer count = transactionTemplate.execute(status -> remaining
                 ? service.syncRemainingComments(testWorkspace.getId(), detachedIssue, "embedded-page")
+                        .count()
                 : service.syncForIssue(testWorkspace.getId(), detachedIssue));
 
         assertThat(count).isEqualTo(2);

@@ -145,7 +145,7 @@ public class ReviewThreadContentSource {
             root.set("reviewDecisions", decisionArray);
             // A withdrawn or replaced decision may be gone, so this list is no event history.
             root.put("decisionHistoryComplete", false);
-            root.put("truncated", false);
+            root.put("truncated", pullRequestRepository.isDiscussionNotReadWhole(pullRequestId));
 
             log.info(
                     "ReviewThreads: prId={} threads={} decisions={}",
@@ -183,9 +183,10 @@ public class ReviewThreadContentSource {
         files.put(
                 OUTPUT_PREFIX + FILE_NAME,
                 objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
+        boolean partial = root.path("truncated").asBoolean();
         return new CaptureContribution(
                 files,
-                Map.of(KIND, SourceCompleteness.COMPLETE),
+                Map.of(KIND, partial ? SourceCompleteness.PARTIAL : SourceCompleteness.COMPLETE),
                 Map.of(),
                 Map.of(),
                 Map.of(),
@@ -193,7 +194,7 @@ public class ReviewThreadContentSource {
                 Map.of(),
                 Map.of(),
                 null,
-                Map.of(),
+                partial ? Map.of(KIND, List.of(ScmCapturedWork.DISCUSSION_NOT_READ_WHOLE)) : Map.of(),
                 List.of(),
                 List.of(),
                 ScmCitableTexts.files(files, this::sourceKindFor, objectMapper));

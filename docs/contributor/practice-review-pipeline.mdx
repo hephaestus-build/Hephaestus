@@ -133,6 +133,12 @@ A missing, failed, redacted or incomplete required source records a readiness re
 It produces no result for that practice.
 Other practices can run when their required sources are available.
 
+Completeness comes from what the mirror knows about its own reads.
+`discussion_read_whole` on a pull request is false when the last provider read did not reach the end of its threads, reviews or comments.
+The review-thread, inline-comment and general-comment sources are then `PARTIAL`, with the limitation `DISCUSSION_NOT_READ_WHOLE`.
+`appliesWhen` stays undecided on a partial source, and a practice that declares such a source `COMPLETE` records a readiness refusal.
+A null value means that no provider read happened, as for work known only from webhooks. It proves nothing and limits nothing.
+
 A practice of an item review stays Queued until capture records it as Ready or Withheld.
 The request does not make it Ready.
 

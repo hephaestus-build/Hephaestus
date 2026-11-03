@@ -295,7 +295,8 @@ class GitLabDiscussionSyncServiceIntegrationTest extends BaseIntegrationTest {
                 userLookup,
                 new GitLabReviewReconciler(reviews, pullRequests, ignoredEvents),
                 properties,
-                projectAdmission);
+                projectAdmission,
+                mock(PullRequestRepository.class));
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
             var pr = pullRequests.findById(prId).orElseThrow();
             when(userLookup.findOrCreateUser(any(GitLabUserLookup.class), eq(providerId)))

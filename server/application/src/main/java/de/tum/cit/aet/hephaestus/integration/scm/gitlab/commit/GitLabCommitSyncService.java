@@ -161,7 +161,9 @@ public class GitLabCommitSyncService {
         }
 
         if (!admission.current(read)) return SyncResult.completed(0);
-        return errorAborted ? SyncResult.abortedError(totalSynced) : SyncResult.completed(totalSynced);
+        if (errorAborted) return SyncResult.abortedError(totalSynced);
+        // A later run starts from the same page, so stopping here for a retry would never reach the rest.
+        return hasMore ? SyncResult.completedWithWarnings(totalSynced) : SyncResult.completed(totalSynced);
     }
 
     @Nullable

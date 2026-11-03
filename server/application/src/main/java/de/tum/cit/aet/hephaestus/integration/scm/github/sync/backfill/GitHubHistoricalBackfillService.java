@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
@@ -23,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
@@ -37,6 +39,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueProcess
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.EmbeddedCommentsDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.IssueWithComments;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.DiscussionReads;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.EmbeddedReviewThreadsDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.EmbeddedReviewsDTO;
@@ -155,6 +159,8 @@ public class GitHubHistoricalBackfillService {
     private final GitHubPullRequestReviewProcessor reviewProcessor;
     private final GitHubPullRequestReviewSyncService reviewSyncService;
     private final GitHubPullRequestReviewCommentSyncService reviewCommentSyncService;
+    private final GitHubIssueCommentSyncService issueCommentSyncService;
+    private final PullRequestRepository pullRequestRepository;
     private final RepositoryRepository repositoryRepository;
     private final ActivityLedgerRepair activityLedgerRepair;
     private final GitHubBackfillRepair backfillRepair;
@@ -173,6 +179,8 @@ public class GitHubHistoricalBackfillService {
             GitHubPullRequestReviewProcessor reviewProcessor,
             GitHubPullRequestReviewSyncService reviewSyncService,
             GitHubPullRequestReviewCommentSyncService reviewCommentSyncService,
+            GitHubIssueCommentSyncService issueCommentSyncService,
+            PullRequestRepository pullRequestRepository,
             RepositoryRepository repositoryRepository,
             TransactionTemplate transactionTemplate,
             @Qualifier("monitoringExecutor") Executor monitoringExecutor,
@@ -189,6 +197,8 @@ public class GitHubHistoricalBackfillService {
         this.reviewProcessor = reviewProcessor;
         this.reviewSyncService = reviewSyncService;
         this.reviewCommentSyncService = reviewCommentSyncService;
+        this.issueCommentSyncService = issueCommentSyncService;
+        this.pullRequestRepository = pullRequestRepository;
         this.repositoryRepository = repositoryRepository;
         this.transactionTemplate = transactionTemplate;
         this.monitoringExecutor = monitoringExecutor;
@@ -821,6 +831,8 @@ public class GitHubHistoricalBackfillService {
         int pageCount = 0;
         int reportedTotalCount = -1;
         List<PullRequestWithReviewCursor> allPrsNeedingReviewPagination = new ArrayList<>();
+        List<ListToFinish> listsToFinish = new ArrayList<>();
+        DiscussionReads discussionReads = new DiscussionReads();
 
         while (hasMore && pageCount < maxPages) {
             pageCount++;
@@ -907,7 +919,13 @@ public class GitHubHistoricalBackfillService {
                 // both are rolled back together, preventing duplicate processing on restart.
                 // Pass repositoryId, not the entity, to avoid LazyInitializationException.
                 PullRequestPageResult pageResult = processPullRequestsPage(
-                        connection, scopeId, repositoryId, syncTargetId, hasMore ? nextCursor : null, fetchedAt);
+                        connection,
+                        scopeId,
+                        repositoryId,
+                        syncTargetId,
+                        hasMore ? nextCursor : null,
+                        fetchedAt,
+                        discussionReads);
                 totalPRsSynced += pageResult.prCount();
                 totalReviewsSynced += pageResult.reviewCount();
                 totalReviewCommentsSynced += pageResult.reviewCommentCount();
@@ -920,6 +938,7 @@ public class GitHubHistoricalBackfillService {
 
                 // Collect PRs that need additional review pagination (more than 50 reviews)
                 allPrsNeedingReviewPagination.addAll(pageResult.prsNeedingReviewPagination());
+                listsToFinish.addAll(pageResult.listsToFinish());
 
                 // See backfillIssues: report every page, not once per batch.
                 notifyPage(
@@ -972,6 +991,7 @@ public class GitHubHistoricalBackfillService {
                     allPrsNeedingReviewPagination.size());
             int processedPrs = 0;
             for (PullRequestWithReviewCursor prWithCursor : allPrsNeedingReviewPagination) {
+                if (discussionReads.rateLimited()) break;
                 // Check for interrupt (e.g., during application shutdown)
                 if (Thread.interrupted()) {
                     log.info(
@@ -984,26 +1004,56 @@ public class GitHubHistoricalBackfillService {
                 }
                 processedPrs++;
                 try {
-                    int additionalReviews = reviewSyncService.syncRemainingReviews(
+                    SyncResult read = reviewSyncService.syncRemainingReviews(
                             scopeId,
                             prWithCursor.pullRequest(),
                             prWithCursor.reviewCursor(),
                             prWithCursor.inlineCount());
-                    totalReviewsSynced += additionalReviews;
-                    if (additionalReviews > 0) {
+                    totalReviewsSynced += read.count();
+                    discussionReads.record(
+                            Objects.requireNonNull(prWithCursor.pullRequest().getId()), read);
+                    if (read.count() > 0) {
                         log.debug(
                                 "Fetched additional reviews: prNumber={}, additionalReviews={}",
                                 prWithCursor.pullRequest().getNumber(),
-                                additionalReviews);
+                                read.count());
                     }
                 } catch (Exception e) {
                     log.warn(
                             "Failed to fetch additional reviews for PR #{}: {}",
                             prWithCursor.pullRequest().getNumber(),
                             e.getClass().getSimpleName());
+                    discussionReads.record(
+                            Objects.requireNonNull(prWithCursor.pullRequest().getId()),
+                            SyncResult.completedWithWarnings(0));
                 }
             }
         }
+
+        // The lists past their first page, outside the page's transaction. The scan's cursor has moved on, so a list
+        // that stops here stays recorded as not read whole, and capture says so.
+        for (ListToFinish list : listsToFinish) {
+            if (Thread.currentThread().isInterrupted() || discussionReads.rateLimited()) break;
+            PullRequest pr = pullRequestRepository
+                    .findByIdWithRepository(list.pullRequestId())
+                    .orElse(null);
+            if (pr == null) continue;
+            try {
+                SyncResult read = list.threads()
+                        ? reviewCommentSyncService.syncRemainingThreads(scopeId, pr, list.cursor())
+                        : issueCommentSyncService.syncRemainingComments(scopeId, pr, list.cursor());
+                if (list.threads()) totalReviewCommentsSynced += read.count();
+                else totalCommentsSynced += read.count();
+                discussionReads.record(list.pullRequestId(), read);
+            } catch (Exception e) {
+                log.warn(
+                        "Failed to finish a list of PR #{}: {}",
+                        pr.getNumber(),
+                        e.getClass().getSimpleName());
+                discussionReads.record(list.pullRequestId(), SyncResult.completedWithWarnings(0));
+            }
+        }
+        discussionReads.settle(pullRequestRepository);
 
         // Normalize min/max if no items were processed
         if (totalPRsSynced == 0) {
@@ -1137,7 +1187,8 @@ public class GitHubHistoricalBackfillService {
             Long repositoryId,
             Long syncTargetId,
             @Nullable String nextCursor,
-            Instant fetchedAt) {
+            Instant fetchedAt,
+            DiscussionReads discussionReads) {
         PullRequestPageResult result = transactionTemplate.execute(status -> {
             // Fetch repository INSIDE the transaction with organization eagerly loaded.
             // This ensures the entity is attached and lazy associations can be accessed.
@@ -1155,6 +1206,7 @@ public class GitHubHistoricalBackfillService {
             int minNumber = Integer.MAX_VALUE;
             int maxNumber = Integer.MIN_VALUE;
             List<PullRequestWithReviewCursor> prsNeedingReviewPagination = new ArrayList<>();
+            List<ListToFinish> listsToFinish = new ArrayList<>();
 
             for (var node : connection.getNodes()) {
                 PullRequestWithReviewThreads prData = PullRequestWithReviewThreads.fromPullRequest(node);
@@ -1177,9 +1229,10 @@ public class GitHubHistoricalBackfillService {
                             }
                         }
 
-                        // Note: as with issue backfill, PRs with more than 10 conversation comments
-                        // get the tail from the regular incremental sync, which paginates them.
-                        // Keeps backfill simple and avoids extra API calls during historical sync.
+                        if (embeddedComments.needsPagination()) {
+                            listsToFinish.add(new ListToFinish(
+                                    processed.getId(), Objects.requireNonNull(embeddedComments.endCursor()), false));
+                        }
 
                         // Process embedded reviews (first 50 per PR in historical query)
                         // Pass context to enable activity event creation
@@ -1200,10 +1253,24 @@ public class GitHubHistoricalBackfillService {
 
                         // Process embedded review threads and their comments
                         EmbeddedReviewThreadsDTO embeddedThreads = prData.embeddedReviewThreads();
+                        boolean threadsWhole = true;
                         for (var thread : embeddedThreads.threads()) {
-                            int commentsSynced = reviewCommentSyncService.processThread(thread, processed, scopeId);
-                            reviewCommentCount += commentsSynced;
+                            var read = reviewCommentSyncService.processThread(thread, processed, scopeId);
+                            reviewCommentCount += read.comments();
+                            threadsWhole &= read.whole();
+                            if (!read.whole()) discussionReads.stop(processed.getId(), read.read());
                         }
+                        if (embeddedThreads.needsPagination()) {
+                            listsToFinish.add(new ListToFinish(
+                                    processed.getId(), Objects.requireNonNull(embeddedThreads.endCursor()), true));
+                        }
+                        boolean moreToRead = embeddedComments.needsPagination()
+                                || embeddedReviews.needsPagination()
+                                || embeddedThreads.needsPagination();
+                        if (embeddedComments.needsPagination()) discussionReads.expect(processed.getId());
+                        if (embeddedReviews.needsPagination()) discussionReads.expect(processed.getId());
+                        if (embeddedThreads.needsPagination()) discussionReads.expect(processed.getId());
+                        pullRequestRepository.recordDiscussionRead(processed.getId(), threadsWhole && !moreToRead);
                     }
                 }
             }
@@ -1224,10 +1291,11 @@ public class GitHubHistoricalBackfillService {
                     reviewCommentCount,
                     commentCount,
                     prsNeedingReviewPagination,
+                    listsToFinish,
                     minNumber,
                     maxNumber);
         });
-        return result != null ? result : new PullRequestPageResult(0, 0, 0, 0, new ArrayList<>(), 0, 0);
+        return result != null ? result : new PullRequestPageResult(0, 0, 0, 0, List.of(), List.of(), 0, 0);
     }
 
     /**
@@ -1372,8 +1440,12 @@ public class GitHubHistoricalBackfillService {
             int reviewCommentCount,
             int commentCount,
             List<PullRequestWithReviewCursor> prsNeedingReviewPagination,
+            List<ListToFinish> listsToFinish,
             int minNumber,
             int maxNumber) {}
+
+    /** A work item's threads or conversation comments past their embedded first page. */
+    private record ListToFinish(long pullRequestId, String cursor, boolean threads) {}
 
     /**
      * Represents the backfill progress for a repository.

@@ -101,6 +101,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -302,6 +303,11 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
     }
 
     private DefaultReviewExecutionHandler bundledHandler(ReviewJob job, boolean inlineCommentPresent) {
+        return bundledHandler(job, inlineCommentPresent, null);
+    }
+
+    private DefaultReviewExecutionHandler bundledHandler(
+            ReviewJob job, boolean inlineCommentPresent, @Nullable Boolean discussionReadWhole) {
         var assignment = assignments.load(job).getFirst();
         var pullRequests = mock(PullRequestRepository.class);
         var inlineComments = mock(PullRequestReviewCommentRepository.class);
@@ -311,6 +317,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
         when(pullRequests.findByIdForReviewContext(sourceId)).thenReturn(Optional.of(pullRequest));
         when(pullRequests.findById(sourceId)).thenReturn(Optional.of(pullRequest));
         when(pullRequests.existsByIdAndDeletedAtIsNull(sourceId)).thenReturn(true);
+        when(pullRequests.isDiscussionNotReadWhole(sourceId)).thenReturn(Boolean.FALSE.equals(discussionReadWhole));
         when(delivered.findForPullRequest(anyLong(), eq(sourceId), any()))
                 .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of()));
         var comment = new PullRequestReviewComment();
@@ -363,6 +370,37 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
         captureFiles(job);
         return handler(new WorkspaceContextBuilder(
                 List.of(), List.of(source), catalogs, new JobFolderIndexBuilder(catalogs, mapper, Clock.systemUTC())));
+    }
+
+    /** A mirror that a sync left unfinished shows no comments, which is no proof that nobody commented. */
+    @Test
+    void shouldStopWithItsReasonInsteadOfDoesNotApplyWhenTheDiscussionWasNotReadWhole() {
+        var definition = bundled.catalog().practices().stream()
+                .filter(p -> p.slug().equals("engaging-with-inline-review-comments"))
+                .findFirst()
+                .orElseThrow()
+                .definition()
+                .definition();
+        var pending = pending(definition);
+        var job = jobs.findById(pending.jobId()).orElseThrow();
+        var handler = bundledHandler(job, false, false);
+
+        assertThatThrownBy(() -> handler.prepareInputs(job)).isInstanceOf(InsufficientEvidenceException.class);
+
+        var practice = practices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        job.getWorkspaceId(),
+                        job.getReviewId(),
+                        pending.scenario().practice().getId())
+                .orElseThrow();
+        assertThat(practice.getReason()).isEqualTo("readiness_refused");
+        assertThat(Objects.requireNonNull(practice.getCaptureDecision())
+                        .path("reasonCodes")
+                        .toString())
+                .contains("DECLARED_EVIDENCE_INSUFFICIENT");
+        assertThat(Objects.requireNonNull(job.getCapture()).toString()).contains("DISCUSSION_NOT_READ_WHOLE");
+        assertThat(proof.forAttempt(job.getWorkspaceId(), job.getReviewId(), job.getId(), job.getAttempt()))
+                .isEmpty();
     }
 
     @ParameterizedTest

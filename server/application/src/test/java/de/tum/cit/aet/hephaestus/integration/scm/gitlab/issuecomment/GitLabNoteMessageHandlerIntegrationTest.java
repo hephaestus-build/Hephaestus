@@ -766,7 +766,8 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     issueCommentProcessor,
                     reviewReconciler,
                     gitLabProperties,
-                    projectAdmission);
+                    projectAdmission,
+                    mock(PullRequestRepository.class));
         }
 
         @SafeVarargs
@@ -791,7 +792,8 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     issueCommentProcessor,
                     reviewReconciler,
                     gitLabProperties,
-                    projectAdmission);
+                    projectAdmission,
+                    mock(PullRequestRepository.class));
         }
 
         private Map<String, @Nullable Object> onePage(Map<String, @Nullable Object> discussion) {

@@ -88,6 +88,14 @@ final class CapturedEvidence {
         return identity != null && (identity.equals(version) || identity.startsWith(version + ":"));
     }
 
+    /** Whether the capture of {@code kind} names something that it left out, so its silence shows nothing. */
+    boolean namesAGap(SourceKind kind) {
+        return manifest.sources().stream()
+                .anyMatch(source -> source.kind().equals(kind)
+                        && source.state() instanceof SourceCaptureState.Available available
+                        && !available.limitations().isEmpty());
+    }
+
     private SourceCaptureState.@Nullable Available whole(SourceKind kind) {
         for (var source : manifest.sources())
             if (source.kind().equals(kind)

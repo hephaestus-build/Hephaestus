@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793700509000-1" author="hephaestus">
+        <comment>Whether the last read of a pull request from its provider reached the end of its threads, reviews and comments. A GitHub read could stop after its first page without saying so: 5 threads or reviews or 10 comments on a live read, 20 threads, 50 reviews or 10 comments on a backfill. A list that holds exactly a first page cannot prove it is whole, so such rows start as not read whole, and the next read of the work settles them.</comment>
+        <addColumn tableName="issue">
+            <column name="discussion_read_whole" type="BOOLEAN"/>
+        </addColumn>
+        <sql>
+            UPDATE issue SET discussion_read_whole = FALSE
+            WHERE issue_type = 'PULL_REQUEST'
+              AND provider_id IN (SELECT id FROM identity_provider WHERE type = 'GITHUB')
+              AND (id IN (SELECT pull_request_id FROM pull_request_review_thread GROUP BY pull_request_id HAVING COUNT(*) IN (5, 20))
+                OR id IN (SELECT pull_request_id FROM pull_request_review GROUP BY pull_request_id HAVING COUNT(*) IN (5, 50))
+                OR id IN (SELECT issue_id FROM issue_comment GROUP BY issue_id HAVING COUNT(*) = 10))
+        </sql>
+        <rollback>
+            <dropColumn tableName="issue" columnName="discussion_read_whole"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -5,6 +5,7 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
@@ -80,6 +81,7 @@ public class GitLabDiscussionSyncService {
     private final GitLabReviewReconciler reviewReconciler;
     private final GitLabProperties gitLabProperties;
     private final GitLabProjectAdmission admission;
+    private final PullRequestRepository pullRequests;
 
     public GitLabDiscussionSyncService(
             GitLabGraphQlClientProvider graphQlClientProvider,
@@ -89,7 +91,8 @@ public class GitLabDiscussionSyncService {
             GitLabIssueCommentProcessor issueCommentProcessor,
             GitLabReviewReconciler reviewReconciler,
             GitLabProperties gitLabProperties,
-            GitLabProjectAdmission admission) {
+            GitLabProjectAdmission admission,
+            PullRequestRepository pullRequests) {
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
         this.threadProcessor = threadProcessor;
@@ -98,6 +101,7 @@ public class GitLabDiscussionSyncService {
         this.reviewReconciler = reviewReconciler;
         this.gitLabProperties = gitLabProperties;
         this.admission = admission;
+        this.pullRequests = pullRequests;
     }
 
     /**
@@ -129,6 +133,7 @@ public class GitLabDiscussionSyncService {
         // diff notes, general notes, skipped
         int[] totals = new int[3];
         Instant requestedAt = readStart();
+        boolean[] everyNoteRead = {true};
         boolean whole = readDiscussions(scopeId, projectPath, mrIid, safeContext, nodes -> {
             for (Map<String, Object> discussionNode : nodes) {
                 ThreadResolution resolution = threadResolution(discussionNode);
@@ -151,9 +156,14 @@ public class GitLabDiscussionSyncService {
                     log.warn(
                             "Error processing discussion: context={}, id={}", safeContext, discussionNode.get("id"), e);
                     totals[2]++;
+                    everyNoteRead[0] = false;
                 }
+                if (notesCutShort(discussionNode)) everyNoteRead[0] = false;
             }
         });
+        boolean readWhole = whole && everyNoteRead[0];
+        admission.runWrite(
+                read, () -> pullRequests.recordDiscussionRead(Objects.requireNonNull(pr.getId()), readWhole));
         if (whole) {
             try {
                 admission.runWrite(
@@ -301,6 +311,18 @@ public class GitLabDiscussionSyncService {
                 outdated,
                 parseTimestamp((String) noteNodes.get(0).get("createdAt")),
                 parseTimestamp(resolvedAt == null ? null : resolvedAt.toString()));
+    }
+
+    /** Whether a merge request of this repository that a read since {@code since} reached is not read whole. */
+    public boolean hasUnfinishedReadSince(Repository repository, Instant since) {
+        return pullRequests.existsUnfinishedDiscussionReadSince(Objects.requireNonNull(repository.getId()), since);
+    }
+
+    /** A discussion's notes come as one page with no cursor of their own, so a longer discussion is read in part. */
+    private static boolean notesCutShort(Map<String, Object> discussionNode) {
+        return discussionNode.get("notes") instanceof Map<?, ?> notes
+                && notes.get("pageInfo") instanceof Map<?, ?> page
+                && Boolean.TRUE.equals(page.get("hasNextPage"));
     }
 
     /** The resolution a diff discussion's node states; null for a discussion that is not on the diff. */

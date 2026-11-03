@@ -204,6 +204,7 @@ public class PullRequestContentSource {
             CommentCapture comments = loadComments(capture.workspaceId(), pullRequestId);
             storeComments(files, comments);
             completeness.put(COMMENTS, comments.complete() ? SourceCompleteness.COMPLETE : SourceCompleteness.PARTIAL);
+            if (!comments.complete()) limitations.put(COMMENTS, List.of(ScmCapturedWork.DISCUSSION_NOT_READ_WHOLE));
             contentStates.put(
                     COMMENTS, comments.comments().isEmpty() ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
         }
@@ -438,7 +439,7 @@ public class PullRequestContentSource {
         var comments = new ArrayList<>(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(
                 pullRequestId, WorkspaceScmProjection.HEPHAESTUS_MARKER, Pageable.unpaged()));
         comments.removeIf(comment -> comment.getNativeId() != null && postedComments.contains(comment.getNativeId()));
-        boolean complete = true;
+        boolean complete = !pullRequestRepository.isDiscussionNotReadWhole(pullRequestId);
         comments.sort(Comparator.comparing(
                 PullRequestReviewComment::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
         return new CommentCapture(comments, postedComments, complete);

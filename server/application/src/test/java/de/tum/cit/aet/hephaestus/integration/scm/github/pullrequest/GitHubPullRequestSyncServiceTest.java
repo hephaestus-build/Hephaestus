@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -311,12 +312,52 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
                     true,
                     "cursor-page-1");
             stubSinglePrPage(createGHPullRequest(comments));
+            when(issueCommentSyncService.syncRemainingComments(SCOPE_ID, entity, "cursor-page-1"))
+                    .thenReturn(SyncResult.completed(24));
 
-            service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
+            SyncResult result = service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
+
+            assertThat(result.status()).isEqualTo(SyncResult.Status.COMPLETED);
+            verify(pullRequestRepository).recordDiscussionRead(PR_ID, true);
 
             // The tail is drained from the embedded page's cursor, reusing the issue-comment sync service
             // rather than a parallel PR-only implementation.
             verify(issueCommentSyncService).syncRemainingComments(SCOPE_ID, entity, "cursor-page-1");
+        }
+
+        @Test
+        void shouldReportARateLimitAndLeaveTheReadOpenWhenItEndsTheCommentPager() {
+            PullRequest entity = createPullRequest();
+            when(pullRequestProcessor.process(any(), any())).thenReturn(entity);
+            when(issueCommentProcessor.process(any(), eq(PR_NUMBER), any())).thenReturn(new IssueComment());
+            when(pullRequestRepository.findByIdWithRepository(PR_ID)).thenReturn(Optional.of(entity));
+            stubSinglePrPage(createGHPullRequest(
+                    createCommentConnection(List.of(createGHComment(1001L, "embedded")), 25, true, "cursor-page-1")));
+            when(issueCommentSyncService.syncRemainingComments(SCOPE_ID, entity, "cursor-page-1"))
+                    .thenReturn(SyncResult.abortedRateLimit(3));
+
+            SyncResult result = service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
+
+            assertThat(result.status()).isEqualTo(SyncResult.Status.ABORTED_RATE_LIMIT);
+            verify(pullRequestRepository).recordDiscussionRead(PR_ID, false);
+            verify(pullRequestRepository, never()).recordDiscussionRead(PR_ID, true);
+        }
+
+        @Test
+        void shouldReportAWarningWhenAProviderErrorEndsTheCommentPager() {
+            PullRequest entity = createPullRequest();
+            when(pullRequestProcessor.process(any(), any())).thenReturn(entity);
+            when(issueCommentProcessor.process(any(), eq(PR_NUMBER), any())).thenReturn(new IssueComment());
+            when(pullRequestRepository.findByIdWithRepository(PR_ID)).thenReturn(Optional.of(entity));
+            stubSinglePrPage(createGHPullRequest(
+                    createCommentConnection(List.of(createGHComment(1001L, "embedded")), 25, true, "cursor-page-1")));
+            when(issueCommentSyncService.syncRemainingComments(SCOPE_ID, entity, "cursor-page-1"))
+                    .thenReturn(SyncResult.completedWithWarnings(3));
+
+            SyncResult result = service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
+
+            assertThat(result.status()).isEqualTo(SyncResult.Status.COMPLETED_WITH_WARNINGS);
+            verify(pullRequestRepository, never()).recordDiscussionRead(PR_ID, true);
         }
 
         @Test

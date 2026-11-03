@@ -232,6 +232,8 @@ public class GitHubIssueSyncService {
         boolean resuming = initialCursor != null;
         final boolean incrementalSync = isIncrementalSync;
         SyncResult.Status abortReason = null; // null means completed successfully
+        // A list longer than a run reads is a warning: holding the timestamp would read the same pages again.
+        boolean capped = false;
 
         if (initialCursor != null) {
             log.info(
@@ -247,6 +249,7 @@ public class GitHubIssueSyncService {
                         "Reached maximum pagination limit for issue sync: repoName={}, limit={}",
                         safeNameWithOwner,
                         MAX_PAGINATION_PAGES);
+                capped = true;
                 break;
             }
 
@@ -483,6 +486,7 @@ public class GitHubIssueSyncService {
                     "issues", issuesReceived, reportedTotalCount, stoppedEarly, safeNameWithOwner);
         }
 
+        SyncResult.Status commentReads = SyncResult.Status.COMPLETED;
         // Fetch remaining comments for issues with >10 comments (using cursor for efficient continuation)
         // Each call to syncRemainingComments handles its own transactions
         if (!issuesNeedingCommentPagination.isEmpty()) {
@@ -491,9 +495,11 @@ public class GitHubIssueSyncService {
                     safeNameWithOwner,
                     issuesNeedingCommentPagination.size());
             for (IssueWithCommentCursor issueWithCursor : issuesNeedingCommentPagination) {
-                int additionalComments = commentSyncService.syncRemainingComments(
+                if (commentReads == SyncResult.Status.ABORTED_RATE_LIMIT) break;
+                SyncResult read = commentSyncService.syncRemainingComments(
                         scopeId, issueWithCursor.issue(), issueWithCursor.commentCursor());
-                totalCommentsSynced += additionalComments;
+                totalCommentsSynced += read.count();
+                if (read.status().isWorseThan(commentReads)) commentReads = read.status();
             }
         }
 
@@ -504,7 +510,9 @@ public class GitHubIssueSyncService {
         }
 
         // Determine the final result status
-        SyncResult.Status finalStatus = abortReason != null ? abortReason : SyncResult.Status.COMPLETED;
+        if (capped && SyncResult.Status.COMPLETED_WITH_WARNINGS.isWorseThan(commentReads))
+            commentReads = SyncResult.Status.COMPLETED_WITH_WARNINGS;
+        SyncResult.Status finalStatus = abortReason != null ? abortReason : commentReads;
 
         log.info(
                 "Completed issue sync: repoName={}, issueCount={}, commentCount={}, issuesWithCommentPagination={}, scopeId={}, resumed={}, incremental={}, status={}",

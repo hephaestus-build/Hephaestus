@@ -92,6 +92,15 @@ public class PullRequest extends Issue {
     private int changedFiles;
 
     /**
+     * Whether the last read of this work from the provider reached the end of its threads, reviews and comments: false
+     * when it did not, null when no such read happened. {@link PullRequestRepository#recordDiscussionRead} writes it, so
+     * that no stale entity can overwrite it. A source that shows this discussion is not whole while this is false.
+     */
+    @Column(name = "discussion_read_whole", insertable = false, updatable = false)
+    @Nullable
+    private Boolean discussionReadWhole;
+
+    /**
      * The review decision state of the pull request.
      * Indicates whether the PR has been approved, changes requested, or review required.
      * Only the GraphQL sync states one; null where it has not, or, on GitLab, where it did not read every reviewer

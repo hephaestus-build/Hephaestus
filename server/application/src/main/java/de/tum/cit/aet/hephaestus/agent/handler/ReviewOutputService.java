@@ -239,8 +239,8 @@ public class ReviewOutputService {
      * Refuses a result that says a checkout lacks something: it names the checkout as searched, or its words say the
      * repository beyond its citations lacks something ({@link AbsenceClaims}), and its receipts hold no search of the
      * whole checkout that ran to the end, captured complete at the searched commit. A complete read of one file is a
-     * complete source of that file, not of the checkout (ADR 0064 § Absence). Every other source is staged whole in
-     * the job folder. A checkout that the capture did not hold whole is a capture limit, so no search could support
+     * complete source of that file, not of the checkout (ADR 0064 § Absence). Every other source is staged as captured
+     * in the job folder, so one whose capture names a gap cannot be named as consulted either. A checkout that the capture did not hold whole is a capture limit, so no search could support
      * the claim. A could-not-determine result says nothing about the work.
      */
     private void requireSearchedAbsence(Candidate candidate, CapturedEvidence captured) {
@@ -256,6 +256,16 @@ public class ReviewOutputService {
         var checkouts = captured.listedSources().stream()
                 .filter(kind -> catalogs.requireSource(kind).authority() == SourceAuthority.UPSTREAM_SNAPSHOT)
                 .toList();
+        // The checkout has its own rule below: a search of it can still run to the end.
+        var cut = consulted.stream()
+                .filter(kind -> !checkouts.contains(kind) && captured.namesAGap(kind))
+                .findFirst();
+        if (cut.isPresent())
+            throw new CandidateEvidenceVerifier.Unverified(
+                    CandidateRefusal.SOURCE_UNAVAILABLE,
+                    "The result names " + cut.get().value() + " as consulted, but its capture left part of it out, "
+                            + "so it cannot show that something is absent",
+                    null);
         var named = consulted.stream().filter(checkouts::contains).findFirst().orElse(null);
         if (named == null && (checkouts.isEmpty() || !claimed)) return;
         var searchable = named == null ? checkouts : List.of(named);

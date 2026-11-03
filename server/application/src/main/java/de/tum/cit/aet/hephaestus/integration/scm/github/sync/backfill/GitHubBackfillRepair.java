@@ -78,7 +78,8 @@ public class GitHubBackfillRepair {
                 return target;
             }
             long stored = count(repo);
-            if (!BackfillRestartProvider.hasMaterialGap(stored, total)) return target;
+            boolean unfinishedDiscussions = manual && pullRequests.existsUnfinishedDiscussionRead(repo.getId());
+            if (!BackfillRestartProvider.hasMaterialGap(stored, total) && !unfinishedDiscussions) return target;
             var restarted = backfillState.restartCompletedBackfill(target.scopeId(), target.id(), total, stored);
             if (restarted.isPresent()) {
                 log.info(

@@ -279,6 +279,7 @@ public class GitHubPullRequestSyncService {
         int reportedTotalCount = -1;
         List<PullRequestWithReviewCursor> prsNeedingReviewPagination = new ArrayList<>();
         List<PullRequestWithThreadCursor> prsNeedingThreadPagination = new ArrayList<>();
+        DiscussionReads discussionReads = new DiscussionReads();
         List<PullRequestWithCommentCursor> prsNeedingCommentPagination = new ArrayList<>();
         String cursor = initialCursor;
         boolean hasMore = true;
@@ -288,6 +289,8 @@ public class GitHubPullRequestSyncService {
         boolean stoppedByIncrementalSync = false;
         final boolean incrementalSync = isIncrementalSync;
         SyncResult.Status abortReason = null; // null means completed successfully
+        // A list longer than a run reads is a warning: holding the timestamp would read the same pages again.
+        boolean capped = false;
 
         if (initialCursor != null) {
             log.info(
@@ -303,6 +306,7 @@ public class GitHubPullRequestSyncService {
                         "Reached maximum pagination limit for pull requests: repoName={}, limit={}",
                         safeNameWithOwner,
                         MAX_PAGINATION_PAGES);
+                capped = true;
                 break;
             }
 
@@ -405,7 +409,8 @@ public class GitHubPullRequestSyncService {
                             scopeId,
                             prsNeedingReviewPagination,
                             prsNeedingThreadPagination,
-                            prsNeedingCommentPagination);
+                            prsNeedingCommentPagination,
+                            discussionReads);
                 });
 
                 if (pageResult != null) {
@@ -620,6 +625,7 @@ public class GitHubPullRequestSyncService {
                     safeNameWithOwner,
                     prsNeedingReviewPagination.size());
             for (PullRequestWithReviewCursor prWithCursor : prsNeedingReviewPagination) {
+                if (discussionReads.rateLimited()) break;
                 // Pagination runs in a new transaction, so reload the repository eagerly.
                 PullRequest pr = pullRequestRepository
                         .findByIdWithRepository(prWithCursor.pullRequestId())
@@ -630,9 +636,10 @@ public class GitHubPullRequestSyncService {
                             prWithCursor.pullRequestId());
                     continue;
                 }
-                int additionalReviews = reviewSyncService.syncRemainingReviews(
+                SyncResult read = reviewSyncService.syncRemainingReviews(
                         scopeId, pr, prWithCursor.reviewCursor(), prWithCursor.inlineCount());
-                totalReviewsSynced += additionalReviews;
+                totalReviewsSynced += read.count();
+                discussionReads.record(prWithCursor.pullRequestId(), read);
             }
         }
 
@@ -642,6 +649,7 @@ public class GitHubPullRequestSyncService {
                     safeNameWithOwner,
                     prsNeedingThreadPagination.size());
             for (PullRequestWithThreadCursor prWithCursor : prsNeedingThreadPagination) {
+                if (discussionReads.rateLimited()) break;
                 // Re-fetch with repository eagerly loaded to avoid LazyInitializationException in
                 // the new transaction; skip if the creating transaction was rolled back.
                 PullRequest pr = pullRequestRepository
@@ -653,9 +661,10 @@ public class GitHubPullRequestSyncService {
                             prWithCursor.pullRequestId());
                     continue;
                 }
-                int additionalComments =
+                SyncResult read =
                         reviewCommentSyncService.syncRemainingThreads(scopeId, pr, prWithCursor.threadCursor());
-                totalReviewCommentsSynced += additionalComments;
+                totalReviewCommentsSynced += read.count();
+                discussionReads.record(prWithCursor.pullRequestId(), read);
             }
         }
 
@@ -667,6 +676,7 @@ public class GitHubPullRequestSyncService {
                     safeNameWithOwner,
                     prsNeedingCommentPagination.size());
             for (PullRequestWithCommentCursor prWithCursor : prsNeedingCommentPagination) {
+                if (discussionReads.rateLimited()) break;
                 // Pagination runs in a new transaction, so reload the repository eagerly.
                 PullRequest pr = pullRequestRepository
                         .findByIdWithRepository(prWithCursor.pullRequestId())
@@ -677,17 +687,26 @@ public class GitHubPullRequestSyncService {
                             prWithCursor.pullRequestId());
                     continue;
                 }
-                int additionalComments =
+                SyncResult read =
                         issueCommentSyncService.syncRemainingComments(scopeId, pr, prWithCursor.commentCursor());
-                totalCommentsSynced += additionalComments;
+                totalCommentsSynced += read.count();
+                discussionReads.record(prWithCursor.pullRequestId(), read);
             }
         }
 
+        // Every page was read, so nothing resumes from the cursor: a work item whose lists stopped short is read again
+        // from the last sync timestamp, which a rate limit keeps in place.
         if (syncTargetId != null && !hasMore && abortReason == null) {
             clearCursorCheckpoint(syncTargetId);
         }
 
-        SyncResult.Status finalStatus = abortReason != null ? abortReason : SyncResult.Status.COMPLETED;
+        discussionReads.settle(pullRequestRepository);
+        SyncResult.Status finalStatus = abortReason != null
+                ? abortReason
+                : SyncResult.merge(
+                                new SyncResult(discussionReads.status(), 0),
+                                capped ? SyncResult.completedWithWarnings(0) : SyncResult.completed(0))
+                        .status();
 
         log.info(
                 "Completed pull request sync: repoName={}, prCount={}, reviewCount={}, reviewCommentCount={}, commentCount={}, prsWithReviewPagination={}, prsWithThreadPagination={}, prsWithCommentPagination={}, resumed={}, incremental={}, stoppedByIncremental={}, status={}",
@@ -786,7 +805,8 @@ public class GitHubPullRequestSyncService {
             Long scopeId,
             List<PullRequestWithReviewCursor> prsNeedingReviewPagination,
             List<PullRequestWithThreadCursor> prsNeedingThreadPagination,
-            List<PullRequestWithCommentCursor> prsNeedingCommentPagination) {
+            List<PullRequestWithCommentCursor> prsNeedingCommentPagination,
+            DiscussionReads discussionReads) {
         int prsSynced = 0;
         int reviewsSynced = 0;
         int reviewCommentsSynced = 0;
@@ -836,9 +856,22 @@ public class GitHubPullRequestSyncService {
             }
 
             EmbeddedReviewThreadsDTO embeddedThreads = prWithReviews.embeddedReviewThreads();
+            boolean threadsWhole = true;
             for (GitHubReviewThreadDTO thread : embeddedThreads.threads()) {
-                reviewCommentsSynced += reviewCommentSyncService.processThread(thread, entity, scopeId);
+                var read = reviewCommentSyncService.processThread(thread, entity, scopeId);
+                reviewCommentsSynced += read.comments();
+                threadsWhole &= read.whole();
+                if (!read.whole()) discussionReads.stop(entity.getId(), read.read());
             }
+            pullRequestRepository.recordDiscussionRead(
+                    entity.getId(),
+                    threadsWhole
+                            && !embeddedComments.needsPagination()
+                            && !embeddedReviews.needsPagination()
+                            && !embeddedThreads.needsPagination());
+            if (embeddedComments.needsPagination()) discussionReads.expect(entity.getId());
+            if (embeddedReviews.needsPagination()) discussionReads.expect(entity.getId());
+            if (embeddedThreads.needsPagination()) discussionReads.expect(entity.getId());
 
             if (embeddedThreads.needsPagination()) {
                 prsNeedingThreadPagination.add(new PullRequestWithThreadCursor(

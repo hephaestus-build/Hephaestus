@@ -123,6 +123,10 @@ Stored tombstones and erased work remain in the comparison count.
 Provider failures leave the checkpoint unchanged.
 Automatic provider probes have a one-hour cooldown per repository and server process.
 
+A manual repair also restarts the scan of a repository that holds a pull request not read whole.
+This covers a pull request that a sync or an earlier version stopped reading at its first page of threads, reviews or comments.
+The practices that need the whole discussion withhold their results on such a pull request until a read finishes it.
+
 ## Run the repair
 
 1. Sign in as a workspace administrator.
