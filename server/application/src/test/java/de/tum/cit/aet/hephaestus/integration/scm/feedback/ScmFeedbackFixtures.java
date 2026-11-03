@@ -12,10 +12,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,6 +33,11 @@ public final class ScmFeedbackFixtures {
     private ScmFeedbackFixtures() {}
 
     public static FeedbackTarget target(IntegrationRef integration, String subject, @Nullable String head) {
+        return target(integration, subject, "a".repeat(40), head);
+    }
+
+    public static FeedbackTarget target(
+            IntegrationRef integration, String subject, String base, @Nullable String head) {
         long id = NEXT.incrementAndGet();
         boolean issue =
                 subject.contains("/issues/") || (integration.kind().name().equals("GITLAB") && subject.contains("#"));
@@ -39,7 +46,7 @@ public final class ScmFeedbackFixtures {
         SUBJECTS.put(item, subject);
         ItemVersion version = head == null
                 ? new ItemVersion("test-unpinned", null)
-                : ScmVersion.pullRequest("a".repeat(40), head, "Test", null);
+                : ScmVersion.pullRequest(base, head, "Test", null);
         return new FeedbackTarget(item, integration, version);
     }
 
@@ -61,15 +68,66 @@ public final class ScmFeedbackFixtures {
     }
 
     public static ScmFeedbackFormatter formatter(String slug) {
-        var workspaces = mock(WorkspaceSummaryQuery.class, call -> {
+        return new ScmFeedbackFormatter(
+                new ApplicationProperties(null, new ApplicationProperties.Webapp("https://hephaestus.example")),
+                workspaces(slug),
+                new WorkspaceSubdomainProperties(false, ""));
+    }
+
+    /** Writes the footer that v1.0.0-rc.1 posted: the same lines, without the disclosure marker above them. */
+    public static ScmFeedbackFormatter formatterBeforeDisclosureMarker(String slug) {
+        return new ScmFeedbackFormatter(
+                new ApplicationProperties(null, new ApplicationProperties.Webapp("https://hephaestus.example")),
+                workspaces(slug),
+                new WorkspaceSubdomainProperties(false, "")) {
+            @Override
+            public Footer footer(ItemRef item) {
+                var footer = super.footer(item);
+                String marker = ScmFeedbackFormatter.DISCLOSURE + "\n";
+                return new Footer(
+                        footer.workspaceId(),
+                        footer.summary().replace(marker, ""),
+                        footer.lineNote().replace(marker, ""));
+            }
+        };
+    }
+
+    private static WorkspaceSummaryQuery workspaces(String slug) {
+        return mock(WorkspaceSummaryQuery.class, call -> {
             if (call.getMethod().getName().equals("findById"))
                 return Optional.of(new WorkspaceSummaryQuery.WorkspaceSummary(call.getArgument(0), slug, "Team"));
             return Answers.RETURNS_DEFAULTS.answer(call);
         });
-        return new ScmFeedbackFormatter(
-                new ApplicationProperties(null, new ApplicationProperties.Webapp("https://hephaestus.example")),
-                workspaces,
-                new WorkspaceSubdomainProperties(false, ""));
+    }
+
+    /**
+     * A summary, a line note and a file note with fresh write identities, worded with the Markdown that posted text
+     * escapes or keeps: a code span, a mention, an HTML tag and a list.
+     */
+    public static OnWorkPackage readbackPackage(String label, String path, int line) {
+        String run = label + "-" + UUID.randomUUID();
+        var summary = new SummaryContent(
+                copyId(run + "-summary"),
+                "Readback check " + label + ".\n\n- Keep `deactivateUser` <b>as is</b>, @alice.\n- A second point.",
+                copyId(run + "-summary").toString(),
+                marker(run + "-summary"));
+        return new OnWorkPackage(
+                summary,
+                List.of(
+                        line(
+                                anchor(path, line),
+                                "This line reads `SECRET_TOKEN` from <env>; " + label + ".",
+                                marker(run + "-line"),
+                                copyId(run + "-line").toString()),
+                        line(
+                                new FeedbackAnchor(path, null, null, null),
+                                "This file has no test; " + label + ".",
+                                marker(run + "-file"),
+                                copyId(run + "-file").toString())));
+    }
+
+    private static String marker(String key) {
+        return "<!-- hephaestus-feedback-copy:" + copyId(key) + " -->";
     }
 
     public static UUID copyId(String key) {
