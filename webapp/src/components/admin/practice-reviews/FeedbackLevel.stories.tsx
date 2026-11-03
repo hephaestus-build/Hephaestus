@@ -31,6 +31,7 @@ import {
 	markedIncorrectFeedbackDetail,
 	partialPackageFeedbackDetail,
 	POSTED_SUMMARY_COMMENT,
+	POSTED_SUMMARY_COMMENT_WITH_FOOTER_MARKER,
 	PRIVATE_FEEDBACK_TEXT,
 	rejectedFeedbackDetail,
 	replacedFeedbackDetail,
@@ -359,6 +360,32 @@ export const DeliveredSummaryComment: Story = {
 		const rendered = panel.getByRole("tabpanel", { name: "Rendered" });
 		await expect(rendered.textContent).toContain("The description needs its purpose and coverage.");
 		await expect(rendered.textContent).not.toMatch(/<!--|<sub>/u);
+		await expect(
+			within(rendered).getByRole("link", {
+				name: "Why you see this and how to stop it (opens in a new tab)",
+			}),
+		).toBeVisible();
+	},
+};
+
+/** A summary posted with the hidden line where its footer starts: that line stays hidden too. */
+export const DeliveredSummaryCommentWithFooterMarker: Story = {
+	args: {
+		feedback: ready({
+			...approvedFeedbackDetail,
+			destination: "ON_WORK",
+			body: POSTED_SUMMARY_COMMENT_WITH_FOOTER_MARKER,
+			copies: approvedFeedbackDetail.copies.map((copy) => ({
+				...copy,
+				body: POSTED_SUMMARY_COMMENT_WITH_FOOTER_MARKER,
+			})),
+		}),
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		const rendered = panel.getByRole("tabpanel", { name: "Rendered" });
+		await expect(rendered.textContent).toContain("The description needs its purpose and coverage.");
+		await expect(rendered.textContent).not.toMatch(/<!--|<sub>|hephaestus-disclosure/u);
 		await expect(
 			within(rendered).getByRole("link", {
 				name: "Why you see this and how to stop it (opens in a new tab)",

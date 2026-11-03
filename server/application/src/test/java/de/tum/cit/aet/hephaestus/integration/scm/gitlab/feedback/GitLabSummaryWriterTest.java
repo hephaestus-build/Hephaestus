@@ -98,7 +98,7 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
         verify(spec)
                 .variable(
                         "body",
-                        "hello\n\n"
+                        "hello\n\n" + ScmFeedbackFormatter.DISCLOSURE + "\n"
                                 + "<sub>Practice review. This feedback is AI-generated and can be inaccurate. Answer or disagree in "
                                 + "[Hephaestus](https://hephaestus.example/w/team/feedback/"
                                 + target.item().itemId() + ").</sub>\n"

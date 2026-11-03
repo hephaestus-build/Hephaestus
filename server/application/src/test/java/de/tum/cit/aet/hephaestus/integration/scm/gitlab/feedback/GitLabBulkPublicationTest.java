@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedCommentThreads;
@@ -181,7 +182,7 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
     }
 
     private static String delivered(String text, String key) {
-        return text + "\n\n"
+        return text + "\n\n" + ScmFeedbackFormatter.DISCLOSURE + "\n"
                 + "<sub>AI-generated feedback. Answer or disagree in [Hephaestus](https://hephaestus.example/w/team/feedback/"
                 + TARGET.item().itemId() + ").</sub>\n"
                 + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n\n"

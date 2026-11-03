@@ -27,6 +27,9 @@ const FOOTER_LINES = [
 	),
 }));
 
+/** The hidden line where the server's footer starts; the provider shows nothing for it. */
+const FOOTER_START = /^<!-- hephaestus-disclosure:\d+ -->$/u;
+
 /** The formatter's rule between the feedback and its footer. */
 const FOOTER_RULE = "---";
 
@@ -104,6 +107,9 @@ function unwrapFooter(block: string, cut: boolean): string | undefined {
 	for (const [index, line] of lines.entries()) {
 		if (!hasText(line.trim())) {
 			unwrapped.push(line);
+			continue;
+		}
+		if (FOOTER_START.test(line.trim())) {
 			continue;
 		}
 		const text = FOOTER_LINES.map(({ pattern }) => pattern.exec(line)?.groups?.text).find(hasText);

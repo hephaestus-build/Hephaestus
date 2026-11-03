@@ -44,6 +44,47 @@ class ScmFeedbackFormatterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldTreatACopyAsTheSameWhateverFormTheFooterTakesLater() {
+        var content = ScmFeedbackFixtures.summary("Test body", "<!-- marker -->");
+        String posted = formatter("https://hephaestus.example").footer(item()).summary(content);
+        assertThat(posted).contains(ScmFeedbackFormatter.DISCLOSURE + "\n<sub>");
+        int start = posted.indexOf(ScmFeedbackFormatter.DISCLOSURE);
+        int end = posted.lastIndexOf("<!-- marker -->");
+        String later = posted.substring(0, start)
+                + ScmFeedbackFormatter.DISCLOSURE
+                + "\nA new footer, as plain text.\n> Even a quote.\n\n"
+                + posted.substring(end);
+
+        assertThat(ScmFeedbackFormatter.sameCopy(posted, later)).isTrue();
+        assertThat(ScmFeedbackFormatter.sameCopy(later, posted)).isTrue();
+    }
+
+    @Test
+    void shouldWithdrawAMarkedCopyWithoutItsFooterOrItsFooterMarker() {
+        String posted = formatter("https://hephaestus.example")
+                .footer(item())
+                .summary(ScmFeedbackFixtures.summary("Test body", "<!-- hephaestus-feedback-copy:abc -->"));
+
+        assertThat(ScmFeedbackFormatter.withdrawnCopyBody(posted))
+                .isEqualTo("This feedback was withdrawn.\n<!-- hephaestus-feedback-copy:abc -->");
+    }
+
+    @Test
+    void shouldReadACopyThatRc1PostedWithoutTheDisclosureMarker() {
+        var content = ScmFeedbackFixtures.summary("Test body", "<!-- marker -->");
+        String expected = formatter("https://new.example").footer(item()).summary(content);
+        String rc1 = formatter("https://old.example")
+                .footer(item())
+                .summary(content)
+                .replace(ScmFeedbackFormatter.DISCLOSURE + "\n", "");
+        assertThat(rc1).doesNotContain("hephaestus-disclosure");
+
+        assertThat(ScmFeedbackFormatter.sameCopy(rc1, expected)).isTrue();
+        assertThat(ScmFeedbackFormatter.sameCopy(rc1.replace("Test body", "Other body"), expected))
+                .isFalse();
+    }
+
+    @Test
     void shouldNotTreatChangedWordsOrAnotherMarkerAsTheSameCopy() {
         var content = ScmFeedbackFixtures.summary("Test body", "<!-- marker -->");
         var footer = formatter("https://hephaestus.example").footer(item());
@@ -115,7 +156,7 @@ class ScmFeedbackFormatterTest extends BaseUnitTest {
 
         assertThat(result)
                 .isEqualTo(
-                        "Inline feedback\n\n"
+                        "Inline feedback\n\n" + ScmFeedbackFormatter.DISCLOSURE + "\n"
                                 + "<sub>AI-generated feedback. Answer or disagree in"
                                 + " [Hephaestus](https://hephaestus.example/w/team/feedback/42).</sub>\n"
                                 + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n");
@@ -150,6 +191,7 @@ class ScmFeedbackFormatterTest extends BaseUnitTest {
         String posted = formatter("https://hephaestus.example").footer(item()).summary(content);
         assertThat(posted)
                 .isEqualTo("**[View file](https://example.test/file)**\n\nAsk `@alice`\n\n"
+                        + ScmFeedbackFormatter.DISCLOSURE + "\n"
                         + "<sub>Practice review. This feedback is AI-generated and can be inaccurate. Answer or disagree in "
                         + "[Hephaestus](https://hephaestus.example/w/team/feedback/42).</sub>\n"
                         + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n\n"

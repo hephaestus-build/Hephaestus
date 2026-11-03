@@ -620,6 +620,12 @@ export const POSTED_SUMMARY_COMMENT = [
 	"",
 ].join("\n");
 
+/** The same comment as the server posts it now: a hidden line marks where its footer starts. */
+export const POSTED_SUMMARY_COMMENT_WITH_FOOTER_MARKER = POSTED_SUMMARY_COMMENT.replace(
+	"\n---\n",
+	"\n<!-- hephaestus-disclosure:1 -->\n",
+);
+
 const LONG_BODY = [
 	"2 issues to tighten in this change, plus one thing worth keeping.",
 	"",

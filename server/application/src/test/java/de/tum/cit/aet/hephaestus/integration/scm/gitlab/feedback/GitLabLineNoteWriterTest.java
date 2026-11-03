@@ -142,7 +142,10 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
                 "fix",
                 "<!-- hephaestus-diff-note -->",
                 "result:a:0");
-        String earlierFooter = posted(expectedCopy).replaceAll("<sub>[^\\n]*</sub>", "<sub>An earlier footer.</sub>");
+        // As rc.1 posted it: no disclosure marker, and another footer.
+        String earlierFooter = posted(expectedCopy)
+                .replace(ScmFeedbackFormatter.DISCLOSURE + "\n", "")
+                .replaceAll("<sub>[^\\n]*</sub>", "<sub>An earlier footer.</sub>");
         assertThat(earlierFooter).isNotEqualTo(posted(expectedCopy));
         stubDiscussions(
                 List.of(discussion(

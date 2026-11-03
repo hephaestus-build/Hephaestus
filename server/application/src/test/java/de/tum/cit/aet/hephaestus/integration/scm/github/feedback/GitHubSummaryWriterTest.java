@@ -97,7 +97,7 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
         verify(spec)
                 .variable(
                         "body",
-                        "body for `@alice`\n\n"
+                        "body for `@alice`\n\n" + ScmFeedbackFormatter.DISCLOSURE + "\n"
                                 + "<sub>Practice review. This feedback is AI-generated and can be inaccurate. Answer or disagree in "
                                 + "[Hephaestus](https://hephaestus.example/w/team/feedback/"
                                 + target.item().itemId() + ").</sub>\n"
@@ -412,6 +412,20 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
         assertThatThrownBy(() -> writer.postSummary(PR_TARGET, ScmFeedbackFixtures.summary("Words", "marker")))
                 .isInstanceOf(FeedbackNotSentException.class);
         verifyNoInteractions(gitHubProvider, prNodeIdResolver);
+    }
+
+    @Test
+    void shouldFindACopyThatRc1PostedBeforeTheDisclosureMarker() {
+        when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
+        GraphQlClient.RequestSpec spec = mockRequestChain();
+        String rc1 = EXACT.replace(ScmFeedbackFormatter.DISCLOSURE + "\n", "");
+        assertThat(rc1).isNotEqualTo(EXACT);
+        var page =
+                mockCommentsPageResponse("repository.pullRequest.comments", List.of(comment("IC_1", rc1)), false, null);
+        when(spec.execute()).thenReturn(Mono.just(page));
+
+        assertThat(channel.findExistingSummary(PR_TARGET, EXPECTED).presence()).isEqualTo(LookupPresence.FOUND);
+        verify(graphQlClient, never()).documentName("AddPullRequestComment");
     }
 
     @Test
