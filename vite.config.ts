@@ -280,6 +280,9 @@ export default defineConfig({
 			}),
 			"gate:pmd-canary": run("node scripts/check-pmd-canary.ts"),
 			"gate:api-compatibility": run("node scripts/check-api-compatibility.ts"),
+			"gate:public-contract": run(
+				"node --test scripts/check-public-contract.test.ts && node scripts/check-public-contract.ts",
+			),
 			"test:server:selection": run("node scripts/verify-server-test-selection.ts"),
 			"test:server:unit": run(
 				`${gradlew} :application:test :application:jacocoTestCoverageVerification`,

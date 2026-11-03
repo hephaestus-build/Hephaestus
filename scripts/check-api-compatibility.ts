@@ -15,6 +15,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { readChangesets } from "@changesets/read";
+import { parse } from "yaml";
 
 import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { installPinnedBinary, type PinnedAsset } from "./lib/pinned-binary.ts";
@@ -24,6 +25,19 @@ import { compareVersions, parseVersion } from "./plan-release.ts";
 const ROOT = path.resolve(import.meta.dirname, "..");
 export const SPEC = "server/openapi.yaml";
 export const ACCEPTED_BREAKS = "server/openapi-accepted-breaks.txt";
+
+/**
+ * oasdiff rule levels that differ from its defaults. Response enums are open, so a new value is no
+ * break. From 1.0, a client also keeps every response property and media type that it can read.
+ */
+const OPEN_RESPONSE_ENUMS = [
+	"response-property-enum-value-added info",
+	"response-mediatype-enum-value-added info",
+];
+const STABLE_RESPONSES = [
+	"response-optional-property-removed err",
+	"response-media-type-name-changed err",
+];
 
 const OASDIFF_VERSION = "1.34.1";
 // The upstream checksums.txt and the GitHub release asset digests both state these values.
@@ -130,18 +144,21 @@ export interface Compatibility {
 }
 
 /** The major version of a `vX.Y.Z` release tag. */
-const majorOf = (tag: string): number => parseVersion(tag.slice(1))?.major ?? 0;
+export const majorOf = (tag: string): number => parseVersion(tag.slice(1))?.major ?? 0;
 
 /**
  * Whether the checkout at `rootDir` heads for a major release after `baseTag`. Before the Version
  * PR, a pending changeset bumps `hephaestus` by `major`. From the Version PR on, it has consumed
- * that changeset and `package.json` carries the higher major.
+ * that changeset and `package.json` carries the higher major. In pre mode, the Version PR moves a
+ * consumed changeset to `.changeset/pre/`, and reading it there would keep this true after the release.
  */
 export async function headsForMajorRelease(rootDir: string, baseTag: string): Promise<boolean> {
 	const changesets = await readChangesets(rootDir);
 	if (
-		changesets.some(({ releases }) =>
-			releases.some(({ name, type }) => name === "hephaestus" && type === "major"),
+		changesets.some(
+			({ id, releases }) =>
+				!id.startsWith("pre/") &&
+				releases.some(({ name, type }) => name === "hephaestus" && type === "major"),
 		)
 	) {
 		return true;
@@ -184,6 +201,47 @@ function acceptedBreaksProblems(
 	return problems;
 }
 
+const HTTP_METHODS = new Set(["get", "put", "post", "delete", "options", "head", "patch", "trace"]);
+
+/** Each query, header or cookie parameter of an operation. A path variable's name is no contract. */
+function parameterLines(operation: string, parameters: readonly unknown[]): string[] {
+	return parameters.flatMap((parameter) => {
+		const { in: where, name } = asRecord(parameter, `${operation} parameter`);
+		return where === "path" ? [] : [`${operation} parameter ${String(where)} ${String(name)}`];
+	});
+}
+
+/**
+ * Each operation and parameter of a parsed spec, as `in API <METHOD> <path>[ parameter <in> <name>]`.
+ * The route hides the names of its variables, so renaming one changes nothing here.
+ */
+function contractLines(spec: unknown): Set<string> {
+	const paths = asRecord(asRecord(spec, "spec").paths, "spec paths");
+	return new Set(
+		Object.entries(paths).flatMap(([template, value]) => {
+			const route = template.replaceAll(/\{[^}]*\}/gu, "{}");
+			const item = asRecord(value, `path ${template}`);
+			const shared = asArray(item.parameters ?? [], `${route} parameters`);
+			return Object.entries(item)
+				.filter(([method]) => HTTP_METHODS.has(method))
+				.flatMap(([method, raw]) => {
+					const operation = `in API ${method.toUpperCase()} ${route}`;
+					const own = asArray(asRecord(raw, operation).parameters ?? [], operation);
+					return [operation, ...parameterLines(operation, [...shared, ...own])];
+				});
+		}),
+	);
+}
+
+/**
+ * What the base offers and the revision lacks. oasdiff lets an operation or parameter go once the
+ * base marks it deprecated, and warns only for a parameter. From 1.0, either one needs a major release.
+ */
+export function removedFromContract(base: string, revision: string): string[] {
+	const kept = contractLines(parse(revision));
+	return [...contractLines(parse(base))].filter((line) => !kept.has(line));
+}
+
 function oasdiffBreaking(oasdiff: string, args: readonly string[], cwd: string) {
 	const result = spawnSync(oasdiff, ["breaking", ...args], {
 		cwd,
@@ -210,31 +268,68 @@ export async function compareSpecs(options: {
 	cwd: string;
 }): Promise<Compatibility> {
 	const { oasdiff, base, baseTag, majorRelease, revision, acceptedBreaks, format, cwd } = options;
-	const all = oasdiffBreaking(oasdiff, [base, revision, "--format", "json"], cwd);
-	if (all.status !== 0) {
-		throw new Error(`oasdiff exited with ${exitStatus(all.status, all.signal)}:\n${all.stderr}`);
+	const stable = majorOf(baseTag) >= 1;
+	const directory = await mkdtemp(path.join(tmpdir(), "api-compatibility-levels-"));
+	try {
+		const levels = path.join(directory, "levels.txt");
+		await writeFile(
+			levels,
+			`${[...OPEN_RESPONSE_ENUMS, ...(stable ? STABLE_RESPONSES : [])].join("\n")}\n`,
+		);
+		const severity = ["--severity-levels", levels];
+		const all = oasdiffBreaking(oasdiff, [base, revision, ...severity, "--format", "json"], cwd);
+		if (all.status !== 0) {
+			throw new Error(`oasdiff exited with ${exitStatus(all.status, all.signal)}:\n${all.stderr}`);
+		}
+		const breaks = new Set(breakLines(all.stdout));
+		const file = await readFile(path.resolve(cwd, acceptedBreaks), "utf8");
+		const gate = oasdiffBreaking(
+			oasdiff,
+			[
+				base,
+				revision,
+				...severity,
+				"--err-ignore",
+				acceptedBreaks,
+				"--fail-on",
+				"ERR",
+				"--format",
+				format,
+			],
+			cwd,
+		);
+		if (gate.status !== 0 && gate.status !== 1) {
+			throw new Error(
+				`oasdiff exited with ${exitStatus(gate.status, gate.signal)}:\n${gate.stderr}`,
+			);
+		}
+		const removed =
+			stable && !majorRelease
+				? removedFromContract(
+						await readFile(path.resolve(cwd, base), "utf8"),
+						await readFile(path.resolve(cwd, revision), "utf8"),
+					)
+				: [];
+		return {
+			compatible: gate.status === 0,
+			report: `${gate.stdout}${gate.stderr}`,
+			obsolete: acceptedEntries(file).filter((entry) => !breaks.has(entry)),
+			problems: [
+				...acceptedBreaksProblems(file, baseTag, breaks, majorRelease),
+				...removed.map(
+					(line) =>
+						`From 1.0 a removal needs a major release, also after a deprecation. Keep it: ${line}`,
+				),
+			],
+		};
+	} finally {
+		await rm(directory, { recursive: true, force: true });
 	}
-	const breaks = new Set(breakLines(all.stdout));
-	const file = await readFile(path.resolve(cwd, acceptedBreaks), "utf8");
-	const gate = oasdiffBreaking(
-		oasdiff,
-		[base, revision, "--err-ignore", acceptedBreaks, "--fail-on", "ERR", "--format", format],
-		cwd,
-	);
-	if (gate.status !== 0 && gate.status !== 1) {
-		throw new Error(`oasdiff exited with ${exitStatus(gate.status, gate.signal)}:\n${gate.stderr}`);
-	}
-	return {
-		compatible: gate.status === 0,
-		report: `${gate.stdout}${gate.stderr}`,
-		obsolete: acceptedEntries(file).filter((entry) => !breaks.has(entry)),
-		problems: acceptedBreaksProblems(file, baseTag, breaks, majorRelease),
-	};
 }
 
-/** The spec at `tag`. A CI checkout has one commit and no tags, so the tag is fetched on demand. */
-async function specAt(tag: string): Promise<string> {
-	const object = `${tag}:${SPEC}`;
+/** A file at `tag`. A CI checkout has one commit and no tags, so the tag is fetched on demand. */
+export async function fileAt(tag: string, file: string): Promise<string> {
+	const object = `${tag}:${file}`;
 	if (!(await succeeds("git", ["cat-file", "-e", object], { cwd: ROOT }))) {
 		const shallow = await output("git", ["rev-parse", "--is-shallow-repository"], { cwd: ROOT });
 		await run(
@@ -266,7 +361,7 @@ async function main(): Promise<void> {
 	const directory = await mkdtemp(path.join(tmpdir(), "api-compatibility-base-"));
 	try {
 		const baseSpec = path.join(directory, `openapi-${base}.yaml`);
-		await writeFile(baseSpec, await specAt(base));
+		await writeFile(baseSpec, await fileAt(base, SPEC));
 		console.log(`Comparing ${SPEC} with ${base} (oasdiff ${OASDIFF_VERSION}).`);
 		const majorRelease = majorOf(base) >= 1 && (await headsForMajorRelease(ROOT, base));
 		if (majorRelease) {

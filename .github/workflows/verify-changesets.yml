@@ -26,6 +26,11 @@ jobs:
       - name: Test changeset and version-sync policies
         run: vp run gate:changesets
 
+      # Reads the latest stable release, and starts refusing at 1.0.0.
+      # docs/contributor/ci-cd.mdx § Public contract gate.
+      - name: Public contract against the latest release
+        run: vp run gate:public-contract
+
       # A revert of a release commit restores MIGRATION.md, the consumed changesets and the pending
       # migration fragments by construction, so it can never satisfy the rules below — the release
       # reverts so far each needed an administrator bypass. The exemption is structural, never

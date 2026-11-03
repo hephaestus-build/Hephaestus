@@ -192,20 +192,58 @@ export const verifyConsumedMigrationEntries = (
 	}
 };
 
-/** Each name that a chart schema accepts, as a dotted path. `[]` marks the items of a list. */
-const chartValueNames = (schema: unknown): Set<string> => {
-	const root = asRecord(schema, "chart schema");
-	const definitions = isRecord(root.definitions) ? root.definitions : {};
+interface ValueLimits {
+	maximum?: number;
+	minimum?: number;
+	values?: unknown[];
+}
+
+/**
+ * Each name that a JSON schema accepts, as a dotted path, and what each path accepts. `[]` marks the
+ * items of a list. A `$ref` resolves against every definition in the file, because the catalog schema
+ * nests its own. Branches of one path merge to what any of them accepts.
+ */
+const schemaValues = (schema: unknown) => {
+	const root = asRecord(schema, "schema");
+	const definitions = new Map<string, unknown>();
+	const collect = (raw: unknown): void => {
+		if (!isRecord(raw) && !Array.isArray(raw)) {
+			return;
+		}
+		for (const key of ["definitions", "$defs"]) {
+			const named = isRecord(raw) ? raw[key] : undefined;
+			for (const [name, value] of Object.entries(isRecord(named) ? named : {})) {
+				definitions.set(name, value);
+			}
+		}
+		for (const value of Object.values(raw)) {
+			collect(value);
+		}
+	};
+	collect(root);
 	const names = new Set<string>();
+	const limits = new Map<string, ValueLimits>();
+	const record = (name: string, node: Record<string, unknown>): void => {
+		const known = limits.get(name) ?? {};
+		const { maximum, minimum } = node;
+		const values: unknown[] | undefined = Array.isArray(node.enum) ? node.enum : undefined;
+		limits.set(name, {
+			...known,
+			...(typeof maximum === "number" && { maximum: Math.max(maximum, known.maximum ?? maximum) }),
+			...(typeof minimum === "number" && { minimum: Math.min(minimum, known.minimum ?? minimum) }),
+			...(values !== undefined && { values: [...(known.values ?? []), ...values] }),
+		});
+	};
 	const walk = (raw: unknown, prefix: string): void => {
 		if (!isRecord(raw)) {
 			return;
 		}
 		const node =
-			typeof raw.$ref === "string" ? definitions[raw.$ref.replace("#/definitions/", "")] : raw;
+			typeof raw.$ref === "string" ? definitions.get(raw.$ref.split("/").at(-1) ?? "") : raw;
 		if (!isRecord(node)) {
 			return;
 		}
+		record(prefix, node);
 		for (const [name, child] of Object.entries(isRecord(node.properties) ? node.properties : {})) {
 			const key = prefix === "" ? name : `${prefix}.${name}`;
 			names.add(key);
@@ -217,17 +255,42 @@ const chartValueNames = (schema: unknown): Set<string> => {
 		}
 	};
 	walk(root, "");
-	return names;
+	return { names, limits };
 };
 
 /** Each name that the base schema has and the head schema lacks: `a` once for a removed group `a.*`. */
 export const removedChartValues = (base: unknown, head: unknown): string[] => {
-	const kept = chartValueNames(head);
-	const removed = [...chartValueNames(base)].filter((name) => !kept.has(name));
+	const { names: kept } = schemaValues(head);
+	const removed = [...schemaValues(base).names].filter((name) => !kept.has(name));
 	return removed.filter(
 		(name) =>
 			!removed.some((other) => name.startsWith(`${other}.`) || name.startsWith(`${other}[]`)),
 	);
+};
+
+/** Each kept value that accepts less than before: a lower maximum, a higher minimum or a lost enum value. */
+export const narrowedChartValues = (base: unknown, head: unknown): string[] => {
+	const { limits: kept } = schemaValues(head);
+	return [...schemaValues(base).limits].flatMap(([name, before]) => {
+		const after = kept.get(name);
+		if (after === undefined) {
+			return [];
+		}
+		const lines: string[] = [];
+		if (after.maximum !== undefined && (before.maximum ?? Infinity) > after.maximum) {
+			lines.push(`${name}: maximum ${String(before.maximum)} became ${after.maximum}`);
+		}
+		if (after.minimum !== undefined && (before.minimum ?? -Infinity) < after.minimum) {
+			lines.push(`${name}: minimum ${String(before.minimum)} became ${after.minimum}`);
+		}
+		const lostValues = (before.values ?? []).filter(
+			(value) => after.values !== undefined && !after.values.includes(value),
+		);
+		return [
+			...lines,
+			...lostValues.map((value) => `${name}: value ${JSON.stringify(value)} is gone`),
+		];
+	});
 };
 
 /**
