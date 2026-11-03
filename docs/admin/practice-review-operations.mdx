@@ -38,6 +38,8 @@ When the window closes, one review runs at the newest event. The older events ar
 An event waits longer in two cases:
 
 - An earlier review of the same work still measures a practice that the event selects. The event waits with `REVIEW_IN_PROGRESS` until that review ends.
+  A newer push or edit stops that review if it has not started. No sandbox starts.
+  The review shows as Replaced, and the next review of the work runs its practices too.
 - A practice needs the work's checks (its checks source is Required or Complete) and the checks have not finished.
   The review withholds that practice with the reason `CHECKS_PENDING`, `CHECKS_AWAITING_APPROVAL` or `NO_CHECKS_REPORTED`.
   The next event on the work, such as the checks event when they finish, selects it again.

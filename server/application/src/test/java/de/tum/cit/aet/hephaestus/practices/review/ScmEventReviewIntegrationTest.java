@@ -91,6 +91,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackStoreService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendTransactions;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
+import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackBasisInput;
@@ -124,7 +125,9 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -145,6 +148,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
@@ -240,6 +244,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     @Autowired
     ReviewService service;
+
+    @Autowired
+    ReviewStart starts;
 
     @Autowired
     GitLabMergeRequestProcessor mergeRequests;
@@ -1685,6 +1692,168 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .filteredOn(occasion -> occasion.getState() == ItemEventState.WAITING)
                 .extracting(ItemEvent::getReason)
                 .containsOnly(ReviewRequestReason.REVIEW_IN_PROGRESS);
+    }
+
+    @Test
+    void shouldCarryWhatAReplacedQueuedReviewSelectedIntoTheReviewOfTheNewerHead() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        long everyPush = practices
+                .findByWorkspaceIdAndSlug(prepared.item().workspaceId(), "event-test")
+                .orElseThrow()
+                .getId();
+        long onlyWhenOpened = practiceOnlyWhenOpened(prepared);
+        long workspace = prepared.item().workspaceId();
+        publish(prepared);
+        var stale = itemReviews(prepared).getFirst();
+        assertThat(membersOf(workspace, stale.getId())).containsOnlyKeys(everyPush, onlyWhenOpened);
+
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60)));
+        var pushed = occasion(prepared, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED);
+        assertThat(pushed.getReason()).isEqualTo(ReviewRequestReason.REVIEW_IN_PROGRESS);
+
+        assertThat(replaced(workspace, stale.getId())).isTrue();
+
+        var replaced = reviews.findById(stale.getId()).orElseThrow();
+        assertThat(replaced.getStatus()).isEqualTo(ReviewStatus.CANCELLED);
+        assertThat(replaced.getStopReason()).isEqualTo(ReviewStopReason.REPLACED);
+        assertThat(replaced.getCompletedAt()).isNotNull();
+        assertThat(membersOf(workspace, stale.getId()).values()).allSatisfy(member -> {
+            assertThat(member.getState()).isEqualTo(ReviewItemState.WITHHELD);
+            assertThat(member.getReason()).isEqualTo("REPLACED");
+        });
+        assertThat(jdbc.queryForList(
+                        "SELECT DISTINCT status||'/'||reason FROM review_practice WHERE review_id=?",
+                        String.class,
+                        stale.getId()))
+                .containsExactly("WITHHELD/REPLACED");
+
+        closeWindows(prepared);
+
+        // The push alone selects one practice. The review of its head also runs what the replaced one still owed.
+        var next = reviews
+                .findByWorkspaceIdAndItemIdOrderByOrderedAtDesc(
+                        workspace, prepared.item().itemId())
+                .stream()
+                .filter(review -> !review.getId().equals(stale.getId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(next.getStatus()).isEqualTo(ReviewStatus.QUEUED);
+        assertThat(next.getItemVersion()).isEqualTo(pushed.getItemVersion()).isNotEqualTo(stale.getItemVersion());
+        assertThat(membersOf(workspace, next.getId())).containsOnlyKeys(everyPush, onlyWhenOpened);
+        assertThat(membersOf(workspace, next.getId()).values())
+                .allSatisfy(member -> assertThat(member.getState()).isEqualTo(ReviewItemState.LISTED));
+
+        // Only a replaced review carries its practices: the next review's own memberships now decide.
+        jdbc.update(
+                "UPDATE review SET status='CANCELLED', stop_reason='CANCELLED', completed_at=now() WHERE id=?",
+                next.getId());
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "d".repeat(40), Instant.now().plusSeconds(120)));
+        closeWindows(prepared);
+        var after = reviews.findByWorkspaceIdAndItemIdOrderByOrderedAtDesc(
+                        workspace, prepared.item().itemId())
+                .getFirst();
+        assertThat(after.getId()).isNotIn(stale.getId(), next.getId());
+        assertThat(membersOf(workspace, after.getId())).containsOnlyKeys(everyPush);
+    }
+
+    @Test
+    void shouldLeaveAQueuedReviewWhenNoNewerOccasionMovedTheWork() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB,
+                false,
+                Map.of(),
+                false,
+                List.of(ScmItemEvents.PULL_REQUEST_CHECKS_COMPLETED));
+        long workspace = prepared.item().workspaceId();
+        publish(prepared);
+        var queued = itemReviews(prepared).getFirst();
+
+        assertThat(replaced(workspace, queued.getId())).isFalse();
+
+        // An occasion at the same version leaves the review's input as it was.
+        settleChecks(prepared);
+        assertThat(itemEvents.open(workspace, prepared.item().itemId()))
+                .singleElement()
+                .satisfies(open -> assertThat(open.itemVersion()).isEqualTo(queued.getItemVersion()));
+        assertThat(replaced(workspace, queued.getId())).isFalse();
+        assertThat(reviews.findById(queued.getId()).orElseThrow().getStatus()).isEqualTo(ReviewStatus.QUEUED);
+    }
+
+    @Test
+    void shouldLeaveAPersonsRequestedReviewWhenTheWorkMoves() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        long workspace = prepared.item().workspaceId();
+        var requested = service.request(ReviewRequest.builder()
+                .workspaceId(workspace)
+                .itemId(prepared.item().itemId())
+                .kind(ReviewKind.ITEM)
+                .version(prepared.version())
+                .origin(ReviewOrigin.REQUEST)
+                .requestedById(memberAccount(workspace))
+                .practiceIds(List.of())
+                .build());
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60)));
+        assertThat(occasion(prepared, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED).getReason())
+                .isEqualTo(ReviewRequestReason.REVIEW_IN_PROGRESS);
+
+        assertThat(replaced(workspace, requested)).isFalse();
+        assertThat(reviews.findById(requested).orElseThrow().getStatus()).isEqualTo(ReviewStatus.QUEUED);
+    }
+
+    private boolean replaced(long workspace, UUID review) {
+        return Boolean.TRUE.equals(transactions.execute(ignored -> starts.replaceByNewerOccasion(workspace, review)));
+    }
+
+    private long memberAccount(long workspace) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT account_id FROM membership WHERE workspace_id=? LIMIT 1", Long.class, workspace));
+    }
+
+    private Map<Long, ReviewItem> membersOf(long workspace, UUID review) {
+        return memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(workspace, review).stream()
+                .collect(Collectors.toMap(ReviewItem::getPracticeId, member -> member));
+    }
+
+    /** A practice that an opened pull request selects and a push does not. */
+    private long practiceOnlyWhenOpened(Prepared prepared) {
+        long workspace = prepared.item().workspaceId();
+        var original = DefinitionTestFixtures.definition(
+                ScmItemEvents.PULL_REQUEST, "Describe the work", "Explain the work.", null);
+        var definition = new PracticeDefinition(
+                original.name(),
+                new ReviewOn(List.of(ScmItemEvents.PULL_REQUEST_OPENED), Map.of()),
+                original.appliesWhen(),
+                AboutRole.AUTHOR,
+                original.reads(),
+                original.reviewedBy(),
+                original.criteria(),
+                original.script(),
+                original.scan(),
+                original.lineNotes(),
+                original.guidance());
+        versions.create(new PracticeVersionService.NewPractice(
+                workspaces.findById(workspace).orElseThrow(),
+                "only-when-opened",
+                ScmItemEvents.PULL_REQUEST,
+                definition,
+                null,
+                0,
+                memberAccount(workspace)));
+        return practices
+                .findByWorkspaceIdAndSlug(workspace, "only-when-opened")
+                .orElseThrow()
+                .getId();
     }
 
     @Test

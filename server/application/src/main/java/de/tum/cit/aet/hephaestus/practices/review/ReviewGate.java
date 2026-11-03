@@ -36,7 +36,7 @@ public class ReviewGate {
 
     /**
      * The practices that run on this review. An event review runs those that the joined occasions select, and those
-     * that still wait for the item's checks from an earlier occasion ({@code awaitingChecks}).
+     * that an earlier occasion still owes ({@code carried}): they wait for the item's checks, or their review was replaced.
      */
     @Transactional(readOnly = true)
     public GateDecision evaluate(
@@ -44,7 +44,7 @@ public class ReviewGate {
             ItemSnapshot item,
             ReviewOrigin origin,
             Set<ItemEventName> occasions,
-            Set<Long> awaitingChecks,
+            Set<Long> carried,
             Collection<Long> selected) {
         if (!Objects.equals(workspace.getId(), item.item().workspaceId()))
             throw new IllegalArgumentException("The item belongs to another workspace.");
@@ -55,8 +55,7 @@ public class ReviewGate {
                 .findByWorkspaceIdAndKind(workspace.getId(), item.item().kind())
                 .stream()
                 .filter(p -> selected.isEmpty() || selected.contains(p.getId()))
-                .filter(p ->
-                        runnable(p, descriptor, item.state(), origin, occasions, awaitingChecks.contains(p.getId())))
+                .filter(p -> runnable(p, descriptor, item.state(), origin, occasions, carried.contains(p.getId())))
                 .toList();
         if (matched.isEmpty())
             return new GateDecision.Skip("No practice can review this item.", ReviewRequestReason.NO_ACTIVE_PRACTICE);
@@ -95,12 +94,11 @@ public class ReviewGate {
             Map<String, String> state,
             ReviewOrigin origin,
             Set<ItemEventName> occasions,
-            boolean awaitingChecks) {
+            boolean carried) {
         var definition = selectable(practice, descriptor).orElse(null);
         if (definition == null) return false;
         if (origin != ReviewOrigin.EVENT) return true;
-        return (awaitingChecks
-                        || occasions.stream().anyMatch(definition.reviewOn().events()::contains))
+        return (carried || occasions.stream().anyMatch(definition.reviewOn().events()::contains))
                 && definition.reviewOn().state().entrySet().stream()
                         .allMatch(e ->
                                 state.containsKey(e.getKey()) && e.getValue().contains(state.get(e.getKey())));

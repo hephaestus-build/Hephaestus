@@ -202,6 +202,16 @@ public class ReviewJobClaimService {
             return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
         }
 
+        if (reviewStart.replaceByNewerOccasion(job.getWorkspaceId(), job.getReviewId())) {
+            job.setStatus(ReviewJobStatus.CANCELLED);
+            job.setCompletedAt(Instant.now());
+            job.setErrorMessage("A newer update of the work replaced this review before it started.");
+            job.setCancellationReason(ReviewJobCancellationReason.REPLACED);
+            jobRepository.save(job);
+            jobTelemetry.claimRefused("replaced");
+            return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
+        }
+
         if (job.spentAttempts() > maxRetries && assignments.hasStaged(job))
             return claimToWithhold(job, CompositionStop.RETRIES_EXHAUSTED);
 

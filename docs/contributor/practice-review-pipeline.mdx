@@ -57,6 +57,16 @@ Capture would withhold such a practice on every review and leave each review Par
 3. A practice can need the item's checks source (Required or Complete). If the checks have not settled, it gets a withheld membership. Its [readiness reason](practice-review-glossary#readiness-reasons) says why.
 
 The newest event starts the review, and the older events of the window are withheld with `COALESCED`.
+
+A queued event review does not run on work that has moved.
+At claim, `ReviewStartService` looks for a newer event that joins a window and waits at another version.
+If it finds one, the review ends with the stop reason `REPLACED`, and no sandbox starts.
+A running review, a person's requested review, and a newer event at the same version change nothing.
+
+The unmeasured practices of a replaced review get a withheld membership with the reason `REPLACED`.
+The next readiness edge of the item selects them with what its own events select.
+This is the same rule as for a practice that waits for checks.
+A retry that seals at a moved version writes the same reason, so the next edge also selects what it did not measure.
 A refusal that can pass, such as an exhausted budget, keeps every event of the window waiting, so that the retry still selects their union.
 
 Adapters record item events after source sync establishes the recorded change.

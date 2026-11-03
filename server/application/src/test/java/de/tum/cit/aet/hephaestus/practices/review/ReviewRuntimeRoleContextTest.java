@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
 import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryQuery;
+import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackVisibilityService;
@@ -62,9 +64,12 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
             ResultCommunicationRepository.class,
             FeedbackVisibilityService.class,
             ReviewRepository.class,
+            ReviewItemRepository.class,
             ReviewPracticeRepository.class,
             PracticeVersionRepository.class,
-            ProductItemQuery.class);
+            ProductItemQuery.class,
+            PracticeItemOptions.class,
+            ItemEventService.class);
 
     // One withBean call per statement: NullAway infers a generic call chain through every receiver, so a long
     // chain of generic calls with lambdas grows its inference work exponentially.

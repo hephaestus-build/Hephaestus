@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793693783599-1" author="hephaestus">
+        <comment>Permit a review job to be cancelled because a newer occasion of its item replaced its review before it started.</comment>
+        <sql>ALTER TABLE review_job DROP CONSTRAINT ck_review_job_cancellation;</sql>
+        <sql>ALTER TABLE review_job ADD CONSTRAINT ck_review_job_cancellation CHECK(cancellation_reason IS NULL OR cancellation_reason IN ('DRAIN_GRACEFUL','DRAIN_IMMEDIATE','BUDGET_EXHAUSTED','MODEL_UNAVAILABLE','MEMBER_AI_DECLINED','PERSON_DATA_ERASED','CANCELLED_BY_ADMIN','CANCELLED_BY_REQUESTER','CONTRACT_CHANGED','NO_SANDBOX_ROOM','REPLACED'));</sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM review_job WHERE cancellation_reason='REPLACED') THEN
+        RAISE EXCEPTION 'Cannot remove a cancellation reason used by existing review jobs. Restore a verified backup instead.';
+    END IF;
+END $$;
+ALTER TABLE review_job DROP CONSTRAINT ck_review_job_cancellation;
+ALTER TABLE review_job ADD CONSTRAINT ck_review_job_cancellation CHECK(cancellation_reason IS NULL OR cancellation_reason IN ('DRAIN_GRACEFUL','DRAIN_IMMEDIATE','BUDGET_EXHAUSTED','MODEL_UNAVAILABLE','MEMBER_AI_DECLINED','PERSON_DATA_ERASED','CANCELLED_BY_ADMIN','CANCELLED_BY_REQUESTER','CONTRACT_CHANGED','NO_SANDBOX_ROOM'));
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
