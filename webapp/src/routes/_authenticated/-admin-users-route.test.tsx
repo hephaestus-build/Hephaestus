@@ -211,8 +211,9 @@ describe("instance users route", () => {
 		// Signing in with GitHub here would resolve a different account and end this session.
 		expect(screen.queryByRole("button", { name: "Continue with GitHub" })).toBeNull();
 
-		// The ask replaces the confirmation it came from rather than stacking on top of it.
-		expect(screen.queryByText("Grant instance admin?")).toBeNull();
+		// The ask replaces the confirmation it came from rather than stacking on top of it. The
+		// confirmation stays mounted until its exit ends, so wait for it to leave.
+		await waitFor(() => expect(screen.queryByText("Grant instance admin?")).toBeNull());
 
 		await user.click(screen.getByRole("button", { name: "Close" }));
 		await waitFor(() =>

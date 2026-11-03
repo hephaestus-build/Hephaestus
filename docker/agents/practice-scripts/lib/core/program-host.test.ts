@@ -725,14 +725,22 @@ export default definePracticeScript({
 				seen.push(line);
 			},
 			review: async () => {
-				await sleep(300);
 				const pid = /pid (?<pid>\d+)/u.exec(seen.join("\n"))?.groups?.pid;
 				assert.ok(pid !== undefined, seen.join("\n"));
-				try {
-					process.kill(Number(pid), 0);
-					alive = true;
-				} catch {
-					alive = false;
+				const running = () => {
+					try {
+						process.kill(Number(pid), 0);
+						return true;
+					} catch {
+						return false;
+					}
+				};
+				// The host ends the program while the model works: wait for that exit, not a fixed time.
+				const deadline = Date.now() + 10_000;
+				alive = running();
+				while (alive && Date.now() < deadline) {
+					await sleep(10);
+					alive = running();
 				}
 				return REVIEWED;
 			},

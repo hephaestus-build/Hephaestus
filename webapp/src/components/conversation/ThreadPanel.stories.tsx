@@ -5,7 +5,7 @@ import { expect, fn, screen, waitFor, within } from "storybook/test";
 
 import { Button } from "@/components/ui/button";
 import { withAnimationTime } from "@/stories/animation-time";
-import { expectSettledVisible } from "@/stories/overlay";
+import { expectDismissed, expectSettledVisible } from "@/stories/overlay";
 
 import { ConversationComposer } from "./ConversationComposer";
 import { ConversationMessage } from "./ConversationMessage";
@@ -155,7 +155,7 @@ const opensAsDrawer: Story["play"] = async ({ args, userEvent }) => {
 	await waitFor(async () => {
 		await expect(args.onClose).toHaveBeenCalledOnce();
 	});
-	await expect(screen.queryByRole("dialog", { name: "Thread" })).toBeNull();
+	await expectDismissed();
 };
 
 /** 820px, sidebar open: 564px (35.25rem) for both, a column would leave the conversation 148px. */
@@ -194,7 +194,7 @@ function returnsFocusFromDrawer(
 		await waitFor(async () => {
 			await expect(args.onClose).toHaveBeenCalledOnce();
 		});
-		await expect(screen.queryByRole("dialog", { name: "Thread" })).toBeNull();
+		await expectDismissed();
 		await waitFor(async () => {
 			await expect(opener).toHaveFocus();
 		});
@@ -227,7 +227,7 @@ export const DrawerReplyReturnsFocus: Story = {
 		await waitFor(async () => {
 			await expect(args.onClose).toHaveBeenCalledOnce();
 		});
-		await expect(screen.queryByRole("dialog", { name: "Thread" })).toBeNull();
+		await expectDismissed();
 		await waitFor(async () => {
 			await expect(opener).toHaveFocus();
 		});
@@ -255,7 +255,7 @@ export const DrawerColdLoadFocus: Story = {
 		await waitFor(async () => {
 			await expect(args.onClose).toHaveBeenCalledOnce();
 		});
-		await expect(screen.queryByRole("dialog", { name: "Thread" })).toBeNull();
+		await expectDismissed();
 		await waitFor(async () => {
 			await expect(document.activeElement).toBe(document.body);
 		});
