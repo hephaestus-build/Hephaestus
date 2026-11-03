@@ -17,11 +17,12 @@
 			},
 			"example": null,
 			"coverage": {
-				"source": "claimed",
+				"source": "host",
 				"complete": true,
-				"selected": 1,
-				"checked": 1,
-				"total": 1
+				"reads": 1,
+				"truncatedReads": 0,
+				"failedReads": 0,
+				"receipts": []
 			},
 			"problems": [
 				{

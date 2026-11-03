@@ -243,13 +243,13 @@ class ScanAdmissionTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldWithholdScanMetWhenCoverageIsClaimed() {
+    void shouldWithholdScanMetWhenCoverageIsNotMeasured() {
         var candidate = candidate(List.of());
         candidate.set("coverage", mapper.readTree("""
             {"source":"claimed","complete":true,"selected":1,"checked":1,"total":1}
             """));
         admit(candidate, List.of());
-        assertWithheld(CandidateRefusal.COVERAGE_INCONSISTENT);
+        assertWithheld(CandidateRefusal.MALFORMED_CANDIDATE);
     }
 
     @Test

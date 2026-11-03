@@ -177,9 +177,7 @@ export async function runPracticeProgram(
 		review: async (options, signal) => {
 			const candidate = await services.review(options, signal);
 			returned.add(JSON.stringify(candidate.coverage));
-			if (candidate.coverage.source === "host") {
-				sessionReadReceipts.push(...candidate.coverage.receipts);
-			}
+			sessionReadReceipts.push(...candidate.coverage.receipts);
 			return candidate;
 		},
 	};
@@ -236,7 +234,7 @@ export async function runPracticeProgram(
 		return finished("failed", "too-large", { error: "read receipts exceed the proof bound" });
 	}
 	const { value } = execution;
-	let reviewed: Extract<Coverage, { source: "host" }> | null = null;
+	let reviewed: Coverage | null = null;
 	let shaped: ParsedSessionCandidate | SessionCandidate;
 	if (isJsonObject(value) && "coverage" in value) {
 		const parsed = parseCandidate(value);
@@ -246,7 +244,7 @@ export async function runPracticeProgram(
 			});
 		}
 		const { coverage, ...rest } = parsed.candidate;
-		if (coverage.source !== "host" || !returned.has(JSON.stringify(coverage))) {
+		if (!returned.has(JSON.stringify(coverage))) {
 			return finished("failed", "invalid-candidate", {
 				error: "the result carries host coverage that no review of this practice returned",
 			});
@@ -440,11 +438,11 @@ function unreadSources(
 
 /** The coverage the host attaches: the review's, or none, with the script's own reads added to it. */
 function hostCoverage(
-	reviewed: Extract<Coverage, { source: "host" }> | null,
+	reviewed: Coverage | null,
 	unread: readonly Omission[],
 	script: Receipts,
 	receipts: readonly ReadReceipt[],
-): Extract<Coverage, { source: "host" }> {
+): Coverage {
 	const omitted: Omission[] = [
 		...unread,
 		...(reviewed === null || reviewed.complete ? [] : reviewed.omitted),

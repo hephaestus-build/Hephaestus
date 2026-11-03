@@ -419,8 +419,8 @@ export type Completeness =
 	| { complete: true; omitted?: never }
 	| { complete: false; omitted: NonEmpty<Omission> };
 /**
- * What the result covers. "host": the host derived it from its own read receipts. "claimed": counts
- * that code typed, which only stored results from earlier releases carry. Admission refuses it.
+ * What the result covers: the host derives it from its own read receipts. A candidate cannot carry
+ * coverage of its own.
  */
 export const readReceiptSchema = z
 	.strictObject({
@@ -561,25 +561,15 @@ const omissionShape = z.strictObject({
 		.optional(),
 });
 const omitted = listOf(omissionShape, CANDIDATE_LIMITS.omissions).readonly().optional();
-const coverageShape = z.discriminatedUnion("source", [
-	z.strictObject({
-		source: z.literal("host"),
-		reads: count,
-		truncatedReads: count,
-		failedReads: count,
-		receipts: z.array(readReceiptSchema).max(CANDIDATE_LIMITS.receipts).readonly(),
-		complete: z.boolean(),
-		omitted,
-	}),
-	z.strictObject({
-		source: z.literal("claimed"),
-		selected: count,
-		checked: count,
-		total: count.nullable(),
-		complete: z.boolean(),
-		omitted,
-	}),
-]);
+const coverageShape = z.strictObject({
+	source: z.literal("host"),
+	reads: count,
+	truncatedReads: count,
+	failedReads: count,
+	receipts: z.array(readReceiptSchema).max(CANDIDATE_LIMITS.receipts).readonly(),
+	complete: z.boolean(),
+	omitted,
+});
 
 // Check outcome rules before reporting an outcome-specific field as an unknown key.
 const supersetShape = z.strictObject({
@@ -621,51 +611,48 @@ function readCoverage(coverage: Superset["coverage"]): Coverage | string {
 			? "complete coverage lists no omission"
 			: "incomplete coverage lists what it omitted";
 	}
-	if (coverage.source === "host") {
-		const { reads, truncatedReads, failedReads, receipts } = coverage;
-		if (coverage.complete && (truncatedReads > 0 || failedReads > 0)) {
-			return "complete host coverage cannot have truncated or failed reads";
-		}
-		if (coverage.complete && receipts.some((receipt) => receipt.status === "FAILED")) {
-			return "complete host coverage cannot contain a failed receipt";
-		}
-		if (
-			coverage.complete &&
-			receipts.some(
-				(receipt) =>
-					receipt.status === "TRUNCATED" &&
-					!receipts.some(
-						(complete) =>
-							complete.status === "COMPLETE" &&
-							complete.sourceKind === receipt.sourceKind &&
-							complete.sourcePath === receipt.sourcePath &&
-							complete.path === receipt.path &&
-							complete.version === receipt.version &&
-							complete.startLine !== undefined &&
-							complete.endLine !== undefined &&
-							receipt.startLine !== undefined &&
-							receipt.endLine !== undefined &&
-							complete.startLine <= receipt.startLine &&
-							complete.endLine >= receipt.endLine,
-					),
-			)
-		) {
-			return "complete host coverage cannot contain an unsettled truncated receipt";
-		}
-
-		return omissions === undefined
-			? { source: "host", reads, truncatedReads, failedReads, receipts, complete: true }
-			: {
-					source: "host",
-					reads,
-					truncatedReads,
-					failedReads,
-					receipts,
-					complete: false,
-					omitted: omissions,
-				};
+	const { reads, truncatedReads, failedReads, receipts } = coverage;
+	if (coverage.complete && (truncatedReads > 0 || failedReads > 0)) {
+		return "complete host coverage cannot have truncated or failed reads";
 	}
-	return "coverage is what the host measured; a result cannot claim it";
+	if (coverage.complete && receipts.some((receipt) => receipt.status === "FAILED")) {
+		return "complete host coverage cannot contain a failed receipt";
+	}
+	if (
+		coverage.complete &&
+		receipts.some(
+			(receipt) =>
+				receipt.status === "TRUNCATED" &&
+				!receipts.some(
+					(complete) =>
+						complete.status === "COMPLETE" &&
+						complete.sourceKind === receipt.sourceKind &&
+						complete.sourcePath === receipt.sourcePath &&
+						complete.path === receipt.path &&
+						complete.version === receipt.version &&
+						complete.startLine !== undefined &&
+						complete.endLine !== undefined &&
+						receipt.startLine !== undefined &&
+						receipt.endLine !== undefined &&
+						complete.startLine <= receipt.startLine &&
+						complete.endLine >= receipt.endLine,
+				),
+		)
+	) {
+		return "complete host coverage cannot contain an unsettled truncated receipt";
+	}
+
+	return omissions === undefined
+		? { source: "host", reads, truncatedReads, failedReads, receipts, complete: true }
+		: {
+				source: "host",
+				reads,
+				truncatedReads,
+				failedReads,
+				receipts,
+				complete: false,
+				omitted: omissions,
+			};
 }
 
 function basisIndices(basis: ClaimBasis): number[] {

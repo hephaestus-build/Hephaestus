@@ -54,11 +54,12 @@
 				"note": "The try wraps the whole call."
 			},
 			"coverage": {
-				"source": "claimed",
+				"source": "host",
 				"complete": true,
-				"selected": 1,
-				"checked": 1,
-				"total": 1
+				"reads": 1,
+				"truncatedReads": 0,
+				"failedReads": 0,
+				"receipts": []
 			},
 			"problems": [
 				{
@@ -147,11 +148,12 @@
 			},
 			"example": null,
 			"coverage": {
-				"source": "claimed",
+				"source": "host",
 				"complete": true,
-				"selected": 1,
-				"checked": 1,
-				"total": 1
+				"reads": 1,
+				"truncatedReads": 0,
+				"failedReads": 0,
+				"receipts": []
 			},
 			"problems": [
 				{
@@ -183,11 +185,12 @@
 			},
 			"example": null,
 			"coverage": {
-				"source": "claimed",
+				"source": "host",
 				"complete": true,
-				"selected": 1,
-				"checked": 1,
-				"total": 1
+				"reads": 1,
+				"truncatedReads": 0,
+				"failedReads": 0,
+				"receipts": []
 			},
 			"problems": [],
 			"summaryOnly": false,
@@ -209,11 +212,13 @@
 			},
 			"example": null,
 			"coverage": {
-				"source": "claimed",
+				"source": "host",
 				"complete": false,
-				"selected": 0,
-				"checked": 0,
-				"total": 1
+				"reads": 0,
+				"truncatedReads": 0,
+				"failedReads": 0,
+				"receipts": [],
+				"omitted": [{ "what": "sources", "count": 1, "reason": "selection" }]
 			},
 			"problems": [],
 			"summaryOnly": false,

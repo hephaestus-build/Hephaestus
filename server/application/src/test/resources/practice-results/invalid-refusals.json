@@ -11,7 +11,6 @@
 	"invalid-duplicate-problem-key.json": "duplicate_problem_key",
 	"invalid-not-met-with-empty-problems.json": "outcome_problem_mismatch",
 	"invalid-incomplete-coverage-omits-nothing.json": "coverage_inconsistent",
-	"invalid-claimed-coverage-checks-more-than-selected.json": "coverage_inconsistent",
 	"invalid-empty-open-questions.json": "malformed_candidate",
 	"invalid-search-consulted-nothing.json": "malformed_candidate",
 	"invalid-citation-ends-before-it-starts.json": "malformed_candidate",

@@ -13259,26 +13259,6 @@ components:
           type: string
       required:
       - type
-    ClaimedCoverage:
-      allOf:
-      - $ref: "#/components/schemas/ResultCoverage"
-      - type: object
-        properties:
-          checked:
-            type: integer
-            format: int32
-          complete:
-            type: boolean
-          omitted:
-            type: array
-            items:
-              $ref: "#/components/schemas/CoverageOmission"
-          selected:
-            type: integer
-            format: int32
-          total:
-            type: integer
-            format: int32
     ClientRefreshRequest:
       type: object
       properties:
@@ -21295,7 +21275,6 @@ components:
         coverage:
           anyOf:
           - oneOf:
-            - $ref: "#/components/schemas/ClaimedCoverage"
             - $ref: "#/components/schemas/HostCoverage"
           - type: "null"
         currentness:
@@ -23481,7 +23460,6 @@ components:
         coverage:
           anyOf:
           - oneOf:
-            - $ref: "#/components/schemas/ClaimedCoverage"
             - $ref: "#/components/schemas/HostCoverage"
           - type: "null"
         currentness:

@@ -178,7 +178,14 @@ const BREACHES: Record<
 		"notMet",
 		(v) =>
 			Object.assign(v, {
-				coverage: { source: "claimed", selected: 3, checked: 3, total: 3, complete: true },
+				coverage: {
+					source: "host",
+					reads: 1,
+					truncatedReads: 0,
+					failedReads: 1,
+					receipts: [],
+					complete: true,
+				},
 			}),
 	],
 	example_outcome_mismatch: [

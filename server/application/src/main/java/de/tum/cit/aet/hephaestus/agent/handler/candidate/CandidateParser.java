@@ -5,7 +5,6 @@ import static de.tum.cit.aet.hephaestus.agent.handler.candidate.CandidateLimits.
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.practices.spi.ClaimBasis;
-import de.tum.cit.aet.hephaestus.practices.spi.ClaimedCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.DutyBasis;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceCitation;
 import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
@@ -198,7 +197,6 @@ public final class CandidateParser {
         }
         boolean complete = switch (coverage) {
             case HostCoverage host -> host.complete();
-            case ClaimedCoverage claimed -> claimed.complete();
         };
         if (outcome == ResultOutcome.MET && !complete) {
             throw refuse(CandidateRefusal.MET_COVERAGE_INCOMPLETE, "a MET result needs complete coverage");
