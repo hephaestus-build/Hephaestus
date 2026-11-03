@@ -228,6 +228,33 @@ export const ReviewStatusUnavailable: Story = {
 	},
 };
 
+/** A newer server can send a value that this build has never heard of. The report still renders. */
+export const ValuesFromANewerServer: Story = {
+	args: {
+		expanded: true,
+		feedback: {
+			status: "ready",
+			data: {
+				...WORK_FEEDBACK,
+				comments: WORK_FEEDBACK.comments.map((comment) => ({
+					...comment,
+					kind: "THREAD_NOTE",
+				})),
+			},
+		},
+		results: {
+			status: "ready",
+			data: { ...OWN_PAGE, rows: [{ ...MET_ROW, outcome: "PARTLY_MET" }], total: 1 },
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("list", { name: "Comments for you" })).toBeVisible();
+		await expect(canvas.getByText("A comment on this work")).toBeVisible();
+		await expect(canvas.queryByText("Summary comment")).toBeNull();
+		await expect(canvas.getByText(/Unknown \(PARTLY_MET\)/u)).toBeVisible();
+	},
+};
+
 export const CommentsWithoutResults: Story = {
 	args: {
 		expanded: true,

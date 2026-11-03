@@ -20,7 +20,11 @@ export function where(comment: WorkComment, short: boolean): string {
 		return short ? "Summary" : "Summary comment";
 	}
 	if (comment.path === undefined) {
-		return comment.kind === "FILE_NOTE" ? "A file of the changes" : "A line of the changes";
+		if (comment.kind === "FILE_NOTE") {
+			return "A file of the changes";
+		}
+		// A kind from a newer server says nothing that this build can trust about its place.
+		return comment.kind === "LINE_NOTE" ? "A line of the changes" : "A comment on this work";
 	}
 	const file = short ? (comment.path.split("/").at(-1) ?? comment.path) : comment.path;
 	return `${file}${lines(comment)}`;
