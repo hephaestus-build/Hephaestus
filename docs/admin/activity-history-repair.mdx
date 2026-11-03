@@ -123,7 +123,8 @@ Stored tombstones and erased work remain in the comparison count.
 Provider failures leave the checkpoint unchanged.
 Automatic provider probes have a one-hour cooldown per repository and server process.
 
-For GitHub, a manual repair also restarts the completed scan of a repository that holds a pull request not read whole, whatever the gap in rows.
+For GitHub, a manual repair also restarts a completed scan when the repository holds a pull request not read whole.
+The gap in rows does not matter then.
 This covers a pull request that a sync or an earlier version stopped reading at its first page of threads, reviews or comments.
 The practices that need the whole discussion withhold their results on such a pull request until a read finishes it.
 
