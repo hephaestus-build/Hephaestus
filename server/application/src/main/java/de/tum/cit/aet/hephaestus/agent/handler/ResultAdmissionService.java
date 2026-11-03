@@ -200,6 +200,10 @@ public class ResultAdmissionService {
         return staging.hasStaged(job);
     }
 
+    public int endedPractices(ReviewJob job) {
+        return staging.endedPractices(job);
+    }
+
     /** At the retry limit, preserve completed practices and record why the remaining work stopped. */
     public void finishInterrupted(AdmissionIdentity identity, ReviewStopReason reason) {
         transactions.executeWithoutResult(status -> {

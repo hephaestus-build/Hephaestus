@@ -119,6 +119,19 @@ public class ReviewJobRecovery {
         return cancellation != null ? Outcome.CANCELLED : Outcome.FAILED;
     }
 
+    /** Hands an unfinished attempt that moved the review on to the next attempt, without spending a retry. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean continueProgressed(ReviewJob job, UUID leaseId) {
+        ReviewJob locked = jobs.lockById(job.getId()).orElse(null);
+        if (locked == null || !owns(locked, leaseId, job.getAttempt()) || ResultAdmissionService.isAdmitted(locked))
+            return false;
+        ReviewJobLlmUsage counts = counts(locked);
+        hold(locked, counts);
+        int changed = jobs.requeueProgressed(job.getId(), leaseId, Instant.now());
+        if (changed > 0) bill(locked, counts);
+        return changed > 0;
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean retryUnadmitted(ReviewJob job, UUID leaseId, boolean bill) {
         ReviewJob locked = jobs.lockById(job.getId()).orElse(null);

@@ -221,6 +221,7 @@ erDiagram
         INTEGER room_refusals "NOT NULL"
         TIMESTAMPTZ leased_until
         UUID lease_id
+        INTEGER progressed_attempts "NOT NULL"
     }
 
     ReviewJobAttemptCharge {

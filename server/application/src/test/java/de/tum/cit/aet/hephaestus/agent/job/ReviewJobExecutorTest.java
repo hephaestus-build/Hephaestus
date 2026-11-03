@@ -572,6 +572,48 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         verifyNoInteractions(composer);
     }
 
+    @Test
+    void shouldSpendNoRetryWhenATimedOutAttemptEndedANewPractice() {
+        var job = unfinishedStagedJob();
+        when(handler.endedPractices(job)).thenReturn(2, 3);
+        recovery = mock(ReviewJobRecovery.class);
+        when(recovery.continueProgressed(any(), any(UUID.class))).thenReturn(true);
+        var executor = runExecutor(mock(ReviewCompositionContinuation.class), timedOutResult(true), false);
+
+        assertThat(tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class)))
+                .isNull();
+
+        verify(recovery).continueProgressed(any(), any(UUID.class));
+        verify(recovery, never()).retryUnadmitted(any(), any(UUID.class), anyBoolean());
+        verify(handler, never()).finishInterrupted(any(), any());
+    }
+
+    @Test
+    void shouldSpendARetryWhenATimedOutAttemptEndedNoNewPractice() {
+        var job = unfinishedStagedJob();
+        when(handler.endedPractices(job)).thenReturn(3, 3);
+        recovery = mock(ReviewJobRecovery.class);
+        when(recovery.retryUnadmitted(any(), any(UUID.class), anyBoolean())).thenReturn(true);
+        var executor = runExecutor(mock(ReviewCompositionContinuation.class), timedOutResult(true), false);
+
+        assertThat(tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class)))
+                .isNull();
+
+        verify(recovery, never()).continueProgressed(any(), any(UUID.class));
+        verify(recovery).retryUnadmitted(any(), any(UUID.class), anyBoolean());
+    }
+
+    /** A running attempt with staged practices and others still open. */
+    private ReviewJob unfinishedStagedJob() {
+        var job = configuredJob();
+        job.setStatus(ReviewJobStatus.RUNNING);
+        job.setLeaseId(UUID.randomUUID());
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(handler.hasStaged(job)).thenReturn(true);
+        when(handler.completeStaged(job)).thenReturn(false);
+        return job;
+    }
+
     private void terminalWriteOf(ReviewJob job, ReviewJobStatus status) {
         when(jobs.lockById(job.getId())).thenReturn(Optional.of(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));

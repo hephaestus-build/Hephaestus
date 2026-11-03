@@ -117,6 +117,12 @@ public class PracticeResultStaging {
         return staging.staged(job.getWorkspaceId(), job.getReviewId(), job.getId());
     }
 
+    public int endedPractices(ReviewJob job) {
+        return membership
+                .endedPractices(job.getWorkspaceId(), job.getReviewId(), job.getId())
+                .size();
+    }
+
     public boolean hasStaged(ReviewJob job) {
         return membership.hasStaged(job.getWorkspaceId(), job.getReviewId(), job.getId());
     }

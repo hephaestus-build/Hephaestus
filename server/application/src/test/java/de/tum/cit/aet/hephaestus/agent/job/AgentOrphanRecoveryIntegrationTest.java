@@ -1216,6 +1216,30 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("an attempt that moved the review on spends no retry, and starts its next attempt now")
+    void shouldSpendNoRetryWhenAnAttemptMovedTheReviewOn() {
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 5);
+
+        Boolean continued = transactionTemplate.execute(status ->
+                recovery.continueProgressed(jobRepository.findById(jobId).orElseThrow(), lease("live-owner")));
+
+        assertThat(continued).isTrue();
+        ReviewJob next = jobRepository.findById(jobId).orElseThrow();
+        assertThat(next.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(next.getAttempt()).isEqualTo(6);
+        assertThat(next.getProgressedAttempts()).isEqualTo(1);
+        assertThat(next.spentAttempts()).isEqualTo(5);
+        assertThat(next.getAvailableAt()).isBeforeOrEqualTo(Instant.now());
+        claimAgain(jobId, "live-owner");
+
+        Boolean retried = transactionTemplate.execute(status ->
+                recovery.retryUnadmitted(jobRepository.findById(jobId).orElseThrow(), lease("live-owner"), true));
+        assertThat(retried)
+                .as("5 retries spent of 5: an attempt that moves nothing still spends the last of them")
+                .isFalse();
+    }
+
+    @Test
     @DisplayName(
             "a review runs again after its last allowed drain, and the drain after it cancels it with the drain's reason")
     void shouldCancelAReviewWithTheDrainsReasonOnceItWasDrainedTooOften() {

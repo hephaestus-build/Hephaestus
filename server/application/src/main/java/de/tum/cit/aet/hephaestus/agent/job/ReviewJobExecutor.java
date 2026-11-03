@@ -945,6 +945,7 @@ public class ReviewJobExecutor {
 
     @Nullable
     ReviewJobStatus executePrepared(UUID jobId, ReviewJob job, SandboxSpec sandboxSpec) {
+        int endedBefore = handler.endedPractices(job);
         SandboxResult result;
         try {
             result = sandboxManager.execute(sandboxSpec);
@@ -962,6 +963,9 @@ public class ReviewJobExecutor {
         if (!ResultAdmissionService.isAdmitted(retained)
                 && handler.hasStaged(retained)
                 && !handler.completeStaged(retained)) {
+            // A slow provider can take many attempts. Each one that moved the review on keeps the retries for the
+            // attempts that move nothing.
+            if (handler.endedPractices(retained) > endedBefore && continueProgressed(retained)) return null;
             if (requeueForAnotherAttempt(retained, true, RequeueCause.SANDBOX)) return null;
             handler.finishInterrupted(
                     retained, result.timedOut() ? ReviewStopReason.DEADLINE : ReviewStopReason.EXECUTION_INCOMPLETE);
@@ -1492,6 +1496,12 @@ public class ReviewJobExecutor {
         String tag() {
             return name().toLowerCase(Locale.ROOT);
         }
+    }
+
+    private boolean continueProgressed(ReviewJob job) {
+        Boolean updated =
+                transactionTemplate.execute(status -> recovery.continueProgressed(job, ownLease(job.getId())));
+        return Boolean.TRUE.equals(updated);
     }
 
     // Bill within the requeue transaction before it clears usage counters.

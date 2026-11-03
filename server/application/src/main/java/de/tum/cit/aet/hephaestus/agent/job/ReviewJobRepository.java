@@ -347,6 +347,20 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("availableAt") Instant availableAt);
 
     /**
+     * The attempt staged a practice that no earlier attempt had and then ended unfinished. The next attempt skips what
+     * is staged, so it starts now, and it spends no retry.
+     */
+    @WorkspaceAgnostic("The worker supplies the claimed job id and ownership fence")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.leaseId = null, j.startedAt = null, j.executionStartedAt ="
+            + " null, j.attempt = j.attempt + 1, j.progressedAttempts = j.progressedAttempts + 1, j.availableAt ="
+            + " :availableAt, j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0,"
+            + " j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0 WHERE j.id = :id AND j.status = 'RUNNING' AND"
+            + " j.leaseId = :leaseId AND j.admissionDigest IS NULL")
+    int requeueProgressed(
+            @Param("id") UUID id, @Param("leaseId") UUID leaseId, @Param("availableAt") Instant availableAt);
+
+    /**
      * Cancels the RUNNING attempt like {@link #transitionToCancelled}, fenced on its lease and the attempt: a draining
      * worker must not cancel a later attempt if the job was orphan-requeued out from under it.
      *
@@ -524,7 +538,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             + " null, j.attempt = j.attempt + 1, j.availableAt = :#{#request.availableAt}, j.llmCalls = 0,"
             + " j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0, j.llmCacheReadTokens = 0,"
             + " j.llmCacheWriteTokens = 0 WHERE j.id = :id AND j.status = 'RUNNING' AND j.leaseId = :leaseId AND"
-            + " j.attempt = :#{#request.attempt} AND j.attempt - j.drainCount - j.roomRefusals <= :#{#request.maxRetries} AND"
+            + " j.attempt = :#{#request.attempt} AND j.attempt - j.drainCount - j.roomRefusals - j.progressedAttempts <= :#{#request.maxRetries} AND"
             + " j.output IS NULL AND NOT (" + NOT_ADMITTED + ")")
     int requeueAdmittedForComposition(
             @Param("id") UUID id, @Param("leaseId") UUID leaseId, @Param("request") CompositionRequeue request);
@@ -744,7 +758,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
                     + " null, j.attempt = j.attempt + 1, j.availableAt = :availableAt,"
                     + " j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0,"
                     + " j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0 WHERE j.id = :id AND j.status = 'RUNNING' AND"
-                    + " j.leaseId = :leaseId AND j.attempt - j.drainCount - j.roomRefusals < :maxRetries AND j.admissionDigest IS NULL")
+                    + " j.leaseId = :leaseId AND j.attempt - j.drainCount - j.roomRefusals - j.progressedAttempts < :maxRetries AND j.admissionDigest IS NULL")
     int requeueOrphan(
             @Param("id") UUID id,
             @Param("leaseId") UUID leaseId,
