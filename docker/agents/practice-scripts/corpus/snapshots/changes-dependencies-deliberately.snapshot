@@ -1,0 +1,357 @@
+{
+	"swift-view": [
+		{
+			"leads": [],
+			"facts": {
+				"manifestsChanged": 0,
+				"onlyAdded": 0,
+				"onlyRemoved": 0,
+				"pinsLoosened": 0,
+				"pinsDropped": 0,
+				"bumped": 0,
+				"unpairedManifestLines": 0,
+				"rawLinesListed": 0,
+				"lockfilesTouched": 0,
+				"lockfilePresent": 1
+			},
+			"directions": [],
+			"context": []
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"manifestsChanged": 0,
+				"onlyAdded": 0,
+				"onlyRemoved": 0,
+				"pinsLoosened": 0,
+				"pinsDropped": 0,
+				"bumped": 0,
+				"unpairedManifestLines": 0,
+				"rawLinesListed": 0,
+				"lockfilesTouched": 0,
+				"lockfilePresent": 1
+			},
+			"directions": [],
+			"context": []
+		}
+	],
+	"manifests": [
+		{
+			"leads": [
+				{
+					"at": {
+						"change": "package.json",
+						"line": 1,
+						"side": "OLD"
+					},
+					"label": "A changed manifest line; read its dependency map and surrounding context before classifying it.",
+					"facts": {
+						"ecosystem": "package.json",
+						"side": "OLD"
+					}
+				},
+				{
+					"at": {
+						"change": "package.json",
+						"line": 2,
+						"side": "NEW"
+					},
+					"label": "A changed manifest line; read its dependency map and surrounding context before classifying it.",
+					"facts": {
+						"ecosystem": "package.json",
+						"side": "NEW"
+					}
+				},
+				{
+					"at": {
+						"change": "services/api/Cargo.toml",
+						"line": 1,
+						"side": "NEW"
+					},
+					"label": "A dependency whose constraint keeps its shape with a different version.",
+					"facts": {
+						"ecosystem": "cargo.toml",
+						"name": "serde",
+						"oldConstraint": "1.0.1",
+						"newConstraint": "1.0.2"
+					}
+				},
+				{
+					"at": {
+						"change": "services/api/Cargo.toml",
+						"line": 2,
+						"side": "NEW"
+					},
+					"label": "A dependency name that matches only on an added line of a manifest: new, or moved or reformatted.",
+					"facts": {
+						"ecosystem": "cargo.toml",
+						"name": "tokio"
+					}
+				},
+				{
+					"at": {
+						"change": "requirements.txt",
+						"line": 1,
+						"side": "NEW"
+					},
+					"label": "A dependency whose version constraint was present and is now absent.",
+					"facts": {
+						"ecosystem": "requirements.txt",
+						"name": "flask",
+						"oldConstraint": "==2.0.0"
+					}
+				},
+				{
+					"at": {
+						"change": "requirements.txt",
+						"line": 2,
+						"side": "NEW"
+					},
+					"label": "A dependency name that matches only on an added line of a manifest: new, or moved or reformatted.",
+					"facts": {
+						"ecosystem": "requirements.txt",
+						"name": "requests"
+					}
+				},
+				{
+					"at": {
+						"change": "Gemfile",
+						"line": 1,
+						"side": "NEW"
+					},
+					"label": "A dependency whose exact or narrower constraint became a range, a caret or a tilde.",
+					"facts": {
+						"ecosystem": "gemfile",
+						"name": "rails",
+						"oldConstraint": "7.0.0",
+						"newConstraint": "~> 7.1"
+					}
+				},
+				{
+					"at": {
+						"change": "Gemfile",
+						"line": 2,
+						"side": "NEW"
+					},
+					"label": "A dependency name that matches only on an added line of a manifest: new, or moved or reformatted.",
+					"facts": {
+						"ecosystem": "gemfile",
+						"name": "puma"
+					}
+				},
+				{
+					"at": {
+						"change": "pom.xml",
+						"line": 1,
+						"side": "OLD"
+					},
+					"label": "A changed manifest line; read its dependency map and surrounding context before classifying it.",
+					"facts": {
+						"ecosystem": "pom.xml",
+						"side": "removed"
+					}
+				},
+				{
+					"at": {
+						"change": "pom.xml",
+						"line": 2,
+						"side": "NEW"
+					},
+					"label": "A changed manifest line; read its dependency map and surrounding context before classifying it.",
+					"facts": {
+						"ecosystem": "pom.xml",
+						"side": "added"
+					}
+				},
+				{
+					"at": {
+						"change": "pom.xml",
+						"line": 3,
+						"side": "NEW"
+					},
+					"label": "A changed manifest line; read its dependency map and surrounding context before classifying it.",
+					"facts": {
+						"ecosystem": "pom.xml",
+						"side": "added"
+					}
+				},
+				{
+					"at": {
+						"change": "build.gradle.kts",
+						"line": 1,
+						"side": "NEW"
+					},
+					"label": "A dependency whose constraint keeps its shape with a different version.",
+					"facts": {
+						"ecosystem": "build.gradle.kts",
+						"name": "com.a:b",
+						"oldConstraint": "1.0",
+						"newConstraint": "1.1"
+					}
+				},
+				{
+					"at": {
+						"change": "Package.swift",
+						"line": 1,
+						"side": "NEW"
+					},
+					"label": "A dependency name that matches only on an added line of a manifest: new, or moved or reformatted.",
+					"facts": {
+						"ecosystem": "package.swift",
+						"name": "a"
+					}
+				},
+				{
+					"at": {
+						"change": "Package.swift",
+						"line": 1,
+						"side": "OLD"
+					},
+					"label": "A dependency name that matches only on a removed line of a manifest: dropped, or moved or reformatted.",
+					"facts": {
+						"ecosystem": "package.swift",
+						"name": "b"
+					}
+				},
+				{
+					"at": {
+						"change": "project.yml",
+						"line": 3,
+						"side": "NEW"
+					},
+					"label": "A changed manifest line; read its dependency map and surrounding context before classifying it.",
+					"facts": {
+						"ecosystem": "project.yml",
+						"side": "added"
+					}
+				},
+				{
+					"at": {
+						"change": "project.yml",
+						"line": 4,
+						"side": "NEW"
+					},
+					"label": "A changed manifest line; read its dependency map and surrounding context before classifying it.",
+					"facts": {
+						"ecosystem": "project.yml",
+						"side": "added"
+					}
+				},
+				{
+					"at": {
+						"change": "go.mod",
+						"line": 1,
+						"side": "NEW"
+					},
+					"label": "A dependency whose constraint keeps its shape with a different version.",
+					"facts": {
+						"ecosystem": "go.mod",
+						"name": "example.org/a",
+						"oldConstraint": "v1.0.0",
+						"newConstraint": "v1.1.0"
+					}
+				},
+				{
+					"at": {
+						"change": "pyproject.toml",
+						"line": 2,
+						"side": "NEW"
+					},
+					"label": "A dependency name that matches only on an added line of a manifest: new, or moved or reformatted.",
+					"facts": {
+						"ecosystem": "pyproject.toml",
+						"name": "dependencies"
+					}
+				}
+			],
+			"facts": {
+				"manifestsChanged": 10,
+				"onlyAdded": 5,
+				"onlyRemoved": 1,
+				"pinsLoosened": 1,
+				"pinsDropped": 1,
+				"bumped": 3,
+				"unpairedManifestLines": 7,
+				"rawLinesListed": 7,
+				"lockfilesTouched": 1,
+				"lockfilePresent": 1
+			},
+			"directions": [
+				"Dependency maps for package.json could not be decoded from a complete read. Inspect the captured JSON and diff; never infer an absent dependency from this limit.",
+				"Manifest-named file(s) changed (10). The name alone is no applicability: a changed external dependency declaration, resolution, source or pin inside one is, and internal target, test-target, scheme or build-setting wiring alone is not.",
+				"Candidate lines, matched by shape and not yet placed in a dependency section: 5 only on an added line, 1 only on a removed line, 1 pin(s) loosened, 1 pin(s) dropped, 3 version bump(s).",
+				"A metadata field such as a package.json engines entry or a Cargo rust-version has the same shape, and a name on one side only may be a moved or reformatted line rather than a new or dropped dependency.",
+				"Read the section around each before treating it as a dependency change; the 7 raw multi-line manifest line(s) are not in these counts, so a zero here does not show that nothing changed. Then investigate whether each dependency constraint change is deliberate and appropriately bounded.",
+				"7 changed manifest line(s) in package.json, pom.xml or XcodeGen project.yml carry no added, removed or pin label and are listed as raw lines.",
+				"These manifests spread one dependency over several lines and the diff shows only the changed ones. Read the manifest around each to tell an addition from a version change or a reordering.",
+				"Lockfile-named file(s) in the checkout: yarn.lock; touched in this diff: yarn.lock.",
+				"A lockfile answers for a changed manifest when the ecosystem resolves that manifest through it: beside it, or at a parent workspace root whose configuration includes it.",
+				"Read the paths and that configuration before expecting a matching update."
+			],
+			"context": []
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"manifestsChanged": 0,
+				"onlyAdded": 0,
+				"onlyRemoved": 0,
+				"pinsLoosened": 0,
+				"pinsDropped": 0,
+				"bumped": 0,
+				"unpairedManifestLines": 0,
+				"rawLinesListed": 0,
+				"lockfilesTouched": 0,
+				"lockfilePresent": 0
+			},
+			"directions": [],
+			"context": []
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"manifestsChanged": 0,
+				"onlyAdded": 0,
+				"onlyRemoved": 0,
+				"pinsLoosened": 0,
+				"pinsDropped": 0,
+				"bumped": 0,
+				"unpairedManifestLines": 0,
+				"rawLinesListed": 0,
+				"lockfilesTouched": 0,
+				"lockfilePresent": 0
+			},
+			"directions": [],
+			"context": []
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"manifestsChanged": 0,
+				"onlyAdded": 0,
+				"onlyRemoved": 0,
+				"pinsLoosened": 0,
+				"pinsDropped": 0,
+				"bumped": 0,
+				"unpairedManifestLines": 0,
+				"rawLinesListed": 0,
+				"lockfilesTouched": 0,
+				"lockfilePresent": 0
+			},
+			"directions": [],
+			"context": []
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

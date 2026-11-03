@@ -1,0 +1,124 @@
+{
+	"swift-view": [
+		{
+			"leads": [],
+			"facts": {
+				"issueMentionSyntaxCandidateCount": 3,
+				"commitCount": 5,
+				"checklistTicked": 1,
+				"checklistUnticked": 1
+			},
+			"directions": [
+				"Issue-mention syntax candidates: #12, #13, #9 (branch '12-cart-total' encodes #12).",
+				"Inspect each mention in context before treating it as the author's motivating issue: templates, examples and branch numbers may be unrelated. A genuine reference need not contain a closing keyword.",
+				"Checklist fact: the description carries 1 ticked and 1 unticked checkbox line(s). These counts say neither whose lines they are nor what was done.",
+				"Where work/change/description.authored.md exists, it separates the form's lines from the author's; otherwise compare description.md with the form.",
+				"Judge whether the author adopted the checklist or wrote equivalent prose; a form's line left unticked as supplied is boilerplate, not unfinished work, and a tick is a claim, not a result."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"issueMentionSyntaxCandidateCount": 3,
+				"commitCount": 5,
+				"checklistTicked": 1,
+				"checklistUnticked": 1
+			},
+			"directions": [
+				"Issue-mention syntax candidates: #12, #13, #9 (branch '12-cart-total' encodes #12).",
+				"Inspect each mention in context before treating it as the author's motivating issue: templates, examples and branch numbers may be unrelated. A genuine reference need not contain a closing keyword.",
+				"Checklist fact: the description carries 1 ticked and 1 unticked checkbox line(s). These counts say neither whose lines they are nor what was done.",
+				"Where work/change/description.authored.md exists, it separates the form's lines from the author's; otherwise compare description.md with the form.",
+				"Judge whether the author adopted the checklist or wrote equivalent prose; a form's line left unticked as supplied is boilerplate, not unfinished work, and a tick is a claim, not a result."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"issueMentionSyntaxCandidateCount": 3,
+				"commitCount": 5,
+				"checklistTicked": 1,
+				"checklistUnticked": 1
+			},
+			"directions": [
+				"Issue-mention syntax candidates: #12, #13, #9 (branch '12-cart-total' encodes #12).",
+				"Inspect each mention in context before treating it as the author's motivating issue: templates, examples and branch numbers may be unrelated. A genuine reference need not contain a closing keyword.",
+				"Checklist fact: the description carries 1 ticked and 1 unticked checkbox line(s). These counts say neither whose lines they are nor what was done.",
+				"Where work/change/description.authored.md exists, it separates the form's lines from the author's; otherwise compare description.md with the form.",
+				"Judge whether the author adopted the checklist or wrote equivalent prose; a form's line left unticked as supplied is boilerplate, not unfinished work, and a tick is a claim, not a result."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"issueMentionSyntaxCandidateCount": 3,
+				"commitCount": 5,
+				"checklistTicked": 1,
+				"checklistUnticked": 1
+			},
+			"directions": [
+				"Issue-mention syntax candidates: #12, #13, #9 (branch '12-cart-total' encodes #12).",
+				"Inspect each mention in context before treating it as the author's motivating issue: templates, examples and branch numbers may be unrelated. A genuine reference need not contain a closing keyword.",
+				"Checklist fact: the description carries 1 ticked and 1 unticked checkbox line(s). These counts say neither whose lines they are nor what was done.",
+				"Where work/change/description.authored.md exists, it separates the form's lines from the author's; otherwise compare description.md with the form.",
+				"Judge whether the author adopted the checklist or wrote equivalent prose; a form's line left unticked as supplied is boilerplate, not unfinished work, and a tick is a claim, not a result."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"issueMentionSyntaxCandidateCount": 3,
+				"commitCount": 5,
+				"checklistTicked": 1,
+				"checklistUnticked": 1
+			},
+			"directions": [
+				"Issue-mention syntax candidates: #12, #13, #9 (branch '12-cart-total' encodes #12).",
+				"Inspect each mention in context before treating it as the author's motivating issue: templates, examples and branch numbers may be unrelated. A genuine reference need not contain a closing keyword.",
+				"Checklist fact: the description carries 1 ticked and 1 unticked checkbox line(s). These counts say neither whose lines they are nor what was done.",
+				"Where work/change/description.authored.md exists, it separates the form's lines from the author's; otherwise compare description.md with the form.",
+				"Judge whether the author adopted the checklist or wrote equivalent prose; a form's line left unticked as supplied is boilerplate, not unfinished work, and a tick is a claim, not a result."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"issueMentionSyntaxCandidateCount": 0,
+				"checklistTicked": 0,
+				"checklistUnticked": 0
+			},
+			"directions": [
+				"Traceability fact: no issue reference (#N, 'Refs #N', closing keyword, or issue-number branch prefix) was found in the body or branch 'feature'. The commits were not captured, so their messages were not searched.",
+				"Confirm in the body before concluding the handoff is untraceable."
+			]
+		}
+	],
+	"change-not-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"issueMentionSyntaxCandidateCount": 3,
+				"commitCount": 5,
+				"checklistTicked": 1,
+				"checklistUnticked": 1
+			},
+			"directions": [
+				"Issue-mention syntax candidates: #12, #13, #9 (branch '12-cart-total' encodes #12).",
+				"Inspect each mention in context before treating it as the author's motivating issue: templates, examples and branch numbers may be unrelated. A genuine reference need not contain a closing keyword.",
+				"Checklist fact: the description carries 1 ticked and 1 unticked checkbox line(s). These counts say neither whose lines they are nor what was done.",
+				"Where work/change/description.authored.md exists, it separates the form's lines from the author's; otherwise compare description.md with the form.",
+				"Judge whether the author adopted the checklist or wrote equivalent prose; a form's line left unticked as supplied is boilerplate, not unfinished work, and a tick is a claim, not a result."
+			]
+		}
+	]
+}

@@ -1,0 +1,124 @@
+{
+	"swift-view": [
+		{
+			"leads": [],
+			"facts": {
+				"descriptionWords": 14,
+				"templatePlaceholders": 1,
+				"checkboxes": 2,
+				"hasScreenshot": true,
+				"changedFiles": 30,
+				"capturedCommits": 5
+			},
+			"directions": [
+				"Words of its own exclude template headings, placeholders, checkboxes and issue references. The authored practice asks the description to say what changed and why, in words a reviewer cannot get from the title, the template or the commit list.",
+				"A description with more than three words of its own is compared with the 5 captured commit subject(s).",
+				"A small change can need only a short description. Read the description against the size and risk of the change before asking for more."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"descriptionWords": 14,
+				"templatePlaceholders": 1,
+				"checkboxes": 2,
+				"hasScreenshot": true,
+				"changedFiles": 30,
+				"capturedCommits": 5
+			},
+			"directions": [
+				"Words of its own exclude template headings, placeholders, checkboxes and issue references. The authored practice asks the description to say what changed and why, in words a reviewer cannot get from the title, the template or the commit list.",
+				"A description with more than three words of its own is compared with the 5 captured commit subject(s).",
+				"A small change can need only a short description. Read the description against the size and risk of the change before asking for more."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"descriptionWords": 14,
+				"templatePlaceholders": 1,
+				"checkboxes": 2,
+				"hasScreenshot": true,
+				"changedFiles": 30,
+				"capturedCommits": 5
+			},
+			"directions": [
+				"Words of its own exclude template headings, placeholders, checkboxes and issue references. The authored practice asks the description to say what changed and why, in words a reviewer cannot get from the title, the template or the commit list.",
+				"A description with more than three words of its own is compared with the 5 captured commit subject(s).",
+				"A small change can need only a short description. Read the description against the size and risk of the change before asking for more."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"descriptionWords": 14,
+				"templatePlaceholders": 1,
+				"checkboxes": 2,
+				"hasScreenshot": true,
+				"changedFiles": 30,
+				"capturedCommits": 5
+			},
+			"directions": [
+				"Words of its own exclude template headings, placeholders, checkboxes and issue references. The authored practice asks the description to say what changed and why, in words a reviewer cannot get from the title, the template or the commit list.",
+				"A description with more than three words of its own is compared with the 5 captured commit subject(s).",
+				"A small change can need only a short description. Read the description against the size and risk of the change before asking for more."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"descriptionWords": 14,
+				"templatePlaceholders": 1,
+				"checkboxes": 2,
+				"hasScreenshot": true,
+				"changedFiles": 30,
+				"capturedCommits": 5
+			},
+			"directions": [
+				"Words of its own exclude template headings, placeholders, checkboxes and issue references. The authored practice asks the description to say what changed and why, in words a reviewer cannot get from the title, the template or the commit list.",
+				"A description with more than three words of its own is compared with the 5 captured commit subject(s).",
+				"A small change can need only a short description. Read the description against the size and risk of the change before asking for more."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"changedFiles": 0
+			},
+			"directions": [
+				"Not captured, so unknown rather than empty: description, title. No cue that depends on it was read.",
+				"Words of its own exclude template headings, placeholders, checkboxes and issue references. The authored practice asks the description to say what changed and why, in words a reviewer cannot get from the title, the template or the commit list.",
+				"The commit range was not captured, so the description was not compared with the commit subjects.",
+				"A small change can need only a short description. Read the description against the size and risk of the change before asking for more."
+			]
+		}
+	],
+	"change-not-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"descriptionWords": 14,
+				"templatePlaceholders": 1,
+				"checkboxes": 2,
+				"hasScreenshot": true,
+				"changedFiles": 30,
+				"capturedCommits": 5
+			},
+			"directions": [
+				"Words of its own exclude template headings, placeholders, checkboxes and issue references. The authored practice asks the description to say what changed and why, in words a reviewer cannot get from the title, the template or the commit list.",
+				"A description with more than three words of its own is compared with the 5 captured commit subject(s).",
+				"A small change can need only a short description. Read the description against the size and risk of the change before asking for more."
+			]
+		}
+	]
+}

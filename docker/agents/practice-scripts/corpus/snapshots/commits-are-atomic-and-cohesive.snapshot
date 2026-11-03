@@ -1,0 +1,508 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "1111111",
+						"bare": true,
+						"repeat": true,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "App/Cart.swift +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "2222222",
+						"bare": false,
+						"repeat": false,
+						"joinedClauses": true,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "App/Cart.swift +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "3333333",
+						"bare": true,
+						"repeat": true,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "web/cart.ts +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "5555555",
+						"bare": true,
+						"repeat": false,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "web/cart.ts +1/-0"
+					}
+				}
+			],
+			"facts": {
+				"authoredCommits": 4,
+				"mergeCommits": 1,
+				"joinedSubjects": 1
+			},
+			"directions": [
+				"4 authored commit(s), 1 merge commit(s) excluded, one lead each.",
+				"`joinedClauses` marks a subject that joins clauses with 'and', '&', '+', a comma, a semicolon or a sentence break, or a body with two or more bullets; `moved` counts files renamed with no line changed. Both describe the record, not how many changes a commit holds."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "1111111",
+						"bare": true,
+						"repeat": true,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "App/Cart.swift +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "2222222",
+						"bare": false,
+						"repeat": false,
+						"joinedClauses": true,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "App/Cart.swift +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "3333333",
+						"bare": true,
+						"repeat": true,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "web/cart.ts +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "5555555",
+						"bare": true,
+						"repeat": false,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "web/cart.ts +1/-0"
+					}
+				}
+			],
+			"facts": {
+				"authoredCommits": 4,
+				"mergeCommits": 1,
+				"joinedSubjects": 1
+			},
+			"directions": [
+				"4 authored commit(s), 1 merge commit(s) excluded, one lead each.",
+				"`joinedClauses` marks a subject that joins clauses with 'and', '&', '+', a comma, a semicolon or a sentence break, or a body with two or more bullets; `moved` counts files renamed with no line changed. Both describe the record, not how many changes a commit holds."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "1111111",
+						"bare": true,
+						"repeat": true,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "App/Cart.swift +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "2222222",
+						"bare": false,
+						"repeat": false,
+						"joinedClauses": true,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "App/Cart.swift +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "3333333",
+						"bare": true,
+						"repeat": true,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "web/cart.ts +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "5555555",
+						"bare": true,
+						"repeat": false,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "web/cart.ts +1/-0"
+					}
+				}
+			],
+			"facts": {
+				"authoredCommits": 4,
+				"mergeCommits": 1,
+				"joinedSubjects": 1
+			},
+			"directions": [
+				"4 authored commit(s), 1 merge commit(s) excluded, one lead each.",
+				"`joinedClauses` marks a subject that joins clauses with 'and', '&', '+', a comma, a semicolon or a sentence break, or a body with two or more bullets; `moved` counts files renamed with no line changed. Both describe the record, not how many changes a commit holds."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "1111111",
+						"bare": true,
+						"repeat": true,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "App/Cart.swift +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "2222222",
+						"bare": false,
+						"repeat": false,
+						"joinedClauses": true,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "App/Cart.swift +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "3333333",
+						"bare": true,
+						"repeat": true,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "web/cart.ts +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "5555555",
+						"bare": true,
+						"repeat": false,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "web/cart.ts +1/-0"
+					}
+				}
+			],
+			"facts": {
+				"authoredCommits": 4,
+				"mergeCommits": 1,
+				"joinedSubjects": 1
+			},
+			"directions": [
+				"4 authored commit(s), 1 merge commit(s) excluded, one lead each.",
+				"`joinedClauses` marks a subject that joins clauses with 'and', '&', '+', a comma, a semicolon or a sentence break, or a body with two or more bullets; `moved` counts files renamed with no line changed. Both describe the record, not how many changes a commit holds."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "1111111",
+						"bare": true,
+						"repeat": true,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "App/Cart.swift +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "2222222",
+						"bare": false,
+						"repeat": false,
+						"joinedClauses": true,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "App/Cart.swift +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "3333333",
+						"bare": true,
+						"repeat": true,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "web/cart.ts +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "5555555",
+						"bare": true,
+						"repeat": false,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "web/cart.ts +1/-0"
+					}
+				}
+			],
+			"facts": {
+				"authoredCommits": 4,
+				"mergeCommits": 1,
+				"joinedSubjects": 1
+			},
+			"directions": [
+				"4 authored commit(s), 1 merge commit(s) excluded, one lead each.",
+				"`joinedClauses` marks a subject that joins clauses with 'and', '&', '+', a comma, a semicolon or a sentence break, or a body with two or more bullets; `moved` counts files renamed with no line changed. Both describe the record, not how many changes a commit holds."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"directions": [
+				"commits.json is missing or malformed: a collection gap, not a history without authored commits."
+			]
+		}
+	],
+	"change-not-captured": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "1111111",
+						"bare": true,
+						"repeat": true,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "App/Cart.swift +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "2222222",
+						"bare": false,
+						"repeat": false,
+						"joinedClauses": true,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "App/Cart.swift +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "3333333",
+						"bare": true,
+						"repeat": true,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "web/cart.ts +1/-0"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shape of its subject and the files that it touched.",
+					"facts": {
+						"sha": "5555555",
+						"bare": true,
+						"repeat": false,
+						"joinedClauses": false,
+						"cutOff": false,
+						"bodyLines": 0,
+						"files": 1,
+						"moved": 0,
+						"paths": "web/cart.ts +1/-0"
+					}
+				}
+			],
+			"facts": {
+				"authoredCommits": 4,
+				"mergeCommits": 1,
+				"joinedSubjects": 1
+			},
+			"directions": [
+				"4 authored commit(s), 1 merge commit(s) excluded, one lead each.",
+				"`joinedClauses` marks a subject that joins clauses with 'and', '&', '+', a comma, a semicolon or a sentence break, or a body with two or more bullets; `moved` counts files renamed with no line changed. Both describe the record, not how many changes a commit holds."
+			]
+		}
+	]
+}

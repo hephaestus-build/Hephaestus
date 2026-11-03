@@ -1,0 +1,812 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 32,
+						"endLine": 32
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 33,
+						"endLine": 33
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 34,
+						"endLine": 34
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 35,
+						"endLine": 35
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 41,
+						"endLine": 41
+					},
+					"label": "A selected line with a TODO, FIXME, XXX or HACK marker.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 55,
+						"endLine": 55
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				}
+			],
+			"facts": {
+				"debugCandidates": 5,
+				"todoCandidates": 1,
+				"processNotes": 0,
+				"placeholders": 0,
+				"swift": 5
+			},
+			"directions": [
+				"Found 5 debug-output call(s) on selected lines (print/console/log-style) — investigate whether each is leftover debug residue or a deliberate, intent-revealing log.",
+				"Found 1 TODO/FIXME/XXX/HACK marker(s) selected — investigate whether each is actionable residue or an intentional, tracked note."
+			]
+		}
+	],
+	"every-language": {
+		"stopped": "review options: facts.objective-c: Invalid key in record",
+		"reviews": []
+	},
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"debugCandidates": 0,
+				"todoCandidates": 0,
+				"processNotes": 0,
+				"placeholders": 0,
+				"kotlin": 0,
+				"swift": 0
+			},
+			"directions": []
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "typescript",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "typescript",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 15,
+						"endLine": 15
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "typescript",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				}
+			],
+			"facts": {
+				"debugCandidates": 3,
+				"todoCandidates": 0,
+				"processNotes": 0,
+				"placeholders": 0,
+				"typescript": 3
+			},
+			"directions": [
+				"Found 3 debug-output call(s) on selected lines (print/console/log-style) — investigate whether each is leftover debug residue or a deliberate, intent-revealing log."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 1,
+						"endLine": 1
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 2,
+						"endLine": 2
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 7,
+						"endLine": 7
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 9,
+						"endLine": 9
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 10,
+						"endLine": 10
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 11,
+						"endLine": 11
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 12,
+						"endLine": 12
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 13,
+						"endLine": 13
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 14,
+						"endLine": 14
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 15,
+						"endLine": 15
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 16,
+						"endLine": 16
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 17,
+						"endLine": 17
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 18,
+						"endLine": 18
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 19,
+						"endLine": 19
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 20,
+						"endLine": 20
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 21,
+						"endLine": 21
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 22,
+						"endLine": 22
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 23,
+						"endLine": 23
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 24,
+						"endLine": 24
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 25,
+						"endLine": 25
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 26,
+						"endLine": 26
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 27,
+						"endLine": 27
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 28,
+						"endLine": 28
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 29,
+						"endLine": 29
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 30,
+						"endLine": 30
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 31,
+						"endLine": 31
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 32,
+						"endLine": 32
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 33,
+						"endLine": 33
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 34,
+						"endLine": 34
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 35,
+						"endLine": 35
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 36,
+						"endLine": 36
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 37,
+						"endLine": 37
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 38,
+						"endLine": 38
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 39,
+						"endLine": 39
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 40,
+						"endLine": 40
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				}
+			],
+			"facts": {
+				"debugCandidates": 220,
+				"todoCandidates": 0,
+				"processNotes": 0,
+				"placeholders": 0,
+				"swift": 220
+			},
+			"directions": [
+				"Found 220 debug-output call(s) on selected lines (print/console/log-style) — investigate whether each is leftover debug residue or a deliberate, intent-revealing log."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"debugCandidates": 0,
+				"todoCandidates": 0,
+				"processNotes": 0,
+				"placeholders": 0
+			},
+			"directions": []
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	},
+	"scan-swift": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 32,
+						"endLine": 32
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 33,
+						"endLine": 33
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 34,
+						"endLine": 34
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 35,
+						"endLine": 35
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 41,
+						"endLine": 41
+					},
+					"label": "A selected line with a TODO, FIXME, XXX or HACK marker.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 55,
+						"endLine": 55
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				}
+			],
+			"facts": {
+				"debugCandidates": 5,
+				"todoCandidates": 1,
+				"processNotes": 0,
+				"placeholders": 0,
+				"swift": 5
+			},
+			"directions": [
+				"Found 5 debug-output call(s) on selected lines (print/console/log-style) — investigate whether each is leftover debug residue or a deliberate, intent-revealing log.",
+				"Found 1 TODO/FIXME/XXX/HACK marker(s) selected — investigate whether each is actionable residue or an intentional, tracked note."
+			]
+		}
+	],
+	"scan-typescript": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "typescript",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "typescript",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 15,
+						"endLine": 15
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "typescript",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				}
+			],
+			"facts": {
+				"debugCandidates": 3,
+				"todoCandidates": 0,
+				"processNotes": 0,
+				"placeholders": 0,
+				"typescript": 3
+			},
+			"directions": [
+				"Found 3 debug-output call(s) on selected lines (print/console/log-style) — investigate whether each is leftover debug residue or a deliberate, intent-revealing log."
+			]
+		}
+	]
+}

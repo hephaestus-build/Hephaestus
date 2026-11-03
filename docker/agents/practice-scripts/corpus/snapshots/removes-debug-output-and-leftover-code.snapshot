@@ -1,0 +1,625 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 32
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 33
+					},
+					"label": "A changed debugPrint() call.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 34
+					},
+					"label": "A changed dump() call.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 35
+					},
+					"label": "A changed NSLog() call.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 41
+					},
+					"label": "A changed TODO or FIXME comment.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 42
+					},
+					"label": "A changed block of two or more commented-out code lines.",
+					"facts": {
+						"lines": 2
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 47
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				}
+			],
+			"facts": {
+				"print": 2,
+				"debugPrint": 1,
+				"dump": 1,
+				"nslog": 1,
+				"todo": 1,
+				"commentedCode": 1
+			},
+			"directions": [
+				"Each lead is a changed line of a changed Swift file. A print inside a catch block is left to the error-handling practice, and a line pattern cannot see an enclosing #if DEBUG block.",
+				"The authored practice expects diagnostic output to go through os.Logger or to be removed before merge. Read whether each call is a leftover or deliberate output, such as a command-line tool's.",
+				"The authored practice treats commented-out code as removable because version control keeps the old code. Read whether a block is an example or documentation instead.",
+				"Read whether each TODO or FIXME is tracked in an issue or resolved by this change."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "AppTests/CartTests.swift",
+						"line": 1
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				}
+			],
+			"facts": {
+				"print": 1
+			},
+			"directions": [
+				"Each lead is a changed line of a changed Swift file. A print inside a catch block is left to the error-handling practice, and a line pattern cannot see an enclosing #if DEBUG block.",
+				"The authored practice expects diagnostic output to go through os.Logger or to be removed before merge. Read whether each call is a leftover or deliberate output, such as a command-line tool's."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of a changed Swift file. A print inside a catch block is left to the error-handling practice, and a line pattern cannot see an enclosing #if DEBUG block."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of a changed Swift file. A print inside a catch block is left to the error-handling practice, and a line pattern cannot see an enclosing #if DEBUG block."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 1
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 2
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 3
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 4
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 5
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 6
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 7
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 8
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 9
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 10
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 11
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 12
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 13
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 14
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 15
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 16
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 17
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 18
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 19
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 20
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 21
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 22
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 23
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 24
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 25
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 26
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 27
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 28
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 29
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 30
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 31
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 32
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 33
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 34
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 35
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 36
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 37
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 38
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 39
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 40
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 41
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 42
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 43
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 44
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 45
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 46
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 47
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 48
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 49
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 50
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 51
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 52
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 53
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 54
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 55
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 56
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 57
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 58
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 59
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 60
+					},
+					"label": "A changed print() call outside a catch block.",
+					"facts": {}
+				}
+			],
+			"facts": {
+				"print": 220
+			},
+			"directions": [
+				"Each lead is a changed line of a changed Swift file. A print inside a catch block is left to the error-handling practice, and a line pattern cannot see an enclosing #if DEBUG block.",
+				"The authored practice expects diagnostic output to go through os.Logger or to be removed before merge. Read whether each call is a leftover or deliberate output, such as a command-line tool's."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of a changed Swift file. A print inside a catch block is left to the error-handling practice, and a line pattern cannot see an enclosing #if DEBUG block."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

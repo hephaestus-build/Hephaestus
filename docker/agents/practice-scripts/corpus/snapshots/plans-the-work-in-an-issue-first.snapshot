@@ -1,0 +1,354 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "linked_work_items/12.md",
+						"line": 0
+					},
+					"label": "An issue that the change names as its own, with when it was opened and when the earliest commit was authored.",
+					"facts": {
+						"number": 12,
+						"namedBy": "provider closing link, closing keyword, title, branch",
+						"providerLink": "closesOnMerge",
+						"openedAt": "2026-01-01T09:00:00Z",
+						"firstCommit": "1111111",
+						"firstCommitAuthoredAt": "2026-01-02T10:00:00Z",
+						"hoursFromIssueToFirstCommit": "25.0",
+						"relation": "the earliest commit was authored 25.0 h after the issue was opened"
+					}
+				},
+				{
+					"at": {
+						"record": "linked_work_items/13.md",
+						"line": 0
+					},
+					"label": "An issue that the change names as its own, with when it was opened and when the earliest commit was authored.",
+					"facts": {
+						"number": 13,
+						"namedBy": "Related to",
+						"providerLink": "mentions",
+						"openedAt": "2026-01-04T09:00:00Z",
+						"firstCommit": "1111111",
+						"firstCommitAuthoredAt": "2026-01-02T10:00:00Z",
+						"hoursFromIssueToFirstCommit": "-47.0",
+						"relation": "the issue was opened 47.0 h after the earliest commit was authored"
+					}
+				}
+			],
+			"facts": {
+				"namedIssues": 2,
+				"unresolvedNamedIssues": 0,
+				"linkedItems": 2,
+				"commits": 5,
+				"issueOpenedAfterFirstCommitMinutes": 2820
+			},
+			"directions": [
+				"The cell is decided by the issue's opening time against the earliest authored commit of the change (commits.json), never against the pull request's creation.",
+				"A pull request is opened when the work is handed off, and the practice asks whether the plan preceded the work.",
+				"Compare the issue opening and earliest captured authored commit exactly. These dates establish the recorded order, not when all work began or why the issue was written.",
+				"An issue named only by `Related to` is the applicability only when the description or the issue shows this change implements part of it, not when the sentence is about other work.",
+				"It was captured as a mention, not a closing candidate: nothing here says the issue closed or will close on merge.",
+				"Several issues are named (#12, #13): judge the one this change implements, read from the description and the issues. If more than one remains plausible and their timing falls in different cells, do not choose the favourable one."
+			],
+			"limitations": []
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "linked_work_items/12.md",
+						"line": 0
+					},
+					"label": "An issue that the change names as its own, with when it was opened and when the earliest commit was authored.",
+					"facts": {
+						"number": 12,
+						"namedBy": "provider closing link, closing keyword, title, branch",
+						"providerLink": "closesOnMerge",
+						"openedAt": "2026-01-01T09:00:00Z",
+						"firstCommit": "1111111",
+						"firstCommitAuthoredAt": "2026-01-02T10:00:00Z",
+						"hoursFromIssueToFirstCommit": "25.0",
+						"relation": "the earliest commit was authored 25.0 h after the issue was opened"
+					}
+				},
+				{
+					"at": {
+						"record": "linked_work_items/13.md",
+						"line": 0
+					},
+					"label": "An issue that the change names as its own, with when it was opened and when the earliest commit was authored.",
+					"facts": {
+						"number": 13,
+						"namedBy": "Related to",
+						"providerLink": "mentions",
+						"openedAt": "2026-01-04T09:00:00Z",
+						"firstCommit": "1111111",
+						"firstCommitAuthoredAt": "2026-01-02T10:00:00Z",
+						"hoursFromIssueToFirstCommit": "-47.0",
+						"relation": "the issue was opened 47.0 h after the earliest commit was authored"
+					}
+				}
+			],
+			"facts": {
+				"namedIssues": 2,
+				"unresolvedNamedIssues": 0,
+				"linkedItems": 2,
+				"commits": 5,
+				"issueOpenedAfterFirstCommitMinutes": 2820
+			},
+			"directions": [
+				"The cell is decided by the issue's opening time against the earliest authored commit of the change (commits.json), never against the pull request's creation.",
+				"A pull request is opened when the work is handed off, and the practice asks whether the plan preceded the work.",
+				"Compare the issue opening and earliest captured authored commit exactly. These dates establish the recorded order, not when all work began or why the issue was written.",
+				"An issue named only by `Related to` is the applicability only when the description or the issue shows this change implements part of it, not when the sentence is about other work.",
+				"It was captured as a mention, not a closing candidate: nothing here says the issue closed or will close on merge.",
+				"Several issues are named (#12, #13): judge the one this change implements, read from the description and the issues. If more than one remains plausible and their timing falls in different cells, do not choose the favourable one."
+			],
+			"limitations": []
+		}
+	],
+	"manifests": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "linked_work_items/12.md",
+						"line": 0
+					},
+					"label": "An issue that the change names as its own, with when it was opened and when the earliest commit was authored.",
+					"facts": {
+						"number": 12,
+						"namedBy": "provider closing link, closing keyword, title, branch",
+						"providerLink": "closesOnMerge",
+						"openedAt": "2026-01-01T09:00:00Z",
+						"firstCommit": "1111111",
+						"firstCommitAuthoredAt": "2026-01-02T10:00:00Z",
+						"hoursFromIssueToFirstCommit": "25.0",
+						"relation": "the earliest commit was authored 25.0 h after the issue was opened"
+					}
+				},
+				{
+					"at": {
+						"record": "linked_work_items/13.md",
+						"line": 0
+					},
+					"label": "An issue that the change names as its own, with when it was opened and when the earliest commit was authored.",
+					"facts": {
+						"number": 13,
+						"namedBy": "Related to",
+						"providerLink": "mentions",
+						"openedAt": "2026-01-04T09:00:00Z",
+						"firstCommit": "1111111",
+						"firstCommitAuthoredAt": "2026-01-02T10:00:00Z",
+						"hoursFromIssueToFirstCommit": "-47.0",
+						"relation": "the issue was opened 47.0 h after the earliest commit was authored"
+					}
+				}
+			],
+			"facts": {
+				"namedIssues": 2,
+				"unresolvedNamedIssues": 0,
+				"linkedItems": 2,
+				"commits": 5,
+				"issueOpenedAfterFirstCommitMinutes": 2820
+			},
+			"directions": [
+				"The cell is decided by the issue's opening time against the earliest authored commit of the change (commits.json), never against the pull request's creation.",
+				"A pull request is opened when the work is handed off, and the practice asks whether the plan preceded the work.",
+				"Compare the issue opening and earliest captured authored commit exactly. These dates establish the recorded order, not when all work began or why the issue was written.",
+				"An issue named only by `Related to` is the applicability only when the description or the issue shows this change implements part of it, not when the sentence is about other work.",
+				"It was captured as a mention, not a closing candidate: nothing here says the issue closed or will close on merge.",
+				"Several issues are named (#12, #13): judge the one this change implements, read from the description and the issues. If more than one remains plausible and their timing falls in different cells, do not choose the favourable one."
+			],
+			"limitations": []
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "linked_work_items/12.md",
+						"line": 0
+					},
+					"label": "An issue that the change names as its own, with when it was opened and when the earliest commit was authored.",
+					"facts": {
+						"number": 12,
+						"namedBy": "provider closing link, closing keyword, title, branch",
+						"providerLink": "closesOnMerge",
+						"openedAt": "2026-01-01T09:00:00Z",
+						"firstCommit": "1111111",
+						"firstCommitAuthoredAt": "2026-01-02T10:00:00Z",
+						"hoursFromIssueToFirstCommit": "25.0",
+						"relation": "the earliest commit was authored 25.0 h after the issue was opened"
+					}
+				},
+				{
+					"at": {
+						"record": "linked_work_items/13.md",
+						"line": 0
+					},
+					"label": "An issue that the change names as its own, with when it was opened and when the earliest commit was authored.",
+					"facts": {
+						"number": 13,
+						"namedBy": "Related to",
+						"providerLink": "mentions",
+						"openedAt": "2026-01-04T09:00:00Z",
+						"firstCommit": "1111111",
+						"firstCommitAuthoredAt": "2026-01-02T10:00:00Z",
+						"hoursFromIssueToFirstCommit": "-47.0",
+						"relation": "the issue was opened 47.0 h after the earliest commit was authored"
+					}
+				}
+			],
+			"facts": {
+				"namedIssues": 2,
+				"unresolvedNamedIssues": 0,
+				"linkedItems": 2,
+				"commits": 5,
+				"issueOpenedAfterFirstCommitMinutes": 2820
+			},
+			"directions": [
+				"The cell is decided by the issue's opening time against the earliest authored commit of the change (commits.json), never against the pull request's creation.",
+				"A pull request is opened when the work is handed off, and the practice asks whether the plan preceded the work.",
+				"Compare the issue opening and earliest captured authored commit exactly. These dates establish the recorded order, not when all work began or why the issue was written.",
+				"An issue named only by `Related to` is the applicability only when the description or the issue shows this change implements part of it, not when the sentence is about other work.",
+				"It was captured as a mention, not a closing candidate: nothing here says the issue closed or will close on merge.",
+				"Several issues are named (#12, #13): judge the one this change implements, read from the description and the issues. If more than one remains plausible and their timing falls in different cells, do not choose the favourable one."
+			],
+			"limitations": []
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "linked_work_items/12.md",
+						"line": 0
+					},
+					"label": "An issue that the change names as its own, with when it was opened and when the earliest commit was authored.",
+					"facts": {
+						"number": 12,
+						"namedBy": "provider closing link, closing keyword, title, branch",
+						"providerLink": "closesOnMerge",
+						"openedAt": "2026-01-01T09:00:00Z",
+						"firstCommit": "1111111",
+						"firstCommitAuthoredAt": "2026-01-02T10:00:00Z",
+						"hoursFromIssueToFirstCommit": "25.0",
+						"relation": "the earliest commit was authored 25.0 h after the issue was opened"
+					}
+				},
+				{
+					"at": {
+						"record": "linked_work_items/13.md",
+						"line": 0
+					},
+					"label": "An issue that the change names as its own, with when it was opened and when the earliest commit was authored.",
+					"facts": {
+						"number": 13,
+						"namedBy": "Related to",
+						"providerLink": "mentions",
+						"openedAt": "2026-01-04T09:00:00Z",
+						"firstCommit": "1111111",
+						"firstCommitAuthoredAt": "2026-01-02T10:00:00Z",
+						"hoursFromIssueToFirstCommit": "-47.0",
+						"relation": "the issue was opened 47.0 h after the earliest commit was authored"
+					}
+				}
+			],
+			"facts": {
+				"namedIssues": 2,
+				"unresolvedNamedIssues": 0,
+				"linkedItems": 2,
+				"commits": 5,
+				"issueOpenedAfterFirstCommitMinutes": 2820
+			},
+			"directions": [
+				"The cell is decided by the issue's opening time against the earliest authored commit of the change (commits.json), never against the pull request's creation.",
+				"A pull request is opened when the work is handed off, and the practice asks whether the plan preceded the work.",
+				"Compare the issue opening and earliest captured authored commit exactly. These dates establish the recorded order, not when all work began or why the issue was written.",
+				"An issue named only by `Related to` is the applicability only when the description or the issue shows this change implements part of it, not when the sentence is about other work.",
+				"It was captured as a mention, not a closing candidate: nothing here says the issue closed or will close on merge.",
+				"Several issues are named (#12, #13): judge the one this change implements, read from the description and the issues. If more than one remains plausible and their timing falls in different cells, do not choose the favourable one."
+			],
+			"limitations": []
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"namedIssues": 0,
+				"unresolvedNamedIssues": 0,
+				"linkedItems": -1,
+				"commits": 0,
+				"issueOpenedAfterFirstCommitMinutes": -1
+			},
+			"directions": [
+				"The commit record is missing or malformed: report a collection gap and record no problem."
+			],
+			"limitations": []
+		}
+	],
+	"change-not-captured": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "linked_work_items/12.md",
+						"line": 0
+					},
+					"label": "An issue that the change names as its own, with when it was opened and when the earliest commit was authored.",
+					"facts": {
+						"number": 12,
+						"namedBy": "provider closing link, closing keyword, title, branch",
+						"providerLink": "closesOnMerge",
+						"openedAt": "2026-01-01T09:00:00Z",
+						"firstCommit": "1111111",
+						"firstCommitAuthoredAt": "2026-01-02T10:00:00Z",
+						"hoursFromIssueToFirstCommit": "25.0",
+						"relation": "the earliest commit was authored 25.0 h after the issue was opened"
+					}
+				},
+				{
+					"at": {
+						"record": "linked_work_items/13.md",
+						"line": 0
+					},
+					"label": "An issue that the change names as its own, with when it was opened and when the earliest commit was authored.",
+					"facts": {
+						"number": 13,
+						"namedBy": "Related to",
+						"providerLink": "mentions",
+						"openedAt": "2026-01-04T09:00:00Z",
+						"firstCommit": "1111111",
+						"firstCommitAuthoredAt": "2026-01-02T10:00:00Z",
+						"hoursFromIssueToFirstCommit": "-47.0",
+						"relation": "the issue was opened 47.0 h after the earliest commit was authored"
+					}
+				}
+			],
+			"facts": {
+				"namedIssues": 2,
+				"unresolvedNamedIssues": 0,
+				"linkedItems": 2,
+				"commits": 5,
+				"issueOpenedAfterFirstCommitMinutes": 2820
+			},
+			"directions": [
+				"The cell is decided by the issue's opening time against the earliest authored commit of the change (commits.json), never against the pull request's creation.",
+				"A pull request is opened when the work is handed off, and the practice asks whether the plan preceded the work.",
+				"Compare the issue opening and earliest captured authored commit exactly. These dates establish the recorded order, not when all work began or why the issue was written.",
+				"An issue named only by `Related to` is the applicability only when the description or the issue shows this change implements part of it, not when the sentence is about other work.",
+				"It was captured as a mention, not a closing candidate: nothing here says the issue closed or will close on merge.",
+				"Several issues are named (#12, #13): judge the one this change implements, read from the description and the issues. If more than one remains plausible and their timing falls in different cells, do not choose the favourable one."
+			],
+			"limitations": []
+		}
+	]
+}

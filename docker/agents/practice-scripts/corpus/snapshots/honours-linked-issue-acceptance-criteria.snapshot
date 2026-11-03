@@ -1,0 +1,154 @@
+{
+	"swift-view": [
+		{
+			"leads": [],
+			"facts": {
+				"issueReferenceSyntaxCandidateCount": 1,
+				"hasIssueReferenceSyntaxCandidate": 1,
+				"branchRefCount": 1,
+				"hasBranchRef": 1,
+				"linkedItemsFilePresent": 1,
+				"linkedIssueCount": 2,
+				"linkedIssueBodyPresent": 1,
+				"acceptanceCriteriaBlockPresent": 1,
+				"acceptanceCriteriaCheckboxes": 2
+			},
+			"directions": [
+				"Issue-reference syntax candidate(s) from title/body: #12.",
+				"Inspect the exact mention in context, including templates/examples, before establishing that the author claims to close this issue. Only then map those criteria to the change.",
+				"Candidate issue facts: bodyPresent=true, acceptanceCriteriaBlockPresent=true (heading=true, checkboxes=2) — these are text facts, not applicability.",
+				"Confirm an authored closing claim in the original mention context before mapping criteria to done or deferred."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"issueReferenceSyntaxCandidateCount": 1,
+				"hasIssueReferenceSyntaxCandidate": 1,
+				"branchRefCount": 1,
+				"hasBranchRef": 1,
+				"linkedItemsFilePresent": 1,
+				"linkedIssueCount": 2,
+				"linkedIssueBodyPresent": 1,
+				"acceptanceCriteriaBlockPresent": 1,
+				"acceptanceCriteriaCheckboxes": 2
+			},
+			"directions": [
+				"Issue-reference syntax candidate(s) from title/body: #12.",
+				"Inspect the exact mention in context, including templates/examples, before establishing that the author claims to close this issue. Only then map those criteria to the change.",
+				"Candidate issue facts: bodyPresent=true, acceptanceCriteriaBlockPresent=true (heading=true, checkboxes=2) — these are text facts, not applicability.",
+				"Confirm an authored closing claim in the original mention context before mapping criteria to done or deferred."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"issueReferenceSyntaxCandidateCount": 1,
+				"hasIssueReferenceSyntaxCandidate": 1,
+				"branchRefCount": 1,
+				"hasBranchRef": 1,
+				"linkedItemsFilePresent": 1,
+				"linkedIssueCount": 2,
+				"linkedIssueBodyPresent": 1,
+				"acceptanceCriteriaBlockPresent": 1,
+				"acceptanceCriteriaCheckboxes": 2
+			},
+			"directions": [
+				"Issue-reference syntax candidate(s) from title/body: #12.",
+				"Inspect the exact mention in context, including templates/examples, before establishing that the author claims to close this issue. Only then map those criteria to the change.",
+				"Candidate issue facts: bodyPresent=true, acceptanceCriteriaBlockPresent=true (heading=true, checkboxes=2) — these are text facts, not applicability.",
+				"Confirm an authored closing claim in the original mention context before mapping criteria to done or deferred."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"issueReferenceSyntaxCandidateCount": 1,
+				"hasIssueReferenceSyntaxCandidate": 1,
+				"branchRefCount": 1,
+				"hasBranchRef": 1,
+				"linkedItemsFilePresent": 1,
+				"linkedIssueCount": 2,
+				"linkedIssueBodyPresent": 1,
+				"acceptanceCriteriaBlockPresent": 1,
+				"acceptanceCriteriaCheckboxes": 2
+			},
+			"directions": [
+				"Issue-reference syntax candidate(s) from title/body: #12.",
+				"Inspect the exact mention in context, including templates/examples, before establishing that the author claims to close this issue. Only then map those criteria to the change.",
+				"Candidate issue facts: bodyPresent=true, acceptanceCriteriaBlockPresent=true (heading=true, checkboxes=2) — these are text facts, not applicability.",
+				"Confirm an authored closing claim in the original mention context before mapping criteria to done or deferred."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"issueReferenceSyntaxCandidateCount": 1,
+				"hasIssueReferenceSyntaxCandidate": 1,
+				"branchRefCount": 1,
+				"hasBranchRef": 1,
+				"linkedItemsFilePresent": 1,
+				"linkedIssueCount": 2,
+				"linkedIssueBodyPresent": 1,
+				"acceptanceCriteriaBlockPresent": 1,
+				"acceptanceCriteriaCheckboxes": 2
+			},
+			"directions": [
+				"Issue-reference syntax candidate(s) from title/body: #12.",
+				"Inspect the exact mention in context, including templates/examples, before establishing that the author claims to close this issue. Only then map those criteria to the change.",
+				"Candidate issue facts: bodyPresent=true, acceptanceCriteriaBlockPresent=true (heading=true, checkboxes=2) — these are text facts, not applicability.",
+				"Confirm an authored closing claim in the original mention context before mapping criteria to done or deferred."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"issueReferenceSyntaxCandidateCount": 0,
+				"hasIssueReferenceSyntaxCandidate": 0,
+				"branchRefCount": 0,
+				"hasBranchRef": 0,
+				"linkedItemsFilePresent": 0,
+				"linkedIssueCount": 0,
+				"linkedIssueBodyPresent": 0,
+				"acceptanceCriteriaBlockPresent": 0,
+				"acceptanceCriteriaCheckboxes": 0
+			},
+			"directions": [
+				"No closing reference, issue URL, or branch-encoded number found in title/body/branch — confirm there is genuinely no linked tracker issue before concluding there are no acceptance criteria to honour.",
+				"No linked_work_items.json was projected into context — the linked issue's body and its acceptance-criteria block are NOT visible here, so this practice cannot be assessed from the diff alone."
+			]
+		}
+	],
+	"change-not-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"issueReferenceSyntaxCandidateCount": 1,
+				"hasIssueReferenceSyntaxCandidate": 1,
+				"branchRefCount": 1,
+				"hasBranchRef": 1,
+				"linkedItemsFilePresent": 1,
+				"linkedIssueCount": 2,
+				"linkedIssueBodyPresent": 1,
+				"acceptanceCriteriaBlockPresent": 1,
+				"acceptanceCriteriaCheckboxes": 2
+			},
+			"directions": [
+				"Issue-reference syntax candidate(s) from title/body: #12.",
+				"Inspect the exact mention in context, including templates/examples, before establishing that the author claims to close this issue. Only then map those criteria to the change.",
+				"Candidate issue facts: bodyPresent=true, acceptanceCriteriaBlockPresent=true (heading=true, checkboxes=2) — these are text facts, not applicability.",
+				"Confirm an authored closing claim in the original mention context before mapping criteria to done or deferred."
+			]
+		}
+	]
+}

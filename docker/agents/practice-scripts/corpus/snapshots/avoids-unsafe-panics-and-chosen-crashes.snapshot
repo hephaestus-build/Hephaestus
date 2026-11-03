@@ -1,0 +1,1164 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 27
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 39
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "fatalError",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 38
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "force cast as!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 40
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "precondition or assert",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 27
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "force unwrap",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 111
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": true,
+						"testFile": false
+					}
+				}
+			],
+			"facts": {
+				"crashOperatorLines": 6,
+				"inPreview": 1,
+				"inTests": 0
+			},
+			"directions": [
+				"6 selected line(s) spell a crash operator: 2 try!, 1 fatalError, 1 force cast as!, 1 precondition or assert, 1 force unwrap.",
+				"1 sit inside a preview block and 0 in test files. String-literal text and comments were not scanned.",
+				"A lead matches spelling on one line: it does not know the operand's type, where the value came from, or what bounds it."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 16
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "typescript",
+						"operators": "process.exit",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 9
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "typescript",
+						"operators": "non-null assertion",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 16
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "python",
+						"operators": "sys.exit",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "pkg/load.go",
+						"line": 10
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "go",
+						"operators": "panic(",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "pkg/load.go",
+						"line": 8
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "go",
+						"operators": "log.Fatal",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "pkg/load.go",
+						"line": 9
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "go",
+						"operators": "os.Exit",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.java",
+						"line": 10
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "java",
+						"operators": "System.exit",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.kt",
+						"line": 2
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "kotlin",
+						"operators": "!! force non-null",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.kt",
+						"line": 7
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "kotlin",
+						"operators": "error(",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "app/models/cart.rb",
+						"line": 8
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "ruby",
+						"operators": "exit!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "native/cart.c",
+						"line": 1
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "c",
+						"operators": "abort(",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "native/cart.c",
+						"line": 2
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "c",
+						"operators": "abort(",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "native/cart.c",
+						"line": 6
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "c",
+						"operators": "abort(",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "native/cart.c",
+						"line": 7
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "c",
+						"operators": "exit(",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "native/cart.c",
+						"line": 5
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "c",
+						"operators": "assert(",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "ios/Cart.m",
+						"line": 6
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "objective-c",
+						"operators": "abort(",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "ios/Cart.m",
+						"line": 1
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "objective-c",
+						"operators": "NSAssert",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "ios/Cart.m",
+						"line": 3
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "objective-c",
+						"operators": "NSAssert",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "src/Cart.cs",
+						"line": 7
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "csharp",
+						"operators": "Environment.Exit",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "src/Cart.cs",
+						"line": 6
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "csharp",
+						"operators": "Debug.Assert",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "src/Cart.cs",
+						"line": 5
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "csharp",
+						"operators": "null-forgiving !",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.test.ts",
+						"line": 1
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "typescript",
+						"operators": "process.exit",
+						"inPreview": false,
+						"testFile": true
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.test.ts",
+						"line": 1
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "typescript",
+						"operators": "non-null assertion",
+						"inPreview": false,
+						"testFile": true
+					}
+				},
+				{
+					"at": {
+						"file": "AppTests/CartTests.swift",
+						"line": 1
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": true
+					}
+				}
+			],
+			"facts": {
+				"crashOperatorLines": 24,
+				"inPreview": 0,
+				"inTests": 3
+			},
+			"directions": [
+				"24 selected line(s) spell a crash operator: 2 process.exit, 2 non-null assertion, 1 sys.exit, 1 panic(, 1 log.Fatal, 1 os.Exit, 1 System.exit, 1 !! force non-null, 1 error(, 1 exit!, 4 abort(, 1 exit(, 1 assert(, 2 NSAssert, 1 Environment.Exit, 1 Debug.Assert, and 2 more.",
+				"0 sit inside a preview block and 3 in test files. String-literal text and comments were not scanned.",
+				"A lead matches spelling on one line: it does not know the operand's type, where the value came from, or what bounds it."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"crashOperatorLines": 0,
+				"inPreview": 0,
+				"inTests": 0
+			},
+			"directions": []
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 16
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "typescript",
+						"operators": "process.exit",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 9
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "typescript",
+						"operators": "non-null assertion",
+						"inPreview": false,
+						"testFile": false
+					}
+				}
+			],
+			"facts": {
+				"crashOperatorLines": 2,
+				"inPreview": 0,
+				"inTests": 0
+			},
+			"directions": [
+				"2 selected line(s) spell a crash operator: 1 process.exit, 1 non-null assertion.",
+				"0 sit inside a preview block and 0 in test files. String-literal text and comments were not scanned.",
+				"A lead matches spelling on one line: it does not know the operand's type, where the value came from, or what bounds it."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 1
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 2
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 3
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 4
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 5
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 6
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 7
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 8
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 9
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 10
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 11
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 12
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 13
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 14
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 15
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 16
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 17
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 18
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 19
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 20
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 21
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 22
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 23
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 24
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 25
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 26
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 27
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 28
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 29
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 30
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 31
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 32
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 33
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 34
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 35
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 36
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 37
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 38
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 39
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 40
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				}
+			],
+			"facts": {
+				"crashOperatorLines": 220,
+				"inPreview": 0,
+				"inTests": 0
+			},
+			"directions": [
+				"220 selected line(s) spell a crash operator: 220 try!.",
+				"0 sit inside a preview block and 0 in test files. String-literal text and comments were not scanned.",
+				"A lead matches spelling on one line: it does not know the operand's type, where the value came from, or what bounds it."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"crashOperatorLines": 0,
+				"inPreview": 0,
+				"inTests": 0
+			},
+			"directions": []
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	},
+	"scan-swift": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 27
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 39
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "fatalError",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 38
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "force cast as!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 40
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "precondition or assert",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 27
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "force unwrap",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 111
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "swift",
+						"operators": "try!",
+						"inPreview": true,
+						"testFile": false
+					}
+				}
+			],
+			"facts": {
+				"crashOperatorLines": 6,
+				"inPreview": 1,
+				"inTests": 0
+			},
+			"directions": [
+				"6 selected line(s) spell a crash operator: 2 try!, 1 fatalError, 1 force cast as!, 1 precondition or assert, 1 force unwrap.",
+				"1 sit inside a preview block and 0 in test files. String-literal text and comments were not scanned.",
+				"A lead matches spelling on one line: it does not know the operand's type, where the value came from, or what bounds it."
+			]
+		}
+	],
+	"scan-typescript": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 16
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "typescript",
+						"operators": "process.exit",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 9
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "typescript",
+						"operators": "non-null assertion",
+						"inPreview": false,
+						"testFile": false
+					}
+				}
+			],
+			"facts": {
+				"crashOperatorLines": 2,
+				"inPreview": 0,
+				"inTests": 0
+			},
+			"directions": [
+				"2 selected line(s) spell a crash operator: 1 process.exit, 1 non-null assertion.",
+				"0 sit inside a preview block and 0 in test files. String-literal text and comments were not scanned.",
+				"A lead matches spelling on one line: it does not know the operand's type, where the value came from, or what bounds it."
+			]
+		}
+	]
+}

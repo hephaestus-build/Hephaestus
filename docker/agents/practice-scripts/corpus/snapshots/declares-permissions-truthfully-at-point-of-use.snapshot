@@ -1,0 +1,165 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"change": "App/CartView.swift",
+						"line": 64
+					},
+					"label": "An added reference to a Location type or call, to inspect for the permission that it needs.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"change": "App/CartView.swift",
+						"line": 64
+					},
+					"label": "An added call that requests an authorization from the user.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"change": "App/CartView.swift",
+						"line": 65
+					},
+					"label": "An added reference to a Camera type or call, to inspect for the permission that it needs.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				}
+			],
+			"facts": {
+				"permissionReferenceKinds": 2,
+				"authorizationRequests": 1,
+				"usageKeysAdded": 0,
+				"usageKeysLocatedInCheckout": 1,
+				"projectFilesRead": 2,
+				"filesScanned": 2,
+				"linesAdded": 174
+			},
+			"directions": [
+				"Permission-related references to inspect, with the usage keys located. Searched the change and 2 of 2 plist/project file(s) read.",
+				"Location — keys located: NSLocationWhenInUseUsageDescription (Project/Info.plist).",
+				"Camera — keys located: none.",
+				"A key located in a file does not show the target declares it, and a key not located does not show it is missing: read the target's own Info.plist or build settings, and the key the actual API and deployment target require.",
+				"1 authorization requests were added. For each request, read the enclosing flag and the call chain. Decide whether it runs when the feature is reached or earlier. A root view can be the feature that needs authorization."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"permissionReferenceKinds": 0,
+				"authorizationRequests": 0,
+				"usageKeysAdded": 0,
+				"usageKeysLocatedInCheckout": 1,
+				"projectFilesRead": 2,
+				"filesScanned": 0,
+				"linesAdded": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [
+				{
+					"at": {
+						"change": "App/Info.plist",
+						"line": 1
+					},
+					"label": "An added line of a plist or project file that holds a usage-description key.",
+					"facts": {
+						"key": "NSCameraUsageDescription"
+					}
+				}
+			],
+			"facts": {
+				"permissionReferenceKinds": 0,
+				"authorizationRequests": 0,
+				"usageKeysAdded": 1,
+				"usageKeysLocatedInCheckout": 1,
+				"projectFilesRead": 2,
+				"filesScanned": 1,
+				"linesAdded": 1
+			},
+			"directions": []
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"permissionReferenceKinds": 0,
+				"authorizationRequests": 0,
+				"usageKeysAdded": 0,
+				"usageKeysLocatedInCheckout": 0,
+				"projectFilesRead": 0,
+				"filesScanned": 0,
+				"linesAdded": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"permissionReferenceKinds": 0,
+				"authorizationRequests": 0,
+				"usageKeysAdded": 0,
+				"usageKeysLocatedInCheckout": 0,
+				"projectFilesRead": 0,
+				"filesScanned": 1,
+				"linesAdded": 220
+			},
+			"directions": [
+				"Scanned 220 added lines in 1 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"permissionReferenceKinds": 0,
+				"authorizationRequests": 0,
+				"usageKeysAdded": 0,
+				"usageKeysLocatedInCheckout": 0,
+				"projectFilesRead": 0,
+				"filesScanned": 0,
+				"linesAdded": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

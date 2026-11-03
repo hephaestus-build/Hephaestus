@@ -1,0 +1,706 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 4
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 31,
+						"otherPath": "App/Report.swift",
+						"otherStart": 32,
+						"otherEnd": 59,
+						"lines": 28,
+						"identicalLines": 28
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 4
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 30,
+						"otherPath": "App/Report.swift",
+						"otherStart": 31,
+						"otherEnd": 57,
+						"lines": 27,
+						"identicalLines": 27
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 6
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 32,
+						"otherPath": "App/Report.swift",
+						"otherStart": 33,
+						"otherEnd": 59,
+						"lines": 27,
+						"identicalLines": 27
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 4
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 29,
+						"otherPath": "App/Report.swift",
+						"otherStart": 30,
+						"otherEnd": 55,
+						"lines": 26,
+						"identicalLines": 26
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 8
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 33,
+						"otherPath": "App/Report.swift",
+						"otherStart": 34,
+						"otherEnd": 59,
+						"lines": 26,
+						"identicalLines": 26
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 4
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 28,
+						"otherPath": "App/Report.swift",
+						"otherStart": 29,
+						"otherEnd": 53,
+						"lines": 25,
+						"identicalLines": 25
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 10
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 34,
+						"otherPath": "App/Report.swift",
+						"otherStart": 35,
+						"otherEnd": 59,
+						"lines": 25,
+						"identicalLines": 25
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 4
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 27,
+						"otherPath": "App/Report.swift",
+						"otherStart": 28,
+						"otherEnd": 51,
+						"lines": 24,
+						"identicalLines": 24
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 12
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 35,
+						"otherPath": "App/Report.swift",
+						"otherStart": 36,
+						"otherEnd": 59,
+						"lines": 24,
+						"identicalLines": 24
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 4
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 26,
+						"otherPath": "App/Report.swift",
+						"otherStart": 27,
+						"otherEnd": 49,
+						"lines": 23,
+						"identicalLines": 23
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 14
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 36,
+						"otherPath": "App/Report.swift",
+						"otherStart": 37,
+						"otherEnd": 59,
+						"lines": 23,
+						"identicalLines": 23
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 4
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 25,
+						"otherPath": "App/Report.swift",
+						"otherStart": 26,
+						"otherEnd": 47,
+						"lines": 22,
+						"identicalLines": 22
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 16
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 37,
+						"otherPath": "App/Report.swift",
+						"otherStart": 38,
+						"otherEnd": 59,
+						"lines": 22,
+						"identicalLines": 22
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 4
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 24,
+						"otherPath": "App/Report.swift",
+						"otherStart": 25,
+						"otherEnd": 45,
+						"lines": 21,
+						"identicalLines": 21
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 18
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 38,
+						"otherPath": "App/Report.swift",
+						"otherStart": 39,
+						"otherEnd": 59,
+						"lines": 21,
+						"identicalLines": 21
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 4
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 23,
+						"otherPath": "App/Report.swift",
+						"otherStart": 24,
+						"otherEnd": 43,
+						"lines": 20,
+						"identicalLines": 20
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 20
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 39,
+						"otherPath": "App/Report.swift",
+						"otherStart": 40,
+						"otherEnd": 59,
+						"lines": 20,
+						"identicalLines": 20
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 4
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 22,
+						"otherPath": "App/Report.swift",
+						"otherStart": 23,
+						"otherEnd": 41,
+						"lines": 19,
+						"identicalLines": 19
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 22
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 40,
+						"otherPath": "App/Report.swift",
+						"otherStart": 41,
+						"otherEnd": 59,
+						"lines": 19,
+						"identicalLines": 19
+					}
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 4
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 21,
+						"otherPath": "App/Report.swift",
+						"otherStart": 22,
+						"otherEnd": 39,
+						"lines": 18,
+						"identicalLines": 18
+					}
+				}
+			],
+			"facts": {
+				"linesAdded": 174,
+				"filesScanned": 2,
+				"pairs": 47
+			},
+			"directions": [
+				"47 pair(s) of added blocks with the same line shapes, one row each with both spans and the names that differ. These are structural candidates, not established copies of maintained knowledge. Assess them under the practice standard."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"linesAdded": 124,
+				"filesScanned": 13,
+				"pairs": 0
+			},
+			"directions": [
+				"No two runs of 5 or more added lines share a shape once names and literals are set aside. A copy this pairing cannot see — the same computation spelled with different statements, or shorter than 5 lines — is still yours to read for."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"linesAdded": 2,
+				"filesScanned": 2,
+				"pairs": 0
+			},
+			"directions": [
+				"No two runs of 5 or more added lines share a shape once names and literals are set aside. A copy this pairing cannot see — the same computation spelled with different statements, or shorter than 5 lines — is still yours to read for."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"linesAdded": 19,
+				"filesScanned": 1,
+				"pairs": 0
+			},
+			"directions": [
+				"No two runs of 5 or more added lines share a shape once names and literals are set aside. A copy this pairing cannot see — the same computation spelled with different statements, or shorter than 5 lines — is still yours to read for."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 1
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 6,
+						"otherPath": "App/Many.swift",
+						"otherStart": 7,
+						"otherEnd": 12,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x0→x6, x1→x7, x2→x8, x3→x9, x4→x10"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 1
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 6,
+						"otherPath": "App/Many.swift",
+						"otherStart": 215,
+						"otherEnd": 220,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x0→x214, x1→x215, x2→x216, x3→x217, x4→x218"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 2
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 7,
+						"otherPath": "App/Many.swift",
+						"otherStart": 8,
+						"otherEnd": 13,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x1→x7, x2→x8, x3→x9, x4→x10, x5→x11"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 2
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 7,
+						"otherPath": "App/Many.swift",
+						"otherStart": 215,
+						"otherEnd": 220,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x1→x214, x2→x215, x3→x216, x4→x217, x5→x218"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 3
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 8,
+						"otherPath": "App/Many.swift",
+						"otherStart": 9,
+						"otherEnd": 14,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x2→x8, x3→x9, x4→x10, x5→x11, x6→x12"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 3
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 8,
+						"otherPath": "App/Many.swift",
+						"otherStart": 215,
+						"otherEnd": 220,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x2→x214, x3→x215, x4→x216, x5→x217, x6→x218"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 4
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 9,
+						"otherPath": "App/Many.swift",
+						"otherStart": 10,
+						"otherEnd": 15,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x3→x9, x4→x10, x5→x11, x6→x12, x7→x13"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 4
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 9,
+						"otherPath": "App/Many.swift",
+						"otherStart": 215,
+						"otherEnd": 220,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x3→x214, x4→x215, x5→x216, x6→x217, x7→x218"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 5
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 10,
+						"otherPath": "App/Many.swift",
+						"otherStart": 11,
+						"otherEnd": 16,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x4→x10, x5→x11, x6→x12, x7→x13, x8→x14"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 5
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 10,
+						"otherPath": "App/Many.swift",
+						"otherStart": 215,
+						"otherEnd": 220,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x4→x214, x5→x215, x6→x216, x7→x217, x8→x218"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 6
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 11,
+						"otherPath": "App/Many.swift",
+						"otherStart": 12,
+						"otherEnd": 17,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x5→x11, x6→x12, x7→x13, x8→x14, x9→x15"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 6
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 11,
+						"otherPath": "App/Many.swift",
+						"otherStart": 215,
+						"otherEnd": 220,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x5→x214, x6→x215, x7→x216, x8→x217, x9→x218"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 7
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 12,
+						"otherPath": "App/Many.swift",
+						"otherStart": 13,
+						"otherEnd": 18,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x6→x12, x7→x13, x8→x14, x9→x15, x10→x16"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 7
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 12,
+						"otherPath": "App/Many.swift",
+						"otherStart": 215,
+						"otherEnd": 220,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x6→x214, x7→x215, x8→x216, x9→x217, x10→x218"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 8
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 13,
+						"otherPath": "App/Many.swift",
+						"otherStart": 14,
+						"otherEnd": 19,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x7→x13, x8→x14, x9→x15, x10→x16, x11→x17"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 8
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 13,
+						"otherPath": "App/Many.swift",
+						"otherStart": 215,
+						"otherEnd": 220,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x7→x214, x8→x215, x9→x216, x10→x217, x11→x218"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 9
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 14,
+						"otherPath": "App/Many.swift",
+						"otherStart": 15,
+						"otherEnd": 20,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x8→x14, x9→x15, x10→x16, x11→x17, x12→x18"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 9
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 14,
+						"otherPath": "App/Many.swift",
+						"otherStart": 215,
+						"otherEnd": 220,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x8→x214, x9→x215, x10→x216, x11→x217, x12→x218"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 10
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 15,
+						"otherPath": "App/Many.swift",
+						"otherStart": 16,
+						"otherEnd": 21,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x9→x15, x10→x16, x11→x17, x12→x18, x13→x19"
+					}
+				},
+				{
+					"at": {
+						"change": "App/Many.swift",
+						"line": 10
+					},
+					"label": "An added block whose lines have the same shape as another added block when names and literals are set aside.",
+					"facts": {
+						"endLine": 15,
+						"otherPath": "App/Many.swift",
+						"otherStart": 215,
+						"otherEnd": 220,
+						"lines": 6,
+						"identicalLines": 0,
+						"differing": "x9→x214, x10→x215, x11→x216, x12→x217, x13→x218"
+					}
+				}
+			],
+			"facts": {
+				"linesAdded": 220,
+				"filesScanned": 1,
+				"pairs": 419
+			},
+			"directions": [
+				"419 pair(s) of added blocks with the same line shapes, one row each with both spans and the names that differ. These are structural candidates, not established copies of maintained knowledge. Assess them under the practice standard."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"linesAdded": 0,
+				"filesScanned": 0,
+				"pairs": 0
+			},
+			"directions": [
+				"No two runs of 5 or more added lines share a shape once names and literals are set aside. A copy this pairing cannot see — the same computation spelled with different statements, or shorter than 5 lines — is still yours to read for."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

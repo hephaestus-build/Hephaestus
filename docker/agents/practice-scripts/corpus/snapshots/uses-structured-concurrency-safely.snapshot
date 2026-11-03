@@ -1,0 +1,560 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 25,
+						"endLine": 25
+					},
+					"label": "A selected async function declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 26,
+						"endLine": 26
+					},
+					"label": "A selected await expression.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 58,
+						"endLine": 58
+					},
+					"label": "A selected Task.detached call.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 58,
+						"endLine": 58
+					},
+					"label": "A selected await expression.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 59,
+						"endLine": 59
+					},
+					"label": "A selected unstructured Task { } block.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 59,
+						"endLine": 59
+					},
+					"label": "A selected await expression.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 60,
+						"endLine": 60
+					},
+					"label": "A selected line that uses DispatchQueue.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 61,
+						"endLine": 61
+					},
+					"label": "A selected await expression.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 61,
+						"endLine": 61
+					},
+					"label": "A selected MainActor.run call.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 105,
+						"endLine": 105
+					},
+					"label": "A selected .task view modifier.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 105,
+						"endLine": 105
+					},
+					"label": "A selected await expression.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 106,
+						"endLine": 106
+					},
+					"label": "A selected await expression.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 107,
+						"endLine": 107
+					},
+					"label": "A selected .onAppear block.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "Project/project.yml",
+						"line": 1
+					},
+					"label": "A line of a project file that names a default actor isolation for one target or module."
+				}
+			],
+			"facts": {
+				"concurrencyLinesSelected": 13,
+				"taskBlocks": 1,
+				"taskBlocksInListedViewRows": 1,
+				"taskModifiers": 1,
+				"detachedTasks": 1,
+				"dispatchQueues": 1,
+				"mainActorMarks": 1,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 2,
+				"linesSelected": 174
+			},
+			"directions": [
+				"1 Task { } block(s) selected inside view types — read the lifetime each needs: work tied to the view belongs to a lifecycle that cancels it, while a Task started from a user action may legitimately finish after the view is gone.",
+				"1 detached task(s) and 1 dispatch queue use(s) — read whether the code shows a need for independent execution or scheduling; no written reason is required when it does.",
+				"Each default-isolation-setting lead applies only to its own target or SwiftPM module and build configuration, and a commented line sets nothing: read which target and configuration build the changed file before relying on any of them.",
+				"A type's isolation comes from its declaration, its module's setting or what it inherits. A missing @MainActor on a selected line does not by itself put a mutation off the main actor.",
+				"Check the SDK before relying on inherited SwiftUI View isolation. Swallowed failures belong to handles-errors-instead-of-swallowing-them, not this practice."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"concurrencyLinesSelected": 0,
+				"taskBlocks": 0,
+				"taskBlocksInListedViewRows": 0,
+				"taskModifiers": 0,
+				"detachedTasks": 0,
+				"dispatchQueues": 0,
+				"mainActorMarks": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"concurrencyLinesSelected": 0,
+				"taskBlocks": 0,
+				"taskBlocksInListedViewRows": 0,
+				"taskModifiers": 0,
+				"detachedTasks": 0,
+				"dispatchQueues": 0,
+				"mainActorMarks": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 1
+			},
+			"directions": [
+				"Scanned 1 added lines in 1 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"concurrencyLinesSelected": 0,
+				"taskBlocks": 0,
+				"taskBlocksInListedViewRows": 0,
+				"taskModifiers": 0,
+				"detachedTasks": 0,
+				"dispatchQueues": 0,
+				"mainActorMarks": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"concurrencyLinesSelected": 0,
+				"taskBlocks": 0,
+				"taskBlocksInListedViewRows": 0,
+				"taskModifiers": 0,
+				"detachedTasks": 0,
+				"dispatchQueues": 0,
+				"mainActorMarks": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 220
+			},
+			"directions": [
+				"Scanned 220 added lines in 1 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"concurrencyLinesSelected": 0,
+				"taskBlocks": 0,
+				"taskBlocksInListedViewRows": 0,
+				"taskModifiers": 0,
+				"detachedTasks": 0,
+				"dispatchQueues": 0,
+				"mainActorMarks": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	},
+	"scan-swift": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 25,
+						"endLine": 25
+					},
+					"label": "A selected async function declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 26,
+						"endLine": 26
+					},
+					"label": "A selected await expression.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 58,
+						"endLine": 58
+					},
+					"label": "A selected Task.detached call.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 58,
+						"endLine": 58
+					},
+					"label": "A selected await expression.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 59,
+						"endLine": 59
+					},
+					"label": "A selected unstructured Task { } block.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 59,
+						"endLine": 59
+					},
+					"label": "A selected await expression.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 60,
+						"endLine": 60
+					},
+					"label": "A selected line that uses DispatchQueue.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 61,
+						"endLine": 61
+					},
+					"label": "A selected await expression.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 61,
+						"endLine": 61
+					},
+					"label": "A selected MainActor.run call.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 105,
+						"endLine": 105
+					},
+					"label": "A selected .task view modifier.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 105,
+						"endLine": 105
+					},
+					"label": "A selected await expression.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 106,
+						"endLine": 106
+					},
+					"label": "A selected await expression.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 107,
+						"endLine": 107
+					},
+					"label": "A selected .onAppear block.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "Project/project.yml",
+						"line": 1
+					},
+					"label": "A line of a project file that names a default actor isolation for one target or module."
+				}
+			],
+			"facts": {
+				"concurrencyLinesSelected": 13,
+				"taskBlocks": 1,
+				"taskBlocksInListedViewRows": 1,
+				"taskModifiers": 1,
+				"detachedTasks": 1,
+				"dispatchQueues": 1,
+				"mainActorMarks": 1,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 113
+			},
+			"directions": [
+				"1 Task { } block(s) selected inside view types — read the lifetime each needs: work tied to the view belongs to a lifecycle that cancels it, while a Task started from a user action may legitimately finish after the view is gone.",
+				"1 detached task(s) and 1 dispatch queue use(s) — read whether the code shows a need for independent execution or scheduling; no written reason is required when it does.",
+				"Each default-isolation-setting lead applies only to its own target or SwiftPM module and build configuration, and a commented line sets nothing: read which target and configuration build the changed file before relying on any of them.",
+				"A type's isolation comes from its declaration, its module's setting or what it inherits. A missing @MainActor on a selected line does not by itself put a mutation off the main actor.",
+				"Check the SDK before relying on inherited SwiftUI View isolation. Swallowed failures belong to handles-errors-instead-of-swallowing-them, not this practice."
+			]
+		}
+	],
+	"scan-typescript": [
+		{
+			"leads": [],
+			"facts": {
+				"concurrencyLinesSelected": 0,
+				"taskBlocks": 0,
+				"taskBlocksInListedViewRows": 0,
+				"taskModifiers": 0,
+				"detachedTasks": 0,
+				"dispatchQueues": 0,
+				"mainActorMarks": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	]
+}

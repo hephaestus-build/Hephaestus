@@ -1,0 +1,464 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 9
+					},
+					"label": "An inline comment by someone other than the author.",
+					"facts": {
+						"by": "reviewer",
+						"bot": false,
+						"at": "2026-01-02T11:30:00Z",
+						"path": "web/cart.ts",
+						"side": "RIGHT",
+						"outdated": false,
+						"authorReplied": true,
+						"replyExcerpt": "Will do later, see #12.",
+						"threadResolved": false,
+						"reviewerLaterNote": "Can you mark this ready and link an issue?",
+						"reviewerApprovedAfter": "88200s later; 2 commit(s) and 2 author note(s) between",
+						"afterHandOff": false,
+						"fileInChange": false,
+						"changeNearLine": false,
+						"commitsAfter": 2,
+						"commitsAfterTouchingFile": 2,
+						"line": 3
+					}
+				},
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 32
+					},
+					"label": "An inline comment by someone other than the author.",
+					"facts": {
+						"by": "linter",
+						"bot": true,
+						"at": "2026-01-02T11:50:00Z",
+						"path": "web/cart.ts",
+						"side": "RIGHT",
+						"outdated": true,
+						"authorReplied": false,
+						"threadResolved": true,
+						"resolvedBy": "reviewer",
+						"afterHandOff": false,
+						"fileInChange": false,
+						"changeNearLine": false,
+						"commitsAfter": 2,
+						"commitsAfterTouchingFile": 2,
+						"line": 5
+					}
+				},
+				{
+					"at": {
+						"record": "general_comments.json",
+						"line": 4
+					},
+					"label": "A conversation comment by someone other than the author.",
+					"facts": {
+						"by": "reviewer",
+						"bot": false,
+						"at": "2026-01-02T12:30:00Z",
+						"authorNotesAfter": 1,
+						"authorNoteExcerpt": "Done, this closes #12.",
+						"reviewerApprovedAfter": "84600s later; 1 commit(s) and 1 author note(s) between",
+						"afterHandOff": false,
+						"commitsAfter": 1
+					}
+				}
+			],
+			"facts": {
+				"commentsFileAbsent": 0,
+				"generalCommentsFileAbsent": 0,
+				"reviewerComments": 1,
+				"conversationComments": 1,
+				"botComments": 1,
+				"withAuthorReply": 2,
+				"withLaterCommitOnFile": 1,
+				"afterHandOff": 0,
+				"commitsFileAbsent": 0
+			},
+			"directions": [
+				"2 reviewer note(s) (1 inline, 1 conversation), 1 more by bots; 2 have a later author note.",
+				"1 have a later authored commit touching the commented file; 0 were posted after the work merged or closed.",
+				"Commit capture: 5 captured commit(s) in commits.json."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 9
+					},
+					"label": "An inline comment by someone other than the author.",
+					"facts": {
+						"by": "reviewer",
+						"bot": false,
+						"at": "2026-01-02T11:30:00Z",
+						"path": "web/cart.ts",
+						"side": "RIGHT",
+						"outdated": false,
+						"authorReplied": true,
+						"replyExcerpt": "Will do later, see #12.",
+						"threadResolved": false,
+						"reviewerLaterNote": "Can you mark this ready and link an issue?",
+						"reviewerApprovedAfter": "88200s later; 2 commit(s) and 2 author note(s) between",
+						"afterHandOff": false,
+						"fileInChange": true,
+						"changeNearLine": true,
+						"commitsAfter": 2,
+						"commitsAfterTouchingFile": 2,
+						"line": 3
+					}
+				},
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 32
+					},
+					"label": "An inline comment by someone other than the author.",
+					"facts": {
+						"by": "linter",
+						"bot": true,
+						"at": "2026-01-02T11:50:00Z",
+						"path": "web/cart.ts",
+						"side": "RIGHT",
+						"outdated": true,
+						"authorReplied": false,
+						"threadResolved": true,
+						"resolvedBy": "reviewer",
+						"afterHandOff": false,
+						"fileInChange": true,
+						"changeNearLine": true,
+						"commitsAfter": 2,
+						"commitsAfterTouchingFile": 2,
+						"line": 5
+					}
+				},
+				{
+					"at": {
+						"record": "general_comments.json",
+						"line": 4
+					},
+					"label": "A conversation comment by someone other than the author.",
+					"facts": {
+						"by": "reviewer",
+						"bot": false,
+						"at": "2026-01-02T12:30:00Z",
+						"authorNotesAfter": 1,
+						"authorNoteExcerpt": "Done, this closes #12.",
+						"reviewerApprovedAfter": "84600s later; 1 commit(s) and 1 author note(s) between",
+						"afterHandOff": false,
+						"commitsAfter": 1
+					}
+				}
+			],
+			"facts": {
+				"commentsFileAbsent": 0,
+				"generalCommentsFileAbsent": 0,
+				"reviewerComments": 1,
+				"conversationComments": 1,
+				"botComments": 1,
+				"withAuthorReply": 2,
+				"withLaterCommitOnFile": 1,
+				"afterHandOff": 0,
+				"commitsFileAbsent": 0
+			},
+			"directions": [
+				"2 reviewer note(s) (1 inline, 1 conversation), 1 more by bots; 2 have a later author note.",
+				"1 have a later authored commit touching the commented file; 0 were posted after the work merged or closed.",
+				"Commit capture: 5 captured commit(s) in commits.json."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 9
+					},
+					"label": "An inline comment by someone other than the author.",
+					"facts": {
+						"by": "reviewer",
+						"bot": false,
+						"at": "2026-01-02T11:30:00Z",
+						"path": "web/cart.ts",
+						"side": "RIGHT",
+						"outdated": false,
+						"authorReplied": true,
+						"replyExcerpt": "Will do later, see #12.",
+						"threadResolved": false,
+						"reviewerLaterNote": "Can you mark this ready and link an issue?",
+						"reviewerApprovedAfter": "88200s later; 2 commit(s) and 2 author note(s) between",
+						"afterHandOff": false,
+						"fileInChange": false,
+						"changeNearLine": false,
+						"commitsAfter": 2,
+						"commitsAfterTouchingFile": 2,
+						"line": 3
+					}
+				},
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 32
+					},
+					"label": "An inline comment by someone other than the author.",
+					"facts": {
+						"by": "linter",
+						"bot": true,
+						"at": "2026-01-02T11:50:00Z",
+						"path": "web/cart.ts",
+						"side": "RIGHT",
+						"outdated": true,
+						"authorReplied": false,
+						"threadResolved": true,
+						"resolvedBy": "reviewer",
+						"afterHandOff": false,
+						"fileInChange": false,
+						"changeNearLine": false,
+						"commitsAfter": 2,
+						"commitsAfterTouchingFile": 2,
+						"line": 5
+					}
+				},
+				{
+					"at": {
+						"record": "general_comments.json",
+						"line": 4
+					},
+					"label": "A conversation comment by someone other than the author.",
+					"facts": {
+						"by": "reviewer",
+						"bot": false,
+						"at": "2026-01-02T12:30:00Z",
+						"authorNotesAfter": 1,
+						"authorNoteExcerpt": "Done, this closes #12.",
+						"reviewerApprovedAfter": "84600s later; 1 commit(s) and 1 author note(s) between",
+						"afterHandOff": false,
+						"commitsAfter": 1
+					}
+				}
+			],
+			"facts": {
+				"commentsFileAbsent": 0,
+				"generalCommentsFileAbsent": 0,
+				"reviewerComments": 1,
+				"conversationComments": 1,
+				"botComments": 1,
+				"withAuthorReply": 2,
+				"withLaterCommitOnFile": 1,
+				"afterHandOff": 0,
+				"commitsFileAbsent": 0
+			},
+			"directions": [
+				"2 reviewer note(s) (1 inline, 1 conversation), 1 more by bots; 2 have a later author note.",
+				"1 have a later authored commit touching the commented file; 0 were posted after the work merged or closed.",
+				"Commit capture: 5 captured commit(s) in commits.json."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 9
+					},
+					"label": "An inline comment by someone other than the author.",
+					"facts": {
+						"by": "reviewer",
+						"bot": false,
+						"at": "2026-01-02T11:30:00Z",
+						"path": "web/cart.ts",
+						"side": "RIGHT",
+						"outdated": false,
+						"authorReplied": true,
+						"replyExcerpt": "Will do later, see #12.",
+						"threadResolved": false,
+						"reviewerLaterNote": "Can you mark this ready and link an issue?",
+						"reviewerApprovedAfter": "88200s later; 2 commit(s) and 2 author note(s) between",
+						"afterHandOff": false,
+						"fileInChange": true,
+						"changeNearLine": true,
+						"commitsAfter": 2,
+						"commitsAfterTouchingFile": 2,
+						"line": 3
+					}
+				},
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 32
+					},
+					"label": "An inline comment by someone other than the author.",
+					"facts": {
+						"by": "linter",
+						"bot": true,
+						"at": "2026-01-02T11:50:00Z",
+						"path": "web/cart.ts",
+						"side": "RIGHT",
+						"outdated": true,
+						"authorReplied": false,
+						"threadResolved": true,
+						"resolvedBy": "reviewer",
+						"afterHandOff": false,
+						"fileInChange": true,
+						"changeNearLine": true,
+						"commitsAfter": 2,
+						"commitsAfterTouchingFile": 2,
+						"line": 5
+					}
+				},
+				{
+					"at": {
+						"record": "general_comments.json",
+						"line": 4
+					},
+					"label": "A conversation comment by someone other than the author.",
+					"facts": {
+						"by": "reviewer",
+						"bot": false,
+						"at": "2026-01-02T12:30:00Z",
+						"authorNotesAfter": 1,
+						"authorNoteExcerpt": "Done, this closes #12.",
+						"reviewerApprovedAfter": "84600s later; 1 commit(s) and 1 author note(s) between",
+						"afterHandOff": false,
+						"commitsAfter": 1
+					}
+				}
+			],
+			"facts": {
+				"commentsFileAbsent": 0,
+				"generalCommentsFileAbsent": 0,
+				"reviewerComments": 1,
+				"conversationComments": 1,
+				"botComments": 1,
+				"withAuthorReply": 2,
+				"withLaterCommitOnFile": 1,
+				"afterHandOff": 0,
+				"commitsFileAbsent": 0
+			},
+			"directions": [
+				"2 reviewer note(s) (1 inline, 1 conversation), 1 more by bots; 2 have a later author note.",
+				"1 have a later authored commit touching the commented file; 0 were posted after the work merged or closed.",
+				"Commit capture: 5 captured commit(s) in commits.json."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 9
+					},
+					"label": "An inline comment by someone other than the author.",
+					"facts": {
+						"by": "reviewer",
+						"bot": false,
+						"at": "2026-01-02T11:30:00Z",
+						"path": "web/cart.ts",
+						"side": "RIGHT",
+						"outdated": false,
+						"authorReplied": true,
+						"replyExcerpt": "Will do later, see #12.",
+						"threadResolved": false,
+						"reviewerLaterNote": "Can you mark this ready and link an issue?",
+						"reviewerApprovedAfter": "88200s later; 2 commit(s) and 2 author note(s) between",
+						"afterHandOff": false,
+						"fileInChange": false,
+						"changeNearLine": false,
+						"commitsAfter": 2,
+						"commitsAfterTouchingFile": 2,
+						"line": 3
+					}
+				},
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 32
+					},
+					"label": "An inline comment by someone other than the author.",
+					"facts": {
+						"by": "linter",
+						"bot": true,
+						"at": "2026-01-02T11:50:00Z",
+						"path": "web/cart.ts",
+						"side": "RIGHT",
+						"outdated": true,
+						"authorReplied": false,
+						"threadResolved": true,
+						"resolvedBy": "reviewer",
+						"afterHandOff": false,
+						"fileInChange": false,
+						"changeNearLine": false,
+						"commitsAfter": 2,
+						"commitsAfterTouchingFile": 2,
+						"line": 5
+					}
+				},
+				{
+					"at": {
+						"record": "general_comments.json",
+						"line": 4
+					},
+					"label": "A conversation comment by someone other than the author.",
+					"facts": {
+						"by": "reviewer",
+						"bot": false,
+						"at": "2026-01-02T12:30:00Z",
+						"authorNotesAfter": 1,
+						"authorNoteExcerpt": "Done, this closes #12.",
+						"reviewerApprovedAfter": "84600s later; 1 commit(s) and 1 author note(s) between",
+						"afterHandOff": false,
+						"commitsAfter": 1
+					}
+				}
+			],
+			"facts": {
+				"commentsFileAbsent": 0,
+				"generalCommentsFileAbsent": 0,
+				"reviewerComments": 1,
+				"conversationComments": 1,
+				"botComments": 1,
+				"withAuthorReply": 2,
+				"withLaterCommitOnFile": 1,
+				"afterHandOff": 0,
+				"commitsFileAbsent": 0
+			},
+			"directions": [
+				"2 reviewer note(s) (1 inline, 1 conversation), 1 more by bots; 2 have a later author note.",
+				"1 have a later authored commit touching the commented file; 0 were posted after the work merged or closed.",
+				"Commit capture: 5 captured commit(s) in commits.json."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"commentsFileAbsent": 1,
+				"generalCommentsFileAbsent": 1,
+				"commitsFileAbsent": 1
+			},
+			"directions": [
+				"No comments file was captured (neither comments.json nor general_comments.json): the record of reviewer notes is not available here."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

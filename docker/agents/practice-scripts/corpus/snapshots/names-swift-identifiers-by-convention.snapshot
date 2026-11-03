@@ -1,0 +1,236 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 63
+					},
+					"label": "A changed variable with a generic name such as data or result.",
+					"facts": {
+						"identifier": "value"
+					}
+				}
+			],
+			"facts": {
+				"genericName": 1
+			},
+			"directions": [
+				"Each lead is a changed line, or for a file-level cue a changed file, of non-test Swift. The authored program follows the Swift API Design Guidelines: lowerCamelCase members, UpperCamelCase types, Bool names that read as assertions, and acronyms cased as one word.",
+				"A name pattern is not a verdict. Read whether the name is clear at its use site; names fixed by an API, a coding key or a domain term can be right as they are."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line, or for a file-level cue a changed file, of non-test Swift. The authored program follows the Swift API Design Guidelines: lowerCamelCase members, UpperCamelCase types, Bool names that read as assertions, and acronyms cased as one word.",
+				"A name pattern is not a verdict. Read whether the name is clear at its use site; names fixed by an API, a coding key or a domain term can be right as they are."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line, or for a file-level cue a changed file, of non-test Swift. The authored program follows the Swift API Design Guidelines: lowerCamelCase members, UpperCamelCase types, Bool names that read as assertions, and acronyms cased as one word.",
+				"A name pattern is not a verdict. Read whether the name is clear at its use site; names fixed by an API, a coding key or a domain term can be right as they are."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line, or for a file-level cue a changed file, of non-test Swift. The authored program follows the Swift API Design Guidelines: lowerCamelCase members, UpperCamelCase types, Bool names that read as assertions, and acronyms cased as one word.",
+				"A name pattern is not a verdict. Read whether the name is clear at its use site; names fixed by an API, a coding key or a domain term can be right as they are."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 101
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x1",
+						"properties": 100
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 101
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x10",
+						"properties": 10
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 111
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x11",
+						"properties": 10
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 121
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x12",
+						"properties": 10
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 131
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x13",
+						"properties": 10
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 141
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x14",
+						"properties": 10
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 151
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x15",
+						"properties": 10
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 161
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x16",
+						"properties": 10
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 171
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x17",
+						"properties": 10
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 181
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x18",
+						"properties": 10
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 191
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x19",
+						"properties": 10
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 201
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x2",
+						"properties": 20
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 201
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x20",
+						"properties": 10
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 211
+					},
+					"label": "Three or more properties in a changed file share a short prefix.",
+					"facts": {
+						"prefix": "x21",
+						"properties": 10
+					}
+				}
+			],
+			"facts": {
+				"sharedPrefix": 14
+			},
+			"directions": [
+				"Each lead is a changed line, or for a file-level cue a changed file, of non-test Swift. The authored program follows the Swift API Design Guidelines: lowerCamelCase members, UpperCamelCase types, Bool names that read as assertions, and acronyms cased as one word.",
+				"A name pattern is not a verdict. Read whether the name is clear at its use site; names fixed by an API, a coding key or a domain term can be right as they are."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line, or for a file-level cue a changed file, of non-test Swift. The authored program follows the Swift API Design Guidelines: lowerCamelCase members, UpperCamelCase types, Bool names that read as assertions, and acronyms cased as one word.",
+				"A name pattern is not a verdict. Read whether the name is clear at its use site; names fixed by an API, a coding key or a domain term can be right as they are."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

@@ -1,0 +1,386 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 94,
+						"endLine": 94
+					},
+					"label": "A selected color made from fixed components, such as RGB, white or hex values.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 95,
+						"endLine": 95
+					},
+					"label": "A selected literal white or black color.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 96,
+						"endLine": 96
+					},
+					"label": "A selected semantic style, such as .primary or .secondary.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 97,
+						"endLine": 97
+					},
+					"label": "A selected material, such as .regularMaterial.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 98,
+						"endLine": 98
+					},
+					"label": "A selected color from a named asset, with the facts that tell if its colorset has a dark appearance.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true,
+						"asset": "Brand",
+						"hasDarkAppearance": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 99,
+						"endLine": 99
+					},
+					"label": "A selected color from a named asset, with the facts that tell if its colorset has a dark appearance.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true,
+						"asset": "Unknown",
+						"hasDarkAppearance": "unknown"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 100,
+						"endLine": 100
+					},
+					"label": "A selected Color member, such as Color.green, that SwiftUI or the app can define.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				}
+			],
+			"facts": {
+				"literalColors": 2,
+				"systemAdaptiveColors": 2,
+				"namedAssetColors": 2,
+				"colorsToClassify": 1,
+				"assetsWithoutDarkAppearance": 0,
+				"assetColorsInCheckout": 2,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 2,
+				"linesSelected": 174
+			},
+			"directions": [
+				"Found 2 literal colors, 2 system-adaptive colors and 2 named asset colors selected in view types. For each literal, read the modifier chain. Text over a fill the same view sets is content.",
+				"A literal background or text on a system background can fix one appearance. A translucent scrim over an image is content, not an adaptive screen background.",
+				"1 selected line(s) name a color whose spelling does not settle its kind — a UIKit color, `Color(.name)`, a `Color` member or a member given to a color modifier.",
+				"Read the type it resolves to and, for a name the app defines, its definition: SwiftUI's standard colors and UIKit's dynamic colors change with the appearance, UIKit's fixed constants do not.",
+				"Each line is listed once, under the first shape its text shows: enumerate every color a listed line holds."
+			],
+			"limitations": []
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"literalColors": 0,
+				"systemAdaptiveColors": 0,
+				"namedAssetColors": 0,
+				"colorsToClassify": 0,
+				"assetsWithoutDarkAppearance": 0,
+				"assetColorsInCheckout": 2,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			],
+			"limitations": []
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"literalColors": 0,
+				"systemAdaptiveColors": 0,
+				"namedAssetColors": 0,
+				"colorsToClassify": 0,
+				"assetsWithoutDarkAppearance": 0,
+				"assetColorsInCheckout": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 1
+			},
+			"directions": [
+				"Scanned 1 added lines in 1 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			],
+			"limitations": []
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"literalColors": 0,
+				"systemAdaptiveColors": 0,
+				"namedAssetColors": 0,
+				"colorsToClassify": 0,
+				"assetsWithoutDarkAppearance": 0,
+				"assetColorsInCheckout": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			],
+			"limitations": []
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"literalColors": 0,
+				"systemAdaptiveColors": 0,
+				"namedAssetColors": 0,
+				"colorsToClassify": 0,
+				"assetsWithoutDarkAppearance": 0,
+				"assetColorsInCheckout": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 220
+			},
+			"directions": [
+				"Scanned 220 added lines in 1 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			],
+			"limitations": []
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"literalColors": 0,
+				"systemAdaptiveColors": 0,
+				"namedAssetColors": 0,
+				"colorsToClassify": 0,
+				"assetsWithoutDarkAppearance": 0,
+				"assetColorsInCheckout": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			],
+			"limitations": []
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	},
+	"scan-swift": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 94,
+						"endLine": 94
+					},
+					"label": "A selected color made from fixed components, such as RGB, white or hex values.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 95,
+						"endLine": 95
+					},
+					"label": "A selected literal white or black color.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 96,
+						"endLine": 96
+					},
+					"label": "A selected semantic style, such as .primary or .secondary.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 97,
+						"endLine": 97
+					},
+					"label": "A selected material, such as .regularMaterial.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 98,
+						"endLine": 98
+					},
+					"label": "A selected color from a named asset, with the facts that tell if its colorset has a dark appearance.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true,
+						"asset": "Brand",
+						"hasDarkAppearance": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 99,
+						"endLine": 99
+					},
+					"label": "A selected color from a named asset, with the facts that tell if its colorset has a dark appearance.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true,
+						"asset": "Unknown",
+						"hasDarkAppearance": "unknown"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 100,
+						"endLine": 100
+					},
+					"label": "A selected Color member, such as Color.green, that SwiftUI or the app can define.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				}
+			],
+			"facts": {
+				"literalColors": 2,
+				"systemAdaptiveColors": 2,
+				"namedAssetColors": 2,
+				"colorsToClassify": 1,
+				"assetsWithoutDarkAppearance": 0,
+				"assetColorsInCheckout": 2,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 113
+			},
+			"directions": [
+				"Found 2 literal colors, 2 system-adaptive colors and 2 named asset colors selected in view types. For each literal, read the modifier chain. Text over a fill the same view sets is content.",
+				"A literal background or text on a system background can fix one appearance. A translucent scrim over an image is content, not an adaptive screen background.",
+				"1 selected line(s) name a color whose spelling does not settle its kind — a UIKit color, `Color(.name)`, a `Color` member or a member given to a color modifier.",
+				"Read the type it resolves to and, for a name the app defines, its definition: SwiftUI's standard colors and UIKit's dynamic colors change with the appearance, UIKit's fixed constants do not.",
+				"Each line is listed once, under the first shape its text shows: enumerate every color a listed line holds."
+			],
+			"limitations": []
+		}
+	],
+	"scan-typescript": [
+		{
+			"leads": [],
+			"facts": {
+				"literalColors": 0,
+				"systemAdaptiveColors": 0,
+				"namedAssetColors": 0,
+				"colorsToClassify": 0,
+				"assetsWithoutDarkAppearance": 0,
+				"assetColorsInCheckout": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			],
+			"limitations": []
+		}
+	]
+}

@@ -1,0 +1,625 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "linked_work_items.json"
+					},
+					"label": "An issue number that the provider records as a closing link, or that a closing keyword in the body names.",
+					"facts": {
+						"number": 12,
+						"target": "https://example.org/team/project/issues/12",
+						"where": "linked_work_items.json (how: closesOnMerge)",
+						"title": "Show the cart total",
+						"state": "OPEN",
+						"inLinkedItems": true
+					}
+				},
+				{
+					"at": {
+						"record": "linked_work_items.json"
+					},
+					"label": "An issue target in the captured linked work items, with its own URL and contents.",
+					"facts": {
+						"number": 13,
+						"target": "unknown",
+						"where": "linked_work_items.json (how: mentions)",
+						"title": "Later work",
+						"state": "CLOSED",
+						"inLinkedItems": true
+					}
+				},
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "metadata.json (title)"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the provider records as a closing link, or that a closing keyword in the body names.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 13,
+						"target": "team/project",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the title or the body names together with the path of its repository.",
+					"facts": {
+						"number": 9,
+						"target": "team/other",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "metadata.json (source_branch)"
+					}
+				}
+			],
+			"facts": {
+				"referencesFound": 5,
+				"closingReferences": 2,
+				"providerClosingLinks": 1,
+				"linkedWorkItems": 2
+			},
+			"directions": [
+				"Issue-shaped references and captured targets: https://example.org/team/project/issues/12#12, unknown#13, team/project#12, team/project#13, team/other#9.",
+				"2 linked issue(s) captured. This partial capture cannot prove that an unresolved issue does not exist or that the repository tracks no issues.",
+				"Authored references and captured targets are separate leads. A matching number alone never identifies the same issue across repositories or providers. Use the captured target URL and contents."
+			],
+			"limitations": []
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "linked_work_items.json"
+					},
+					"label": "An issue number that the provider records as a closing link, or that a closing keyword in the body names.",
+					"facts": {
+						"number": 12,
+						"target": "https://example.org/team/project/issues/12",
+						"where": "linked_work_items.json (how: closesOnMerge)",
+						"title": "Show the cart total",
+						"state": "OPEN",
+						"inLinkedItems": true
+					}
+				},
+				{
+					"at": {
+						"record": "linked_work_items.json"
+					},
+					"label": "An issue target in the captured linked work items, with its own URL and contents.",
+					"facts": {
+						"number": 13,
+						"target": "unknown",
+						"where": "linked_work_items.json (how: mentions)",
+						"title": "Later work",
+						"state": "CLOSED",
+						"inLinkedItems": true
+					}
+				},
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "metadata.json (title)"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the provider records as a closing link, or that a closing keyword in the body names.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 13,
+						"target": "team/project",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the title or the body names together with the path of its repository.",
+					"facts": {
+						"number": 9,
+						"target": "team/other",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "metadata.json (source_branch)"
+					}
+				}
+			],
+			"facts": {
+				"referencesFound": 5,
+				"closingReferences": 2,
+				"providerClosingLinks": 1,
+				"linkedWorkItems": 2
+			},
+			"directions": [
+				"Issue-shaped references and captured targets: https://example.org/team/project/issues/12#12, unknown#13, team/project#12, team/project#13, team/other#9.",
+				"2 linked issue(s) captured. This partial capture cannot prove that an unresolved issue does not exist or that the repository tracks no issues.",
+				"Authored references and captured targets are separate leads. A matching number alone never identifies the same issue across repositories or providers. Use the captured target URL and contents."
+			],
+			"limitations": []
+		}
+	],
+	"manifests": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "linked_work_items.json"
+					},
+					"label": "An issue number that the provider records as a closing link, or that a closing keyword in the body names.",
+					"facts": {
+						"number": 12,
+						"target": "https://example.org/team/project/issues/12",
+						"where": "linked_work_items.json (how: closesOnMerge)",
+						"title": "Show the cart total",
+						"state": "OPEN",
+						"inLinkedItems": true
+					}
+				},
+				{
+					"at": {
+						"record": "linked_work_items.json"
+					},
+					"label": "An issue target in the captured linked work items, with its own URL and contents.",
+					"facts": {
+						"number": 13,
+						"target": "unknown",
+						"where": "linked_work_items.json (how: mentions)",
+						"title": "Later work",
+						"state": "CLOSED",
+						"inLinkedItems": true
+					}
+				},
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "metadata.json (title)"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the provider records as a closing link, or that a closing keyword in the body names.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 13,
+						"target": "team/project",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the title or the body names together with the path of its repository.",
+					"facts": {
+						"number": 9,
+						"target": "team/other",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "metadata.json (source_branch)"
+					}
+				}
+			],
+			"facts": {
+				"referencesFound": 5,
+				"closingReferences": 2,
+				"providerClosingLinks": 1,
+				"linkedWorkItems": 2
+			},
+			"directions": [
+				"Issue-shaped references and captured targets: https://example.org/team/project/issues/12#12, unknown#13, team/project#12, team/project#13, team/other#9.",
+				"2 linked issue(s) captured. This partial capture cannot prove that an unresolved issue does not exist or that the repository tracks no issues.",
+				"Authored references and captured targets are separate leads. A matching number alone never identifies the same issue across repositories or providers. Use the captured target URL and contents."
+			],
+			"limitations": []
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "linked_work_items.json"
+					},
+					"label": "An issue number that the provider records as a closing link, or that a closing keyword in the body names.",
+					"facts": {
+						"number": 12,
+						"target": "https://example.org/team/project/issues/12",
+						"where": "linked_work_items.json (how: closesOnMerge)",
+						"title": "Show the cart total",
+						"state": "OPEN",
+						"inLinkedItems": true
+					}
+				},
+				{
+					"at": {
+						"record": "linked_work_items.json"
+					},
+					"label": "An issue target in the captured linked work items, with its own URL and contents.",
+					"facts": {
+						"number": 13,
+						"target": "unknown",
+						"where": "linked_work_items.json (how: mentions)",
+						"title": "Later work",
+						"state": "CLOSED",
+						"inLinkedItems": true
+					}
+				},
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "metadata.json (title)"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the provider records as a closing link, or that a closing keyword in the body names.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 13,
+						"target": "team/project",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the title or the body names together with the path of its repository.",
+					"facts": {
+						"number": 9,
+						"target": "team/other",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "metadata.json (source_branch)"
+					}
+				}
+			],
+			"facts": {
+				"referencesFound": 5,
+				"closingReferences": 2,
+				"providerClosingLinks": 1,
+				"linkedWorkItems": 2
+			},
+			"directions": [
+				"Issue-shaped references and captured targets: https://example.org/team/project/issues/12#12, unknown#13, team/project#12, team/project#13, team/other#9.",
+				"2 linked issue(s) captured. This partial capture cannot prove that an unresolved issue does not exist or that the repository tracks no issues.",
+				"Authored references and captured targets are separate leads. A matching number alone never identifies the same issue across repositories or providers. Use the captured target URL and contents."
+			],
+			"limitations": []
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "linked_work_items.json"
+					},
+					"label": "An issue number that the provider records as a closing link, or that a closing keyword in the body names.",
+					"facts": {
+						"number": 12,
+						"target": "https://example.org/team/project/issues/12",
+						"where": "linked_work_items.json (how: closesOnMerge)",
+						"title": "Show the cart total",
+						"state": "OPEN",
+						"inLinkedItems": true
+					}
+				},
+				{
+					"at": {
+						"record": "linked_work_items.json"
+					},
+					"label": "An issue target in the captured linked work items, with its own URL and contents.",
+					"facts": {
+						"number": 13,
+						"target": "unknown",
+						"where": "linked_work_items.json (how: mentions)",
+						"title": "Later work",
+						"state": "CLOSED",
+						"inLinkedItems": true
+					}
+				},
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "metadata.json (title)"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the provider records as a closing link, or that a closing keyword in the body names.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 13,
+						"target": "team/project",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the title or the body names together with the path of its repository.",
+					"facts": {
+						"number": 9,
+						"target": "team/other",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "metadata.json (source_branch)"
+					}
+				}
+			],
+			"facts": {
+				"referencesFound": 5,
+				"closingReferences": 2,
+				"providerClosingLinks": 1,
+				"linkedWorkItems": 2
+			},
+			"directions": [
+				"Issue-shaped references and captured targets: https://example.org/team/project/issues/12#12, unknown#13, team/project#12, team/project#13, team/other#9.",
+				"2 linked issue(s) captured. This partial capture cannot prove that an unresolved issue does not exist or that the repository tracks no issues.",
+				"Authored references and captured targets are separate leads. A matching number alone never identifies the same issue across repositories or providers. Use the captured target URL and contents."
+			],
+			"limitations": []
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"referencesFound": 0,
+				"closingReferences": 0,
+				"providerClosingLinks": 0,
+				"linkedWorkItems": -1
+			},
+			"directions": [
+				"No issue reference in the title, body or branch. Read commits.json for a reference in history.",
+				"linked_work_items.json was not captured. Report a collection gap if the criterion needs a target.",
+				"Authored references and captured targets are separate leads. A matching number alone never identifies the same issue across repositories or providers. Use the captured target URL and contents."
+			],
+			"limitations": []
+		}
+	],
+	"change-not-captured": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "linked_work_items.json"
+					},
+					"label": "An issue number that the provider records as a closing link, or that a closing keyword in the body names.",
+					"facts": {
+						"number": 12,
+						"target": "https://example.org/team/project/issues/12",
+						"where": "linked_work_items.json (how: closesOnMerge)",
+						"title": "Show the cart total",
+						"state": "OPEN",
+						"inLinkedItems": true
+					}
+				},
+				{
+					"at": {
+						"record": "linked_work_items.json"
+					},
+					"label": "An issue target in the captured linked work items, with its own URL and contents.",
+					"facts": {
+						"number": 13,
+						"target": "unknown",
+						"where": "linked_work_items.json (how: mentions)",
+						"title": "Later work",
+						"state": "CLOSED",
+						"inLinkedItems": true
+					}
+				},
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "metadata.json (title)"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the provider records as a closing link, or that a closing keyword in the body names.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 13,
+						"target": "team/project",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "description.md"
+					},
+					"label": "An issue number that the title or the body names together with the path of its repository.",
+					"facts": {
+						"number": 9,
+						"target": "team/other",
+						"where": "description.md"
+					}
+				},
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "An issue number that the title, the body or the source branch names without a closing keyword.",
+					"facts": {
+						"number": 12,
+						"target": "team/project",
+						"where": "metadata.json (source_branch)"
+					}
+				}
+			],
+			"facts": {
+				"referencesFound": 5,
+				"closingReferences": 2,
+				"providerClosingLinks": 1,
+				"linkedWorkItems": 2
+			},
+			"directions": [
+				"Issue-shaped references and captured targets: https://example.org/team/project/issues/12#12, unknown#13, team/project#12, team/project#13, team/other#9.",
+				"2 linked issue(s) captured. This partial capture cannot prove that an unresolved issue does not exist or that the repository tracks no issues.",
+				"Authored references and captured targets are separate leads. A matching number alone never identifies the same issue across repositories or providers. Use the captured target URL and contents."
+			],
+			"limitations": []
+		}
+	]
+}

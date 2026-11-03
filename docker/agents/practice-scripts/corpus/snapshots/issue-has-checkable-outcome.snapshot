@@ -1,0 +1,57 @@
+{
+	"issue-with-outcome": [
+		{
+			"leads": [],
+			"facts": {
+				"bodyLength": 66,
+				"taskCheckboxes": 2,
+				"uncheckedBoxes": 1,
+				"checkedBoxes": 1,
+				"emptyOrTitleEcho": 0,
+				"hasDeliverableType": 1,
+				"looksUmbrella": 0
+			},
+			"directions": [
+				"Captured: 2 task-list item(s) in the body (1 ticked); labels feature, billing; native type task.",
+				"Judge the standard once over the title, the whole body, the comments and any materialised document; these counts locate text and decide nothing."
+			]
+		}
+	],
+	"issue-empty": [
+		{
+			"leads": [],
+			"facts": {
+				"bodyLength": 0,
+				"taskCheckboxes": 0,
+				"uncheckedBoxes": 0,
+				"checkedBoxes": 0,
+				"emptyOrTitleEcho": 1,
+				"hasDeliverableType": 0,
+				"looksUmbrella": 0
+			},
+			"directions": [
+				"The captured body is empty: the title is the only text the issue itself carries.",
+				"Captured: 0 task-list item(s) in the body (0 ticked); labels none; native type none.",
+				"Judge the standard once over the title, the whole body, the comments and any materialised document; these counts locate text and decide nothing."
+			]
+		}
+	],
+	"issue-closed": [
+		{
+			"leads": [],
+			"facts": {
+				"bodyLength": 39,
+				"taskCheckboxes": 1,
+				"uncheckedBoxes": 1,
+				"checkedBoxes": 0,
+				"emptyOrTitleEcho": 0,
+				"hasDeliverableType": 1,
+				"looksUmbrella": 1
+			},
+			"directions": [
+				"Captured: 1 task-list item(s) in the body (0 ticked); labels epic; native type none.",
+				"Judge the standard once over the title, the whole body, the comments and any materialised document; these counts locate text and decide nothing."
+			]
+		}
+	]
+}

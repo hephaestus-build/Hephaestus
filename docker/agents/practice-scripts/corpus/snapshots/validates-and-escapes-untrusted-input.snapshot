@@ -1,0 +1,274 @@
+{
+	"swift-view": [
+		{
+			"leads": [],
+			"facts": {
+				"sourceSinkFlows": 0,
+				"filesScanned": 2,
+				"linesAdded": 170
+			},
+			"directions": [
+				"Scanned 170 added lines in 2 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"change": "web/cart.ts",
+						"line": 10
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 6,
+						"sourceToken": "request/req param",
+						"sinkToken": "deserialize",
+						"lineDistance": 4
+					}
+				},
+				{
+					"at": {
+						"change": "web/cart.ts",
+						"line": 11
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 6,
+						"sourceToken": "request/req param",
+						"sinkToken": "raw SQL string-concat",
+						"lineDistance": 5
+					}
+				},
+				{
+					"at": {
+						"change": "web/cart.ts",
+						"line": 12
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 6,
+						"sourceToken": "request/req param",
+						"sinkToken": "innerHTML / dangerouslySetInnerHTML",
+						"lineDistance": 6
+					}
+				},
+				{
+					"at": {
+						"change": "web/cart.ts",
+						"line": 13
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 6,
+						"sourceToken": "request/req param",
+						"sinkToken": "eval",
+						"lineDistance": 7
+					}
+				},
+				{
+					"at": {
+						"change": "app/tool.py",
+						"line": 7
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 3,
+						"sourceToken": "request/req param",
+						"sinkToken": "raw SQL string-concat",
+						"lineDistance": 4
+					}
+				},
+				{
+					"at": {
+						"change": "app/tool.py",
+						"line": 8
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 3,
+						"sourceToken": "request/req param",
+						"sinkToken": "exec / shell",
+						"lineDistance": 5
+					}
+				},
+				{
+					"at": {
+						"change": "src/main/App.java",
+						"line": 9
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 3,
+						"sourceToken": "@RequestParam/@PathVariable/@RequestBody",
+						"sinkToken": "exec / shell",
+						"lineDistance": 6
+					}
+				},
+				{
+					"at": {
+						"change": "app/models/cart.rb",
+						"line": 5
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 3,
+						"sourceToken": "params/query/body/headers/cookies",
+						"sinkToken": "deserialize",
+						"lineDistance": 2
+					}
+				},
+				{
+					"at": {
+						"change": "public/cart.php",
+						"line": 4
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 3,
+						"sourceToken": "superglobals",
+						"sinkToken": "exec / shell",
+						"lineDistance": 1
+					}
+				},
+				{
+					"at": {
+						"change": "public/cart.php",
+						"line": 5
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 3,
+						"sourceToken": "superglobals",
+						"sinkToken": "echo/print to HTML",
+						"lineDistance": 2
+					}
+				}
+			],
+			"facts": {
+				"sourceSinkFlows": 10,
+				"filesScanned": 18,
+				"linesAdded": 121
+			},
+			"directions": [
+				"Found 10 added line(s) where an untrusted-input source (request/params/env/file/stdin/argv) and a dangerous sink (raw SQL concat, exec/eval/system, innerHTML, path join, template render, deserialize) co-occur within 25 lines.",
+				"Trace whether the source reaches the sink without validation/escaping/parameterization, and confirm before deciding."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"sourceSinkFlows": 0,
+				"filesScanned": 12,
+				"linesAdded": 21
+			},
+			"directions": [
+				"Scanned 21 added lines in 12 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"change": "web/cart.ts",
+						"line": 10
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 6,
+						"sourceToken": "request/req param",
+						"sinkToken": "deserialize",
+						"lineDistance": 4
+					}
+				},
+				{
+					"at": {
+						"change": "web/cart.ts",
+						"line": 11
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 6,
+						"sourceToken": "request/req param",
+						"sinkToken": "raw SQL string-concat",
+						"lineDistance": 5
+					}
+				},
+				{
+					"at": {
+						"change": "web/cart.ts",
+						"line": 12
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 6,
+						"sourceToken": "request/req param",
+						"sinkToken": "innerHTML / dangerouslySetInnerHTML",
+						"lineDistance": 6
+					}
+				},
+				{
+					"at": {
+						"change": "web/cart.ts",
+						"line": 13
+					},
+					"label": "An added line with a dangerous operation (a sink) and an untrusted input (a source) at most 25 added lines away.",
+					"facts": {
+						"sourceLine": 6,
+						"sourceToken": "request/req param",
+						"sinkToken": "eval",
+						"lineDistance": 7
+					}
+				}
+			],
+			"facts": {
+				"sourceSinkFlows": 4,
+				"filesScanned": 1,
+				"linesAdded": 18
+			},
+			"directions": [
+				"Found 4 added line(s) where an untrusted-input source (request/params/env/file/stdin/argv) and a dangerous sink (raw SQL concat, exec/eval/system, innerHTML, path join, template render, deserialize) co-occur within 25 lines.",
+				"Trace whether the source reaches the sink without validation/escaping/parameterization, and confirm before deciding."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"sourceSinkFlows": 0,
+				"filesScanned": 1,
+				"linesAdded": 220
+			},
+			"directions": [
+				"Scanned 220 added lines in 1 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"sourceSinkFlows": 0,
+				"filesScanned": 0,
+				"linesAdded": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

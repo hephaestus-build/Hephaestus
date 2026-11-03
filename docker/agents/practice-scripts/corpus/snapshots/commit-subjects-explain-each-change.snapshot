@@ -1,0 +1,400 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "1111111",
+						"bare": true,
+						"repeat": true,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "2222222",
+						"bare": false,
+						"repeat": false,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "3333333",
+						"bare": true,
+						"repeat": true,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "5555555",
+						"bare": true,
+						"repeat": false,
+						"cutOff": false
+					}
+				}
+			],
+			"facts": {
+				"authoredCommits": 4,
+				"mergeCommits": 1,
+				"bareSubjects": 3,
+				"repeatedSubjects": 2,
+				"cutOffSubjects": 0
+			},
+			"directions": [
+				"4 authored commit(s), 1 merge commit(s) excluded, one lead each.",
+				"Judge every subject on whether it names a specific action and object for a reader of the history. A flag names a shape to check, not a lapse."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "1111111",
+						"bare": true,
+						"repeat": true,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "2222222",
+						"bare": false,
+						"repeat": false,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "3333333",
+						"bare": true,
+						"repeat": true,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "5555555",
+						"bare": true,
+						"repeat": false,
+						"cutOff": false
+					}
+				}
+			],
+			"facts": {
+				"authoredCommits": 4,
+				"mergeCommits": 1,
+				"bareSubjects": 3,
+				"repeatedSubjects": 2,
+				"cutOffSubjects": 0
+			},
+			"directions": [
+				"4 authored commit(s), 1 merge commit(s) excluded, one lead each.",
+				"Judge every subject on whether it names a specific action and object for a reader of the history. A flag names a shape to check, not a lapse."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "1111111",
+						"bare": true,
+						"repeat": true,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "2222222",
+						"bare": false,
+						"repeat": false,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "3333333",
+						"bare": true,
+						"repeat": true,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "5555555",
+						"bare": true,
+						"repeat": false,
+						"cutOff": false
+					}
+				}
+			],
+			"facts": {
+				"authoredCommits": 4,
+				"mergeCommits": 1,
+				"bareSubjects": 3,
+				"repeatedSubjects": 2,
+				"cutOffSubjects": 0
+			},
+			"directions": [
+				"4 authored commit(s), 1 merge commit(s) excluded, one lead each.",
+				"Judge every subject on whether it names a specific action and object for a reader of the history. A flag names a shape to check, not a lapse."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "1111111",
+						"bare": true,
+						"repeat": true,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "2222222",
+						"bare": false,
+						"repeat": false,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "3333333",
+						"bare": true,
+						"repeat": true,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "5555555",
+						"bare": true,
+						"repeat": false,
+						"cutOff": false
+					}
+				}
+			],
+			"facts": {
+				"authoredCommits": 4,
+				"mergeCommits": 1,
+				"bareSubjects": 3,
+				"repeatedSubjects": 2,
+				"cutOffSubjects": 0
+			},
+			"directions": [
+				"4 authored commit(s), 1 merge commit(s) excluded, one lead each.",
+				"Judge every subject on whether it names a specific action and object for a reader of the history. A flag names a shape to check, not a lapse."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "1111111",
+						"bare": true,
+						"repeat": true,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "2222222",
+						"bare": false,
+						"repeat": false,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "3333333",
+						"bare": true,
+						"repeat": true,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "5555555",
+						"bare": true,
+						"repeat": false,
+						"cutOff": false
+					}
+				}
+			],
+			"facts": {
+				"authoredCommits": 4,
+				"mergeCommits": 1,
+				"bareSubjects": 3,
+				"repeatedSubjects": 2,
+				"cutOffSubjects": 0
+			},
+			"directions": [
+				"4 authored commit(s), 1 merge commit(s) excluded, one lead each.",
+				"Judge every subject on whether it names a specific action and object for a reader of the history. A flag names a shape to check, not a lapse."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"directions": [
+				"commits.json is missing or malformed: a collection gap, not a history without authored commits."
+			]
+		}
+	],
+	"change-not-captured": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "1111111",
+						"bare": true,
+						"repeat": true,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "2222222",
+						"bare": false,
+						"repeat": false,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "3333333",
+						"bare": true,
+						"repeat": true,
+						"cutOff": false
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json"
+					},
+					"label": "An authored commit of the reviewed range, with the shapes of its subject: bare, repeated or cut off.",
+					"facts": {
+						"sha": "5555555",
+						"bare": true,
+						"repeat": false,
+						"cutOff": false
+					}
+				}
+			],
+			"facts": {
+				"authoredCommits": 4,
+				"mergeCommits": 1,
+				"bareSubjects": 3,
+				"repeatedSubjects": 2,
+				"cutOffSubjects": 0
+			},
+			"directions": [
+				"4 authored commit(s), 1 merge commit(s) excluded, one lead each.",
+				"Judge every subject on whether it names a specific action and object for a reader of the history. A flag names a shape to check, not a lapse."
+			]
+		}
+	]
+}

@@ -1,0 +1,770 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 7,
+						"endLine": 7
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 9,
+						"endLine": 9
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 10,
+						"endLine": 10
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 11,
+						"endLine": 11
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 12,
+						"endLine": 12
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 13,
+						"endLine": 13
+					},
+					"label": "A selected @State or @StateObject declaration that creates an object.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 14,
+						"endLine": 14
+					},
+					"label": "A selected @ObservedObject declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 15,
+						"endLine": 15
+					},
+					"label": "A selected @Environment or @EnvironmentObject declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 16,
+						"endLine": 16
+					},
+					"label": "A selected @Environment or @EnvironmentObject declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 17,
+						"endLine": 17
+					},
+					"label": "A selected @Binding declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 18,
+						"endLine": 18
+					},
+					"label": "A selected @Binding declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 19,
+						"endLine": 19
+					},
+					"label": "A selected @Binding declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 20,
+						"endLine": 20
+					},
+					"label": "A selected @Binding declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 21,
+						"endLine": 21
+					},
+					"label": "A selected @Binding declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 22,
+						"endLine": 22
+					},
+					"label": "A selected @AppStorage declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 23,
+						"endLine": 23
+					},
+					"label": "A selected @Query declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 24,
+						"endLine": 24
+					},
+					"label": "A selected stored var without a property wrapper.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 104,
+						"endLine": 104
+					},
+					"label": "A selected .environment or .environmentObject modifier.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				}
+			],
+			"facts": {
+				"stateDeclarationsSelected": 22,
+				"stateDeclarationsInViews": 22,
+				"objectsCreatedInViews": 1,
+				"storedVarsInViews": 1,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 2,
+				"linesSelected": 174
+			},
+			"directions": [
+				"22 state declaration(s) or wiring line(s) selected; 22 of the listed rows lie inside view types. Walk each against the four rules.",
+				"1 object(s) created in a view's @State/@StateObject — check in the checkout whether a parent already owns an instance of the same type.",
+				"1 plain stored var(s) in a view type. Read whether the view mutates each one: the first rule covers a value that the view owns and mutates. A var that the view only receives from its parent is an input."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"stateDeclarationsSelected": 0,
+				"stateDeclarationsInViews": 0,
+				"objectsCreatedInViews": 0,
+				"storedVarsInViews": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"stateDeclarationsSelected": 0,
+				"stateDeclarationsInViews": 0,
+				"objectsCreatedInViews": 0,
+				"storedVarsInViews": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 1
+			},
+			"directions": [
+				"Scanned 1 added lines in 1 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"stateDeclarationsSelected": 0,
+				"stateDeclarationsInViews": 0,
+				"objectsCreatedInViews": 0,
+				"storedVarsInViews": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"stateDeclarationsSelected": 0,
+				"stateDeclarationsInViews": 0,
+				"objectsCreatedInViews": 0,
+				"storedVarsInViews": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 220
+			},
+			"directions": [
+				"Scanned 220 added lines in 1 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"stateDeclarationsSelected": 0,
+				"stateDeclarationsInViews": 0,
+				"objectsCreatedInViews": 0,
+				"storedVarsInViews": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	},
+	"scan-swift": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 7,
+						"endLine": 7
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 9,
+						"endLine": 9
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 10,
+						"endLine": 10
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 11,
+						"endLine": 11
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 12,
+						"endLine": 12
+					},
+					"label": "A selected @State declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 13,
+						"endLine": 13
+					},
+					"label": "A selected @State or @StateObject declaration that creates an object.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 14,
+						"endLine": 14
+					},
+					"label": "A selected @ObservedObject declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 15,
+						"endLine": 15
+					},
+					"label": "A selected @Environment or @EnvironmentObject declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 16,
+						"endLine": 16
+					},
+					"label": "A selected @Environment or @EnvironmentObject declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 17,
+						"endLine": 17
+					},
+					"label": "A selected @Binding declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 18,
+						"endLine": 18
+					},
+					"label": "A selected @Binding declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 19,
+						"endLine": 19
+					},
+					"label": "A selected @Binding declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 20,
+						"endLine": 20
+					},
+					"label": "A selected @Binding declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 21,
+						"endLine": 21
+					},
+					"label": "A selected @Binding declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 22,
+						"endLine": 22
+					},
+					"label": "A selected @AppStorage declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 23,
+						"endLine": 23
+					},
+					"label": "A selected @Query declaration.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 24,
+						"endLine": 24
+					},
+					"label": "A selected stored var without a property wrapper.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 104,
+						"endLine": 104
+					},
+					"label": "A selected .environment or .environmentObject modifier.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				}
+			],
+			"facts": {
+				"stateDeclarationsSelected": 22,
+				"stateDeclarationsInViews": 22,
+				"objectsCreatedInViews": 1,
+				"storedVarsInViews": 1,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 113
+			},
+			"directions": [
+				"22 state declaration(s) or wiring line(s) selected; 22 of the listed rows lie inside view types. Walk each against the four rules.",
+				"1 object(s) created in a view's @State/@StateObject — check in the checkout whether a parent already owns an instance of the same type.",
+				"1 plain stored var(s) in a view type. Read whether the view mutates each one: the first rule covers a value that the view owns and mutates. A var that the view only receives from its parent is an input."
+			]
+		}
+	],
+	"scan-typescript": [
+		{
+			"leads": [],
+			"facts": {
+				"stateDeclarationsSelected": 0,
+				"stateDeclarationsInViews": 0,
+				"objectsCreatedInViews": 0,
+				"storedVarsInViews": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	]
+}

@@ -1,0 +1,768 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 27,
+						"endLine": 27
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "swift",
+						"constructs": "payload decode"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 37,
+						"endLine": 37
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "swift",
+						"constructs": "subscript or slice"
+					}
+				}
+			],
+			"facts": {
+				"edgeConstructLines": 2,
+				"filesScanned": 2,
+				"linesScanned": 174,
+				"requestInput": 0,
+				"subscriptOrSlice": 1,
+				"divisionOrRemainderByAName": 0,
+				"extremeSentinel": 0,
+				"payloadDecode": 1
+			},
+			"directions": [
+				"2 selected line(s) hold a construct that can fail or mislead on an edge value (0 request input, 1 subscript or slice, 0 division or remainder by a name, 0 extreme sentinel, 1 payload decode).",
+				"String-literal text, comments and test files were not scanned; lookups and parses whose result the language makes optional, and crash operators, are not listed.",
+				"A listed line marks where a consuming site may be, not a problem: whether its value comes from outside the local logic, and what already handles its bad case, is read from the code."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "app/models/cart.rb",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "ruby",
+						"constructs": "subscript or slice"
+					}
+				},
+				{
+					"at": {
+						"file": "app/models/cart.rb",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "ruby",
+						"constructs": "JSON.parse"
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "python",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "python",
+						"constructs": "subscript or slice"
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "python",
+						"constructs": "int()/float() parse"
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "python",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "python",
+						"constructs": "json.loads"
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "python",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "python",
+						"constructs": "subscript or slice"
+					}
+				},
+				{
+					"at": {
+						"file": "native/cart.c",
+						"line": 2,
+						"endLine": 2
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "c",
+						"constructs": "pointer deref *"
+					}
+				},
+				{
+					"at": {
+						"file": "native/cart.c",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "c",
+						"constructs": "atoi/strtol parse"
+					}
+				},
+				{
+					"at": {
+						"file": "pkg/load.go",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "go",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "pkg/load.go",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "go",
+						"constructs": "strconv parse"
+					}
+				},
+				{
+					"at": {
+						"file": "src/Cart.cs",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "csharp",
+						"constructs": "int.Parse/Convert"
+					}
+				},
+				{
+					"at": {
+						"file": "src/Cart.cs",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "csharp",
+						"constructs": ".First()/.Last()/.Single()"
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.java",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "java",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.java",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "java",
+						"constructs": "Integer/Long/Double.parse"
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.kt",
+						"line": 2,
+						"endLine": 2
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "kotlin",
+						"constructs": "toInt/toDouble parse"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "parseInt/parseFloat"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 9,
+						"endLine": 9
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "division or remainder by a name"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 10,
+						"endLine": 10
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 10,
+						"endLine": 10
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "JSON.parse"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 11,
+						"endLine": 11
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 12,
+						"endLine": 12
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 13,
+						"endLine": 13
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				}
+			],
+			"facts": {
+				"edgeConstructLines": 27,
+				"filesScanned": 11,
+				"linesScanned": 112,
+				"requestInput": 11,
+				"subscriptOrSlice": 3,
+				"divisionOrRemainderByAName": 1,
+				"extremeSentinel": 0,
+				"parseintParseFloat": 1,
+				"numberParse": 0,
+				"jsonParse": 2,
+				"intFloatParse": 1,
+				"jsonLoads": 1,
+				"pop": 0,
+				"next": 0,
+				"strconvParse": 1,
+				"jsonUnmarshal": 0,
+				"getIAccess": 0,
+				"integerLongDoubleParse": 1,
+				"valueofParse": 0,
+				"charatSubstring": 0,
+				"tointToDoubleParse": 1,
+				"firstLast": 0,
+				"fetch": 0,
+				"atoiStrtolParse": 1,
+				"pointerDeref": 1,
+				"intParseConvert": 1,
+				"jsonserializerDeserialize": 0,
+				"firstLastSingle": 1
+			},
+			"directions": [
+				"27 selected line(s) hold a construct that can fail or mislead on an edge value (11 request input, 3 subscript or slice, 1 division or remainder by a name, 0 extreme sentinel, 1 parseInt/parseFloat, 0 Number(...) parse, 2 JSON.parse, 1 int()/float() parse, 1 json.loads, 0 .pop(), and 15 more).",
+				"String-literal text, comments and test files were not scanned; lookups and parses whose result the language makes optional, and crash operators, are not listed.",
+				"A listed line marks where a consuming site may be, not a problem: whether its value comes from outside the local logic, and what already handles its bad case, is read from the code."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"edgeConstructLines": 0,
+				"filesScanned": 2,
+				"linesScanned": 2,
+				"requestInput": 0,
+				"subscriptOrSlice": 0,
+				"divisionOrRemainderByAName": 0,
+				"extremeSentinel": 0,
+				"tointToDoubleParse": 0,
+				"firstLast": 0,
+				"payloadDecode": 0
+			},
+			"directions": []
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "parseInt/parseFloat"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 9,
+						"endLine": 9
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "division or remainder by a name"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 10,
+						"endLine": 10
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 10,
+						"endLine": 10
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "JSON.parse"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 11,
+						"endLine": 11
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 12,
+						"endLine": 12
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 13,
+						"endLine": 13
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				}
+			],
+			"facts": {
+				"edgeConstructLines": 9,
+				"filesScanned": 1,
+				"linesScanned": 19,
+				"requestInput": 6,
+				"subscriptOrSlice": 0,
+				"divisionOrRemainderByAName": 1,
+				"extremeSentinel": 0,
+				"parseintParseFloat": 1,
+				"numberParse": 0,
+				"jsonParse": 1
+			},
+			"directions": [
+				"9 selected line(s) hold a construct that can fail or mislead on an edge value (6 request input, 0 subscript or slice, 1 division or remainder by a name, 0 extreme sentinel, 1 parseInt/parseFloat, 0 Number(...) parse, 1 JSON.parse).",
+				"String-literal text, comments and test files were not scanned; lookups and parses whose result the language makes optional, and crash operators, are not listed.",
+				"A listed line marks where a consuming site may be, not a problem: whether its value comes from outside the local logic, and what already handles its bad case, is read from the code."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"edgeConstructLines": 0,
+				"filesScanned": 1,
+				"linesScanned": 220,
+				"requestInput": 0,
+				"subscriptOrSlice": 0,
+				"divisionOrRemainderByAName": 0,
+				"extremeSentinel": 0,
+				"payloadDecode": 0
+			},
+			"directions": []
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"edgeConstructLines": 0,
+				"filesScanned": 0,
+				"linesScanned": 0
+			},
+			"directions": []
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	},
+	"scan-swift": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 27,
+						"endLine": 27
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "swift",
+						"constructs": "payload decode"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 37,
+						"endLine": 37
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "swift",
+						"constructs": "subscript or slice"
+					}
+				}
+			],
+			"facts": {
+				"edgeConstructLines": 2,
+				"filesScanned": 1,
+				"linesScanned": 113,
+				"requestInput": 0,
+				"subscriptOrSlice": 1,
+				"divisionOrRemainderByAName": 0,
+				"extremeSentinel": 0,
+				"payloadDecode": 1
+			},
+			"directions": [
+				"2 selected line(s) hold a construct that can fail or mislead on an edge value (0 request input, 1 subscript or slice, 0 division or remainder by a name, 0 extreme sentinel, 1 payload decode).",
+				"String-literal text, comments and test files were not scanned; lookups and parses whose result the language makes optional, and crash operators, are not listed.",
+				"A listed line marks where a consuming site may be, not a problem: whether its value comes from outside the local logic, and what already handles its bad case, is read from the code."
+			]
+		}
+	],
+	"scan-typescript": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "parseInt/parseFloat"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 9,
+						"endLine": 9
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "division or remainder by a name"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 10,
+						"endLine": 10
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 10,
+						"endLine": 10
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "JSON.parse"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 11,
+						"endLine": 11
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 12,
+						"endLine": 12
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 13,
+						"endLine": 13
+					},
+					"label": "A selected line of code with a construct that can fail or mislead on an edge value, with its language and constructs.",
+					"facts": {
+						"language": "typescript",
+						"constructs": "request input"
+					}
+				}
+			],
+			"facts": {
+				"edgeConstructLines": 9,
+				"filesScanned": 1,
+				"linesScanned": 19,
+				"requestInput": 6,
+				"subscriptOrSlice": 0,
+				"divisionOrRemainderByAName": 1,
+				"extremeSentinel": 0,
+				"parseintParseFloat": 1,
+				"numberParse": 0,
+				"jsonParse": 1
+			},
+			"directions": [
+				"9 selected line(s) hold a construct that can fail or mislead on an edge value (6 request input, 0 subscript or slice, 1 division or remainder by a name, 0 extreme sentinel, 1 parseInt/parseFloat, 0 Number(...) parse, 1 JSON.parse).",
+				"String-literal text, comments and test files were not scanned; lookups and parses whose result the language makes optional, and crash operators, are not listed.",
+				"A listed line marks where a consuming site may be, not a problem: whether its value comes from outside the local logic, and what already handles its bad case, is read from the code."
+			]
+		}
+	]
+}
