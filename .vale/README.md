@@ -21,7 +21,9 @@ Ask ASD for [Issue 9](https://www.asd-ste100.org/request.html) if you need the f
 It supports Linux, macOS, and Windows on x64 and arm64.
 The first run downloads the archive from the pinned GitHub release.
 
-The executable stays in `.cache/ste/`, in a directory keyed by version and archive hash.
+The executable stays in `hephaestus-tools/ste/` in the Git common directory, keyed by version and archive hash.
+Every worktree of the clone reads that one cache.
+
 Each run checks the archive hash and compares the executable with the verified archive.
 Concurrent installers publish complete directories with a rename and reuse the same executable.
 Only configuration and styles are temporary and removed after each run.

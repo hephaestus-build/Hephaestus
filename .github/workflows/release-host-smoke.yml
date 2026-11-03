@@ -134,4 +134,3 @@ jobs:
           kubectl -n cert-manager logs -l app.kubernetes.io/instance=cert-manager --tail=200 --prefix || true
           kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true
           kubectl describe nodes | grep -A 12 "Allocated resources" || true
-

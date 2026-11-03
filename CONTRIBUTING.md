@@ -102,8 +102,8 @@ bullet of that issue is met.
 After a pull that changes the lockfile, run `vp install`.
 The [local verification guide](https://docs.hephaestus.build/contributor/local-verification) explains its changes to your Git hooks.
 Use `vp run check:affected` for fast feedback.
-Before you push, run `vp run check`.
-The hook runs `check:push`, whose scope the local verification guide defines.
+Before you push, the hook runs `check:push`: the checks that pull request CI runs for the changed trees.
+The local verification guide defines its scope and when to run the complete `vp run check`.
 Before you request review, run `vp run verify`.
 
 The [local verification guide](https://docs.hephaestus.build/contributor/local-verification) defines the scope and exclusions.

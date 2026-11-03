@@ -199,11 +199,8 @@ function run(command: Command): void {
 	}
 }
 
-/**
- * The globs of the `kubernetes` path filter in `cicd.yml`: a change to them runs the k3d cluster
- * jobs in CI.
- */
-export function clusterGlobs(workflow: string): string[] {
+/** The path filters of `cicd.yml`, by name: each selects the CI jobs that a change runs. */
+export function pathFilters(workflow: string): Record<string, string[]> {
 	const parsed: unknown = parse(workflow);
 	const jobs = isRecord(parsed) && isRecord(parsed.jobs) ? Object.values(parsed.jobs) : [];
 	for (const job of jobs) {
@@ -211,13 +208,29 @@ export function clusterGlobs(workflow: string): string[] {
 		for (const step of steps) {
 			if (isRecord(step) && isRecord(step.with) && typeof step.with.filters === "string") {
 				const filters: unknown = parse(step.with.filters);
-				if (isRecord(filters) && Array.isArray(filters.kubernetes)) {
-					return filters.kubernetes.map(String);
+				if (isRecord(filters)) {
+					return Object.fromEntries(
+						Object.entries(filters)
+							.filter((entry): entry is [string, unknown[]] => Array.isArray(entry[1]))
+							.map(([name, globs]) => [name, globs.map(String)]),
+					);
 				}
 			}
 		}
 	}
-	throw new Error("cicd.yml has no kubernetes path filter");
+	throw new Error("cicd.yml has no path filters");
+}
+
+/**
+ * The globs of the `kubernetes` path filter in `cicd.yml`: a change to them runs the k3d cluster
+ * jobs in CI.
+ */
+export function clusterGlobs(workflow: string): string[] {
+	const globs = pathFilters(workflow).kubernetes;
+	if (globs === undefined) {
+		throw new Error("cicd.yml has no kubernetes path filter");
+	}
+	return globs;
 }
 
 /**

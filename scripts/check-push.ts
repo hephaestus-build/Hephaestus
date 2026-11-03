@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { changedPaths, parseBase, scopesFor, type Scope } from "./check-affected.ts";
+import { changedPaths, parseBase, pathFilters, scopesFor, type Scope } from "./check-affected.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { repositoryCli } from "./lib/process.ts";
 import { PUSH_CHECK_ENV, pushStaticTasks } from "./lib/push-gates.ts";
@@ -12,12 +12,62 @@ const allScopes = Object.keys(pushStaticTasks).filter(
 );
 const instructionPath = /^(?:\.agents|\.claude)\/|(?:^|\/)(?:AGENTS|CLAUDE)\.md$/u;
 
+// The CI path filters that select a tree's jobs, and the push scope that runs that tree's checks.
+const ciTrees = {
+	"application-server": "server",
+	docs: "docs",
+	extension: "extension",
+	webapp: "webapp",
+} as const;
+
+/** The CI path filters, or undefined when `cicd.yml` cannot be read and every scope must run. */
+function ciFilters(): Record<string, string[]> | undefined {
+	try {
+		const workflow = path.join(import.meta.dirname, "..", ".github", "workflows", "cicd.yml");
+		return pathFilters(readFileSync(workflow, "utf8"));
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Repository tooling, plus each tree whose CI path filter names the file: what pull request CI runs
+ * for it. Without the filters, every scope.
+ */
+export function toolingScopes(
+	file: string,
+	filters: Record<string, string[]> | undefined,
+): Exclude<Scope, "full">[] | undefined {
+	if (filters === undefined) {
+		return undefined;
+	}
+	const trees = Object.entries(ciTrees).flatMap(([filter, scope]) =>
+		(filters[filter] ?? []).some(
+			(glob) => !glob.startsWith("!") && path.posix.matchesGlob(file, glob),
+		)
+			? [scope]
+			: [],
+	);
+	return ["agents", ...trees];
+}
+
 export function pushScopes(paths: string[] | undefined): Exclude<Scope, "full">[] {
 	const selected = new Set<Exclude<Scope, "full">>();
 	if (paths === undefined) {
 		return allScopes;
 	}
+	const filters = ciFilters();
 	for (const file of paths) {
+		if (file.startsWith("scripts/") && !/^scripts\/ci-[^/]+\.ts$/u.test(file)) {
+			const scopes = toolingScopes(file, filters);
+			if (scopes === undefined) {
+				return allScopes;
+			}
+			for (const scope of scopes) {
+				selected.add(scope);
+			}
+			continue;
+		}
 		if (
 			file.startsWith(".github/") ||
 			/^scripts\/ci-[^/]+\.ts$/u.test(file) ||
@@ -76,18 +126,40 @@ export function focusedTests(paths: string[], cwd = process.cwd()): string[] {
 	return [...tests].toSorted();
 }
 
-/** Vitest owns the import graph. Resources, deleted files and shared inputs need the whole unit project. */
+/** The changed test files of a tree, and the existing colocated tests of its changed sources. */
+export function colocatedTests(files: readonly string[], cwd = process.cwd()): string[] {
+	const tests = new Set<string>();
+	for (const file of files) {
+		const candidates = /\.test\.[jt]sx?$/u.test(file)
+			? [file]
+			: [".test.ts", ".test.tsx"].map((suffix) => file.replace(/\.[jt]sx?$/u, suffix));
+		for (const candidate of candidates) {
+			if (existsSync(path.join(cwd, candidate))) {
+				tests.add(candidate);
+			}
+		}
+	}
+	return [...tests].toSorted();
+}
+
+/**
+ * For source files, the changed and colocated tests. Their import graph reaches most route tests
+ * through the router, which took minutes on one worker; CI runs the complete unit project.
+ * Resources, deleted files, test helpers and shared inputs need the whole unit project here too.
+ */
 export function frontendCommands(paths: string[] | undefined, cwd = process.cwd()): string[][] {
 	const scopes = pushScopes(paths);
 	return (["webapp", "extension"] as const)
 		.filter((tree) => scopes.includes(tree))
-		.map((tree) => {
+		.flatMap((tree) => {
 			const files = (paths ?? []).filter((file) => file.startsWith(`${tree}/`));
-			const related =
+			const sourceOnly =
 				files.length > 0 &&
 				files.every(
 					(file) =>
 						file.startsWith(`${tree}/src/`) &&
+						// Test helpers and the shared network mocks reach many tests, as a resource does.
+						!/^[^/]+\/src\/(?:test|mocks)\//u.test(file) &&
 						/\.[jt]sx?$/u.test(file) &&
 						existsSync(path.join(cwd, file)),
 				) &&
@@ -97,17 +169,20 @@ export function frontendCommands(paths: string[] | undefined, cwd = process.cwd(
 						!scopesFor([file]).includes("full") &&
 						(file.startsWith(`${tree}/`) || !scopesFor([file]).includes(tree)),
 				);
+			const tests = sourceOnly ? colocatedTests(files, cwd) : [];
+			if (sourceOnly && tests.length === 0) {
+				return [];
+			}
 			return [
-				"-C",
-				tree,
-				"test",
-				...(related ? ["related"] : []),
-				"--run",
-				"--maxWorkers=1",
-				...(tree === "extension" ? ["--project", "unit"] : []),
-				...(related
-					? ["--passWithNoTests", ...files.map((file) => file.slice(tree.length + 1))]
-					: []),
+				[
+					"-C",
+					tree,
+					"test",
+					"--run",
+					"--maxWorkers=1",
+					...(tree === "extension" ? ["--project", "unit"] : []),
+					...tests.map((file) => file.slice(tree.length + 1)),
+				],
 			];
 		});
 }
@@ -159,7 +234,7 @@ function main(): void {
 		run(process.execPath, [cli, ...command]);
 	}
 	console.log(
-		"Push checks passed. Complete Node suites, Gradle checks and tests, browser suites and builds did not run. Run `vp run check` and the applicable test tiers before pushing.",
+		"Push checks passed. Complete Node suites, Java unit and integration tests, browser suites and builds did not run; CI runs them.",
 	);
 }
 

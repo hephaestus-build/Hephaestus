@@ -18,7 +18,7 @@ import { readChangesets } from "@changesets/read";
 import { parse } from "yaml";
 
 import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
-import { installPinnedBinary, type PinnedAsset } from "./lib/pinned-binary.ts";
+import { installPinnedBinary, toolCache, type PinnedAsset } from "./lib/pinned-binary.ts";
 import { CAPTURE_LIMIT_BYTES, exitStatus, output, run, succeeds } from "./lib/process.ts";
 import { compareVersions, parseVersion } from "./plan-release.ts";
 
@@ -75,7 +75,7 @@ export async function installOasdiff(): Promise<string> {
 		);
 	}
 	return installPinnedBinary({
-		cache: path.join(ROOT, ".cache", "oasdiff"),
+		cache: toolCache("oasdiff"),
 		version: OASDIFF_VERSION,
 		asset,
 		url: `https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/`,

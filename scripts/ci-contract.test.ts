@@ -5538,10 +5538,15 @@ void test("every job that runs Helm installs the pinned one first, and the rende
 	for (const entry of ["format:config", "gate:config-format"]) {
 		assert.match(
 			commandsOf(tasks[entry]).join(" "),
-			/vp fmt --(?:write|check) 'deploy\/\{chart,platform\}\/\*\*\/\*\.\{json,yaml\}' '!deploy\/chart\/\*\*\/templates\/\*\*'/u,
+			/vp fmt --(?:write|check) 'deploy\/\{chart,platform\}\/\*\*\/\*\.\{json,yaml\}'/u,
 			entry,
 		);
 	}
+	const formatter = asRecord(parseJsonc(await readFile(".oxfmtrc.json", "utf8")), ".oxfmtrc.json");
+	assert.ok(
+		asArray(formatter.ignorePatterns, "ignorePatterns").includes("deploy/chart/**/templates/**"),
+		"the formatter ignores the chart's Go templates",
+	);
 
 	const detection = job(await readFile(".github/workflows/cicd.yml", "utf8"), "detect-changes");
 	assert.match(pathFilter(detection, "tooling"), /- 'deploy\/chart\/\*\*'/u);

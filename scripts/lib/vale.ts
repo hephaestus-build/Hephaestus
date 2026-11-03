@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { stringify } from "yaml";
 
 import { asArray, asRecord, asString, parseJson } from "./json.ts";
-import { installPinnedBinary } from "./pinned-binary.ts";
+import { installPinnedBinary, toolCache } from "./pinned-binary.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
 import {
 	approvedWords,
@@ -52,7 +52,7 @@ export interface Vale {
 
 export async function prepareVale(): Promise<Vale> {
 	const binary = await installValeBinary({
-		cache: path.join(root, ".cache", "ste"),
+		cache: toolCache("ste"),
 		version: asString(toolchain.version, "Vale version"),
 		asset: assetFor(process.platform, process.arch),
 		url: asString(toolchain.url, "release URL"),

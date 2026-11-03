@@ -6,7 +6,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { focusedTests, frontendCommands, pushTasks } from "./check-push.ts";
+import {
+	focusedTests,
+	frontendCommands,
+	pushScopes,
+	pushTasks,
+	toolingScopes,
+} from "./check-push.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 
@@ -31,6 +37,40 @@ void test("workflow and docs edits retain eight static checks without complete s
 	assert.deepEqual(frontendCommands([".github/workflows/cicd.yml"]), []);
 });
 
+void test("a tooling change runs what pull request CI runs for it, not every frontend suite", () => {
+	// Before, any scripts/ path selected every scope, and the hook ran both complete frontend unit
+	// suites on one worker.
+	assert.deepEqual(pushScopes(["scripts/reorder-migrations.ts"]), ["agents"]);
+	assert.deepEqual(frontendCommands(["scripts/reorder-migrations.ts"]), []);
+	// CI's webapp and extension filters name the story prose gate, so both trees' checks run.
+	const story = pushScopes(["scripts/check-story-prose.ts"]);
+	assert.ok(story.includes("webapp") && story.includes("extension"), story.join(", "));
+	assert.ok(pushScopes(["scripts/run-gradlew.ts"]).includes("server"));
+	// Without readable filters, the hook cannot know, so it runs every scope.
+	assert.equal(toolingScopes("scripts/reorder-migrations.ts", undefined), undefined);
+	assert.deepEqual(
+		toolingScopes("scripts/x.ts", { webapp: ["scripts/x.ts"], docs: ["!scripts/**"] }),
+		["agents", "webapp"],
+	);
+});
+
+void test("a server change compiles the tests and runs Spotless, PMD and the architecture tier in one Gradle call", async () => {
+	const selected = pushTasks(["server/application/src/test/java/Example.java"]);
+	const tasks = await loadTasks();
+	const commands = selected
+		.flatMap((name) => commandsOf(tasks[name]))
+		.filter((command) => command.includes("gradlew"));
+	assert.equal(commands.length, 1, commands.join("\n"));
+	for (const task of [
+		":spotlessCheck",
+		":application:spotlessCheck",
+		":application:pmdMain",
+		":application:architectureTest",
+	]) {
+		assert.ok(commands[0]?.includes(task) === true, task);
+	}
+});
+
 void test("unknown inputs and unavailable bases retain every static scope", () => {
 	const all = pushTasks(undefined);
 	assert.deepEqual(pushTasks(["unknown-input.txt"]), all);
@@ -46,16 +86,36 @@ void test("unknown inputs and unavailable bases retain every static scope", () =
 	assert.equal(frontendCommands(undefined).length, 2);
 });
 
-void test("Vitest owns source selection, with complete unit projects for resources and deletions", () => {
-	const related = frontendCommands(["webapp/src/components/ui/button.tsx", ".changeset/a.md"]);
-	assert.equal(related.length, 1);
-	assert.ok(related.some((command) => command.includes("related")));
+void test("a source change runs its changed and colocated tests, and resources run the whole unit project", () => {
+	// Before, Vitest's related selection reached 101 test files through the router for one component.
+	const component = frontendCommands([
+		"webapp/src/components/product-feedback/ProductFeedbackDialog.tsx",
+		".changeset/a.md",
+	]);
+	assert.deepEqual(component, [
+		[
+			"-C",
+			"webapp",
+			"test",
+			"--run",
+			"--maxWorkers=1",
+			"src/components/product-feedback/ProductFeedbackDialog.test.tsx",
+		],
+	]);
+	// A source without a colocated test leaves its tests to CI.
+	assert.deepEqual(frontendCommands(["webapp/src/components/ui/button.tsx"]), []);
 	for (const files of [
 		["webapp/public/a.svg"],
 		["webapp/src/deleted.ts"],
 		["webapp/package.json"],
+		["webapp/src/test/async.ts"],
+		["webapp/src/mocks/handlers.ts"],
 	]) {
-		assert.ok(frontendCommands(files).every((command) => !command.includes("related")));
+		assert.deepEqual(
+			frontendCommands(files),
+			[["-C", "webapp", "test", "--run", "--maxWorkers=1"]],
+			"the whole unit project",
+		);
 	}
 	const extension = frontendCommands(["extension/src/deleted.ts"])[0];
 	assert.ok(extension !== undefined);
@@ -161,7 +221,7 @@ void test("a missing base falls back without fetching and reports omitted full s
 		const result = f.run(f.directory, "missing-reference");
 		assert.equal(result.status, 0, result.stderr);
 		assert.match(result.stdout, /No usable merge base/u);
-		assert.match(result.stdout, /Complete Node suites, Gradle/u);
+		assert.match(result.stdout, /Complete Node suites, Java unit and integration tests/u);
 		const calls = await readFile(f.calls, "utf8");
 		assert.match(calls, /"-C","webapp","test","--run","--maxWorkers=1"/u);
 		assert.match(calls, /"-C","extension".*"--project","unit"/u);

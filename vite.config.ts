@@ -68,10 +68,9 @@ const docsSources = "'docs/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 // Two passes: a negation applies to the whole invocation, so `!*/**` would also drop the nested set.
 const rootConfigSources = "'*.{json,jsonc,ts,code-workspace}' '!*/**'";
 const nestedConfigSources = "'{.changeset,.vscode,scripts,.vale}/*.{cjs,json}'";
-// The chart's plain JSON and YAML, and the platform files beside it. The chart's templates are Go
-// templates, not YAML; Helm rendering judges them.
-const chartConfigSources =
-	"'deploy/{chart,platform}/**/*.{json,yaml}' '!deploy/chart/**/templates/**'";
+// The chart's plain JSON and YAML, and the platform files beside it. `.oxfmtrc.json` ignores the
+// chart's templates: they are Go templates, not YAML, and Helm rendering judges them.
+const chartConfigSources = "'deploy/{chart,platform}/**/*.{json,yaml}'";
 const alertRuleSources = "'deploy/observability/*.yml'";
 // `as const` keeps the command a literal type, so `cached` can still read what it runs.
 const configFormatCommand = (mode: "--check" | "--write") =>
@@ -166,6 +165,9 @@ export default defineConfig({
 			]),
 			"check:affected": run("node scripts/check-affected.ts"),
 			"check:push": run("node scripts/check-push.ts"),
+			"check:push:server": run(
+				`${gradlew} :spotlessCheck :application:spotlessCheck :application:pmdMain :application:architectureTest --quiet`,
+			),
 
 			// Formatting
 			format: group([

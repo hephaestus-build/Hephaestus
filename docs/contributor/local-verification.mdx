@@ -7,18 +7,20 @@ title: Local verification
 | Command                 | What success proves                                                | Excludes                                                                                                                         |
 | ----------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | `vp run check:affected` | Selected gates passed, including any tests they contain            | Unselected scopes, verification-only suites and builds, and CI-only checks                                                       |
-| `vp run check:push`     | Selected static checks, prose checks and focused unit tests passed | Complete Node suites, Gradle checks and tests, browser suites, builds and live-service tests                                     |
+| `vp run check:push`     | Selected static checks, prose checks and focused unit tests passed | Complete Node suites, Java unit and integration tests, browser suites, builds and live-service tests                             |
 | `vp run check`          | Every gate the `quality` task in `vite.config.ts` runs passed      | Distributable builds, browser and live-service tests, images, mutation analysis, and release security                            |
 | `vp run verify`         | The local verification suites and builds passed                    | Server integration and database tests, full-application E2E, live-service tests, images, mutation analysis, and release security |
 
 While you work, run `check:affected`.
-Before you push, run `check`.
-It validates the contents of all pending changeset files through `gate:changesets`.
+Before you push, let the pre-push hook run `check:push`: it runs the checks that pull request CI runs for the changed trees.
+Run `check` when you change a shared input, such as the lockfile, or before you push another local ref.
+
+`check` validates the contents of all pending changeset files through `gate:changesets`.
 CI also checks release-note presence and changes against the tested merge base.
 Before you request review, run `verify`.
 `vp run` with no task name lists every task, and `vite.config.ts` is where each one is defined.
 
-On first use, the script tests in `check` download two pinned tools, Vale and oasdiff, into a local cache.
+On first use, the script tests in `check` download two pinned tools, Vale and oasdiff, into a cache that every worktree of the clone shares.
 
 ## Dependency installation
 
@@ -115,25 +117,32 @@ It never falls back to another checkout's `vp` or to one on `PATH`, because that
 The pre-push hook runs `vp run check:push` with one task worker.
 It compares the same paths as `check:affected` and runs selected format, lint, TypeScript and prose checks.
 It does not write source files.
-Run `vp run check` before each push, as required above.
 `git push --no-verify` skips the hook.
 
 For Node, it runs changed test files, existing source companion tests and the CI contract suites for workflow changes.
 This selection does not cover every fixture or resource input.
 The complete Node suites remain in `check` and CI.
-Java formatting, PMD and Java tests remain in the full gate and their test tiers.
+
+A server change runs one Gradle invocation: Spotless, PMD, the test compilation and the architecture tier.
+The Java unit and integration tiers remain in CI.
 Instruction changes also run the instruction gate.
 The workflow parser and CI linters remain outside the hook.
 
-For frontend source files, Vitest selects related unit tests through its static import graph.
-Shared inputs, deleted files and non-code resources select the complete unit project.
+For frontend source files, the hook runs the changed test files and the colocated test of each changed source, such as `Dialog.test.tsx` beside `Dialog.tsx`.
+It does not follow the import graph: through the router, one component reaches most route tests, which take minutes on one worker.
+CI runs the complete unit project.
+A source without a colocated test runs no test here.
+
+Shared inputs, test helpers, network mocks, deleted files and non-code resources select the complete unit project.
 The extension selects its unit project only.
 Each test runner uses one worker.
-See [Vitest related tests](https://main.vitest.dev/guide/cli#vitest-related) for the import graph limits.
+
+A change under `scripts/` selects the tooling checks and each tree whose CI path filter in `cicd.yml` names the file.
+Pull request CI runs the same trees for that change.
 
 An unknown path or missing merge base selects every scoped check and both frontend unit projects.
 The hook does not fetch, install tools, start a browser or build a distributable artifact.
-If a pinned tool is absent, run `vp run check` to prepare its verified cache.
+If a pinned tool is absent from the shared cache, run `vp run check` once in any worktree of the clone.
 The hook reports its selected scope and the suites that still require the full gate or CI.
 It checks the current worktree, its HEAD and pending changes.
 Before you push another local ref, run the full gate on that exact commit.
