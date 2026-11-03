@@ -70,6 +70,26 @@ Each implementation has one owner and an exclusive worktree.
 Review changed scope independently on its final source, with concrete defects and residual risks.
 Use the parallel delivery protocol below for shared files and generation.
 
+## Long commands
+
+An agent harness stops a foreground command after about ten minutes.
+It also stops its own background tasks at a time limit, and a turn that ends on one may not resume.
+Thus, a long push, check or build can die without a result, or finish while nobody reads it.
+
+Start such a command as a job, and wait for it in bounded steps:
+
+```sh
+vp run job:start -- git push origin <local>:refs/heads/<branch> --force-with-lease=<branch>:<sha>
+vp run job:wait <id>
+```
+
+The job runs detached from the harness, so no time limit of the agent stops it.
+`job:wait` waits for up to nine minutes.
+It exits 0 when the command succeeded, 1 when it failed, and 75 when the command still runs.
+On 75, run `job:wait` again in the same turn.
+Do not end a turn while your own job runs.
+For a pull request's checks and reviews, use `/watch-pr` instead.
+
 ## Parallel delivery protocol
 
 Parallel work stays parallel only when contributors avoid manufacturing shared diffs:

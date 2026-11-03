@@ -150,6 +150,8 @@ Codex reads only `.agents/skills/`, so the six contribution skills have byte-ide
   `vp run check` runs every gate. Run it when you change a shared input, such as the lockfile.
   `vp run verify` adds the credential-free builds and suites.
   CI owns images, browser suites, and live-service suites (`docs/contributor/local-verification.mdx`).
+- Run a command that can take longer than ten minutes with `vp run job:start`, and wait for it with `vp run job:wait`.
+  `docs/contributor/ai-agent-workflow.mdx` § Long commands has the procedure.
 - Ask before computer use or before you start a browser.
   Test against a run environment that the maintainer already started.
 

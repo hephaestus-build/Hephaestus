@@ -287,6 +287,7 @@ Only these prefixes are allowed:
 | `format` | Apply formatting. A final `check` segment makes the operation read-only. |
 | `gate` | Produce one verdict that CI can annotate. Every gate belongs to `quality` unless explicitly CI-only in the task contract test. |
 | `generate` | Regenerate a committed artifact from its authoritative source |
+| `job` | Run a long command detached from the caller, and wait for it in bounded steps |
 | `lint` | Run a linter. A final `fix` segment applies safe fixes. `report` writes a report. |
 | `pr` | Follow a pull request on GitHub |
 | `quality` | Internal graph with every local quality gate. Use `check` at the command line. |

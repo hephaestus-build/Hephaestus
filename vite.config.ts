@@ -485,6 +485,9 @@ export default defineConfig({
 			"report:flakes": run("node scripts/report-flakes.ts"),
 			"report:test-results": run("node scripts/summarize-test-results.ts"),
 			"pr:wait": run("node scripts/pr-wait.ts"),
+			// A long command that must outlive the caller: docs/contributor/ai-agent-workflow.mdx § Long commands.
+			"job:start": run("node scripts/job.ts start"),
+			"job:wait": run("node scripts/job.ts wait"),
 			"pr:rebase-generated": run("node scripts/rebase-generated.ts"),
 			"release:version": run("changeset version && node scripts/sync-release-version.ts"),
 
