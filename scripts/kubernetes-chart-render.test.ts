@@ -2885,6 +2885,30 @@ await test("values that the chart does not accept fail the render", () => {
 	}
 });
 
+await test("a private CA reaches the roles that call a Git provider, and is off by default", () => {
+	const caFile = "/etc/hephaestus/private-ca/ca.crt";
+	const resources = rendered([
+		...layersFor("small"),
+		{ config: { privateCa: { existingSecret: "corp-ca", key: "bundle.pem" } } },
+	]);
+	for (const component of ["server", "worker", "webhook"]) {
+		const role = workload(resources, component);
+		const calls = component !== "webhook";
+		assert.equal(envValue(role, "SSL_CERT_FILE"), calls ? caFile : undefined, component);
+		const volumes = list(get(role, "spec", "template", "spec", "volumes"));
+		const volume = volumes.find((candidate) => get(candidate, "name") === "private-ca");
+		assert.equal(get(volume, "secret", "secretName"), calls ? "corp-ca" : undefined, component);
+		assert.equal(
+			get(list(get(volume, "secret", "items"))[0], "key"),
+			calls ? "bundle.pem" : undefined,
+		);
+	}
+	const defaults = rendered(layersFor("small"));
+	for (const component of ["server", "worker", "webhook"]) {
+		assert.equal(envValue(workload(defaults, component), "SSL_CERT_FILE"), undefined, component);
+	}
+});
+
 await test("a model endpoint on a private network reaches the server and the worker, never the metadata range", () => {
 	const endpoint = { cidr: "10.20.0.0/16", ports: [8000] };
 	const resources = rendered([

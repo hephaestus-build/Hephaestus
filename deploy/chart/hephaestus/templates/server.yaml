@@ -100,6 +100,7 @@ spec:
             - name: HEPHAESTUS_LLM_DISPLAY_CURRENCY
               value: {{ $config.llmDisplayCurrency | quote }}
             {{- include "hephaestus.env.modelEgress" . | nindent 12 }}
+            {{- include "hephaestus.privateCaEnv" . | nindent 12 }}
             - name: MONITORING_RUN_ON_STARTUP
               value: {{ $config.monitoring.runOnStartup | quote }}
             - name: MONITORING_TIMEFRAME
@@ -203,6 +204,7 @@ spec:
             - name: tmp
               mountPath: /tmp
             {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
+            {{- include "hephaestus.privateCaMount" . | nindent 12 }}
       volumes:
         # Commit ingestion mirrors: a cache that the server fills again after a restart.
         - name: git-cache
@@ -212,3 +214,4 @@ spec:
           emptyDir:
             sizeLimit: 1Gi
         {{- include "hephaestus.postgresqlCaVolume" . | nindent 8 }}
+        {{- include "hephaestus.privateCaVolume" . | nindent 8 }}
