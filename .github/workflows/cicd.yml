@@ -870,6 +870,9 @@ jobs:
   Build:
     uses: ./.github/workflows/ci-build.yml
     needs: [detect-changes, server-package]
+    # The implicit success() also skips this call when a job further up was skipped. The package job
+    # needs Security-merge-group, which only a merge group runs, so pull requests never built this.
+    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && needs.server-package.result == 'success' }}
     permissions:
       actions: write
       contents: read
