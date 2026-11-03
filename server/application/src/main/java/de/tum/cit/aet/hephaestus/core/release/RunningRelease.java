@@ -1,8 +1,13 @@
 package de.tum.cit.aet.hephaestus.core.release;
 
+import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.release.ReleaseStatusDTO.RunningReleaseDTO;
 import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.binder.MeterBinder;
+import java.util.Locale;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.actuate.info.Info;
@@ -13,11 +18,12 @@ import org.springframework.stereotype.Component;
 /**
  * The identity every runtime role reports under {@code release} in {@code /actuator/info}. It is what
  * the deployment handed the container from its verified lock env: the JAR carries no version of its
- * own, because release promotion tags an already-built image.
+ * own, because release promotion tags an already-built image. Each role also exports it as
+ * {@code application_build_info}, so a query can tell which release produced a series.
  */
 @Component
 @ReceiverComponent
-public class RunningRelease implements InfoContributor {
+public class RunningRelease implements InfoContributor, MeterBinder {
     /** {@code IMAGE_TAG} as a lock renders it; nine digits per part keeps {@code Version.parse} within int. */
     static final Pattern RELEASE_VERSION =
             Pattern.compile("(?:0|[1-9][0-9]{0,8})\\.(?:0|[1-9][0-9]{0,8})\\.(?:0|[1-9][0-9]{0,8})");
@@ -49,5 +55,14 @@ public class RunningRelease implements InfoContributor {
     @Override
     public void contribute(Info.Builder builder) {
         builder.withDetail("release", identity);
+    }
+
+    @Override
+    public void bindTo(MeterRegistry registry) {
+        Gauge.builder(CoreMetrics.APPLICATION_BUILD_INFO, () -> 1)
+                .description("The release that this process runs; always 1")
+                .tag("version", identity.version())
+                .tag("channel", identity.channel().name().toLowerCase(Locale.ROOT))
+                .register(registry);
     }
 }

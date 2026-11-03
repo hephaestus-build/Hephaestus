@@ -76,6 +76,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendRecovery;
+import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
@@ -110,6 +111,8 @@ import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -121,6 +124,7 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
@@ -480,6 +484,10 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldClearStagingWithItsCancellationCauseAtTerminalSettlement() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            Map<Meter.Id, Double> endedBefore = meters.find(PracticeMetrics.REVIEW_ENDED).counters().stream()
+                    .collect(Collectors.toMap(Counter::getId, Counter::count));
+            double withheldBefore = count(
+                    PracticeMetrics.REVIEW_ITEMS_ENDED, "kind", "item", "state", "withheld", "reason", "cancelled");
             admission.stage(review.identity(), request(review));
             jdbc.update(
                     "UPDATE review_job SET status='CANCELLED',started_at=NULL,completed_at=now(),cancellation_reason='CANCELLED_BY_REQUESTER' WHERE id=?",
@@ -506,7 +514,32 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             review.item().itemId()))
                     .isTrue();
             assertThat(resultIds(review)).isEmpty();
+            var ended = jdbc.queryForMap(
+                    "SELECT lower(status) AS status,lower(stop_reason) AS reason FROM review WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    review.reviewId());
+            assertThat(meters.find(PracticeMetrics.REVIEW_ENDED).counters().stream()
+                            .filter(counter -> counter.count() != endedBefore.getOrDefault(counter.getId(), 0.0))
+                            .map(counter -> counter.getId().getTag("status") + "/"
+                                    + counter.getId().getTag("reason") + "/"
+                                    + (counter.count() - endedBefore.getOrDefault(counter.getId(), 0.0))))
+                    .as("the review ends once, with its own status and stop reason")
+                    .containsExactly(ended.get("status") + "/" + ended.get("reason") + "/1.0");
+            assertThat(count(
+                            PracticeMetrics.REVIEW_ITEMS_ENDED,
+                            "kind",
+                            "item",
+                            "state",
+                            "withheld",
+                            "reason",
+                            "cancelled"))
+                    .isEqualTo(withheldBefore + 1);
         }
+    }
+
+    private double count(String name, String... tags) {
+        var counter = meters.find(name).tags(tags).counter();
+        return counter == null ? 0 : counter.count();
     }
 
     @Test

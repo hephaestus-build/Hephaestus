@@ -258,6 +258,29 @@ groups:
           severity: warning
         annotations:
           summary: Fewer than 75 % of page loads showed their main content within 2.5 seconds over six hours
+      # An item review that does not end complete leaves a developer without feedback for part of its practices.
+      # Readiness waits and budget stops are decisions of policy with their own signals, so they count on neither side.
+      - alert: HephaestusReviewsIncomplete
+        expr: >-
+          sum(
+            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget"}[6h])
+            or increase(practice_review_ended_total{job="hephaestus",kind="item",status="cancelled",reason="no_sandbox_room"}[6h])
+          )
+          / sum(
+            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget"}[6h])
+            or increase(practice_review_ended_total{job="hephaestus",kind="item",status="cancelled",reason="no_sandbox_room"}[6h])
+            or increase(practice_review_ended_total{job="hephaestus",kind="item",status="complete"}[6h])
+          ) > 0.25
+          and sum(
+            increase(practice_review_ended_total{job="hephaestus",kind="item",status=~"partial|failed",reason!~"readiness_refused|budget"}[6h])
+            or increase(practice_review_ended_total{job="hephaestus",kind="item",status="cancelled",reason="no_sandbox_room"}[6h])
+            or increase(practice_review_ended_total{job="hephaestus",kind="item",status="complete"}[6h])
+          ) >= 4
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than a quarter of the item reviews of the last six hours did not end complete
   - name: hephaestus-kubernetes
     rules:
       - alert: HephaestusWebhookReceiverDown
