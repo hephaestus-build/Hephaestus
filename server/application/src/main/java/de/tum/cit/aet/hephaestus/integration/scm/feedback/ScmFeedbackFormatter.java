@@ -116,14 +116,34 @@ public class ScmFeedbackFormatter {
         return withoutDisclosure(posted).equals(withoutDisclosure(expected));
     }
 
-    /** The words above the footer, then the trailing markers. */
-    private static String withoutDisclosure(String body) {
-        List<String> lines = body.strip().lines().toList();
+    /**
+     * Whether a posted copy ends with this copy's marker among its hidden markers. Readback asks one question: did this
+     * write land? The marker names the copy, whose words never change once its write begins, so it answers that
+     * question whatever words, escaping or footer the copy was posted with. The caller checks the author and the place.
+     */
+    public static boolean carries(String posted, String marker) {
+        String wanted = marker.strip();
+        List<String> lines = posted.strip().lines().toList();
+        return !wanted.isEmpty()
+                && lines.subList(markersFrom(lines), lines.size()).stream()
+                        .map(String::strip)
+                        .anyMatch(wanted::equals);
+    }
+
+    /** Where the hidden markers that end a copy start. */
+    private static int markersFrom(List<String> lines) {
         int end = lines.size();
         while (end > 0
                 && (lines.get(end - 1).isBlank()
                         || (TRAILING_MARKER.matcher(lines.get(end - 1).strip()).matches()
                                 && !lines.get(end - 1).strip().equals(DISCLOSURE)))) end--;
+        return end;
+    }
+
+    /** The words above the footer, then the trailing markers. */
+    private static String withoutDisclosure(String body) {
+        List<String> lines = body.strip().lines().toList();
+        int end = markersFrom(lines);
         List<String> above = lines.subList(0, end);
         int footer = above.indexOf(DISCLOSURE);
         List<String> words = footer >= 0

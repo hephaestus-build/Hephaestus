@@ -188,12 +188,6 @@ public class GitHubSummaryWriter implements SummaryWriter {
         if (marker == null || marker.isBlank()) {
             return SummaryLookup.unknown();
         }
-        String expectedBody;
-        try {
-            expectedBody = formatter.footer(target.item()).summary(expected);
-        } catch (RuntimeException unavailable) {
-            return SummaryLookup.unknown();
-        }
         long scopeId = target.integration().workspaceId();
         if (gitHubProvider.isRateLimitCritical(scopeId)) {
             return SummaryLookup.unknown();
@@ -254,7 +248,7 @@ public class GitHubSummaryWriter implements SummaryWriter {
                     }
                     if (!body.contains(marker)) continue;
                     if (Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
-                            && ScmFeedbackFormatter.sameCopy(body, expectedBody)
+                            && ScmFeedbackFormatter.carries(body, marker)
                             && comment.get("id") instanceof String id
                             && !id.isBlank()) {
                         return SummaryLookup.found(

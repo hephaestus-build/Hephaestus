@@ -612,6 +612,16 @@ Readback records found copies and proved absence without guessing.
 An admin can retry a proved absent copy after all current gates pass.
 Confirmed historical copies are never posted again.
 
+Readback asks one question: did this write land?
+A copy is found when a comment by Hephaestus, at the copy's place, ends with the copy's marker.
+The marker names the copy, and a copy's words never change once its write begins.
+Readback does not compare words, so a change to the posted text or to the footer leaves a found copy found.
+
+A copy is absent only when no comment carries its marker: no submitted review, review comment, or pull or merge request comment.
+A marker that a comment carries without matching leaves the copy unknown, never absent.
+Thus, a copy that v1.0.0-rc.1 posted in its own shape and left in doubt stays Unconfirmed until an admin acts.
+A pending review is a private draft, so its markers prove nothing, and the next attempt adopts it.
+
 Current source version, scope, consent, feedback mode, delivery pause and approval are checked at egress.
 A work-state refusal does not erase the result.
 Practice-page and conversation feedback retain their own visibility checks.

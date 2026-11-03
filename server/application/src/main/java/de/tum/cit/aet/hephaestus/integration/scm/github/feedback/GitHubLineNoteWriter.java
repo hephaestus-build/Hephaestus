@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.github.feedback.GitHubSummaryWriter.PrCoordinates;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,18 +90,16 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         try {
             var footer = formatter.footer(target.item());
             var pr = GitHubSummaryWriter.parseSubjectExternalId(targets.subject(target, kind()));
-            var copies = indexCopies(footer, pr, publication.notes(), commitOid(target));
+            var copies = indexCopies(workspace, pr, publication.notes(), commitOid(target));
             String body = publication.summary() == null
                     ? publication.notes().getFirst().writeMarker()
                     : footer.summary(publication.summary());
             var reviews = reviewLookup(
                     workspace,
                     pr,
-                    body,
+                    packageMarker(publication),
                     Objects.requireNonNull(commitOid(target)),
-                    publication.notes().stream()
-                            .map(note -> postedBody(footer, note))
-                            .collect(Collectors.toSet()));
+                    noteMarkers(publication));
             if (reviews.conflict()) return publication.notSent();
             if (reviews.submitted() != null) {
                 // A receipt is recorded only on a fenced copy.
@@ -153,12 +152,10 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             var beforeSubmit = reviewLookup(
                     workspace,
                     pr,
-                    body,
+                    packageMarker(publication),
                     Objects.requireNonNull(commitOid(target)),
-                    publication.notes().stream()
-                            .map(note -> postedBody(footer, note))
-                            .collect(Collectors.toSet()));
-            var complete = indexCopies(footer, pr, publication.notes(), commitOid(target));
+                    noteMarkers(publication));
+            var complete = indexCopies(workspace, pr, publication.notes(), commitOid(target));
             if (beforeSubmit.conflict()
                     || !pending.equals(beforeSubmit.pending())
                     || beforeSubmit.pendingComments() != publication.notes().size()
@@ -184,23 +181,27 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         long workspace = target.item().workspaceId();
         if (gitHubProvider.isRateLimitCritical(workspace) || commitOid(target) == null) return null;
         try {
-            var footer = formatter.footer(target.item());
             var pr = GitHubSummaryWriter.parseSubjectExternalId(targets.subject(target, kind()));
-            String body = publication.summary() == null
-                    ? publication.notes().getFirst().writeMarker()
-                    : footer.summary(publication.summary());
-            var review = reviewLookup(
-                    workspace,
-                    pr,
-                    body,
-                    Objects.requireNonNull(commitOid(target)),
-                    publication.notes().stream()
-                            .map(note -> postedBody(footer, note))
-                            .collect(Collectors.toSet()));
+            String commit = Objects.requireNonNull(commitOid(target));
+            var review = reviewLookup(workspace, pr, packageMarker(publication), commit, noteMarkers(publication));
             if (review.conflict()) return null;
-            if (review.submitted() == null) return List.of();
-            return receipts(
-                    publication, review.submitted(), indexCopies(footer, pr, publication.notes(), commitOid(target)));
+            if (review.submitted() != null)
+                return receipts(
+                        publication, review.submitted(), indexCopies(workspace, pr, publication.notes(), commit));
+            // No submitted review holds the package. A copy is absent only if no comment anywhere carries its marker:
+            // an earlier release posted the summary as a comment and the notes in a review of their own. A marker
+            // that is there but did not match leaves the copy unknown, never absent. The threads of submitted reviews
+            // are their comments; a pending review is a private draft that the next attempt adopts.
+            if (!review.complete()) return null;
+            var seen = new HashSet<>(review.seen());
+            seen.addAll(commentMarkers(workspace, pr, markers(publication)));
+            var unknown = new ArrayList<CopyReceipt>();
+            var summary = publication.summary();
+            if (summary != null && seen.contains(summary.writeMarker()))
+                unknown.add(CopyReceipt.attempted(summary.copyId()));
+            for (var note : publication.notes())
+                if (seen.contains(note.writeMarker())) unknown.add(CopyReceipt.attempted(note.copyId()));
+            return List.copyOf(unknown);
         } catch (RuntimeException unknown) {
             return null;
         }
@@ -217,9 +218,11 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
     }
 
     private ReviewLookup reviewLookup(
-            long workspace, PrCoordinates pr, String expectedBody, String commit, Set<String> expectedNotes) {
-        int markerStart = expectedBody.lastIndexOf("<!--");
-        String marker = markerStart < 0 ? expectedBody : expectedBody.substring(markerStart);
+            long workspace, PrCoordinates pr, String marker, String commit, Set<String> noteMarkers) {
+        var watched = new HashSet<>(noteMarkers);
+        watched.add(marker);
+        var seen = new HashSet<String>();
+        boolean complete = true;
         String after = null;
         String pending = null;
         int pendingComments = 0;
@@ -244,8 +247,11 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                         || !(review.get("id") instanceof String id)
                         || !(review.get("state") instanceof String state))
                     throw new FeedbackDeliveryException("GitHub review identity is incomplete");
+                // A submitted review holds the copies that it carries, whoever wrote it; a pending one is a private
+                // draft.
+                if (!state.equals("PENDING")) complete &= watch(review, body, watched, seen);
                 if (!Boolean.TRUE.equals(review.get("viewerDidAuthor"))) continue;
-                boolean same = ScmFeedbackFormatter.sameCopy(body, expectedBody)
+                boolean same = ScmFeedbackFormatter.carries(body, marker)
                         && review.get("commit") instanceof Map<?, ?> revision
                         && commit.equals(revision.get("oid"));
                 if (state.equals("PENDING")) {
@@ -255,27 +261,27 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                             || !(comments.get("nodes") instanceof List<?> entries)
                             || !(comments.get("pageInfo") instanceof Map<?, ?> pageInfo)
                             || !Boolean.FALSE.equals(pageInfo.get("hasNextPage"))
-                            || entries.size() > expectedNotes.size()
+                            || entries.size() > noteMarkers.size()
                             || entries.stream()
                                     .anyMatch(entry -> !(entry instanceof Map<?, ?> comment)
                                             || !Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
                                             || !(comment.get("body") instanceof String posted)
-                                            || expectedNotes.stream()
-                                                    .noneMatch(note -> ScmFeedbackFormatter.sameCopy(posted, note)))
+                                            || noteMarkers.stream()
+                                                    .noneMatch(note -> ScmFeedbackFormatter.carries(posted, note)))
                             || entries.stream()
                                             .map(entry -> ((Map<?, ?>) entry).get("body"))
                                             .distinct()
                                             .count()
-                                    != entries.size()) return new ReviewLookup(null, 0, null, true);
+                                    != entries.size()) return new ReviewLookup(null, 0, null, true, Set.of(), false);
                     pending = id;
                     pendingComments = entries.size();
                 } else if (same) {
-                    if (submitted != null) return new ReviewLookup(null, 0, null, true);
+                    if (submitted != null) return new ReviewLookup(null, 0, null, true, Set.of(), false);
                     submitted = new SummaryHandle(id, review.get("url") instanceof String url ? url : null);
-                } else if (body.contains(marker)) return new ReviewLookup(null, 0, null, true);
+                } else if (body.contains(marker)) return new ReviewLookup(null, 0, null, true, Set.of(), false);
             }
             if (Boolean.FALSE.equals(info.get("hasNextPage")))
-                return new ReviewLookup(pending, pendingComments, submitted, false);
+                return new ReviewLookup(pending, pendingComments, submitted, false, Set.copyOf(seen), complete);
             if (!Boolean.TRUE.equals(info.get("hasNextPage"))
                     || !(info.get("endCursor") instanceof String next)
                     || next.isBlank()
@@ -303,18 +309,86 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         return List.copyOf(receipts);
     }
 
-    /** {@code pendingComments} counts the pending review's own comments, each a distinct expected note. */
+    /**
+     * {@code pendingComments} counts the pending review's own comments, each a distinct expected note. {@code seen}
+     * holds the package's markers that a submitted review or its comments carry; {@code complete} says whether every
+     * such comment was read.
+     */
     private record ReviewLookup(
             @Nullable String pending,
             int pendingComments,
             @Nullable SummaryHandle submitted,
-            boolean conflict) {}
+            boolean conflict,
+            Set<String> seen,
+            boolean complete) {}
+
+    private static boolean watch(Map<?, ?> review, String body, Set<String> watched, Set<String> seen) {
+        watched.stream().filter(body::contains).forEach(seen::add);
+        if (!(review.get("comments") instanceof Map<?, ?> comments)
+                || !(comments.get("nodes") instanceof List<?> entries)
+                || !(comments.get("pageInfo") instanceof Map<?, ?> pageInfo)) return false;
+        for (var entry : entries) {
+            if (!(entry instanceof Map<?, ?> comment) || !(comment.get("body") instanceof String posted)) return false;
+            watched.stream().filter(posted::contains).forEach(seen::add);
+        }
+        return Boolean.FALSE.equals(pageInfo.get("hasNextPage"));
+    }
+
+    // The pull request's own comments: where an earlier release posted the summary and the notes about whole files.
+    private Set<String> commentMarkers(long workspace, PrCoordinates pr, Set<String> watched) {
+        var seen = new HashSet<String>();
+        String before = null;
+        for (int page = 0; page < MAX_THREAD_PAGES; page++) {
+            var variables = new HashMap<String, Object>();
+            variables.put("owner", pr.owner());
+            variables.put("name", pr.name());
+            variables.put("number", pr.number());
+            variables.put("last", THREADS_PAGE_SIZE);
+            if (before != null) variables.put("before", before);
+            Map<String, Object> connection = execute(workspace, "GetPullRequestCommentsNewest", variables)
+                    .field("repository.pullRequest.comments")
+                    .getValue();
+            if (connection == null
+                    || !(connection.get("nodes") instanceof List<?> nodes)
+                    || !(connection.get("pageInfo") instanceof Map<?, ?> info))
+                throw new FeedbackDeliveryException("GitHub pull request comments were not read completely");
+            for (var node : nodes) {
+                if (!(node instanceof Map<?, ?> comment) || !(comment.get("body") instanceof String body))
+                    throw new FeedbackDeliveryException("A GitHub pull request comment was not read completely");
+                watched.stream().filter(body::contains).forEach(seen::add);
+            }
+            if (Boolean.FALSE.equals(info.get("hasPreviousPage"))) return seen;
+            if (!Boolean.TRUE.equals(info.get("hasPreviousPage"))
+                    || !(info.get("startCursor") instanceof String next)
+                    || next.isBlank()
+                    || next.equals(before)) break;
+            before = next;
+        }
+        throw new FeedbackDeliveryException("GitHub pull request comment pagination did not reach its end");
+    }
+
+    /** The marker that the package's review carries: its summary's, or its first note's when it has no summary. */
+    private static String packageMarker(OnWorkPackage publication) {
+        var summary = publication.summary();
+        return summary == null
+                ? publication.notes().getFirst().writeMarker()
+                : Objects.requireNonNull(summary.writeMarker(), "A package summary has a marker");
+    }
+
+    private static Set<String> noteMarkers(OnWorkPackage publication) {
+        return publication.notes().stream().map(LineNote::writeMarker).collect(Collectors.toSet());
+    }
+
+    private static Set<String> markers(OnWorkPackage publication) {
+        var markers = new HashSet<>(noteMarkers(publication));
+        markers.add(packageMarker(publication));
+        return markers;
+    }
 
     // Partial pagination cannot prove absence; retain mismatched copies as conflicts.
     private Map<String, Copy> indexCopies(
-            Footer footer, PrCoordinates pr, List<LineNote> items, @Nullable String commitOid) {
+            long scopeId, PrCoordinates pr, List<LineNote> items, @Nullable String commitOid) {
         if (items.isEmpty()) return Map.of();
-        long scopeId = footer.workspaceId();
         Map<String, LineNote> expected = new HashMap<>();
         for (LineNote item : items) {
             expected.putIfAbsent(item.writeKey(), item);
@@ -349,7 +423,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                     throw new FeedbackDeliveryException("GitHub review-thread lookup was incomplete");
                 }
                 for (Object thread : threads) {
-                    indexThread(footer, thread, expected, commitOid, copies);
+                    indexThread(thread, expected, commitOid, copies);
                 }
                 Object hasNextPage = pageInfo.get("hasNextPage");
                 if (Boolean.FALSE.equals(hasNextPage)) {
@@ -372,7 +446,6 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
     }
 
     private void indexThread(
-            Footer footer,
             @Nullable Object node,
             Map<String, LineNote> expected,
             @Nullable String commitOid,
@@ -396,7 +469,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             return;
         }
         LineNote item = expected.get(key);
-        boolean verified = item != null && sameCopy(footer, thread, firstComment, body, item, commitOid);
+        boolean verified = item != null && ours(thread, firstComment, body, item, commitOid);
         String url = firstComment.get("url") instanceof String commentUrl ? commentUrl : null;
         Copy previous = copies.get(key);
         if (verified && (previous == null || !previous.verified())) {
@@ -406,18 +479,13 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         }
     }
 
-    private boolean sameCopy(
-            Footer footer,
-            Map<?, ?> thread,
-            Map<?, ?> comment,
-            String body,
-            LineNote item,
-            @Nullable String commitOid) {
+    private static boolean ours(
+            Map<?, ?> thread, Map<?, ?> comment, String body, LineNote item, @Nullable String commitOid) {
         FeedbackAnchor diff = item.anchor();
         if (diff.endLine() == null)
             return Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
                     && "FILE".equals(thread.get("subjectType"))
-                    && ScmFeedbackFormatter.sameCopy(body, postedBody(footer, item))
+                    && ScmFeedbackFormatter.carries(body, item.writeMarker())
                     && diff.path().equals(comment.get("path"))
                     && comment.get("originalCommit") instanceof Map<?, ?> revision
                     && Objects.equals(commitOid, revision.get("oid"));
@@ -426,7 +494,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         Integer expectedStart = startLine != null && startLine < diff.endLine() ? startLine : null;
         String expectedSide = diff.side() == CitationSide.OLD ? "LEFT" : "RIGHT";
         return Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
-                && ScmFeedbackFormatter.sameCopy(body, postedBody(footer, item))
+                && ScmFeedbackFormatter.carries(body, item.writeMarker())
                 && expectedSide.equals(thread.get("diffSide"))
                 && (expectedStart == null || expectedSide.equals(thread.get("startDiffSide")))
                 && diff.path().equals(comment.get("path"))

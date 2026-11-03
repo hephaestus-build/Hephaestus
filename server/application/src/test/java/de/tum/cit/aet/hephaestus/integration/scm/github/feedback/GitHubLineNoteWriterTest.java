@@ -49,6 +49,7 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     private final List<String> writes = new ArrayList<>();
     private final List<Map<String, Object>> reviews = new ArrayList<>();
     private final List<Map<String, Object>> threads = new ArrayList<>();
+    private final List<Map<String, Object>> issueComments = new ArrayList<>();
     private boolean loseSubmit;
     private int failThread;
     private int createdThreads;
@@ -223,13 +224,45 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNeverPublishAgainAfterTheSubmittedBodyIsEdited() {
+    void shouldFindTheCopyAndNeverPublishAgainAfterTheSubmittedBodyIsEdited() {
         writer.postPackage(TARGET, publication(), (ids, done) -> true);
         reviews.getFirst().put("body", "Edited\n" + MARKER);
         var before = List.copyOf(writes);
-        assertThat(writer.findPosted(TARGET, publication())).isNull();
+        assertThat(writer.findPosted(TARGET, publication())).hasSize(3).allMatch(CopyReceipt::acknowledged);
         writer.postPackage(TARGET, publication(), (ids, done) -> true);
         assertThat(writes).isEqualTo(before);
+    }
+
+    @Test
+    void shouldFindACopyWhoseWordsAnEarlierReleaseEscapedOtherwise() {
+        writer.postPackage(TARGET, publication(), (ids, done) -> true);
+        var review = reviews.getFirst();
+        review.put("body", "Review summary\\.\n" + review.get("body"));
+        threads.forEach(thread -> comment(thread)
+                .put("body", "Feedback for \\@everyone\\.\n" + comment(thread).get("body")));
+        assertThat(writer.findPosted(TARGET, publication())).hasSize(3).allMatch(CopyReceipt::acknowledged);
+    }
+
+    @Test
+    void shouldLeaveCopiesUnknownNotAbsentWhenAnEarlierReleasePostedThemApart() {
+        // v1.0.0-rc.1 posted the summary and a file note as comments, and the line note in a review without a body.
+        writer.postPackage(TARGET, publication(), (ids, done) -> true);
+        reviews.getFirst().put("body", "");
+        threads.removeIf(thread -> "FILE".equals(thread.get("subjectType")));
+        issueComments.add(Map.of("body", "Review summary.\n\n" + MARKER));
+        issueComments.add(Map.of("body", "File note.\n\n<!-- hephaestus-feedback-copy:file -->"));
+        assertThat(writer.findPosted(TARGET, publication()))
+                .hasSize(3)
+                .noneMatch(CopyReceipt::acknowledged)
+                .allMatch(receipt -> Boolean.TRUE.equals(receipt.writeMayHaveStarted()));
+    }
+
+    @Test
+    void shouldProveAbsenceWhenOnlyAPendingDraftCarriesTheMarkers() {
+        failThread = 2;
+        writer.postPackage(TARGET, publication(), (ids, done) -> true);
+        assertThat(reviews.getFirst().get("state")).isEqualTo("PENDING");
+        assertThat(writer.findPosted(TARGET, publication())).isEmpty();
     }
 
     @Test
@@ -315,6 +348,10 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
                         "repository.pullRequest.reviews",
                         Map.of("nodes", reviews, "pageInfo", Map.of("hasNextPage", false)));
             }
+            case "GetPullRequestCommentsNewest" ->
+                fields.put(
+                        "repository.pullRequest.comments",
+                        Map.of("nodes", issueComments, "pageInfo", Map.of("hasPreviousPage", false)));
             case "GetPullRequestReviewThreads" ->
                 fields.put(
                         "repository.pullRequest.reviewThreads",
