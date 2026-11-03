@@ -100,6 +100,41 @@ await test("a detected header fails closed when malformed or not at the start", 
 	}
 });
 
+await test("an npm package must name a valid package and one exact version", () => {
+	for (const version of ["3.164.0-rc.1", "3.164.0-rc.1+build.5", "0.0.1"]) {
+		const owned = ownedComponent(file, header.replace("@3.164.0", `@${version}`));
+		assert.equal(owned?.pedigree.ancestors[0]?.version, version);
+	}
+	for (const version of [
+		"^3.164.0",
+		"~3.164.0",
+		"3.x",
+		"3.164",
+		"v3.164.0",
+		"03.164.0",
+		"*",
+		"3.164.0-01",
+	]) {
+		assert.throws(
+			() => ownedComponent(file, header.replace("@3.164.0", `@${version}`)),
+			/canonical/u,
+		);
+	}
+	for (const name of [
+		"%40GitLab/svgs",
+		"%40gitlab/.svgs",
+		".svgs",
+		"svg%20s",
+		"%40gitlab%2Fsvgs",
+	]) {
+		assert.throws(
+			() => ownedComponent(file, header.replace("%40gitlab/svgs", name)),
+			/canonical/u,
+			name,
+		);
+	}
+});
+
 await test("CSS comments and SPDX expressions survive; test and story files are excluded", () => {
 	const css = ownedComponent(
 		"webapp/src/styles/owned.css",
