@@ -295,6 +295,7 @@ export async function runCustomProgram(
 	]);
 	let aborted: AbortReason | undefined;
 	const open = new Map<number, OpenRequest>();
+	let lastRequestId = -1;
 	const outstanding = new Map<OpenRequest, Promise<void>>();
 	const countUnrated = (slot: ModelSlot, reason: Reason) => {
 		const slotReport = report.find((r) => r.slot === slot);
@@ -626,10 +627,13 @@ export async function runCustomProgram(
 					fail("invalid-program", `the program sent a ${message.kind} request before meta`);
 					return;
 				}
-				if (open.has(message.id)) {
+				// Only rising ids pass, because whether the first use is still open depends on scheduling. A
+				// program's process does this by counting, and no count of its requests grows the host's memory.
+				if (message.id <= lastRequestId) {
 					fail("error", `the program reused the id of request ${message.id}`);
 					return;
 				}
+				lastRequestId = message.id;
 				if (open.size >= MAX_IN_FLIGHT) {
 					fail("error", `more than ${MAX_IN_FLIGHT} requests at once`);
 					return;
