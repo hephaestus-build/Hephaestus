@@ -17,24 +17,41 @@ Semantic versioning applies to the surfaces an operator or API consumer depends 
 | Surface                      | What is covered                                                                                                                                                                                                                                                                                                                                                                 |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Database migration chain** | Liquibase applies changesets in changelog order. A newer release builds on the previous schema. Follow the [database migration instructions](#database-migrations) before an upgrade.                                                                                                                                                                                |
-| **Runtime prerequisites**    | The minimum PostgreSQL major version, the required outbound network destinations, and any required external services. Adding one is a breaking change.                                                                                                                                                                                                                          |
-| **Configuration keys**       | Environment variables and `hephaestus.*` properties listed in the [Configuration reference](./configuration-reference). Renames and removals are breaking changes.                                                                                                                     |
-| **REST API**                 | The endpoints described by the published [OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml). CI checks each change against the previous release: see [API compatibility](../contributor/ci-cd#api-compatibility).                                                                                                                                                                                                                                 |
-| **Helm chart values** | The values of the Helm chart, from the first release that publishes the chart. Removing or renaming a value, or changing its meaning, is a breaking change. A new optional value is a minor change. |
+| **Runtime prerequisites** | The minimum PostgreSQL major version and its required extensions. The minimum Kubernetes version and the required kernel features. The required outbound network destinations and external services. Adding or raising one is a breaking change. |
+| **REST API**                 | The endpoints described by the published [OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml). CI checks each change against the previous release: see [API compatibility](../contributor/ci-cd#api-compatibility). The base path is `/api`. Error responses use the problem types in [API error handling](../contributor/api-error-handling). [Open enums](#open-enums) states what a client must accept. |
+| **Helm chart values** | The values of the Helm chart, and the key names that [Secret custody](./secret-custody) lists for `secret.name`. Removing or renaming a value, accepting less than before, or changing its meaning is a breaking change. A new optional value or a wider limit is a minor change. |
+| **Signed release** | The assets that [Release image lock](./release-image-lock.md) lists and the schema of the joint lock. The location of the chart, and the image names in [Docker image tags](#docker-image-tags). |
+| **Backups** | The pgBackRest stanza name of the bundled PostgreSQL, because an existing repository uses it. |
+| **Practice scripts** | What [Write a practice script](./practice-scripts) documents: the shape of a script, its context, its result, and the modules that it imports. Removing or renaming one, or changing the script contract version, is a breaking change. Other modules of the toolkit are not covered. |
+| **Practice definitions and catalog** | The fields of a practice definition, its Applies when conditions, and the practice and group slugs of the catalog. A new field or condition is a minor change. A changed catalog practice reaches a workspace as an offer that an admin accepts. |
+| **Alert rules** | The alert names of the shipped rules, and the metrics that those rules read. |
+| **Provider connections** | The webhook routes that you registered at a provider, and the permissions of the GitHub App, the GitLab token and the Slack app. A new required permission is a breaking change. A minor release can ask for a permission only if its feature stays off, with a recorded reason, until you grant it. |
+| **Posted text** | Hephaestus wrote links into comments, notes, Slack messages and email. These targets stay: `/w/<short name>/feedback/<item>`, `/w/<short name>/conversation`, `/settings` and `/unsubscribe`. The hidden `<!-- hephaestus…` markers in comments also keep their format. |
+
+CI enforces these rules from 1.0.0: see [Public contract gate](../contributor/ci-cd#public-contract-gate) and [API compatibility](../contributor/ci-cd#api-compatibility).
+
+A limit that a release states can go in a minor release.
+[One GitLab instance for each install](./integrations#more-than-one-gitlab) is an example.
 
 Other surfaces can change in any release without notice:
 
 - Java and TypeScript internals.
 - The database schema itself, as distinct from the migration chain.
-- Undocumented endpoints.
-- UI layout.
+- Environment variables and `hephaestus.*` properties. The chart sets them, so set chart values instead.
+- Undocumented endpoints, and the operation IDs and tags of the OpenAPI specification.
+- UI layout, and web app routes that posted text does not link to. A moved route gets no redirect.
+- The wording of comment footers, email and notifications.
+- The workspace layout of a sandbox, the tool protocol, and the contents of the `agent-pi` image. A custom sandbox image is not supported.
+- The NATS stream and subject names.
+- The interfaces between the server and its GitHub, GitLab, Slack and Outline adapters.
+- Metrics that no shipped alert rule reads, and log fields.
 
 ## Version numbers
 
 | Bump                | Meaning                                                                                                                                                                                                                                                                                                        |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Major** (`X`.y.z) | You must act before or during the upgrade. Causes include required new, removed, or renamed configuration keys, manual or destructive migrations, and removed APIs. The release notes say what to do. [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) has the details. |
-| **Minor** (x.`Y`.z) | New functionality. The upgrade needs no action. It can include new *optional* configuration keys.                                                                                                                                                                                                              |
+| **Major** (`X`.y.z) | You must act before or during the upgrade. Causes include required new, removed, or renamed chart values, manual or destructive migrations, and removed APIs. The release notes say what to do. [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) has the details. |
+| **Minor** (x.`Y`.z) | New functionality. The upgrade needs no action. It can include new *optional* chart values.                                                                                                                                                                                                              |
 | **Patch** (x.y.`Z`) | Bug and security fixes. The upgrade needs no action.                                                                                                                                                                                                                                                           |
 
 :::caution[CAUTION: Pre-1.0]
@@ -80,6 +97,8 @@ That procedure owns the requirements to stop writers, verify the backup, apply t
 
 **From 1.0 onward, any 1.x can be upgraded to any later 1.y without intermediate releases.** Use the
 target release's Helm chart. Follow the [database migration instructions](#database-migrations) for its supported database baseline.
+Only the previous release can run beside a new schema.
+Thus, an upgrade that skips a release stops every role before the migration.
 
 **Before 1.0, do not assume an arbitrary older release can upgrade directly.** Read the target release's
 migration instructions first: they may require an intermediate release or manual preparation.
