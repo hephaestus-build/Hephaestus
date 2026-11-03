@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.contributors.ContributorDTO;
+import de.tum.cit.aet.hephaestus.contributors.ContributorService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -13,8 +14,11 @@ class ContributorControllerIntegrationTest extends AbstractWorkspaceIntegrationT
     @Autowired
     private WebTestClient webTestClient;
 
+    @Autowired
+    private ContributorService contributors;
+
     @Test
-    void globalContributorsEndpointReturnsEmptyListWhenTokenMissing() {
+    void shouldServeTheContributorsTheBuildRecordedWithoutSignIn() {
         var response = webTestClient
                 .get()
                 .uri("/contributors")
@@ -26,7 +30,6 @@ class ContributorControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 .returnResult()
                 .getResponseBody();
 
-        assertThat(response).isNotNull();
-        assertThat(response).isEmpty();
+        assertThat(response).isEqualTo(contributors.getGlobalContributors());
     }
 }

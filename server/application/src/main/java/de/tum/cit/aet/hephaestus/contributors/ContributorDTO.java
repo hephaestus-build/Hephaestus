@@ -1,10 +1,7 @@
 package de.tum.cit.aet.hephaestus.contributors;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Data transfer object representing a GitHub contributor.
@@ -25,29 +22,4 @@ public record ContributorDTO(
         String htmlUrl,
 
         @Schema(description = "Number of contributions to the project", example = "42")
-        int contributions) {
-    /**
-     * DTO for parsing GitHub API contributor response.
-     */
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record GitHubContributorResponse(
-            @JsonProperty("id") Long id,
-            @JsonProperty("login") String login,
-            @JsonProperty("avatar_url") String avatarUrl,
-            @JsonProperty("html_url") String htmlUrl,
-            @JsonProperty("contributions") int contributions) {
-        /**
-         * Converts to ContributorDTO with full name from user API.
-         * Falls back to login if name is not available.
-         */
-        public ContributorDTO toContributorDTO(@Nullable String fullName) {
-            return new ContributorDTO(
-                    id,
-                    login,
-                    fullName != null && !fullName.isBlank() ? fullName : login,
-                    avatarUrl,
-                    htmlUrl,
-                    contributions);
-        }
-    }
-}
+        int contributions) {}

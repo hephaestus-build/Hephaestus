@@ -766,7 +766,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
-        if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         with:
           install: "none"
       - name: Find the exact-commit merge-queue build
@@ -789,6 +788,12 @@ jobs:
           digest-mismatch: error
       - uses: ./.github/actions/setup-caches
         if: steps.reuse.outputs.artifact-id == ''
+      # The About page lists these; the server reads no provider for them at run time.
+      - name: Record the contributor list
+        if: steps.reuse.outputs.artifact-id == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/generate-contributors.ts
       - name: Package the server
         if: steps.reuse.outputs.artifact-id == ''
         working-directory: server
@@ -805,6 +810,7 @@ jobs:
           mapfile -t clients < <(find generated-clients/build/libs -maxdepth 1 -name 'hephaestus-generated-clients-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
           (( ${#jars[@]} == 1 )) && (( ${#clients[@]} == 1 ))
           unzip -p "${jars[0]}" META-INF/MANIFEST.MF | grep '^Main-Class: org.springframework.boot.loader' >/dev/null
+          unzip -p "${jars[0]}" BOOT-INF/classes/contributors.json | jq -e 'length > 0' >/dev/null
       - name: Upload the packaged server
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

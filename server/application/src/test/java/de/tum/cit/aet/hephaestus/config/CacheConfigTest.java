@@ -16,7 +16,7 @@ import org.springframework.cache.support.SimpleCacheManager;
 
 class CacheConfigTest extends BaseUnitTest {
 
-    private static final List<String> EXPECTED_NAMES = List.of("auth_jwt_revoked", "contributors");
+    private static final List<String> EXPECTED_NAMES = List.of("auth_jwt_revoked");
 
     @Test
     @DisplayName("cacheManager exposes exactly the declared caches by name")
@@ -35,13 +35,6 @@ class CacheConfigTest extends BaseUnitTest {
     }
 
     @Test
-    void contributorCacheHasOneHourTtlAndThousandEntryLimit() {
-        CacheConfig.CacheSpec spec = findSpec("contributors");
-        assertThat(spec.ttl()).isEqualTo(Duration.ofHours(1));
-        assertThat(spec.maxSize()).isEqualTo(1000L);
-    }
-
-    @Test
     void cacheSpecValidation() {
         assertThatThrownBy(() -> new CacheConfig.CacheSpec("", Duration.ofMinutes(1), 1L))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -49,12 +42,5 @@ class CacheConfigTest extends BaseUnitTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new CacheConfig.CacheSpec("ok", Duration.ofMinutes(1), 0L))
                 .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    private static CacheConfig.CacheSpec findSpec(String name) {
-        return CacheConfig.SPECS.stream()
-                .filter(s -> s.name().equals(name))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("missing spec: " + name));
     }
 }

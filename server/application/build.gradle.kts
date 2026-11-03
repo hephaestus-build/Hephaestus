@@ -133,6 +133,9 @@ dependencies {
 tasks.processResources {
     exclude("agent/work/**")
     from(rootProject.file("../docs/contributor/practice-feedback-language.md")) { into("agent") }
+    // The About page's contributor list; the packaging build writes it with
+    // scripts/generate-contributors.ts.
+    from(layout.buildDirectory.dir("contributors"))
 }
 
 tasks.withType<JavaCompile>().configureEach {

@@ -7,30 +7,26 @@ import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.caffeine.CaffeineCache;
 import org.springframework.cache.support.SimpleCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableCaching
 public class CacheConfig {
 
-    private static final Duration LONG_TTL = Duration.ofHours(1);
-
-    /** Only revoked verdicts are cached; expiry triggers a database recheck, never admission. */
+    /**
+     * A store of security verdicts, not a stand-in for a slow read. Only revoked verdicts are cached;
+     * expiry triggers a database recheck, never admission.
+     */
     private static final Duration AUTH_JWT_REVOKED_TTL = Duration.ofMinutes(15);
-
-    private static final long LONG_MAX = 1000L;
 
     private static final long AUTH_JWT_REVOKED_MAX = 10_000L;
 
     static final List<CacheSpec> SPECS = List.of(
             // Name mirrors core.auth.jwt.RevocationAwareJwtDecoder.CACHE_NAME (kept as a literal to
             // avoid a config→core.auth internal-type dependency; the decoder owns the canonical const).
-            new CacheSpec("auth_jwt_revoked", AUTH_JWT_REVOKED_TTL, AUTH_JWT_REVOKED_MAX),
-            new CacheSpec("contributors", LONG_TTL, LONG_MAX));
+            new CacheSpec("auth_jwt_revoked", AUTH_JWT_REVOKED_TTL, AUTH_JWT_REVOKED_MAX));
 
     @Bean
     public SimpleCacheManager cacheManager(MeterRegistry meterRegistry) {

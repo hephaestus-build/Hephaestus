@@ -64,7 +64,6 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
             Map.entry("ReviewJobZombieSweeper#purgeStaleWorkerRegistrations", "ROW"),
             Map.entry("MentorTurnQueueSampler#sample", "LOCAL"),
             Map.entry("MentorLiveHub#heartbeat", "LOCAL"),
-            Map.entry("ContributorService#evictContributorsCache", "LOCAL"),
             Map.entry("ReleaseCheckService#poll", "LOCAL"),
             Map.entry("CredentialRotationService#rotateBatch", "ROW"),
             Map.entry("SyncJobService#refreshLeases", "LOCAL"),

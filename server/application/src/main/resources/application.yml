@@ -536,11 +536,6 @@ hephaestus:
             token: ${GITLAB_PAT:}
             server-url: ${GITLAB_SERVER_URL:}
 
-    cache:
-        contributors:
-            # Eviction rate in milliseconds (1 hour)
-            evict-rate: 3600000
-
     # ═══════════════════════════════════════════════════════════════════════════
     # FEATURE FLAGS (operational / development toggles)
     # ═══════════════════════════════════════════════════════════════════════════
@@ -813,14 +808,6 @@ hephaestus:
             # Spring buffers the body). Tomcat's max-http-post-size only enforces on
             # form-encoded bodies, so we can't rely on it for JSON webhooks.
             max-payload-bytes: 26214400
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    # CONTRIBUTORS (Hephaestus meta — who built the app)
-    # ═══════════════════════════════════════════════════════════════════════════
-    # Separate prefix so SCM-integration code never carries this PAT. Blank disables contributor credits.
-    contributors:
-        github:
-            auth-token: ${GH_AUTH_TOKEN:}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # INTEGRATION FEATURE FLAGS + SCM/SLACK CONFIG

@@ -818,6 +818,11 @@ database contract tests and the `Test` suites use the restored classes with `-Pp
 which bypasses compilation. `ci-tests.yml` sets it as `ORG_GRADLE_PROJECT_packagedServer`, because
 its commands are `vp run` tasks. Thus, every server suite tests the classes that the JAR ships.
 
+Before it packages, the job records the About page's contributor list with `scripts/generate-contributors.ts`.
+The JAR carries that list, so the server reads no provider for it at run time.
+If GitHub does not answer for the list or for a name, the step fails. A JAR without a list fails the package validation.
+A local build that skips the step lists nobody.
+
 The suites never compile. Test compilation is the slowest server build step, and it is rarely a
 cache hit. A change alters the test sources or the main classes they compile against.
 So the suites wait for packaging rather than compile the same sources in each of their jobs.

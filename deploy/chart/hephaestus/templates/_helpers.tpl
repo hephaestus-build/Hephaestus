@@ -316,7 +316,6 @@ fails every pod, so each role is owed the lock's digest. */}}
 - name: GH_APP_ID
   value: {{ .Values.config.github.appId | int | quote }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "GH_APP_PRIVATE_KEY" "optional" true) }}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "GH_AUTH_TOKEN" "optional" true) }}
 - name: GIT_CHECKOUT_ENABLED
   value: {{ .Values.config.gitCheckoutEnabled | quote }}
 - name: GITLAB_ENABLED
