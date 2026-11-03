@@ -1475,6 +1475,50 @@ void describe("CI contract", () => {
 		}
 	});
 
+	void test("a crash of the rescan of main opens or updates its own tracking issue", async (context) => {
+		const rescan = parseDocument(await readFile(".github/workflows/rescan-images.yml", "utf8"));
+		const report = namedStep(rescan, ["jobs", "main"], "Report a failed rescan");
+		assert.equal(report.get("if"), "failure()");
+		assert.equal(rescan.getIn(["jobs", "main", "permissions", "issues"]), "write");
+		const script = asString(report.get("run"), "report script");
+		const directory = await mkdtemp(path.join(tmpdir(), "rescan-report-"));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
+		const log = path.join(directory, "calls.log");
+		const answer = path.join(directory, "issues.json");
+		await writeFile(
+			path.join(directory, "gh"),
+			`#!/bin/sh\necho "$*" >> "${log}"\n[ "$1 $2" = "issue list" ] && cat "${answer}"\nexit 0\n`,
+		);
+		await chmod(path.join(directory, "gh"), 0o755);
+		const run = async (listed: string) => {
+			await writeFile(log, "");
+			await writeFile(answer, listed);
+			const result = spawnSync("bash", ["--noprofile", "--norc", "-c", script], {
+				encoding: "utf8",
+				env: environmentForGitFixture({
+					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+					REPOSITORY: "owner/repository",
+					RUN_URL: "https://example.invalid/run",
+				}),
+			});
+			assert.equal(result.status, 0, result.stderr);
+			const calls = await readFile(log, "utf8");
+			return calls.trim().split("\n");
+		};
+		const title = "The rescan of main's images failed";
+		const workflow = { login: "app/github-actions" };
+		const first = await run("[]");
+		assert.match(first[0] ?? "", /^issue list .*--json number,title,author/u);
+		assert.match(first[1] ?? "", /^issue create /u);
+		const again = await run(JSON.stringify([{ number: 7, title, author: workflow }]));
+		assert.match(again[1] ?? "", /^issue comment 7 /u);
+		// The same title from anyone else is not the tracking issue.
+		const planted = await run(
+			JSON.stringify([{ number: 8, title, author: { login: "stranger" } }]),
+		);
+		assert.match(planted[1] ?? "", /^issue create /u);
+	});
+
 	void test("GHCR-only rescans share login while the image builder keeps its registry input", async () => {
 		const rescan = parseDocument(await readFile(".github/workflows/rescan-images.yml", "utf8"));
 		const login = namedStep(rescan, ["jobs", "main"], "Log in to Container Registry");

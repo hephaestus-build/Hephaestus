@@ -72,6 +72,29 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/report-vulnerability-drift.ts reports
 
+      # Findings go to the drift issue above, so only a crash fails this job, and nothing else reports it.
+      - name: Report a failed rescan
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="The rescan of main's images failed"
+          # Only the workflow token opens this issue, and anyone can open one with the same title. `--author`
+          # does not match an app, and the search index can miss an issue that a run just opened, so the
+          # listing is filtered here.
+          number=$(gh issue list -R "$REPOSITORY" --state open --limit 500 --json number,title,author |
+            jq -r --arg title "$title" \
+              '[.[] | select(.title == $title and .author.login == "app/github-actions")][0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" -R "$REPOSITORY" --body "The rescan failed again: $RUN_URL"
+          else
+            gh issue create -R "$REPOSITORY" --title "$title" \
+              --body "The rescan of main's images stopped before it could report its findings: $RUN_URL. The run's log names the step. Close this issue when a run passes."
+          fi
+
   release:
     name: Rescan the supported release
     runs-on: ubuntu-latest
