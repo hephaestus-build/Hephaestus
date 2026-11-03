@@ -117,8 +117,8 @@ public class QueryPlans {
 
     private static int dollarQuoteEnd(String sql, int start) {
         int tagEnd = start + 1;
-        while (tagEnd < sql.length()
-                && (Character.isLetterOrDigit(sql.charAt(tagEnd)) || sql.charAt(tagEnd) == '_')) tagEnd++;
+        while (tagEnd < sql.length() && (Character.isLetterOrDigit(sql.charAt(tagEnd)) || sql.charAt(tagEnd) == '_'))
+            tagEnd++;
         if (tagEnd >= sql.length() || sql.charAt(tagEnd) != '$' || Character.isDigit(sql.charAt(start + 1))) {
             return start + 1;
         }

@@ -1,0 +1,98 @@
+---
+id: read-and-write-the-database
+sidebar_position: 9
+title: Read and write the database
+description: How a server read becomes one query into a record, how a write uses entities, and which tests guard the cost.
+---
+
+Use this page when you add or change a server read or write.
+[ADR 0076](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0076-reads-are-shaped-like-the-screen.md) records the decision and the options that it rejected.
+[Database migration](./database-migration.mdx) owns schema changes, such as a new index.
+
+## Write a read
+
+1. Write a record that has the fields that the screen or the response shows, and no other fields.
+   Put it next to its query: a nested record in the repository, or a record in the same package.
+   If the API returns the same shape, the record is the `*DTO` and no mapping code is necessary.
+2. Write the query on a Spring Data repository with `@Query`, and return the record.
+   Use JPQL with an explicit constructor expression and the record's fully qualified name.
+   `SlackMessageRepository#findLiveInThreadRange` is an example:
+
+   ```java
+   @Query("""
+       SELECT new de.tum.cit.aet.hephaestus.integration.slack.domain.SlackLiveMessage(m.slackTs, m.slackThreadTs)
+       FROM SlackMessage m
+       WHERE m.workspaceId = :workspaceId AND m.slackChannelId = :channelId AND m.deletedAt IS NULL
+         AND COALESCE(m.slackThreadTs, m.slackTs) >= :oldest AND COALESCE(m.slackThreadTs, m.slackTs) <= :latest
+       """)
+   List<SlackLiveMessage> findLiveInThreadRange(...);
+   ```
+
+   Spring Data gives each JPQL query to Hibernate when it creates the repository.
+   Thus, a wrong path, or a constructor that does not match the selected values, fails when the application context starts, and in each integration test.
+   Do not leave out `SELECT new`. Spring Data can add it, but only when the query runs, so the startup check does not see the constructor.
+3. If JPQL cannot express the query, use native SQL with `@NativeQuery` and the same record.
+   JPQL cannot express a common table expression, a window function, `DISTINCT ON`, `LATERAL` or a PostgreSQL operator.
+   Native SQL maps columns to record components by position. Select the columns in the order of the components.
+   Nothing checks native SQL before it runs. Thus, an integration test must run the query.
+4. Run the read in a read-only transaction. ADR 0075 owns transaction boundaries.
+   Read a list in one statement, or in a fixed number of statements.
+   Do not call a repository in a loop. Do not read an entity to copy its fields into a DTO.
+5. Page in SQL. Use `Pageable` for a list that shows its total (`OffsetPageDTO`), and keyset pagination for a long append-only list (`CursorPageDTO`).
+   `server/AGENTS.md` § API and security conventions owns the page shapes.
+6. A partial index serves only a query that repeats its predicate.
+   If the table has a partial index, for example `identity` with `WHERE disabled_at IS NULL`, the query must say the same condition.
+   Write the predicate with literals, as the index does. PostgreSQL cannot match `status IN (:states)` to an index on `status IN ('PENDING', 'RUNNING')` in a generic plan.
+7. Do not add a cache to make a read fast. Change the query, its shape or its index.
+
+## Change data
+
+1. Load the entity in the transaction that changes it, change it, and let the transaction flush it.
+   Use an entity to keep an invariant of its aggregate or to use `@Version`.
+2. Declare every `@ManyToOne` and `@OneToOne` with `fetch = FetchType.LAZY`. Do not use `FetchType.EAGER`.
+   If a write needs an association, fetch it in the query with `JOIN FETCH` or `@EntityGraph`.
+3. For a bulk change, use one `@Modifying` JPQL or native statement. Do not load each row to change or delete it.
+   A derived `deleteBy…` method loads each row before it deletes it.
+
+## Report the plan
+
+A pull request that adds or changes a read gives the plan of each changed statement on staging-size data.
+Run `EXPLAIN (ANALYZE, BUFFERS)` with typical values.
+If you cannot run it, give `EXPLAIN (GENERIC_PLAN)` with the parameters written `$1`, `$2`.
+Look for a `Seq Scan` on a large table, a high `rows` estimate that is wrong, and a loop that runs once per row.
+
+## Test the cost
+
+An endpoint that a main screen calls has an integration test that measures one request.
+`SqlRequestTrace` records the statements that the request prepares on the server thread, including the security and workspace filters.
+`QueryPlans` plans them with sequential scans off.
+`WorkspaceRequestCostIntegrationTest` is an example:
+
+```java
+var request = requests.measure(webTestClient, client -> client.get()
+        .uri("/workspaces/{workspaceSlug}/scoped-test/echo", workspace.getWorkspaceSlug())
+        .headers(TestAuthUtils.withCurrentUser())
+        .exchange()
+        .expectStatus()
+        .isOk()
+        .expectBody(Void.class));
+
+assertThat(request.statements()).isLessThanOrEqualTo(10);
+assertThat(plans.fullScans(request.sql())).isEmpty();
+```
+
+- Give the budget that you measured. Lower it when a change makes the request cheaper.
+- Measure the request with few rows and with many rows. The statement count must not change. If it grows, a statement runs per row.
+- `repeated()` lists each statement that the request prepared more than once.
+- `fullScans` lists each filtered sequential scan that no index can replace.
+  The test database is almost empty, so its normal plans always scan.
+  With sequential scans off, PostgreSQL 18 uses a scan only when no index serves the filter, and marks it `"Disabled": true`.
+  Thus, the check finds a query that leaves out the predicate of a partial index.
+- The plan check proves that an index can serve each statement. It does not prove that PostgreSQL uses the index on real data. The plan in the pull request shows that.
+- `SqlReadMeasurement` measures a service read in the same way, without HTTP.
+
+## Troubleshooting
+
+- **The context fails with `Query validation failed`.** A JPQL query does not match the model or the record constructor. The message names the method.
+- **A native read returns a wrong value in a field.** The column order does not match the record components.
+- **`LazyInitializationException`.** Code reads an association after its transaction ended. For a read, select the field in the query. For a write, fetch the association in the query that loads the entity.

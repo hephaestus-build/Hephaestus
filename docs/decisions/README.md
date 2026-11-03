@@ -114,5 +114,6 @@ Admin Guide (`docs/admin/`), and the ADR links to it.
 | [0073](0073-product-feedback-is-worked-on-in-github.md) | Product feedback is worked on in GitHub | Accepted (2026-10-31). Relates to 0025, 0026 and 0068. |
 | [0074](0074-a-reviews-width-and-count-follow-the-provider.md) | A review's width and count follow the provider | Accepted (2026-11-02). Amends 0068 and 0069. |
 | [0075](0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) | A transaction is one use case and talks to nothing | Accepted (2026-11-03). Builds on 0003 and 0044. |
+| [0076](0076-reads-are-shaped-like-the-screen.md) | Reads are shaped like the screen, entities are for writes | Accepted (2026-11-03). Relates to 0072 and 0075. |
 
 Template: [0000-template.md](0000-template.md).
