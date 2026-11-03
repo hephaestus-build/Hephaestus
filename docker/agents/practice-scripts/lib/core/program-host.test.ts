@@ -880,17 +880,33 @@ void describe("the host's bounds on a program's messages", () => {
 	});
 
 	void test("a request id used again while its request is open stops the program", async () => {
+		const call = { prompt: [{ role: "user", content: [{ type: "text", text: "Hello." }] }] };
+		const request = JSON.stringify({
+			kind: "model",
+			id: 7,
+			slot: "chat",
+			label: "reuse",
+			options: call,
+		});
 		const ws = await workspace({
 			reused: program(
 				"definePracticeScript",
-				`{ meta: {}, async run() {
-					process.send(JSON.stringify({ kind: "read", id: 7, request: { op: "record", name: "metadata.json" } }));
-					process.send(JSON.stringify({ kind: "read", id: 7, request: { op: "record", name: "metadata.json" } }));
+				`{ meta: { models: { chat: "required" } }, async run() {
+					process.send(${JSON.stringify(request)});
+					process.send(${JSON.stringify(request)});
 					return Promise.withResolvers().promise;
 				} }`,
 			),
 		});
-		const { outcome } = await run(ws, "reused");
+		// The model never answers, so the first request stays open. The host frees an id once it answers it.
+		const chat = new MockLanguageModelV4({
+			doGenerate: async ({ abortSignal }) => {
+				assert.ok(abortSignal !== undefined);
+				await once(abortSignal, "abort");
+				throw new Error("stopped");
+			},
+		});
+		const { outcome } = await run(ws, "reused", { models: { chat } });
 		assert.equal(outcome.status, "failed");
 		assert.equal(outcome.stopReason, "error");
 		assert.equal(outcome.error, "the program reused the id of request 7");
