@@ -46,6 +46,7 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -182,6 +183,22 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
                 .filteredOn(card -> card.id().equals(piece))
                 .singleElement()
                 .satisfies(card -> assertThat(card.body()).isEqualTo("Name each change after its intent."));
+    }
+
+    /** An older card must not fall off the page because a developer has many others. */
+    @Test
+    void shouldListEveryPracticePageCardOfADeveloperWithManyOfThem() {
+        seed(works.size());
+        var problem = Objects.requireNonNull(newestProblem);
+        var pieces = IntStream.range(0, 25)
+                .mapToObj(index -> practicePageFeedback(problem, true))
+                .toList();
+
+        var cards = new TransactionTemplate(transactions)
+                .execute(status -> practicePageFeedback.getOwnPracticePageFeedback(
+                        scenario.workspace().getId()));
+
+        assertThat(cards).extracting(card -> card.id()).containsAll(pieces);
     }
 
     /** Each read's statements, after checking that the read saw the seeded work. */

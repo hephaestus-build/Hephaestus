@@ -57,7 +57,8 @@ import tools.jackson.databind.ObjectMapper;
 class LlmProxyService {
 
     private static final Logger log = LoggerFactory.getLogger(LlmProxyService.class);
-    private static final Duration BLOCK_TIMEOUT = Duration.ofSeconds(310);
+    /** Past the idle bound on a response, so that the idle bound answers and this one only stops a stuck call. */
+    private static final Duration BLOCK_TIMEOUT = LlmProxyWebClientConfig.IDLE.plusSeconds(10);
     /**
      * A conversation call's own bound, a minute past its turn's ceiling. The dispatcher checks the deadline every few
      * seconds, stops the turn and cancels the call; it gives the host 30 seconds to end the turn. A bound at the ceiling
