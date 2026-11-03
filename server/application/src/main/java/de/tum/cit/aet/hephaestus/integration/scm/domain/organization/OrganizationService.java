@@ -26,9 +26,8 @@ public class OrganizationService {
         }
 
         organizations.insertIfAbsent(nativeId, providerId, login);
-        Organization organization = organizations
-                .findByNativeIdAndProviderId(nativeId, providerId)
-                .orElseThrow();
+        Organization organization =
+                organizations.findByNativeIdAndProviderId(nativeId, providerId).orElseThrow();
         if (!login.equals(organization.getLogin())) {
             organization.setLogin(login);
         }
