@@ -18,6 +18,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -95,11 +97,13 @@ public class ConnectionActivityRecorder {
         connectionIdCache.remove(new ScopeKindKey(workspaceId, kind));
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onActivated(ConnectionLifecycleEvent.Activated event) {
         invalidate(event.workspaceId(), event.kind());
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onDeactivated(ConnectionLifecycleEvent.Deactivated event) {
         invalidate(event.workspaceId(), event.kind());

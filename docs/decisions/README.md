@@ -113,5 +113,6 @@ Admin Guide (`docs/admin/`), and the ADR links to it.
 | [0072](0072-few-dependencies-owned-slivers-kept-foundations.md) | Few dependencies — own a sliver, keep a foundation | Accepted (2026-10-31). |
 | [0073](0073-product-feedback-is-worked-on-in-github.md) | Product feedback is worked on in GitHub | Accepted (2026-10-31). Relates to 0025, 0026 and 0068. |
 | [0074](0074-a-reviews-width-and-count-follow-the-provider.md) | A review's width and count follow the provider | Accepted (2026-11-02). Amends 0068 and 0069. |
+| [0075](0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) | A transaction is one use case and talks to nothing | Accepted (2026-11-03). Builds on 0003 and 0044. |
 
 Template: [0000-template.md](0000-template.md).

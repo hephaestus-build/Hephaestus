@@ -20,9 +20,10 @@ import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.support.TransactionTemplate;
 
 // Terminal settlement is server maintenance, including when new submission and execution are disabled.
@@ -55,7 +56,8 @@ public class ReviewJobCompletionService {
             }
     }
 
-    @TransactionalEventListener
+    // Each job cancel commits on its own, and the sandbox stop runs outside any transaction.
+    @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void cancel(ReviewCancellationRequested event) {
         for (var job : jobs.findByReviewIdAndWorkspaceIdOrderByAvailableAtAsc(event.reviewId(), event.workspaceId()))
             if (job.getStatus() == ReviewJobStatus.QUEUED || job.getStatus() == ReviewJobStatus.RUNNING)

@@ -115,6 +115,8 @@ Never write cleanup that another test depends on having run.
 - **Build every HTTP client from the builder Spring injects** (`WebClient.Builder`, `RestClient.Builder`,
   `RestTemplateBuilder`), so the application's codecs, observation and customizers apply. Set the client's own
   connector, request factory or codecs on that builder. `HttpClientConstructionArchTest` enforces it.
+- **Transactions follow [Transactions and side effects](../docs/contributor/transactions.md).** It owns the
+  boundary, the after-commit, the network-call and the locking rules. `SpringCorrectnessArchitectureTest` enforces the ones a test can see.
 - **Keep proxied methods overridable.** Spring's class-based proxies and Hibernate entity proxies
   cannot intercept a `final` method. To avoid an overridable constructor call, use constructor-local
   values or a private calculation helper instead. Making the public method `final` can read

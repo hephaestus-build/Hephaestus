@@ -21,7 +21,11 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.repository.Repository;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.bind.annotation.RequestBody;
 
 class SpringCorrectnessArchitectureTest extends HephaestusArchitectureTest {
@@ -48,6 +52,18 @@ class SpringCorrectnessArchitectureTest extends HephaestusArchitectureTest {
         ArchRule rule = methods()
                 .should(notCallTransactionalMethodsOnSelf())
                 .because("self-invocation bypasses Spring's transactional proxy");
+
+        rule.check(classes);
+    }
+
+    @Test
+    void shouldRunAfterCompletionListenersOutsideTheFinishedTransaction() {
+        ArchRule rule = methods()
+                .that()
+                .areAnnotatedWith(TransactionalEventListener.class)
+                .should(runOutsideTheFinishedTransaction())
+                .because("after completion the finished transaction is still bound, so a REQUIRED call joins it and"
+                        + " its writes never commit (TransactionSynchronization#afterCommit, ADR 0075)");
 
         rule.check(classes);
     }
@@ -170,6 +186,30 @@ class SpringCorrectnessArchitectureTest extends HephaestusArchitectureTest {
                         .filter(parameter -> !parameter.isAnnotatedWith(Valid.class))
                         .forEach(parameter -> events.add(SimpleConditionEvent.violated(
                                 method, parameter.getDescription() + " is @RequestBody but is not @Valid")));
+            }
+        };
+    }
+
+    private static ArchCondition<JavaMethod> runOutsideTheFinishedTransaction() {
+        return new ArchCondition<>("run on another thread or in a transaction of their own") {
+            @Override
+            public void check(JavaMethod method, ConditionEvents events) {
+                // A BEFORE_COMMIT listener runs inside the live transaction and joins it on purpose.
+                if (method.getAnnotationOfType(TransactionalEventListener.class).phase()
+                        == TransactionPhase.BEFORE_COMMIT) {
+                    return;
+                }
+                boolean ownBoundary = method.tryGetAnnotationOfType(Transactional.class)
+                        .map(transactional -> transactional.propagation() == Propagation.REQUIRES_NEW
+                                || transactional.propagation() == Propagation.NOT_SUPPORTED)
+                        .orElse(false);
+                if (!method.isAnnotatedWith(Async.class) && !ownBoundary) {
+                    events.add(SimpleConditionEvent.violated(
+                            method,
+                            method.getDescription()
+                                    + " runs after completion without @Async or"
+                                    + " @Transactional(REQUIRES_NEW | NOT_SUPPORTED)"));
+                }
             }
         };
     }

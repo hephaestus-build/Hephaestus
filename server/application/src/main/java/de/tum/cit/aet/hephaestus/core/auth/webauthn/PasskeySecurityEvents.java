@@ -10,6 +10,8 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -47,16 +49,18 @@ public class PasskeySecurityEvents {
     record PasskeyFailure(Long accountId, AuthEvent.EventType type, String reason) {}
 
     // The account write lock must end before the audit writer opens its independent transaction.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    void success(PasskeySuccess event) {
+    public void success(PasskeySuccess event) {
         audit.event(event.type(), AuthEvent.Result.SUCCESS)
                 .account(event.accountId())
                 .details("{\"passkey_operation\":\"" + event.operation() + "\"}")
                 .record();
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMPLETION, fallbackExecution = true)
-    void failure(PasskeyFailure event) {
+    public void failure(PasskeyFailure event) {
         audit.event(event.type(), AuthEvent.Result.FAILURE)
                 .account(event.accountId())
                 .failureReason(event.reason())
