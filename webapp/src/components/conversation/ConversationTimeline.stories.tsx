@@ -1187,12 +1187,12 @@ export const LinkedMessage: Story = {
 };
 
 /**
- * A link to a message that is not in the conversation, such as a deleted one, stops reading older
- * pages after a bounded number of messages and says so.
+ * A link to a message further back than the read limit stops reading older pages and says the
+ * message is not among the latest ones, without claiming that it is gone.
  */
 const loadEarlier = fn();
 
-export const LinkedMessageNotFound: Story = {
+export const LinkedMessagePastReadLimit: Story = {
 	args: {
 		jumpTo: "e9999999-0000-4000-8000-000000000000",
 		state: ready({
@@ -1208,9 +1208,27 @@ export const LinkedMessageNotFound: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			await canvas.findByText("We could not find that message. It may have been deleted."),
+			await canvas.findByText(
+				"That message is not among the latest 250 messages. Scroll up to look further back.",
+			),
 		).toBeVisible();
 		await expect(loadEarlier).not.toHaveBeenCalled();
+	},
+};
+
+/** A link to a message that the whole conversation does not hold says it may have been deleted. */
+export const LinkedMessageNotFound: Story = {
+	args: {
+		jumpTo: "e9999999-0000-4000-8000-000000000000",
+		state: ready({
+			entries: [entry({ id: "only", kind: "USER", text: "The only message" })],
+			earlier: { status: "none" },
+		}),
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			await canvas.findByText("We could not find that message. It may have been deleted."),
+		).toBeVisible();
 	},
 };
 

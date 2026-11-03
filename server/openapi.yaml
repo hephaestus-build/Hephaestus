@@ -441,7 +441,14 @@ paths:
             text/csv:
               schema:
                 type: string
-          description: OK
+          description: The newest matching events as CSV
+          headers:
+            X-Left-Out-Count:
+              description: How many matching events the file leaves out
+              schema:
+                type: integer
+                format: int64
+              style: simple
       summary: "Export the filtered audit log as CSV (newest first, capped)"
       tags:
       - Admin
@@ -8148,6 +8155,14 @@ paths:
           maxLength: 51
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: query
+        name: origin
+        required: false
+        schema:
+          type: string
+          enum:
+          - BACKFILL
+          - SCHEDULE
       - in: query
         name: page
         required: false

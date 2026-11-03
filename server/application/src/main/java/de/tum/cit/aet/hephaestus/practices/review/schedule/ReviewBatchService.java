@@ -160,8 +160,8 @@ public class ReviewBatchService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ReviewBatchDTO> list(WorkspaceContext context, Pageable page) {
-        return batches.findByWorkspaceId(context.id(), page).map(this::dto);
+    public Page<ReviewBatchDTO> list(WorkspaceContext context, @Nullable ReviewBatchOrigin origin, Pageable page) {
+        return batches.pageOf(context.id(), origin, page).map(this::dto);
     }
 
     public ReviewBatchDTO dto(ReviewBatch batch) {

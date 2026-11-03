@@ -262,6 +262,8 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .value("Content-Type", ct -> assertThat(ct).contains("text/csv"))
                 .expectHeader()
                 .value("Content-Disposition", cd -> assertThat(cd).contains("audit-log.csv"))
+                .expectHeader()
+                .valueEquals("X-Left-Out-Count", "0")
                 .expectBody(String.class)
                 .returnResult()
                 .getResponseBody();

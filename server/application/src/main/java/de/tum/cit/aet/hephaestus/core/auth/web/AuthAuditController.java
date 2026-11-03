@@ -9,8 +9,10 @@ import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.core.web.TimeIdCursor;
 import de.tum.cit.aet.hephaestus.core.web.TotalCountDTO;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.util.Arrays;
@@ -40,6 +42,9 @@ public class AuthAuditController {
 
     /** Upper bound on a single CSV export so the admin can't pull an unbounded slice of the log. */
     private static final int EXPORT_MAX_ROWS = 10_000;
+
+    /** How many matching events the file leaves out, so that a client can say so. */
+    private static final String EXPORT_LEFT_OUT_HEADER = "X-Left-Out-Count";
 
     private final AuthAuditService authAuditService;
 
@@ -123,8 +128,19 @@ public class AuthAuditController {
     @Operation(
             summary = "Export the filtered audit log as CSV (newest first, capped)",
             operationId = "adminExportAuthEvents")
+    @ApiResponse(
+            responseCode = "200",
+            description = "The newest matching events as CSV",
+            headers =
+                    @Header(
+                            name = EXPORT_LEFT_OUT_HEADER,
+                            description = "How many matching events the file leaves out",
+                            schema = @Schema(type = "integer", format = "int64")))
     public ResponseEntity<String> export(@ParameterObject AuditFilterParams filter) {
         AuthAuditService.AuditPage data = authAuditService.list(filter.toFilter(), null, EXPORT_MAX_ROWS);
+        // Counted after the read: an event that arrives in between is not in the file either.
+        long leftOut = Math.max(
+                0, authAuditService.count(filter.toFilter()) - data.events().size());
         var identities = data.identities();
         StringBuilder csv = new StringBuilder();
         // A new column is APPENDED, never inserted: an operator's parser keyed on column order
@@ -158,6 +174,7 @@ public class AuthAuditController {
         }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"audit-log.csv\"")
+                .header(EXPORT_LEFT_OUT_HEADER, Long.toString(leftOut))
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .body(csv.toString());
     }

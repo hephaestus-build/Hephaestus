@@ -48,12 +48,18 @@ const OUTCOMES: ("SUCCESS" | "FAILURE")[] = ["SUCCESS", "FAILURE"];
  * day the reader saved it.
  */
 async function downloadAuditLog(query: AdminExportAuthEventsData["query"]): Promise<void> {
-	const { data, error } = await adminExportAuthEvents({ query });
+	const { data, error, response } = await adminExportAuthEvents({ query });
 	if (error !== undefined || typeof data !== "string") {
 		throw new Error("Export failed");
 	}
 	const day = new Date().toISOString().slice(0, 10);
 	saveTextFile(data, `audit-log-${day}.csv`, "text/csv;charset=utf-8;");
+	const leftOut = Number(response?.headers.get("X-Left-Out-Count"));
+	if (leftOut > 0) {
+		toast.warning("The file does not hold every matching event", {
+			description: `It leaves out ${leftOut.toLocaleString()} matching ${leftOut === 1 ? "event" : "events"}. Narrow the filters to export them.`,
+		});
+	}
 }
 
 export interface AuthAuditPanelProps {

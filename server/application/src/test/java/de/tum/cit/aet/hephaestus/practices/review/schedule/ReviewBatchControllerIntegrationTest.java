@@ -151,6 +151,32 @@ class ReviewBatchControllerIntegrationTest extends BaseIntegrationTest {
                 .containsExactly(running.getId());
     }
 
+    /** A running batch older than a page of finished ones is still the first a page shows. */
+    @Test
+    void shouldListAReviewOfPastWorkThatIsUnderWayBeforeNewerFinishedOnes() {
+        var at = Instant.now();
+        var running = seedBatch(scenario, ReviewBatchStatus.RUNNING, at.minusSeconds(3600));
+        for (int i = 0; i < 25; i++) seedBatch(scenario, ReviewBatchStatus.COMPLETED, at.minusSeconds(i));
+        var schedule = batches.saveAndFlush(ReviewBatch.builder()
+                .id(UUID.randomUUID())
+                .workspaceId(scenario.workspace().getId())
+                .kind("scm.pull_request")
+                .origin(ReviewBatchOrigin.SCHEDULE)
+                .fromAt(at.minusSeconds(60))
+                .toAt(at)
+                .status(ReviewBatchStatus.COMPLETED)
+                .requestedByAccountId(scenario.account().getId())
+                .createdAt(at)
+                .updatedAt(at)
+                .build());
+
+        var page = batches.pageOf(scenario.workspace().getId(), ReviewBatchOrigin.BACKFILL, PageRequest.ofSize(20));
+
+        assertThat(page.getContent().getFirst().getId()).isEqualTo(running.getId());
+        assertThat(page.getContent()).extracting(ReviewBatch::getId).doesNotContain(schedule.getId());
+        assertThat(page.getTotalElements()).isEqualTo(26);
+    }
+
     @Test
     void shouldRecordAnAdminPauseWithItsOwnReason() {
         var batch = seedBatch(scenario, ReviewBatchStatus.RUNNING, Instant.now());

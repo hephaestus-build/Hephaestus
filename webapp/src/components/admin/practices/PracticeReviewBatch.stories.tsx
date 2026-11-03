@@ -16,6 +16,7 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		batches: [],
+		totalBatches: 0,
 		isLoading: false,
 		isError: false,
 		onRetry: fn(),
@@ -150,6 +151,17 @@ export const WithHistory: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Finished")).toBeVisible();
 		await expect(canvas.getByText("Stopped")).toBeVisible();
+	},
+};
+
+/** The list is one page of a longer history, and it says so. */
+export const OlderReviewsNotListed: Story = {
+	args: {
+		...WithHistory.args,
+		totalBatches: 25,
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/23 older reviews are\s+not listed/u)).toBeVisible();
 	},
 };
 

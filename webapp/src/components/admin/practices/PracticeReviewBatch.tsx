@@ -40,6 +40,8 @@ export type ReviewBatchStatusChange = "RUNNING" | "PAUSED" | "CANCELLED";
 
 export interface PracticeReviewBatchProps {
 	batches: ReviewBatch[];
+	/** How many reviews of past work this workspace has: `batches` is the page that shows them. */
+	totalBatches: number;
 	isLoading: boolean;
 	isError: boolean;
 	onRetry: () => void;
@@ -96,6 +98,7 @@ const formatEstimate = (value: string | null) =>
 // Require estimate confirmation before a review can consume the workspace's AI budget.
 export function PracticeReviewBatch({
 	batches,
+	totalBatches,
 	isLoading,
 	isError,
 	onRetry,
@@ -154,7 +157,13 @@ export function PracticeReviewBatch({
 
 			{current}
 
-			{!unknown && <HistorySection batches={history} isLoading={isLoading} />}
+			{!unknown && (
+				<HistorySection
+					batches={history}
+					isLoading={isLoading}
+					olderOnes={Math.max(0, totalBatches - batches.length)}
+				/>
+			)}
 		</div>
 	);
 }
@@ -394,7 +403,15 @@ function ActiveBatchSection({
 	);
 }
 
-function HistorySection({ batches, isLoading }: { batches: ReviewBatch[]; isLoading: boolean }) {
+function HistorySection({
+	batches,
+	isLoading,
+	olderOnes,
+}: {
+	batches: ReviewBatch[];
+	isLoading: boolean;
+	olderOnes: number;
+}) {
 	let history: ReactNode;
 	if (isLoading) {
 		history = (
@@ -458,6 +475,12 @@ function HistorySection({ batches, isLoading }: { batches: ReviewBatch[]; isLoad
 				<p className="text-sm text-muted-foreground">What earlier reviews of past work covered.</p>
 			</div>
 			{history}
+			{olderOnes > 0 && (
+				<p className="text-sm text-muted-foreground">
+					This shows the newest ones. {olderOnes} older{" "}
+					{olderOnes === 1 ? "review is" : "reviews are"} not listed.
+				</p>
+			)}
 		</section>
 	);
 }

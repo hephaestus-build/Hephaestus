@@ -7410,7 +7410,7 @@ export type AdminExportAuthEventsData = {
 
 export type AdminExportAuthEventsResponses = {
     /**
-     * OK
+     * The newest matching events as CSV
      */
     200: string;
 };
@@ -13414,6 +13414,7 @@ export type ListReviewBatchesData = {
         workspaceSlug: string;
     };
     query?: {
+        origin?: 'BACKFILL' | 'SCHEDULE';
         page?: number;
         size?: number;
     };
