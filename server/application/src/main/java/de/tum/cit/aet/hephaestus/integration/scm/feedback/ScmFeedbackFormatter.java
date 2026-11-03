@@ -56,9 +56,9 @@ public class ScmFeedbackFormatter {
         String settings = "<sub>[Why you see this and how to stop it](" + preferencesUrl + ")</sub>\n";
         return new Footer(
                 item.workspaceId(),
-                "<sub>Practice review. This feedback is AI-generated and can be inaccurate. " + respond + "</sub>\n"
-                        + settings,
-                "<sub>AI-generated feedback. " + respond + "</sub>\n" + settings);
+                DISCLOSURE + "\n<sub>Practice review. This feedback is AI-generated and can be inaccurate. " + respond
+                        + "</sub>\n" + settings,
+                DISCLOSURE + "\n<sub>AI-generated feedback. " + respond + "</sub>\n" + settings);
     }
 
     /** Immutable rendering for one target; it does not read settings or workspace data again. */
@@ -93,24 +93,51 @@ public class ScmFeedbackFormatter {
         return "Answer or disagree in [Hephaestus](" + url + ").";
     }
 
-    // PostedText escapes `<` outside a code span, and a code span starts with a backtick, so only a footer starts so.
-    private static final Pattern DISCLOSURE_LINE = Pattern.compile("(?m)^<sub>.*</sub>$");
+    /**
+     * Where the disclosure footer starts. Everything between it and the trailing markers is the footer, which may change
+     * wording, links and form at any time. The number names this rule; a footer that needs another one gets a new
+     * marker, and readback keeps reading this one.
+     */
+    public static final String DISCLOSURE = "<!-- hephaestus-disclosure:1 -->";
+
+    // Copies posted before the disclosure marker: their footer is the `<sub>` lines. PostedText escapes `<` outside a
+    // code span, and a code span starts with a backtick, so only a footer line starts so.
+    private static final Pattern UNMARKED_DISCLOSURE_LINE = Pattern.compile("^<sub>.*</sub>$");
     private static final Pattern BLANK_LINES = Pattern.compile("\\n{2,}");
+    // A hidden marker that a writer appends; posted text escapes `<`, so no line of the words is one.
+    private static final Pattern TRAILING_MARKER = Pattern.compile("^<!--.*-->$");
 
     /**
      * Whether a posted copy holds the words and markers of this copy, whatever disclosure footer it was posted with. The
-     * footer's wording and links can change after a copy is posted: the host, the workspace's address or the text. None
-     * of that makes it another copy, and the provider's copy is not edited to follow them.
+     * footer's wording, links and form can change after a copy is posted: the host, the workspace's address or the text.
+     * None of that makes it another copy, and the provider's copy is not edited to follow them.
      */
     public static boolean sameCopy(String posted, String expected) {
         return withoutDisclosure(posted).equals(withoutDisclosure(expected));
     }
 
+    /** The words above the footer, then the trailing markers. */
     private static String withoutDisclosure(String body) {
-        return BLANK_LINES
-                .matcher(DISCLOSURE_LINE.matcher(body).replaceAll(""))
-                .replaceAll("\n\n")
-                .strip();
+        List<String> lines = body.strip().lines().toList();
+        int end = lines.size();
+        while (end > 0
+                && (lines.get(end - 1).isBlank()
+                        || (TRAILING_MARKER.matcher(lines.get(end - 1).strip()).matches()
+                                && !lines.get(end - 1).strip().equals(DISCLOSURE)))) end--;
+        List<String> above = lines.subList(0, end);
+        int footer = above.indexOf(DISCLOSURE);
+        List<String> words = footer >= 0
+                ? above.subList(0, footer)
+                : above.stream()
+                        .filter(line -> !UNMARKED_DISCLOSURE_LINE.matcher(line).matches())
+                        .toList();
+        String markers = String.join(
+                "\n",
+                lines.subList(end, lines.size()).stream()
+                        .filter(line -> !line.isBlank())
+                        .map(String::strip)
+                        .toList());
+        return BLANK_LINES.matcher(String.join("\n", words)).replaceAll("\n\n").strip() + "\n\0" + markers;
     }
 
     private static final Pattern APPROVAL_LANGUAGE = Pattern.compile(

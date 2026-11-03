@@ -21,6 +21,16 @@ describe("feedbackDisplayMarkdown", () => {
 		);
 	});
 
+	it("drops the hidden line where the footer starts", () => {
+		expect(
+			feedbackDisplayMarkdown(
+				`${MARKER}\nKeep it focused.\n\n<!-- hephaestus-disclosure:1 -->\n${DISCLOSURE}\n${SETTINGS}\n`,
+			),
+		).toBe(
+			"Keep it focused.\n\nPractice review &middot; Model. This feedback is AI-generated and can be inaccurate. Answer or disagree in [Hephaestus](https://example.com/respond).\n[Why you see this and how to stop it](https://example.com/settings)\n",
+		);
+	});
+
 	it("returns a body with neither as the same string", () => {
 		const body = "Keep it focused.\r\n\r\n  - one   \n\n<sub>authored aside</sub>\n";
 		expect(feedbackDisplayMarkdown(body)).toBe(body);
