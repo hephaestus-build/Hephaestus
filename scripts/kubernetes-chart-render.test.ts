@@ -2132,40 +2132,66 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	);
 });
 
-for (const name of ["small", "small-16gib"] as const) {
-	await test(`${name}: each tier's quota holds the sandboxes that its workers may run, and no more`, () => {
-		const resources = rendered(layersFor(name));
-		const worker = workload(resources, "worker");
-		assert.ok(worker, "the profile runs a worker");
-		// The reviews tier holds each worker's reviews once: new workers wait for the old ones' room. Every
-		// running worker, the old ones during a surge included, has its probe, Heph host and turn sandboxes.
-		const replicas = Number(get(worker, "spec", "replicas"));
-		const running = replicas + surge(worker);
-		const workerReviews = replicas * Number(envValue(worker, "SANDBOX_MAX_CONCURRENT"));
-		const turns = Number(envValue(worker, "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"));
-		assert.ok(Number.isInteger(turns), "the profile bounds the Heph turns");
-		const turnSandboxes =
-			sandboxPods.pooledTurns + Math.min(turns, sandboxPods.activeTurnSandboxes);
-		const expected = {
-			reviews: {
-				gib: workerReviews * sandboxPods.review.gib + running * sandboxPods.probe.gib,
-				pods: workerReviews * sandboxPods.review.pods + running * sandboxPods.probe.pods,
-			},
-			conversations: {
-				gib: running * (sandboxPods.hephHost.gib + turnSandboxes * sandboxPods.turn.gib),
-				pods: running * (sandboxPods.hephHost.pods + turnSandboxes * sandboxPods.turn.pods),
-			},
-		};
-		for (const tier of ["reviews", "conversations"] as const) {
-			const hard = get(tierQuota(resources, tier), "spec", "hard");
-			assert.equal(
-				amount(get(hard, "requests.memory")),
-				expected[tier].gib * 2 ** 30,
-				`${tier} memory`,
-			);
-			assert.equal(Number(get(hard, "pods")), expected[tier].pods, `${tier} Pods`);
-		}
-	});
+// The quota and the Pods it admits come from one table and one review count. Any profile, at its own count
+// and at another, renders a quota of exactly what its workers may run: a review count or a Pod request that
+// moves alone fails here.
+for (const name of profiles) {
+	for (const reviewCount of [undefined, 3]) {
+		const label = `${name}${reviewCount === undefined ? "" : `, worker.reviews ${reviewCount}`}`;
+		await test(`${label}: each tier's quota holds the sandboxes that its workers may run, and no more`, () => {
+			const resources = rendered([
+				...withWorker(name),
+				...(reviewCount === undefined ? [] : [{ worker: { reviews: reviewCount } }]),
+			]);
+			const worker = workload(resources, "worker");
+			assert.ok(worker, "the profile runs a worker");
+			// The reviews tier holds each worker's reviews once: new workers wait for the old ones' room. Every
+			// running worker, the old ones during a surge included, has its probe, Heph host and turn sandboxes.
+			const replicas = Number(get(worker, "spec", "replicas"));
+			const running = replicas + surge(worker);
+			const workerReviews = replicas * Number(envValue(worker, "SANDBOX_MAX_CONCURRENT"));
+			if (reviewCount !== undefined) {
+				assert.equal(
+					workerReviews,
+					replicas * reviewCount,
+					"the worker runs the reviews that the quota holds",
+				);
+			}
+			const turns = Number(envValue(worker, "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"));
+			assert.ok(Number.isInteger(turns), "the profile bounds the Heph turns");
+			const turnSandboxes =
+				sandboxPods.pooledTurns + Math.min(turns, sandboxPods.activeTurnSandboxes);
+			const sum = (parts: [typeof sandboxPods.review, number][]) => ({
+				gib: parts.reduce((total, [pod, count]) => total + pod.gib * count, 0),
+				cpu: parts.reduce((total, [pod, count]) => total + pod.cpu * count, 0),
+				pods: parts.reduce((total, [pod, count]) => total + pod.pods * count, 0),
+			});
+			const expected = {
+				reviews: sum([
+					[sandboxPods.review, workerReviews],
+					[sandboxPods.probe, running],
+				]),
+				conversations: sum([
+					[sandboxPods.hephHost, running],
+					[sandboxPods.turn, running * turnSandboxes],
+				]),
+			};
+			for (const tier of ["reviews", "conversations"] as const) {
+				const hard = get(tierQuota(resources, tier), "spec", "hard");
+				assert.equal(
+					amount(get(hard, "requests.memory")),
+					expected[tier].gib * 2 ** 30,
+					`${tier} memory`,
+				);
+				assert.equal(
+					Math.round(amount(get(hard, "requests.cpu")) * 1000),
+					Math.round(expected[tier].cpu * 1000),
+					`${tier} CPU`,
+				);
+				assert.equal(Number(get(hard, "pods")), expected[tier].pods, `${tier} Pods`);
+			}
+		});
+	}
 }
 
 /** The requests that each tier's quota holds, rendered from these layers. */
