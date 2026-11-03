@@ -930,6 +930,27 @@ void describe("CI contract", () => {
 		);
 	});
 
+	void test("a job that needs a job that can be skipped states a status function", async () => {
+		// Without always(), !cancelled() or another status function, a condition gets the implicit
+		// success(), which skips the job when any job up its chain was skipped: in a pull request, a job
+		// that runs only in a merge group. Only detect-changes always runs.
+		const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const jobs = ci.get("jobs");
+		assert.ok(isMap(jobs), "cicd.yml has jobs");
+		const exposed = jobs.items.flatMap(({ key, value }) => {
+			if (!isMap(value) || !value.has("needs")) {
+				return [];
+			}
+			const needs = value.get("needs");
+			const needed = isSeq(needs) ? needs.items.map(String) : [String(needs)];
+			const raw = value.get("if");
+			const condition = typeof raw === "string" ? raw : "";
+			const guarded = /\b(?:always|success|failure|cancelled)\s*\(/u.test(condition);
+			return guarded || needed.every((name) => name === "detect-changes") ? [] : [String(key)];
+		});
+		assert.deepEqual(exposed, []);
+	});
+
 	void test("weekly server profiles run CI's integration shards, never the whole tier", async () => {
 		const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const shards = serverShards(ci, true).filter((shard) => shard !== "unit");
