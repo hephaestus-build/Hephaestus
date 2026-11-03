@@ -19,14 +19,10 @@ public class CacheConfig {
 
     private static final Duration LONG_TTL = Duration.ofHours(1);
 
-    private static final Duration MENTOR_CONTEXT_TTL = Duration.ofMinutes(5);
-
     /** Only revoked verdicts are cached; expiry triggers a database recheck, never admission. */
     private static final Duration AUTH_JWT_REVOKED_TTL = Duration.ofMinutes(15);
 
     private static final long LONG_MAX = 1000L;
-
-    private static final long MENTOR_MAX = 512L;
 
     private static final long AUTH_JWT_REVOKED_MAX = 10_000L;
 
@@ -34,9 +30,7 @@ public class CacheConfig {
             // Name mirrors core.auth.jwt.RevocationAwareJwtDecoder.CACHE_NAME (kept as a literal to
             // avoid a config→core.auth internal-type dependency; the decoder owns the canonical const).
             new CacheSpec("auth_jwt_revoked", AUTH_JWT_REVOKED_TTL, AUTH_JWT_REVOKED_MAX),
-            new CacheSpec("contributors", LONG_TTL, LONG_MAX),
-            new CacheSpec("mentor_practice_context", MENTOR_CONTEXT_TTL, MENTOR_MAX),
-            new CacheSpec("pullRequestTemplates", LONG_TTL, LONG_MAX));
+            new CacheSpec("contributors", LONG_TTL, LONG_MAX));
 
     @Bean
     public SimpleCacheManager cacheManager(MeterRegistry meterRegistry) {
