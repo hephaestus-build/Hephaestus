@@ -127,6 +127,19 @@ export class UnratedError extends Error {
 	}
 }
 
+const captureFailureMessages: string[] = [];
+
+/**
+ * A failure of a kit to trust what the capture holds. The host counts it as a failed read of this
+ * program, so that code which catches it decides nothing from it.
+ */
+export function captureFailure(reason: UnratedReason, message: string): UnratedError {
+	captureFailureMessages.push(message);
+	return new UnratedError(reason, message);
+}
+
+export const captureFailures = (): readonly string[] => captureFailureMessages;
+
 /**
  * The text of a captured record parsed as JSON, or null when the record was not captured.
  * Malformed JSON and failed reads throw `UnratedError("unavailable")`.
@@ -142,7 +155,7 @@ export async function readRecordJson(
 	try {
 		return JSON.parse(record.text);
 	} catch {
-		throw new UnratedError("unavailable", `${name} is not valid JSON`);
+		throw captureFailure("unavailable", `${name} is not valid JSON`);
 	}
 }
 

@@ -2737,7 +2737,8 @@ export const zPracticeScriptRun = z.object({
         'ERROR',
         'CANCELLED',
         'INVALID_SCRIPT',
-        'INVALID_CANDIDATE'
+        'INVALID_CANDIDATE',
+        'UNREAD_EVIDENCE'
     ]).nullable()
 });
 

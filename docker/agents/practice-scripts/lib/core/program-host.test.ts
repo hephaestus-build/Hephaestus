@@ -100,12 +100,50 @@ const program = (imports: string, body: string) =>
 	`import {scm} from "../kits/scm/index.ts";
 import { ${imports} } from "../lib/core/practice-script.ts";\nexport default definePracticeScript(${body});\n`;
 
+const cited = `await ctx.evidence.citeRecord("metadata.json", 36)`;
+const readThen = (before: string, result: string) =>
+	program(
+		"definePracticeScript",
+		`{ meta: {}, run: async (ctx) => {
+			${before}
+			await ctx.evidence.record("metadata.json");
+			return ${result};
+		} }`,
+	);
+const FAILED_READ = `await ctx.evidence.record("..").catch(() => undefined);`;
+const NOT_CAPTURED = `await ctx.evidence.record("review_threads.json");`;
+const FAILED_CITE = `await ctx.evidence.citeRecord("review_threads.json", 1).catch(() => undefined);`;
+const ABSENT_FILE = `await scm(ctx).files?.head.read("no-such-file.txt");`;
+const NOT_MET = `{ outcome: "NOT_MET", summary: "The change is too large",
+	explanation: "The record counts the changed files.", citations: [], evidence: {},
+	problems: [{ severity: "MINOR", summary: "Too many changed files",
+		explanation: "The record states the count.", citations: [${cited}],
+		basis: { type: "state", explanation: "The pull request has this state." } }] }`;
+const OPEN = `{ outcome: "COULD_NOT_DETERMINE", summary: "The read failed",
+	explanation: "The program could not read a source.", citations: [${cited}],
+	evidence: { openQuestions: [{ openQuestion: "What does it say?", wouldSettleIt: "A read." }] } }`;
+const MET = `{ outcome: "MET", summary: "Met", explanation: "The record shows it.",
+	citations: [${cited}], evidence: {} }`;
+const DOES_NOT_APPLY = `{ outcome: "DOES_NOT_APPLY", summary: "No view changed",
+	explanation: "No changed file is a view.", citations: [${cited}],
+	evidence: { inapplicability: { consulted: ["scm.pull-request.core"],
+		prerequisite: "user interface files", ruledOutBy: "No changed file is a view." } } }`;
+const KIT_FAILURE = `await readReviewThreads(ctx.evidence).catch(() => undefined);`;
+const kitProgram = (result: string) =>
+	`import { readReviewThreads } from "../kits/scm/review.ts";\n${readThen(KIT_FAILURE, result)}`;
+
 interface Workspace {
 	practices: string;
 	repo: string;
 	sources: EvidenceSources;
 	inputs: InputReader;
 }
+
+const malformed = async (ws: Workspace) => {
+	await writeFile(path.join(ws.sources.contextDir ?? "", "review_threads.json"), "{ not json");
+	ws.sources.sourceKindOf = (sourceFile) =>
+		sourceFile === "context/metadata.json" ? "scm.pull-request.core" : "scm.review-threads";
+};
 
 async function workspace(scripts: Record<string, string | null>): Promise<Workspace> {
 	const { root, practices } = await stagePracticeScripts(scripts);
@@ -320,35 +358,6 @@ void describe("a practice's result", () => {
 		assert.match(outcome.error ?? "", /^met_coverage_incomplete:/u);
 	});
 
-	void test("code that ignored a failed read gets no Does not apply", async () => {
-		const ws = await workspace({
-			hidden: program(
-				"definePracticeScript",
-				`{ meta: {}, run: async (ctx) => {
-					await ctx.evidence.record("..").catch(() => undefined);
-					await ctx.evidence.record("metadata.json");
-					return {
-						outcome: "DOES_NOT_APPLY",
-						summary: "No user interface changes",
-						explanation: "The program ignored its failed read.",
-						citations: [await ctx.evidence.citeRecord("metadata.json", 36)],
-						evidence: {
-							inapplicability: {
-								consulted: ["scm.pull-request.core"],
-								prerequisite: "user interface files",
-								ruledOutBy: "No changed file is a view.",
-							},
-						},
-					};
-				} }`,
-			),
-		});
-		const { outcome } = await run(ws, "hidden");
-		assert.equal(outcome.status, "failed");
-		assert.equal(outcome.stopReason, "invalid-candidate");
-		assert.match(outcome.error ?? "", /complete coverage/u);
-	});
-
 	void test("code gets no MET until it reads each source that its practice requires", async () => {
 		const ws = await workspace({
 			unread: decidesFromTheChange(false),
@@ -405,42 +414,167 @@ void describe("a practice's result", () => {
 		assert.deepEqual(searchesOf(decided.outcome), [lead]);
 	});
 
-	void test("code that ignored a failed read keeps its Not met, with incomplete coverage", async () => {
-		const ws = await workspace({
-			partial: program(
-				"definePracticeScript",
-				`{ meta: {}, run: async (ctx) => {
-					await ctx.evidence.record("..").catch(() => undefined);
-					await ctx.evidence.record("metadata.json");
-					const cited = await ctx.evidence.citeRecord("metadata.json", 36);
-					return {
-						outcome: "NOT_MET",
-						summary: "The change is too large",
-						explanation: "The record counts the changed files.",
-						citations: [],
-						problems: [{
-							severity: "MINOR",
-							summary: "Too many changed files",
-							explanation: "The record states the count.",
-							citations: [cited],
-							basis: { type: "state", explanation: "The pull request has this state." },
-						}],
-						evidence: {},
-					};
-				} }`,
-			),
+	for (const [outcome, result] of Object.entries({ NOT_MET, OPEN, MET, DOES_NOT_APPLY })) {
+		for (const [cause, before, reason] of [
+			["a failed read", FAILED_READ, /1 of its reads failed/u],
+			["a failed citation", FAILED_CITE, /1 of its reads failed/u],
+			["a record that was not captured", NOT_CAPTURED, /review_threads\.json/u],
+		] as const) {
+			void test(`code that decides ${outcome} after ${cause} is refused with its own reason`, async () => {
+				const ws = await workspace({ decides: readThen(before, result) });
+				const { outcome: ran } = await run(ws, "decides");
+				assert.equal(ran.status, "failed");
+				assert.equal(ran.stopReason, "unread-evidence");
+				assert.match(ran.error ?? "", reason);
+				assert.equal(ran.candidate, undefined);
+			});
+		}
+	}
+
+	for (const [outcome, result] of Object.entries({ NOT_MET, OPEN, MET, DOES_NOT_APPLY })) {
+		void test(`code that decides ${outcome} after it catches a failure of the kit is refused`, async () => {
+			const ws = await workspace({ decides: kitProgram(result) });
+			await malformed(ws);
+			const { outcome: ran } = await run(ws, "decides");
+			assert.equal(ran.status, "failed");
+			assert.equal(ran.stopReason, "unread-evidence");
+			assert.match(ran.error ?? "", /review_threads\.json is not valid JSON/u);
+			assert.equal(ran.candidate, undefined);
+			assert.equal(ran.coverageReached.failedReads, 1);
 		});
-		const { outcome } = await run(ws, "partial");
+	}
+
+	void test("a review after a caught failure of the kit names it in its coverage", async () => {
+		const ws = await workspace({ reviews: kitProgram("ctx.review({})") });
+		await malformed(ws);
+		const { outcome } = await run(ws, "reviews", {
+			review: async () => REVIEWED,
+		});
 		assert.equal(outcome.status, "ok", outcome.error);
 		assert.partialDeepStrictEqual(outcome.candidate, {
-			outcome: "NOT_MET",
 			coverage: {
-				source: "host",
 				failedReads: 1,
 				complete: false,
 				omitted: [{ what: "script reads that failed", count: 1, reason: "unavailable" }],
 			},
 		});
+	});
+
+	const CUT_LISTING = `await scm(ctx).files?.head.grep("a|e", { maxResults: 1 });`;
+	const CUT_READ = `await scm(ctx).files?.head.read("notes.txt", { maxLines: 1 });`;
+	for (const [cause, before] of [
+		["a cut search", CUT_LISTING],
+		["a cut read", CUT_READ],
+	] as const) {
+		void test(`code gets no Met or Does not apply after ${cause}: a partial read proves no absence`, async () => {
+			const ws = await workspace({
+				met: readThen(before, MET),
+				inapplicable: readThen(before, DOES_NOT_APPLY),
+			});
+			const met = await run(ws, "met");
+			assert.equal(met.outcome.status, "failed");
+			assert.match(met.outcome.error ?? "", /^met_coverage_incomplete:/u);
+			const inapplicable = await run(ws, "inapplicable");
+			assert.equal(inapplicable.outcome.status, "failed");
+			assert.match(inapplicable.outcome.error ?? "", /complete coverage/u);
+		});
+
+		void test(`code keeps a Not met on evidence it read after ${cause}`, async () => {
+			const ws = await workspace({ "not-met": readThen(before, NOT_MET) });
+			const { outcome } = await run(ws, "not-met");
+			assert.equal(outcome.status, "ok", outcome.error);
+			assert.partialDeepStrictEqual(outcome.candidate, {
+				outcome: "NOT_MET",
+				coverage: { complete: false },
+			});
+		});
+	}
+
+	void test("code that read what it decides from keeps its result", async () => {
+		const ws = await workspace({ "not-met": readThen("", NOT_MET) });
+		const { outcome } = await run(ws, "not-met");
+		assert.equal(outcome.status, "ok", outcome.error);
+		assert.partialDeepStrictEqual(outcome.candidate, { outcome: "NOT_MET" });
+	});
+
+	void test("a file that the captured tree does not hold is a fact that code can decide from", async () => {
+		const ws = await workspace({ absent: readThen(ABSENT_FILE, DOES_NOT_APPLY) });
+		const { outcome } = await run(ws, "absent");
+		assert.equal(outcome.status, "ok", outcome.error);
+		assert.partialDeepStrictEqual(outcome.candidate, {
+			outcome: "DOES_NOT_APPLY",
+			coverage: { complete: true },
+		});
+	});
+
+	void test("a review after a failed read keeps its Not met, and its coverage says what failed", async () => {
+		const ws = await workspace({
+			reviews: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => {
+					${FAILED_READ}
+					return ctx.review({});
+				} }`,
+			),
+		});
+		const { outcome } = await run(ws, "reviews", {
+			review: async () => ({
+				...REVIEWED,
+				outcome: "NOT_MET",
+				citations: [],
+				evidence: {},
+				problems: [
+					{
+						severity: "MINOR",
+						summary: "Too many changed files",
+						explanation: "The review read the record.",
+						citations: REVIEWED.citations,
+						basis: { type: "state", explanation: "The pull request has this state." },
+					},
+				],
+			}),
+		});
+		assert.equal(outcome.status, "ok", outcome.error);
+		assert.partialDeepStrictEqual(outcome.candidate, {
+			outcome: "NOT_MET",
+			coverage: {
+				failedReads: 1,
+				complete: false,
+				omitted: [{ what: "script reads that failed", count: 1, reason: "unavailable" }],
+			},
+		});
+	});
+
+	void test("a review after a failed read gets no Met", async () => {
+		const ws = await workspace({
+			reviews: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => {
+					${FAILED_READ}
+					return ctx.review({});
+				} }`,
+			),
+		});
+		const { outcome } = await run(ws, "reviews", {
+			review: async () => ({
+				outcome: "MET",
+				summary: REVIEWED.summary,
+				explanation: REVIEWED.explanation,
+				citations: REVIEWED.citations,
+				example: undefined,
+				evidence: {},
+				coverage: {
+					source: "host",
+					reads: 0,
+					truncatedReads: 0,
+					failedReads: 0,
+					receipts: [],
+					complete: true,
+				},
+			}),
+		});
+		assert.equal(outcome.status, "failed");
+		assert.match(outcome.error ?? "", /^met_coverage_incomplete:/u);
 	});
 
 	void test("the built-in asks one review with no prepared input and returns its result", async () => {

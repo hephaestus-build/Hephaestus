@@ -222,6 +222,8 @@ export async function runPracticeProgram(
 			? finished("withheld", failure.stopReason)
 			: finished("failed", failure.stopReason, { error: failure.error });
 	}
+	const kitFailures = execution.captureFailures ?? [];
+	services.receipts.failedReads += kitFailures.length;
 	const readReceipts = [
 		...new Map(
 			[...services.reader.readReceipts, ...sessionReadReceipts].map((receipt) => [
@@ -271,6 +273,16 @@ export async function runPracticeProgram(
 	}
 	// A result with no review's coverage is code's decision, measured against the reads.
 	const decided = reviewed;
+	if (decided === null) {
+		const unread = unreadEvidence(
+			services.receipts,
+			kitFailures,
+			services.reader.notCapturedRecords,
+		);
+		if (unread !== null) {
+			return finished("failed", "unread-evidence", { error: unread });
+		}
+	}
 	// A search proves an absence only for the decision that ran it: the review, or else the code.
 	const searchedBy = new Set(
 		(decided?.receipts ?? services.reader.readReceipts).map((receipt) => JSON.stringify(receipt)),
@@ -329,6 +341,25 @@ interface Cited {
 		inapplicability?: unknown;
 		openQuestions?: readonly { citation?: Citation }[];
 	};
+}
+
+/**
+ * Why code cannot decide: it asked for evidence that it did not get. It cannot know what that evidence
+ * says, so a failure to read never becomes a statement about the work. A review keeps its result: the
+ * review session reads for itself, and its coverage records what the script could not read.
+ */
+function unreadEvidence(
+	script: Receipts,
+	kitFailures: readonly string[],
+	notCaptured: readonly string[],
+): string | null {
+	if (script.failedReads > 0) {
+		const first = kitFailures[0] === undefined ? "" : `: ${kitFailures[0].slice(0, 200)}`;
+		return `the program decided after ${String(script.failedReads)} of its reads failed${first}`;
+	}
+	return notCaptured.length > 0
+		? `the program decided after reading records that were not captured: ${notCaptured.join(", ").slice(0, 200)}`
+		: null;
 }
 
 /** Every citation of a candidate: its own, its problems', its example's and its open questions'. */

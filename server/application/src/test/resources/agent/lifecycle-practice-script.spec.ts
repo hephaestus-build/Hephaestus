@@ -343,25 +343,29 @@ void test("plans-first cannot replace unknown authored dates with a later handof
 });
 
 void test("plans-first keeps missing commit capture separate from unknown authored dates", async () => {
-	for (const malformed of [undefined, "{", '{"commits":[null]}']) {
-		const result = await review("plans-the-work-in-an-issue-first", {
-			item: metadata,
-			context: {
-				"linked_work_items.json": {
-					workItems: [
-						{ number: 18, title: "Add ingredients", body: "", createdAt: "2026-04-13T09:35:24Z" },
-					],
-				},
-				...(malformed === undefined ? {} : { "commits.json": malformed }),
-			},
-		});
-		assert.match(
-			(result.directions ?? []).join("\n"),
-			/report a collection gap and record no problem\./u,
+	const context = {
+		"linked_work_items.json": {
+			workItems: [
+				{ number: 18, title: "Add ingredients", body: "", createdAt: "2026-04-13T09:35:24Z" },
+			],
+		},
+	};
+	const result = await review("plans-the-work-in-an-issue-first", { item: metadata, context });
+	assert.match(
+		(result.directions ?? []).join("\n"),
+		/report a collection gap and record no problem\./u,
+	);
+	const facts = result.leads[0]?.facts;
+	assert.match(String(facts?.relation), /commit record is missing or malformed/u);
+	assert.equal(facts?.firstCommit, undefined);
+	for (const malformed of ["{", '{"commits":[null]}']) {
+		await assert.rejects(
+			review("plans-the-work-in-an-issue-first", {
+				item: metadata,
+				context: { ...context, "commits.json": malformed },
+			}),
+			{ name: "UnratedError" },
 		);
-		const facts = result.leads[0]?.facts;
-		assert.match(String(facts?.relation), /commit record is missing or malformed/u);
-		assert.equal(facts?.firstCommit, undefined);
 	}
 });
 

@@ -74,6 +74,8 @@ export interface ProgramServices {
 
 export interface ProgramExecution {
 	value?: unknown;
+	/** What the kits could not trust in the capture while the program ran. */
+	captureFailures?: readonly string[];
 	failure?: { stopReason: StopReason; error: string; skipped?: true };
 	models: SlotReport[];
 	calls: { review: number } & Record<ModelSlot, number>;
@@ -451,7 +453,10 @@ export async function runCustomProgram(
 		child.kill("SIGKILL");
 		try {
 			const candidate = await services.review(parsed.options, call);
-			settled ??= { value: structuredClone(candidate) };
+			settled ??= {
+				value: structuredClone(candidate),
+				captureFailures: message.captureFailures,
+			};
 		} catch (error) {
 			settled ??= { failure: { stopReason: reasonOf(error), error: cut(messageOf(error)) } };
 		} finally {
@@ -600,7 +605,7 @@ export async function runCustomProgram(
 				if (aborted !== undefined) {
 					return;
 				}
-				settled = { value: message.value };
+				settled = { value: message.value, captureFailures: message.captureFailures };
 				return;
 			}
 			case "failed": {

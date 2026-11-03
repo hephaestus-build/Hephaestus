@@ -141,6 +141,7 @@ export class EvidenceReader {
 	readonly #receipts: Receipts;
 	readonly #readReceipts = new Map<string, ReadReceipt>();
 	readonly #ranges = new ReadRanges();
+	readonly #notCaptured = new Set<string>();
 
 	constructor(sources: EvidenceSources, receipts: Receipts) {
 		this.#sources = sources;
@@ -149,6 +150,10 @@ export class EvidenceReader {
 
 	get readReceipts(): readonly ReadReceipt[] {
 		return [...this.#readReceipts.values()];
+	}
+	/** The records that a read asked for and the capture does not hold. An empty record is captured. */
+	get notCapturedRecords(): readonly string[] {
+		return [...this.#notCaptured];
 	}
 	allowsCitation(citation: Citation): boolean {
 		return (
@@ -167,16 +172,22 @@ export class EvidenceReader {
 			try {
 				return await this.#cite(request, signal);
 			} catch (error) {
-				if (error instanceof UnratedError || signal?.aborted === true) {
+				if (signal?.aborted === true) {
 					throw error;
 				}
-				throw new UnratedError("unavailable", "the cited source could not be read");
+				this.#receipts.failedReads += 1;
+				throw error instanceof UnratedError
+					? error
+					: new UnratedError("unavailable", "the cited source could not be read");
 			}
 		}
 		this.#receipts.reads += 1;
 		try {
 			const value = await this.#read(request, signal);
 			signal?.throwIfAborted();
+			if (request.op === "record" && "status" in value && value.status === "ABSENT") {
+				this.#notCaptured.add(request.name);
+			}
 			if ("truncated" in value && value.truncated && request.op !== "read") {
 				this.#receipts.truncatedReads += 1;
 			}

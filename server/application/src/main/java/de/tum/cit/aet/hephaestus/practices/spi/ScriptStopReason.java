@@ -10,5 +10,6 @@ public enum ScriptStopReason {
     ERROR,
     CANCELLED,
     INVALID_SCRIPT,
-    INVALID_CANDIDATE;
+    INVALID_CANDIDATE,
+    UNREAD_EVIDENCE;
 }

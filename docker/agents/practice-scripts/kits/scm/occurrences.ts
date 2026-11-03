@@ -1,5 +1,5 @@
 import type { PracticeInputs, ReviewLead } from "../../lib/core/contract.ts";
-import { UnratedError } from "../../lib/core/practice-script.ts";
+import { captureFailure } from "../../lib/core/practice-script.ts";
 import {
 	type Declaration,
 	declarations,
@@ -185,19 +185,19 @@ export async function selectedSources(
 	select: (file: Pick<SourceFile, "path" | "language">) => boolean,
 ): Promise<readonly SourceFile[]> {
 	if (files === null) {
-		throw new UnratedError("unavailable", "the pinned file tree was not captured");
+		throw captureFailure("unavailable", "the pinned file tree was not captured");
 	}
 	const paths =
 		inputs.scope.kind === "SCAN"
 			? [inputs.scope.item.path]
 			: [...(files.change?.files.keys() ?? [])];
 	if (inputs.scope.kind === "ITEM" && files.change === null) {
-		throw new UnratedError("unavailable", "the change was not captured");
+		throw captureFailure("unavailable", "the change was not captured");
 	}
 	const sources: SourceFile[] = [];
 	for (const path of paths) {
 		if (path === undefined) {
-			throw new UnratedError("unavailable", "the assigned file has no path");
+			throw captureFailure("unavailable", "the assigned file has no path");
 		}
 		const file = { path, language: languageOf(path) };
 		if (
@@ -208,10 +208,10 @@ export async function selectedSources(
 		}
 		const read = await files.head.read(path);
 		if (read.status !== "FOUND") {
-			throw new UnratedError("unavailable", `${path} is not readable text`);
+			throw captureFailure("unavailable", `${path} is not readable text`);
 		}
 		if (read.truncated) {
-			throw new UnratedError("too-large", `${path} was not read completely`);
+			throw captureFailure("too-large", `${path} was not read completely`);
 		}
 		if (select(file)) {
 			sources.push({ ...file, text: read.text });
@@ -228,7 +228,7 @@ export function selectedOccurrences(
 		return found;
 	}
 	if (files?.change == null) {
-		throw new UnratedError("unavailable", "the change was not captured");
+		throw captureFailure("unavailable", "the change was not captured");
 	}
 	return selectAddedOccurrences(found, files.change.files);
 }

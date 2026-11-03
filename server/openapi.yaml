@@ -19631,6 +19631,7 @@ components:
           - CANCELLED
           - INVALID_SCRIPT
           - INVALID_CANDIDATE
+          - UNREAD_EVIDENCE
           - null
       required:
       - attempt
