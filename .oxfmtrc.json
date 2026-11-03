@@ -26,6 +26,15 @@
 		"webapp/.storybook/public/mockServiceWorker.js",
 		"extension/src/api/**",
 		"extension/.output/**",
-		"extension/.wxt/**"
+		"extension/.wxt/**",
+		"server/**/*.{json,yml,yaml,graphql}",
+		"**/*.mdx",
+		".vale/styles/**",
+		".vale/fixtures/**",
+		".claude/skills/**",
+		".agents/skills/**",
+		"scripts/feedback-eval/**/*.json",
+		"docker/agents/pi/package.json",
+		"deploy/chart/**/templates/**"
 	]
 }

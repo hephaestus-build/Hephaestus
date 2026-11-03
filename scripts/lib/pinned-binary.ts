@@ -8,8 +8,28 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promise
 import path from "node:path";
 import { unzipSync } from "fflate";
 
+import { environmentWithoutGitRepository } from "./git-environment.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
 import { PUSH_CHECK_ENV } from "./push-gates.ts";
+
+/**
+ * The cache directory for one pinned tool, shared by every worktree of the clone. Each use verifies
+ * the archive and the executable against the pin, so a copy that another worktree installed is as
+ * trustworthy as a fresh download. The push check does not download, so a per-worktree cache would
+ * fail every new worktree's first push. Outside a Git checkout the cache stays in the tree.
+ */
+export function toolCache(name: string, cwd = import.meta.dirname): string {
+	try {
+		const common = execFileSync(
+			"git",
+			["rev-parse", "--path-format=absolute", "--git-common-dir"],
+			{ cwd, encoding: "utf8", env: environmentWithoutGitRepository() },
+		).trim();
+		return path.join(common, "hephaestus-tools", name);
+	} catch {
+		return path.join(import.meta.dirname, "..", "..", ".cache", name);
+	}
+}
 
 export interface PinnedAsset {
 	readonly name: string;

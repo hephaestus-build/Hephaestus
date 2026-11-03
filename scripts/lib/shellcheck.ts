@@ -3,9 +3,8 @@
  * installed from the upstream release and verified at each use.
  */
 import { execFileSync } from "node:child_process";
-import path from "node:path";
 
-import { installPinnedBinary } from "./pinned-binary.ts";
+import { installPinnedBinary, toolCache } from "./pinned-binary.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
 
 const VERSION = "0.11.0";
@@ -51,7 +50,7 @@ export async function prepareShellCheck(): Promise<string> {
 		);
 	}
 	const binary = await installPinnedBinary({
-		cache: path.join(import.meta.dirname, "..", "..", ".cache", "shellcheck"),
+		cache: toolCache("shellcheck"),
 		version: VERSION,
 		asset: { name: asset.name, sha256: asset.sha256 },
 		url: RELEASE,

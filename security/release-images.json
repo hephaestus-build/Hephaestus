@@ -1,11 +1,6 @@
 {
 	"schemaVersion": 1,
-	"images": [
-		"webapp",
-		"application-server",
-		"agent-pi",
-		"postgres"
-	],
+	"images": ["webapp", "application-server", "agent-pi", "postgres"],
 	"upstream": [
 		{
 			"name": "nats",

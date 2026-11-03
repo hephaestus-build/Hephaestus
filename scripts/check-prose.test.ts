@@ -2,7 +2,17 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { readFile, mkdtemp, rm, writeFile, mkdir, readdir, rename, stat } from "node:fs/promises";
+import {
+	readFile,
+	mkdtemp,
+	realpath,
+	rm,
+	writeFile,
+	mkdir,
+	readdir,
+	rename,
+	stat,
+} from "node:fs/promises";
 import { createServer, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -18,7 +28,7 @@ import {
 	issueFormAlerts,
 } from "./check-prose.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
-import { executableFromArchive, verifyArchive } from "./lib/pinned-binary.ts";
+import { executableFromArchive, toolCache, verifyArchive } from "./lib/pinned-binary.ts";
 import { output } from "./lib/process.ts";
 import {
 	approvedWords,
@@ -121,6 +131,37 @@ await test("Vale pins cover every supported OS and reject changed archives", () 
 		() => executableFromArchive(zipSync({ other: bytes }), "vale.zip", "vale.exe"),
 		/no vale.exe/u,
 	);
+});
+
+await test("every worktree of a clone reads one pinned-tool cache, so a new worktree's push finds Vale", async () => {
+	const root = await mkdtemp(path.join(tmpdir(), "tool-cache-"));
+	try {
+		const env = environmentForGitFixture();
+		const clone = path.join(root, "clone");
+		execFileSync("git", ["init", "--quiet", clone], { env });
+		execFileSync(
+			"git",
+			[
+				"-c",
+				"user.name=t",
+				"-c",
+				"user.email=t@example.invalid",
+				"commit",
+				"--quiet",
+				"--allow-empty",
+				"-m",
+				"root",
+			],
+			{ cwd: clone, env },
+		);
+		const worktree = path.join(root, "worktree");
+		execFileSync("git", ["worktree", "add", "--quiet", "--detach", worktree], { cwd: clone, env });
+		const shared = toolCache("ste", clone);
+		assert.equal(toolCache("ste", worktree), shared);
+		assert.equal(shared, path.join(await realpath(clone), ".git", "hephaestus-tools", "ste"));
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
 });
 
 await test("concurrent Vale installers publish one verified binary and reuse it offline", async () => {

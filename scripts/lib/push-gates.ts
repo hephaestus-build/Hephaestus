@@ -23,6 +23,7 @@ export const pushStaticTasks = {
 	changesets: changesetGates,
 	docs: [...docsStaticGates, "gate:prose"],
 	extension: extensionGates,
-	server: serverStaticGates,
+	// One Gradle invocation: formatting, PMD, test compilation and the architecture tier.
+	server: [...serverStaticGates, "check:push:server"],
 	webapp: webappGates,
 };
