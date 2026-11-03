@@ -768,7 +768,7 @@ class KubernetesSandboxRuntimeTest {
         quotaWithRoomForTwoReviews();
 
         assertThat(backend().roomFor(LIMITS))
-                .as("1280 MiB free hold two reviews that request 640 MiB")
+                .as("1000 MiB free hold two reviews that request 384 MiB")
                 .isEqualTo(2);
     }
 
@@ -826,7 +826,7 @@ class KubernetesSandboxRuntimeTest {
                 .create();
 
         assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "gvisor", "").roomFor(LIMITS))
-                .as("1280 MiB free hold one review of 640 MiB with 512 MiB of overhead")
+                .as("1000 MiB free hold one review of 384 MiB with 512 MiB of overhead")
                 .isEqualTo(1);
         assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "", "").roomFor(LIMITS))
                 .as("the cluster's default runtime has no overhead")
@@ -951,7 +951,7 @@ class KubernetesSandboxRuntimeTest {
                         .endSpec()
                         .withNewStatus()
                         .withHard(Map.of("requests.memory", new Quantity("4Gi")))
-                        .withUsed(Map.of("requests.memory", new Quantity("2816Mi")))
+                        .withUsed(Map.of("requests.memory", new Quantity("3096Mi")))
                         .endStatus()
                         .build())
                 .create();

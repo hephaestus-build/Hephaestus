@@ -29,9 +29,9 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
 
     @Test
     void shouldAdmitNoReviewWhenTheQuotaHoldsLessMemoryThanItsSandbox() {
-        // 9 of 9.5 GiB requested by the Hephaestus host and the turn sandboxes: 512 MiB is free, a review requests 640.
+        // The Hephaestus host and the turn sandboxes hold nearly all of it: 256 MiB is free, a review requests 384.
         var quota = quota(
-                Map.of("requests.memory", "9728Mi", "pods", "10"), Map.of("requests.memory", "9216Mi", "pods", "4"));
+                Map.of("requests.memory", "9728Mi", "pods", "10"), Map.of("requests.memory", "9472Mi", "pods", "4"));
 
         assertThat(KubernetesSandboxQuota.fits(List.of(quota), REVIEW, REVIEWS)).isZero();
     }
@@ -105,13 +105,13 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
     @Test
     void shouldTellAQuotaSmallerThanOneReviewFromAFullOne() {
         var full = quota(Map.of("requests.memory", "9728Mi"), Map.of("requests.memory", "9728Mi"));
-        var tooSmall = quota(Map.of("requests.memory", "512Mi"), Map.of("requests.memory", "0"));
+        var tooSmall = quota(Map.of("requests.memory", "256Mi"), Map.of("requests.memory", "0"));
 
         assertThat(KubernetesSandboxQuota.neverFits(List.of(full), REVIEW, REVIEWS))
                 .as("a full quota frees room when its sandboxes end")
                 .isFalse();
         assertThat(KubernetesSandboxQuota.neverFits(List.of(full, tooSmall), REVIEW, REVIEWS))
-                .as("512 MiB never hold a review that requests 640 MiB")
+                .as("256 MiB never hold a review that requests 384 MiB")
                 .isTrue();
     }
 
@@ -182,10 +182,10 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
         var reviews = tierQuota(REVIEWS, Map.of("requests.memory", "2Gi"), Map.of("requests.memory", "640Mi"));
 
         assertThat(KubernetesSandboxQuota.fits(List.of(reviews), REVIEW, REVIEWS))
-                .as("1360 MiB free hold two reviews of 640 MiB")
-                .isEqualTo(2);
+                .as("1408 MiB free hold three reviews of 384 MiB")
+                .isEqualTo(3);
         assertThat(KubernetesSandboxQuota.neverFits(
-                        List.of(tierQuota(REVIEWS, Map.of("requests.memory", "512Mi"), Map.of())), REVIEW, REVIEWS))
+                        List.of(tierQuota(REVIEWS, Map.of("requests.memory", "256Mi"), Map.of())), REVIEW, REVIEWS))
                 .isTrue();
     }
 
