@@ -9,6 +9,7 @@ public enum ReviewStopReason {
     STALE_ROLLOUT_REVISION,
     CANCELLED_BY_ADMIN,
     REPLACED,
+    /** History only: the review was cancelled before stop reasons were recorded. Old rows keep it; no code writes it. */
     LEGACY_FAILURE,
     EXECUTION_INCOMPLETE,
     RESULT_WITHHELD,
@@ -24,6 +25,7 @@ public enum ReviewStopReason {
     MODEL_CHANGED,
     MODEL_UNAVAILABLE,
     ERROR,
+    /** History only: the review ran before its coverage was recorded. No code writes it, and old rows keep it. */
     LEGACY_SCOPE_UNKNOWN,
     CONTRACT_CHANGED,
     NO_SANDBOX_ROOM;

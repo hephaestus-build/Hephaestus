@@ -95,9 +95,11 @@ public class Result {
     private @Nullable JsonNode coverage;
 
     /**
-     * Migrated history (ADR 0070 F-1): a read-only earlier review. It is never current and never delivered.
-     * The {@code ck_result_evidence_version} constraint allows only this value and
-     * {@link #CAPTURED_EVIDENCE_VERSION}. SQL that filters {@code evidence_version} names these constants.
+     * Migrated history (ADR 0070 F-1): a read-only earlier review. It is never current and never newly delivered. No current
+     * version describes these results, so they keep this one: raising it would claim a capture contract that they never
+     * had. The {@code ck_result_evidence_version} constraint allows only this value and
+     * {@link #CAPTURED_EVIDENCE_VERSION}, and a trigger refuses it on a new result. SQL that filters
+     * {@code evidence_version} names these constants.
      */
     public static final short MIGRATED_EVIDENCE_VERSION = 0;
 

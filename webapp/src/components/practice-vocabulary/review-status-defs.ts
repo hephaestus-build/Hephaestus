@@ -138,7 +138,7 @@ export const REVIEW_STOP_REASON_SENTENCES: Record<ReviewStopReason, string> = {
 	STALE_ROLLOUT_REVISION: "Review settings changed while it waited.",
 	CANCELLED_BY_ADMIN: "A workspace admin cancelled it.",
 	REPLACED: "A newer review of the same work replaced it.",
-	LEGACY_FAILURE: "It failed before Hephaestus recorded why.",
+	LEGACY_FAILURE: "It was cancelled before Hephaestus recorded why.",
 	EXECUTION_INCOMPLETE: "The review did not record an observation for every selected practice.",
 	RESULT_WITHHELD: "Its candidate observations were withheld.",
 	READINESS_REFUSED: "Something the review needs was not ready.",

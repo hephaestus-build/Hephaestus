@@ -5,7 +5,24 @@ import {
 	withheldSentence,
 } from "@/components/admin/practice-scans/scan-display";
 
-import { reviewReasonSentence } from "./review-status-defs";
+import { ITEM_EVENT_REASON_SENTENCES } from "./item-event-defs";
+import { REVIEW_STOP_REASON_SENTENCES, reviewReasonSentence } from "./review-status-defs";
+
+describe("reasons that only old rows hold", () => {
+	it("says what was not recorded about a stopped review, and nothing about the work", () => {
+		expect(REVIEW_STOP_REASON_SENTENCES.LEGACY_FAILURE).toBe(
+			"It was cancelled before Hephaestus recorded why.",
+		);
+		expect(REVIEW_STOP_REASON_SENTENCES.LEGACY_SCOPE_UNKNOWN).toBe(
+			"It ran before Hephaestus recorded what it covered.",
+		);
+	});
+	it("says why an old event cannot start a review", () => {
+		expect(ITEM_EVENT_REASON_SENTENCES.LEGACY_REVIEW_UNBOUND).toBe(
+			"An earlier version recorded this review without naming which review it was, so it cannot start.",
+		);
+	});
+});
 
 describe("legacy withholding reasons", () => {
 	it("describes retained ambiguity without selecting a result", () => {
