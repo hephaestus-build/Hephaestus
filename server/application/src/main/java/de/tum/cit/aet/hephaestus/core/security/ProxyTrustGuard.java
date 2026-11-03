@@ -18,8 +18,7 @@ import org.springframework.stereotype.Component;
  * operator to pin the ingress address via {@code HEPHAESTUS_TRUSTED_PROXIES} and abort the boot if the
  * wildcard default is still in effect.
  *
- * <p>Mirrors {@link de.tum.cit.aet.hephaestus.core.auth.jwt.JwtSigningKeyService#assertKeysSealed()}:
- * throws {@link IllegalStateException} from a non-swallowed {@code @PostConstruct}.
+ * <p>Throws {@link IllegalStateException} from a non-swallowed {@code @PostConstruct}.
  */
 @Component
 @ReceiverComponent

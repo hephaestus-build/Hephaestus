@@ -470,16 +470,13 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Query("SELECT j FROM ReviewJob j WHERE j.status = 'RUNNING' AND j.startedAt < :cutoff")
     List<ReviewJob> findStaleRunningJobs(@Param("cutoff") Instant cutoff);
 
-    /**
-     * Running attempts whose lease expired before {@code cutoff}, a time on the database clock. An attempt with no lease
-     * was claimed by a version before leases, which no longer runs.
-     */
+    /** Running attempts whose lease expired before {@code cutoff}, a time on the database clock. */
     @WorkspaceAgnostic("Cross-workspace lease recovery; caller is @WorkspaceAgnostic sweeper")
     @Query(
             value = "SELECT j.id AS jobId, j.workspace_id AS workspaceId, j.attempt AS attempt, "
                     + "j.lease_id AS leaseId "
                     + "FROM review_job j WHERE j.status = 'RUNNING' AND j.lease_id IS NOT NULL "
-                    + "AND (j.leased_until IS NULL OR j.leased_until < :cutoff)",
+                    + "AND j.leased_until < :cutoff",
             nativeQuery = true)
     List<OrphanedJobRef> findExpiredLeases(@Param("cutoff") Instant cutoff);
 

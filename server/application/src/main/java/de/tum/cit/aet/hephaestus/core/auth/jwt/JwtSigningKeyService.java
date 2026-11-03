@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,17 +55,14 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext> {
     private static final Logger log = LoggerFactory.getLogger(JwtSigningKeyService.class);
 
     private final JwtSigningKeyRepository repository;
-    private final Environment environment;
     private final JwtSigningKeySealer sealer;
     private final AtomicReference<@Nullable CachedSet> cache = new AtomicReference<>();
 
     /** How long to trust the in-memory key cache before reloading from DB. */
     private static final long CACHE_TTL_MILLIS = 60_000L;
 
-    public JwtSigningKeyService(
-            JwtSigningKeyRepository repository, Environment environment, JwtSigningKeySealer sealer) {
+    public JwtSigningKeyService(JwtSigningKeyRepository repository, JwtSigningKeySealer sealer) {
         this.repository = repository;
-        this.environment = environment;
         this.sealer = sealer;
     }
 
@@ -101,19 +97,6 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext> {
         repository.save(row);
         cache.set(null);
         log.info("auth.jwt: bootstrapped initial signing key kid={} sealed={}", row.getKid(), sealer.isEnabled());
-    }
-
-    /** Refuses an active legacy key that the database migration has not sealed. */
-    public void assertKeysSealed() {
-        // Build-only profiles load the authentication contract without a database.
-        if (!environment.matchesProfiles("specs", "cds-training") && hasUnsealedActiveKey()) {
-            throw new IllegalStateException("Active JWT signing key is unsealed. Run the database migration first.");
-        }
-    }
-
-    private boolean hasUnsealedActiveKey() {
-        return repository.findActive().stream()
-                .anyMatch(k -> !JwtSigningKeySealer.KEY_ID.equals(k.getEncryptionKeyId()));
     }
 
     private JwtSigningKey generateNewKeyRow() {

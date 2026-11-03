@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.RevocationAwareJwtDecoder;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
-import jakarta.annotation.PostConstruct;
 import java.time.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,11 +77,6 @@ public class AuthJwtConfig {
     @Primary
     public BearerTokenResolver hephaestusBearerTokenResolver(CookieBearerTokenResolver cookieBearerTokenResolver) {
         return cookieBearerTokenResolver;
-    }
-
-    @PostConstruct
-    void assertSigningKeysSealed() {
-        keyService.assertKeysSealed();
     }
 
     // Build profiles load the authentication contract but have no database to seed.

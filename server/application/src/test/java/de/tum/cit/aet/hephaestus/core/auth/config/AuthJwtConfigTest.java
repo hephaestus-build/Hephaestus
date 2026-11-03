@@ -47,7 +47,6 @@ class AuthJwtConfigTest extends BaseUnitTest {
     void shouldSeedSigningKeysDuringProductionStartup() {
         contextRunner.withPropertyValues("spring.profiles.active=prod").run(context -> {
             assertThat(context).hasNotFailed();
-            verify(keyService).assertKeysSealed();
             context.getBean(ApplicationRunner.class).run(new DefaultApplicationArguments());
             verify(keyService).ensureActiveKey();
         });
@@ -61,18 +60,6 @@ class AuthJwtConfigTest extends BaseUnitTest {
         contextRunner.run(context -> {
             context.getBean(ApplicationRunner.class).run(new DefaultApplicationArguments());
             verify(keyService).ensureActiveKey();
-        });
-    }
-
-    @Test
-    void shouldRejectUnsealedProductionKeysDuringContextRefresh() {
-        doThrow(new IllegalStateException("unsealed signing key"))
-                .when(keyService)
-                .assertKeysSealed();
-        contextRunner.withPropertyValues("spring.profiles.active=prod").run(context -> {
-            assertThat(context).hasFailed();
-            assertThat(context.getStartupFailure()).hasRootCauseMessage("unsealed signing key");
-            verify(keyService, never()).ensureActiveKey();
         });
     }
 }
