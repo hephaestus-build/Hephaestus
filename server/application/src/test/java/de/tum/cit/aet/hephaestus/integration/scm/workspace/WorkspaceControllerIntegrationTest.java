@@ -371,9 +371,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(repositoryToMonitorRepository.findById(repository.getId())).isEmpty();
 
-        Workspace refreshedAlpha =
-                workspaceRepository.findById(workspaceAlpha.getId()).orElseThrow();
-        assertThat(refreshedAlpha.getRepositoriesToMonitor()).isEmpty();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspaceAlpha.getId()))
+                .isEmpty();
     }
 
     @Test

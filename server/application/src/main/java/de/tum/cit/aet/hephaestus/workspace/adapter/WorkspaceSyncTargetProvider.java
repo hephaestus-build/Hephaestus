@@ -106,9 +106,10 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                 .map(ws -> {
                     // Apply repository filter to respect monitoring
                     // configuration (e.g., dev environment limits)
-                    List<RepositoryToMonitor> monitors = ws.getRepositoriesToMonitor().stream()
-                            .filter(workspaceScopeFilter::isRepositoryAllowed)
-                            .toList();
+                    List<RepositoryToMonitor> monitors =
+                            repositoryToMonitorRepository.findByWorkspaceId(scopeId).stream()
+                                    .filter(workspaceScopeFilter::isRepositoryAllowed)
+                                    .toList();
                     List<SyncTarget> targets = monitors.stream()
                             .flatMap(rtm -> SyncTargetFactory.create(ws, rtm, connectionService).stream())
                             .toList();
