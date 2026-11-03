@@ -466,6 +466,8 @@ hephaestus:
             history-request-interval: 60s
             replies-enabled: true
             replies-request-budget: 30
+            # Requests each night to check older stored messages for deletions and edits whose events were lost.
+            reconcile-request-budget: 30
             metadata-enabled: true
         # filters.allowed-organizations / allowed-repositories are intentionally unset here so
         # each profile can override; set them in application-local.yml to scope dev syncs.

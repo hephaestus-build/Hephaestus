@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.slack.api.model.Message;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
@@ -40,8 +41,7 @@ import org.mockito.Mock;
 
 /**
  * The consent-safety invariants of the nightly history reconciliation: fail-closed floors, per-request consent
- * re-checks, watermark-only-on-clean-completion, the event-path filter parity, and the hard "sync never tombstones"
- * rule.
+ * re-checks, watermark-only-on-clean-completion and the event-path filter parity.
  */
 @Tag("unit")
 class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
@@ -69,18 +69,14 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
     @Mock
     private ConnectionService connectionService;
 
+    @Mock
+    private SlackMessageRepository messageRepository;
+
     private SlackChannelHistorySyncService service;
 
     @BeforeEach
     void setUp() {
-        service = new SlackChannelHistorySyncService(
-                monitoredChannelRepository,
-                threadRepository,
-                slackMessageService,
-                ingestService,
-                connectionService,
-                new SlackSyncProperties("0 0 4 * * *", 10, 15, Duration.ZERO, true, 5, true),
-                CLOCK);
+        service = serviceWith(new SlackSyncProperties("0 0 4 * * *", 10, 15, Duration.ZERO, true, 5, true, 10));
         lenient().when(connectionService.findSlackConfig(WS)).thenReturn(Optional.empty());
         lenient()
                 .when(monitoredChannelRepository.findConsentState(WS, CHANNEL))
@@ -88,6 +84,24 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
         lenient()
                 .when(monitoredChannelRepository.advanceHistoryWatermark(eq(WS), eq(CHANNEL), any(), any()))
                 .thenReturn(1);
+    }
+
+    private SlackChannelHistorySyncService serviceWith(SlackSyncProperties properties) {
+        return new SlackChannelHistorySyncService(
+                monitoredChannelRepository,
+                threadRepository,
+                slackMessageService,
+                ingestService,
+                connectionService,
+                new SlackHistoryReconciler(
+                        messageRepository,
+                        monitoredChannelRepository,
+                        slackMessageService,
+                        ingestService,
+                        properties,
+                        CLOCK),
+                properties,
+                CLOCK);
     }
 
     private SlackMonitoredChannel channel(@Nullable Instant announcedAt, @Nullable String watermark) {
@@ -231,14 +245,7 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
 
     @Test
     void budgetExhaustedMidWindow_doesNotAdvanceTheWatermark() {
-        service = new SlackChannelHistorySyncService(
-                monitoredChannelRepository,
-                threadRepository,
-                slackMessageService,
-                ingestService,
-                connectionService,
-                new SlackSyncProperties("0 0 4 * * *", 1, 15, Duration.ZERO, false, 0, true),
-                CLOCK);
+        service = serviceWith(new SlackSyncProperties("0 0 4 * * *", 1, 15, Duration.ZERO, false, 0, true, 10));
         stubChannels(channel(ANNOUNCED, null));
         // First page consumed the whole budget and points at a second page.
         when(slackMessageService.fetchHistoryPage(eq(WS), eq(CHANNEL), anyString(), anyString(), any(), anyInt()))
@@ -251,7 +258,7 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void syncNeverTombstones() {
+    void deletionSubtypeInAPage_removesNothingByItself() {
         stubChannels(channel(ANNOUNCED, null));
         Message deleted = plain("1783000002.000000", "U1", "gone");
         deleted.setSubtype("message_deleted");
@@ -260,7 +267,7 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
 
         service.syncWorkspace(WS);
 
-        // Absence/tombstone semantics are the event path's job: reconciliation must never delete.
+        // Nothing is stored here, so nothing is absent; a message's subtype alone never removes a stored row.
         verify(ingestService, never()).tombstoneMessage(any(), any(), any());
         verify(ingestService, never()).ingestChannelMessage(any(), any(), any(), any(), any(), any());
     }
@@ -332,14 +339,7 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
 
     @Test
     void repliesBudgetExhaustedMidPagination_doesNotAdvanceChannelWatermark() {
-        service = new SlackChannelHistorySyncService(
-                monitoredChannelRepository,
-                threadRepository,
-                slackMessageService,
-                ingestService,
-                connectionService,
-                new SlackSyncProperties("0 0 4 * * *", 10, 15, Duration.ZERO, true, 1, true),
-                CLOCK);
+        service = serviceWith(new SlackSyncProperties("0 0 4 * * *", 10, 15, Duration.ZERO, true, 1, true, 10));
         stubChannels(channel(ANNOUNCED, null));
         Message parent = plain("1783000007.000000", "U1", "root");
         parent.setReplyCount(2);

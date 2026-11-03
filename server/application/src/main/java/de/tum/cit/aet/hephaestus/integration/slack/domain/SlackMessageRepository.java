@@ -232,6 +232,22 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
             @Param("now") Instant now);
 
     /**
+     * The stored messages that are not tombstoned and whose thread root lies in the range, ends included: what a
+     * complete read of that range must return for each to still exist in Slack.
+     */
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.integration.slack.domain.SlackLiveMessage(m.slackTs, m.slackThreadTs)
+        FROM SlackMessage m
+        WHERE m.workspaceId = :workspaceId AND m.slackChannelId = :channelId AND m.deletedAt IS NULL
+          AND COALESCE(m.slackThreadTs, m.slackTs) >= :oldest AND COALESCE(m.slackThreadTs, m.slackTs) <= :latest
+        """)
+    List<SlackLiveMessage> findLiveInThreadRange(
+            @Param("workspaceId") long workspaceId,
+            @Param("channelId") String channelId,
+            @Param("oldest") String oldest,
+            @Param("latest") String latest);
+
+    /**
      * Slack {@code message_changed}: replace the rendered {@code text} with the edited body and stamp
      * {@code edited_at}. Scoped JPQL UPDATE carrying the {@code workspace_id} predicate. Never resurrects a
      * tombstoned row ({@code deleted_at IS NULL} guard), and never replaces a later edit with an older or redelivered

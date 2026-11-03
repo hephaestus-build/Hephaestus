@@ -506,6 +506,8 @@ erDiagram
         VARCHAR(32) last_history_synced_ts
         TIMESTAMPTZ history_synced_at
         VARCHAR(2048) last_sync_error
+        VARCHAR(32) history_check_cursor_ts
+        TIMESTAMPTZ history_checked_at
     }
 
     SlackParticipantConsent {

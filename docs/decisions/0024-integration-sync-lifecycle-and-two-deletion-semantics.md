@@ -340,3 +340,34 @@ clears `deletedAt` when the document reappears upstream), so a document signal r
 row is tombstoned is retired for good — the outcome the 2026-09-04 update replaced for
 `scm.pull_request` and `scm.issue` with the retryable `ARTIFACT_NOT_VISIBLE` hold. Whether
 `docs.document` takes the same hold is undecided.
+
+## Update — 2026-11-03: Slack infers a deletion from a complete read
+
+Supersedes the **Slack does not sweep, by design** consequence and the two sentences that say Slack never infers
+deletion from absence. A `message_deleted` event can be lost: Slack stops after its retries, and an event can age out of
+the stream during an outage longer than the stream's age bound. The deleted text then stayed until the retention
+sweep, up to 180 days.
+
+`SlackHistoryReconciler` now tombstones a stored message that Slack no longer returns, through the same
+`SlackIngestService#tombstoneMessage` as the event. The objection of the original decision was that absence from a
+page means truncation, a filtered subtype or a thread reply. The reconciler answers each:
+
+- **Truncation.** It compares a range only after every page of it was read. An error, a rate limit, an exhausted
+  budget, a consent change, a cancellation, or a page that has more but no cursor removes nothing.
+- **Filtered subtypes.** It compares the rows it stores with everything Slack returned, before any filter, so a
+  message that ingest skips cannot read as absent. Slack's marker for a deleted root that keeps its replies counts as a
+  deletion of the root only.
+- **Thread replies.** History holds roots only. A reply is compared only with a complete `conversations.replies` read
+  of its own thread, and only when Slack's reply count differs from the stored replies.
+
+It reads the stored rows before Slack and leaves out the newest 10 minutes, so a message that arrives during the read
+is never taken for a deleted one. It compares only the last 89 days, because Slack's free plan hides history older than 90 days
+from apps. Messages below the watermark are read in a separate pass with its own request budget, one UTC day of
+thread roots at a time. Each channel keeps a cursor (`history_check_cursor_ts`) and the time of its last full pass
+(`history_checked_at`), so the channel checked longest ago goes first. Its history and replies reads share one budget, and a day whose
+replies were not all compared keeps the cursor. The check keeps up only while one night's budget reads more than a
+day of the workspace's history; the admin page states that bound. A stateless rotation
+was rejected: the cost of a day varies, so it cannot bound when a day is reached. That pass never ingests, so it
+cannot store a paused gap or an author who opted out. Slack needs no
+`RECONCILIATION` gate: it compares only rows it already stores, so a mirror that is still filling cannot read as a
+deletion. Paused and archived channels are not read, and the limits that remain are in the admin data retention page.

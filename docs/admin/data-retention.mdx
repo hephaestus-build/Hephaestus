@@ -69,7 +69,7 @@ The jobs that delete review job data run only when `AGENT_ENABLED` is `true`.
 | Feedback and its delivery records | No automatic deletion. Conversation feedback that is never shown is withheld after 14 days and kept. | None | Workspace purge or person erasure |
 | LLM usage records | 400 days | `HEPHAESTUS_LLM_USAGE_RETENTION` | A server job at 04:15 every day |
 | conversations | No automatic deletion | None | Workspace purge, person erasure, or Slack disconnection |
-| Slack messages and threads | 30 days for each connection, at most 180 days | None | A server job at 03:30 every day |
+| Slack messages and threads | 30 days for each connection, at most 180 days. A message deleted in Slack goes earlier, as [Messages deleted or edited in Slack](#messages-deleted-or-edited-in-slack) says. | None | A server job at 03:30 every day |
 | Outline documents | No age limit. Document bodies above 200 MB for each workspace are evicted. | `hephaestus.integration.outline.cache.max-size-mb` | Outline sync |
 | GitHub and GitLab mirror tables | No age limit while a workspace monitors the repository | None | Repository monitoring |
 | Sync job history | The newest 50 runs of each connection | None | Each new sync run |
@@ -85,6 +85,49 @@ The jobs that delete review job data run only when `AGENT_ENABLED` is `true`.
 | Product feedback reports, drafts, and choices | No automatic deletion by age | None | Account or person erasure removes account-owned rows. Workspace purge removes reports from that workspace. Both start applicable GitHub cleanup. |
 | Product feedback cleanup locators | Until external cleanup completes. After 30 days, incomplete work needs manual action. The locator remains until completion or admin confirmation. | None | Cleanup or confirmed manual completion ([Product feedback](./product-feedback.mdx#handle-erasure)) |
 | Research disclosure records | No automatic deletion. The released file is not stored. | None | Closure of the disclosure removes its mapping |
+
+## Messages deleted or edited in Slack
+
+Slack sends an event when a person deletes or edits a message in a monitored channel.
+For a deletion, Hephaestus erases the stored text and keeps only an empty marker.
+For an edit, it stores the new text.
+
+The event can fail to arrive: Slack stops after its retries, or the event ages out of NATS during a long outage.
+The nightly Slack sync then finds the change.
+It reads the history of each active monitored channel and compares it with the stored messages:
+
+- A stored message that a complete read no longer returns is erased, as the event would erase it.
+- A stored message that Slack shows as edited gets its new text.
+
+A read that stops early removes nothing: an error, a rate limit, a request budget that ran out, a consent change or a cancelled job.
+
+These limits remain:
+
+- The sync reads only active channels.
+  In a paused or archived channel, a lost deletion stays until the channel is active again.
+  Otherwise, the retention sweep deletes it with its thread.
+- The sync compares only messages inside the retention window and from the last 89 days.
+  Slack's free plan hides messages older than 90 days from apps, so their absence proves nothing.
+  A thread that is still active keeps its older messages until the thread ages out.
+- Messages stored in the last 10 minutes are compared on a later night.
+- The sync compares a reply only when the reply count of its thread differs from the stored replies.
+  It finds the edit of a reply only then.
+- `hephaestus.sync.slack.reconcile-request-budget` limits the requests for messages older than the last sync.
+  The default is 30 requests for each workspace each night.
+  Each request waits `hephaestus.sync.slack.history-request-interval`, 60 seconds by default.
+  Thus the check can add 30 minutes to the nightly sync of each workspace.
+  At 15 messages a request, the default budget reads about 450 messages of Slack history a night.
+  The check continues each channel on the day where it stopped, and the channel checked longest ago goes first.
+  A larger workspace thus takes more nights for a full check.
+  One day of a channel that needs more than the whole budget is not compared.
+- The check keeps up only while one night's budget reads more than one day of the workspace's history.
+  At the defaults, that is about 450 messages and replies a day.
+  In a busier workspace, the oldest messages leave the 89-day window before the check reaches them.
+- The default budgets and interval suit the rate limits of commercially distributed apps outside the Slack Marketplace.
+  An app that you create for your own Slack workspace has higher limits.
+  For such an app, raise the budgets and shorten the interval.
+
+Direct messages with Hephaestus are not part of this sync.
 
 ## NATS JetStream
 

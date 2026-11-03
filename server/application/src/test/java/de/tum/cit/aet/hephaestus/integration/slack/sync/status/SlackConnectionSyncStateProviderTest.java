@@ -56,7 +56,7 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
         return new SlackConnectionSyncStateProvider(
                 monitoredChannelRepository,
                 messageRepository,
-                new SlackSyncProperties(cron, 10, 15, Duration.ZERO, true, 5, true),
+                new SlackSyncProperties(cron, 10, 15, Duration.ZERO, true, 5, true, 10),
                 rateLimitTracker,
                 clock);
     }

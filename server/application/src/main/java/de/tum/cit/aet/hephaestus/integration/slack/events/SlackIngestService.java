@@ -200,8 +200,8 @@ public class SlackIngestService {
         String editedTs = edit.editedTs();
         // Without the edit's own time a change cannot be ordered: Slack also sends message_changed for a new reply
         // or an unfurl, which edit nothing.
-        Long editedMicros = SlackTs.toEpochMicros(editedTs);
-        if (!conversationIngestEnabled || channelId.isEmpty() || ts.isEmpty() || editedMicros == null) {
+        Instant editedAt = instantOf(editedTs);
+        if (!conversationIngestEnabled || channelId.isEmpty() || ts.isEmpty() || editedAt == null) {
             return;
         }
         Optional<Long> workspaceOpt = workspaceResolver.resolveWorkspaceId(teamId);
@@ -209,7 +209,6 @@ public class SlackIngestService {
             return;
         }
         long workspaceId = workspaceOpt.get();
-        Instant editedAt = Instant.ofEpochSecond(editedMicros / 1_000_000L, (editedMicros % 1_000_000L) * 1_000L);
 
         // Normal case: the base row exists -> scoped UPDATE swaps in the edited text. The deleted_at IS NULL guard in
         // applyEdit means a delete-then-edit reorder no-ops (updated == 0, row present) and never resurrects a
@@ -227,6 +226,23 @@ public class SlackIngestService {
             // so the projector's `edited` flag reads true. Idempotent second write on the now-present row.
             messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt);
         }
+    }
+
+    /**
+     * The text of a stored message as Slack shows it now, for an edit whose event was lost. Changes only a stored row:
+     * unlike {@link #editMessage}, it never ingests, so it may run on history below the watermark.
+     */
+    @Transactional
+    public void refreshEdit(long workspaceId, String channelId, String ts, String text, @Nullable String editedTs) {
+        Instant editedAt = instantOf(editedTs);
+        if (conversationIngestEnabled && editedAt != null) {
+            messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt);
+        }
+    }
+
+    private static @Nullable Instant instantOf(@Nullable String ts) {
+        Long micros = SlackTs.toEpochMicros(ts);
+        return micros == null ? null : Instant.ofEpochSecond(micros / 1_000_000L, (micros % 1_000_000L) * 1_000L);
     }
 
     /**

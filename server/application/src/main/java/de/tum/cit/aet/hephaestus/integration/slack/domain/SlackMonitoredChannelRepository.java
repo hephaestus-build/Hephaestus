@@ -86,6 +86,36 @@ public interface SlackMonitoredChannelRepository extends JpaRepository<SlackMoni
             @Param("lastTs") String lastTs,
             @Param("syncedAt") Instant syncedAt);
 
+    /** Record how far the check of older stored messages got in its current pass. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE SlackMonitoredChannel c SET c.historyCheckCursorTs = :cursorTs "
+            + "WHERE c.workspaceId = :workspaceId AND c.slackChannelId = :slackChannelId")
+    int recordHistoryCheckCursor(
+            @Param("workspaceId") Long workspaceId,
+            @Param("slackChannelId") String slackChannelId,
+            @Param("cursorTs") String cursorTs);
+
+    /** End a full pass of the check of older stored messages, so the next pass starts again at the watermark. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE SlackMonitoredChannel c SET c.historyCheckCursorTs = null, c.historyCheckedAt = :checkedAt "
+            + "WHERE c.workspaceId = :workspaceId AND c.slackChannelId = :slackChannelId")
+    int completeHistoryCheck(
+            @Param("workspaceId") Long workspaceId,
+            @Param("slackChannelId") String slackChannelId,
+            @Param("checkedAt") Instant checkedAt);
+
+    /** Put a channel whose check failed behind the others; its cursor stays, so its next turn retries the same day. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE SlackMonitoredChannel c SET c.historyCheckedAt = :deferredAt "
+            + "WHERE c.workspaceId = :workspaceId AND c.slackChannelId = :slackChannelId")
+    int deferHistoryCheck(
+            @Param("workspaceId") Long workspaceId,
+            @Param("slackChannelId") String slackChannelId,
+            @Param("deferredAt") Instant deferredAt);
+
     @Modifying
     @Transactional
     @Query("UPDATE SlackMonitoredChannel c SET c.lastSyncError = :error "
