@@ -73,8 +73,22 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
         """ + PUBLIC_PERSON + """
         )
         """;
-    String MONITORS = """
-        monitored AS (
+    /**
+     * The workspace's hidden members as actors, read once per query. A membership lookup for each event
+     * row scans identity once for each row.
+     */
+    String HIDDEN_ACTORS = """
+        hidden_actors AS MATERIALIZED (
+            SELECT u.id FROM membership h
+            JOIN identity i ON i.account_id = h.account_id AND i.team_key = ''
+            JOIN "user" u ON u.provider_id = i.provider_id AND CAST(u.native_id AS text) = i.provider_user_key
+            WHERE h.workspace_id = :#{#scope.workspaceId()} AND h.hidden
+        )
+        """;
+
+    String NOT_HIDDEN = " NOT IN (SELECT id FROM hidden_actors) ";
+    String MONITORS = HIDDEN_ACTORS + """
+        , monitored AS (
             SELECT DISTINCT r.id, r.provider_id FROM repository_to_monitor m
             JOIN repository r ON r.name_with_owner = m.name_with_owner
             WHERE m.workspace_id = :#{#scope.workspaceId()} AND
@@ -94,7 +108,6 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
     String SOURCE_HEAD = """
             FROM activity_event e
             JOIN "user" u ON u.id = e.actor_id
-            LEFT JOIN membership wm ON wm.workspace_id = e.workspace_id AND wm.account_id IN (SELECT identity_owner.account_id FROM identity identity_owner WHERE identity_owner.provider_id = u.provider_id AND identity_owner.provider_user_key = CAST(u.native_id AS text) AND identity_owner.team_key = '')
             LEFT JOIN pull_request_review prr ON e.target_type = 'review' AND prr.id = e.target_id
             LEFT JOIN issue pr ON pr.id = prr.pull_request_id
             LEFT JOIN "user" author ON author.id = pr.author_id
@@ -107,10 +120,7 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
               AND u.id IN (SELECT id FROM public_people)
               AND e.event_type IN ('PULL_REQUEST_OPENED', 'PULL_REQUEST_MERGED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED', 'ISSUE_CREATED')
         """;
-    String SOURCE_TAIL = """
-              AND (:own = true OR (NOT coalesce(wm.hidden, false)
-                  AND NOT EXISTS (SELECT 1 FROM membership h
-                      WHERE h.workspace_id = :#{#scope.workspaceId()} AND h.hidden AND h.account_id IN (SELECT identity_owner.account_id FROM identity identity_owner WHERE identity_owner.provider_id = u.provider_id AND identity_owner.provider_user_key = CAST(u.native_id AS text) AND identity_owner.team_key = ''))))
+    String SOURCE_TAIL = " AND (:own = true OR e.actor_id" + NOT_HIDDEN + ")" + """
               AND (:person = 0 OR e.actor_id = :person)
               AND e.repository_id IN (:#{#scope.repositoryIds()})
               AND (:#{#scope.teamIds().isEmpty()} = true OR (
@@ -445,12 +455,9 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
         return new ActivityCoverageDTO(row.getSince(), row.getComplete(), row.getTotal());
     }
 
-    @Query(value = """
+    @Query(value = "WITH " + HIDDEN_ACTORS + """
         SELECT u.id FROM "user" u
-        LEFT JOIN membership wm ON wm.workspace_id = :#{#scope.workspaceId()} AND wm.account_id IN (SELECT identity_owner.account_id FROM identity identity_owner WHERE identity_owner.provider_id = u.provider_id AND identity_owner.provider_user_key = CAST(u.native_id AS text) AND identity_owner.team_key = '')
-        WHERE u.type = 'USER' AND NOT coalesce(wm.hidden, false)
-            AND NOT EXISTS (SELECT 1 FROM membership h
-                WHERE h.workspace_id = :#{#scope.workspaceId()} AND h.hidden AND h.account_id IN (SELECT identity_owner.account_id FROM identity identity_owner WHERE identity_owner.provider_id = u.provider_id AND identity_owner.provider_user_key = CAST(u.native_id AS text) AND identity_owner.team_key = ''))
+        WHERE u.type = 'USER' AND u.id""" + NOT_HIDDEN + """
             AND NOT EXISTS (SELECT 1 FROM activity_automation a
                 WHERE a.workspace_id = :#{#scope.workspaceId()} AND a.user_id = u.id)
             AND (:#{#scope.teamIds().isEmpty()} = true OR EXISTS (SELECT 1 FROM team_membership tm
