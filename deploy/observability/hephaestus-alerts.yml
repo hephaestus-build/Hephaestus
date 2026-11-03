@@ -163,6 +163,12 @@ groups:
           severity: warning
         annotations:
           summary: Review sandboxes failed to reach the server or the model provider at least three times in one hour
+      - alert: HephaestusReviewServerError
+        expr: sum(increase(agent_job_server_error_total{job="hephaestus"}[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: The server answered a review's results with its own error, so the review ended without them
       - alert: HephaestusReviewPreparationFailing
         expr: sum(increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause="preparation"}[30m])) >= 5
         for: 15m

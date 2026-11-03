@@ -12,9 +12,12 @@ export function retryDelayMs(attempt: number, baseMs = 1000): number {
 	return baseMs * 2 ** (attempt - 1);
 }
 
-/** Retry throttling and server errors, not client errors. */
+/**
+ * Retry throttling and a gateway that could not reach the server, not a server's own error. A 500 is the server's
+ * answer: asking again repeats it.
+ */
 export function isRetryableStatus(status: number): boolean {
-	return status >= 500 || status === 429;
+	return status === 429 || status === 502 || status === 503 || status === 504;
 }
 
 /** Admission timeouts are not retried because the server may still be verifying the request. */

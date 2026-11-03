@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
+	AdmissionUnreachableError,
 	admittedResultSchema,
+	isAdmissionServerError,
 	admit,
 	stagePractice,
 	parseAdmission,
@@ -82,6 +84,30 @@ void test("an explicit admission refusal is terminal", async () => {
 		/admission was refused: HTTP 403/u,
 	);
 	assert.equal(calls, 1);
+});
+
+void test("a server error is reported once as the server's own, and a gateway that cannot reach it is retried as unreachable", async () => {
+	let calls = 0;
+	await assert.rejects(
+		admit({}, async () => {
+			calls += 1;
+			return Response.json(
+				{ detail: "Only the bound invocation can record an execution failure." },
+				{ status: 500 },
+			);
+		}),
+		(error) => isAdmissionServerError(error) && /HTTP 500/u.test(error.message),
+	);
+	assert.equal(calls, 1);
+	calls = 0;
+	await assert.rejects(
+		admit({}, async () => {
+			calls += 1;
+			return new Response("", { status: 503 });
+		}),
+		(error) => error instanceof AdmissionUnreachableError,
+	);
+	assert.equal(calls, 4);
 });
 
 for (const [field, value, path] of [

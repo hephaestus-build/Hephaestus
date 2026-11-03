@@ -47,6 +47,18 @@ const ADMISSION_ATTEMPTS = 4;
 export class AdmissionUnreachableError extends Error {
 	name = "AdmissionUnreachableError";
 }
+const SERVER_ERROR = "AdmissionServerError";
+
+/** The server answered with its own error. That is a defect to report, not an outage to wait out. */
+export function isAdmissionServerError(error: unknown): error is Error {
+	return error instanceof Error && error.name === SERVER_ERROR;
+}
+
+function admissionServerError(message: string): Error {
+	const error = new Error(message);
+	error.name = SERVER_ERROR;
+	return error;
+}
 export type AdmissionFetch = (body: string, signal: AbortSignal) => Promise<Response>;
 async function postAdmission(body: string, send: AdmissionFetch): Promise<unknown> {
 	let response: Response;
@@ -67,6 +79,11 @@ async function postAdmission(body: string, send: AdmissionFetch): Promise<unknow
 	}
 	if (isRetryableStatus(response.status)) {
 		throw new AdmissionUnreachableError(`result admission failed: HTTP ${response.status}`);
+	}
+	if (response.status >= 500) {
+		throw admissionServerError(
+			`result admission failed on the server: HTTP ${response.status} — ${await answerText(response)}`,
+		);
 	}
 	if (!response.ok) {
 		// The server has decided, and it said why. Asking again puts the same question, so the run ends
