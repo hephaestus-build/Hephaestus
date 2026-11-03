@@ -32,7 +32,7 @@
 | `postgresql.parameters.effective_cache_size` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
 | `postgresql.parameters.hash_mem_multiplier` | number | `supplied by release or operator` |  | `minimum: 1. maximum: 10` |
 | `postgresql.parameters.maintenance_work_mem` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
-| `postgresql.parameters.max_connections` | integer | `supplied by release or operator` |  | `minimum: 4. maximum: 400` |
+| `postgresql.parameters.max_connections` | integer | `supplied by release or operator` |  | `minimum: 4` |
 | `postgresql.parameters.max_parallel_workers_per_gather` | integer | `supplied by release or operator` |  | `minimum: 0. maximum: 16` |
 | `postgresql.parameters.max_wal_size` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
 | `postgresql.parameters.shared_buffers` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |

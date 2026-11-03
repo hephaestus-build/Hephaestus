@@ -149,7 +149,8 @@ During that worker surge, budget three dedicated listeners outside Hikari, four 
 The total is 78 of 80.
 The server retains `Recreate`. Do not double the whole release or overlap another worker rollout.
 
-The chart rejects a bundled database configuration whose explicit `max_connections` cannot hold its role pools, worker surge, listeners, and maintenance reserves.
+Without an explicit `max_connections`, the chart sets what the role pools, worker surge, listeners, and maintenance reserves need on a bundled database.
+It rejects an explicit value that cannot hold them.
 Inventory dedicated listeners after runtime changes and recompute this budget if more exist.
 
 The independent mentor loop and tool Pods must use the gateway without a database pool.

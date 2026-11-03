@@ -3185,6 +3185,24 @@ await test("small PostgreSQL overrides the image calculator and gives each datab
 	);
 });
 
+const maxConnections = (layers: readonly Layer[]) => {
+	const args = list(get(container(workload(rendered(layers), "postgresql")), "args"));
+	return args.findLast((arg) => typeof arg === "string" && arg.startsWith("max_connections="));
+};
+
+await test("without an explicit max_connections the database gets what the role pools need", () => {
+	const base = [prepared, operator, reviews, { worker: { enabled: true } }];
+	// Two workers that can each surge, the server, listeners, the migration pool and the reserves.
+	assert.equal(maxConnections(base), "max_connections=164");
+	// A larger release is not limited by a number that the image derives from memory alone.
+	assert.equal(maxConnections([...base, { worker: { replicas: 8 } }]), "max_connections=560");
+	// An explicit value stays the operator's.
+	assert.equal(
+		maxConnections([...base, { postgresql: { parameters: { max_connections: 200 } } }]),
+		"max_connections=200",
+	);
+});
+
 await test("the small database holds one worker surge and rejects pools beyond the connection budget", () => {
 	const base = [prepared, profile("small"), operator, reviews];
 	assert.ok(render([...base, { worker: { rolloutStrategy: "RollingUpdate" } }]).ok);

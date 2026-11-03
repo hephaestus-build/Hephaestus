@@ -83,7 +83,8 @@ postgresql:
   # true runs the release's PostgreSQL image as one StatefulSet. false uses `external`.
   bundled: true
   database: hephaestus
-  # Explicit PostgreSQL -c overrides, after the image memory calculator.
+  # Explicit PostgreSQL -c overrides, after the image memory calculator. Without max_connections, the
+  # chart sets what the role pools need.
   parameters: {}
   # Every role connects with sslmode=verify-full. Required: an existing Secret in the release
   # namespace with ca.crt, the CA that signed the server certificate. The bundled server also reads

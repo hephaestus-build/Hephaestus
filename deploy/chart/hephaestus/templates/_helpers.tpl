@@ -704,8 +704,7 @@ independent pool and quota admission. The ceiling is the qualified model-only re
 {{- end -}}
 
 {{/* All worker replicas can surge once; another overlapping rollout is outside this budget. */}}
-{{- define "hephaestus.databaseConnectionBudget" -}}
-{{- if hasKey .Values.postgresql.parameters "max_connections" -}}
+{{- define "hephaestus.databaseConnectionsRequired" -}}
 {{- $servers := int .Values.server.replicas -}}
 {{- $workers := 0 -}}
 {{- if .Values.worker.enabled -}}
@@ -715,7 +714,13 @@ independent pool and quota admission. The ceiling is the qualified model-only re
 {{- $pooled := add (mul $servers (int .Values.server.databasePool.maximumPoolSize)) (mul $workers (int .Values.worker.databasePool.maximumPoolSize)) -}}
 {{- $listeners := add $servers $workers -}}
 {{- /* One listener per role replica, migration pool, two backup sessions, four operator sessions, three superuser slots. */ -}}
-{{- $required := add $pooled $listeners (int .Values.migration.databasePool.maximumPoolSize) 2 4 3 -}}
+{{- add $pooled $listeners (int .Values.migration.databasePool.maximumPoolSize) 2 4 3 -}}
+{{- end -}}
+
+{{/* An explicit max_connections must hold the role pools. Without one, the chart sets what they need. */}}
+{{- define "hephaestus.databaseConnectionBudget" -}}
+{{- if hasKey .Values.postgresql.parameters "max_connections" -}}
+{{- $required := int (include "hephaestus.databaseConnectionsRequired" .) -}}
 {{- if gt $required (int .Values.postgresql.parameters.max_connections) -}}
 {{- fail (printf "PostgreSQL max_connections needs at least %d for role pools, one worker surge, listeners and maintenance/admin reserves" $required) -}}
 {{- end -}}

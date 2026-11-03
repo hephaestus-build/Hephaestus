@@ -308,8 +308,7 @@
 						},
 						"max_connections": {
 							"type": "integer",
-							"minimum": 4,
-							"maximum": 400
+							"minimum": 4
 						},
 						"autovacuum_max_workers": {
 							"type": "integer",
@@ -717,13 +716,13 @@
 					"required": ["runOnStartup", "timeframeDays", "syncCron", "cooldownMinutes"],
 					"properties": {
 						"runOnStartup": { "type": "boolean" },
-						"timeframeDays": { "type": "integer", "minimum": 1, "maximum": 3650 },
+						"timeframeDays": { "type": "integer", "minimum": 1, "maximum": 365 },
 						"syncCron": {
 							"description": "A Spring cron expression with six fields, seconds first.",
 							"type": "string",
 							"pattern": "^\\S+( \\S+){5}$"
 						},
-						"cooldownMinutes": { "type": "integer", "minimum": 0, "maximum": 10080 }
+						"cooldownMinutes": { "type": "integer", "minimum": 1, "maximum": 1440 }
 					}
 				},
 				"credentialKey": {

@@ -2,7 +2,7 @@
 
 | Key | Type | Default | Required in object | Constraints |
 | --- | --- | --- | --- | --- |
-| `config.monitoring.cooldownMinutes` | integer | `60` | yes | `minimum: 0. maximum: 10080` |
+| `config.monitoring.cooldownMinutes` | integer | `60` | yes | `minimum: 1. maximum: 1440` |
 | `config.monitoring.runOnStartup` | boolean | `true` | yes | — |
 | `config.monitoring.syncCron` | string | `"0 0 * * * *"` | yes | A Spring cron expression with six fields, seconds first. |
-| `config.monitoring.timeframeDays` | integer | `7` | yes | `minimum: 1. maximum: 3650` |
+| `config.monitoring.timeframeDays` | integer | `7` | yes | `minimum: 1. maximum: 365` |
