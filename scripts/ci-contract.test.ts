@@ -512,10 +512,20 @@ interface Completion {
 	outputs?: Record<string, string>;
 }
 
+/** The jobs that `name` lists under `needs`, in either of its two YAML forms. */
+function needsOf(workflow: Document, name: string): string[] {
+	const dependencies = workflow.getIn(["jobs", name, "needs"]);
+	if (isSeq(dependencies)) {
+		return dependencies.items.map(String);
+	}
+	return dependencies === undefined ? [] : [asString(dependencies, "dependency")];
+}
+
 /**
  * Whether GitHub starts a job of `workflow` for `event`, given how the jobs it needs ended. A
- * condition without a status function gets an implicit `success()`: every needed job succeeded and
- * the run was not cancelled.
+ * condition without a status function gets an implicit `success()`: every job up its chain, not
+ * only the ones it names, succeeded and the run was not cancelled. Modelling only the named jobs
+ * reported `Build` as running on pull requests while GitHub skipped it (#3410 to #3719).
  */
 function jobRuns(
 	workflow: Document,
@@ -525,15 +535,8 @@ function jobRuns(
 	cancelled = false,
 	inputs: Record<string, unknown> = {},
 ): boolean {
-	const dependencies = workflow.getIn(["jobs", name, "needs"]);
-	let needed: string[] = [];
-	if (isSeq(dependencies)) {
-		needed = dependencies.items.map(String);
-	} else if (dependencies !== undefined) {
-		needed = [asString(dependencies, "dependency")];
-	}
 	const needs = Object.fromEntries(
-		needed.map((need) => {
+		needsOf(workflow, name).map((need) => {
 			const completion = completions[need];
 			assert.ok(completion !== undefined, `${name} needs ${need}, which this model does not run`);
 			return [need, completion] as const;
@@ -547,10 +550,8 @@ function jobRuns(
 					.trim()
 					.replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "");
 	const implicitSuccess = !/\b(?:always|cancelled|failure|success)\(/u.test(source);
-	if (
-		implicitSuccess &&
-		(cancelled || Object.values(needs).some((need) => need.result !== "success"))
-	) {
+	const chain = [...needsClosure(workflow, name)].flatMap((need) => completions[need] ?? []);
+	if (implicitSuccess && (cancelled || chain.some((need) => need.result !== "success"))) {
 		return false;
 	}
 	const functions = [
@@ -5813,9 +5814,7 @@ function simulateRun(workflow: Document, event: string, security: string): Recor
 function needsClosure(workflow: Document, name: string): Set<string> {
 	const closure = new Set<string>();
 	const expand = (from: string): void => {
-		const dependencies = workflow.getIn(["jobs", from, "needs"]);
-		const needed = isSeq(dependencies) ? dependencies.items.map(String) : [];
-		for (const need of needed) {
+		for (const need of needsOf(workflow, from)) {
 			if (!closure.has(need)) {
 				closure.add(need);
 				expand(need);
