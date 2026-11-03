@@ -51,7 +51,10 @@ public record ReviewDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int activeJobCount,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        String model) {
+        String model,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
+        ReviewProgressDTO progress) {
     public ReviewDTO {
         practices = List.copyOf(practices);
     }

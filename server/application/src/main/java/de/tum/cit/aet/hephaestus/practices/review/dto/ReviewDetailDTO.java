@@ -60,7 +60,10 @@ public record ReviewDetailDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<ReviewStageTimingDTO> stageTiming,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
-        GeneratedPathReviewDTO generatedPaths) {
+        GeneratedPathReviewDTO generatedPaths,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
+        ReviewProgressDTO progress) {
     public ReviewDetailDTO {
         practices = List.copyOf(practices);
         stageTiming = List.copyOf(stageTiming);

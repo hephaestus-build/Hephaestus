@@ -10,6 +10,8 @@ import { REVIEW_ORIGIN_DEFS } from "@/components/practice-vocabulary/review-orig
 import {
 	REVIEW_STATUS_DEFS,
 	REVIEW_STOP_REASON_SENTENCES,
+	reviewProgressWords,
+	shownReviewStatusDef,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { ReviewStatusBadge } from "@/components/practice-vocabulary/ReviewStatusBadge";
 import { TableCell } from "@/components/ui/table";
@@ -57,7 +59,7 @@ export function ReviewSummaryRow({ review, open = false, request }: ReviewSummar
 			}
 		>
 			<RecordTimeCell
-				status={REVIEW_STATUS_DEFS[review.status]}
+				status={shownReviewStatusDef(REVIEW_STATUS_DEFS, review.status, review.progress)}
 				at={review.createdAt}
 				statusTooltip={false}
 			/>
@@ -80,9 +82,17 @@ export function reviewMarkers(review: Pick<ReviewSummary, "status">): StatusDef[
 function ReviewMarkers({ review }: { review: ReviewSummary }) {
 	const reason =
 		review.stopReason === null ? undefined : REVIEW_STOP_REASON_SENTENCES[review.stopReason];
-	return reviewMarkers(review).map((def) => (
-		<ReviewStatusBadge key={def.label} def={def} reason={reason} />
-	));
+	const progress = reviewProgressWords(review.progress);
+	return (
+		<>
+			{reviewMarkers(review).map((def) => (
+				<ReviewStatusBadge key={def.label} def={def} reason={reason} />
+			))}
+			{progress !== undefined && (
+				<span className="text-xs text-muted-foreground tabular-nums">{progress}</span>
+			)}
+		</>
+	);
 }
 
 /** A requested review names its requester as the result tables name a developer; any other its origin. */

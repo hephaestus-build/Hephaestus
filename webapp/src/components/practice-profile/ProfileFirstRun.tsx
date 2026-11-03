@@ -5,7 +5,10 @@ import type { MemberReviewReadiness, ProfileReviewRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { reviewEventPhrases } from "@/components/practice-vocabulary/review-event-defs";
-import { OWN_REVIEW_STATUS_DEFS } from "@/components/practice-vocabulary/review-status-defs";
+import {
+	OWN_REVIEW_STATUS_DEFS,
+	reviewProgressWords,
+} from "@/components/practice-vocabulary/review-status-defs";
 import {
 	Empty,
 	EmptyContent,
@@ -131,7 +134,27 @@ export function firstRunApplies(
 const FIRST_REVIEW_TITLE = {
 	QUEUED: "Your first review is waiting to start",
 	RUNNING: "Your first review is running",
+	CONTINUING: "Your first review is continuing",
 };
+
+/** Where a first review stands: waiting for its start, running, or between two of its attempts. */
+function firstReviewState(review: ProfileReviewRef): keyof typeof FIRST_REVIEW_TITLE {
+	if (review.progress?.continuing === true) {
+		return "CONTINUING";
+	}
+	return review.status === "QUEUED" ? "QUEUED" : "RUNNING";
+}
+
+/** What the state and the progress add to "It is on #12.": no claim the server did not make. */
+function firstReviewSentences(review: ProfileReviewRef): string {
+	const state = firstReviewState(review);
+	const progress = reviewProgressWords(review.progress);
+	if (state === "CONTINUING") {
+		return `${progress ?? ""}. It continues with the rest. A slow AI provider can take several attempts.`;
+	}
+	const status = OWN_REVIEW_STATUS_DEFS[state].description;
+	return progress === undefined ? status : `${status} ${progress}.`;
+}
 
 const NO_REVIEW_TITLE = "No review of your work yet";
 
@@ -149,7 +172,9 @@ export function firstRunWords({
 	| undefined {
 	const { blocker } = readiness;
 	if (activeReview !== undefined && !reviewed) {
-		return `${FIRST_REVIEW_TITLE[activeReview.status === "QUEUED" ? "QUEUED" : "RUNNING"]}.`;
+		const progress = reviewProgressWords(activeReview.progress);
+		const title = `${FIRST_REVIEW_TITLE[firstReviewState(activeReview)]}.`;
+		return progress === undefined ? title : `${title} ${progress}.`;
 	}
 	if (blocker !== null && blocker !== "PERSON_ERASED") {
 		return `${BLOCKERS[blocker].title}. ${BLOCKERS[blocker].description(workspaceName)}`;
@@ -181,13 +206,12 @@ export function ProfileFirstRun({
 	const { blocker } = readiness;
 	// A review under way is real, so it speaks before any reason a future review would not start.
 	if (activeReview !== undefined && !reviewed) {
-		const status = activeReview.status === "QUEUED" ? "QUEUED" : "RUNNING";
 		const { item } = activeReview;
 		return (
 			<FirstRunEmpty
 				offer={tourOffer}
 				icon={<SparklesIcon />}
-				title={FIRST_REVIEW_TITLE[status]}
+				title={FIRST_REVIEW_TITLE[firstReviewState(activeReview)]}
 				description={
 					<>
 						It is on{" "}
@@ -198,7 +222,7 @@ export function ProfileFirstRun({
 						) : (
 							itemName(item)
 						)}
-						. {OWN_REVIEW_STATUS_DEFS[status].description} Its result appears here when it finishes.
+						. {firstReviewSentences(activeReview)} Its result appears here when it finishes.
 					</>
 				}
 			>

@@ -14,6 +14,8 @@ import { countsTogether } from "@/components/practice-vocabulary/feedback-text";
 import {
 	isActiveReview,
 	OWN_REVIEW_STATUS_DEFS,
+	reviewProgressWords,
+	shownReviewStatusDef,
 } from "@/components/practice-vocabulary/review-status-defs";
 import type { StandingCounts } from "@/components/practice-vocabulary/standing-counts";
 import { StandingSummaryBox } from "@/components/practice-vocabulary/StandingSummaryBox";
@@ -140,12 +142,22 @@ function LatestReviewChip({ review, activeReview }: LatestReviewChipProps) {
 	const today = new Date(useNow());
 	if (review === undefined && activeReview !== undefined) {
 		// Not a link: the reviews of the reader's work list a review once it records something.
-		const waiting = activeReview.status === "QUEUED";
-		const def = waiting ? OWN_REVIEW_STATUS_DEFS.QUEUED : RUNNING;
+		const def = shownReviewStatusDef(
+			OWN_REVIEW_STATUS_DEFS,
+			activeReview.status ?? "RUNNING",
+			activeReview.progress,
+		);
+		const progress = reviewProgressWords(activeReview.progress);
 		return (
 			<Badge variant="muted" className="max-w-full">
 				<def.icon className={statusToneClass(def.badgeVariant)} aria-hidden />
-				<span className="font-semibold">{waiting ? "Review waiting" : "Review running"}</span>
+				<span className="font-semibold">Review {def.label.toLowerCase()}</span>
+				{progress !== undefined && (
+					<>
+						<ClauseDot />
+						<span className="min-w-0 truncate font-normal text-muted-foreground">{progress}</span>
+					</>
+				)}
 				<ClauseDot />
 				<span className="min-w-0 truncate font-normal text-muted-foreground">
 					on {activeReview.item.label}
@@ -164,13 +176,24 @@ function LatestReviewChip({ review, activeReview }: LatestReviewChipProps) {
 	const at = asDate(review.at);
 	const { label } = review.item;
 	const running = review.status !== null && isActiveReview(review.status);
+	const progress = running ? reviewProgressWords(review.progress) : undefined;
+	const runningDef =
+		review.status === null
+			? RUNNING
+			: shownReviewStatusDef(OWN_REVIEW_STATUS_DEFS, review.status, review.progress);
 	const stopped = review.status === "FAILED" || review.status === "CANCELLED";
-	const Icon = running ? RUNNING.icon : HistoryIcon;
-	const iconTone = running ? statusToneClass(RUNNING.badgeVariant) : "text-muted-foreground";
+	const Icon = running ? runningDef.icon : HistoryIcon;
+	const iconTone = running ? statusToneClass(runningDef.badgeVariant) : "text-muted-foreground";
 
 	const words = running ? (
 		<>
-			<span className="font-semibold">Review running</span>
+			<span className="font-semibold">Review {runningDef.label.toLowerCase()}</span>
+			{progress !== undefined && (
+				<>
+					<ClauseDot />
+					<span className="min-w-0 truncate font-normal text-muted-foreground">{progress}</span>
+				</>
+			)}
 			<ClauseDot />
 			<span className="min-w-0 truncate font-normal text-muted-foreground">on {label}</span>
 		</>

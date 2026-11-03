@@ -19,4 +19,7 @@ public record ReviewQueueItemDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         ReviewDeveloperDTO developer,
 
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant since) {}
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant since,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
+        ReviewProgressDTO progress) {}

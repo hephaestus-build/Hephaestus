@@ -127,6 +127,21 @@ export const RequestBlockedWhileRunning: Story = {
 	},
 };
 
+/** Between two attempts on a slow provider: the row says it moved on, and how far. */
+export const Continuing: Story = {
+	args: {
+		review: {
+			...running,
+			status: "QUEUED",
+			progress: { practicesEnded: 76, practicesTotal: 200, continuing: true },
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("76 of 200 practices finished")).toBeVisible();
+		canvas.getByText("Continuing");
+	},
+};
+
 export const AConversation: Story = {
 	args: { review: conversation },
 	play: async ({ canvas }) => {

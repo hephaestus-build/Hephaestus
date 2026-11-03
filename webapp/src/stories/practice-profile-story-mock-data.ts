@@ -291,6 +291,7 @@ export const LATEST_REVIEW: ProfileReviewRef = {
 	at: LATEST_REVIEW_AT,
 	item: pullRequest(22),
 	status: "COMPLETE",
+	progress: null,
 };
 
 const PACKAGING = { groupSlug: "review-ready-work", groupName: "Packaging work for review" };

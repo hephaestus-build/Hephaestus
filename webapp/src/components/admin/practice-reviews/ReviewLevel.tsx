@@ -36,6 +36,8 @@ import {
 	REVIEW_PRACTICE_STATUS_DEFS,
 	REVIEW_STATUS_DEFS,
 	REVIEW_STOP_REASON_SENTENCES,
+	reviewProgressWords,
+	shownReviewStatusDef,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { buttonVariants } from "@/components/ui/button";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
@@ -258,11 +260,28 @@ function ReviewStatusLine({ review }: { review: ReviewDetail }) {
 	const elapsed = between(review.createdAt, review.completedAt);
 	return (
 		<SheetStatusLine
-			status={<ReviewStatusMark def={REVIEW_STATUS_DEFS[review.status]} />}
-			figure={elapsed === undefined ? undefined : `${elapsed} from request`}
+			status={
+				<ReviewStatusMark
+					def={shownReviewStatusDef(REVIEW_STATUS_DEFS, review.status, review.progress)}
+				/>
+			}
+			figure={statusFigure(review.progress, elapsed)}
 			at={at}
 		/>
 	);
+}
+
+/** How far a review got while it runs, and its time from request: whichever of the two is known. */
+function statusFigure(
+	progress: ReviewDetail["progress"],
+	elapsed: string | undefined,
+): string | undefined {
+	const parts = [
+		reviewProgressWords(progress),
+		elapsed === undefined ? undefined : `${elapsed} from request`,
+	];
+	const known = parts.filter((part) => part !== undefined);
+	return known.length === 0 ? undefined : known.join(" · ");
 }
 
 const RESULT_OUTCOMES = [

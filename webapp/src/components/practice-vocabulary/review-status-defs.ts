@@ -8,12 +8,19 @@ import {
 	HourglassIcon,
 	LoaderIcon,
 	PackageXIcon,
+	StepForwardIcon,
 	TimerOffIcon,
 } from "lucide-react";
 
-import type { ReviewJob, ReviewPractice, ReviewRef, ReviewSummary } from "@/api/types.gen";
+import type {
+	ReviewJob,
+	ReviewPractice,
+	ReviewProgress,
+	ReviewRef,
+	ReviewSummary,
+} from "@/api/types.gen";
 
-import type { StatusDefs } from "@/components/common/status-def";
+import type { StatusDef, StatusDefs } from "@/components/common/status-def";
 
 export type ReviewStatus = ReviewRef["status"];
 export type ReviewStopReason = NonNullable<ReviewSummary["stopReason"]>;
@@ -316,3 +323,40 @@ export const REVIEW_JOB_PROCESSING_DEFS: StatusDefs<ReviewJobProcessingStatus> =
 		description: "Processing its output failed.",
 	},
 };
+
+/**
+ * A review between two attempts. On a slow AI provider a review can take many attempts, and each ends
+ * some of its practices. Between them its job waits as it would for a first start, so without this the
+ * review reads as stuck. Not a status of the wire: it is a waiting review whose progress says so
+ * (`ReviewProgress.continuing`).
+ */
+export const REVIEW_CONTINUING_DEF: StatusDef = {
+	label: "Continuing",
+	icon: StepForwardIcon,
+	badgeVariant: "secondary",
+	description:
+		"An attempt finished some practices, and the review continues with the rest. A slow AI provider can take several attempts. Observations appear when the whole review finishes.",
+};
+
+/** The status words a review shows, where its progress says more than its status. */
+export function shownReviewStatusDef(
+	defs: StatusDefs<ReviewStatus>,
+	status: ReviewStatus,
+	progress: ReviewProgress | null | undefined,
+): StatusDef {
+	return progress?.continuing === true ? REVIEW_CONTINUING_DEF : defs[status];
+}
+
+/**
+ * "76 of 200 practices finished", with a result or a recorded reason. Nothing before an attempt
+ * finished one: "0 of 200" would read as a count that never moves.
+ */
+export function reviewProgressWords(
+	progress: ReviewProgress | null | undefined,
+): string | undefined {
+	if (progress === null || progress === undefined || progress.practicesEnded === 0) {
+		return undefined;
+	}
+	const noun = progress.practicesTotal === 1 ? "practice" : "practices";
+	return `${progress.practicesEnded} of ${progress.practicesTotal} ${noun} finished`;
+}

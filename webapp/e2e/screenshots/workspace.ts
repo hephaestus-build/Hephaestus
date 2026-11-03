@@ -252,7 +252,13 @@ const overview: Wire<PracticeProfileOverview> = {
 			type: "FEEDBACK_NEW",
 		},
 	],
-	latestReview: { at: daysAgo(1), item: metrics, reviewId: "review-223", status: "COMPLETE" },
+	latestReview: {
+		at: daysAgo(1),
+		item: metrics,
+		reviewId: "review-223",
+		status: "COMPLETE",
+		progress: null,
+	},
 	reviewedItems: [retries, paging, metrics, cache],
 	window: { since: daysAgo(28), until: NOW.toISOString() },
 };
