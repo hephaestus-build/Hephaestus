@@ -9,19 +9,27 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewThreadContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCaptureFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueCommentConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
@@ -33,9 +41,19 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequ
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestReviewThreadConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestState;
+import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcomment.GitHubPullRequestReviewCommentProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcomment.GitHubPullRequestReviewCommentSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.backfill.BackfillPageObserver;
+import de.tum.cit.aet.hephaestus.integration.scm.github.sync.backfill.GitHubBackfillRepair;
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.backfill.GitHubHistoricalBackfillService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -49,19 +67,26 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Pageable;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.GraphQlClient.RequestSpec;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -73,14 +98,11 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
     private static final int NUMBER = 42;
     private static final OffsetDateTime AT = OffsetDateTime.of(2025, 1, 3, 10, 0, 0, 0, ZoneOffset.UTC);
 
-    @MockitoBean
-    private GitHubGraphQlClientProvider clients;
+    @Autowired
+    private ApplicationContext context;
 
     @Autowired
-    private GitHubPullRequestSyncService sync;
-
-    @Autowired
-    private GitHubHistoricalBackfillService backfill;
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private ReviewThreadContentSource threadSource;
@@ -106,7 +128,11 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private IdentityProviderRepository providers;
 
+    // A plain mock, not a @MockitoBean: the services below are built over it, so the shared context stays unchanged.
+    private final GitHubGraphQlClientProvider clients = mock(GitHubGraphQlClientProvider.class);
     private final HttpGraphQlClient client = mock(HttpGraphQlClient.class);
+    private GitHubPullRequestSyncService sync;
+    private GitHubHistoricalBackfillService backfill;
     private final AtomicBoolean critical = new AtomicBoolean();
     private long workspaceId;
     private long repositoryId;
@@ -146,6 +172,86 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
         lenient().when(clients.getRateLimitRemaining(workspaceId)).thenReturn(5000);
         lenient().when(clients.isRateLimitCritical(workspaceId)).thenAnswer(invocation -> critical.get());
         lenient().when(client.documentName(anyString())).thenAnswer(invocation -> mock(RequestSpec.class));
+        wireServicesOverTheStubbedProvider();
+    }
+
+    private void wireServicesOverTheStubbedProvider() {
+        var properties = context.getBean(GitHubSyncProperties.class);
+        var classifier = context.getBean(GitHubExceptionClassifier.class);
+        var coordinator = context.getBean(GitHubGraphQlSyncCoordinator.class);
+        var repositories = context.getBean(RepositoryRepository.class);
+        var reviews = transactional(
+                GitHubPullRequestReviewSyncService.class,
+                new GitHubPullRequestReviewSyncService(
+                        clients,
+                        context.getBean(GitHubPullRequestReviewProcessor.class),
+                        properties,
+                        classifier,
+                        coordinator,
+                        transactionManager));
+        var reviewComments = transactional(
+                GitHubPullRequestReviewCommentSyncService.class,
+                new GitHubPullRequestReviewCommentSyncService(
+                        threads,
+                        clients,
+                        context.getBean(GitHubPullRequestReviewCommentProcessor.class),
+                        context.getBean(GitHubUserProcessor.class),
+                        properties,
+                        classifier,
+                        coordinator));
+        var issueComments = transactional(
+                GitHubIssueCommentSyncService.class,
+                new GitHubIssueCommentSyncService(
+                        clients,
+                        context.getBean(GitHubIssueCommentProcessor.class),
+                        properties,
+                        classifier,
+                        coordinator,
+                        repositories));
+        var transactions = new TransactionTemplate(transactionManager);
+        sync = new GitHubPullRequestSyncService(
+                repositories,
+                pullRequests,
+                clients,
+                context.getBean(GitHubPullRequestProcessor.class),
+                reviews,
+                reviewComments,
+                context.getBean(GitHubIssueCommentProcessor.class),
+                issueComments,
+                context.getBean(BackfillStateProvider.class),
+                transactions,
+                properties,
+                context.getBean(SyncSchedulerProperties.class),
+                classifier,
+                coordinator);
+        backfill = new GitHubHistoricalBackfillService(
+                context.getBean(SyncTargetProvider.class),
+                context.getBean(BackfillStateProvider.class),
+                context.getBean(SyncSchedulerProperties.class),
+                properties,
+                clients,
+                context.getBean(GitHubIssueProcessor.class),
+                context.getBean(GitHubIssueCommentProcessor.class),
+                context.getBean(GitHubPullRequestProcessor.class),
+                context.getBean(GitHubPullRequestReviewProcessor.class),
+                reviews,
+                reviewComments,
+                issueComments,
+                pullRequests,
+                repositories,
+                transactions,
+                context.getBean("monitoringExecutor", Executor.class),
+                context.getBean(ActivityLedgerRepair.class),
+                context.getBean(GitHubBackfillRepair.class));
+    }
+
+    /** Applies the service's own {@code @Transactional} methods, as its Spring proxy does. */
+    private <T> T transactional(Class<T> type, T service) {
+        TransactionManager manager = transactionManager;
+        var factory = new ProxyFactory(service);
+        factory.setProxyTargetClass(true);
+        factory.addAdvice(new TransactionInterceptor(manager, new AnnotationTransactionAttributeSource()));
+        return type.cast(factory.getProxy());
     }
 
     /** A provider with six threads: the first page holds five resolved ones. The sixth, still open, never arrives. */
