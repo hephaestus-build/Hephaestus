@@ -1,12 +1,11 @@
-import { scm, expectKind, requireChange } from "../kits/scm/index.ts";
-import { definePracticeScript } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const changed = requireChange(domain.files).size;
+		const work = scm(ctx, "scm.pull_request");
+		const changed = work.changedFiles().size;
 		await ctx.evidence.record("metadata.json");
 		const citation = await ctx.evidence.citeRecord("metadata.json", 36);
 		return {

@@ -17,10 +17,6 @@ const SCRIPTS_DIR = path.resolve(
 );
 const SNAPSHOTS_DIR = path.join(import.meta.dirname, "corpus", "snapshots");
 
-// A program that refuses an item kind says nothing about that case.
-const OTHER_KIND =
-	/^the script reads |^this practice requires SCM source files|^the SCM kit cannot read /u;
-
 const files = await readdir(SCRIPTS_DIR);
 const slugs = files
 	.filter((file) => file.endsWith(".ts"))
@@ -44,7 +40,8 @@ for (const slug of slugs) {
 			}
 			const stopped =
 				outcome.error instanceof Error ? outcome.error.message : String(outcome.error);
-			if (!OTHER_KIND.test(stopped)) {
+			// A program that refuses an item kind says nothing about that case.
+			if (!stopped.startsWith("the script reads ")) {
 				runs[name] = { stopped, reviews };
 			}
 		}

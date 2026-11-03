@@ -1,7 +1,5 @@
-import { expectKind, scm } from "../kits/scm/index.ts";
-import { isTestPath } from "../kits/scm/languages.ts";
-import { selectedSources } from "../kits/scm/occurrences.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { isTestPath, scm } from "@hephaestus/practice-scripts/scm";
 
 const CONTAINER =
 	/\b(?:VStack|HStack|ZStack|LazyVStack|LazyHStack|LazyVGrid|LazyHGrid|List|Form|ScrollView|Group|NavigationStack|NavigationSplitView|TabView|Section)\s*(?:\(.*?\))?\s*\{/u;
@@ -153,13 +151,8 @@ function viewBodies(lines: readonly string[]): ViewBody[] {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const files = await selectedSources(
-			ctx,
-			domain.files,
-			(file) => file.language === "swift" && !isTestPath(file.path),
-		);
+		const work = scm(ctx, "scm.pull_request");
+		const files = await work.sources((file) => file.language === "swift" && !isTestPath(file.path));
 		const leads: ReviewLead[] = [];
 		const facts = {
 			viewBodies: 0,

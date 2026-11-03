@@ -1,13 +1,10 @@
-import { scm, expectKind } from "../kits/scm/index.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
 import {
-	OUTCOME_HEADING,
-	closingReferences,
-	issueUrlReferences,
 	branchIssueReferences,
-} from "../kits/scm/references.ts";
-import { checkableItems, readLinkedWorkItems } from "../kits/scm/review.ts";
-import { DIRECTION_CHARS, oneLine } from "../lib/core/bounded-text.ts";
-import { definePracticeScript } from "../lib/core/practice-script.ts";
+	checkableItems,
+	issueReferences,
+	scm,
+} from "@hephaestus/practice-scripts/scm";
 
 function acFacts(body: string): { heading: boolean; boxes: number } {
 	return { heading: OUTCOME_HEADING.test(body), boxes: checkableItems(body).length };
@@ -16,23 +13,23 @@ function acFacts(body: string): { heading: boolean; boxes: number } {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const title = domain.item.title ?? "";
-		const body = domain.item.body ?? "";
-		const branch = domain.item.source_branch;
+		const work = scm(ctx, "scm.pull_request");
+		const title = work.item.title ?? "";
+		const body = work.item.body ?? "";
+		const branch = work.item.source_branch;
 
 		const closingRefs = [
 			...new Set([
-				...closingReferences(`${title}\n${body}`),
-				...issueUrlReferences(`${title}\n${body}`),
+				...issueReferences(`${title}\n${body}`).closing,
+				...issueReferences(`${title}\n${body}`).urls,
 			]),
 		].map((number) => `#${number}`);
 		const hasClosingRef = closingRefs.length > 0;
 		const branchRefs = branchIssueReferences(branch).map((number) => `#${number}`);
 		const hasBranchRef = branchRefs.length > 0;
 
-		const linked = await readLinkedWorkItems(ctx.evidence);
+		const capture = await work.linkedIssues();
+		const linked = capture?.items ?? null;
 		const linkedIssueBodyPresent = linked?.some((i) => i.body.trim().length > 0);
 		let acHeading = false;
 		let acBoxes = 0;
@@ -48,18 +45,12 @@ export default definePracticeScript({
 		const directions: string[] = [];
 		if (hasClosingRef) {
 			directions.push(
-				oneLine(
-					`Issue-reference syntax candidate(s) from title/body: ${closingRefs.join(", ")}.`,
-					DIRECTION_CHARS,
-				),
+				`Issue-reference syntax candidate(s) from title/body: ${closingRefs.join(", ")}.`,
 				"Inspect the exact mention in context, including templates/examples, before establishing that the author claims to close this issue. Only then map those criteria to the change.",
 			);
 		} else if (hasBranchRef) {
 			directions.push(
-				oneLine(
-					`Branch name encodes a possible issue number (${branchRefs.join(", ")}) but no closing keyword/URL was found in title/body.`,
-					DIRECTION_CHARS,
-				),
+				`Branch name encodes a possible issue number (${branchRefs.join(", ")}) but no closing keyword/URL was found in title/body.`,
 				"Treat this as a traceability candidate, not a closing claim: confirm it maps to a tracked issue before mapping any acceptance criteria.",
 			);
 		} else {
@@ -100,3 +91,7 @@ export default definePracticeScript({
 		});
 	},
 });
+
+/** A heading under which an issue states what "done" means without a task list. */
+const OUTCOME_HEADING =
+	/^\s*#+\s*(?:acceptance criteria|definition of done|dod\b|done when|expected (?:outcome|result|behaviou?r)|given\b)/imu;

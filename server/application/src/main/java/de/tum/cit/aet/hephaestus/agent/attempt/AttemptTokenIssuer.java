@@ -21,7 +21,7 @@ public class AttemptTokenIssuer {
     static final String WORK_DEADLINE_CLAIM = "work_deadline";
 
     /**
-     * Lets a sandbox call the review model, the direct models of its practice programs and the other gateway
+     * Lets a sandbox call the review model, the direct models of its practice scripts and the other gateway
      * capabilities of its job. A job holds one such credential.
      */
     public static final String LLM_PROXY_SCOPE = "llm_proxy";

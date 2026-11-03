@@ -32,7 +32,7 @@ after(() => {
 	}
 });
 
-const REVIEWING_PROGRAM = `import { definePracticeScript } from "../lib/core/practice-script.ts";
+const REVIEWING_PROGRAM = `import { definePracticeScript } from "@hephaestus/practice-scripts";
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {

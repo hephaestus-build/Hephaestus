@@ -12,12 +12,11 @@ The host and server validate the same result shape.
 
 ## Define a script
 
-Import the author entry point from `lib/core/practice-script.ts`.
-Domain helpers belong to `kits/scm/index.ts`, `kits/chat/index.ts` or `kits/docs/index.ts`.
-The runtime resolves these imports inside its installed toolkit.
+Import the author entry point from `@hephaestus/practice-scripts`.
+Domain helpers belong to `@hephaestus/practice-scripts/scm`, `/chat` or `/docs`.
 
 ```ts
-import { definePracticeScript } from "./lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
 
 export default definePracticeScript({
   meta: {},
@@ -30,6 +29,46 @@ export default definePracticeScript({
 This is the built-in behavior expressed as a custom script.
 A null definition script invokes the built-in script without a custom process.
 An invalid custom script never falls back to it.
+
+## The public API
+
+The [operator script guide](/admin/practice-scripts#the-script-api) lists every public name.
+The `exports` map in `docker/agents/practice-scripts/package.json` is the one home of the entry points.
+
+A map alone does not enforce the boundary, because a relative path still reaches any file.
+Thus, `lib/core/script-imports.ts` resolves each import of a script through the map and refuses anything else.
+This boundary is a contract. It is not a security boundary: the process permissions and the host's reads are.
+
+A new public name needs at least 3 scripts that use it. Until then, the helper stays in its script.
+Promoting a helper is additive. Demoting a helper is a breaking change.
+
+### What can change, and when
+
+The script API's major version is the product's major version. A script carries no version field.
+The contract version and the runtime image contract are facts between the host and the server. Authors do not see them.
+
+| Change | When |
+| --- | --- |
+| New export, optional option, returned field, record field, `UnratedReason`, outcome or higher limit | Any minor release |
+| Which lines a site rule, `isTestPath`, `languageOf` or the mask match, and the text of a helper's direction | Any minor release |
+| Removed or renamed name, new required option, lower limit, changed meaning of null | A major release, with a migration of known bytes and a recorded refusal for the rest |
+
+There is no deprecation period and no second path.
+
+### Errors and unknown values
+
+A script ends in one of three ways:
+
+1. It returns `ctx.review(...)` or a result that code decided.
+2. It throws `UnratedError`. It has no result, and the reason is recorded. An unknown reason records as `error`.
+3. It throws anything else. It has no result, and the reason is `error`.
+
+A script must not branch on every reason, because the set can grow.
+`ctx.review` ends the script, so a script never reads an outcome. Thus, a new outcome cannot break it.
+A code-decided result uses a known outcome. The host refuses any other.
+
+Records ignore unknown fields. A string with a closed list of values is open in the type.
+A script reads a value that it does not know as unknown, never as false.
 
 ## Context and trust
 
@@ -136,14 +175,14 @@ Drafts belong to one practice session and create no product records.
 Only the complete candidate returned by the script reaches admission.
 Removing a draft does not repair or remove a recorded Problem.
 
-## Compare what programs send
+## Compare what scripts send
 
-`docker/agents/practice-scripts/corpus.test.ts` runs every bundled program on the authored work in `corpus-cases.ts`.
-It records each program's review input in `corpus/snapshots/<slug>.snapshot`, or the reason that the program stopped.
+`docker/agents/practice-scripts/corpus.test.ts` runs every bundled script on the authored work in `corpus-cases.ts`.
+It records each script's review input in `corpus/snapshots/<slug>.snapshot`, or the reason that the script stopped.
 It uses no network and no model.
 
-A library change shows its effect on each program as a snapshot difference.
-No difference means that the programs send the same input for this work.
+A library change shows its effect on each script as a snapshot difference.
+No difference means that the scripts send the same input for this work.
 A difference changes what a review reads, so the [catalog rules](./practice-catalog.md#changing-bundled-defaults) apply to it.
 
 To record a change on purpose, run this command and review the difference:
@@ -152,7 +191,7 @@ To record a change on purpose, run this command and review the difference:
 node --test --test-update-snapshots docker/agents/practice-scripts/corpus.test.ts
 ```
 
-A snapshot proves what a program sends, not that a review judges better.
+A snapshot proves what a script sends, not that a review judges better.
 
 ## Models and limits
 

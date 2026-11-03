@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { requireChange, type DiffFile, type FileTree } from "../../kits/scm/index.ts";
 
 import { APICallError } from "@ai-sdk/provider";
 
@@ -233,32 +232,7 @@ const answered = (statusCode: number) =>
 		statusCode,
 	});
 
-async function refused(): Promise<never> {
-	throw new UnratedError("refused");
-}
-
 void describe("the context helpers", () => {
-	void test("a work without a captured change stops the program as unavailable, never as an empty change", () => {
-		const head: FileTree = {
-			commit: "a".repeat(40),
-			read: refused,
-			list: refused,
-			grep: refused,
-			cite: refused,
-		};
-		const change = new Map<string, DiffFile>();
-		assert.equal(
-			requireChange({
-				head,
-				change: { base: "", head: "", files: change, cite: refused },
-			}),
-			change,
-		);
-		for (const missing of [null, { head, change: null }]) {
-			assert.throws(() => requireChange(missing), { name: "UnratedError", reason: "unavailable" });
-		}
-	});
-
 	void test("an absent record is null, and malformed JSON or a failed read stops the program", async () => {
 		const records: Record<string, string> = {
 			"metadata.json": '{"pr_number": 7}',

@@ -1,13 +1,14 @@
-import { setTimeout as sleep } from "node:timers/promises";
-import { scm } from "../kits/scm/index.ts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 
-import { definePracticeScript, embedMany, step } from "../lib/core/practice-script.ts";
+import { definePracticeScript, embedMany, step } from "@hephaestus/practice-scripts/models";
+
+const { setTimeout: sleep } = process.getBuiltinModule("node:timers/promises");
 
 export default definePracticeScript({
 	meta: { models: { embedding: "required" } },
 	async run(ctx) {
-		const domain = scm(ctx);
-		const found = await domain.files?.change?.cite("src/cart.ts", "NEW", 2);
+		const work = scm(ctx, "scm.pull_request");
+		const found = await work.change?.cite("src/cart.ts", "NEW", 2);
 		if (found === undefined) {
 			throw new Error("the change was not captured");
 		}

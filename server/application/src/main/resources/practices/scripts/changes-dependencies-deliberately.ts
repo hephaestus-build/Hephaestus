@@ -1,11 +1,9 @@
-import { scm, expectKind, requireChange, type DiffFile, type FileTree } from "../kits/scm/index.ts";
-import { DIRECTION_CHARS, factsOf, oneLine } from "../lib/core/bounded-text.ts";
 import {
 	definePracticeScript,
-	z,
 	type PreparedContext,
 	type ReviewLead,
-} from "../lib/core/practice-script.ts";
+} from "@hephaestus/practice-scripts";
+import { scm, type DiffFile, type FileTree } from "@hephaestus/practice-scripts/scm";
 
 export const LABELS = {
 	"only-added":
@@ -44,13 +42,39 @@ function isLoose(c: string): boolean {
 	return LOOSE.test(t);
 }
 
-const dependencyMap = z.record(z.string().min(1), z.string());
-const packageDependenciesSchema = z.object({
-	dependencies: dependencyMap.optional(),
-	devDependencies: dependencyMap.optional(),
-	peerDependencies: dependencyMap.optional(),
-	optionalDependencies: dependencyMap.optional(),
-});
+const DEPENDENCY_MAPS = [
+	"dependencies",
+	"devDependencies",
+	"peerDependencies",
+	"optionalDependencies",
+] as const;
+
+/** The dependency maps of a package.json, or null when a map is not a map of strings. */
+function packageDependencies(value: unknown): Record<string, Record<string, string>> | null {
+	if (typeof value !== "object" || value === null) {
+		return null;
+	}
+	const fields = new Map(Object.entries(value));
+	const maps: Record<string, Record<string, string>> = {};
+	for (const name of DEPENDENCY_MAPS) {
+		const map: unknown = fields.get(name);
+		if (map === undefined) {
+			continue;
+		}
+		if (typeof map !== "object" || map === null || Array.isArray(map)) {
+			return null;
+		}
+		const versions: Record<string, string> = {};
+		for (const [dependency, version] of Object.entries(map)) {
+			if (dependency === "" || typeof version !== "string") {
+				return null;
+			}
+			versions[dependency] = version;
+		}
+		maps[name] = versions;
+	}
+	return maps;
+}
 
 const reTomlDep =
 	/^\s*(?<name>[A-Za-z0-9_.-]+)\s*=\s*(?:"(?<quoted>[^"]*)"|\{[^}]*version\s*=\s*"(?<table>[^"]*)"[^}]*\})/u;
@@ -233,7 +257,7 @@ async function capturedPackageMaps(tree: FileTree | null, path: string) {
 		return null;
 	}
 	try {
-		return packageDependenciesSchema.safeParse(JSON.parse(captured.text));
+		return packageDependencies(JSON.parse(captured.text));
 	} catch {
 		return null;
 	}
@@ -242,9 +266,9 @@ async function capturedPackageMaps(tree: FileTree | null, path: string) {
 async function packageManifestInputs(path: string, df: DiffFile, tree: FileTree | null) {
 	const parsed = await capturedPackageMaps(tree, path);
 	const context: PreparedContext[] =
-		parsed?.success === true
-			? [{ label: `Dependency maps in ${path} at the pinned head`, value: parsed.data }]
-			: [];
+		parsed === null
+			? []
+			: [{ label: `Dependency maps in ${path} at the pinned head`, value: parsed }];
 	const notes =
 		context.length === 0
 			? [
@@ -296,10 +320,7 @@ function lockfileDirections(
 ): string[] {
 	if (checkout.paths.length > 0 || touched.size > 0) {
 		return [
-			oneLine(
-				`Lockfile-named file(s) in the checkout: ${checkout.paths.length === 0 ? "none" : namedPaths(checkout.paths)}; touched in this diff: ${touched.size === 0 ? "none" : namedPaths([...touched])}.`,
-				DIRECTION_CHARS,
-			),
+			`Lockfile-named file(s) in the checkout: ${checkout.paths.length === 0 ? "none" : namedPaths(checkout.paths)}; touched in this diff: ${touched.size === 0 ? "none" : namedPaths([...touched])}.`,
 			"A lockfile answers for a changed manifest when the ecosystem resolves that manifest through it: beside it, or at a parent workspace root whose configuration includes it.",
 			"Read the paths and that configuration before expecting a matching update.",
 		];
@@ -316,10 +337,9 @@ function lockfileDirections(
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		const tree = domain.files?.head ?? null;
-		expectKind(domain, "scm.pull_request");
-		const change = requireChange(domain.files);
+		const work = scm(ctx, "scm.pull_request");
+		const tree = work.head;
+		const change = work.changedFiles();
 		const leads: ReviewLead[] = [];
 		const packageContexts: PreparedContext[] = [];
 		const packageNotes: string[] = [];
@@ -420,12 +440,12 @@ export default definePracticeScript({
 					leads.push({
 						at: { change: path, line, side: side === "added" ? "NEW" : "OLD" },
 						label: LABELS[kind],
-						facts: factsOf({
+						facts: {
 							ecosystem: base,
 							name,
 							oldConstraint: inAdded && inRemoved ? (removed.get(name) ?? "") : "",
 							newConstraint: inAdded && inRemoved ? (added.get(name) ?? "") : "",
-						}),
+						},
 					});
 				}
 			}
@@ -437,8 +457,7 @@ export default definePracticeScript({
 			(lead) => lead.label === LABELS["raw-manifest-line"],
 		).length;
 
-		const directions: string[] =
-			packageNotes.length === 0 ? [] : [oneLine(packageNotes.join(" "), DIRECTION_CHARS)];
+		const directions: string[] = packageNotes.length === 0 ? [] : [packageNotes.join(" ")];
 		if (changedManifests.size > 0) {
 			directions.push(
 				`Manifest-named file(s) changed (${changedManifests.size}). The name alone is no applicability: a changed external dependency declaration, resolution, source or pin inside one is, and internal target, test-target, scheme or build-setting wiring alone is not.`,

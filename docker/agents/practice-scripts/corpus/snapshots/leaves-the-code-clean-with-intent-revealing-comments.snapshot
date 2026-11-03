@@ -87,10 +87,178 @@
 			]
 		}
 	],
-	"every-language": {
-		"stopped": "review options: facts.objective-c: Invalid key in record",
-		"reviews": []
-	},
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "AppTests/CartTests.swift",
+						"line": 1,
+						"endLine": 1
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "swift",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "app/models/cart.rb",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "ruby",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "python",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 9,
+						"endLine": 9
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "python",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "pkg/load.go",
+						"line": 7,
+						"endLine": 7
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "go",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.java",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "java",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.java",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "java",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.kt",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "kotlin",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.test.ts",
+						"line": 1,
+						"endLine": 1
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "typescript",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "typescript",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "typescript",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 15,
+						"endLine": 15
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "typescript",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				}
+			],
+			"facts": {
+				"debugCandidates": 12,
+				"todoCandidates": 0,
+				"processNotes": 0,
+				"placeholders": 0,
+				"typescript": 4,
+				"javascript": 0,
+				"python": 2,
+				"go": 1,
+				"java": 2,
+				"kotlin": 1,
+				"rust": 0,
+				"ruby": 1,
+				"c": 0,
+				"objectiveC": 0,
+				"csharp": 0,
+				"php": 0,
+				"swift": 1
+			},
+			"directions": [
+				"Found 12 debug-output call(s) on selected lines (print/console/log-style) — investigate whether each is leftover debug residue or a deliberate, intent-revealing log."
+			]
+		}
+	],
 	"manifests": [
 		{
 			"leads": [],

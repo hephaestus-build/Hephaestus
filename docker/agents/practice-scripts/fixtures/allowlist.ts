@@ -1,4 +1,4 @@
-import { definePracticeScript, generateText } from "../lib/core/practice-script.ts";
+import { definePracticeScript, generateText } from "@hephaestus/practice-scripts/models";
 
 export default definePracticeScript({
 	meta: { models: { chat: "required" } },

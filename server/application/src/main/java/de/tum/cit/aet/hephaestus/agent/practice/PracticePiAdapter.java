@@ -42,7 +42,7 @@ public class PracticePiAdapter {
     static final String PRACTICE_OUTPUT_TOKENS_ENV = "PI_PRACTICE_OUTPUT_TOKENS";
 
     /**
-     * The tokens the direct model calls of the attempt's practice programs may spend together: the runner holds its
+     * The tokens the direct model calls of the attempt's practice scripts may spend together: the runner holds its
      * programs to it, and the proxy refuses further direct calls past {@code direct-model-tokens-per-attempt}.
      */
     static final String DIRECT_MODEL_TOKENS_ENV = "PI_DIRECT_MODEL_TOKENS";

@@ -1,4 +1,4 @@
-import { definePracticeScript } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts/models";
 
 export default definePracticeScript({
 	// @ts-expect-error -- "sometimes" is not a need, which is the point of this fixture.

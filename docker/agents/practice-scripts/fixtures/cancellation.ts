@@ -1,4 +1,4 @@
-import { definePracticeScript } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
 
 export default definePracticeScript({
 	meta: {},

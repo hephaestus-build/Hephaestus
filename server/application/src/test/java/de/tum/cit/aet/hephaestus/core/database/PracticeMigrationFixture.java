@@ -121,9 +121,18 @@ final class PracticeMigrationFixture {
     record ProgramMapping(String sourceSha256, String source, String targetSha256, String target) {}
 
     static Map<String, ProgramMapping> mappedPrograms() throws Exception {
+        return programsOf(BRANCH_FILE);
+    }
+
+    /** The bundled scripts that move to the public script API, by the SHA-256 of their earlier text. */
+    static Map<String, ProgramMapping> publicScriptApiPrograms() throws Exception {
+        return programsOf("next/20261103140923-practice-scripts-public-api.xml");
+    }
+
+    private static Map<String, ProgramMapping> programsOf(String changelog) throws Exception {
         final String migration;
         try (var input = Objects.requireNonNull(
-                PracticeMigrationFixture.class.getResourceAsStream("/db/changelog/" + BRANCH_FILE))) {
+                PracticeMigrationFixture.class.getResourceAsStream("/db/changelog/" + changelog))) {
             migration = new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
         var literal = Pattern.compile("INSERT INTO _cutover_program VALUES\\('([a-f0-9]{64})',"

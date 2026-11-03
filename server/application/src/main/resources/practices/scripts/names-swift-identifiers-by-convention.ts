@@ -1,6 +1,5 @@
-import { expectKind, scm } from "../kits/scm/index.ts";
-import { selectedSources } from "../kits/scm/occurrences.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 
 const ALLOWED_SINGLE = new Set(["i", "j", "k", "x", "y", "z", "_"]);
 const ACRONYMS = ["API", "URL", "HTTP", "JSON", "XML", "HTML", "CSS", "SQL", "UI", "ID"];
@@ -115,11 +114,8 @@ function lineCues(lines: readonly string[], index: number): [Cue, Record<string,
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const files = await selectedSources(
-			ctx,
-			domain.files,
+		const work = scm(ctx, "scm.pull_request");
+		const files = await work.sources(
 			(file) => file.language === "swift" && !/Tests?\//u.test(file.path),
 		);
 		const counts = new Map<Cue, number>();
@@ -139,11 +135,10 @@ export default definePracticeScript({
 			if (/import\s+XCTest|import\s+Testing/u.test(file.text)) {
 				continue;
 			}
-			const added = domain.files?.change?.files.get(file.path)?.addedLines;
 			const lines = file.text.split("\n");
 			for (const index of lines.keys()) {
 				const at = index + 1;
-				if (added?.has(at) !== true) {
+				if (!file.isAdded(at)) {
 					continue;
 				}
 				for (const [key, facts] of lineCues(lines, index)) {

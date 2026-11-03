@@ -1,14 +1,11 @@
-import { scm, expectKind } from "../kits/scm/index.ts";
-import { bodyFact, classifyIssue } from "../kits/scm/issue-classification.ts";
-import { DIRECTION_CHARS, oneLine } from "../lib/core/bounded-text.ts";
-import { definePracticeScript } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { issueShape, scm } from "@hephaestus/practice-scripts/scm";
 
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.issue");
-		const shape = classifyIssue(domain.item);
+		const work = scm(ctx, "scm.issue");
+		const shape = issueShape(work.item);
 		const { body, issueType, labels, emptyOrTitleEcho, hasDeliverableType, looksUmbrella } = shape;
 		return ctx.review({
 			leads: [],
@@ -20,11 +17,8 @@ export default definePracticeScript({
 				looksUmbrella: looksUmbrella ? 1 : 0,
 			},
 			directions: [
-				...bodyFact(shape),
-				oneLine(
-					`Captured: ${String(body.length)} body character(s); labels ${labels.join(", ") || "none"}; native type ${issueType || "none"}.`,
-					DIRECTION_CHARS,
-				),
+				...shape.bodyDirections,
+				`Captured: ${String(body.length)} body character(s); labels ${labels.join(", ") || "none"}; native type ${issueType || "none"}.`,
 				"Judge the standard once over the title, the whole body, the comments and any materialised document the issue delegates to.",
 			],
 		});

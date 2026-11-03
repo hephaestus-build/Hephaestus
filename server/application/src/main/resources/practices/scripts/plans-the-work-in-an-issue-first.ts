@@ -1,16 +1,7 @@
-import { readCapturedCommits } from "../kits/scm/change.ts";
-import { scm, expectKind } from "../kits/scm/index.ts";
-import {
-	branchIssueReferences,
-	closingReferences,
-	issueNumberReferences,
-	namedIssues,
-	relatedReferences,
-} from "../kits/scm/references.ts";
-import { millisBetween, readLinkedWorkItemCapture } from "../kits/scm/review.ts";
-import { factsOf, listWithin } from "../lib/core/bounded-text.ts";
-import { REVIEW_LEAD_LIMIT } from "../lib/core/contract.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, listWithin, type ReviewLead } from "@hephaestus/practice-scripts";
+import { branchIssueReferences, issueReferences, scm } from "@hephaestus/practice-scripts/scm";
+
+const REVIEW_LEAD_LIMIT = 200;
 
 export const LABELS = {
 	"candidate-issue":
@@ -33,25 +24,24 @@ function hours(millis: number): string {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
+		const work = scm(ctx, "scm.pull_request");
 		const leads: ReviewLead[] = [];
 		const directions: string[] = [];
-		const body = domain.item.body ?? "";
-		const title = domain.item.title ?? "";
-		const capture = await readLinkedWorkItemCapture(ctx.evidence);
+		const body = work.item.body ?? "";
+		const title = work.item.title ?? "";
+		const capture = await work.linkedIssues();
 		const linked = capture?.items ?? null;
 		const named = namedIssues([
 			[
 				"provider closing link",
 				(linked ?? []).filter((item) => item.how === "closesOnMerge").map((item) => item.number),
 			],
-			["closing keyword", closingReferences(body)],
-			["title", issueNumberReferences(title)],
-			["branch", branchIssueReferences(domain.item.source_branch)],
-			["Related to", relatedReferences(body)],
+			["closing keyword", issueReferences(body).closing],
+			["title", issueReferences(title).mentioned],
+			["branch", branchIssueReferences(work.item.source_branch)],
+			["Related to", issueReferences(body).related],
 		]);
-		const capturedCommits = await readCapturedCommits(ctx.evidence);
+		const capturedCommits = await work.commits();
 		const commitsCaptured = capturedCommits !== null;
 		const commits = capturedCommits ?? [];
 		const authored = commits
@@ -84,7 +74,7 @@ export default definePracticeScript({
 			leads.push({
 				at: { record: `linked_work_items/${String(item.number)}.md`, line: 0 },
 				label: LABELS["candidate-issue"],
-				facts: factsOf({
+				facts: {
 					number: item.number,
 					namedBy,
 					providerLink: item.how ?? "",
@@ -94,7 +84,7 @@ export default definePracticeScript({
 						: { firstCommit: first.sha.slice(0, 7), firstCommitAuthoredAt: first.authoredAt }),
 					...(toFirstCommit === null ? {} : { hoursFromIssueToFirstCommit: hours(toFirstCommit) }),
 					relation,
-				}),
+				},
 			});
 		}
 		const numbers = [...named.keys()].map((n) => `#${String(n)}`);
@@ -172,3 +162,25 @@ export default definePracticeScript({
 		});
 	},
 });
+
+/** Milliseconds between two ISO instants, or null when either is missing or unreadable. */
+function millisBetween(from: string | undefined, to: string | undefined): number | null {
+	if (from === undefined || to === undefined) {
+		return null;
+	}
+	const a = Date.parse(from);
+	const b = Date.parse(to);
+	return Number.isNaN(a) || Number.isNaN(b) ? null : b - a;
+}
+
+function namedIssues(
+	ways: readonly (readonly [how: string, issues: readonly number[]])[],
+): Map<number, string[]> {
+	const named = new Map<number, string[]>();
+	for (const [how, issues] of ways) {
+		for (const number of issues) {
+			named.set(number, [...(named.get(number) ?? []), how]);
+		}
+	}
+	return named;
+}

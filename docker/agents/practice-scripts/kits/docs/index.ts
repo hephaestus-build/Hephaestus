@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { decimalIdSchema } from "../../lib/core/contract.ts";
-import type { PracticeScriptContext, ModelNeeds } from "../../lib/core/practice-script.ts";
+import type { ScriptContext } from "../../lib/core/practice-script.ts";
 
 export const documentRecordSchema = z.object({
 	id: decimalIdSchema,
@@ -16,7 +16,7 @@ export const documentRecordSchema = z.object({
 	archived: z.boolean(),
 });
 
-export function docs<M extends ModelNeeds>(ctx: PracticeScriptContext<M>) {
+export function docs<C extends Pick<ScriptContext, "kind" | "item" | "evidence">>(ctx: C) {
 	if (ctx.kind !== "docs.document") {
 		throw new Error("the script uses the wrong domain kit");
 	}

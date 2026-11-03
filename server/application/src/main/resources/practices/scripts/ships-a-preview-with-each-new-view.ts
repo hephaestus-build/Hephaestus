@@ -1,8 +1,5 @@
-import { isCommentLine } from "../kits/scm/declarations.ts";
-import { scm, expectKind, requireChange } from "../kits/scm/index.ts";
-import { isTestPath, languageOf } from "../kits/scm/languages.ts";
-import { factsOf } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { isTestPath, languageOf, scm } from "@hephaestus/practice-scripts/scm";
 
 const VIEW_DECLARATION =
 	/^\s*(?:@\w+\s+)*(?:(?:public|private|fileprivate|internal)\s+)?struct\s+(?<name>[A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*:\s*[^{]*\bView\b/u;
@@ -16,13 +13,12 @@ export const LABELS = {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
+		const work = scm(ctx, "scm.pull_request");
 		const leads: ReviewLead[] = [];
 		let newViews = 0;
 		let previewsAdded = 0;
 		let filesWithNewViewAndNoPreview = 0;
-		for (const [path, df] of requireChange(domain.files)) {
+		for (const [path, df] of work.changedFiles()) {
 			if (languageOf(path) !== "swift" || isTestPath(path)) {
 				continue;
 			}
@@ -38,7 +34,7 @@ export default definePracticeScript({
 					leads.push({
 						at: { change: path, line },
 						label: LABELS["new-view-type"],
-						facts: factsOf({ name: view.groups?.name ?? "" }),
+						facts: { name: view.groups?.name ?? "" },
 					});
 				} else if (PREVIEW.test(content)) {
 					previews += 1;
@@ -65,3 +61,11 @@ export default definePracticeScript({
 		});
 	},
 });
+
+function isCommentLine(content: string, language: string): boolean {
+	const trimmed = content.trimStart();
+	if (language === "python" || language === "ruby") {
+		return trimmed.startsWith("#");
+	}
+	return trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*");
+}

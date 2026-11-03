@@ -1,14 +1,12 @@
-import { scm, expectKind, requireChange, type DiffFile } from "../kits/scm/index.ts";
+import { definePracticeScript, listWithin, type ReviewLead } from "@hephaestus/practice-scripts";
 import {
 	branchIssueReferences,
-	closingReferences,
-	issueNumberReferences,
-	namedIssues,
-	withoutHtmlComments,
-} from "../kits/scm/references.ts";
-import { readLinkedWorkItemCapture } from "../kits/scm/review.ts";
-import { DIRECTION_CHARS, listWithin, oneLine } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+	issueReferences,
+	scm,
+	type DiffFile,
+} from "@hephaestus/practice-scripts/scm";
+
+const DIRECTION_CHARS = 300;
 
 export const LABELS = {
 	"xcode-placeholder": "An added line that keeps an Xcode placeholder token.",
@@ -82,10 +80,9 @@ function listed(opening: string, items: readonly string[], separator = ", "): st
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const { item: record } = domain;
-		const change = requireChange(domain.files);
+		const work = scm(ctx, "scm.pull_request");
+		const { item: record } = work;
+		const change = work.changedFiles();
 		const paths = [...change.keys()];
 		const unchanged = [...change.values()]
 			.filter(
@@ -134,7 +131,7 @@ export default definePracticeScript({
 		const body = record.body ?? "";
 		const testing = testingSection(body);
 		const screenshots = body.match(SCREENSHOT)?.length ?? 0;
-		const capture = await readLinkedWorkItemCapture(ctx.evidence);
+		const capture = await work.linkedIssues();
 		const captured = capture?.items.map((item) => item.number) ?? [];
 		const named = namedIssues([
 			[
@@ -143,8 +140,8 @@ export default definePracticeScript({
 					.filter((item) => item.how === "closesOnMerge")
 					.map((item) => item.number),
 			],
-			["closing keyword in the description", closingReferences(body)],
-			["title", issueNumberReferences(record.title ?? "")],
+			["closing keyword in the description", issueReferences(body).closing],
+			["title", issueReferences(record.title ?? "").mentioned],
 			["branch", branchIssueReferences(record.source_branch)],
 		]);
 
@@ -257,3 +254,34 @@ export default definePracticeScript({
 		});
 	},
 });
+
+function namedIssues(
+	ways: readonly (readonly [how: string, issues: readonly number[]])[],
+): Map<number, string[]> {
+	const named = new Map<number, string[]>();
+	for (const [how, issues] of ways) {
+		for (const number of issues) {
+			named.set(number, [...(named.get(number) ?? []), how]);
+		}
+	}
+	return named;
+}
+
+// Providers do not link issue references inside hidden HTML comments.
+const HTML_COMMENT = /<!--[\s\S]*?-->/gu;
+
+// Retain a boundary so removed comments cannot join separate tokens.
+function withoutHtmlComments(text: string): string {
+	let result = text;
+	let previous;
+	do {
+		previous = result;
+		result = result.replaceAll(HTML_COMMENT, " ");
+	} while (result !== previous);
+	return result;
+}
+
+function oneLine(text: string, max: number): string {
+	const flat = text.replaceAll(/\s+/gu, " ").trim();
+	return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
+}

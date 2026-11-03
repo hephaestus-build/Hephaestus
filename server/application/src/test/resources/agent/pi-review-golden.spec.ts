@@ -62,7 +62,7 @@ function preparingProgram(many: boolean): string {
 		...lead,
 		label: LEAD_LABELS[kind],
 	}));
-	return `import { definePracticeScript } from "../lib/core/practice-script.ts";
+	return `import { definePracticeScript } from "@hephaestus/practice-scripts";
 export default definePracticeScript({
 meta: {},
 async run(ctx) {

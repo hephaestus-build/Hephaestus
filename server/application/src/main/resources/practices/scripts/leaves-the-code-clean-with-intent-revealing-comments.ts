@@ -1,12 +1,5 @@
-import { scm } from "../kits/scm/index.ts";
-import {
-	occurrences,
-	selectedSources,
-	selectedOccurrences,
-	occurrenceLead,
-	sortOccurrenceLeads,
-} from "../kits/scm/occurrences.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { scm, type Site } from "@hephaestus/practice-scripts/scm";
 
 export const LABELS = {
 	"debug-output":
@@ -62,38 +55,32 @@ const LISTED = 40;
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		if (domain.kind !== "scm.pull_request" && domain.kind !== "scm.file") {
-			throw new Error("this practice requires SCM source files");
-		}
-		const leads: ReviewLead[] = [];
+		const work = scm(ctx, "scm.pull_request", "scm.file");
 		const byLang: Record<string, number> = {};
 		let debugCandidates = 0;
 		let todoCandidates = 0;
 		let processNotes = 0;
 		let placeholders = 0;
 
-		for (const file of await selectedSources(
-			ctx,
-			domain.files,
-			(source) => source.language !== null,
-		)) {
+		const sites: Site[] = [];
+		for (const file of await work.sources((source) => source.language !== null)) {
 			const lang = file.language;
 			if (lang === null) {
 				continue;
 			}
-			const debug = selectedOccurrences(
-				ctx,
-				domain.files,
-				occurrences(
-					file,
-					(LANG_PATTERNS[lang] ?? []).map(([_call, test]) => ({
+			const debug = file
+				.sites(
+					(LANG_PATTERNS[lang] ?? []).map(([call, test]) => ({
+						kind: call,
 						label: LABELS["debug-output"],
 						test,
 					})),
-				).map((row) => ({ ...row, facts: { ...row.facts, call: row.label } })),
-			);
-			leads.push(...debug.map(occurrenceLead));
+				)
+				.map((site) => ({
+					...site,
+					lead: { ...site.lead, facts: { ...site.facts, call: site.label } },
+				}));
+			sites.push(...debug);
 			debugCandidates += debug.length;
 			byLang[lang] = (byLang[lang] ?? 0) + debug.length;
 			for (const [kind, test] of [
@@ -101,12 +88,8 @@ export default definePracticeScript({
 				["editing-process-note", PROCESS_NOTE],
 				["template-placeholder", TEMPLATE_PLACEHOLDER],
 			] as const) {
-				const found = selectedOccurrences(
-					ctx,
-					domain.files,
-					occurrences(file, [{ label: LABELS[kind], test }], { includeComments: true }),
-				);
-				leads.push(...found.map(occurrenceLead));
+				const found = file.sites([{ kind, label: LABELS[kind], test }], { comments: true });
+				sites.push(...found);
 				if (kind === "todo-fixme-marker") {
 					todoCandidates += found.length;
 				}
@@ -118,6 +101,9 @@ export default definePracticeScript({
 				}
 			}
 		}
+		const leads = sites
+			.toSorted((a, b) => (a.path < b.path ? -1 : Number(a.path > b.path)) || a.line - b.line)
+			.map((site) => site.lead);
 		const directions: string[] = [];
 		if (debugCandidates > 0) {
 			directions.push(
@@ -135,7 +121,7 @@ export default definePracticeScript({
 			);
 		}
 		return ctx.review({
-			leads: sortOccurrenceLeads(leads).slice(0, LISTED),
+			leads: leads.slice(0, LISTED),
 			facts: {
 				debugCandidates,
 				todoCandidates,

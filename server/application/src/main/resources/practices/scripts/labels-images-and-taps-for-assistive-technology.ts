@@ -1,6 +1,5 @@
-import { expectKind, scm } from "../kits/scm/index.ts";
-import { selectedSources } from "../kits/scm/occurrences.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 
 const LABELS = {
 	unlabeledImage:
@@ -29,19 +28,17 @@ function labelledImage(lines: readonly string[], index: number): boolean {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const files = await selectedSources(ctx, domain.files, (file) => file.language === "swift");
+		const work = scm(ctx, "scm.pull_request");
+		const files = await work.sources((file) => file.language === "swift");
 		const counts = new Map<Cue, number>();
 		const leads: ReviewLead[] = [];
 		for (const file of files) {
 			if (!/:\s*View\s*\{/u.test(file.text)) {
 				continue;
 			}
-			const added = domain.files?.change?.files.get(file.path)?.addedLines;
 			const lines = file.text.split("\n");
 			for (const [index, line] of lines.entries()) {
-				if (added?.has(index + 1) !== true) {
+				if (!file.isAdded(index + 1)) {
 					continue;
 				}
 				const found: Cue[] = [];

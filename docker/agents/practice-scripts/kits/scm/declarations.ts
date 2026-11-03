@@ -3,8 +3,6 @@
  * comments are skipped. Unsupported languages return null so callers report location as unknown.
  */
 
-import type { FileTree } from "./index.ts";
-
 export interface Declaration {
 	/** `struct`, `class`, `enum`, `actor`, `extension`, `protocol`, `interface`, `object`, `record`, `impl`, `trait`, `mod`, `type`. */
 	kind: string;
@@ -146,10 +144,6 @@ const SYNTAX: Record<string, Syntax> = {
 		],
 	},
 };
-export function hasDeclarationSyntax(language: string | null): boolean {
-	return language !== null && language in SYNTAX;
-}
-
 function startsWith(source: string, i: number, token: string): boolean {
 	return source.startsWith(token, i);
 }
@@ -412,34 +406,6 @@ export function enclosingDeclaration(decls: Declaration[], line: number): Declar
 		}
 	}
 	return best;
-}
-
-/**
- * The declarations of a file of the tree, or null when the file is not there, cannot be read, or the
- * language has no row: its location is then unknown, never "file scope".
- */
-export async function declarationsOf(
-	tree: Pick<FileTree, "read"> | null,
-	path: string,
-	language: string,
-): Promise<Declaration[] | null> {
-	if (tree === null) {
-		return null;
-	}
-	try {
-		const file = await tree.read(path);
-		return file.status === "FOUND" ? declarations(language, file.text) : null;
-	} catch {
-		return null;
-	}
-}
-
-export function isCommentLine(content: string, language: string): boolean {
-	const trimmed = content.trimStart();
-	if (language === "python" || language === "ruby") {
-		return trimmed.startsWith("#");
-	}
-	return trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*");
 }
 
 /** Replace comments and string contents with spaces while retaining match offsets and line breaks. */

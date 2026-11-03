@@ -37,7 +37,7 @@ const LIB = nodePath.resolve(
 	"../../../../../../docker/agents/practice-scripts/lib",
 );
 
-export const INVALID_META_PROGRAM = `import { definePracticeScript } from "../lib/core/practice-script.ts";
+export const INVALID_META_PROGRAM = `import { definePracticeScript } from "@hephaestus/practice-scripts";
 export default definePracticeScript({
     meta: { limits: {} },
     async run() { return { outcome: "MET" }; },
@@ -159,7 +159,8 @@ export const SESSION_CANDIDATE = {
 };
 
 export function directProgram(before = ""): string {
-	return `import { definePracticeScript, generateText, step } from "../lib/core/practice-script.ts";
+	return `import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { generateText, step } from "@hephaestus/practice-scripts/models";
 export default definePracticeScript({
 	meta: { models: { chat: "optional" } },
 	async run(ctx) {

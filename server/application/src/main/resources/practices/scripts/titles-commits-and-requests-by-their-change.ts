@@ -1,6 +1,5 @@
-import { readCapturedCommits } from "../kits/scm/change.ts";
-import { expectKind, scm } from "../kits/scm/index.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 
 const MEANINGLESS = [
 	/^\.+$/u,
@@ -91,12 +90,11 @@ function titleCuesOf(title: string, sourceBranch: string): string[] {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const { title } = domain.item;
+		const work = scm(ctx, "scm.pull_request");
+		const { title } = work.item;
 		const leads: ReviewLead[] = [];
-		const titleCues = title === undefined ? [] : titleCuesOf(title, domain.item.source_branch);
-		const commits = await readCapturedCommits(ctx.evidence);
+		const titleCues = title === undefined ? [] : titleCuesOf(title, work.item.source_branch);
+		const commits = await work.commits();
 		const authored = (commits ?? [])
 			.map((commit) => ({ commit, subject: (commit.message.split("\n")[0] ?? "").trim() }))
 			.filter(({ subject }) => subject.length > 0 && !MERGE.test(subject));
@@ -119,7 +117,7 @@ export default definePracticeScript({
 		const repeatedSubjects = [...subjects.values()].filter((count) => count > 1).length;
 		const vague = [...categories.values()].reduce((sum, count) => sum + count, 0);
 		const directories = new Set(
-			[...(domain.files?.change?.files.keys() ?? [])].flatMap((path) =>
+			[...(work.change?.files.keys() ?? [])].flatMap((path) =>
 				path.includes("/") ? [path.slice(0, path.lastIndexOf("/"))] : [],
 			),
 		);
@@ -138,16 +136,16 @@ export default definePracticeScript({
 				"Half or more of the authored commits have vague subjects. Read whether this is a pattern for the change as a whole, not one slip.",
 			);
 		}
-		if (domain.item.changed_files >= 20 && directories.size >= 4) {
+		if (work.item.changed_files >= 20 && directories.size >= 4) {
 			directions.push(
-				`The change touches ${String(domain.item.changed_files)} files in ${String(directories.size)} directories. Read whether one title can describe it or whether it holds separate changes.`,
+				`The change touches ${String(work.item.changed_files)} files in ${String(directories.size)} directories. Read whether one title can describe it or whether it holds separate changes.`,
 			);
 		}
 		return ctx.review({
 			leads: leads.slice(0, 60),
 			facts: {
 				...(title === undefined ? {} : { titleLength: title.length, titleCues: titleCues.length }),
-				changedFiles: domain.item.changed_files,
+				changedFiles: work.item.changed_files,
 				...(commits === null
 					? {}
 					: { authoredCommits: authored.length, vagueSubjects: vague, repeatedSubjects }),

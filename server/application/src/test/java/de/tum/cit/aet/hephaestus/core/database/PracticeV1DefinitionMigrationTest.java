@@ -18,6 +18,12 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Tag("database")
 class PracticeV1DefinitionMigrationTest {
+    /**
+     * The cutover's own result. The public script API migration rewrites bundled scripts after it, and
+     * {@link PublicScriptApiMigrationTest} owns that step.
+     */
+    private static final String PUBLIC_SCRIPT_API = "practice-scripts-public-api.xml";
+
     @ParameterizedTest
     @ValueSource(strings = {"prod", "dev"})
     void shouldConvertEveryMappedProgramWithoutChangingItsSyntheticOwnerCriteria(String context) throws Exception {
@@ -46,7 +52,7 @@ class PracticeV1DefinitionMigrationTest {
                 .hasSize(85);
         var database = PracticeMigrationFixture.releasedDatabase(context);
         PracticeMigrationFixture.seedMappedPrograms(database, programs);
-        PracticeMigrationFixture.upgrade(database, context);
+        PracticeMigrationFixture.upgradeBefore(database, context, PUBLIC_SCRIPT_API);
         for (int index = 0; index < programs.size(); index++) {
             long practiceId = 1600000L + index;
             var mapping = programs.get(index);
@@ -100,7 +106,7 @@ class PracticeV1DefinitionMigrationTest {
                 .source();
         var database = PracticeMigrationFixture.releasedDatabase(context);
         installProgram(database, source + " ");
-        assertThatThrownBy(() -> PracticeMigrationFixture.upgrade(database, context))
+        assertThatThrownBy(() -> PracticeMigrationFixture.upgradeBefore(database, context, PUBLIC_SCRIPT_API))
                 .hasMessageContaining("practice 992121 has an unsupported custom program");
         assertThat(PracticeMigrationFixture.column(database, "SELECT precompute_script FROM practice WHERE id=992121"))
                 .containsExactly(source + " ");
@@ -160,7 +166,7 @@ class PracticeV1DefinitionMigrationTest {
                 }
                 connection.commit();
             }
-            PracticeMigrationFixture.upgrade(database, context);
+            PracticeMigrationFixture.upgradeBefore(database, context, PUBLIC_SCRIPT_API);
             int index = 0;
             for (var program : programs) {
                 var mapping = releasedMapping(mapped, program);
@@ -192,7 +198,7 @@ class PracticeV1DefinitionMigrationTest {
                     JsonMapper.builder().build().readTree(input).get(0));
             var mapping = releasedMapping(PracticeMigrationFixture.mappedPrograms(), program);
             installProgram(database, program.path("source").asString());
-            PracticeMigrationFixture.upgrade(database, context);
+            PracticeMigrationFixture.upgradeBefore(database, context, PUBLIC_SCRIPT_API);
             assertThat(PracticeMigrationFixture.column(
                             database,
                             "SELECT encode(sha256(convert_to(definition->>'script','UTF8')),'hex') FROM"
@@ -217,7 +223,7 @@ class PracticeV1DefinitionMigrationTest {
     void shouldIdentifyUnsupportedCustomProgramsAndRollBackTheCutover(String context) throws Exception {
         var database = PracticeMigrationFixture.releasedDatabase(context);
         installProgram(database, "export default async function custom() { return {outcome: 'MET'}; }");
-        assertThatThrownBy(() -> PracticeMigrationFixture.upgrade(database, context))
+        assertThatThrownBy(() -> PracticeMigrationFixture.upgradeBefore(database, context, PUBLIC_SCRIPT_API))
                 .hasMessageContaining("practice 992121 has an unsupported custom program");
         assertThat(PracticeMigrationFixture.column(
                         database, "SELECT current_revision_id::text FROM practice WHERE id=992121"))
@@ -290,7 +296,7 @@ class PracticeV1DefinitionMigrationTest {
             INSERT INTO practice_catalog_installation(workspace_id,installed_at,provenance_linked_at)
             VALUES(992101,'2026-01-01T00:00:00Z','2026-01-02T00:00:00Z');
             """);
-        PracticeMigrationFixture.upgrade(database, context);
+        PracticeMigrationFixture.upgradeBefore(database, context, PUBLIC_SCRIPT_API);
         assertThat(PracticeMigrationFixture.column(
                         database,
                         "SELECT number || '|' || (definition->>'criteria') FROM practice_version WHERE id"
@@ -355,7 +361,7 @@ class PracticeV1DefinitionMigrationTest {
             INSERT INTO practice_catalog_installation(workspace_id,installed_at,provenance_linked_at)
             VALUES(992101,'2026-01-01',NULL);
             """);
-        PracticeMigrationFixture.upgrade(database, context);
+        PracticeMigrationFixture.upgradeBefore(database, context, PUBLIC_SCRIPT_API);
         assertThat(PracticeMigrationFixture.column(database, """
             SELECT catalog_slug || '|' || (catalog_base->'groupSlug'='null'::jsonb)::text || '|' ||
                 (catalog_base->'definition'->>'criteria') || '|' ||
@@ -398,7 +404,7 @@ class PracticeV1DefinitionMigrationTest {
             }
             connection.commit();
         }
-        PracticeMigrationFixture.upgrade(database, context);
+        PracticeMigrationFixture.upgradeBefore(database, context, PUBLIC_SCRIPT_API);
         assertThat(PracticeMigrationFixture.column(database, """
             SELECT p.slug || '|' || v.number || '|' || (v.definition->>'about') || '|' ||
                 (v.definition->'reads'->>'contract') || '|' ||

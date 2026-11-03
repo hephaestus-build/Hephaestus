@@ -17,8 +17,8 @@ const CATALOG_SCHEMA =
 	"server/application/src/main/resources/practices/default-catalog.schema.json";
 const CATALOG = "server/application/src/main/resources/practices/default-catalog.json";
 const CONTRACT = "docker/agents/practice-scripts/lib/core/contract.ts";
-const ENTRY = "docker/agents/practice-scripts/lib/core/practice-script.ts";
-const SCM = "docker/agents/practice-scripts/kits/scm/index.ts";
+const ENTRY = "docker/agents/practice-scripts/lib/api.ts";
+const SCM = "docker/agents/practice-scripts/kits/scm/api.ts";
 const CHAT = "docker/agents/practice-scripts/kits/chat/index.ts";
 const DOCS = "docker/agents/practice-scripts/kits/docs/index.ts";
 
@@ -62,7 +62,7 @@ export const SEVERITIES = ["MAJOR"] as const;
 	],
 	[
 		ENTRY,
-		"export function definePracticeScript() {}\nexport type { Candidate } from './contract.ts';\n",
+		"export const definePracticeScript = () => {};\nexport type { Outcome } from './core/practice-script.ts';\n",
 	],
 	[SCM, "export function scm() {}\n"],
 	[CHAT, "export function chat() {}\n"],
@@ -171,8 +171,8 @@ for (const [name, head, expected] of [
 	],
 	[
 		"a lost script export",
-		after(ENTRY, "export function definePracticeScript() {}\n"),
-		/practice-script\.ts no longer exports Candidate/u,
+		after(ENTRY, "export const definePracticeScript = () => {};\n"),
+		/lib\/api\.ts no longer exports Outcome/u,
 	],
 	[
 		"a new contract version",

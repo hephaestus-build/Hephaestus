@@ -99,7 +99,7 @@ COPY practice-scripts/package.json practice-scripts/child.ts /opt/practice-scrip
 COPY practice-scripts/lib/ /opt/practice-scripts/lib/
 COPY practice-scripts/kits/ /opt/practice-scripts/kits/
 
-# The runner imports the practice program host through a link the runtime creates before Node starts
+# The runner imports the practice script host through a link the runtime creates before Node starts
 # (`PracticeRunnerProfile.setupCommands`): `/workspace/work/practice-scripts/lib` → `/opt/practice-scripts/lib`.
 # Resolving it here, as /workspace/.run-pi.ts does, proves the toolkit and its own dependencies load beside the
 # Pi SDK, and that a program's process starts under the permissions the host gives it.

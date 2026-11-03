@@ -19,7 +19,7 @@ Every candidate passes the same server admission.
 5. Save the practice.
 
 ```ts
-import { definePracticeScript } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
 
 export default definePracticeScript({
   meta: {},
@@ -29,7 +29,7 @@ export default definePracticeScript({
 });
 ```
 
-The installed toolkit resolves the core import.
+A script can import only the [script API](#the-script-api).
 For provider evidence, use its validated SCM, chat or docs kit.
 A null Script runs the built-in script. An invalid custom script stops without fallback.
 
@@ -56,21 +56,53 @@ A domain kit validates the item record before it exposes source-specific helpers
 This SCM example preserves the normal review and adds a typed fact:
 
 ```ts
-import { definePracticeScript } from "../lib/core/practice-script.ts";
-import { scm } from "../kits/scm/index.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 
 export default definePracticeScript({
   meta: {},
   async run(ctx) {
-    const target = scm(ctx);
-    return ctx.review({ facts: { itemKind: target.kind } });
+    const work = scm(ctx, "scm.pull_request");
+    return ctx.review({ facts: { changedFiles: work.item.changed_files } });
   },
 });
 ```
 
-The kit supplies evidence tools under the host's permission boundary.
+The kit states the kinds of work that your script reads, and another kind stops the script.
 It does not change the selected workspace, item or developer.
 Do not cast the unknown core item into a provider payload.
+
+To find places in changed code, give each language its rules:
+
+```ts
+const found = await work.sites({
+  swift: [{ kind: "forced-try", label: "A changed try! expression.", test: /\btry!/u }],
+});
+const directions = found.leads.length > 0 ? ["Read whether each one can fail."] : [...found.noMatch];
+return ctx.review({ leads: [...found.leads], directions });
+```
+
+A site is on an added line of the change, or anywhere in a scan's file.
+Comments and strings do not match, unless you set `comments: true`.
+Which lines match can improve between releases. Each lead is a place for the review to read, never a verdict.
+
+## The script API
+
+These names are the whole API. They hold for a major version of Hephaestus. A script can import nothing else, also not a Node module or a package.
+
+| Import | Names |
+| --- | --- |
+| `@hephaestus/practice-scripts` | `definePracticeScript`, `UnratedError`, `listWithin` |
+| `@hephaestus/practice-scripts/scm` | `scm`, `isTestPath`, `languageOf`, `checkableItems`, `issueReferences`, `branchIssueReferences`, `issueShape`, `subIssueRollup`, `later`, `dated` |
+| `@hephaestus/practice-scripts/chat` | `chat` |
+| `@hephaestus/practice-scripts/docs` | `docs` |
+
+The `work` object from `scm` has `kind`, `item`, `head`, `change`, `changedFiles`, `sources`, `sites`, `commits`, `linkedIssues`, `inlineComments`, `conversationComments`, `reviewRecord` and `checks`.
+A read that returns null means that the source was not captured. It never means empty.
+A malformed record stops the script.
+
+A direction or a fact that is too long is folded to one line and cut. An empty fact is dropped.
+More than 10 directions or 200 leads is an error of the script.
 
 ## Return a result
 
@@ -140,6 +172,7 @@ Execution details can expire while durable review history remains available.
 ## Upgrade a script from an earlier release
 
 If the default export has the wrong shape, execution stops with “The script's default export is not a practice script. Write it with definePracticeScript.”
+A script that imports anything else stops and names the import. Its practice is withheld with **Not a runnable script**.
 Use the [operator migration entry](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) and the [runner contract](/contributor/practice-script-runner) to upgrade custom scripts.
 
 ## Limits

@@ -5,11 +5,25 @@ import {
 	readCapturedCommits,
 	type ChangedFile,
 } from "../../../../../../docker/agents/practice-scripts/kits/scm/change.ts";
-import { subjectFacts } from "../../../../../../docker/agents/practice-scripts/kits/scm/commit-subjects.ts";
 import {
+	bundledExports,
 	leadKeys,
 	runBundled,
 } from "../../../../../../docker/agents/practice-scripts/run-bundled.ts";
+
+const { subjectFacts } = await bundledExports<{
+	subjectFacts: (commits: readonly unknown[]) => {
+		sha: string;
+		subject: string;
+		merge: boolean;
+		bare: boolean;
+		repeat: boolean;
+		joinedClauses: boolean;
+		cutOff: boolean;
+		bodyLines: number;
+		files: ChangedFile[];
+	}[];
+}>("commits-are-atomic-and-cohesive");
 
 function evidence(source?: string) {
 	return {

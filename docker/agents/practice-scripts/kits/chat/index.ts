@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { decimalIdSchema } from "../../lib/core/contract.ts";
-import type { PracticeScriptContext, ModelNeeds } from "../../lib/core/practice-script.ts";
+import type { ScriptContext } from "../../lib/core/practice-script.ts";
 
 export const threadRecordSchema = z.object({
 	channel: z.string(),
@@ -20,7 +20,7 @@ export const threadRecordSchema = z.object({
 	truncated: z.boolean(),
 });
 
-export function chat<M extends ModelNeeds>(ctx: PracticeScriptContext<M>) {
+export function chat<C extends Pick<ScriptContext, "kind" | "item" | "evidence">>(ctx: C) {
 	if (ctx.kind !== "chat.thread") {
 		throw new Error("the script uses the wrong domain kit");
 	}

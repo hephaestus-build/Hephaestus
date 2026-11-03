@@ -1,6 +1,5 @@
-import { readCapturedCommits } from "../kits/scm/change.ts";
-import { expectKind, scm } from "../kits/scm/index.ts";
-import { definePracticeScript } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 
 const TEMPLATE_PLACEHOLDERS = [
 	"Briefly describe what was implemented",
@@ -186,16 +185,15 @@ function commitComparison(commits: readonly unknown[] | null, bodyCaptured: bool
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const { title } = domain.item;
-		const fileCount = domain.item.changed_files;
-		const commits = await readCapturedCommits(ctx.evidence);
+		const work = scm(ctx, "scm.pull_request");
+		const { title } = work.item;
+		const fileCount = work.item.changed_files;
+		const commits = await work.commits();
 		const cues = new Set<Cue>();
 		const body =
-			domain.item.body === undefined
+			work.item.body === undefined
 				? {}
-				: bodyFacts(domain.item.body ?? "", title, commits, fileCount, cues);
+				: bodyFacts(work.item.body ?? "", title, commits, fileCount, cues);
 		const lowerTitle = title?.toLowerCase().trim();
 		if (
 			lowerTitle !== undefined &&
@@ -204,7 +202,7 @@ export default definePracticeScript({
 			cues.add("genericTitle");
 		}
 		const unknown = [
-			...(domain.item.body === undefined ? ["description"] : []),
+			...(work.item.body === undefined ? ["description"] : []),
 			...(title === undefined ? ["title"] : []),
 		];
 		const directions = [
@@ -215,7 +213,7 @@ export default definePracticeScript({
 						`Not captured, so unknown rather than empty: ${unknown.join(", ")}. No cue that depends on it was read.`,
 					]),
 			"Words of its own exclude template headings, placeholders, checkboxes and issue references. The authored practice asks the description to say what changed and why, in words a reviewer cannot get from the title, the template or the commit list.",
-			commitComparison(commits, domain.item.body !== undefined),
+			commitComparison(commits, work.item.body !== undefined),
 			"A small change can need only a short description. Read the description against the size and risk of the change before asking for more.",
 		];
 		return ctx.review({

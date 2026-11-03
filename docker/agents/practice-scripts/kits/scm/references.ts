@@ -129,18 +129,12 @@ export function branchIssueReferences(branch: string): number[] {
 	return numbers(BRANCH_REF, branch);
 }
 
-/** A heading under which an issue states what "done" means without a task list. */
-export const OUTCOME_HEADING =
-	/^\s*#+\s*(?:acceptance criteria|definition of done|dod\b|done when|expected (?:outcome|result|behaviou?r)|given\b)/imu;
-
-export function namedIssues(
-	ways: readonly (readonly [how: string, issues: readonly number[]])[],
-): Map<number, string[]> {
-	const named = new Map<number, string[]>();
-	for (const [how, issues] of ways) {
-		for (const number of issues) {
-			named.set(number, [...(named.get(number) ?? []), how]);
-		}
-	}
-	return named;
+/** The issue numbers that a text names: what it closes, relates to or only mentions, and its issue links. */
+export function issueReferences(text: string) {
+	return {
+		closing: closingReferences(text),
+		related: relatedReferences(text),
+		mentioned: issueNumberReferences(text),
+		urls: issueUrlReferences(text),
+	};
 }

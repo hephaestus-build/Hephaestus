@@ -5,14 +5,9 @@
 
 import { z } from "zod";
 
-import { factsOf } from "../../lib/core/bounded-text.ts";
-import type { PracticeInputs, ReviewLead } from "../../lib/core/contract.ts";
-import { optionalString } from "../../lib/core/json.ts";
 import { captureFailure, type Evidence } from "../../lib/core/practice-script.ts";
-import type { ChangeCommit } from "./change.ts";
 import type { SubIssueSource } from "./issue-classification.ts";
-import { pullRequestChecksRecordSchema, type pullRequestRecordSchema } from "./records.ts";
-import type { DiffFile } from "./types.ts";
+import { pullRequestChecksRecordSchema } from "./records.ts";
 
 export interface LinkedWorkItem {
 	number: number;
@@ -204,14 +199,6 @@ export async function readLinkedWorkItemCapture(
 	};
 }
 
-/** The issues the change names, as `linked_work_items.json` records them; null when not captured. */
-export async function readLinkedWorkItems(
-	evidence: Pick<Evidence, "record">,
-): Promise<LinkedWorkItem[] | null> {
-	const capture = await readLinkedWorkItemCapture(evidence);
-	return capture?.items ?? null;
-}
-
 // Server records place each key on its own line. Map body lines only when they match comments one to one.
 async function readCommentRecord<T>(
 	evidence: Pick<Evidence, "record">,
@@ -320,248 +307,12 @@ export function checkableItems(body: string): CheckableItem[] {
 	return items;
 }
 
-/** Milliseconds between two ISO instants, or null when either is missing or unreadable. */
-export function millisBetween(from: string | undefined, to: string | undefined): number | null {
-	if (from === undefined || to === undefined) {
-		return null;
-	}
-	const a = Date.parse(from);
-	const b = Date.parse(to);
-	return Number.isNaN(a) || Number.isNaN(b) ? null : b - a;
-}
-
 /** Whether instant `a` is strictly after instant `b`; false when either is missing. */
 export function later(a: string | undefined, b: string | undefined): boolean {
 	return a !== undefined && b !== undefined && Date.parse(a) > Date.parse(b);
 }
 
-export function excerpt(body: string, length = 160): string {
-	return body.replaceAll(/\s+/gu, " ").trim().slice(0, length);
-}
-
-export function changeNear(
-	diff: DiffFile | undefined,
-	line: number | undefined,
-	radius = 15,
-): boolean {
-	if (diff === undefined || line === undefined) {
-		return false;
-	}
-	const near = (n: number) => Math.abs(n - line) <= radius;
-	return [...diff.addedLines.keys()].some(near) || [...diff.removedLines.keys()].some(near);
-}
-
-interface ReviewerCommentRow {
-	comment: ReviewComment;
-	/** No earlier comment by others in the same thread: this one opens it. */
-	opensThread: boolean;
-	replies: ReviewComment[];
-	followUps: ReviewComment[];
-	thread?: ReviewThread;
-}
-
-function sameThread(a: ReviewComment, b: ReviewComment): boolean {
-	return a.thread !== undefined && b.thread !== undefined
-		? a.thread === b.thread
-		: a.path === b.path && a.line === b.line;
-}
-
-export function reviewerCommentRows(
-	inline: readonly ReviewComment[],
-	threads: readonly ReviewThread[],
-	author: string,
-): ReviewerCommentRow[] {
-	const byOthers = (c: ReviewComment) => c.author !== undefined && c.author !== author;
-	const threadOf = (c: ReviewComment) =>
-		threads.find((t) =>
-			c.thread !== undefined && t.id !== undefined
-				? t.id === c.thread
-				: t.path === c.path && t.line === c.line,
-		);
-	return inline.flatMap((comment, index) => {
-		if (!byOthers(comment)) {
-			return [];
-		}
-		const after = (c: ReviewComment) =>
-			sameThread(c, comment) && later(c.createdAt, comment.createdAt);
-		return [
-			{
-				comment,
-				opensThread: !inline.some(
-					(earlier, j) => j < index && byOthers(earlier) && sameThread(earlier, comment),
-				),
-				replies: inline.filter((c) => c.author === author && after(c)),
-				followUps: inline.filter((c) => byOthers(c) && after(c)),
-				thread: threadOf(comment),
-			},
-		];
-	});
-}
-
-export function commitsAfter(
-	commits: readonly ChangeCommit[],
-	at: string | undefined,
-	path?: string,
-): number {
-	return commits.filter(
-		(c) =>
-			c.parents.length < 2 &&
-			later(c.committedAt, at) &&
-			(path === undefined || c.files.some((f) => f.path === path || f.oldPath === path)),
-	).length;
-}
-
-interface MergeFacts {
-	mergedAt?: string;
-	mergedBy?: string;
-	mergedByIsAuthor: boolean;
-	author?: string;
-}
-
-type MergeRecord = Pick<
-	z.infer<typeof pullRequestRecordSchema>,
-	"merged_at" | "merged_by" | "author"
->;
-
-/**
- * Whether a practice that only the merge moment brings into a review reads a merged pull request:
- * at that event, or when the review state that the review recorded is MERGED.
- */
-export function reviewsMergedWork(review: PracticeInputs["review"]): boolean {
-	return review.event?.name === "scm.pull_request.merged" || review.event?.state.state === "MERGED";
-}
-
-export function mergeFacts(record: MergeRecord): MergeFacts {
-	const mergedAt = optionalString(record.merged_at);
-	const mergedBy = optionalString(record.merged_by);
-	const author = optionalString(record.author);
-	return {
-		mergedAt,
-		mergedBy,
-		mergedByIsAuthor: mergedBy !== undefined && mergedBy === author,
-		author,
-	};
-}
-
-/** Stored practice programs call this API with the work record before the merge facts. */
-export function mergeLead(_record: MergeRecord, merge: MergeFacts, label: string): ReviewLead {
-	return {
-		at: { record: "metadata.json" },
-		label,
-		facts: factsOf({
-			mergedBy: merge.mergedBy ?? "",
-			mergedByIsAuthor: merge.mergedByIsAuthor,
-			mergedAt: merge.mergedAt ?? "",
-			author: merge.author ?? "",
-		}),
-	};
-}
-
-/** One lead per submitted decision, oldest first, placed against the merge and the author. */
-export function decisionLeads(
-	decisions: readonly ReviewDecision[],
-	merge: MergeFacts,
-	label: string,
-): ReviewLead[] {
-	return decisions.map((d) => ({
-		at: { record: "review_threads.json" },
-		label,
-		facts: factsOf({
-			state: d.state,
-			author: d.author ?? "",
-			submittedAt: d.submittedAt ?? "",
-			...(merge.mergedAt !== undefined && d.submittedAt !== undefined
-				? { beforeMerge: later(merge.mergedAt, d.submittedAt) }
-				: {}),
-			isAuthor: d.author !== undefined && d.author === merge.author,
-			dismissed: d.dismissed === true,
-			bot: d.bot,
-		}),
-	}));
-}
-
-/** Each reviewer's last decision, only where all their decision times are known. */
-export function lastDecisionPerReviewer(decisions: readonly ReviewDecision[]): ReviewDecision[] {
-	const last = new Map<string, ReviewDecision>();
-	const unknown = new Set<string>();
-	for (const d of decisions) {
-		const reviewer = d.author ?? "";
-		if (d.submittedAt === undefined) {
-			unknown.add(reviewer);
-		}
-		last.set(reviewer, d);
-	}
-	return [...last.entries()]
-		.filter(([reviewer]) => !unknown.has(reviewer))
-		.map(([, decision]) => decision);
-}
-
 // Missing or invalid timestamps cannot establish event order.
 export function dated(time: string | undefined): boolean {
 	return !Number.isNaN(Date.parse(time ?? ""));
-}
-
-/** Whether the record dates a thread's resolution at or before a dated merge. */
-export function resolvedByMerge(thread: ReviewThread, merge: MergeFacts): boolean {
-	return (
-		dated(thread.resolvedAt) && dated(merge.mergedAt) && !later(thread.resolvedAt, merge.mergedAt)
-	);
-}
-
-/**
- * The threads to review against the merge: currently unresolved threads, and resolved threads the
- * record does not date as resolved by the merge — every one of them when the merge itself is
- * undated. A resolved thread opened after a dated merge was not open at it; opening times still
- * determine whether every other thread existed at the merge.
- */
-export function candidateThreads(
-	threads: readonly ReviewThread[],
-	merge: MergeFacts,
-): ReviewThread[] {
-	return threads.filter(
-		(t) =>
-			t.state !== "RESOLVED" || (!resolvedByMerge(t, merge) && !later(t.createdAt, merge.mergedAt)),
-	);
-}
-
-export type ThreadKind =
-	| "unresolved-thread"
-	| "thread-resolved-after-the-merge"
-	| "resolved-thread-resolution-time-unknown"
-	| "resolved-thread-merge-time-unknown"
-	| "resolved-thread-both-times-unknown";
-
-function threadKind(t: ReviewThread, merge: MergeFacts): ThreadKind {
-	if (t.state !== "RESOLVED") {
-		return "unresolved-thread";
-	}
-	if (dated(merge.mergedAt)) {
-		return dated(t.resolvedAt)
-			? "thread-resolved-after-the-merge"
-			: "resolved-thread-resolution-time-unknown";
-	}
-	return dated(t.resolvedAt)
-		? "resolved-thread-merge-time-unknown"
-		: "resolved-thread-both-times-unknown";
-}
-
-export function threadLead(
-	t: ReviewThread,
-	merge: MergeFacts,
-	labels: Readonly<Record<ThreadKind, string>>,
-): ReviewLead {
-	return {
-		at: { record: "review_threads.json" },
-		label: labels[threadKind(t, merge)],
-		facts: factsOf({
-			id: t.id ?? 0,
-			state: t.state,
-			createdAt: t.createdAt ?? "",
-			resolvedAt: t.resolvedAt ?? "",
-			resolvedBy: t.resolvedBy ?? "",
-			path: t.path ?? "",
-			line: t.line ?? 0,
-			outdated: t.outdated === true,
-		}),
-	};
 }

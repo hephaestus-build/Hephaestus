@@ -1,7 +1,5 @@
-import { expectKind, scm } from "../kits/scm/index.ts";
-import { isTestPath } from "../kits/scm/languages.ts";
-import { selectedSources } from "../kits/scm/occurrences.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { isTestPath, scm } from "@hephaestus/practice-scripts/scm";
 
 const LABELS = {
 	fatalError: "A changed fatalError() call.",
@@ -29,18 +27,16 @@ function forceUnwrap(line: string): boolean {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const files = await selectedSources(ctx, domain.files, (file) => file.language === "swift");
+		const work = scm(ctx, "scm.pull_request");
+		const files = await work.sources((file) => file.language === "swift");
 		const counts = new Map<Cue, number>();
 		const leads: ReviewLead[] = [];
 		let inPreviewOrTest = 0;
 		for (const file of files) {
-			const added = domain.files?.change?.files.get(file.path)?.addedLines;
 			const testFile = isTestPath(file.path);
 			for (const [index, line] of file.text.split("\n").entries()) {
 				const at = index + 1;
-				if (added?.has(at) !== true || line.trimStart().startsWith("//")) {
+				if (!file.isAdded(at) || line.trimStart().startsWith("//")) {
 					continue;
 				}
 				const found: Cue[] = [];

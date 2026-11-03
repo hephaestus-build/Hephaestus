@@ -1,14 +1,7 @@
-import { scm } from "../kits/scm/index.ts";
-import { isTestPath } from "../kits/scm/languages.ts";
-import {
-	occurrences,
-	selectedSources,
-	selectedOccurrences,
-	occurrenceLead,
-	sortOccurrenceLeads,
-} from "../kits/scm/occurrences.ts";
-import { DIRECTION_CHARS, factsOf, listWithin } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type Facts, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, listWithin, type Facts } from "@hephaestus/practice-scripts";
+import { isTestPath, scm, type Site } from "@hephaestus/practice-scripts/scm";
+
+const DIRECTION_CHARS = 300;
 
 export const LABELS = {
 	"edge-construct":
@@ -100,18 +93,13 @@ function factKey(label: string): string {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		if (domain.kind !== "scm.pull_request" && domain.kind !== "scm.file") {
-			throw new Error("this practice requires SCM source files");
-		}
-		const leads: ReviewLead[] = [];
+		const work = scm(ctx, "scm.pull_request", "scm.file");
+		const sites: Site[] = [];
 		const byKind = new Map<string, number>();
 		let filesScanned = 0;
 		let linesScanned = 0;
 
-		for (const file of await selectedSources(
-			ctx,
-			domain.files,
+		for (const file of await work.sources(
 			(source) =>
 				source.language !== null &&
 				LANG_PATTERNS[source.language] !== undefined &&
@@ -131,22 +119,16 @@ export default definePracticeScript({
 			linesScanned +=
 				ctx.scope.kind === "SCAN"
 					? file.text.split("\n").length
-					: (domain.files?.change?.files.get(file.path)?.addedLines.size ?? 0);
+					: (work.changedFiles().get(file.path)?.addedLines.size ?? 0);
 			for (const [kind, test] of patterns) {
-				const found = selectedOccurrences(
-					ctx,
-					domain.files,
-					occurrences(file, [{ label: LABELS["edge-construct"], test }]),
-				);
+				const found = file.sites([{ kind, label: LABELS["edge-construct"], test }]);
 				byKind.set(kind, (byKind.get(kind) ?? 0) + found.length);
-				leads.push(
-					...found.map((row) => ({
-						...occurrenceLead(row),
-						facts: factsOf({ ...row.facts, constructs: kind }),
-					})),
-				);
+				sites.push(...found);
 			}
 		}
+		const leads = sites
+			.toSorted((a, b) => (a.path < b.path ? -1 : Number(a.path > b.path)) || a.line - b.line)
+			.map((site) => ({ ...site.lead, facts: { ...site.facts, constructs: site.kind } }));
 		const counts: Facts = {};
 		for (const [label, count] of byKind) {
 			counts[factKey(label)] = count;
@@ -163,7 +145,7 @@ export default definePracticeScript({
 				: [];
 
 		return ctx.review({
-			leads: sortOccurrenceLeads(leads).slice(0, 40),
+			leads: leads.slice(0, 40),
 			facts: {
 				edgeConstructLines: leads.length,
 				filesScanned,

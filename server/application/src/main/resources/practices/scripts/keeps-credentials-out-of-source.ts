@@ -1,7 +1,5 @@
-import { expectKind, scm } from "../kits/scm/index.ts";
-import { selectedSources } from "../kits/scm/occurrences.ts";
-import { listWithin } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, listWithin, type ReviewLead } from "@hephaestus/practice-scripts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 
 const KEY_PREFIXES = [
 	["sk-", "OpenAI-style secret key"],
@@ -53,11 +51,8 @@ function scannable(path: string, language: string | null): boolean {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const files = await selectedSources(ctx, domain.files, (file) =>
-			scannable(file.path, file.language),
-		);
+		const work = scm(ctx, "scm.pull_request");
+		const files = await work.sources((file) => scannable(file.path, file.language));
 		const counts = new Map<Cue, number>();
 		const keyKinds = new Set<string>();
 		const leads: ReviewLead[] = [];
@@ -73,10 +68,9 @@ export default definePracticeScript({
 			}
 		};
 		for (const file of files) {
-			const added = domain.files?.change?.files.get(file.path)?.addedLines;
 			for (const [index, line] of file.text.split("\n").entries()) {
 				const at = index + 1;
-				if (added?.has(at) !== true) {
+				if (!file.isAdded(at)) {
 					continue;
 				}
 				const comment = line.trimStart().startsWith("//");

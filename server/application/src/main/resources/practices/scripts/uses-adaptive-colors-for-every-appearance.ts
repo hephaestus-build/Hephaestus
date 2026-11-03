@@ -1,17 +1,9 @@
-import { scm, type FileTree } from "../kits/scm/index.ts";
-import {
-	countLabel,
-	sampleNote,
-	scanOccurrences,
-	type SourcePattern,
-} from "../kits/scm/source-scan.ts";
-import { factsOf, noMatchDirections } from "../lib/core/bounded-text.ts";
-import { isJsonObject } from "../lib/core/json.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { scm, type FileTree, type SiteRule } from "@hephaestus/practice-scripts/scm";
 
 const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/u;
 
-const COLORS: readonly SourcePattern[] = [
+const COLORS: readonly [string, RegExp][] = [
 	[
 		"fixed-components",
 		/\bColor\s*\(\s*(?:red|hue|white|\.sRGB|\.displayP3|hex)\s*:|\bColor\s*\(\s*"#|\bUIColor\s*\(\s*(?:red|white|hue|displayP3Red)\s*:/u,
@@ -156,69 +148,52 @@ export const LABELS = {
 		"A selected Color member, such as Color.green, that SwiftUI or the app can define.",
 	"color-modifier-member": "A selected member, such as .pink, that a color modifier gets.",
 };
-const LABEL_OF = new Map<string, string>(Object.entries(LABELS));
+
+const LABEL_OF: Record<string, string> = LABELS;
+
+const rulesOf = (rows: readonly [string, RegExp][]): SiteRule[] =>
+	rows.map(([kind, test]) => ({ kind, label: LABEL_OF[kind] ?? "", test }));
 
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		if (domain.kind !== "scm.pull_request" && domain.kind !== "scm.file") {
-			throw new Error("this practice requires SCM source files");
-		}
-		const scan = await scanOccurrences(ctx, domain.files, {
-			languages: ["swift"],
-			patterns: COLORS,
-			scope: SWIFTUI_VIEW,
-			onlyInScope: true,
-		});
-		const assets = await assetColors(domain.files?.head ?? null);
+		const work = scm(ctx, "scm.pull_request", "scm.file");
+		const found = await work.sites(
+			{ swift: rulesOf(COLORS) },
+			{ overlap: "first", enclosing: { scope: SWIFTUI_VIEW, only: true } },
+		);
+		const assets = await assetColors(work.head);
 		const colorsetsFound = [...assets.paths.values()].reduce((sum, files) => sum + files.length, 0);
-		const hints = scan.hints.map((hint) => {
-			if (hint.pattern !== "named-asset" && hint.pattern !== "color-from-a-value") {
-				return hint;
+		const hints = found.listed.map((site) => {
+			if (site.kind !== "named-asset" && site.kind !== "color-from-a-value") {
+				return site;
 			}
 			const name =
-				/Color\s*\(\s*"(?<name>[^"]+)"/u.exec(hint.context)?.groups?.name ??
-				/Color\s*\(\s*\.(?<name>\w+)/u.exec(hint.context)?.groups?.name ??
+				/Color\s*\(\s*"(?<name>[^"]+)"/u.exec(site.text)?.groups?.name ??
+				/Color\s*\(\s*\.(?<name>\w+)/u.exec(site.text)?.groups?.name ??
 				"";
-			const bundle = hint.pattern === "named-asset" ? bundleOf(hint.context) : null;
-			return {
-				...hint,
-				flags: {
-					...hint.flags,
-					asset: name,
-					...(bundle === null ? {} : { bundle }),
-					hasDarkAppearance: bundle === null ? appearanceOf(assets, name) : "unknown",
-				},
+			const bundle = site.kind === "named-asset" ? bundleOf(site.text) : null;
+			const facts = {
+				...site.facts,
+				asset: name,
+				...(bundle === null ? {} : { bundle }),
+				hasDarkAppearance: bundle === null ? appearanceOf(assets, name) : "unknown",
 			};
+			return { ...site, facts, lead: { ...site.lead, facts } };
 		});
-		const leads: ReviewLead[] = hints.flatMap((hint) => {
-			const label = LABEL_OF.get(hint.pattern);
-			return label === undefined
-				? []
-				: [
-						{
-							at: { file: hint.file, line: hint.line, endLine: hint.endLine },
-							label,
-							facts: factsOf(hint.flags),
-						},
-					];
-		});
-		const inOtherBundles = hints.filter((hint) => hint.flags.bundle !== undefined).length;
-		const literals =
-			countLabel(scan, "fixed-components") + countLabel(scan, "literal-white-or-black");
-		const toClassify = TO_CLASSIFY.reduce((sum, label) => sum + countLabel(scan, label), 0);
-		const systemAdaptive =
-			countLabel(scan, "semantic-style") +
-			countLabel(scan, "material") +
-			countLabel(scan, "accent");
-		const namedAssets = countLabel(scan, "named-asset");
+		const leads = hints.map((site) => site.lead);
+		const inOtherBundles = hints.filter((site) => site.facts.bundle !== undefined).length;
+		const count = (kind: string) => found.counts.get(kind) ?? 0;
+		const literals = count("fixed-components") + count("literal-white-or-black");
+		const toClassify = TO_CLASSIFY.reduce((sum, label) => sum + count(label), 0);
+		const systemAdaptive = count("semantic-style") + count("material") + count("accent");
+		const namedAssets = count("named-asset");
 		const assetsWithoutDarkAppearance = hints.filter(
-			(hint) => hint.flags.hasDarkAppearance === false,
+			(site) => site.facts.hasDarkAppearance === false,
 		).length;
-		const directions: string[] = [...sampleNote(scan)];
+		const directions: string[] = [...found.listedNote];
 		if (leads.length === 0) {
-			directions.push(...noMatchDirections(scan.linesSelected, scan.filesScanned));
+			directions.push(...found.noMatch);
 		}
 		if (literals > 0) {
 			directions.push(
@@ -232,7 +207,7 @@ export default definePracticeScript({
 				"Read the type it resolves to and, for a name the app defines, its definition: SwiftUI's standard colors and UIKit's dynamic colors change with the appearance, UIKit's fixed constants do not.",
 			);
 		}
-		if (scan.hints.length > 0) {
+		if (found.listed.length > 0) {
 			directions.push(
 				"Each line is listed once, under the first shape its text shows: enumerate every color a listed line holds.",
 			);
@@ -275,11 +250,15 @@ export default definePracticeScript({
 				colorsToClassify: toClassify,
 				assetsWithoutDarkAppearance,
 				assetColorsInCheckout: assets.listing === "complete" ? colorsetsFound : -1,
-				filesWithUnknownLocation: scan.filesWithUnknownLocation,
-				filesScanned: scan.filesScanned,
-				linesSelected: scan.linesSelected,
+				filesWithUnknownLocation: found.filesWithUnknownLocation,
+				filesScanned: found.filesScanned,
+				linesSelected: found.linesSelected,
 			},
 			directions,
 		});
 	},
 });
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}

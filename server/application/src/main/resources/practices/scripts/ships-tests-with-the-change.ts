@@ -1,16 +1,13 @@
-import { scm, expectKind, requireChange } from "../kits/scm/index.ts";
-import { isTestPath, languageOf } from "../kits/scm/languages.ts";
-import { DIRECTION_CHARS, listWithin } from "../lib/core/bounded-text.ts";
-import { definePracticeScript } from "../lib/core/practice-script.ts";
+import { definePracticeScript, listWithin } from "@hephaestus/practice-scripts";
+import { isTestPath, languageOf, scm } from "@hephaestus/practice-scripts/scm";
+
+const DIRECTION_CHARS = 300;
 
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const source = [...requireChange(domain.files).keys()].filter(
-			(path) => languageOf(path) !== null,
-		);
+		const work = scm(ctx, "scm.pull_request");
+		const source = [...work.changedFiles().keys()].filter((path) => languageOf(path) !== null);
 		const tests = source.filter((path) => isTestPath(path));
 		const production = source.filter((path) => !isTestPath(path));
 

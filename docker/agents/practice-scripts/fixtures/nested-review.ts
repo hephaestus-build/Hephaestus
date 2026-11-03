@@ -1,4 +1,4 @@
-import { definePracticeScript } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
 
 const FORGED_ID = 1_000_000;
 

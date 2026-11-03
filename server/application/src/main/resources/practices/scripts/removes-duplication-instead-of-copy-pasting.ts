@@ -1,8 +1,5 @@
-import { duplicatePairs, MIN_RUN_LINES } from "../kits/scm/duplication.ts";
-import { scm, expectKind, requireChange } from "../kits/scm/index.ts";
-import { isTestPath, languageOf } from "../kits/scm/languages.ts";
-import { factsOf } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { isTestPath, languageOf, scm, type DiffFile } from "@hephaestus/practice-scripts/scm";
 
 const MAX_PAIRS = 20;
 
@@ -14,9 +11,8 @@ export const LABELS = {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const change = requireChange(domain.files);
+		const work = scm(ctx, "scm.pull_request");
+		const change = work.changedFiles();
 		const sourceFiles = [...change.values()].filter(
 			(file) => languageOf(file.path) !== null && !isTestPath(file.path),
 		);
@@ -25,7 +21,7 @@ export default definePracticeScript({
 		const leads: ReviewLead[] = pairs.slice(0, MAX_PAIRS).map((pair) => ({
 			at: { change: pair.a.path, line: pair.a.startLine },
 			label: LABELS["same-shaped-blocks"],
-			facts: factsOf({
+			facts: {
 				endLine: pair.a.endLine,
 				otherPath: pair.b.path,
 				otherStart: pair.b.startLine,
@@ -33,7 +29,7 @@ export default definePracticeScript({
 				lines: pair.lines,
 				identicalLines: pair.identicalLines,
 				differing: pair.differing.join(", "),
-			}),
+			},
 		}));
 		const directions =
 			pairs.length === 0
@@ -50,3 +46,191 @@ export default definePracticeScript({
 		});
 	},
 });
+
+/** Same-shaped added blocks are duplication candidates; the review decides whether they duplicate knowledge. */
+
+/** One added source line with its shape: identifiers as `id`, literals as `str`/`num`, the rest kept. */
+interface ShapedLine {
+	line: number;
+	text: string;
+	shape: string;
+	identifiers: string[];
+}
+
+/** Two runs of added lines with the same shape, the names that differ, and how long the run is. */
+interface DuplicatePair {
+	a: { path: string; startLine: number; endLine: number };
+	b: { path: string; startLine: number; endLine: number };
+	lines: number;
+	/** The identifiers that differ between the two runs, as `a→b`, at most five. */
+	differing: string[];
+	/** Whether a line of the run is identical in text, not only in shape. */
+	identicalLines: number;
+}
+
+// Short assignment and modifier sequences are too common to establish duplication.
+export const MIN_RUN_LINES = 5;
+// Many differing names indicate parallel structure rather than copied knowledge.
+const MAX_DIFFERING_NAMES = 6;
+
+const STRING = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/gu;
+const NUMBER = /\b\d+(?:\.\d+)?\b/gu;
+const IDENTIFIER = /\b[A-Za-z_][A-Za-z0-9_]*\b/gu;
+
+function shaped(line: number, text: string, language: string): ShapedLine | null {
+	const trimmed = text.trim();
+	if (trimmed === "" || isCommentLine(trimmed, language)) {
+		return null;
+	}
+	const identifiers: string[] = [];
+	const shape = trimmed
+		.replaceAll(STRING, "str")
+		.replaceAll(NUMBER, "num")
+		.replaceAll(IDENTIFIER, (word) => {
+			identifiers.push(word);
+			return "id";
+		})
+		.replaceAll(/\s+/gu, " ");
+	return { line, text: trimmed, shape, identifiers };
+}
+
+function bare(shape: string): boolean {
+	return shape.replaceAll(/[^A-Za-z]/gu, "").length === 0;
+}
+
+function shapedLines(file: DiffFile): ShapedLine[] {
+	const language = languageOf(file.path) ?? "";
+	return [...file.addedLines.entries()]
+		.toSorted(([a], [b]) => a - b)
+		.map(([line, text]) => shaped(line, text, language))
+		.filter((line): line is ShapedLine => line !== null);
+}
+
+function consecutive(lines: ShapedLine[], index: number): boolean {
+	const previous = lines[index - 1];
+	const current = lines[index];
+	return previous !== undefined && current !== undefined && current.line - previous.line <= 2;
+}
+
+/**
+ * Every pair of runs of at least {@link MIN_RUN_LINES} consecutive added lines with the same
+ * shapes, across and within the source files of a change, test files excluded.
+ * Overlapping candidates collapse to the longest run starting at each position.
+ */
+export function duplicatePairs(diffFiles: ReadonlyMap<string, DiffFile>): DuplicatePair[] {
+	const files = [...diffFiles.values()]
+		.filter((file) => languageOf(file.path) !== null && !isTestPath(file.path))
+		.map((file) => ({ path: file.path, lines: shapedLines(file) }));
+	const starts = new Map<string, { file: number; index: number }[]>();
+	for (const [fileIndex, file] of files.entries()) {
+		for (let index = 0; index + MIN_RUN_LINES <= file.lines.length; index += 1) {
+			const window = file.lines.slice(index, index + MIN_RUN_LINES);
+			if (window.every((line) => bare(line.shape))) {
+				continue;
+			}
+			if (window.some((_line, offset) => offset > 0 && !consecutive(file.lines, index + offset))) {
+				continue;
+			}
+			const key = window.map((line) => line.shape).join("\n");
+			starts.set(key, [...(starts.get(key) ?? []), { file: fileIndex, index }]);
+		}
+	}
+	const pairs: DuplicatePair[] = [];
+	for (const candidates of starts.values()) {
+		for (let i = 0; i < candidates.length; i += 1) {
+			for (let j = i + 1; j < candidates.length; j += 1) {
+				const first = candidates[i];
+				const second = candidates[j];
+				if (first === undefined || second === undefined) {
+					continue;
+				}
+				const pair = extend(files, first, second);
+				if (pair === null) {
+					continue;
+				}
+				const inside = pairs.some((seen) => within(pair.a, seen.a) && within(pair.b, seen.b));
+				if (!inside) {
+					pairs.push(pair);
+				}
+			}
+		}
+	}
+	return pairs.toSorted((x, y) => y.lines - x.lines || x.a.path.localeCompare(y.a.path));
+}
+
+function within(span: DuplicatePair["a"], seen: DuplicatePair["a"]): boolean {
+	return (
+		span.path === seen.path && span.startLine >= seen.startLine && span.endLine <= seen.endLine
+	);
+}
+
+function extend(
+	files: { path: string; lines: ShapedLine[] }[],
+	first: { file: number; index: number },
+	second: { file: number; index: number },
+): DuplicatePair | null {
+	const fa = files[first.file];
+	const fb = files[second.file];
+	if (fa === undefined || fb === undefined) {
+		return null;
+	}
+	// A duplicate must not overlap its own source span.
+	if (first.file === second.file && Math.abs(first.index - second.index) < MIN_RUN_LINES) {
+		return null;
+	}
+	let length = 0;
+	let identical = 0;
+	const differing = new Map<string, string>();
+	for (;;) {
+		const la = fa.lines[first.index + length];
+		const lb = fb.lines[second.index + length];
+		if (la === undefined || lb === undefined || la.shape !== lb.shape) {
+			break;
+		}
+		if (
+			length > 0 &&
+			(!consecutive(fa.lines, first.index + length) ||
+				!consecutive(fb.lines, second.index + length))
+		) {
+			break;
+		}
+		if (first.file === second.file && first.index + length >= second.index) {
+			break;
+		}
+		for (const [k, name] of la.identifiers.entries()) {
+			const other = lb.identifiers[k];
+			if (other !== undefined && other !== name) {
+				differing.set(name, other);
+			}
+		}
+		if (la.text === lb.text) {
+			identical += 1;
+		}
+		length += 1;
+	}
+	if (length < MIN_RUN_LINES || differing.size > MAX_DIFFERING_NAMES) {
+		return null;
+	}
+	const startA = fa.lines[first.index];
+	const endA = fa.lines[first.index + length - 1];
+	const startB = fb.lines[second.index];
+	const endB = fb.lines[second.index + length - 1];
+	if (startA === undefined || endA === undefined || startB === undefined || endB === undefined) {
+		return null;
+	}
+	return {
+		a: { path: fa.path, startLine: startA.line, endLine: endA.line },
+		b: { path: fb.path, startLine: startB.line, endLine: endB.line },
+		lines: length,
+		differing: [...differing.entries()].slice(0, 5).map(([x, y]) => `${x}→${y}`),
+		identicalLines: identical,
+	};
+}
+
+function isCommentLine(content: string, language: string): boolean {
+	const trimmed = content.trimStart();
+	if (language === "python" || language === "ruby") {
+		return trimmed.startsWith("#");
+	}
+	return trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*");
+}

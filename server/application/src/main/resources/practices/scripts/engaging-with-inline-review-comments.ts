@@ -1,20 +1,14 @@
-import { type ChangeCommit, readCapturedCommits } from "../kits/scm/change.ts";
-import { scm, expectKind, requireChange } from "../kits/scm/index.ts";
+import { definePracticeScript, type Facts, type ReviewLead } from "@hephaestus/practice-scripts";
 import {
-	type GeneralComment,
-	type ReviewDecision,
-	changeNear,
-	commitsAfter,
-	excerpt,
 	later,
-	millisBetween,
-	readGeneralComments,
-	readReviewComments,
-	readReviewThreads,
-	reviewerCommentRows,
-} from "../kits/scm/review.ts";
-import { factsOf } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type Facts, type ReviewLead } from "../lib/core/practice-script.ts";
+	scm,
+	type ChangeCommit,
+	type DiffFile,
+	type GeneralComment,
+	type ReviewComment,
+	type ReviewDecision,
+	type ReviewThread,
+} from "@hephaestus/practice-scripts/scm";
 
 export const LABELS = {
 	"reviewer-comment": "An inline comment by someone other than the author.",
@@ -70,17 +64,16 @@ interface Note {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const change = requireChange(domain.files);
-		const author = domain.item.author ?? "";
-		const inline = await readReviewComments(ctx.evidence);
-		const general = await readGeneralComments(ctx.evidence);
-		const record = await readReviewThreads(ctx.evidence);
-		const capturedCommits = await readCapturedCommits(ctx.evidence);
+		const work = scm(ctx, "scm.pull_request");
+		const change = work.changedFiles();
+		const author = work.item.author ?? "";
+		const inline = await work.inlineComments();
+		const general = await work.conversationComments();
+		const record = await work.reviewRecord();
+		const capturedCommits = await work.commits();
 		const commits = capturedCommits ?? [];
 		const decisions = record?.decisions ?? [];
-		const handOff = domain.item.merged_at ?? domain.item.closed_at;
+		const handOff = work.item.merged_at ?? work.item.closed_at;
 		const byOthers = (note: { author?: string }) =>
 			note.author !== undefined && note.author !== author;
 		const authorNotes = [
@@ -100,7 +93,7 @@ export default definePracticeScript({
 					? "unknown"
 					: commitsAfter(commits, comment.createdAt, comment.path);
 			const afterHandOff = later(comment.createdAt, handOff);
-			const facts: Facts = factsOf({
+			const facts: Facts = {
 				by: comment.author ?? "",
 				bot: comment.bot,
 				at: comment.createdAt ?? "",
@@ -129,7 +122,7 @@ export default definePracticeScript({
 				commitsAfter:
 					capturedCommits === null ? "unknown" : commitsAfter(commits, comment.createdAt),
 				commitsAfterTouchingFile,
-			});
+			};
 			if (comment.line !== undefined) {
 				facts.line = comment.line;
 			}
@@ -156,7 +149,7 @@ export default definePracticeScript({
 					lead: {
 						at: { record: "general_comments.json", line: note.recordLine },
 						label: LABELS["conversation-comment"],
-						facts: factsOf({
+						facts: {
 							by: note.author ?? "",
 							bot: note.bot,
 							at: note.createdAt ?? "",
@@ -173,7 +166,7 @@ export default definePracticeScript({
 							afterHandOff,
 							commitsAfter:
 								capturedCommits === null ? "unknown" : commitsAfter(commits, note.createdAt),
-						}),
+						},
 					},
 					bot: note.bot,
 					replied: authorAfter.length > 0,
@@ -228,3 +221,85 @@ export default definePracticeScript({
 		});
 	},
 });
+
+interface ReviewerCommentRow {
+	comment: ReviewComment;
+	/** No earlier comment by others in the same thread: this one opens it. */
+	opensThread: boolean;
+	replies: ReviewComment[];
+	followUps: ReviewComment[];
+	thread?: ReviewThread;
+}
+
+function sameThread(a: ReviewComment, b: ReviewComment): boolean {
+	return a.thread !== undefined && b.thread !== undefined
+		? a.thread === b.thread
+		: a.path === b.path && a.line === b.line;
+}
+
+function reviewerCommentRows(
+	inline: readonly ReviewComment[],
+	threads: readonly ReviewThread[],
+	author: string,
+): ReviewerCommentRow[] {
+	const byOthers = (c: ReviewComment) => c.author !== undefined && c.author !== author;
+	const threadOf = (c: ReviewComment) =>
+		threads.find((t) =>
+			c.thread !== undefined && t.id !== undefined
+				? t.id === c.thread
+				: t.path === c.path && t.line === c.line,
+		);
+	return inline.flatMap((comment, index) => {
+		if (!byOthers(comment)) {
+			return [];
+		}
+		const after = (c: ReviewComment) =>
+			sameThread(c, comment) && later(c.createdAt, comment.createdAt);
+		return [
+			{
+				comment,
+				opensThread: !inline.some(
+					(earlier, j) => j < index && byOthers(earlier) && sameThread(earlier, comment),
+				),
+				replies: inline.filter((c) => c.author === author && after(c)),
+				followUps: inline.filter((c) => byOthers(c) && after(c)),
+				thread: threadOf(comment),
+			},
+		];
+	});
+}
+
+function changeNear(diff: DiffFile | undefined, line: number | undefined, radius = 15): boolean {
+	if (diff === undefined || line === undefined) {
+		return false;
+	}
+	const near = (n: number) => Math.abs(n - line) <= radius;
+	return [...diff.addedLines.keys()].some(near) || [...diff.removedLines.keys()].some(near);
+}
+
+function excerpt(body: string, length = 160): string {
+	return body.replaceAll(/\s+/gu, " ").trim().slice(0, length);
+}
+
+function commitsAfter(
+	commits: readonly ChangeCommit[],
+	at: string | undefined,
+	path?: string,
+): number {
+	return commits.filter(
+		(c) =>
+			c.parents.length < 2 &&
+			later(c.committedAt, at) &&
+			(path === undefined || c.files.some((f) => f.path === path || f.oldPath === path)),
+	).length;
+}
+
+/** Milliseconds between two ISO instants, or null when either is missing or unreadable. */
+function millisBetween(from: string | undefined, to: string | undefined): number | null {
+	if (from === undefined || to === undefined) {
+		return null;
+	}
+	const a = Date.parse(from);
+	const b = Date.parse(to);
+	return Number.isNaN(a) || Number.isNaN(b) ? null : b - a;
+}

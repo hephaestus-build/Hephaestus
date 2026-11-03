@@ -33,10 +33,13 @@ const CATALOG = "server/application/src/main/resources/practices/default-catalog
 const SCRIPT_CONTRACT = "docker/agents/practice-scripts/lib/core/contract.ts";
 const ROUTE_TREE = "webapp/src/routeTree.gen.ts";
 
-/** What a practice script imports. A script that imports any other module has no promise. */
+/**
+ * The files that the `exports` map of `docker/agents/practice-scripts/package.json` names: what a
+ * practice script can import. A script cannot import any other module.
+ */
 const SCRIPT_ENTRY_POINTS = [
-	"docker/agents/practice-scripts/lib/core/practice-script.ts",
-	"docker/agents/practice-scripts/kits/scm/index.ts",
+	"docker/agents/practice-scripts/lib/api.ts",
+	"docker/agents/practice-scripts/kits/scm/api.ts",
 	"docker/agents/practice-scripts/kits/chat/index.ts",
 	"docker/agents/practice-scripts/kits/docs/index.ts",
 ];

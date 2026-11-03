@@ -1,12 +1,5 @@
-import { scm } from "../kits/scm/index.ts";
-import {
-	occurrences,
-	selectedSources,
-	selectedOccurrences,
-	occurrenceLead,
-	sortOccurrenceLeads,
-} from "../kits/scm/occurrences.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 
 export const LABELS = {
 	"credential-named-value-in-url-path-query":
@@ -57,24 +50,19 @@ function countFact(kind: InsecureKind): string {
 	return kind.replaceAll(/-(?<letter>[a-z])/gu, (_, letter: string) => letter.toUpperCase());
 }
 
+const RULES = PATTERNS.map(([kind, test]) => ({ kind, label: LABELS[kind], test }));
+
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		if (domain.kind !== "scm.pull_request" && domain.kind !== "scm.file") {
-			throw new Error("this practice requires SCM source files");
-		}
-		const leads: ReviewLead[] = [];
+		const work = scm(ctx, "scm.pull_request", "scm.file");
+		const found = await work.sites(RULES, { tests: true, comments: true });
+		const sites = found.sites.filter((site) => !isComment(site.text));
+		const leads = sites.map((site) => site.lead);
 		const byKind: Record<string, number> = {};
-		for (const file of await selectedSources(ctx, domain.files, () => true)) {
-			for (const [kind, test] of PATTERNS) {
-				const found = selectedOccurrences(
-					ctx,
-					domain.files,
-					occurrences(file, [{ label: LABELS[kind], test }], { includeComments: true }),
-				).filter((row) => !isComment(file.text.split("\n")[row.startLine - 1]?.trimStart() ?? ""));
-				leads.push(...found.map(occurrenceLead));
-				byKind[countFact(kind)] = (byKind[countFact(kind)] ?? 0) + found.length;
+		if (found.filesScanned > 0) {
+			for (const [kind] of PATTERNS) {
+				byKind[countFact(kind)] = sites.filter((site) => site.kind === kind).length;
 			}
 		}
 		const directions =
@@ -87,7 +75,7 @@ export default definePracticeScript({
 					]
 				: [];
 		return ctx.review({
-			leads: sortOccurrenceLeads(leads).slice(0, 40),
+			leads: leads.slice(0, 40),
 			facts: { insecureDefaultCandidates: leads.length, ...byKind },
 			directions,
 		});
