@@ -1485,11 +1485,17 @@ void describe("CI contract", () => {
 			return calls.trim().split("\n");
 		};
 		const title = "The rescan of main's images failed";
+		const workflow = { login: "app/github-actions" };
 		const first = await run("[]");
-		assert.match(first[0] ?? "", /--author app\/github-actions/u);
+		assert.match(first[0] ?? "", /^issue list .*--json number,title,author/u);
 		assert.match(first[1] ?? "", /^issue create /u);
-		const again = await run(JSON.stringify([{ number: 7, title }]));
+		const again = await run(JSON.stringify([{ number: 7, title, author: workflow }]));
 		assert.match(again[1] ?? "", /^issue comment 7 /u);
+		// The same title from anyone else is not the tracking issue.
+		const planted = await run(
+			JSON.stringify([{ number: 8, title, author: { login: "stranger" } }]),
+		);
+		assert.match(planted[1] ?? "", /^issue create /u);
 	});
 
 	void test("GHCR-only rescans share login while the image builder keeps its registry input", async () => {

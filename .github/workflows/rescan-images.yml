@@ -82,9 +82,12 @@ jobs:
         run: |
           set -euo pipefail
           title="The rescan of main's images failed"
-          # Only the workflow token opens this issue. Anyone can open an issue with the same title.
-          number=$(gh issue list -R "$REPOSITORY" --state open --author app/github-actions --limit 500 \
-            --json number,title | jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')
+          # Only the workflow token opens this issue, and anyone can open one with the same title. `--author`
+          # does not match an app, and the search index can miss an issue that a run just opened, so the
+          # listing is filtered here.
+          number=$(gh issue list -R "$REPOSITORY" --state open --limit 500 --json number,title,author |
+            jq -r --arg title "$title" \
+              '[.[] | select(.title == $title and .author.login == "app/github-actions")][0].number // empty')
           if [ -n "$number" ]; then
             gh issue comment "$number" -R "$REPOSITORY" --body "The rescan failed again: $RUN_URL"
           else
