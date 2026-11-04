@@ -63,6 +63,222 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
+### v1.0.0-rc.2
+
+#### 🔴 Check practice scripts that decide after a failed read
+
+A practice script that returns its own result now needs the evidence that it asked for. It stops with the reason **Decided without its evidence** if a read failed, even if it caught the error, or if it read a record that was not captured.
+
+This changes nothing for a script that returns `ctx.review()`. Every script in the shipped catalog does.
+
+If you wrote a practice script that catches a read failure and then returns its own result:
+
+1. Open the practice in the practice editor.
+2. Let the review decide with `ctx.review`, or let the failure end the script.
+
+#### 🔴 Choose how long conversations with Hephaestus stay
+
+Conversations with Hephaestus now have a retention limit of 400 days. Each message, answer, digest and summary is erased in the two weeks before it is 400 days old, as a deleted message is. What Hephaestus read during an answer is erased with the workspace's Slack retention, 30 days by default, because it can copy messages from monitored Slack channels.
+
+The first weekly runs after the upgrade erase every entry that is older, and the erasure cannot be undone.
+
+To keep conversations longer:
+
+1. Before you upgrade, set the Helm value `config.conversationRetention`, for example `P730D`. The value is at least `P15D`.
+2. Upgrade.
+
+#### 🔴 Remove `interactiveReserve` from call pool requests
+
+A call pool's limit is now learned from the provider, and that limit sets the conversation reserve.
+`interactiveReserve` no longer exists in `/api/admin/llm/call-pools` requests or responses, and the database drops the column.
+Change any script that sends or reads this field.
+
+The upgrade gives every model without a pool a pool of its own, which starts at 4 calls in flight.
+A pool's existing `maxConcurrentCalls` stays as a ceiling on the learned limit, and that pool also starts at 4 calls in flight.
+Its limit rises while the provider serves all calls.
+[Sharing provider capacity](/admin/ai-providers#6-sharing-provider-capacity) tells what you can still set.
+
+#### 🔴 Give the one-host installer a login provider
+
+The one-host installer no longer writes or keeps a `site.yaml` without a login provider.
+Such an instance starts, but nobody can sign in to it.
+
+- For a scripted first install, give `--github-client-id` and set `GITHUB_OAUTH_CLIENT_SECRET`.
+  On a terminal, the installer asks for both.
+- Before a repeat run, make sure that `site.yaml` names a login provider.
+  Set `config.github.oauthClientId`, or enable GitLab with `config.gitlab.enabled: true` and `config.gitlab.oauthClientId`.
+  [First steps § 1](https://docs.hephaestus.build/admin/first-steps#1-configure-a-login-provider) describes the GitHub OAuth app.
+
+#### 🔴 Download the k3s bundle to install or upgrade a one-host deployment
+
+A release no longer publishes `k3s-install.sh` and its seven sibling files as separate assets.
+To install or upgrade, download `hephaestus-k3s-<version>.tar.gz` and its `.sigstore.json` signature.
+Verify the bundle with `cosign verify-blob`, unpack it with `tar xzf`, and run `sh k3s-install.sh` from the unpacked directory.
+[Install on one host](/admin/kubernetes#install-on-one-host-k3s) gives the commands.
+A script that downloads the single `k3s-*` assets fails on a new release until you change it to download the bundle.
+
+#### 🔴 Install 1.0.0-rc.1 before you upgrade a database from 0.x
+
+This release starts from a baseline with the schema of 1.0.0-rc.1, and no longer holds the 0.x migrations.
+
+A database from before 1.0.0-rc.1 is refused before anything changes. Install 1.0.0-rc.1 with its [versioned upgrade instructions](https://github.com/hephaestus-build/Hephaestus/blob/v1.0.0-rc.1/docs/admin/upgrade-to-1-0.mdx), complete its upgrade, then upgrade to this release.
+
+A database on 1.0.0-rc.1 needs no action. The migration compares its schema with 1.0.0-rc.1, records the baseline without changing the schema, and continues. If the schema differs, or if a later build ran on the database, the migration stops without a change and lists what it found. The current release can keep running: contact the maintainers with the list.
+
+An installation that once ran the former intelligence service can still hold its tables: `checkpoints`, `checkpoint_blobs`, `checkpoint_writes`, `checkpoint_migrations`, `store` and `store_migrations`, and the function `text_to_lo(text)`. Hephaestus does not use them, and the migration stops and lists them. Back them up, drop them, and run the migration again. Connect as the owner of the Hephaestus database (here `hephaestus`):
+
+```bash
+pg_dump --format=custom --file=intelligence-leftovers.dump \
+  --table=public.checkpoints --table=public.checkpoint_blobs --table=public.checkpoint_writes \
+  --table=public.checkpoint_migrations --table=public.store --table=public.store_migrations hephaestus
+psql --dbname=hephaestus --command='DROP TABLE IF EXISTS public.checkpoints, public.checkpoint_blobs, public.checkpoint_writes, public.checkpoint_migrations, public.store, public.store_migrations; DROP FUNCTION IF EXISTS public.text_to_lo(text);'
+```
+
+The tables hold old conversation memory, so keep the backup only as long as your retention rules allow.
+
+#### 🔴 Update API clients that read paged lists
+
+This release has two page shapes. A client that still reads an old field gets no value for it.
+
+A numbered list returns `{content, page, size, totalElements, totalPages}`:
+
+- These fields are gone: `number`, `numberOfElements`, `first`, `last`, `empty`, `sort` and `pageable`. Read `page` for `number`. There is another page when `page + 1 < totalPages`.
+- `GET /admin/product-feedback` moves `page.number`, `page.size`, `page.totalElements` and `page.totalPages` to the top level.
+- `GET /admin/users` returns this object, not a bare array.
+
+A long append-only list returns `{content, nextCursor}`. Pass `nextCursor` as `cursor` to read the next page. The last page has no `nextCursor`.
+
+| Endpoint | Change |
+| --- | --- |
+| `GET /admin/audit` and `GET /admin/config-audit` | Replace `page` with `cursor`. The response is a cursor page, so `size`, `totalElements`, `totalPages` and the numbered-page fields are gone. For the total, read `/count` under the same path with the same filters. |
+| `GET /workspaces/{workspaceSlug}/config-audit` | The same change, and the same `/count` read. |
+| `GET /admin/integration/dead-letters` and `GET /workspaces/{workspaceSlug}/integrations/dead-letters` | The bare array becomes a cursor page. Replace `after` with `cursor`. |
+| `GET /workspaces/{workspaceSlug}/practices/scans/{scanId}/report/items` and `/problems` | `hasNext` is gone. There is another page when `nextCursor` is present. |
+| `GET /workspaces/{workspaceSlug}/mentor/entries` | `entries` becomes `content`, and `earlierBefore` becomes `nextCursor`. Replace `before` with `cursor`, and `limit` with `size`. |
+| `GET /workspaces/{workspaceSlug}/mentor/entries/{entryId}/thread` | The same parameters. `entries` and `earlierBefore` move into `replies`, as `replies.content` and `replies.nextCursor`. |
+| `POST /workspaces/gitlab/projects` | `projects` becomes `content`, and `nextPage` becomes `nextCursor`. Replace `page` with `cursor`. |
+
+#### 🔴 Rewrite custom practice scripts for the public script API
+
+Practice scripts now import only `@hephaestus/practice-scripts`, `@hephaestus/practice-scripts/scm`, `/chat` and `/docs`. The upgrade rewrites every practice whose current script is exact bundled text, whether or not you customized its other fields. Your own script text is not changed, and the upgrade does not stop for it.
+
+Until you rewrite such a script, its practice is withheld with the reason **Not a runnable script**, and the review ends as Partial. It makes no claim about the work.
+
+To find these scripts after the upgrade, run:
+
+```sql
+SELECT p.workspace_id, p.slug
+FROM practice p
+JOIN practice_version v ON v.id = p.current_version_id
+WHERE v.definition->>'script' LIKE '%../lib/core/%'
+   OR v.definition->>'script' LIKE '%../kits/%';
+```
+
+For each script:
+
+1. Replace the imports. `definePracticeScript`, `UnratedError` and `listWithin` come from `@hephaestus/practice-scripts`. `scm` and the SCM helpers come from `@hephaestus/practice-scripts/scm`.
+2. Replace `const domain = scm(ctx); expectKind(domain, "scm.pull_request");` with `const work = scm(ctx, "scm.pull_request");`.
+3. Replace `requireChange(domain.files)` with `work.changedFiles()`, `domain.files?.head` with `work.head`, and `selectedSources` with `work.sources`.
+4. Replace `readCapturedCommits(ctx.evidence)` with `work.commits()`. The other record readers are methods of `work` too.
+5. Replace `occurrences` and `scanOccurrences` with `work.sites`.
+6. Move any other helper into your script.
+
+**What happens to results.** The rewritten scripts are new practice versions, so their earlier results are no longer current. Nothing reviews again because of the upgrade. A practice is judged again at its next occasion for each item. Results and feedback that you already have stay as they are.
+
+**Scheduled reviews.** The next scheduled batch and repository scan measure their whole scope again, once, because reuse needs the same practice version. This costs model usage once. A scan report cannot compare across this change.
+
+**Reviews in flight.** A review that is queued or running during the upgrade still runs the script version that it pinned. That practice is withheld with the reason above, and its next occasion judges it again.
+
+**Removed.** `branches-from-the-integration-branch` had no use and no catalog entry. A practice with its exact text is withheld with the reason above until you replace its script.
+
+#### 🔴 Delete GitLab hooks on the shared endpoint
+
+This release removes `POST /webhooks/gitlab`. A hook that still posts there receives an error, and Hephaestus does not record its events.
+
+1. Before you upgrade, open **Settings → Webhooks** of each GitLab group and project that a workspace connects.
+2. Delete each hook whose URL ends in `/webhooks/gitlab`.
+3. Keep each hook whose URL contains `/webhooks/gitlab/connections/`. The workspace's GitLab connection registered it.
+4. Keep the previous release running until it has processed the events that the deleted hooks already delivered. Its GitLab consumers then have no pending messages.
+5. Upgrade. If a connected group has no connection hook, Hephaestus registers one at its next webhook health check, within six hours.
+
+Events that GitLab sends to the shared endpoint, or before the connection hook exists, are lost. So are shared-endpoint events that the previous release did not process before the upgrade: the new release does not read them. This includes push events. The next periodic reconcile recovers the effect of lost events on issues, merge requests and notes.
+
+`WEBHOOK_SECRET` stays required. It now verifies GitHub webhooks only. GitLab hooks use the token that `WEBHOOK_ROUTING_SECRET` signs.
+
+#### 🔴 Enable user namespaces on sandbox nodes
+
+Before upgrading, ensure that every sandbox node supports [Kubernetes user namespaces](https://kubernetes.io/docs/concepts/workloads/pods/user-namespaces/).
+The nodes need Linux 6.3 or later and a compatible container runtime, such as containerd 2.0 or later.
+If you use gVisor (`runsc`) or another RuntimeClass that is not qualified with user namespaces, clear `worker.runtime.runtimeClassName` to use the default runtime or qualify a compatible runtime before upgrading.
+A RuntimeClass does not replace user namespaces.
+Every sandbox and probe Pod now sets `hostUsers: false`, including when an optional RuntimeClass is configured.
+The worker starts no sandbox until its isolation probe confirms a private user mapping.
+Check that `sandbox_isolation_passed` and `sandbox_isolation_user_namespaces` are both `1` after the worker starts.
+See [Sandbox prerequisites](https://docs.hephaestus.build/admin/kubernetes#sandbox-prerequisites).
+
+#### 🔴 Remove `PRACTICE_REVIEW_PRACTICE_CONCURRENCY`, and check two review budgets
+
+A practice review now sets its own pace, so Hephaestus no longer reads `PRACTICE_REVIEW_PRACTICE_CONCURRENCY`.
+
+If you set this variable, remove it. If you used a low value to protect your model provider, set a limit on its [call pool](https://docs.hephaestus.build/admin/runtime-roles#call-pools) instead.
+
+If you set `PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` or `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS`, multiply the value by 3 to keep your budget. Each practice now gets exactly the value that you set. The old value applied at least three times over.
+
+#### 🔴 Stop every role: the practice-review assignment's "Max concurrent reviews" is removed
+
+The upgrade drops the column that stored **Max concurrent reviews**. A role that still runs the earlier version cannot read the new schema, so stop every role before the upgrade.
+
+Reviews are now paced by capacity: a worker's review slots, the reviews quota of its sandbox namespace, and the fair grants of the model's call pool. To limit how much one provider serves, set a limit on its [call pool](https://docs.hephaestus.build/admin/runtime-roles#call-pools).
+
+#### 🔴 Check practice scripts that change a result after `ctx.review`
+
+A practice script now ends when it calls `ctx.review`. Code after that call does not run, and the review's result is the practice's result.
+
+This changes nothing for a script that returns `ctx.review()`. Every script in the shipped catalog does.
+
+If you wrote a practice script that reads or changes the result after the call, or catches a failed review:
+
+1. Open the practice in the practice editor.
+2. Move that logic before `ctx.review`, or give it to the review as `directions`.
+
+#### 🔴 Apply the 72-hour horizon to Slack and Outline on the small profile
+
+The `small` profile kept Slack and Outline deliveries for seven days. These streams carry personal content, and an erasure request cannot reach inside them, so they now keep deliveries for 72 hours, as on every other profile.
+
+A new installation has this at once. So does a stream that holds nothing older than 72 hours. On any other stream, the upgrade alone does not apply it: startup withholds a shorter age, because that deletes stored messages.
+
+**The one action:** check that `webhook.stream.consumer.pending` and `webhook.stream.consumer.ack.pending` are near zero, set `webhook.stream.allowDestructiveLimitUpdates: true` for one upgrade, then set it back to `false`.
+The flag applies to every stream. If your site values also lower a bound on another stream, that bound takes effect too, and it deletes what no longer fits.
+
+**What shows that it is not in effect yet:** the alert `HephaestusWebhookStreamPastAgeBound`, and `webhook.stream.oldest.message.age` above `webhook.stream.age.bound` for `slack` or `outline`.
+
+After this change, a stored event older than 72 hours can no longer be replayed: its replay returns `410`. An outage longer than 72 hours loses older Slack and Outline events from the stream:
+
+- The nightly Slack history sync refills messages in active monitored channels. It also removes a stored message that a complete read of Slack no longer returns. The admin guide's data retention page, under *Messages deleted or edited in Slack*, lists the messages that it does not compare.
+- The Outline sync restores each document's current state, and it removes deleted documents on a clean reconciliation pass.
+
+#### 🔴 Stop every role before you upgrade from 1.0.0-rc.1
+
+1.0.0-rc.1 cannot run on the schema of this release.
+The migration drops the column `llm_call_pool.interactive_reserve` and replaces the unique constraint `uq_issue_provider_native_id`, and 1.0.0-rc.1 still uses both.
+
+Follow [Stopped schema upgrades](https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades):
+
+1. Back up PostgreSQL and JetStream, and verify the restore.
+2. Stop every role with the chart of 1.0.0-rc.1: the server, the workers and the webhook.
+   Wait until their Pods and the sandbox Pods and Jobs are gone.
+3. Run the migration of this release with every role stopped.
+4. Start every role from this release.
+
+Do not use `--rollback-on-failure`.
+With [pull-based deployment](https://docs.hephaestus.build/admin/pull-based-deployment#operating-it), pause the reconcile timer before step 2.
+For an upgrade within one major version, the reconciler does not stop the roles.
+Promote this release and resume the timer only after step 4.
+
+To roll back, stop every role and restore the backup from step 1. Then start 1.0.0-rc.1.
+There is no in-place downgrade.
+If the migration fails, follow [If migration fails](https://docs.hephaestus.build/admin/upgrade#if-migration-fails).
+
 ### v1.0.0-rc.1
 
 #### 🔴 Stop every role before the conversation lease cutover
