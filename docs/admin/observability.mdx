@@ -28,7 +28,7 @@ The alert or the objective tells the operator when the answer needs work.
 | Do model calls wait for their pool? | `llm_pool_permit_wait_seconds`, `llm_pool_upstream_throttled_total` | None |
 | Does the API answer without errors, and fast enough? | `http_server_requests_seconds` | The API objectives |
 | Which route is slow at the 95th percentile? | `http_server_requests_seconds_bucket`, by `uri` | The Activity objective |
-| Does the database pool make requests wait? | `hikaricp_connections_acquire_seconds`, `hikaricp_connections_pending` | None |
+| Does the database pool make requests wait? | `hikaricp_connections_acquire_seconds`, `hikaricp_connections_timeout_total` | `HephaestusDatabasePoolSlow`, `HephaestusDatabaseConnectionTimeouts` |
 | Do pages show their content fast enough? | `web_vital_duration_seconds` | `HephaestusPageExperiencePoor` |
 | Does a conversation answer, and how fast does it start? | `mentor_turn_completed_total`, `mentor_turn_first_token_seconds` | None |
 | Do provider events arrive and get processed? | `webhook_publish_total`, `webhook_stream_*`, `integration_consumer_*` | The webhook and stream alerts |
@@ -49,8 +49,8 @@ These questions have no signal yet. The most important is first.
    `llm_proxy_duration_seconds` has no pool label and no buckets.
    It also spans the wait for a pool permit, which `llm_pool_permit_wait_seconds` measures on its own.
    Token counts are only in spans and in the database.
-3. Does the database pool make requests wait, and which statements are slow?
-   `hikaricp_*` has no alert. No exporter reads `pg_stat_statements`, lock waits, autovacuum or table growth.
+3. Which statements are slow, and do they wait for locks?
+   No exporter reads `pg_stat_statements`, lock waits, autovacuum or table growth.
 4. How long does an event wait in the broker, and how long does its handler take?
    `integration_consumer_nak_total` and `integration_consumer_poison_total` count retries and dead letters.
    No histogram measures the wait or the handling.
@@ -230,6 +230,8 @@ For a release name longer than 34 characters, change the name patterns of these 
 | `HephaestusAgentQueueStalled` | `agent_queue_oldest_age_seconds` | A practice review usually runs for 10 to 16 minutes. A wait of several review durations shows that no worker claims work |
 | `HephaestusSandboxIsolationFailed` | `sandbox_isolation_passed` of a worker | A later probe failed, and the worker starts no sandbox until a probe passes. The wait covers the first probe at the start |
 | `HephaestusWalArchiveFailing` | `database_wal_archive_failing`, and `database_wal_archive_sample_failures_total` | PostgreSQL retries a failed segment about once each minute, so a short fault of the bucket clears itself. A longer failure stops point-in-time recovery after the last archived segment. A server that cannot read the archiver for the same time cannot show that the archive works, so the alert also fires then |
+| `HephaestusDatabaseConnectionTimeouts` | `hikaricp_connections_timeout_total`, by `runtime_role` | The pool could not give a connection within its timeout, so the request or the job that asked failed. A single timeout is a failure that a user meets. The alert stays up for up to 15 minutes after the last timeout |
+| `HephaestusDatabasePoolSlow` | `hikaricp_connections_acquire_seconds`, by `runtime_role` | The sizing target is an acquire p95 below 50 ms ([Sizing](./sizing.mdx)). More than 5 % of the acquires of 30 minutes above 50 ms misses it. A process with fewer than 300 acquires in 30 minutes does not fire, so a few slow acquires during a database restart do not count |
 | `HephaestusBrowserFaultsRising` | `browser_faults_total` | A page that fails for one reader repeats its failure. Twenty of one kind in one hour point to a fault that many readers meet, such as a release that broke a page. The alert stays up for up to one hour after the faults stop |
 | `HephaestusWebhookReceiverDown` | `kube_deployment_status_replicas_available` of the webhook Deployment, while its desired replicas are above 0 | No available receiver means that every provider delivery fails. The wait covers the start of a replacement pod. A Deployment scaled to 0 for maintenance does not fire. A receiver that is unavailable for a shorter time than the wait, for example for 16 seconds to 2 minutes, does not fire. `HephaestusWebhookRedeliveriesRequested` can then fire for the GitHub deliveries that it lost, when they reach its threshold. Deliveries of other providers have no such alert |
 | `HephaestusWebhookReceiverUnready` | `kube_deployment_status_replicas_unavailable` of the webhook Deployment, while another replica is available | The other replicas serve, so this is a warning. The wait is longer than the 10 minutes that a new pod waits for the schema |

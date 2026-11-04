@@ -232,6 +232,25 @@ groups:
           severity: critical
         annotations:
           summary: PostgreSQL cannot archive its WAL, or the server cannot read whether it can
+      # A connection that the pool cannot give within its timeout fails the request or the job that asked for it.
+      - alert: HephaestusDatabaseConnectionTimeouts
+        expr: sum by (runtime_role) (increase(hikaricp_connections_timeout_total{job="hephaestus"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: The {{ $labels.runtime_role }} role could not get a database connection in time, so requests or jobs failed
+      # The sizing target is an acquire p95 below 50 ms (docs/admin/sizing.mdx). The floor keeps a quiet process from
+      # firing on a few acquires during a database restart.
+      - alert: HephaestusDatabasePoolSlow
+        expr: >-
+          1 - sum by (runtime_role) (increase(hikaricp_connections_acquire_seconds_bucket{job="hephaestus",le="0.05"}[30m]))
+            / sum by (runtime_role) (increase(hikaricp_connections_acquire_seconds_count{job="hephaestus"}[30m])) > 0.05
+          and sum by (runtime_role) (increase(hikaricp_connections_acquire_seconds_count{job="hephaestus"}[30m])) >= 300
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 5 % of the {{ $labels.runtime_role }} role's database connections took longer than 50 ms to get
       - alert: HephaestusBrowserFaultsRising
         expr: sum by (kind) (increase(browser_faults_total{job="hephaestus"}[1h])) >= 20
         labels:

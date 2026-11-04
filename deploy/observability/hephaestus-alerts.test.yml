@@ -567,6 +567,60 @@ tests:
             exp_annotations:
               summary: PostgreSQL cannot archive its WAL, or the server cannot read whether it can
 
+  - name: a connection timeout fires for its role, a role without timeouts does not
+    interval: 1m
+    input_series:
+      - series: 'hikaricp_connections_timeout_total{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1"}'
+        values: "0x5 1x20"
+      - series: 'hikaricp_connections_timeout_total{job="hephaestus",instance="worker:9090",runtime_role="worker",pool="HikariPool-1"}'
+        values: "0x25"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HephaestusDatabaseConnectionTimeouts
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: HephaestusDatabaseConnectionTimeouts
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              runtime_role: server
+            exp_annotations:
+              summary: The server role could not get a database connection in time, so requests or jobs failed
+      - eval_time: 25m
+        alertname: HephaestusDatabaseConnectionTimeouts
+        exp_alerts: []
+
+  # 100 acquires a minute. From minute 5, 10 of them take longer than 50 ms on the server: 10 % slow.
+  - name: sustained slow connection acquires fire, a brief burst and a quiet process do not
+    interval: 1m
+    input_series:
+      - series: 'hikaricp_connections_acquire_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1",le="0.05"}'
+        values: "0+100x5 500+90x60"
+      - series: 'hikaricp_connections_acquire_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",pool="HikariPool-1"}'
+        values: "0+100x65"
+      # A restart: every acquire of two minutes is slow, then the pool recovers.
+      - series: 'hikaricp_connections_acquire_seconds_bucket{job="hephaestus",instance="worker:9090",runtime_role="worker",pool="HikariPool-1",le="0.05"}'
+        values: "0+100x5 500x2 500+100x58"
+      - series: 'hikaricp_connections_acquire_seconds_count{job="hephaestus",instance="worker:9090",runtime_role="worker",pool="HikariPool-1"}'
+        values: "0+100x65"
+      # A quiet process: 5 acquires a minute, all slow.
+      - series: 'hikaricp_connections_acquire_seconds_bucket{job="hephaestus",instance="webhook:9090",runtime_role="webhook",pool="HikariPool-1",le="0.05"}'
+        values: "0x65"
+      - series: 'hikaricp_connections_acquire_seconds_count{job="hephaestus",instance="webhook:9090",runtime_role="webhook",pool="HikariPool-1"}'
+        values: "0+5x65"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusDatabasePoolSlow
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: HephaestusDatabasePoolSlow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              runtime_role: server
+            exp_annotations:
+              summary: More than 5 % of the server role's database connections took longer than 50 ms to get
+
   # A failed read makes the gauge NaN, and the read-failure counter increases on each read, every 30 seconds.
   - name: a failing archive alert stays firing through a long read outage
     interval: 1m
