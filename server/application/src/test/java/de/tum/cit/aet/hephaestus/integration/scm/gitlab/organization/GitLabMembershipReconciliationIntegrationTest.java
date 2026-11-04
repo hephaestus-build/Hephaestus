@@ -482,20 +482,20 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
         ensureAccount(student);
         PullRequest ready = mergeRequest(student, "main");
 
-        assertThat(coverage.admits(
-                        workspace, repositoryItemId, ready.getBaseRefName(), accountId(student.getId()), true))
+        assertThat(coverage.admission(workspace)
+                        .admits(repositoryItemId, ready.getBaseRefName(), accountId(student.getId()), true))
                 .isFalse();
 
         answer("GetGroupMembers " + COURSE, page(false, member(STUDENT, "student", 30)));
         memberSync.syncGroupMemberships(workspace.getId(), COURSE, course);
 
-        assertThat(coverage.admits(
-                        workspace, repositoryItemId, ready.getBaseRefName(), accountId(student.getId()), true))
+        assertThat(coverage.admission(workspace)
+                        .admits(repositoryItemId, ready.getBaseRefName(), accountId(student.getId()), true))
                 .isTrue();
-        assertThat(coverage.admits(workspace, repositoryItemId, "develop", accountId(student.getId()), true))
+        assertThat(coverage.admission(workspace).admits(repositoryItemId, "develop", accountId(student.getId()), true))
                 .as("the base branch still has to be selected")
                 .isFalse();
-        assertThat(coverage.admits(workspace, repositoryItemId, "main", Long.MAX_VALUE, true))
+        assertThat(coverage.admission(workspace).admits(repositoryItemId, "main", Long.MAX_VALUE, true))
                 .isFalse();
     }
 

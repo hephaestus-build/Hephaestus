@@ -1648,9 +1648,9 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         assertThat(practiceReviewCoverageService.scope(reviewed).repositories())
                 .extracting(ReviewRepositoryTarget::repositoryItemId)
                 .containsExactly(repositoryItemId);
-        assertThat(practiceReviewCoverageService.admits(reviewed, repositoryItemId, "main", null, true))
+        assertThat(practiceReviewCoverageService.admission(reviewed).admits(repositoryItemId, "main", null, true))
                 .isTrue();
-        assertThat(practiceReviewCoverageService.admits(reviewed, Long.MAX_VALUE, "main", null, true))
+        assertThat(practiceReviewCoverageService.admission(reviewed).admits(Long.MAX_VALUE, "main", null, true))
                 .isFalse();
 
         ObjectNode rename = (ObjectNode) projectCreate(renamed, projectId);

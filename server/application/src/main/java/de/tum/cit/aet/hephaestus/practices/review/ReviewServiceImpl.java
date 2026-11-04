@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
+import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemChecks;
@@ -51,6 +52,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -223,8 +225,10 @@ public class ReviewServiceImpl implements ReviewService {
                         && selected.stream().anyMatch(p -> needsChecks(definition(p), checksOfItem.source()))
                 ? checksOfItem.checks(pinned, occasion)
                 : ItemChecks.SETTLED;
+        // Read once for every practice: the review scope, the eligible members, the item's repository and its people.
+        var itemCoverage = request.kind() == ReviewKind.ITEM ? itemCoverage(workspace, pinned) : null;
         var planned = selected.stream()
-                .map(p -> selection(workspace, p, request.kind(), pinned, checksSource, headChecks))
+                .map(p -> selection(p, request.kind(), pinned, itemCoverage, checksSource, headChecks))
                 .toList();
         var developers = new ArrayList<@Nullable Long>();
         for (var plan : planned) {
@@ -407,28 +411,30 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     private SelectedPractice selection(
-            Workspace workspace,
             Practice practice,
             ReviewKind kind,
             ItemSnapshot pinned,
+            @Nullable ItemCoverage itemCoverage,
             @Nullable SourceKind checksSource,
             ItemChecks checks) {
         var version = practice.getCurrentVersion();
         var definition = json.convertValue(version.getDefinition(), PracticeDefinition.class);
         if (kind == ReviewKind.SCAN) return new SelectedPractice(practice, version, List.of(), null);
-        var roles = resolveRole(workspace.getId(), definition, pinned);
+        var covered = Objects.requireNonNull(itemCoverage);
+        var roles = definition.about() == null
+                ? List.<Long>of()
+                : covered.accounts().getOrDefault(definition.about(), List.of());
         String reason = definition.about() == null
                 ? null
                 : roles.isEmpty() ? "ROLE_UNAVAILABLE" : roles.size() > 1 ? "ROLE_AMBIGUOUS" : null;
         if (reason == null
-                && !coverage.admits(
-                        workspace,
-                        coverage.repositoryItemId(
-                                workspace.getId(), pinned.item().itemId()),
-                        pinned.state().get("baseBranch"),
-                        roles.size() == 1 ? roles.getFirst() : null,
-                        pinned.item().kind().value().equals("scm.pull_request")
-                                || pinned.item().kind().value().equals("scm.pull_request_review")))
+                && !covered.admission()
+                        .admits(
+                                covered.repository(),
+                                pinned.state().get("baseBranch"),
+                                roles.size() == 1 ? roles.getFirst() : null,
+                                pinned.item().kind().value().equals("scm.pull_request")
+                                        || pinned.item().kind().value().equals("scm.pull_request_review")))
             reason = "OUTSIDE_REVIEW_SCOPE";
         if (reason == null) reason = readiness(definition, checksSource, checks);
         return new SelectedPractice(practice, version, roles, reason);
@@ -440,20 +446,33 @@ public class ReviewServiceImpl implements ReviewService {
             List<Long> roles,
             @Nullable String reason) {}
 
-    private List<Long> resolveRole(long workspaceId, PracticeDefinition definition, ItemSnapshot snapshot) {
-        if (definition.about() == null) return List.of();
-        var eligible = coverage.eligibleAccountIds(workspaceId);
-        return snapshot.roles().stream()
-                .filter(r -> r.human() && r.role() == definition.about())
-                .map(r -> identities.resolveAccountId(
-                        r.identity().providerId(),
-                        r.identity().subject(),
-                        r.identity().teamId()))
-                .flatMap(Optional::stream)
-                .filter(eligible::contains)
-                .distinct()
-                .sorted()
-                .toList();
+    /** What every practice of one item review is checked against: who holds each role, and the review scope. */
+    private record ItemCoverage(
+            PracticeReviewCoverageService.Admission admission,
+            @Nullable Long repository,
+            Map<AboutRole, List<Long>> accounts) {}
+
+    private ItemCoverage itemCoverage(Workspace workspace, ItemSnapshot pinned) {
+        var admission = coverage.admission(workspace);
+        var accounts = new EnumMap<AboutRole, List<Long>>(AboutRole.class);
+        for (var role : AboutRole.values())
+            accounts.put(
+                    role,
+                    pinned.roles().stream()
+                            .filter(r -> r.human() && r.role() == role)
+                            .map(r -> identities.resolveAccountId(
+                                    r.identity().providerId(),
+                                    r.identity().subject(),
+                                    r.identity().teamId()))
+                            .flatMap(Optional::stream)
+                            .filter(admission.eligible()::contains)
+                            .distinct()
+                            .sorted()
+                            .toList());
+        return new ItemCoverage(
+                admission,
+                coverage.repositoryItemId(workspace.getId(), pinned.item().itemId()),
+                accounts);
     }
 
     @Override

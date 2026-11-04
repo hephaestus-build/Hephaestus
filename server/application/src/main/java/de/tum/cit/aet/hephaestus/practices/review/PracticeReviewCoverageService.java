@@ -185,17 +185,20 @@ public class PracticeReviewCoverageService {
             throw new InvalidReviewScopeException("Select only eligible workspace members.");
     }
 
-    public boolean admits(
-            Workspace workspace,
-            @Nullable Long repository,
-            @Nullable String branch,
-            @Nullable Long developerId,
-            boolean branchRestrictionsApply) {
-        return (developerId == null
-                        || (eligibleAccountIds(workspace.getId()).contains(developerId)
-                                && scope(workspace).admitsPerson(developerId)))
-                && (repository == null
-                        || scope(workspace).admitsRepository(repository, branch, branchRestrictionsApply));
+    /** The eligible members and the review scope that every practice of one admission is checked against, read once. */
+    public Admission admission(Workspace workspace) {
+        return new Admission(eligibleAccountIds(workspace.getId()), scope(workspace));
+    }
+
+    public record Admission(Set<Long> eligible, WorkspaceReviewScope scope) {
+        public boolean admits(
+                @Nullable Long repository,
+                @Nullable String branch,
+                @Nullable Long developerId,
+                boolean branchRestrictionsApply) {
+            return (developerId == null || (eligible.contains(developerId) && scope.admitsPerson(developerId)))
+                    && (repository == null || scope.admitsRepository(repository, branch, branchRestrictionsApply));
+        }
     }
 
     public @Nullable Long repositoryItemId(long workspaceId, long itemId) {
