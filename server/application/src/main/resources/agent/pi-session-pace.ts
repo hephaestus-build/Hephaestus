@@ -186,3 +186,15 @@ export function roomForSession(options: {
 		used + perSession < limit
 	);
 }
+
+/**
+ * Whether measuring ends: two sessions in a row ended unanswered, so a later session would wait as long. A session
+ * that ends any other way resets the count.
+ */
+export function newStallRule(): (stop: string | null) => boolean {
+	let stalls = 0;
+	return (stop) => {
+		stalls = stop === "stall" ? stalls + 1 : 0;
+		return stalls >= 2;
+	};
+}

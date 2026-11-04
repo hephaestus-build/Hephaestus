@@ -4,6 +4,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import {
 	newModelWait,
+	newStallRule,
 	podMemoryAvailable,
 	roomForSession,
 	SessionPace,
@@ -165,4 +166,14 @@ void test("no session starts in less time than the sessions so far took", async 
 	assert.equal(pace.timeFor(1200), true);
 	assert.equal(pace.timeFor(1199), false);
 	assert.equal(await pace.nextStart(open, 1199), false);
+});
+
+void test("two unanswered sessions in a row end measuring, and an answered one resets the count", () => {
+	const ends = newStallRule();
+	assert.equal(ends("stall"), false);
+	assert.equal(ends(null), false);
+	assert.equal(ends("stall"), false);
+	assert.equal(ends("budget"), false);
+	assert.equal(ends("stall"), false);
+	assert.equal(ends("stall"), true);
 });

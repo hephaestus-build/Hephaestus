@@ -39,7 +39,13 @@ import {
 } from "./pi-change.ts";
 import { type DiagnosticValue, diagnose, errorKind, ms } from "./pi-diagnostics.ts";
 import { errorText } from "./pi-error-text.ts";
-import { type ModelWait, newModelWait, roomForSession, SessionPace } from "./pi-session-pace.ts";
+import {
+	type ModelWait,
+	newModelWait,
+	newStallRule,
+	roomForSession,
+	SessionPace,
+} from "./pi-session-pace.ts";
 
 import {
 	CONTEXT_IS_LOOP_ONLY,
@@ -828,7 +834,7 @@ export async function runReviewJob(): Promise<void> {
 	const TRACE_REASON_CHARS = 140;
 	const reviewState = new Map<string, Candidate>();
 	const executions = new Map<string, ProgramOutcome>();
-	let unreachedReason: "deadline" | "budget" | "error" = "deadline";
+	let unreachedReason: "deadline" | "budget" | "error" | "unavailable" = "deadline";
 
 	const assignedInputs = new Map<string, PracticeInputs>();
 	const assignmentReceipts = new Map<string, readonly ReadReceipt[]>();
@@ -3158,11 +3164,15 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				diagnose("turn.near_ceiling", { ...placeOf(label), rest_not_reached: true });
 				return "safety";
 			}
-			return stoppedBy();
+			// A hung provider shows no stall here: its call waits for a first byte until the proxy gives up, and
+			// the SDK retries it. A turn whose retries ended unanswered stalled as surely.
+			return (
+				stoppedBy() ?? (trace.finalModelFailure?.retryEndedUnsuccessfully === true ? "stall" : null)
+			);
 		}
 
 		async function measurePractices(): Promise<void> {
-			let stalls = 0;
+			const stalled = newStallRule();
 			const serial = practiceIndex.some((practice) => practice.contextPaths !== undefined);
 			if (serial) {
 				for (const [index, slug] of allSlugs.entries()) {
@@ -3173,9 +3183,13 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						`## Turn ${index + 1} of ${allSlugs.length}: ${slug}`,
 						[slug],
 					);
-					stalls = stop === "stall" ? stalls + 1 : 0;
-					if (stop === "safety" || stalls >= 2) {
-						diagnose("measurement.ended", { reason: stop === "safety" ? "safety" : "stalled" });
+					if (stalled(stop)) {
+						unreachedReason = "unavailable";
+						diagnose("measurement.ended", { reason: "stalled" });
+						break;
+					}
+					if (stop === "safety") {
+						diagnose("measurement.ended", { reason: "safety" });
 						break;
 					}
 				}
@@ -3197,9 +3211,14 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				]);
 				const runSession = async (work: (typeof planned)[number], scope: ReviewSessionState) => {
 					try {
-						await sessionScopes.run(scope, async () =>
+						const stop = await sessionScopes.run(scope, async () =>
 							runScope(work.label, work.heading, [work.slug]),
 						);
+						if (stalled(stop) && !measuringEnded.signal.aborted) {
+							unreachedReason = "unavailable";
+							diagnose("measurement.ended", { reason: "stalled" });
+							measuringEnded.abort(new UnratedError("unavailable", "the model stopped answering"));
+						}
 					} catch (error) {
 						measurementClosed = true;
 						unreachedReason = "error";
