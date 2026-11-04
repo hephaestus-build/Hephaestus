@@ -1389,7 +1389,8 @@ public class ReviewJobExecutor {
                     e.getClass().getName(),
                     e);
         } else {
-            // Bounded facts only, as on the job row: the exception types of the chain show an unclassified cause.
+            // Bounded facts only, as on the job row: an exception message can name a private path or repository. The
+            // exception types and the throwing location show an unclassified cause.
             log.error(
                     "Review preparation failed: jobId={}, stage={}, kind={}, reason={}, captureCode={}, capturedAt={},"
                             + " exceptionTypes={}",
@@ -1399,8 +1400,7 @@ public class ReviewJobExecutor {
                     preparation.reason().name(),
                     preparation.captureCode(),
                     preparation.capturedAt(),
-                    preparation.exceptionTypes(),
-                    e);
+                    preparation.exceptionTypes());
         }
 
         if (isRetryableExecutionFailure(e)) {
