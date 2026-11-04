@@ -2,13 +2,16 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
+import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
@@ -17,8 +20,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -43,6 +48,7 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
     private final ReviewRuntimeQuery runtime;
     private final HistoryCustodyQuery custody;
     private final JsonMapper json;
+    private final ReuseCandidateQuery reuseCandidates;
 
     @Override
     @Transactional
@@ -104,8 +110,9 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
 
     @Override
     @Transactional
-    public void capture(
+    public Set<Long> capture(
             long workspaceId, UUID reviewId, UUID jobId, int attempt, List<ReviewCaptureDecision> decisions) {
+        var reused = new HashSet<Long>();
         var review = fence.lock(workspaceId, reviewId, jobId, attempt);
         var copied = custody.find(workspaceId, List.of(jobId));
         var assignments = practices.lockAssignments(workspaceId, reviewId).stream()
@@ -150,6 +157,15 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                         : (ObjectNode) locked.getDetail().deepCopy();
                 detail.set("custody", json.valueToTree(copied));
                 if (review.getKind() == ReviewKind.SCAN) detail.set("captureDecision", decision.facts());
+                var reusable = reusable(workspaceId, review, decision, member.getItemId());
+                if (reusable.isPresent()) {
+                    detail.set(
+                            "custody", json.valueToTree(reusable.orElseThrow().custody()));
+                    locked.setState(ReviewItemState.REUSED);
+                    locked.setResultId(reusable.orElseThrow().result().getId());
+                    assignment.setStatus(ReviewPracticeStatus.DONE);
+                    reused.add(decision.practiceId());
+                }
                 locked.setDetail(detail);
                 if (refused) {
                     locked.setState(ReviewItemState.WITHHELD);
@@ -158,6 +174,41 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                 }
             }
         }
+        return Set.copyOf(reused);
+    }
+
+    /**
+     * The current result that a requested review keeps: the candidate a scan would reuse, whose own capture read the same
+     * sources. Only a person's request asks for this. An opened or ready occasion measures again by decision.
+     */
+    private Optional<ReuseCandidateQuery.ReusableResult> reusable(
+            long workspaceId, Review review, ReviewCaptureDecision decision, long itemId) {
+        String digest =
+                decision.facts().path(ReviewCaptureDecision.SOURCES_DIGEST).asString(null);
+        if (digest == null
+                || review.getKind() != ReviewKind.ITEM
+                || review.getOrigin() != ReviewOrigin.REQUEST
+                || decision.status() != ReviewPracticeStatus.READY) return Optional.empty();
+        return reuseCandidates
+                .find(workspaceId, new ReviewAssignmentId(review.getId(), decision.practiceId(), itemId))
+                .filter(candidate -> practices
+                        .findByWorkspaceIdAndReviewIdAndPracticeId(
+                                workspaceId, candidate.result().getReviewId(), decision.practiceId())
+                        .map(ReviewPractice::getCaptureDecision)
+                        .map(facts -> digest.equals(
+                                facts.path(ReviewCaptureDecision.SOURCES_DIGEST).asString(null)))
+                        .orElse(false));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> reusedPractices(long workspaceId, UUID reviewId, UUID jobId) {
+        return items
+                .findByWorkspaceIdAndReviewIdAndJobIdOrderByPracticeIdAscItemIdAsc(workspaceId, reviewId, jobId)
+                .stream()
+                .filter(member -> member.getState() == ReviewItemState.REUSED)
+                .map(ReviewItem::getPracticeId)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override

@@ -3020,7 +3020,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 commenter.getLogin(),
                 providerId(commenter),
                 commenter.getNativeId(),
-                noteId)));
+                noteId,
+                null)));
     }
 
     private long account(User user) {

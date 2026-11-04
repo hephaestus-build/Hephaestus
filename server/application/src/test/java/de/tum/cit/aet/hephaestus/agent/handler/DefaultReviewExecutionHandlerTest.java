@@ -3,7 +3,9 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -200,7 +202,8 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
         if (need == ReadNeed.OPTIONAL
                 || (state instanceof SourceCaptureState.Available available
                         && (need != ReadNeed.COMPLETE || available.completeness() == SourceCompleteness.COMPLETE)))
-            when(source.record(eq(pinned), any()))
+            lenient()
+                    .when(source.record(eq(pinned), any()))
                     .thenReturn(mapper.createObjectNode().put("title", "Captured document"));
         when(files.prepare(eq(job), any(), any()))
                 .thenReturn(new PreparedJobInputs(Map.of(), List.of(), List.of(), manifest, null));
@@ -216,6 +219,27 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
         verify(files).beginPersonCapture(job);
         verify(catalog).inject(any(), any(), eq(ReviewKind.ITEM), eq(Map.of()));
         assertDecision(job, ReviewPracticeStatus.READY);
+    }
+
+    @Test
+    void shouldLeaveAPracticeThatKeptItsResultOutOfTheSandbox() {
+        var job = prepare(true);
+        long practiceId = RuntimeReviewTestData.assignment(5L, null).practice().practiceId();
+        when(members.capture(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(job.getAttempt()), any()))
+                .thenReturn(Set.of(practiceId));
+
+        try (var prepared = handler.prepareInputs(job)) {
+            assertThat(prepared.folderIndex()).isNotNull();
+        }
+
+        verify(catalog).inject(any(), eq(List.of()), eq(ReviewKind.ITEM), eq(Map.of()));
+        verify(files)
+                .prepare(
+                        eq(job),
+                        any(),
+                        argThat(report ->
+                                report != null && report.decisions().stream().noneMatch(report::runs)));
+        verify(source, never()).record(any(), any());
     }
 
     @Test

@@ -149,6 +149,18 @@ public class ReviewIntegrationData {
 
     @Transactional
     public Result result(Scenario s, ResultOutcome outcome, Instant orderedAt, Instant recordedAt, String itemVersion) {
+        return result(
+                s, outcome, orderedAt, recordedAt, itemVersion, new HostCoverage(true, List.of(), 1, 0, 0, List.of()));
+    }
+
+    @Transactional
+    public Result result(
+            Scenario s,
+            ResultOutcome outcome,
+            Instant orderedAt,
+            Instant recordedAt,
+            String itemVersion,
+            HostCoverage coverage) {
         var review = Review.builder()
                 .id(UUID.randomUUID())
                 .workspaceId(s.workspace().getId())
@@ -216,7 +228,7 @@ public class ReviewIntegrationData {
                 .explanation("The captured change supports this result.")
                 .severity(outcome == ResultOutcome.NOT_MET ? Severity.MAJOR : null)
                 .evidence(evidence)
-                .coverage(json.valueToTree(new HostCoverage(true, List.of(), 1, 0, 0, List.of())))
+                .coverage(json.valueToTree(coverage))
                 .recordedAt(recordedAt)
                 .build();
         results.saveAndFlush(result);

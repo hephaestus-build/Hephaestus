@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultView;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ResultListDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemRepository;
+import de.tum.cit.aet.hephaestus.practices.review.ReusedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewSummaryQueryService;
 import de.tum.cit.aet.hephaestus.practices.review.dto.OutcomeVectorDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
@@ -30,6 +31,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -42,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PracticeProfileReviewService {
+    private final ReusedResultQuery reusedResults;
     private final CurrentDeveloperLookup developer;
     private final ResultRepository results;
     private final ResultViewQuery views;
@@ -147,7 +150,10 @@ public class PracticeProfileReviewService {
     public ProfileReviewDetailDTO get(WorkspaceContext ws, UUID id) {
         long account = developer.currentDeveloperIdElseThrow();
         var review = reviews.require(ws.id(), id);
-        var rows = results.findByWorkspaceIdAndReviewIdOrderByRecordedAtAscIdAsc(ws.id(), id).stream()
+        // A reused result keeps the id of the review that recorded it, so this review's list adds what it reused.
+        var rows = Stream.concat(
+                        results.findByWorkspaceIdAndReviewIdOrderByRecordedAtAscIdAsc(ws.id(), id).stream(),
+                        reusedResults.of(ws.id(), id).stream())
                 .filter(r -> Objects.equals(r.getDeveloperId(), account))
                 .toList();
         var permitted = authorization.permitsAll(ws.id(), rows, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);

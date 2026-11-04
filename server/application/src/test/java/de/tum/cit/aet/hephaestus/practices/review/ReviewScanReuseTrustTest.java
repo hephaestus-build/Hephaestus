@@ -32,20 +32,20 @@ class ReviewScanReuseTrustTest extends BaseUnitTest {
 
     @Test
     void completeTextAndAttestedAbsenceAreReusable() {
-        assertThat(ScanReuseCandidateQuery.trusted(coverage(ReadReceiptStatus.COMPLETE, "a".repeat(64), true)))
+        assertThat(ReuseCandidateQuery.trusted(coverage(ReadReceiptStatus.COMPLETE, "a".repeat(64), true)))
                 .isTrue();
-        assertThat(ScanReuseCandidateQuery.trusted(coverage(ReadReceiptStatus.ABSENT, "", true)))
+        assertThat(ReuseCandidateQuery.trusted(coverage(ReadReceiptStatus.ABSENT, "", true)))
                 .isTrue();
     }
 
     @Test
     void missingDigestFailedBinaryAndTruncatedReadsAreNotReusable() {
-        assertThat(ScanReuseCandidateQuery.trusted(coverage(ReadReceiptStatus.COMPLETE, "", true)))
+        assertThat(ReuseCandidateQuery.trusted(coverage(ReadReceiptStatus.COMPLETE, "", true)))
                 .isFalse();
         for (var status : List.of(ReadReceiptStatus.FAILED, ReadReceiptStatus.TRUNCATED, ReadReceiptStatus.BINARY))
-            assertThat(ScanReuseCandidateQuery.trusted(coverage(status, "a".repeat(64), true)))
+            assertThat(ReuseCandidateQuery.trusted(coverage(status, "a".repeat(64), true)))
                     .isFalse();
-        assertThat(ScanReuseCandidateQuery.trusted(coverage(ReadReceiptStatus.COMPLETE, "a".repeat(64), false)))
+        assertThat(ReuseCandidateQuery.trusted(coverage(ReadReceiptStatus.COMPLETE, "a".repeat(64), false)))
                 .isFalse();
     }
 }

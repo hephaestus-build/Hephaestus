@@ -1,0 +1,12 @@
+# Answers a note in its own discussion on a merge request.
+# Used to answer a request comment that no feedback answers.
+
+mutation CreateMergeRequestDiscussionReply($noteableId: NoteableID!, $discussionId: DiscussionID!, $body: String!) {
+    createNote(input: {noteableId: $noteableId, discussionId: $discussionId, body: $body}) {
+        note {
+            id
+            url
+        }
+        errors
+    }
+}

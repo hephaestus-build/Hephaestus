@@ -91,7 +91,7 @@ work's `number`, `title` and `url` as its source names it now; absent when it ca
 for the review or why. These describe a run, not what it observed and not whether feedback reached anyone. `reviewStatus` gives the review's
 status as the screens show it (`QUEUED` while its run waits to start), with `reviewStopReason` where it recorded one; a `COMPLETED` run can belong to a `PARTIAL` review.
 `assignmentCounts` counts that review's practices about this developer on this work: `total`, then `judged`,
-`reused`, `withheld` and `pending`. They are not outcomes. A field is absent where it could not be read completely.
+`reused`, `withheld` and `pending`. They are not outcomes. A practice counted in `reused` was not measured again: nothing it reads had changed, so the review kept its earlier observation. Never say that a review with only `reused` practices looked at the work again. A field is absent where it could not be read completely.
 `listingComplete: false` and `hasMore: true` mean the listing is incomplete. The file holds no evidence or
 observations.
 

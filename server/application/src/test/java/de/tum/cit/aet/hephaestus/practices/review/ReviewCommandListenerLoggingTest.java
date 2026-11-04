@@ -27,9 +27,10 @@ class ReviewCommandListenerLoggingTest {
     @Test
     void shouldLogTheRefusalTypeAndIdsWithoutTheExceptionMessage() {
         ReviewRequestService requests = mock(ReviewRequestService.class);
-        when(requests.requestByComment(anyLong(), anyLong(), any(), any()))
+        when(requests.requestByComment(anyLong(), anyLong(), any(), any(), any()))
                 .thenThrow(new AccessForbiddenException("Refused for " + CANARY));
-        ReviewCommandListener listener = new ReviewCommandListener(requests);
+        ReviewCommandListener listener = new ReviewCommandListener(
+                requests, List.of(), mock(ReviewRepository.class), mock(ReviewItemRepository.class));
 
         Logger logger = (Logger) LoggerFactory.getLogger(ReviewCommandListener.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -37,7 +38,7 @@ class ReviewCommandListenerLoggingTest {
         logger.addAppender(appender);
         try {
             listener.on(new BotCommandReceivedEvent(
-                    IntegrationKind.GITHUB, 11L, 22L, "/hephaestus review", "someone", 1L, 33L, 44L));
+                    IntegrationKind.GITHUB, 11L, 22L, "/hephaestus review", "someone", 1L, 33L, 44L, null));
         } finally {
             logger.detachAppender(appender);
             appender.stop();

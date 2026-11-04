@@ -31,7 +31,8 @@ class ReviewOriginTest extends BaseUnitTest {
                 null,
                 List.of(),
                 true,
-                Set.of());
+                Set.of(),
+                null);
         assertThat(request.eventId()).isNull();
         assertThat(request.origin()).isEqualTo(ReviewOrigin.SCHEDULE);
     }

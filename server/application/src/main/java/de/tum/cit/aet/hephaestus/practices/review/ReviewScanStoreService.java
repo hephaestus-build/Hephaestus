@@ -42,7 +42,7 @@ public class ReviewScanStoreService implements ReviewScanStore {
     private final ReviewRepository reviews;
     private final ReviewPracticeRepository practices;
     private final ReviewItemRepository items;
-    private final ScanReuseCandidateQuery reuseCandidates;
+    private final ReuseCandidateQuery reuseCandidates;
     private final ReviewAssignmentQuery assignments;
     private final ResultRepository results;
     private final ItemIndexService writer;

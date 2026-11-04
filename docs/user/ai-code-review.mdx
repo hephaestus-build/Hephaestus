@@ -107,6 +107,12 @@ When you undo a response, its current answer goes away, and its history stays.
 You can also select **Request review** on eligible work in [Activity](./activity.mdx#request-a-review) or in the browser extension.
 A request follows your AI choice, the workspace’s review scope, and the access checks of the source.
 
+On GitLab, you can also comment `/hephaestus review` on a merge request.
+Hephaestus answers in the comment's thread when no feedback answers it:
+
+- If nothing that the practices read has changed since the last review, it does not review the merge request again. It says so and links the feedback.
+- If it cannot accept the request, it says why. For example, a review was requested a short time ago.
+
 The review you asked from keeps its own status.
 The new review keeps earlier observations in history.
 Of the reviews that can count, the one that Hephaestus recorded last counts, whoever started it.

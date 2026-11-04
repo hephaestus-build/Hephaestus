@@ -661,7 +661,8 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 null,
                 List.of(scenario.practice().getId()),
                 false,
-                Set.of()));
+                Set.of(),
+                null));
     }
 
     @Test

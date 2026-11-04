@@ -17,7 +17,16 @@ public interface ReviewAssignmentStore {
     /** Whether an invocation retains verified practices that still need its seal. */
     boolean hasStaged(long workspaceId, UUID reviewId, UUID jobId);
 
-    void capture(long workspaceId, UUID reviewId, UUID jobId, int attempt, List<ReviewCaptureDecision> decisions);
+    /**
+     * Records what capture decided. In a requested item review, a ready practice whose current result read the same
+     * sources keeps that result instead of running.
+     *
+     * @return the practices that reuse a result and must not run
+     */
+    Set<Long> capture(long workspaceId, UUID reviewId, UUID jobId, int attempt, List<ReviewCaptureDecision> decisions);
+
+    /** The practices of this job that keep an earlier result: they do not run, and no later attempt runs them. */
+    Set<Long> reusedPractices(long workspaceId, UUID reviewId, UUID jobId);
 
     void withhold(long workspaceId, ReviewAssignmentId assignment, CandidateRefusal reason, String message);
 

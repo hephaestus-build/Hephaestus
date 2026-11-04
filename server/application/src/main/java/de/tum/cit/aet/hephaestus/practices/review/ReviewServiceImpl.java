@@ -78,6 +78,9 @@ public class ReviewServiceImpl implements ReviewService {
     private static final List<String> CARRIED_REASONS = List.of(
             "CHECKS_PENDING", "NO_CHECKS_REPORTED", "CHECKS_AWAITING_APPROVAL", ReviewStopReason.REPLACED.name());
 
+    /** Where a review that a comment requested answers that comment when no feedback does. */
+    static final String COMMENT_ANSWER = "commentAnswer";
+
     private final ReviewRepository reviews;
     private final ReviewStart starts;
     private final ReviewPracticeRepository assignments;
@@ -253,6 +256,9 @@ public class ReviewServiceImpl implements ReviewService {
         var method = new ReviewMethod(1, digest, models);
         ObjectNode checks = json.createObjectNode();
         checks.put("reuse", request.reuse());
+        var answer = request.commentAnswer();
+        if (answer != null)
+            checks.putObject(COMMENT_ANSWER).put("kind", answer.kind().name()).put("address", answer.address());
         if (request.kind() == ReviewKind.SCAN) {
             var branch = pinned.state().get("defaultBranch");
             if (branch == null || branch.isBlank())
@@ -324,6 +330,7 @@ public class ReviewServiceImpl implements ReviewService {
             review.setStopReason(ReviewStopReason.READINESS_REFUSED);
             review.setCompletedAt(now);
             outcomes.ended(review);
+            ended(review);
         } else events.publishEvent(new ReviewRequested(review.getId(), request.workspaceId()));
         return review.getId();
     }
@@ -540,6 +547,7 @@ public class ReviewServiceImpl implements ReviewService {
                 && memberships.existsByWorkspaceIdAndReviewIdAndStateInAndResultIdIsNotNull(
                         workspaceId, reviewId, List.of(ReviewItemState.JUDGED, ReviewItemState.REUSED)))
             events.publishEvent(new ReviewCompleted(reviewId, workspaceId));
+        ended(review);
     }
 
     @Override
@@ -558,10 +566,16 @@ public class ReviewServiceImpl implements ReviewService {
             review.setStatus(ReviewStatus.CANCELLED);
             review.setStopReason(ReviewStopReason.CANCELLED);
             review.setCompletedAt(clock.instant());
+            ended(review);
             if (review.getKind() == ReviewKind.SCAN) reports.freeze(workspaceId, reviewId);
             outcomes.ended(review);
         }
         return true;
+    }
+
+    private void ended(Review review) {
+        if (review.getChecks().has(COMMENT_ANSWER))
+            events.publishEvent(new CommentRequestedReviewEnded(review.getId(), review.getWorkspaceId()));
     }
 
     private boolean hasUnsettledInvocation(long workspaceId, UUID reviewId) {

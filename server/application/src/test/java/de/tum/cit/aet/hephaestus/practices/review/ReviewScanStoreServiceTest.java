@@ -35,7 +35,7 @@ class ReviewScanStoreServiceTest extends BaseUnitTest {
     private final ReviewRepository reviews = mock(ReviewRepository.class);
     private final ReviewPracticeRepository practices = mock(ReviewPracticeRepository.class);
     private final ReviewItemRepository items = mock(ReviewItemRepository.class);
-    private final ScanReuseCandidateQuery candidates = mock(ScanReuseCandidateQuery.class);
+    private final ReuseCandidateQuery candidates = mock(ReuseCandidateQuery.class);
     private final Review review = Review.builder()
             .id(UUID.randomUUID())
             .workspaceId(1)
@@ -97,7 +97,7 @@ class ReviewScanStoreServiceTest extends BaseUnitTest {
         when(reviews.lockByIdAndWorkspaceId(review.getId(), 1)).thenReturn(Optional.of(review));
         when(items.lockAssignment(1, review.getId(), 2, 4)).thenReturn(Optional.of(member));
         when(candidates.find(1, id))
-                .thenReturn(Optional.of(new ScanReuseCandidateQuery.ReusableResult(
+                .thenReturn(Optional.of(new ReuseCandidateQuery.ReusableResult(
                         Result.builder().id(resultId).build(),
                         new HistoryCustody(true, false, List.of(), List.of(), List.of()))));
 

@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeR
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiffNoteWebhookProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabCommentReplySink;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
@@ -301,6 +302,7 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
                 username,
                 providerId,
                 user.id().longValue(),
-                attrs.id()));
+                attrs.id(),
+                GitLabCommentReplySink.address(mr.id(), attrs.discussionId())));
     }
 }

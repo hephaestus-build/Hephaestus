@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.events;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Published when a bot command (e.g. {@code /hephaestus review}) is detected on a pull-request / merge-request
@@ -22,6 +23,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
  *                       actor the publisher cannot name is not published at all, because a subscriber that spends
  *                       budget has to be able to ask who is asking
  * @param commentId      the comment's native id; a redelivered comment carries the same one
+ * @param replyAddress   where an answer to the comment goes, in the publishing adapter's own form; null when the
+ *                       payload names no thread to answer in
  */
 public record BotCommandReceivedEvent(
         IntegrationKind kind,
@@ -31,4 +34,5 @@ public record BotCommandReceivedEvent(
         String noteAuthor,
         long providerId,
         long authorNativeId,
-        long commentId) {}
+        long commentId,
+        @Nullable String replyAddress) {}
