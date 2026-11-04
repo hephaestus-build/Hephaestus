@@ -198,9 +198,12 @@ public class WorkspaceRepositoryMonitorService {
                                     workspace.getId(), IntegrationKind.GITLAB, IntegrationState.SUSPENDED)
                             .isPresent());
             if (gitLab) {
-                connectionService
+                // Takes the GitLab lock, so a discovery that runs at the same time finishes first.
+                if (connectionService
                         .updateGitLabProjectExclusions(workspace.getId(), exclusions -> exclusions)
-                        .orElseThrow(() -> new RepositoryProviderNotConnectedException(slug));
+                        .isEmpty()) {
+                    throw new RepositoryProviderNotConnectedException(slug);
+                }
             }
 
             if (isGitHubAppWorkspace(workspace)) {
