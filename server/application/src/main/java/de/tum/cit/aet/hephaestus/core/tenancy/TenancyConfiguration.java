@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Locale;
+import java.util.Set;
 import org.hibernate.cfg.AvailableSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,25 +35,41 @@ public class TenancyConfiguration {
 
     @Bean
     TenancyViolationReporter tenancyViolationReporter(MeterRegistry registry) {
-        return (sql, unguardedTables, mode) -> {
-            for (String table : unguardedTables) {
-                registry.counter(
-                                CoreMetrics.TENANCY_VIOLATION_TOTAL,
-                                "module",
-                                "tenancy",
-                                "table",
-                                table,
-                                "mode",
-                                mode.name().toLowerCase(Locale.ROOT))
-                        .increment();
+        return new TenancyViolationReporter() {
+            @Override
+            public void report(String sql, Set<String> unguardedTables, TenancyEnforcement mode) {
+                for (String table : unguardedTables) {
+                    registry.counter(
+                                    CoreMetrics.TENANCY_VIOLATION_TOTAL,
+                                    "module",
+                                    "tenancy",
+                                    "table",
+                                    table,
+                                    "mode",
+                                    mode.name().toLowerCase(Locale.ROOT))
+                            .increment();
+                }
+                log.warn(
+                        "Tenancy violation ({}): scoped tables {} queried without workspace_id predicate. SQL: {}",
+                        mode.name().toLowerCase(Locale.ROOT),
+                        unguardedTables,
+                        LoggingUtils.truncate(sql, 200));
+                if (mode == TenancyEnforcement.THROW) {
+                    throw new TenancyViolationException(unguardedTables);
+                }
             }
-            log.warn(
-                    "Tenancy violation ({}): scoped tables {} queried without workspace_id predicate. SQL: {}",
-                    mode.name().toLowerCase(Locale.ROOT),
-                    unguardedTables,
-                    LoggingUtils.truncate(sql, 200));
-            if (mode == TenancyEnforcement.THROW) {
-                throw new TenancyViolationException(unguardedTables);
+
+            @Override
+            public void reportBypassed(String sql, Set<String> unguardedTables, Set<String> silencingTypes) {
+                for (String type : silencingTypes) {
+                    registry.counter(CoreMetrics.TENANCY_BYPASSED_VIOLATION_TOTAL, "module", "tenancy", "type", type)
+                            .increment();
+                }
+                log.debug(
+                        "Tenancy check bypassed by type-level markers {}: tables {}. SQL: {}",
+                        silencingTypes,
+                        unguardedTables,
+                        LoggingUtils.truncate(sql, 2000));
             }
         };
     }

@@ -53,4 +53,24 @@ class TenancyBypassTest extends BaseUnitTest {
                 .as("try-with-resources must decrement depth even when the body throws")
                 .isFalse();
     }
+
+    // Closing the scopes is the operation; their bindings are intentionally unread.
+    @SuppressWarnings("try")
+    @Test
+    void shouldNameTheTypesWhoseMarkersAloneOpenTheBypass() {
+        assertThat(TenancyBypass.silencingTypes()).isEmpty();
+        try (TenancyBypass.Scope service = TenancyBypass.openForType("service", String.class)) {
+            try (TenancyBypass.Scope repository = TenancyBypass.openForType("repository", Integer.class)) {
+                assertThat(TenancyBypass.silencingTypes()).containsExactly("String", "Integer");
+                try (TenancyBypass.Scope method = TenancyBypass.open("method")) {
+                    assertThat(TenancyBypass.silencingTypes())
+                            .as("a method-level marker states its own reason, so nothing is silenced by type")
+                            .isEmpty();
+                }
+                assertThat(TenancyBypass.silencingTypes()).containsExactly("String", "Integer");
+            }
+        }
+        assertThat(TenancyBypass.isActive()).isFalse();
+        assertThat(TenancyBypass.silencingTypes()).isEmpty();
+    }
 }
