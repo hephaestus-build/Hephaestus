@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class FeedbackSupersession {
     private final FeedbackRepository feedback;
+    private final FeedbackOutcomes outcomes;
     private final FeedbackCopyRepository copies;
     private final FeedbackVisibilityService visibility;
     private final FeedbackBasisRepository basis;
@@ -83,7 +84,7 @@ public class FeedbackSupersession {
                 || (prior.getDestination() == FeedbackDestination.CONVERSATION
                         && copies.hasWriteFence(workspaceId, previousId))) return false;
         feedback.recordReplacement(workspaceId, nextId, previousId);
-        feedback.updateDelivery(workspaceId, previousId, FeedbackState.REPLACED, null, prior.getDeliveredAt());
+        outcomes.update(prior, FeedbackState.REPLACED, null, prior.getDeliveredAt());
         return true;
     }
 }

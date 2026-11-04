@@ -17,12 +17,14 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackGate;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackOutcomes;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPublicationContext;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSend;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendQueue;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackVisibilityService;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckFacts;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckStage;
@@ -35,6 +37,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -64,10 +67,10 @@ class FeedbackDecisionServiceTest {
     final UUID id = UUID.randomUUID();
     final FeedbackDecisionService service = new FeedbackDecisionService(
             feedback,
+            new FeedbackOutcomes(new SimpleMeterRegistry(), feedback, mock(ReviewRepository.class), decisions),
             decisions,
             basis,
             copies,
-            sends,
             mock(ApplicationEventPublisher.class),
             Clock.fixed(now, ZoneOffset.UTC),
             gate,

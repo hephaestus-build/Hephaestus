@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnCaptureRole
 public class FeedbackDeliveryPolicy {
     private final FeedbackRepository feedback;
+    private final FeedbackOutcomes outcomes;
     private final FeedbackCopyRepository copies;
     private final FeedbackGate gate;
     private final FeedbackSendQueue sendQueue;
@@ -63,12 +64,7 @@ public class FeedbackDeliveryPolicy {
         copies.withholdPlanned(row.getWorkspaceId(), row.getId(), reason.name());
         var children = copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(row.getWorkspaceId(), row.getId());
         var projection = FeedbackSendStateMachine.project(row, children, reason);
-        feedback.updateDelivery(
-                row.getWorkspaceId(),
-                row.getId(),
-                projection.state(),
-                projection.stopReason(),
-                projection.deliveredAt());
+        outcomes.update(row, projection.state(), projection.stopReason(), projection.deliveredAt());
     }
 
     public void prepared(Feedback row) {
@@ -77,7 +73,7 @@ public class FeedbackDeliveryPolicy {
             if (!check.allowed()) {
                 withhold(row, Objects.requireNonNull(check.reason()));
             } else if (row.getState() == FeedbackState.AWAITING_APPROVAL || gate.requiresApproval(row)) {
-                feedback.updateDelivery(row.getWorkspaceId(), row.getId(), FeedbackState.AWAITING_APPROVAL, null, null);
+                outcomes.update(row, FeedbackState.AWAITING_APPROVAL, null, null);
             } else if (row.getDestination() == FeedbackDestination.ON_WORK) {
                 var automatic = check(row, FeedbackCheckStage.AUTOMATIC, true);
                 if (automatic.allowed()) sendQueue.queue(row, FeedbackSendAction.POST, FeedbackSendState.PENDING);

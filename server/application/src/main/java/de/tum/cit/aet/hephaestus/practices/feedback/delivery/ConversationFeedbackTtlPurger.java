@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback.delivery;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackOutcomes;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import java.time.Instant;
 import java.util.Comparator;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConversationFeedbackTtlPurger {
     private final FeedbackRepository feedback;
     private final FeedbackCopyRepository copies;
+    private final FeedbackOutcomes outcomes;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int expireWorkspaceBefore(long workspaceId, Instant cutoff) {
@@ -26,7 +28,7 @@ public class ConversationFeedbackTtlPurger {
                 .toList()) {
             feedback.lockByIdAndWorkspaceId(row.getId(), workspaceId);
             copies.withholdPlanned(workspaceId, row.getId(), "CONVERSATION_EXPIRED");
-            count += feedback.expireConversation(workspaceId, row.getId(), cutoff);
+            count += outcomes.expireConversation(row, cutoff);
         }
         return count;
     }

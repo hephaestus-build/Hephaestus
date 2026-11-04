@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -27,6 +28,11 @@ public class FeedbackSendQueue {
     private final FeedbackCopyRepository copies;
     private final FeedbackVisibilityService visibility;
     private final ConfigAuditPort audit;
+
+    /** Locks the send row of a feedback, if it has one. */
+    public Optional<FeedbackSend> lock(long workspaceId, UUID feedbackId) {
+        return sends.lockByFeedbackId(workspaceId, feedbackId);
+    }
 
     @Transactional
     public void queue(Feedback row, FeedbackSendAction action, FeedbackSendState state) {

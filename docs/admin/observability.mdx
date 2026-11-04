@@ -20,6 +20,9 @@ The alert or the objective tells the operator when the answer needs work.
 | --- | --- | --- |
 | Do item reviews end complete? | `practice_review_ended_total` | `HephaestusReviewsIncomplete` |
 | Which items got no result, and why? | `practice_review_items_ended_total`, by `state` and `reason` | `HephaestusReviewsIncomplete` |
+| Does feedback reach each destination, and why was it withheld? | `practice_feedback_settled_total`, by `destination`, `state` and `reason` | `HephaestusFeedbackDeliveriesFailing` |
+| How long after a push or a request does the developer get feedback? | `practice_review_first_delivery_seconds` | `HephaestusFeedbackDeliverySlow` |
+| Does feedback wait and never arrive? | `practice_feedback_oldest_waiting_seconds` | `HephaestusFeedbackDeliveryStalled` |
 | Do review attempts fail, and where? | `agent_job_total`, `agent_job_infra_retry_requeued_total`, `agent_job_orphan_failed_total` | `HephaestusAgentJobsFailing` and the other review alerts |
 | Does work wait for a worker? | `agent_queue_oldest_age_seconds`, `agent_job_duration_seconds` with `phase="queue"` | `HephaestusAgentQueueStalled` |
 | Do model calls wait for their pool? | `llm_pool_permit_wait_seconds`, `llm_pool_upstream_throttled_total` | None |
@@ -37,23 +40,22 @@ The alert or the objective tells the operator when the answer needs work.
 
 These questions have no signal yet. The most important is first.
 
-1. How long after a request or a push does the developer get feedback?
-   The delivery state of each destination and the reason of withheld feedback are only in the `feedback` and `feedback_copy` tables.
-2. How long does each API route take at the 95th percentile?
+1. How long does each API route take at the 95th percentile?
    The server publishes only the 2-second bucket.
-3. How long does each stage of a review take: capture, the practice sessions, admission and composition?
+2. How long does each stage of a review take: capture, the practice sessions, admission and composition?
    Only the durations of the whole job and of the sandbox exist.
-4. How long does a model call of each pool take, and how soon does its first token come?
+3. How long does a model call of each pool take, and how soon does its first token come?
    How many tokens go in and out, and how often does a model refuse?
    `llm_proxy_duration_seconds` has no pool label and no buckets. Token counts are only in spans and in the database.
-5. Does the database pool make requests wait, and which statements are slow?
+4. Does the database pool make requests wait, and which statements are slow?
    `hikaricp_*` has no alert. No exporter reads `pg_stat_statements`, lock waits, autovacuum or table growth.
-6. How often does a consumer get an event again, and how many events went to the dead letters?
-   No counter exists.
-7. What does a reader wait for on a page?
+5. How long does an event wait in the broker, and how long does its handler take?
+   `integration_consumer_nak_total` and `integration_consumer_poison_total` count retries and dead letters.
+   No histogram measures the wait or the handling.
+6. What does a reader wait for on a page?
    When does the browser show the first word of an answer?
    No signal exists.
-8. Does feedback earn trust: the outcomes of each practice, corrections and disagreement?
+7. Does feedback earn trust: the outcomes of each practice, corrections and disagreement?
    These are only in the database.
    A practice is not a metric label, because each workspace can add practices.
 
@@ -65,7 +67,7 @@ The samples are small.
 | Objective | Baseline | Signal |
 | --- | --- | --- |
 | 95 % of item reviews end complete | 4 of 15 reviews in seven days | `HephaestusReviewsIncomplete` |
-| 90 % of requested reviews deliver their first feedback within 30 minutes | Median 22 minutes, 95th percentile 2.9 hours, 15 reviews | None yet |
+| 90 % of reviews post their first feedback within 30 minutes of their push or request | From review creation to the first posted copy: median 21 minutes, 95th percentile 2.9 hours, 83 reviews in 30 days | `HephaestusFeedbackDeliverySlow`, `HephaestusFeedbackDeliveryStalled` |
 | 95 % of Activity reads finish within 1 second | Cannot be measured: one bucket only | None yet |
 | 95 % of conversation turns get their first token within 10 seconds | 95th percentile 6.7 seconds, 7 turns | `mentor_turn_first_token_seconds`, no alert yet |
 
@@ -241,12 +243,12 @@ For a release name longer than 34 characters, change the name patterns of these 
 
 #### Service level objectives
 
-The group `hephaestus-slos` holds four objectives.
+The group `hephaestus-slos` holds five objectives.
 The two API objectives each have an error budget for 30 days, and burn-rate alerts on that budget.
 A fast burn spends 2 % of that budget in one hour, and a slow burn spends 5 % in six hours.
 Each of these alerts checks a long window and a short window, so it ends soon after the cause ends ([Google SRE workbook](https://sre.google/workbook/alerting-on-slos/)).
 
-The page load and review objectives each have one threshold over six hours, not a budget.
+The page load, review and feedback objectives each have one threshold over six hours, not a budget.
 Each alert needs a minimum number of requests, page loads or reviews in its long window.
 Thus, one failure on an idle instance does not page.
 
@@ -256,6 +258,7 @@ Thus, one failure on an idle instance does not page.
 | 99.5 % of API reads finish within 2 seconds (`HephaestusApiLatencyBudgetBurnFast`, `HephaestusApiLatencyBudgetBurnSlow`) | `http_server_requests_seconds_bucket` with `le="2.0"` against `le="+Inf"`, for `GET` without server errors, event streams, downloads and exports | A page waits for its reads. An event stream stays open on purpose, and a download or an export takes as long as its size. The server publishes one bucket at 2 seconds, not a full histogram. A server from before this bucket counts on neither side |
 | 75 % of page loads show their main content within 2.5 seconds (`HephaestusPageExperiencePoor`) | `web_vital_duration_seconds_bucket` for `lcp` with `le="2.5"`, over six hours | The Core Web Vitals threshold for a good Largest Contentful Paint ([web.dev](https://web.dev/articles/lcp)). It needs [page experience metrics](#page-experience-metrics) on, and 50 loads in six hours |
 | 95 % of item reviews end complete (`HephaestusReviewsIncomplete`) | `practice_review_ended_total` with `kind="item"`, over six hours | A review that is not complete gives a developer no feedback on part of its practices. The alert fires when more than 25 % end incomplete, which spends the 5 % budget five times as fast. Readiness waits and budget stops are policy decisions with their own signals, so they count on neither side. A cancellation counts only when no sandbox room was left. The alert needs four reviews in six hours |
+| 90 % of reviews post their first feedback within 30 minutes of their push or request (`HephaestusFeedbackDeliverySlow`) | `practice_review_first_delivery_seconds` with `trigger` `event` or `request` and `approval="none"`, over six hours | A developer waits for this feedback. The alert fires when more than 30 % come later than 30 minutes, which spends the 10 % budget three times as fast. Feedback that a person approves first, and scheduled or backfill reviews, count on neither side. The alert needs four reviews in six hours. Feedback that never arrives has no observation, so `HephaestusFeedbackDeliveryStalled` covers it: feedback on the work that waited more than two hours for its first copy |
 
 The WAL archive rule reads the server's [WAL archive metrics](#wal-archive-metrics).
 It also applies to an external PostgreSQL that archives its WAL.
@@ -504,6 +507,39 @@ A write that the provider confirmed is not read back.
 The `feedback_copy.readback` column records only `absent` and `unknown`: a copy that readback found looks the same as a copy that its write confirmed.
 
 The server registers each provider and outcome at zero when it starts.
+
+## Feedback delivery metrics
+
+Each feedback row is one destination of one review: the work, the practice page or a conversation.
+The server role and the workers count each change into a settled state, when the change commits.
+
+| Prometheus name | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `practice_feedback_settled_total` | Counter | `destination`, `state`, `reason` | Each time feedback reaches a settled state |
+| `practice_review_first_delivery_seconds` | Histogram | `trigger`, `approval` | From the occasion of a review to its first posted copy |
+| `practice_feedback_oldest_waiting_seconds` | Gauge | none | The age of the oldest feedback on the work that may be sent and has no posted copy |
+
+`destination` is `on_work`, `practice_page` or `conversation`.
+`state` is `delivered`, `withheld`, `failed` or `rejected`.
+The `reason` of withheld feedback is its stop reason in lowercase, for example `composer_withheld` or `conversation_expired`. Other states have `none`.
+Feedback that fails and then delivers after a retry counts once as `failed` and once as `delivered`.
+
+A copy is posted on the work or in a conversation. Feedback on the practice page has no copy, so it starts no first delivery.
+
+For a review of a provider event, the occasion is the time that the provider gives the event.
+For other reviews, it is the time of the request or the schedule.
+`trigger` is `event`, `request`, `schedule` or `backfill`.
+`approval` is `approved` when a person approved the feedback before its post, else `none`.
+The buckets end at 1, 2, 5, 10, 15, 20, 30 and 45 minutes, and at 1, 2, 4 and 8 hours.
+Two feedback of one review that post at the same moment, in separate transactions, can each count as first.
+
+The server role reads the oldest waiting feedback every 30 seconds.
+Feedback that waits for a person's approval, or for the developer to open a conversation, does not count.
+The gauge is `0` when no feedback waits, and `NaN` before the first read and after a read that failed.
+Take the maximum over the servers.
+
+The roles register every settled state and every first delivery at zero when they start.
+Thus, `increase()` also counts the first change after a start.
 
 ## Release metric
 

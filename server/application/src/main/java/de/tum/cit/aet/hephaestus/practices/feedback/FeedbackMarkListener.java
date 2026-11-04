@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnCaptureRole
 public class FeedbackMarkListener {
     private final FeedbackRepository feedback;
+    private final FeedbackOutcomes outcomes;
     private final FeedbackBasisRepository basis;
     private final FeedbackCopyRepository copies;
     private final FeedbackSendRepository sends;
@@ -95,7 +96,7 @@ public class FeedbackMarkListener {
                 var last = decisionHistory.findLatestApproval(row.getWorkspaceId(), id);
                 FeedbackState state = policy.restoredState(row, last);
                 copies.restoreUnsent(row.getWorkspaceId(), id);
-                feedback.updateDelivery(row.getWorkspaceId(), id, state, null, row.getDeliveredAt());
+                outcomes.update(row, state, null, row.getDeliveredAt());
                 if (state == FeedbackState.READY && row.getDestination() == FeedbackDestination.ON_WORK)
                     sendQueue.queue(row, FeedbackSendAction.POST, FeedbackSendState.PENDING);
             }
