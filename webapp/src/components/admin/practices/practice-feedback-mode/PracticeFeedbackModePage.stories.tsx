@@ -509,7 +509,7 @@ export const EveryPracticeSetByHand: Story = {
 
 		await userEvent.click(
 			canvas.getByRole("button", {
-				name: "Reset the practices in Packaging work for review to follow this group setting",
+				name: "Reset them to follow it: the practices in Packaging work for review, to this group setting",
 			}),
 		);
 		await expect(args.onBulkSetFeedbackMode).toHaveBeenCalledWith(

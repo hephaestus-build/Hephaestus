@@ -75,9 +75,9 @@ export const Invalid: Story = {
 export const OpensAndListsGroups: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
-		await expect(await screen.findByRole("option", { name: /^GPT-5, .*Cloud/u })).toBeVisible();
+		await expect(await screen.findByRole("option", { name: /^GPT-5 .*Cloud$/u })).toBeVisible();
 		await expect(
-			await screen.findByRole("option", { name: /^My OpenAI key, .*Not declared/u }),
+			await screen.findByRole("option", { name: /^My OpenAI key .*Not declared$/u }),
 		).toBeVisible();
 		await expect(screen.getByText("Shared models")).toBeVisible();
 		await expect(screen.getByText("Own provider")).toBeVisible();
@@ -89,7 +89,7 @@ export const FilteredToTier: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("combobox"));
 		await expect(
-			await screen.findByRole("option", { name: /^Local Llama.*, In-house/u }),
+			await screen.findByRole("option", { name: /^Local Llama.* In-house$/u }),
 		).toBeVisible();
 		await expect(screen.getAllByRole("option")).toHaveLength(1);
 	},

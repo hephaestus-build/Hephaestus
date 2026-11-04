@@ -153,7 +153,7 @@ export const AccountMenu: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Product feedback" })).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: "Account" }));
+		await userEvent.click(canvas.getByRole("button", { name: /^Account/u }));
 		const menu = within(await screen.findByRole("menu"));
 		const settings = menu.getByRole("menuitem", { name: "User settings" });
 		await expectSettledVisible(settings);
@@ -172,7 +172,7 @@ export const ReadOnly: Story = {
 		readOnly: true,
 	},
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Account" }));
+		await userEvent.click(canvas.getByRole("button", { name: /^Account/u }));
 		const menu = within(await screen.findByRole("menu"));
 		await expectSettledVisible(menu.getByRole("menuitem", { name: "Sign out" }));
 		await expect(menu.queryByRole("menuitem", { name: "User settings" })).not.toBeInTheDocument();

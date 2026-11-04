@@ -135,7 +135,7 @@ test("real user verification grants admin access and recovery requires re-enroll
 		const { codes } = z.object({ codes: z.tuple([z.string()]).rest(z.string()) }).parse(codesBody);
 		const [recoveryCode] = codes;
 
-		await page.getByRole("button", { name: "Account", exact: true }).click();
+		await page.getByRole("button", { name: /^Account/u }).click();
 		await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
 		await expect(page).toHaveURL((url) => url.pathname === "/");
 		await loginAsDevAdmin(page, username);

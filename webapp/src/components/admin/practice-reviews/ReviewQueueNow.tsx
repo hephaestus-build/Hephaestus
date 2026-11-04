@@ -148,14 +148,14 @@ function QueueFigures({ workspaceSlug, queue }: { workspaceSlug: string; queue: 
 			term: "waiting",
 			value: queue.waiting,
 			none: queue.waiting === 0,
-			link: queueLink(workspaceSlug, "WAITING", queue.waiting, "waiting"),
+			link: queueLink(workspaceSlug, "WAITING", queue.waiting),
 		},
 		{
 			key: "running",
 			term: "running",
 			value: queue.running,
 			none: queue.running === 0,
-			link: queueLink(workspaceSlug, "RUNNING", queue.running, "running"),
+			link: queueLink(workspaceSlug, "RUNNING", queue.running),
 		},
 		{
 			key: "held",
@@ -166,13 +166,8 @@ function QueueFigures({ workspaceSlug, queue }: { workspaceSlug: string; queue: 
 				</QueueHold>
 			),
 			none: queue.heldForBudget === 0,
-			// The link's name hides the hold's "Needs a look", so it says it too.
-			link: queueLink(
-				workspaceSlug,
-				"HELD",
-				queue.heldForBudget,
-				"on hold for budget, needs a look",
-			),
+			// The link takes its name from its content, the hold's hidden "Needs a look" included.
+			link: queueLink(workspaceSlug, "HELD", queue.heldForBudget),
 		},
 	];
 	// While nothing waits there is no oldest wait to tell: "0 waiting" says it already.
@@ -190,7 +185,7 @@ function QueueFigures({ workspaceSlug, queue }: { workspaceSlug: string; queue: 
 					: {
 							render: <DetailStackLink entry={reviewLevel(longest.reviewId)} single />,
 							// The name says the figure too: the link's own name hides the hold's words.
-							label: `Oldest wait ${durationText(oldest)}${waitsLong(queue) ? ", needs a look" : ""}: open that review`,
+							label: `${durationText(oldest)} oldest wait${waitsLong(queue) ? ", needs a look" : ""}: open that review`,
 						},
 		});
 	}
@@ -229,7 +224,6 @@ function queueLink(
 	workspaceSlug: string,
 	queueState: QueueState,
 	count: number,
-	noun: string,
 ): CardFigure["link"] {
 	if (count === 0) {
 		return undefined;
@@ -241,7 +235,6 @@ function queueLink(
 				destination={{ list: "reviews", search: { queueState } }}
 			/>
 		),
-		label: `${count} ${count === 1 ? "review" : "reviews"} ${noun}`,
 	};
 }
 
@@ -276,7 +269,7 @@ function QueueHold({
 	}
 	return (
 		<span className={cn("font-semibold", broken && statusToneClass("destructive"))}>
-			<span className="sr-only">Needs a look: </span>
+			<span className="sr-only">Needs a look:</span>{" "}
 			<TriangleAlertIcon aria-hidden className="mr-1 inline size-3.5 align-[-0.125em]" />
 			{children}
 		</span>

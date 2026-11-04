@@ -17,9 +17,10 @@ export interface CardFigure {
 	none?: boolean;
 	/**
 	 * Opens the rows the figure counts. Number and term are then one link, underlined together as
-	 * the outcome counts are ("2 complete"), rather than a bare number beside its word.
+	 * the outcome counts are ("2 complete"), rather than a bare number beside its word. A `label`
+	 * starts with the visible words and adds only what they leave out (WCAG 2.5.3).
 	 */
-	link?: { render: ReactElement; label: string };
+	link?: { render: ReactElement; label?: string };
 }
 
 /**

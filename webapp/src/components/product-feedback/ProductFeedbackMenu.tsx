@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
 import { Bug, History, Lightbulb, MessageSquare, MessageSquarePlus } from "lucide-react";
-import { useId } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,7 +30,6 @@ const KINDS: { kind: FeedbackKind; icon: typeof Bug }[] = [
  * The static link to the upstream issue tracker is gone: reports reach GitHub through the instance.
  */
 export function ProductFeedbackMenu({ onSendFeedback, workspaceSlug }: ProductFeedbackMenuProps) {
-	const id = useId();
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
@@ -53,14 +51,12 @@ export function ProductFeedbackMenu({ onSendFeedback, workspaceSlug }: ProductFe
 						<DropdownMenuItem
 							key={kind}
 							className="items-start"
-							aria-label={FEEDBACK_KIND_COPY[kind].heading}
-							aria-describedby={`${id}-${kind}`}
 							onClick={() => onSendFeedback(kind)}
 						>
 							<Icon className="mt-0.5" />
 							<span className="flex min-w-0 flex-col">
-								<span>{FEEDBACK_KIND_COPY[kind].heading}</span>
-								<span id={`${id}-${kind}`} className="text-xs text-muted-foreground">
+								<span>{FEEDBACK_KIND_COPY[kind].heading}</span>{" "}
+								<span className="text-xs text-muted-foreground">
 									{FEEDBACK_KIND_COPY[kind].detail}
 								</span>
 							</span>

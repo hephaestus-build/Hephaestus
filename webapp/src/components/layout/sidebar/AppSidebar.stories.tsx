@@ -284,7 +284,9 @@ export const InstanceAdministrationLoading: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Workspace administration")).toBeVisible();
-		await expect(canvas.getByRole("link", { name: "Back to instance workspaces" })).toBeVisible();
+		await expect(
+			canvas.getByRole("link", { name: /: back to instance workspaces$/u }),
+		).toBeVisible();
 		await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
 		await expect(canvas.queryByText("AET")).not.toBeInTheDocument();
 	},
@@ -304,7 +306,9 @@ export const InstanceAdministrationUnavailable: Story = {
 		await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
 		await expect(canvas.getByText("We could not load the workspace details")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
-		await expect(canvas.getByRole("link", { name: "Back to instance workspaces" })).toBeVisible();
+		await expect(
+			canvas.getByRole("link", { name: /: back to instance workspaces$/u }),
+		).toBeVisible();
 		await expect(canvas.queryByText("AET")).not.toBeInTheDocument();
 		await expect(canvas.queryByText("No workspace")).not.toBeInTheDocument();
 	},

@@ -36,7 +36,7 @@ it("says the feedback form could not open and offers a page load", async () => {
 	await user.click(
 		await screen.findByRole("button", { name: "Product feedback" }, ROUTE_RENDER_WAIT),
 	);
-	await user.click(await screen.findByRole("menuitem", { name: "Report a bug" }));
+	await user.click(await screen.findByRole("menuitem", { name: /^Report a bug /u }));
 
 	await screen.findByText("We could not open the feedback form.", undefined, ROUTE_RENDER_WAIT);
 	screen.getByRole("button", { name: "Reload page" });

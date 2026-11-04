@@ -219,7 +219,7 @@ test("signing out in another tab cannot be undone by a delayed renewal response"
 	await page.clock.fastForward(61_000);
 	await held.processed;
 	try {
-		await other.getByRole("button", { name: "Account", exact: true }).click();
+		await other.getByRole("button", { name: /^Account/u }).click();
 		await other.getByRole("menuitem", { name: "Sign out", exact: true }).click();
 	} finally {
 		held.release();
@@ -235,14 +235,14 @@ test("failed sign-out reports the failure and allows a successful retry", async 
 	await loginAsDevAdmin(page, "session-logout-retry");
 	await page.goto("/settings");
 	await page.route("**/auth/logout", async (route) => route.fulfill({ status: 503 }), { times: 1 });
-	await page.getByRole("button", { name: "Account", exact: true }).click();
+	await page.getByRole("button", { name: /^Account/u }).click();
 	await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
 	await expect(
 		page.getByText("We could not confirm that you signed out. Try again."),
 	).toBeVisible();
 	await expect(page).toHaveURL(/\/settings$/u);
 	expect(await statusOf(context.request.get(`${E2E_SERVER_URL}/user`))).toBe(200);
-	await page.getByRole("button", { name: "Account", exact: true }).click();
+	await page.getByRole("button", { name: /^Account/u }).click();
 	await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
 	await expect(page).toHaveURL((url) => url.pathname === "/");
 	expect(await statusOf(context.request.get(`${E2E_SERVER_URL}/user`))).toBe(401);

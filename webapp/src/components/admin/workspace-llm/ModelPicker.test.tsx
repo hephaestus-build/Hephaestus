@@ -53,8 +53,8 @@ describe("ModelPicker", () => {
 		});
 		expect(screen.getByRole("combobox").textContent).toMatch(/^GPT-5\W?$/u);
 		fireEvent.click(screen.getByRole("combobox"));
-		screen.getByRole("option", { name: /^GPT-5, Organization endpoint,/u });
-		screen.getByRole("option", { name: /^GPT-5, Workspace endpoint,/u });
+		screen.getByRole("option", { name: /^GPT-5 .* Organization endpoint /u });
+		screen.getByRole("option", { name: /^GPT-5 .* Workspace endpoint /u });
 		screen.getByText("Shared models");
 		screen.getByText("Own provider");
 	});
@@ -67,10 +67,10 @@ describe("ModelPicker", () => {
 		fireEvent.click(screen.getByRole("combobox"));
 
 		screen.getByRole("option", {
-			name: "GPT-5, Organization endpoint, Cloud, $1.00 input · $2.00 output / 1M tokens",
+			name: "GPT-5 $1.00 input · $2.00 output / 1M tokens Organization endpoint Cloud",
 		});
 		screen.getByRole("option", {
-			name: "GPT-5, Workspace endpoint, In-house, No metered API cost",
+			name: "GPT-5 No metered API cost Workspace endpoint In-house",
 		});
 	});
 

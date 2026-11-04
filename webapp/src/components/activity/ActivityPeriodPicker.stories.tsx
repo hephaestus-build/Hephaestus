@@ -71,7 +71,7 @@ export const PickCustomRange: Story = {
 		await userEvent.click(
 			within(dismissed.getByRole("grid", { name: format(lastMonth, "MMMM yyyy") })).getByRole(
 				"button",
-				{ name: / 20th, /u },
+				{ name: / 20 /u },
 			),
 		);
 		await expect(dismissed.getByRole("button", { name: "Apply" })).toBeEnabled();
@@ -99,13 +99,13 @@ export const PickCustomRange: Story = {
 		await userEvent.click(
 			within(popup.getByRole("grid", { name: format(lastMonth, "MMMM yyyy") })).getByRole(
 				"button",
-				{ name: / 20th, /u },
+				{ name: / 20 /u },
 			),
 		);
 		await userEvent.click(
 			within(popup.getByRole("grid", { name: format(thisMonth, "MMMM yyyy") })).getByRole(
 				"button",
-				{ name: / 1st, /u },
+				{ name: / 1 /u },
 			),
 		);
 		await expect(args.onPeriodChange).not.toHaveBeenCalled();
@@ -189,7 +189,7 @@ export const Reflow: Story = {
 		await expectWithinViewport(thisMonthGrid);
 		await expectControlOnScreen(apply);
 
-		await userEvent.click(within(thisMonthGrid).getByRole("button", { name: / 1st, /u }));
+		await userEvent.click(within(thisMonthGrid).getByRole("button", { name: / 1 /u }));
 		await userEvent.click(apply);
 		const firstDay = startOfMonth(new Date(STORY_NOW));
 		await expect(args.onPeriodChange).toHaveBeenCalledWith({

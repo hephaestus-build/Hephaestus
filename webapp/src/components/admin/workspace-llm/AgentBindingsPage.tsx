@@ -613,12 +613,12 @@ function usedByLine(usedBy: UsedBy[]): string {
 }
 
 // Screen readers need the tier label because table headers may not be read with cells.
-function TierCellView({ id, cell }: { id: string; cell: TierCell }) {
+function TierCellView({ cell }: { cell: TierCell }) {
 	const { column, binding, model, unused } = cell;
 	const ColumnIcon = column.icon;
 	const fallback = column.tier === "CLOUD" && binding?.dataHandlingTier === "IN_HOUSE";
 	return (
-		<span id={id} className="flex min-w-0 items-center gap-2 text-sm font-normal">
+		<span className="flex min-w-0 items-center gap-2 text-sm font-normal">
 			{/* Below `md` the header is gone, so each cell names its column with the icon. */}
 			<ColumnIcon className="size-3.5 shrink-0 text-muted-foreground md:hidden" aria-hidden />
 			<span className="sr-only">{column.label}: </span>
@@ -680,27 +680,16 @@ function PurposeRow({
 	onSave,
 	onTurnOff,
 }: PurposeRowProps) {
-	const baseId = useId();
+	const titleId = useId();
 	const { purpose, bindings, off, status, cells, usedBy, unmet } = view;
 	const { title, description } = AGENT_PURPOSE_DEFS[purpose];
 	const servingModels = availableModels.filter((model) => model.purposes.includes(purpose));
 	const practiceScript = isPracticeScriptPurpose(purpose);
-	const usedById = `${baseId}-used-by`;
-	const statusId = `${baseId}-status`;
-	const cellId = (index: number) => `${baseId}-cell-${index}`;
-	const describedBy = [
-		...(usedBy ? [usedById] : []),
-		...cells.map((_, index) => cellId(index)),
-		...(status ? [statusId] : []),
-	].join(" ");
-
 	return (
 		<AccordionItem value={purpose} ref={rowRef} className="relative scroll-mt-24">
 			{linked && <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-highlight" />}
 			<AccordionTrigger
 				headingLevel={3}
-				aria-label={title}
-				aria-describedby={describedBy}
 				className="items-center gap-3 px-4 py-3 hover:no-underline"
 			>
 				<span
@@ -710,11 +699,13 @@ function PurposeRow({
 					)}
 				>
 					<span className="flex min-w-0 items-center gap-3">
-						<ModelKindMark purpose={purpose} size="md" label="sr-only" />
+						<ModelKindMark purpose={purpose} size="md" label="none" />
 						<span className="min-w-0">
-							<span className="block font-medium">{title}</span>
+							<span id={titleId} className="block font-medium">
+								{title}
+							</span>
 							{usedBy && (
-								<span id={usedById} className="block text-xs font-normal text-muted-foreground">
+								<span className="block text-xs font-normal text-muted-foreground">
 									{usedByLine(usedBy)}
 								</span>
 							)}
@@ -727,26 +718,22 @@ function PurposeRow({
 							)}
 						</span>
 					</span>
-					{cells.map((cell, index) => (
+					{cells.map((cell) => (
 						<span key={cell.column.label} className="min-w-0">
-							<TierCellView id={cellId(index)} cell={cell} />
+							<TierCellView cell={cell} />
 						</span>
 					))}
 					{/* Last below `md` too, so the badge never squeezes the title beside it. */}
 					<span className="flex empty:hidden md:justify-end">
-						{status && (
-							<>
-								<StatusBadge def={PURPOSE_STATUS_DEFS[status]} aria-hidden />
-								<span id={statusId} className="sr-only">
-									{PURPOSE_STATUS_DEFS[status].label}
-								</span>
-							</>
-						)}
+						{status && <StatusBadge def={PURPOSE_STATUS_DEFS[status]} />}
 					</span>
 				</span>
 			</AccordionTrigger>
 			{/* Gaps rather than margins: the panel's own paragraph margin would reach every form below. */}
-			<AccordionContent className="flex flex-col gap-6 px-4 pt-2 pb-6 [&_p:not(:last-child)]:mb-0">
+			<AccordionContent
+				aria-labelledby={titleId}
+				className="flex flex-col gap-6 px-4 pt-2 pb-6 [&_p:not(:last-child)]:mb-0"
+			>
 				<p className="max-w-2xl text-muted-foreground">{description}</p>
 				{unmet.length > 0 && (
 					// Static content must not announce itself as new when an accordion opens.

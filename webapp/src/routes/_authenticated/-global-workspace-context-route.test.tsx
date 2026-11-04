@@ -176,7 +176,7 @@ describe("workspace context on global routes", () => {
 		const user = userEvent.setup();
 		renderNavigation();
 		await screen.findByText("beta|beta|GITLAB");
-		await user.click(screen.getByRole("button", { name: "Account" }));
+		await user.click(screen.getByRole("button", { name: /^Account/u }));
 		await user.click(await screen.findByRole("menuitem", { name: "User settings" }));
 		await screen.findByRole("heading", { name: "User settings page" });
 		await screen.findByText("undefined|beta|GITLAB");

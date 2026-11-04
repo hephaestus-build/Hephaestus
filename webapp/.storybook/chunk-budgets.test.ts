@@ -13,7 +13,7 @@ it("keeps the ordinary chunk limit for application and story code", () => {
 
 it.each([
 	["/repo/node_modules/storybook/dist/preview/runtime.js", 1_186_100],
-	[String.raw`C:\repo\node_modules\axe-core\axe.js`, 600_000],
+	[String.raw`C:\repo\node_modules\axe-core\axe.js`, 672_000],
 ])("budgets the exact upstream module %s", (id, limit) => {
 	expect(checkChunkBudget("a".repeat(limit), [id])).toContain(`${limit}/${limit} bytes`);
 	expect(() => checkChunkBudget("a".repeat(limit + 1), [id])).toThrow("exceeds its tooling budget");
@@ -35,7 +35,7 @@ it("enforces compressed size as well as raw size", () => {
 it("enforces tooling gzip budgets below the ordinary raw chunk limit", () => {
 	const code = Array.from({ length: 90_000 }, (_, index) => index.toString(36)).join("-");
 	expect(Buffer.byteLength(code)).toBeLessThanOrEqual(500_000);
-	expect(gzipSync(code).byteLength).toBeGreaterThan(165_000);
+	expect(gzipSync(code).byteLength).toBeGreaterThan(190_000);
 	expect(() => checkChunkBudget(code, ["/repo/node_modules/axe-core/axe.js"])).toThrow(
 		"gzip bytes",
 	);

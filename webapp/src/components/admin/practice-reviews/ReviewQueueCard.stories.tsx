@@ -129,7 +129,7 @@ export const TestWorkspace: Story = {
 		// Only what opens its reviews is a figure; the merge's share is said in the (i).
 		await expect(figuresIn(canvas, "Review time figures")).toEqual(["272 finished"]);
 		// Running and finished counts open their reviews.
-		for (const name of ["2 reviews running", "272 reviews finished"]) {
+		for (const name of ["2 running", "272 finished"]) {
 			canvas.getByRole("link", { name });
 		}
 	},

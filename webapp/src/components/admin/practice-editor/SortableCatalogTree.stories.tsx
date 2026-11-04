@@ -123,7 +123,7 @@ function CatalogTreeHarness({
 					size="sm"
 					ref={actionTriggerRef}
 					aria-disabled={!move.canMoveDown}
-					aria-label={`Move ${group.name} down`}
+					aria-label={`Group down: ${group.name}`}
 					onClick={move.moveDown}
 				>
 					Group down
@@ -332,7 +332,7 @@ export const ReorderingInsideAGroup: Story = {
 export const AGroupWithItsOwnMoveInFlightHoldsItsPosition: Story = {
 	args: { disabledGroups: ["delivery"] },
 	play: async ({ args, canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Move Delivery down" })).toHaveAttribute(
+		await expect(canvas.getByRole("button", { name: "Group down: Delivery" })).toHaveAttribute(
 			"aria-disabled",
 			"true",
 		);

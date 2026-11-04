@@ -224,7 +224,7 @@ describe("review route", () => {
 		await router.load();
 		expect(router.state.location.pathname).toBe("/w/tutors/admin/practices/review");
 		await screen.findByRole("heading", { name: "Review settings" }, ROUTE_RENDER_WAIT);
-		await screen.findByRole("link", { name: "Back to instance workspaces" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("link", { name: /: back to instance workspaces$/u }, ROUTE_RENDER_WAIT);
 		screen.getByText("Tutors administration");
 		expect(screen.queryByRole("link", { name: "Hephaestus" })).toBeNull();
 		const sidebarSettings = screen.getByRole("link", { name: "Workspace settings" });

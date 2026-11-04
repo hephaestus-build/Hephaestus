@@ -133,7 +133,7 @@ export const Default: Story = {
 		// What waits and runs is now; what finished follows the range, as everything else in the area.
 		queueNow.getByText("Now");
 		reviewTime.getByText("Last 30 days");
-		reviewTime.getByRole("link", { name: "35 reviews finished" });
+		reviewTime.getByRole("link", { name: "35 finished" });
 		const stages = canvas.getByRole("list", { name: "Stages" }).querySelectorAll(":scope > li");
 		await expect([...stages].map((card) => card.textContent)).toEqual([
 			expect.stringMatching(/^Reviews/u),
