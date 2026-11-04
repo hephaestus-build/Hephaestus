@@ -112,19 +112,6 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
                 .orElse(null);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<Long> findActorId(long gitProviderId, String subject) {
-        return actorId(gitProviderId, subject);
-    }
-
-    private Optional<Long> actorId(long gitProviderId, String subject) {
-        return nativeId(subject)
-                .flatMap(id -> userRepository
-                        .findByNativeIdAndProviderId(id, gitProviderId)
-                        .map(User::getId));
-    }
-
     private static Optional<Long> nativeId(String subject) {
         try {
             return Optional.of(Long.parseLong(subject));

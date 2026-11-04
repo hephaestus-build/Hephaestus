@@ -82,7 +82,6 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
         githubProvider.setBaseUrl("https://github.com");
         lenient().when(loginProviderRepository.findByRegistrationId(any())).thenReturn(Optional.of(githubProvider));
         lenient().when(gitProviderRegistry.resolveProviderId(any(), any())).thenReturn(PROVIDER_ID);
-        lenient().when(gitProviderRegistry.findActorId(anyLong(), any())).thenReturn(Optional.empty());
         lenient().when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(accountJitCreator.create(any(), any())).thenAnswer(inv -> {
             Account created = inv.getArgument(0);
@@ -361,7 +360,8 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
 
         service.resolveOrProvision("github", "777", principal(), AuthIntentCookie.Intent.login(null, null));
 
-        verify(gitProviderRegistry, never()).findActorId(anyLong(), any());
+        verify(gitProviderRegistry, never()).actor(anyLong());
+        verify(gitProviderRegistry, never()).accountActors(anyLong());
     }
 
     private Identity existingLink() {

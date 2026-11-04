@@ -5,14 +5,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import java.util.List;
 import java.util.Optional;
@@ -48,21 +46,6 @@ class RegistrationToGitProviderResolverTest {
         assertThat(resolver.findProviderId("GITLAB", "https://outline.example.test"))
                 .isEmpty();
         verify(gitProviderRepository, never()).save(any(IdentityProvider.class));
-    }
-
-    @Test
-    void shouldFindTheSyncedUserWhenTheSubjectIsTheProvidersNumericId() {
-        User synced = new User();
-        synced.setId(555L);
-        when(userRepository.findByNativeIdAndProviderId(777L, 7L)).thenReturn(Optional.of(synced));
-
-        assertThat(resolver.findActorId(7L, "777")).contains(555L);
-    }
-
-    @Test
-    void shouldFindNobodyWhenTheSubjectIsNotNumeric() {
-        assertThat(resolver.findActorId(7L, "U0777")).isEmpty();
-        verifyNoInteractions(userRepository);
     }
 
     private void stubRegistration(IdentityProviderType type, String origin, long id) {
