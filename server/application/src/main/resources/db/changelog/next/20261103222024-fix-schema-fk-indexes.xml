@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793744424066-1" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that activity_event.repository_id references scans activity_event without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_activity_event_repository_id; CREATE INDEX CONCURRENTLY idx_activity_event_repository_id ON activity_event (repository_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_activity_event_repository_id</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793744424066-2" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that pull_request_review_comment.author_id references scans pull_request_review_comment without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_pull_request_review_comment_author_id; CREATE INDEX CONCURRENTLY idx_pull_request_review_comment_author_id ON pull_request_review_comment (author_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_pull_request_review_comment_author_id</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793744424066-3" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that issue.merged_by_id references scans issue without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_issue_merged_by_id; CREATE INDEX CONCURRENTLY idx_issue_merged_by_id ON issue (merged_by_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_issue_merged_by_id</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793744424066-4" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that issue.milestone_id references scans issue without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_issue_milestone_id; CREATE INDEX CONCURRENTLY idx_issue_milestone_id ON issue (milestone_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_issue_milestone_id</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793744424066-5" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that item_event.actor_user_id references scans item_event without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_item_event_actor_user_id; CREATE INDEX CONCURRENTLY idx_item_event_actor_user_id ON item_event (actor_user_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_item_event_actor_user_id</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793744424066-6" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that issue_label.label_id references scans issue_label without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_issue_label_label_id; CREATE INDEX CONCURRENTLY idx_issue_label_label_id ON issue_label (label_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_issue_label_label_id</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793744424066-7" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that issue_assignee.user_id references scans issue_assignee without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_issue_assignee_user_id; CREATE INDEX CONCURRENTLY idx_issue_assignee_user_id ON issue_assignee (user_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_issue_assignee_user_id</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793744424066-8" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that review.requested_by_id references scans review without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_review_requested_by_id; CREATE INDEX CONCURRENTLY idx_review_requested_by_id ON review (requested_by_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_review_requested_by_id</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793744424066-9" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that feedback_basis.workspace_id references scans feedback_basis without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_feedback_basis_workspace_id; CREATE INDEX CONCURRENTLY idx_feedback_basis_workspace_id ON feedback_basis (workspace_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_feedback_basis_workspace_id</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793744424066-10" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that feedback_copy.workspace_id references scans feedback_copy without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_feedback_copy_workspace_id; CREATE INDEX CONCURRENTLY idx_feedback_copy_workspace_id ON feedback_copy (workspace_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_feedback_copy_workspace_id</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793744424066-11" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that milestone.creator_id references scans milestone without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_milestone_creator_id; CREATE INDEX CONCURRENTLY idx_milestone_creator_id ON milestone (creator_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_milestone_creator_id</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793744424066-12" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that milestone.repository_id references scans milestone without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_milestone_repository_id; CREATE INDEX CONCURRENTLY idx_milestone_repository_id ON milestone (repository_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_milestone_repository_id</sql>
+    </rollback>
+  </changeSet>
+</databaseChangeLog>
