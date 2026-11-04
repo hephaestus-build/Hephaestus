@@ -65,8 +65,6 @@ The provider mirror tables in `WorkspaceScopedTables.MIRROR_TABLES` have no `wor
 A read of a mirror table binds the workspace through the monitored scope ([ADR 0077](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md)).
 Add a mirror table only for a new provider object that more than one workspace can monitor.
 
-The test also lists the tables from before this rule. Do not add to that list.
-
 A mixed-scope table has a nullable workspace column and remains under SQL tenancy enforcement.
 The test records each one in `MIXED_SCOPE_TABLES`, with its reason, and requires that the table remains scoped:
 
