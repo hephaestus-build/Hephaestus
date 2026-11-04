@@ -30,6 +30,11 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
     @WorkspaceAgnostic("Reads every workspace's mirror rows; only tests call it, to check what sync stored")
     List<Issue> findAll();
 
+    /** Deletes every workspace's mirror rows. Only tests call it, to start from an empty mirror. */
+    @Override
+    @WorkspaceAgnostic("Deletes every workspace's mirror rows; only tests call it, to start from an empty mirror")
+    void deleteAll();
+
     /** The row that holds a provider's issue or pull request id, with the repository it is stored under. */
     interface Holding {
         long getId();

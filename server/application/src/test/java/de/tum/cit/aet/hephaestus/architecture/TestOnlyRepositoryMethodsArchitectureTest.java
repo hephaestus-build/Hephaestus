@@ -22,7 +22,9 @@ class TestOnlyRepositoryMethodsArchitectureTest extends HephaestusArchitectureTe
 
     /** Add an entry when a conversion declares a test-only method on a repository. */
     private static final List<TestOnlyMethod> TEST_ONLY = List.of(
-            new TestOnlyMethod(IssueRepository.class, "count"), new TestOnlyMethod(IssueRepository.class, "findAll"));
+            new TestOnlyMethod(IssueRepository.class, "count"),
+            new TestOnlyMethod(IssueRepository.class, "findAll"),
+            new TestOnlyMethod(IssueRepository.class, "deleteAll"));
 
     @Test
     void shouldCallNoTestOnlyRepositoryMethodFromProductionCode() {
