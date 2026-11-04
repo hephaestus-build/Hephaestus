@@ -864,6 +864,9 @@ async function claimedReview(database: string): Promise<string> {
  * without DDL can pass it. A trigger on the history insert would not do: Liquibase 5.0.x commits a change set before
  * its history row. The previous release must run on that prefix, and the migration must complete when it runs again.
  * `database` is a copy of the seeded database from before the upgrade.
+ *
+ * The trigger's function lives in its own schema. The 1.0 baseline synchronization refuses a database on 1.0.0-rc.1
+ * whose application schema differs from the pinned fingerprint, and that fingerprint covers every function in `public`.
  */
 async function assertPartialMigration(
 	database: string,
@@ -878,14 +881,15 @@ async function assertPartialMigration(
 	}
 	const applied = Math.floor(pending / 2);
 	query(
-		`CREATE FUNCTION stop_upgrade_test_migration() RETURNS event_trigger LANGUAGE plpgsql AS $$
+		`CREATE SCHEMA upgrade_test;
+		CREATE FUNCTION upgrade_test.stop_migration() RETURNS event_trigger LANGUAGE plpgsql AS $$
 		BEGIN
-			IF (SELECT count(*) FROM databasechangelog) >= ${before + applied} THEN
+			IF (SELECT count(*) FROM public.databasechangelog) >= ${before + applied} THEN
 				RAISE EXCEPTION '${MIGRATION_STOP_MESSAGE}';
 			END IF;
 		END $$;
 		CREATE EVENT TRIGGER stop_upgrade_test_migration ON ddl_command_start
-			EXECUTE FUNCTION stop_upgrade_test_migration();`,
+			EXECUTE FUNCTION upgrade_test.stop_migration();`,
 		database,
 	);
 	let stopped: ReturnType<typeof migrate>;
@@ -893,7 +897,7 @@ async function assertPartialMigration(
 		stopped = migrate(candidateImage, database);
 	} finally {
 		query(
-			"DROP EVENT TRIGGER stop_upgrade_test_migration; DROP FUNCTION stop_upgrade_test_migration();",
+			"DROP EVENT TRIGGER stop_upgrade_test_migration; DROP SCHEMA upgrade_test CASCADE;",
 			database,
 		);
 	}
