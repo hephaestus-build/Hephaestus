@@ -7,6 +7,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
 import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
+import de.tum.cit.aet.hephaestus.integration.scm.github.credentials.GitHubCredentialRefusalFilter;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHActor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssue;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequest;
@@ -122,7 +123,10 @@ public class GitHubGraphQlConfig {
     }
 
     @Bean
-    public WebClient gitHubGraphQlWebClient(JsonMapper baseObjectMapper, WebClient.Builder webClients) {
+    public WebClient gitHubGraphQlWebClient(
+            JsonMapper baseObjectMapper,
+            WebClient.Builder webClients,
+            GitHubCredentialRefusalFilter credentialRefusalFilter) {
         JsonMapper graphQlObjectMapper = gitHubGraphQlObjectMapper(baseObjectMapper);
 
         // The buffer limit must be set on the CUSTOM decoder, not only via
@@ -165,6 +169,8 @@ public class GitHubGraphQlConfig {
                 .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
                 .defaultHeader("X-GitHub-Api-Version", "2022-11-28")
                 .exchangeStrategies(strategies)
+                // Outermost, so it sees the answer after every retry.
+                .filter(credentialRefusalFilter)
                 .filter(rateLimitLoggingFilter())
                 .filter(retryFilter())
                 .filter(transportErrorRetryFilter())

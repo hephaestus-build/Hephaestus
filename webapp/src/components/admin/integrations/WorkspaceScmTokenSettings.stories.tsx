@@ -168,6 +168,13 @@ export const RefusedGitLabToken: Story = {
 	},
 };
 
+export const RefusedGitHubToken: Story = {
+	args: { providerLabel: "GitHub", attentionProblem: "CREDENTIAL_REVOKED" },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("GitHub no longer accepts this token")).toBeVisible();
+	},
+};
+
 export const GitLabNoExpiry: Story = {
 	args: { providerLabel: "GitLab", tokenExpiryCheckedAt: new Date(STORY_NOW) },
 	play: async ({ canvas }) => {

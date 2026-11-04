@@ -41,6 +41,16 @@ public class SilentModeGraphQlClientFactory {
     }
 
     public HttpGraphQlClient withBearerTokenAndAttribute(
+            HttpGraphQlClient baseClient, String token, String attributeName, Object attributeValue) {
+        return baseClient
+                .mutate()
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .webClient(
+                        builder -> builder.defaultRequest(request -> request.attribute(attributeName, attributeValue)))
+                .build();
+    }
+
+    public HttpGraphQlClient withBearerTokenAndAttribute(
             HttpGraphQlClient baseClient, String url, String token, String attributeName, Object attributeValue) {
         return withBearerTokenAndAttribute(
                 baseClient, url, token, attributeName, attributeValue, new GraphQlClientInterceptor[0]);

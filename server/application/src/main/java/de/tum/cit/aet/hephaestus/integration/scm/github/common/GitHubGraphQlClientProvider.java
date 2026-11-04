@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService.InstallationToken;
+import de.tum.cit.aet.hephaestus.integration.scm.github.credentials.GitHubCredentialRefusalFilter;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRateLimit;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -109,7 +110,8 @@ public class GitHubGraphQlClientProvider {
         // Fire-and-forget and self-throttled, so it costs the sync neither latency nor quota (GitHub
         // documents that endpoint as not counting against the limit) — see GitHubRestRateLimitSeeder.
         rateLimitSeeder.seedIfUnobserved(scopeId, token);
-        return clientFactory.withBearerToken(baseClient, token);
+        return clientFactory.withBearerTokenAndAttribute(
+                baseClient, token, GitHubCredentialRefusalFilter.SCOPE_ID_ATTRIBUTE, scopeId);
     }
 
     /**

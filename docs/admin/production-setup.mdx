@@ -353,6 +353,9 @@ GitHub App installation tokens renew automatically without expiry action.
 **GitHub personal access token expiry is not tracked**.
 Workspace admins must track and replace them.
 
+When GitHub refuses a stored personal access token, Hephaestus records the refusal and sends one alert.
+The sync of that workspace then pauses until a workspace admin replaces the token.
+
 Slack revocation alerts and Outline expiry information stay unchanged.
 
 ### Practice review
