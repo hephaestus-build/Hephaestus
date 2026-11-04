@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+  <changeSet id="1793783588310-1" author="hephaestus">
+    <comment>pull_request_review stored its provider timestamps without a time zone, unlike every other application column. The stored values are UTC wall-clock times, so the conversion reads them as UTC.</comment>
+    <sql>ALTER TABLE pull_request_review ALTER COLUMN created_at TYPE timestamp(6) with time zone USING created_at AT TIME ZONE 'UTC', ALTER COLUMN updated_at TYPE timestamp(6) with time zone USING updated_at AT TIME ZONE 'UTC'</sql>
+    <rollback>
+      <sql>ALTER TABLE pull_request_review ALTER COLUMN created_at TYPE timestamp(6) without time zone USING created_at AT TIME ZONE 'UTC', ALTER COLUMN updated_at TYPE timestamp(6) without time zone USING updated_at AT TIME ZONE 'UTC'</sql>
+    </rollback>
+  </changeSet>
+  <changeSet id="1793783588310-2" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that pull_request_review_comment.in_reply_to_id references scans pull_request_review_comment without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_pull_request_review_comment_in_reply_to_id; CREATE INDEX CONCURRENTLY idx_pull_request_review_comment_in_reply_to_id ON pull_request_review_comment (in_reply_to_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_pull_request_review_comment_in_reply_to_id</sql>
+    </rollback>
+  </changeSet>
+  <changeSet id="1793783588310-3" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that pull_request_requested_reviewers.user_id references scans pull_request_requested_reviewers without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_pull_request_requested_reviewers_user_id; CREATE INDEX CONCURRENTLY idx_pull_request_requested_reviewers_user_id ON pull_request_requested_reviewers (user_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_pull_request_requested_reviewers_user_id</sql>
+    </rollback>
+  </changeSet>
+  <changeSet id="1793783588310-4" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that team_membership.user_id references scans team_membership without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_team_membership_user_id; CREATE INDEX CONCURRENTLY idx_team_membership_user_id ON team_membership (user_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_team_membership_user_id</sql>
+    </rollback>
+  </changeSet>
+  <changeSet id="1793783588310-5" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that repository_collaborator.user_id references scans repository_collaborator without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_repository_collaborator_user_id; CREATE INDEX CONCURRENTLY idx_repository_collaborator_user_id ON repository_collaborator (user_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_repository_collaborator_user_id</sql>
+    </rollback>
+  </changeSet>
+  <changeSet id="1793783588310-6" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that pull_request_closing_issue.issue_id references scans pull_request_closing_issue without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_pull_request_closing_issue_issue_id; CREATE INDEX CONCURRENTLY idx_pull_request_closing_issue_issue_id ON pull_request_closing_issue (issue_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_pull_request_closing_issue_issue_id</sql>
+    </rollback>
+  </changeSet>
+  <changeSet id="1793783588310-7" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the row that item_event.requested_by_id references scans item_event without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_item_event_requested_by_id; CREATE INDEX CONCURRENTLY idx_item_event_requested_by_id ON item_event (requested_by_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_item_event_requested_by_id</sql>
+    </rollback>
+  </changeSet>
+  <changeSet id="1793783588310-8" author="hephaestus">
+    <comment>A delete or update of the row that auth_event.acting_account_id references scans every auth_event partition without this index. PostgreSQL cannot build an index on a partitioned table concurrently, and auth_event is small, so this one locks writes briefly. New partitions inherit it.</comment>
+    <sql>CREATE INDEX IF NOT EXISTS idx_auth_event_acting_account_id ON auth_event (acting_account_id)</sql>
+    <rollback>
+      <sql>DROP INDEX IF EXISTS idx_auth_event_acting_account_id</sql>
+    </rollback>
+  </changeSet>
+  <changeSet id="1793783588310-9" author="hephaestus">
+    <comment>A delete or update of the row that auth_event.viewed_actor_id references scans every auth_event partition without this index. PostgreSQL cannot build an index on a partitioned table concurrently, and auth_event is small, so this one locks writes briefly. New partitions inherit it.</comment>
+    <sql>CREATE INDEX IF NOT EXISTS idx_auth_event_viewed_actor_id ON auth_event (viewed_actor_id)</sql>
+    <rollback>
+      <sql>DROP INDEX IF EXISTS idx_auth_event_viewed_actor_id</sql>
+    </rollback>
+  </changeSet>
+  <changeSet id="1793783588310-10" author="hephaestus" runInTransaction="false">
+    <comment>No query filters commit_file_change by filename, and the index only adds write cost to the largest table.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_commit_file_change_filename</sql>
+    <rollback>
+      <sql>CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_commit_file_change_filename ON commit_file_change (filename)</sql>
+    </rollback>
+  </changeSet>
+</databaseChangeLog>
