@@ -21,6 +21,23 @@ import org.springframework.stereotype.Component;
 @Component
 final class ReviewJobTelemetry {
 
+    /** A review runs for minutes and can wait an hour in the queue; a percentile histogram stops at 30 seconds. */
+    private static final Duration[] JOB_DURATION_BOUNDS = {
+        Duration.ofSeconds(1),
+        Duration.ofSeconds(5),
+        Duration.ofSeconds(30),
+        Duration.ofMinutes(1),
+        Duration.ofMinutes(2),
+        Duration.ofMinutes(5),
+        Duration.ofMinutes(10),
+        Duration.ofMinutes(15),
+        Duration.ofMinutes(20),
+        Duration.ofMinutes(30),
+        Duration.ofHours(1),
+        Duration.ofHours(2),
+        Duration.ofHours(4)
+    };
+
     enum Phase {
         QUEUE("queue"),
         EXECUTION("execution"),
@@ -77,7 +94,7 @@ final class ReviewJobTelemetry {
                     Timer.builder(AgentMetrics.AGENT_JOB_DURATION)
                             .description("Agent job lifecycle phase duration")
                             .tag("phase", phase.tag)
-                            .publishPercentileHistogram()
+                            .serviceLevelObjectives(JOB_DURATION_BOUNDS)
                             .register(registry));
         }
         for (ResultOutcome outcome : new ResultOutcome[] {

@@ -27,6 +27,8 @@ The alert or the objective tells the operator when the answer needs work.
 | Does work wait for a worker? | `agent_queue_oldest_age_seconds`, `agent_job_duration_seconds` with `phase="queue"` | `HephaestusAgentQueueStalled` |
 | Do model calls wait for their pool? | `llm_pool_permit_wait_seconds`, `llm_pool_upstream_throttled_total` | None |
 | Does the API answer without errors, and fast enough? | `http_server_requests_seconds` | The API objectives |
+| Which route is slow at the 95th percentile? | `http_server_requests_seconds_bucket`, by `uri` | The Activity objective |
+| Does the database pool make requests wait? | `hikaricp_connections_acquire_seconds`, `hikaricp_connections_pending` | None |
 | Do pages show their content fast enough? | `web_vital_duration_seconds` | `HephaestusPageExperiencePoor` |
 | Does a conversation answer, and how fast does it start? | `mentor_turn_completed_total`, `mentor_turn_first_token_seconds` | None |
 | Do provider events arrive and get processed? | `webhook_publish_total`, `webhook_stream_*`, `integration_consumer_*` | The webhook and stream alerts |
@@ -40,22 +42,22 @@ The alert or the objective tells the operator when the answer needs work.
 
 These questions have no signal yet. The most important is first.
 
-1. How long does each API route take at the 95th percentile?
-   The server publishes only the 2-second bucket.
-2. How long does each stage of a review take: capture, the practice sessions, admission and composition?
+1. How long does each stage of a review take: capture, the practice sessions, admission and composition?
    Only the durations of the whole job and of the sandbox exist.
-3. How long does a model call of each pool take, and how soon does its first token come?
+2. How long does a model call of each pool take, and how soon does its first token come?
    How many tokens go in and out, and how often does a model refuse?
-   `llm_proxy_duration_seconds` has no pool label and no buckets. Token counts are only in spans and in the database.
-4. Does the database pool make requests wait, and which statements are slow?
+   `llm_proxy_duration_seconds` has no pool label and no buckets.
+   It also spans the wait for a pool permit, which `llm_pool_permit_wait_seconds` measures on its own.
+   Token counts are only in spans and in the database.
+3. Does the database pool make requests wait, and which statements are slow?
    `hikaricp_*` has no alert. No exporter reads `pg_stat_statements`, lock waits, autovacuum or table growth.
-5. How long does an event wait in the broker, and how long does its handler take?
+4. How long does an event wait in the broker, and how long does its handler take?
    `integration_consumer_nak_total` and `integration_consumer_poison_total` count retries and dead letters.
    No histogram measures the wait or the handling.
-6. What does a reader wait for on a page?
+5. What does a reader wait for on a page?
    When does the browser show the first word of an answer?
    No signal exists.
-7. Does feedback earn trust: the outcomes of each practice, corrections and disagreement?
+6. Does feedback earn trust: the outcomes of each practice, corrections and disagreement?
    These are only in the database.
    A practice is not a metric label, because each workspace can add practices.
 
@@ -68,7 +70,7 @@ The samples are small.
 | --- | --- | --- |
 | 95 % of item reviews end complete | 4 of 15 reviews in seven days | `HephaestusReviewsIncomplete` |
 | 90 % of reviews post their first feedback within 30 minutes of their push or request | From review creation to the first posted copy: median 21 minutes, 95th percentile 2.9 hours, 83 reviews in 30 days | `HephaestusFeedbackDeliverySlow`, `HephaestusFeedbackDeliveryStalled` |
-| 95 % of Activity reads finish within 1 second | Cannot be measured: one bucket only | None yet |
+| 95 % of Activity reads finish within 1 second | The slowest Activity read in seven days took 0.19 seconds | `HephaestusActivityLatencyBudgetBurnFast`, `HephaestusActivityLatencyBudgetBurnSlow` |
 | 95 % of conversation turns get their first token within 10 seconds | 95th percentile 6.7 seconds, 7 turns | `mentor_turn_first_token_seconds`, no alert yet |
 
 ## Scrape metrics
@@ -243,8 +245,8 @@ For a release name longer than 34 characters, change the name patterns of these 
 
 #### Service level objectives
 
-The group `hephaestus-slos` holds five objectives.
-The two API objectives each have an error budget for 30 days, and burn-rate alerts on that budget.
+The group `hephaestus-slos` holds six objectives.
+The two API objectives and the Activity objective each have an error budget for 30 days, and burn-rate alerts on that budget.
 A fast burn spends 2 % of that budget in one hour, and a slow burn spends 5 % in six hours.
 Each of these alerts checks a long window and a short window, so it ends soon after the cause ends ([Google SRE workbook](https://sre.google/workbook/alerting-on-slos/)).
 
@@ -255,7 +257,8 @@ Thus, one failure on an idle instance does not page.
 | Objective | Signal | Why this objective |
 | --- | --- | --- |
 | 99.5 % of API requests get no server error (`HephaestusApiErrorBudgetBurnFast`, `HephaestusApiErrorBudgetBurnSlow`) | `http_server_requests_seconds_count` of the server role, without the `/internal/` routes | A reader sees every server error. The `/internal/` routes serve review sandboxes and the model proxy, which have their own alerts |
-| 99.5 % of API reads finish within 2 seconds (`HephaestusApiLatencyBudgetBurnFast`, `HephaestusApiLatencyBudgetBurnSlow`) | `http_server_requests_seconds_bucket` with `le="2.0"` against `le="+Inf"`, for `GET` without server errors, event streams, downloads and exports | A page waits for its reads. An event stream stays open on purpose, and a download or an export takes as long as its size. The server publishes one bucket at 2 seconds, not a full histogram. A server from before this bucket counts on neither side |
+| 99.5 % of API reads finish within 2 seconds (`HephaestusApiLatencyBudgetBurnFast`, `HephaestusApiLatencyBudgetBurnSlow`) | `http_server_requests_seconds_bucket` with `le="2.0"` against `le="+Inf"`, for `GET` without server errors, event streams, downloads and exports | A page waits for its reads. An event stream stays open on purpose, and a download or an export takes as long as its size. A server from before the 2-second bucket counts on neither side |
+| 95 % of Activity reads finish within 1 second (`HephaestusActivityLatencyBudgetBurnFast`, `HephaestusActivityLatencyBudgetBurnSlow`) | `http_server_requests_seconds_bucket` with `le="1.0"` against `le="+Inf"`, for `GET` without server errors on the workspace and public Activity routes | Activity is the page that a developer opens most. The alerts use the same windows as the API objectives. They need 20 reads in one hour or 60 in six hours, so that one slow read on a quiet instance does not fire |
 | 75 % of page loads show their main content within 2.5 seconds (`HephaestusPageExperiencePoor`) | `web_vital_duration_seconds_bucket` for `lcp` with `le="2.5"`, over six hours | The Core Web Vitals threshold for a good Largest Contentful Paint ([web.dev](https://web.dev/articles/lcp)). It needs [page experience metrics](#page-experience-metrics) on, and 50 loads in six hours |
 | 95 % of item reviews end complete (`HephaestusReviewsIncomplete`) | `practice_review_ended_total` with `kind="item"`, over six hours | A review that is not complete gives a developer no feedback on part of its practices. The alert fires when more than 25 % end incomplete, which spends the 5 % budget five times as fast. Readiness waits and budget stops are policy decisions with their own signals, so they count on neither side. A cancellation counts only when no sandbox room was left. The alert needs four reviews in six hours |
 | 90 % of reviews post their first feedback within 30 minutes of their push or request (`HephaestusFeedbackDeliverySlow`) | `practice_review_first_delivery_seconds` with `trigger` `event` or `request` and `approval="none"`, over six hours | A developer waits for this feedback. The alert fires when more than 30 % come later than 30 minutes, which spends the 10 % budget three times as fast. Feedback that a person approves first, and scheduled or backfill reviews, count on neither side. The alert needs four reviews in six hours. Feedback that never arrives has no observation, so `HephaestusFeedbackDeliveryStalled` covers it: feedback on the work that waited more than two hours for its first copy |
@@ -837,6 +840,21 @@ creating unbounded time series. A limit warning therefore means metrics are inco
 investigation, not a logging-level change.
 
 Concrete IDs or URLs in `uri` tags indicate a tagging defect.
+
+The histogram has buckets at 25, 50, 100, 250 and 500 milliseconds, and at 1, 2, 5 and 10 seconds.
+The objectives read the 1-second and 2-second buckets.
+Each label set of the meter exports 13 series: 9 finite buckets, `+Inf`, a count, a sum and a maximum.
+This query gives the 95th percentile of each route over one hour:
+
+```promql
+histogram_quantile(0.95, sum by (uri, le) (rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server"}[1h])))
+```
+
+`hikaricp_connections_acquire_seconds` has buckets at 1, 5, 10, 50, 100 and 500 milliseconds, and at 1, 5, 10 and 30 seconds.
+`agent_job_duration_seconds` has buckets from 1 second to 4 hours, so a review of many minutes has a percentile.
+`mentor_turn_first_token_seconds` has buckets from 0.5 to 60 seconds, with one at the conversation objective's 10 seconds.
+`mentor_turn_duration_seconds` has buckets from 1 second to 10 minutes.
+The roles register both turn timers at zero when they start.
 
 1. When the limit is reached, first inspect the actual `uri` tag values.
 2. Fix a tagging defect before considering a larger budget.

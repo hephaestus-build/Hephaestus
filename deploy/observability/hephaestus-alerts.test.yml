@@ -1616,4 +1616,55 @@ tests:
     alert_rule_test:
       - eval_time: 20m
         alertname: HephaestusFeedbackDeliveryStalled
+
+  - name: slow Activity reads burn the budget fast and slow, other routes and a quiet hour do not
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/activity/me",le="1.0"}'
+        values: "0+1x420"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/activity/me",le="+Inf"}'
+        values: "0+10x420"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="1.0"}'
+        values: "0x420"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="+Inf"}'
+        values: "0+5x420"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusActivityLatencyBudgetBurnFast
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HephaestusActivityLatencyBudgetBurnFast
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Activity reads take longer than 1 second often enough to spend the monthly budget in two days
+      - eval_time: 10m
+        alertname: HephaestusActivityLatencyBudgetBurnSlow
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: HephaestusActivityLatencyBudgetBurnSlow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Activity reads take longer than 1 second often enough to spend the monthly budget in five days
+
+  - name: fast Activity reads and slow other routes do not burn the Activity budget
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/public/workspaces/{slug}/activity",le="1.0"}'
+        values: "0+10x420"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/public/workspaces/{slug}/activity",le="+Inf"}'
+        values: "0+10x420"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="1.0"}'
+        values: "0x420"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="+Inf"}'
+        values: "0+10x420"
+    alert_rule_test:
+      - eval_time: 400m
+        alertname: HephaestusActivityLatencyBudgetBurnFast
+        exp_alerts: []
+      - eval_time: 400m
+        alertname: HephaestusActivityLatencyBudgetBurnSlow
         exp_alerts: []

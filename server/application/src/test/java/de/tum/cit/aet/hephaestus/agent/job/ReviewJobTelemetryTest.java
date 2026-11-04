@@ -26,6 +26,7 @@ import io.opentelemetry.sdk.trace.export.SpanExporter;
 import io.opentelemetry.sdk.trace.samplers.Sampler;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
@@ -123,6 +124,21 @@ class ReviewJobTelemetryTest {
             logger.detachAppender(appender);
             appender.stop();
         }
+    }
+
+    @Test
+    void shouldGiveEachPhaseBucketsThatHoldAReviewOfMinutes() {
+        var registry = new SimpleMeterRegistry();
+        new ReviewJobTelemetry(registry, Tracer.NOOP);
+
+        assertThat(registry.get("agent.job.duration").timers())
+                .isNotEmpty()
+                .allSatisfy(timer -> assertThat(
+                                Arrays.stream(timer.takeSnapshot().histogramCounts())
+                                        .map(bucket -> bucket.bucket(TimeUnit.SECONDS)))
+                        .containsExactly(
+                                1.0, 5.0, 30.0, 60.0, 120.0, 300.0, 600.0, 900.0, 1200.0, 1800.0, 3600.0, 7200.0,
+                                14400.0));
     }
 
     @Test

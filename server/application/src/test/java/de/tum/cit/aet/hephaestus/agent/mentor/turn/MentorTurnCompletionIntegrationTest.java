@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
@@ -25,10 +26,12 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -165,6 +168,22 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         jdbc.execute("DROP TRIGGER IF EXISTS test_receipt_outage ON feedback_copy");
         jdbc.execute("DROP FUNCTION IF EXISTS test_receipt_outage()");
         jdbc.execute("DROP TABLE IF EXISTS test_receipt_outage");
+    }
+
+    @Test
+    void shouldRegisterTheTurnTimersAtStartWithTheObjectivesBuckets() {
+        assertThat(Arrays.stream(metrics.get(AgentMetrics.MENTOR_TURN_FIRST_TOKEN)
+                                .timer()
+                                .takeSnapshot()
+                                .histogramCounts())
+                        .map(bucket -> bucket.bucket(TimeUnit.SECONDS)))
+                .containsExactly(0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 60.0);
+        assertThat(Arrays.stream(metrics.get(AgentMetrics.MENTOR_TURN_DURATION)
+                                .timer()
+                                .takeSnapshot()
+                                .histogramCounts())
+                        .map(bucket -> bucket.bucket(TimeUnit.SECONDS)))
+                .containsExactly(1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 60.0, 120.0, 300.0, 600.0);
     }
 
     @Test
