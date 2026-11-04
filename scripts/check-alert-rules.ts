@@ -54,8 +54,8 @@ const read = async (path: string) => readFile(new URL(`../${path}`, import.meta.
 
 if (import.meta.main) {
 	const gaps = incompleteAlerts(
-		await read(`deploy/observability/${rulesFile}`),
-		await read(`deploy/observability/${testsFile}`),
+		await read(`deploy/chart/hephaestus/files/${rulesFile}`),
+		await read(`deploy/chart/hephaestus/files/${testsFile}`),
 		await read(runbookFile),
 	);
 	if (gaps.length > 0) {
@@ -67,7 +67,7 @@ if (import.meta.main) {
 	// macOS, and no binary to install.
 	const prometheusImage =
 		"prom/prometheus:v3.15.1-distroless@sha256:451a845bae1d51622b41af1780eb2ad911bbb79a9855bc8e9bb67fabbc03f934";
-	const rules = fileURLToPath(new URL("../deploy/observability", import.meta.url));
+	const rules = fileURLToPath(new URL("../deploy/chart/hephaestus/files", import.meta.url));
 	const promtool = [
 		"run",
 		"--rm",

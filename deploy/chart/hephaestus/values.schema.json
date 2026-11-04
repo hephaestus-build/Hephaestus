@@ -554,6 +554,27 @@
 				"resources": { "$ref": "#/definitions/resources" }
 			}
 		},
+		"observability": {
+			"description": "Render the release's alert rules for the rule evaluator of the cluster.",
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"alertRules": {
+					"type": "object",
+					"additionalProperties": false,
+					"properties": {
+						"configMap": {
+							"description": "Render a ConfigMap with the rule file as it is.",
+							"type": "boolean"
+						},
+						"prometheusRule": {
+							"description": "Render a PrometheusRule with the groups of the rule file. The CRD of the Prometheus Operator must exist.",
+							"type": "boolean"
+						}
+					}
+				}
+			}
+		},
 		"priorityClasses": {
 			"description": "Create the three PriorityClasses, or name three that exist: the roles' above the conversations' above the reviews'.",
 			"type": "object",

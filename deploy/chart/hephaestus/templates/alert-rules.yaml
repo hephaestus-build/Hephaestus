@@ -1,0 +1,26 @@
+{{- /* files/hephaestus-alerts.yml is the one home of the rules; vp run test:alerts tests that file. */}}
+{{- $rules := .Files.Get "files/hephaestus-alerts.yml" }}
+{{- if .Values.observability.alertRules.configMap }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" $ "component" "alert-rules") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" $ "component" "alert-rules") | nindent 4 }}
+data:
+  hephaestus-alerts.yml: |
+{{ $rules | indent 4 }}
+{{- end }}
+{{- if .Values.observability.alertRules.prometheusRule }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" $ "component" "alert-rules") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" $ "component" "alert-rules") | nindent 4 }}
+spec:
+  groups:
+    {{- (fromYaml $rules).groups | toYaml | nindent 4 }}
+{{- end }}

@@ -71,7 +71,7 @@ const nestedConfigSources = "'{.changeset,.vscode,scripts,.vale}/*.{cjs,json}'";
 // The chart's plain JSON and YAML, and the platform files beside it. `.oxfmtrc.json` ignores the
 // chart's templates: they are Go templates, not YAML, and Helm rendering judges them.
 const chartConfigSources = "'deploy/{chart,platform}/**/*.{json,yaml}'";
-const alertRuleSources = "'deploy/observability/*.yml'";
+const alertRuleSources = "'deploy/chart/hephaestus/files/*.yml'";
 // `as const` keeps the command a literal type, so `cached` can still read what it runs.
 const configFormatCommand = (mode: "--check" | "--write") =>
 	`vp fmt ${mode} ${rootConfigSources} && vp fmt ${mode} ${nestedConfigSources} && vp fmt ${mode} ${chartConfigSources} && vp fmt ${mode} ${alertRuleSources}` as const;

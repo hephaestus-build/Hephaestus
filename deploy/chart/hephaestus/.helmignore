@@ -2,3 +2,5 @@
 *.swp
 *.tmp
 *.orig
+# The promtool cases of the alert rules: the repository tests them, the chart does not ship them.
+files/hephaestus-alerts.test.yml
