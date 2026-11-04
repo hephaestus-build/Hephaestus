@@ -29,8 +29,6 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import io.micrometer.common.util.StringUtils;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.List;
@@ -53,9 +51,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @WorkspaceAgnostic("Manages workspace-repository mapping configuration")
 public class WorkspaceRepositoryMonitorService {
-
-    @PersistenceContext
-    private @Nullable EntityManager entityManager;
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceRepositoryMonitorService.class);
     private static final String GITHUB_SERVER_URL = "https://github.com";
@@ -203,20 +198,21 @@ public class WorkspaceRepositoryMonitorService {
                                     workspace.getId(), IntegrationKind.GITLAB, IntegrationState.SUSPENDED)
                             .isPresent());
             if (gitLab) {
-                var locked = connectionService
+                // Takes the GitLab lock, so a discovery that runs at the same time finishes first.
+                if (connectionService
                         .updateGitLabProjectExclusions(workspace.getId(), exclusions -> exclusions)
-                        .orElseThrow(() -> new RepositoryProviderNotConnectedException(slug));
-                // A concurrent discovery may have changed the eager monitor set while Stop waited for the lock.
-                Objects.requireNonNull(entityManager).refresh(locked.getWorkspace());
+                        .isEmpty()) {
+                    throw new RepositoryProviderNotConnectedException(slug);
+                }
             }
 
             if (isGitHubAppWorkspace(workspace)) {
                 throw new RepositoryManagementNotAllowedException(slug);
             }
 
-            RepositoryToMonitor repositoryToMonitor = workspace.getRepositoriesToMonitor().stream()
-                    .filter(r -> r.getNameWithOwner().equals(nameWithOwner))
-                    .findFirst()
+            // Read after the GitLab lock, so a monitor that a concurrent discovery added while Stop waited is seen.
+            RepositoryToMonitor repositoryToMonitor = repositoryToMonitorRepository
+                    .findByWorkspaceIdAndNameWithOwner(workspace.getId(), nameWithOwner)
                     .orElse(null);
 
             if (repositoryToMonitor == null) {

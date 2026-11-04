@@ -248,7 +248,10 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
 
     @Test
     void shouldThrowUnreadableCredentialWhenTargetsOfThatWorkspaceAreRequested() {
-        when(workspaceRepository.findById(5L)).thenReturn(Optional.of(workspace(5)));
+        Workspace workspace = workspace(5);
+        when(workspaceRepository.findById(5L)).thenReturn(Optional.of(workspace));
+        when(repositoryToMonitorRepository.findByWorkspaceId(5L))
+                .thenReturn(List.copyOf(workspace.getRepositoriesToMonitor()));
         when(connectionService.findActiveGitLabConfig(5)).thenReturn(Optional.of(GITLAB_CONFIG));
         when(connectionService.findActiveBearerToken(5, IntegrationKind.GITLAB))
                 .thenThrow(unreadable(IntegrationKind.GITLAB));
