@@ -14,6 +14,7 @@ public final class CoreMetrics {
     public static final String AUTH_TOKEN_REFRESH_RESULT = "auth.token.refresh.result";
     public static final String BROWSER_FAULTS = "browser.faults";
     public static final String BROWSER_FAULTS_REFUSED = "browser.faults.refused";
+    public static final String DATABASE_TRANSACTION_DURATION = "database.transaction.duration";
     public static final String DATABASE_WAL_ARCHIVE_FAILING = "database.wal.archive.failing";
     public static final String DATABASE_WAL_ARCHIVE_SAMPLE_FAILURES = "database.wal.archive.sample.failures";
     public static final String PRIVACY_JOB_AFFECTED = "privacy.job.affected";
