@@ -1323,7 +1323,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(policy.permitsReview(job)).thenReturn(true);
         var binding = mock(WorkspaceAgentBinding.class);
         when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.UNDECLARED);
-        when(binding.getMaxConcurrentJobs()).thenReturn(1);
         when(policy.binding(job)).thenReturn(Optional.of(binding));
         when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));

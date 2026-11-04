@@ -190,23 +190,6 @@ const timeoutInput = (scope: HTMLElement) =>
 const pickerOf = (scope: HTMLElement) => within(scope).getByRole("combobox");
 
 describe("workspace AI models route", () => {
-	it("offers a concurrency limit only for queued practice reviews, not conversation turns", async () => {
-		await renderModelsRoute(() => [binding("PRACTICE_REVIEW", 20), binding("MENTOR", 20)]);
-		const reviews = row("Practice reviews");
-		const conversations = row("Conversations");
-		fireEvent.click(advancedButton(reviews));
-		fireEvent.click(advancedButton(conversations));
-		expect(
-			within(reviews).getByRole<HTMLInputElement>("spinbutton", {
-				name: /^Max concurrent reviews/u,
-			}).value,
-		).toBe("3");
-		expect(
-			within(conversations).queryByRole("spinbutton", { name: /^Max concurrent reviews/u }),
-		).toBeNull();
-		expect(timeoutInput(conversations).value).toBe("600");
-	});
-
 	it("keeps each purpose's row pending independently when two saves run at once", async () => {
 		const { promise: slowSave, resolve: releaseSlowSave } = deferred();
 		let detectionSaves = 0;
