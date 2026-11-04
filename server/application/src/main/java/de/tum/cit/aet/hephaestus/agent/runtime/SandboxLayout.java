@@ -200,6 +200,13 @@ public final class SandboxLayout {
      */
     public static final int EXIT_PROVIDER_UNREACHABLE = 76;
 
+    /**
+     * Exit code emitted by the Pi runner when this server answered staging or admission with its own error. That is a
+     * defect in the server, not an outage: another attempt would meet it again, so the attempt ends with what it
+     * staged and spends no retry.
+     */
+    public static final int EXIT_SERVER_ERROR = 77;
+
     /** OCI label declaring the agent image runtime contract. */
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";
 

@@ -23,6 +23,7 @@
 		"practice.program_finished",
 		"practice.program_log",
 		"practice.result_refused",
+		"practice.staging_failed",
 		"practice.unsubmitted",
 		"practice_scripts.truncated",
 		"provider.failed",

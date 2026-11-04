@@ -12,6 +12,7 @@ public final class AgentMetrics {
     public static final String AGENT_JOB_DRAINED = "agent.job.drained";
     public static final String AGENT_JOB_MODEL_REFUSED = "agent.job.model.refused";
     public static final String AGENT_JOB_ORPHAN_FAILED = "agent.job.orphan.failed";
+    public static final String AGENT_JOB_SERVER_ERROR = "agent.job.server.error";
     public static final String AGENT_JOB_ORPHAN_REQUEUED = "agent.job.orphan.requeued";
     public static final String AGENT_JOB_RETENTION_DELETED = "agent.job.retention.deleted";
     public static final String AGENT_JOB_RETENTION_STRIPPED = "agent.job.retention.stripped";

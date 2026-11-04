@@ -434,6 +434,23 @@ tests:
             exp_annotations:
               summary: Review sandboxes failed to reach the server or the model provider at least three times in one hour
 
+  - name: one server error on a review's results fires
+    interval: 1m
+    input_series:
+      - series: 'agent_job_server_error_total{job="hephaestus",instance="worker-a:9090"}'
+        values: "0 0 1 1x30"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusReviewServerError
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HephaestusReviewServerError
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The server answered a review's results with its own error, so the review ended without them
+
   - name: preparation retries that continue fire, a few retries do not
     interval: 1m
     input_series:

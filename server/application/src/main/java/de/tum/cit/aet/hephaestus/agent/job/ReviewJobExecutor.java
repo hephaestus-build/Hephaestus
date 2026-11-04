@@ -184,6 +184,7 @@ public class ReviewJobExecutor {
     private final RetryTemplate requeueRetries = retryTemplate(REQUEUE_REJECTED_CLAIM_POLICY);
 
     private final Map<RequeueCause, Counter> infraRetryRequeued = new EnumMap<>(RequeueCause.class);
+    private final Counter serverErrors;
 
     /** Reviews that this worker's drain stopped: tried again without spending a retry, or past the drain cap. */
     private final Counter drainedRequeued;
@@ -294,6 +295,9 @@ public class ReviewJobExecutor {
                             .tag("reason", reason.tag())
                             .register(meterRegistry));
         }
+        serverErrors = Counter.builder(AgentMetrics.AGENT_JOB_SERVER_ERROR)
+                .description("Attempts that ended because this server answered their results with its own error")
+                .register(meterRegistry);
         for (RequeueCause cause : RequeueCause.values()) {
             infraRetryRequeued.put(
                     cause,
@@ -959,15 +963,27 @@ public class ReviewJobExecutor {
         } catch (ResultAdmissionService.StaleAttemptException lost) {
             return null;
         }
+        // A server error is a defect here, not an outage, and another attempt would meet it again. The attempt keeps
+        // what it staged and ends the rest, with no retry.
+        boolean serverError = result.exitCode() == SandboxLayout.EXIT_SERVER_ERROR;
+        if (serverError) {
+            serverErrors.increment();
+            log.error("The server refused a review's results with its own error, so the attempt ends: jobId={}", jobId);
+        }
         if (!ResultAdmissionService.isAdmitted(retained)
                 && handler.hasStaged(retained)
                 && !handler.completeStaged(retained)) {
-            // A slow provider can take many attempts. Each one that moved the review on keeps the retries for the
-            // attempts that move nothing.
-            if (handler.endedPractices(retained) > endedBefore && continueProgressed(retained)) return null;
-            if (requeueForAnotherAttempt(retained, true, RequeueCause.SANDBOX)) return null;
+            if (!serverError) {
+                // A slow provider can take many attempts. Each one that moved the review on keeps the retries for
+                // the attempts that move nothing.
+                if (handler.endedPractices(retained) > endedBefore && continueProgressed(retained)) return null;
+                if (requeueForAnotherAttempt(retained, true, RequeueCause.SANDBOX)) return null;
+            }
             handler.finishInterrupted(
-                    retained, result.timedOut() ? ReviewStopReason.DEADLINE : ReviewStopReason.EXECUTION_INCOMPLETE);
+                    retained,
+                    serverError
+                            ? ReviewStopReason.EXECUTION_FAILED
+                            : result.timedOut() ? ReviewStopReason.DEADLINE : ReviewStopReason.EXECUTION_INCOMPLETE);
         }
 
         // Two exits say the run could not reach something it needed, rather than anything about the
@@ -1688,7 +1704,9 @@ public class ReviewJobExecutor {
                     !storable && determined == ReviewJobStatus.COMPLETED ? ReviewJobStatus.FAILED : determined;
             String failureMessage = sandboxResult.exitCode() == 0
                     ? "The runner did not return a valid result."
-                    : "The container exited with code " + sandboxResult.exitCode() + ".";
+                    : sandboxResult.exitCode() == SandboxLayout.EXIT_SERVER_ERROR
+                            ? "The server answered the review's results with its own error."
+                            : "The container exited with code " + sandboxResult.exitCode() + ".";
             String errorMessage = switch (terminalStatus) {
                 case TIMED_OUT -> "The container timed out.";
                 case FAILED -> storable ? failureMessage : UNSTORABLE_RESULT_MESSAGE;

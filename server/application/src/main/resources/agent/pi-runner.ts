@@ -6,7 +6,12 @@ import nodePath from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { isDeepStrictEqual } from "node:util";
 import { getHeapStatistics } from "node:v8";
-import { admit, AdmissionUnreachableError, stagePractice } from "./pi-admitted-results.ts";
+import {
+	admit,
+	AdmissionUnreachableError,
+	isAdmissionServerError,
+	stagePractice,
+} from "./pi-admitted-results.ts";
 import { DIFF_SOURCE, TREE_SOURCE } from "./work/practice-scripts/kits/scm/sources.ts";
 
 import {
@@ -908,8 +913,14 @@ export async function runReviewJob(): Promise<void> {
 			);
 			stagedPractices.add(practiceSlug);
 		} catch (error) {
-			stagingFailure = { error };
-			throw error;
+			// A server error for one practice leaves the others to stage; an unreachable server reaches none.
+			// Any other error replaces an earlier server error, so an unreachable server still exits retryable.
+			if (!isAdmissionServerError(error)) {
+				stagingFailure = { error };
+				throw error;
+			}
+			stagingFailure ??= { error };
+			diagnose("practice.staging_failed", { practice: practiceAt(practiceSlug) });
 		}
 	}
 
@@ -1979,6 +1990,8 @@ export async function runReviewJob(): Promise<void> {
 	const SERVER_UNREACHABLE_EXIT = 75;
 	// The server interprets exit 76 as provider failure without a recorded result and retries the review.
 	const PROVIDER_UNREACHABLE_EXIT = 76;
+	// The server answered staging or admission with its own error: the worker ends the attempt, with no retry.
+	const SERVER_ERROR_EXIT = 77;
 
 	function readTaskEnvelope(): TaskEnvelope {
 		let raw: string;
@@ -3346,6 +3359,14 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		process.exit(2);
 	});
 
+	// Admission transport failures keep their retryable code; a server error keeps its own.
+	function exitCodeOf(error: unknown): number {
+		if (error instanceof AdmissionUnreachableError) {
+			return SERVER_UNREACHABLE_EXIT;
+		}
+		return isAdmissionServerError(error) ? SERVER_ERROR_EXIT : 2;
+	}
+
 	async function run(): Promise<void> {
 		try {
 			await main();
@@ -3353,8 +3374,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			diagnose("review.fatal", { error: errorKind(error) });
 			unreachedReason = "error";
 			finalizeOutputQuietly();
-			// Preserve the retryable exit code for admission transport failures.
-			process.exit(error instanceof AdmissionUnreachableError ? SERVER_UNREACHABLE_EXIT : 2);
+			process.exit(exitCodeOf(error));
 		}
 	}
 

@@ -262,6 +262,30 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         assertThat(requeued("server_unreachable")).isZero();
     }
 
+    @Test
+    void shouldEndAnAttemptWithoutARetryWhenTheServerAnsweredItsResultsWithAnError() {
+        var job = configuredJob();
+        job.setStatus(ReviewJobStatus.RUNNING);
+        job.setLeaseId(UUID.randomUUID());
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(handler.hasStaged(job)).thenReturn(true);
+        when(handler.completeStaged(job)).thenReturn(false);
+        when(handler.endedPractices(job)).thenReturn(0, 3);
+        recovery = mock(ReviewJobRecovery.class);
+        var executor = runExecutor(
+                mock(ReviewCompositionContinuation.class),
+                new SandboxResult(SandboxLayout.EXIT_SERVER_ERROR, Map.of(), "", false, Duration.ofSeconds(1)),
+                false);
+
+        tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class));
+
+        verify(handler).finishInterrupted(job, ReviewStopReason.EXECUTION_FAILED);
+        verifyNoInteractions(recovery);
+        assertThat(meters.get("agent.job.server.error").counter().count()).isEqualTo(1);
+        assertThat(requeued("sandbox")).isZero();
+        assertThat(requeued("server_unreachable")).isZero();
+    }
+
     private double requeuedAfterExit(int exitCode, String cause) {
         var job = admittedJob();
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));

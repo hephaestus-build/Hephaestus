@@ -113,11 +113,11 @@ void test("attempts that cannot be spent are refused before the call is made", a
 	assert.equal(calls, 0);
 });
 
-void test("a server saying not now is worth asking again; a server saying no is not", () => {
-	for (const status of [500, 502, 503, 504, 429]) {
+void test("a server saying not now is worth asking again; a server saying no, or failing itself, is not", () => {
+	for (const status of [502, 503, 504, 429]) {
 		assert.equal(isRetryableStatus(status), true, `${status} should be retried`);
 	}
-	for (const status of [200, 201, 400, 401, 403, 404, 409, 422]) {
+	for (const status of [200, 201, 400, 401, 403, 404, 409, 422, 500, 501]) {
 		assert.equal(isRetryableStatus(status), false, `${status} should not be retried`);
 	}
 });
