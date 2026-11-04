@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
-import io.micrometer.core.instrument.Timer;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.http.HttpServletRequest;
@@ -262,7 +261,6 @@ class LlmProxyService {
         try (ProxyCallsInFlight.Call inFlight = callsInFlight.begin(routing.attempt())) {
             MDC.put("proxy.principal", routing.principalDescription());
             MDC.put("proxy.apiProtocol", routing.apiProtocol());
-            Timer.Sample timer = accounting.startTimer();
             String operation = operationName(protocol);
             Span span = tracer.spanBuilder()
                     .name("gen_ai." + operation)
@@ -318,7 +316,6 @@ class LlmProxyService {
                     line.log(failure == null ? "conversation model call" : "conversation model call failed");
                 }
                 span.end();
-                accounting.stopTimer(timer, routing.apiProtocol());
                 MDC.remove("proxy.principal");
                 MDC.remove("proxy.apiProtocol");
             }
@@ -371,7 +368,7 @@ class LlmProxyService {
             log.debug(
                     "Model call refused, its attempt has its most calls in flight: principal={}",
                     routing.principalDescription());
-            accounting.recordCallsInFlightRefused();
+            accounting.refused(ReviewModelGateway.Refusal.CALLS_IN_FLIGHT);
             // 429, so a model client asks again once one of the attempt's calls has ended.
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .header(HttpHeaders.RETRY_AFTER, "1")
@@ -557,6 +554,7 @@ class LlmProxyService {
                 permit.failed(e);
                 if (practiceScript != null) accounting.recordUsage(attempt, practiceScript, null);
                 Bounds bounds = exchange.bounds();
+                poolPermit.outcome(bounds != null && ProxyStreamingUtils.readTimedOut(e) ? "stalled" : "error");
                 if (bounds != null && ProxyStreamingUtils.readTimedOut(e)) {
                     callPermits.unanswered(poolPermit, true, tap.sinceSent(), instanceCredential);
                     accounting.recordError(routing.apiProtocol());
@@ -595,11 +593,13 @@ class LlmProxyService {
 
             if (upstream == null) {
                 // The turn's end cancelled the call before the provider answered.
+                poolPermit.outcome("cancelled");
                 permit.released();
                 if (practiceScript != null) accounting.recordUsage(attempt, practiceScript, null);
                 accounting.recordError(routing.apiProtocol());
                 return ResponseEntity.status(502).body("Upstream provider unavailable");
             }
+            poolPermit.outcome(outcome(upstream, tap, protocol));
             if (upstream.status() >= 200 && upstream.status() < 300) poolPermit.served(instanceCredential);
             StreamOutcome ended = upstream.streamOutcome();
             if (ended != null
@@ -648,7 +648,8 @@ class LlmProxyService {
             }
             var outcome = upstream.streamOutcome();
             if (outcome != null)
-                return settleStream(routing, attempt, practiceScript, span, upstream.status(), outcome, tap, call);
+                return settleStream(
+                        routing, attempt, practiceScript, span, upstream.status(), outcome, tap, call, poolPermit);
             boolean served = upstream.status() >= 200 && upstream.status() < 300;
             if (!served) {
                 call.failed(new MentorTurn.FailedCall(UPSTREAM_STATUS, upstream.status()));
@@ -657,7 +658,9 @@ class LlmProxyService {
             }
             // Attributed now, not at the run's terminal write, so an execution that dies still bills.
             if (upstream.body() != null && served) {
-                tagUsage(span, accounting.recordUsage(attempt, practiceScript, protocol, upstream.body()));
+                ProxyTokenUsage usage = accounting.recordUsage(attempt, practiceScript, protocol, upstream.body());
+                tagUsage(span, usage);
+                if (usage != null) poolPermit.tokens(usage);
             }
             return ResponseEntity.status(upstream.status())
                     .headers(upstream.headers())
@@ -679,7 +682,8 @@ class LlmProxyService {
             int status,
             ProxyStreamingUtils.StreamOutcome outcome,
             ProxyStreamUsageTap tap,
-            ProxyCallsInFlight.Call call) {
+            ProxyCallsInFlight.Call call,
+            LlmCallPermits.Permit poolPermit) {
         boolean served = status >= 200 && status < 300;
         if (!served) {
             call.failed(new MentorTurn.FailedCall(UPSTREAM_STATUS, status));
@@ -703,8 +707,10 @@ class LlmProxyService {
             if (tap.hasMalformedUsage()) {
                 accounting.recordMalformedUsage(attempt);
             } else {
-                accounting.recordUsage(attempt, practiceScript, tap.observed());
-                tagUsage(span, tap.observed());
+                ProxyTokenUsage usage = tap.observed();
+                accounting.recordUsage(attempt, practiceScript, usage);
+                tagUsage(span, usage);
+                if (usage != null) poolPermit.tokens(usage);
             }
         }
         return null;
@@ -843,7 +849,34 @@ class LlmProxyService {
     }
 
     // Not 429 or 5xx, so neither the runner nor a model client asks again; the words avoid what retry classifiers read.
-    private static ResponseEntity<String> refusal(HttpStatus status, ReviewModelGateway.Refusal rule, String message) {
+    /**
+     * How a call that reached its provider ended, by the provider's status, the stream's end and the model's own stop
+     * reason. A served stream without content becomes {@code unanswered} when its permit closes.
+     */
+    private String outcome(UpstreamResult upstream, ProxyStreamUsageTap tap, LlmApiProtocol protocol) {
+        if (upstream.status() < 200 || upstream.status() >= 300) return "error";
+        StreamOutcome stream = upstream.streamOutcome();
+        if (stream == null) {
+            byte[] body = upstream.body();
+            if (body == null) return "completed";
+            try {
+                // Read apart from the usage, which a buffered answer's accounting parses for itself.
+                return ModelStopReason.outcome(ModelStopReason.of(objectMapper.readTree(body), protocol));
+            } catch (RuntimeException unreadable) {
+                return "completed";
+            }
+        }
+        return switch (stream) {
+            case COMPLETED -> ModelStopReason.outcome(tap.stopReason());
+            case CLIENT_DISCONNECTED -> "cancelled";
+            case TIMED_OUT, UPSTREAM_IDLE -> "stalled";
+            case STREAM_FAILED -> "error";
+        };
+    }
+
+    /** The proxy's own refusal, before the call reaches a provider. */
+    private ResponseEntity<String> refusal(HttpStatus status, ReviewModelGateway.Refusal rule, String message) {
+        accounting.refused(rule);
         return ResponseEntity.status(status).header(REFUSAL_HEADER, rule.name()).body(message);
     }
 

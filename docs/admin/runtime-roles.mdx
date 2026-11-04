@@ -490,7 +490,7 @@ A model call ends when its provider sends nothing for 5 minutes.
 
 The proxy refuses a call past the limit with HTTP 429 and `Retry-After: 1`.
 It refuses the call before the call reaches the provider.
-`sandbox.gateway.calls_in_flight.refused` counts these refusals.
+`llm_proxy_refused_total` with `refusal="calls_in_flight"` counts these refusals.
 
 A refused call is not lost:
 

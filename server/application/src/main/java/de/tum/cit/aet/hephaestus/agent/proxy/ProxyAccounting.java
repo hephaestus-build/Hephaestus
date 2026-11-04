@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +34,6 @@ public class ProxyAccounting {
     private final Counter gatewayRequests;
     private final DistributionSummary gatewayRequestSize;
     private final Counter gatewayThrottled;
-    private final Counter callsInFlightRefused;
     private final Counter gatewayLimiterErrors;
     private final Counter practiceScriptUnattributed;
 
@@ -61,9 +60,8 @@ public class ProxyAccounting {
         this.gatewayThrottled = Counter.builder(AgentMetrics.SANDBOX_GATEWAY_THROTTLED)
                 .description("Sandbox gateway requests refused by the per-principal rate limit")
                 .register(meterRegistry);
-        this.callsInFlightRefused = Counter.builder(AgentMetrics.SANDBOX_GATEWAY_CALLS_IN_FLIGHT_REFUSED)
-                .description("Model calls refused because their attempt already had its most calls in flight")
-                .register(meterRegistry);
+        // Registered up front, so a rate of refusals starts from zero.
+        for (ReviewModelGateway.Refusal refusal : ReviewModelGateway.Refusal.values()) refusedCounter(refusal);
         this.gatewayLimiterErrors = Counter.builder(AgentMetrics.SANDBOX_GATEWAY_LIMITER_ERRORS)
                 .description("Sandbox gateway requests served without a rate-limit decision")
                 .register(meterRegistry);
@@ -77,22 +75,36 @@ public class ProxyAccounting {
      * spend, which the ledger cannot see until the run ends.
      */
     public boolean refuseForBudget(ProxyRouting routing) {
-        return countedRefusal(
-                budgetGate.isBlocked(routing), routing, UsageFundingSource.capTag(routing.connectionScope()));
+        return budgetBlocked(budgetGate.isBlocked(routing), UsageFundingSource.capTag(routing.connectionScope()));
     }
 
     public boolean refuseForDirectModelCap(ProxyRouting routing, ProxyRouting.BilledAttempt attempt) {
-        return countedRefusal(budgetGate.isDirectModelCapReached(attempt), routing, "practice_script_attempt");
+        return budgetBlocked(budgetGate.isDirectModelCapReached(attempt), "practice_script_attempt");
     }
 
-    // Monthly and per-attempt limits have different owners; count refusal against the cap that blocked it.
-    private boolean countedRefusal(boolean refused, ProxyRouting routing, String cap) {
-        if (refused) {
+    // The admission points count their refusals at a cap in the same counter, under their own surface.
+    private boolean budgetBlocked(boolean blocked, String cap) {
+        if (blocked) {
             meterRegistry
-                    .counter(AgentMetrics.LLM_PROXY_BUDGET_BLOCKED, "apiProtocol", routing.apiProtocol(), "cap", cap)
+                    .counter(AgentMetrics.LLM_BUDGET_BLOCKED, "surface", "model_call", "cap", cap)
                     .increment();
         }
-        return refused;
+        return blocked;
+    }
+
+    /**
+     * A call that the proxy refused before it reached a provider. A model that declines to answer is no refusal here: it
+     * is the {@code refused} outcome of its call.
+     */
+    public void refused(ReviewModelGateway.Refusal refusal) {
+        refusedCounter(refusal).increment();
+    }
+
+    private Counter refusedCounter(ReviewModelGateway.Refusal refusal) {
+        return Counter.builder(AgentMetrics.LLM_PROXY_REFUSED)
+                .description("Model calls that the proxy refused before they reached their provider")
+                .tag("refusal", refusal.name().toLowerCase(Locale.ROOT))
+                .register(meterRegistry);
     }
 
     // Every direct call must name a valid practice so its spend can be attributed.
@@ -174,10 +186,6 @@ public class ProxyAccounting {
                 .increment();
     }
 
-    public Timer.Sample startTimer() {
-        return Timer.start();
-    }
-
     /** Counted once the gateway has accepted the request, so it measures work served, not probes. */
     public void recordGatewayRequest(int requestBytes) {
         gatewayRequests.increment();
@@ -188,10 +196,6 @@ public class ProxyAccounting {
         gatewayThrottled.increment();
     }
 
-    public void recordCallsInFlightRefused() {
-        callsInFlightRefused.increment();
-    }
-
     /**
      * The store behind the gateway's rate limit could not be reached, so the request was served
      * without a limit. A sustained rate means the gateway is unlimited, which no log line makes
@@ -199,13 +203,6 @@ public class ProxyAccounting {
      */
     public void recordGatewayLimiterError() {
         gatewayLimiterErrors.increment();
-    }
-
-    public void stopTimer(Timer.Sample sample, String apiProtocol) {
-        sample.stop(Timer.builder(AgentMetrics.LLM_PROXY_DURATION)
-                .description("LLM proxy request duration")
-                .tag("apiProtocol", apiProtocol)
-                .register(meterRegistry));
     }
 
     public void recordError(String apiProtocol) {

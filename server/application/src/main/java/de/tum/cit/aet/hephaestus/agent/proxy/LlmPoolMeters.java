@@ -52,6 +52,17 @@ final class LlmPoolMeters {
     /** Why a call waited: {@code none} when its pool admitted it at once. */
     static final List<String> WAIT_REASONS = List.of("none", "capacity", "cooldown");
 
+    /**
+     * How a call that reached its provider ended. {@code refused}, {@code length} and {@code completed} are the
+     * provider's own stop reason ({@link ModelStopReason}); {@code unanswered} is a served stream without content.
+     * The proxy's own refusals never reach a provider: {@code llm_proxy_refused_total} counts them.
+     */
+    static final List<String> CALL_OUTCOMES =
+            List.of("completed", "length", "refused", "unanswered", "error", "stalled", "cancelled");
+
+    /** The token buckets that a provider bills apart. */
+    static final List<String> TOKEN_TYPES = List.of("input", "output", "cache_read", "cache_write");
+
     /** Why a worker cancelled a call: it could not renew the permit, or the database no longer had it. */
     static final List<String> CANCEL_REASONS = List.of("no_renewal", "lease_lost", "attempt_ended");
 
@@ -132,7 +143,12 @@ final class LlmPoolMeters {
         for (int status : THROTTLE_STATUSES) throttledCounter(slug, status);
         for (String cause : DECREASE_CAUSES) limitDecreasesCounter(slug, cause);
         absorbedCounter(slug);
-        for (LlmCallClass callClass : LlmCallClass.values()) firstTokenTimer(slug, callClass);
+        for (LlmCallClass callClass : LlmCallClass.values()) {
+            firstTokenTimer(slug, callClass);
+            operationTimer(slug, callClass);
+            for (String outcome : CALL_OUTCOMES) callsCounter(slug, callClass, outcome);
+            for (String type : TOKEN_TYPES) tokensCounter(slug, callClass, type);
+        }
         baselineResetsCounter(slug);
         return new Pool(
                 slug,
@@ -181,6 +197,33 @@ final class LlmPoolMeters {
                 .tag("pool", slug)
                 .tag("class", callClass.tag())
                 .serviceLevelObjectives(FIRST_CHUNK_BUCKETS)
+                .register(registry);
+    }
+
+    private Timer operationTimer(String slug, LlmCallClass callClass) {
+        return Timer.builder(AgentMetrics.GEN_AI_CLIENT_OPERATION_DURATION)
+                .description("How long a model call took from its pool's grant to its end")
+                .tag("pool", slug)
+                .tag("class", callClass.tag())
+                .serviceLevelObjectives(FIRST_CHUNK_BUCKETS)
+                .register(registry);
+    }
+
+    private Counter callsCounter(String slug, LlmCallClass callClass, String outcome) {
+        return Counter.builder(AgentMetrics.GEN_AI_CLIENT_CALLS)
+                .description("Model calls that reached their provider, by how they ended")
+                .tag("pool", slug)
+                .tag("class", callClass.tag())
+                .tag("outcome", outcome)
+                .register(registry);
+    }
+
+    private Counter tokensCounter(String slug, LlmCallClass callClass, String type) {
+        return Counter.builder(AgentMetrics.GEN_AI_CLIENT_TOKENS)
+                .description("Tokens that providers reported for model calls")
+                .tag("pool", slug)
+                .tag("class", callClass.tag())
+                .tag("type", type)
                 .register(registry);
     }
 
@@ -290,6 +333,18 @@ final class LlmPoolMeters {
 
         void firstToken(LlmCallClass callClass, int millis) {
             firstTokenTimer(slug, callClass).record(millis, TimeUnit.MILLISECONDS);
+        }
+
+        void called(LlmCallClass callClass, String outcome, long nanos) {
+            operationTimer(slug, callClass).record(nanos, TimeUnit.NANOSECONDS);
+            callsCounter(slug, callClass, outcome).increment();
+        }
+
+        void tokens(LlmCallClass callClass, ProxyTokenUsage usage) {
+            tokensCounter(slug, callClass, "input").increment(usage.billableInputTokens());
+            tokensCounter(slug, callClass, "output").increment(usage.outputTokens());
+            tokensCounter(slug, callClass, "cache_read").increment(usage.cacheReadTokens());
+            tokensCounter(slug, callClass, "cache_write").increment(usage.cacheWriteTokens());
         }
 
         void baselineReset() {

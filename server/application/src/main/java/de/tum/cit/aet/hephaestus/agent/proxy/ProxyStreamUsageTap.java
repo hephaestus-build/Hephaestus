@@ -37,6 +37,8 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
 
     private static final byte[] DATA_PREFIX = "data:".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] USAGE_MARKER = "usage".getBytes(StandardCharsets.US_ASCII);
+    /** Anthropic's {@code stop_reason} and OpenAI's {@code finish_reason}; the responses API's ride with usage. */
+    private static final byte[] STOP_MARKER = "_reason".getBytes(StandardCharsets.US_ASCII);
 
     private final ObjectMapper objectMapper;
     private final LlmApiProtocol protocol;
@@ -51,6 +53,8 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
     private ProxyTokenUsage observed;
 
     private boolean malformedUsage;
+
+    private @Nullable String stopReason;
 
     private @Nullable LongConsumer firstEvent;
 
@@ -144,13 +148,17 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
             firstEvent = null;
             if (first != null && served) first.accept(System.nanoTime() - sentAt);
         }
-        if (from < 0 || !contains(line, USAGE_MARKER)) {
+        if (from < 0 || !(contains(line, USAGE_MARKER) || contains(line, STOP_MARKER))) {
             return;
         }
         try {
             JsonNode event = objectMapper.readTree(new String(line, from, line.length - from, StandardCharsets.UTF_8));
             if (!event.isObject()) {
                 return;
+            }
+            String reason = ModelStopReason.of(event, protocol);
+            if (reason != null) {
+                stopReason = reason;
             }
             if (protocol == LlmApiProtocol.ANTHROPIC_MESSAGES) {
                 String type = event.path("type").asString("");
@@ -225,6 +233,12 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
     @Nullable
     ProxyTokenUsage observed() {
         return observed;
+    }
+
+    /** The last stop reason the stream reported, or {@code null} when it reported none. */
+    @Nullable
+    String stopReason() {
+        return stopReason;
     }
 
     boolean hasMalformedUsage() {
