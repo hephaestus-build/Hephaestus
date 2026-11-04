@@ -24,8 +24,5 @@ public record AgentBindingRequestDTO(
         @Schema(description = "Per-run timeout in seconds (30–10800; three hours is the longest a single run may take)")
         Integer timeoutSeconds,
 
-        @Nullable @Min(1) @Schema(description = "Maximum concurrent runs for this purpose")
-        Integer maxConcurrentJobs,
-
         @Nullable @Schema(description = "Whether this purpose is active (paused when false)")
         Boolean enabled) {}

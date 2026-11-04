@@ -84,7 +84,6 @@ if (process.env.CAPACITY_SEED_MODE === "sessions") {
 			workspaceModelId: id,
 			enabled: true,
 			timeoutSeconds: purpose === "MENTOR" ? 300 : 1200,
-			maxConcurrentJobs: 1,
 		});
 	}
 	process.stdout.write("Synthetic replay model bound to both purposes in the isolated workspace\n");

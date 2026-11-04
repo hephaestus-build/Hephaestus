@@ -102,15 +102,14 @@ class AgentBindingServiceTest extends BaseUnitTest {
                 context(),
                 AgentPurpose.MENTOR,
                 DataHandlingTier.UNDECLARED,
-                new AgentBindingRequestDTO(99L, null, null, null, true));
+                new AgentBindingRequestDTO(99L, null, null, true));
         assertThat(saved.getTimeoutSeconds()).isEqualTo(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
 
         assertThatThrownBy(() -> service.upsertBinding(
                         context(),
                         AgentPurpose.MENTOR,
                         DataHandlingTier.UNDECLARED,
-                        new AgentBindingRequestDTO(
-                                99L, null, AgentBindingLimits.MAX_HEPH_TURN_SECONDS + 1, null, true)))
+                        new AgentBindingRequestDTO(99L, null, AgentBindingLimits.MAX_HEPH_TURN_SECONDS + 1, true)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Hephaestus stops an answer");
     }
@@ -141,7 +140,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
         when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        var request = new AgentBindingRequestDTO(99L, null, 300, 2, true);
+        var request = new AgentBindingRequestDTO(99L, null, 300, true);
         WorkspaceAgentBinding saved =
                 service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED, request);
 
@@ -152,7 +151,6 @@ class AgentBindingServiceTest extends BaseUnitTest {
         assertThat(instanceModel.getId()).isEqualTo(99L);
         assertThat(saved.getWorkspaceModel()).isNull();
         assertThat(saved.getTimeoutSeconds()).isEqualTo(300);
-        assertThat(saved.getMaxConcurrentJobs()).isEqualTo(2);
         assertThat(saved.isEnabled()).isTrue();
         verify(llmModelResolver).isAvailable(any(WorkspaceAgentBinding.class));
 
@@ -192,7 +190,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
             AgentPurpose purpose, LlmApiProtocol apiProtocol, String message) {
         stubNewUndeclaredBinding(purpose, model(99L, apiProtocol));
 
-        var request = new AgentBindingRequestDTO(99L, null, null, null, true);
+        var request = new AgentBindingRequestDTO(99L, null, null, true);
         assertThatThrownBy(() -> service.upsertBinding(context(), purpose, DataHandlingTier.UNDECLARED, request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage(message);
@@ -212,7 +210,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         stubNewUndeclaredBinding(purpose, model(99L, apiProtocol));
         when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        var request = new AgentBindingRequestDTO(99L, null, null, null, true);
+        var request = new AgentBindingRequestDTO(99L, null, null, true);
         WorkspaceAgentBinding saved = service.upsertBinding(context(), purpose, DataHandlingTier.UNDECLARED, request);
 
         assertThat(saved.getPurpose()).isEqualTo(purpose);
@@ -232,7 +230,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(false);
 
-        var request = new AgentBindingRequestDTO(99L, null, null, null, true);
+        var request = new AgentBindingRequestDTO(99L, null, null, true);
         assertThatThrownBy(() -> service.upsertBinding(
                         context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED, request))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -250,7 +248,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null));
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
 
-        var request = new AgentBindingRequestDTO(99L, null, null, null, true);
+        var request = new AgentBindingRequestDTO(99L, null, null, true);
         assertThatThrownBy(() ->
                         service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.CLOUD, request))
                 .isInstanceOf(AgentBindingSlotMismatchException.class)
@@ -271,7 +269,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         LlmModel model = model(99L, LlmApiProtocol.OPENAI_COMPLETIONS);
         when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model));
 
-        var request = new AgentBindingRequestDTO(99L, null, null, null, true);
+        var request = new AgentBindingRequestDTO(99L, null, null, true);
         assertThatThrownBy(
                         () -> service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.IN_HOUSE, request))
                 .isInstanceOf(AgentBindingSlotMismatchException.class)
@@ -295,7 +293,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
         when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        var request = new AgentBindingRequestDTO(99L, null, null, null, true);
+        var request = new AgentBindingRequestDTO(99L, null, null, true);
         WorkspaceAgentBinding saved =
                 service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.CLOUD, request);
 
@@ -318,7 +316,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
         when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        var request = new AgentBindingRequestDTO(99L, null, null, null, true);
+        var request = new AgentBindingRequestDTO(99L, null, null, true);
         WorkspaceAgentBinding saved =
                 service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED, request);
 
@@ -336,7 +334,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
                         1L, AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.empty());
 
-        var bothNull = new AgentBindingRequestDTO(null, null, null, null, true);
+        var bothNull = new AgentBindingRequestDTO(null, null, null, true);
         assertThatThrownBy(() ->
                         service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED, bothNull))
                 .isInstanceOf(IllegalArgumentException.class);

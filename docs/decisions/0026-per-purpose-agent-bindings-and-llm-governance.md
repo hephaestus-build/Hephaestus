@@ -254,3 +254,9 @@ spend so far is read from its own `mentor_turn` row counters, priced at the rate
 `MentorTurnLeaseReaper` once the lease expires (default lease one minute). For Heph turns, N in the
 concurrency bullet is the number of Heph conversations and Heph threads that run a turn at once. The server retains
 Heph submission and the ledger. The worker admits the turn when it claims it.
+
+## Update — 2026-11-03: no per-location limit on running reviews
+
+`maxConcurrentJobs` is removed from the binding. In § What the bound does not cover, N for jobs is now the number of reviews of the workspace that run at once.
+The worker's review slots bound N, and the call pool's calls in flight bound how fast their spend can pass the budget.
+So the overshoot stays bounded, by capacity rather than by an operator's number.

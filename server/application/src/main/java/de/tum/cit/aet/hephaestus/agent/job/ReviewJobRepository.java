@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
-import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
@@ -84,13 +83,6 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             + "(j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.COMPLETED AND "
             + "j.processingStatus = de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus.PENDING))")
     boolean existsPurgeBlockingWork(@Param("workspaceId") Long workspaceId);
-
-    @Query(value = """
-        SELECT COUNT(*) FROM review_job
-        WHERE workspace_id = :workspaceId AND status = 'RUNNING'
-          AND COALESCE(config_snapshot -> 'model' ->> 'dataHandlingTier', 'UNDECLARED') = :#{#tier.name()}
-        """, nativeQuery = true)
-    long countRunningByWorkspaceIdAndDataHandlingTier(Long workspaceId, DataHandlingTier tier);
 
     /** Migrated invocations retain their processing history, not work for the current completion pass. */
     @WorkspaceAgnostic("Bounded server completion pass; each selected job is reloaded under its own workspace")
@@ -404,14 +396,6 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      * Poll-loop candidates, id-only because {@link #findByIdQueuedForUpdateSkipLocked} re-checks and
      * locks each one; a stale read here costs at most a skipped candidate.
      *
-     * <p>Candidates whose slot is already at its {@code max_concurrent_jobs} cap are excluded. A slot is a
-     * {@code (workspace, purpose, AI tier)} binding, the tier being the one the job's snapshot froze and
-     * {@code UNDECLARED} where it names none, as {@link #countRunningByWorkspaceIdAndDataHandlingTier}
-     * and the claim count it. Without the exclusion, one saturated slot with a deep backlog fills every LIMIT
-     * window with jobs nobody can claim, and a younger runnable job elsewhere never reaches the batch. A
-     * candidate whose slot has no binding row is still fetched — the claim's admission re-check is the
-     * authoritative gate.
-     *
      * <p>Work already started comes first: a job on a later attempt, such as one a drain or a handed-on composition
      * put back, and a job whose results were admitted. A requeue sets a fresh {@code available_at}, so oldest-first
      * alone left an admitted review's composition behind every fresh review queued before it. The candidate query
@@ -443,12 +427,6 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
               AND wm.connection_id=CAST(j.config_snapshot->'model'->>'connectionId' AS bigint)
               AND wm.workspace_id=j.workspace_id
             WHERE j.status='QUEUED' AND w.status='ACTIVE' AND j.available_at<=now()
-              AND (SELECT count(*) FROM review_job r WHERE r.workspace_id=j.workspace_id AND r.status='RUNNING'
-                AND COALESCE(r.config_snapshot->'model'->>'dataHandlingTier','UNDECLARED')=
-                    COALESCE(j.config_snapshot->'model'->>'dataHandlingTier','UNDECLARED'))
-                < COALESCE((SELECT b.max_concurrent_jobs FROM workspace_agent_binding b
-                    WHERE b.workspace_id=j.workspace_id AND b.purpose='PRACTICE_REVIEW'
-                      AND b.data_handling_tier=COALESCE(j.config_snapshot->'model'->>'dataHandlingTier','UNDECLARED')),2147483647)
               AND (:#{#excludedJobs.isEmpty()} OR j.id NOT IN (:excludedJobs))
               AND (j.admission_digest IS NOT NULL OR :#{#excludedPools.isEmpty()}
                 OR COALESCE(im.call_pool_id,wm.call_pool_id,0) NOT IN (:excludedPools))

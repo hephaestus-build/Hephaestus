@@ -279,7 +279,6 @@ export type AgentBinding = {
     dataHandlingTier: 'IN_HOUSE' | 'CLOUD' | 'UNDECLARED';
     enabled: boolean;
     instanceModelId?: number;
-    maxConcurrentJobs?: number;
     purpose: 'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING';
     /**
      * True when the bound model is available to run right now
@@ -305,10 +304,6 @@ export type AgentBindingRequest = {
      * Shared (instance-catalog) model id to run this purpose on
      */
     instanceModelId?: number;
-    /**
-     * Maximum concurrent runs for this purpose
-     */
-    maxConcurrentJobs?: number;
     /**
      * Per-run timeout in seconds (30–10800; three hours is the longest a single run may take)
      */

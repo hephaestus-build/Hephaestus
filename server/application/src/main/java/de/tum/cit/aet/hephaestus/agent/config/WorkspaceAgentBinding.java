@@ -83,10 +83,6 @@ public class WorkspaceAgentBinding implements ModelBindingSource {
     @Column(name = "timeout_seconds", nullable = false)
     private int timeoutSeconds = AgentBindingLimits.MAX_TIMEOUT_SECONDS;
 
-    @ColumnDefault("3")
-    @Column(name = "max_concurrent_jobs", nullable = false)
-    private int maxConcurrentJobs = 3;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = "instance_model_id",

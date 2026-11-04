@@ -63,15 +63,11 @@ final class ReviewJobTelemetry {
 
     private final Tracer tracer;
     private final MeterRegistry registry;
-    private final Counter concurrencyRejected;
     private final Timer claimLatency;
 
     ReviewJobTelemetry(MeterRegistry registry, Tracer tracer) {
         this.tracer = tracer;
         this.registry = registry;
-        concurrencyRejected = Counter.builder(AgentMetrics.AGENT_JOB_CONCURRENCY_REJECTED)
-                .description("Jobs rejected due to concurrency limits")
-                .register(registry);
         claimLatency = Timer.builder(AgentMetrics.AGENT_JOB_CLAIM_LATENCY)
                 .description("Time between job submission and its claim")
                 .register(registry);
@@ -94,10 +90,6 @@ final class ReviewJobTelemetry {
                             .tag("outcome", outcome.tag)
                             .register(registry));
         }
-    }
-
-    void claimRejected() {
-        concurrencyRejected.increment();
     }
 
     void claimWait(Duration duration) {

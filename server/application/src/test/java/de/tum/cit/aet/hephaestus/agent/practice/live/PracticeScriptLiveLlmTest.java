@@ -596,10 +596,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                                 null))
                 .getId();
         bindings.upsertBinding(
-                context,
-                purpose,
-                DataHandlingTier.UNDECLARED,
-                new AgentBindingRequestDTO(null, modelId, null, null, true));
+                context, purpose, DataHandlingTier.UNDECLARED, new AgentBindingRequestDTO(null, modelId, null, true));
     }
 
     private Practice practice(Workspace workspace, String program) {

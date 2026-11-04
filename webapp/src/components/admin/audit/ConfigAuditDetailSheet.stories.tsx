@@ -17,9 +17,9 @@ const baseEntry: ConfigAuditEntryView = {
 	actorAccountId: 7,
 	actor: { id: 7, displayName: "Ada Lovelace", email: "ada@example.com" },
 	workspaceId: 3,
-	changedKeys: ["timeoutSeconds", "maxConcurrentJobs"],
-	oldValue: JSON.stringify({ timeoutSeconds: 600, maxConcurrentJobs: 1 }),
-	newValue: JSON.stringify({ timeoutSeconds: 900, maxConcurrentJobs: 3 }),
+	changedKeys: ["timeoutSeconds", "enabled"],
+	oldValue: JSON.stringify({ timeoutSeconds: 600, enabled: false }),
+	newValue: JSON.stringify({ timeoutSeconds: 900, enabled: true }),
 };
 
 const meta = {
@@ -69,7 +69,7 @@ export const Created: Story = {
 			action: "CREATED",
 			oldValue: undefined,
 			changedKeys: undefined,
-			newValue: JSON.stringify({ timeoutSeconds: 600, maxConcurrentJobs: 1 }),
+			newValue: JSON.stringify({ timeoutSeconds: 600, enabled: false }),
 		},
 	},
 };

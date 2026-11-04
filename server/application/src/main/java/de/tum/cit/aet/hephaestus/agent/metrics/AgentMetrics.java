@@ -5,7 +5,6 @@ public final class AgentMetrics {
     public static final String AGENT_JOB_BUDGET_REFUSED = "agent.job.budget.refused";
     public static final String AGENT_JOB_CLAIM_LATENCY = "agent.job.claim.latency";
     public static final String AGENT_JOB_COMPOSITION_STOPPED = "agent.job.composition.stopped";
-    public static final String AGENT_JOB_CONCURRENCY_REJECTED = "agent.job.concurrency.rejected";
     public static final String AGENT_JOB_DURATION = "agent.job.duration";
     public static final String AGENT_JOB_EXECUTION_DURATION = "agent.job.execution.duration";
     public static final String AGENT_JOB_INFRA_RETRY_REQUEUED = "agent.job.infra.retry.requeued";

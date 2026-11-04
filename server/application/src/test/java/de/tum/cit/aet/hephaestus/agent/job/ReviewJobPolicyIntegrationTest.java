@@ -66,7 +66,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.awaitility.Awaitility;
@@ -78,7 +77,6 @@ import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     @Autowired
@@ -294,29 +292,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldLeaveACappedBindingQueuedWithoutHoldingProviderCapacity() {
-        var capped = binding(DataHandlingTier.IN_HOUSE);
-        long poolId = endpointPool(capped);
-        var waiting = queued(capped);
-        var running = queued(capped);
-        running.setStatus(ReviewJobStatus.RUNNING);
-        jobs.saveAndFlush(running);
-        var open = binding(DataHandlingTier.CLOUD);
-        var model = Objects.requireNonNull(open.getInstanceModel());
-        jdbc.update("UPDATE llm_model SET call_pool_id=? WHERE id=?", poolId, model.getId());
-        var runnable = queued(open);
-        var capacity = LlmCallPermitsTestFixtures.worker(context, "test-worker");
-        var polling = pooledExecutor(properties, capacity, roomySandboxes());
-
-        assertThat(polling.processJob(waiting.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
-        assertThat(polling.processJob(runnable.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
-        assertThat(jobs.findById(waiting.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
-        assertThat(jobs.findById(runnable.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
-        assertThat(context.getBean(LlmCallPermitRepository.class).countUnclosed(poolId))
-                .isZero();
-    }
-
-    @Test
     void shouldKeepAReviewQueuedUntilQuotaRoomReturns() {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         var sandboxes = mock(SandboxManager.class);
@@ -331,7 +306,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldLeaveTheNextReviewQueuedWhenAPreparingClaimUsesTheObservedQuotaRoom() {
         var selected = binding(DataHandlingTier.IN_HOUSE);
-        selected.setMaxConcurrentJobs(3);
         bindings.saveAndFlush(selected);
         var first = queued(selected);
         var second = queued(selected);
@@ -729,37 +703,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldAllowIndependentTierSlotsButSerializeClaimsWithinEachSlot() throws Exception {
-        var inHouse = binding(DataHandlingTier.IN_HOUSE);
-        var cloud = binding(DataHandlingTier.CLOUD);
-        var first = queued(inHouse);
-        var second = queued(inHouse);
-        var start = new CyclicBarrier(2);
-        when(policy.permitsReview(any())).thenAnswer(invocation -> {
-            start.await(30, TimeUnit.SECONDS);
-            return true;
-        });
-        try (var threads = Executors.newVirtualThreadPerTaskExecutor()) {
-            var firstClaim = threads.submit(() -> executor.processJob(first.getId()));
-            var secondClaim = threads.submit(() -> executor.processJob(second.getId()));
-            assertThat(List.of(firstClaim.get(30, TimeUnit.SECONDS), secondClaim.get(30, TimeUnit.SECONDS)))
-                    .containsExactlyInAnyOrder(
-                            ReviewJobExecutor.StartOutcome.STARTED, ReviewJobExecutor.StartOutcome.SKIPPED);
-        }
-        assertThat(jobs.findAllById(List.of(first.getId(), second.getId())))
-                .extracting(ReviewJob::getStatus)
-                .containsExactlyInAnyOrder(ReviewJobStatus.RUNNING, ReviewJobStatus.QUEUED);
-
-        doReturn(true).when(policy).permitsReview(any());
-        var cloudJob = queued(cloud);
-        assertThat(executor.processJob(cloudJob.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
-        assertThat(jobs.findById(cloudJob.getId()))
-                .get()
-                .extracting(ReviewJob::getStatus)
-                .isEqualTo(ReviewJobStatus.RUNNING);
-    }
-
-    @Test
     void shouldHoldPartlyStagedWorkWhileItsBudgetCanBeRaised() {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         var budgets = mock(LlmBudgetService.class);
@@ -888,39 +831,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(queued.getAttempt()).isEqualTo(job.getAttempt());
         assertThat(queued.getLeaseId()).isNull();
         assertThat(queued.getExecutionStartedAt()).isNull();
-    }
-
-    @Test
-    void shouldKeepRunningOccupancyWhenTheSlotsModelIsReassigned() {
-        var binding = binding(DataHandlingTier.IN_HOUSE);
-        var running = queued(binding);
-        assertThat(executor.processJob(running.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
-
-        var replacement = model(DataHandlingTier.IN_HOUSE);
-        binding.setInstanceModel(replacement);
-        binding = bindings.saveAndFlush(binding);
-        var queued = queued(binding);
-        assertThat(executor.processJob(queued.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
-        assertThat(jobs.findById(queued.getId()))
-                .get()
-                .extracting(ReviewJob::getStatus)
-                .isEqualTo(ReviewJobStatus.QUEUED);
-    }
-
-    @Test
-    void shouldCountAnUndeclaredModelAgainstOnlyTheUndeclaredSlot() {
-        var binding = binding(DataHandlingTier.UNDECLARED);
-        var historical = queued(binding);
-        var snapshot = (ObjectNode) historical.getConfigSnapshot();
-        ((ObjectNode) snapshot.get("model")).remove("dataHandlingTier");
-        historical.setConfigSnapshot(snapshot);
-        historical.setStatus(ReviewJobStatus.RUNNING);
-        jobs.saveAndFlush(historical);
-
-        assertThat(executor.processJob(queued(binding).getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
-        assertThat(executor.processJob(
-                        queued(binding(DataHandlingTier.IN_HOUSE)).getId()))
-                .isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
     }
 
     @Test
@@ -1061,7 +971,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         binding.setDataHandlingTier(tier);
         binding.setInstanceModel(model(tier));
         binding.setEnabled(true);
-        binding.setMaxConcurrentJobs(1);
         return bindings.saveAndFlush(binding);
     }
 

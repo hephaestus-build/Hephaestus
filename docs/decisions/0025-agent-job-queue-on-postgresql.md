@@ -148,3 +148,12 @@ which needs them anyway.
 `agent_job` is `review_job`. `AgentJobExecutor`, `AgentJobService`, `AgentJobZombieSweeper` and
 `AgentJobRetentionService` are `ReviewJobExecutor`, `ReviewJobService`, `ReviewJobZombieSweeper` and
 `ReviewJobRetentionService`.
+
+## Update — 2026-11-03: no fixed number of running reviews for a workspace
+
+`workspace_agent_binding.max_concurrent_jobs` is removed. A fixed count per workspace was a width that no measurement set.
+The candidate query no longer excludes a slot at a cap.
+
+§ Consequences called that cap "the only lever" against a noisy tenant. The claim order has since taken that role: started work first, then the workspace with fewer running reviews, then origin with aging, then age.
+The fair grants of the call pool share the provider between workspaces ([ADR 0074](0074-a-reviews-width-and-count-follow-the-provider.md)).
+A worker's review slots and the reviews quota still bound how many reviews run.

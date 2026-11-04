@@ -18,12 +18,12 @@ INSERT INTO llm_model (id, connection_id, slug, display_name, upstream_model_id,
 VALUES (2, 1, 'gpt-oss-120b', 'GPT-OSS 120B', 'openai/gpt-oss-120b', 128000, 32000, 'PUBLIC', true, now())
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO workspace_agent_binding (id, workspace_id, purpose, instance_model_id, enabled, timeout_seconds, max_concurrent_jobs, created_at, updated_at)
-VALUES (1, 1, 'PRACTICE_REVIEW', 1, true, 600, 2, now(), now())
+INSERT INTO workspace_agent_binding (id, workspace_id, purpose, instance_model_id, enabled, timeout_seconds, created_at, updated_at)
+VALUES (1, 1, 'PRACTICE_REVIEW', 1, true, 600, now(), now())
 ON CONFLICT (id) DO UPDATE SET purpose = EXCLUDED.purpose;
 
-INSERT INTO workspace_agent_binding (id, workspace_id, purpose, instance_model_id, enabled, timeout_seconds, max_concurrent_jobs, created_at, updated_at)
-VALUES (2, 1, 'MENTOR', 2, true, 300, 1, now(), now())
+INSERT INTO workspace_agent_binding (id, workspace_id, purpose, instance_model_id, enabled, timeout_seconds, created_at, updated_at)
+VALUES (2, 1, 'MENTOR', 2, true, 300, now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- The Hephaestus page offers Hephaestus once a model is ready under some AI choice, and a developer who has not chosen is
@@ -32,8 +32,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO llm_model (id, connection_id, slug, display_name, upstream_model_id, context_window, max_output_tokens, visibility, enabled, operated_by, created_at)
 VALUES (3, 1, 'in-house-model', 'In-house model', 'in-house-model', 128000, 32000, 'PUBLIC', true, 'OWN_ORGANISATION', now())
 ON CONFLICT (id) DO NOTHING;
-INSERT INTO workspace_agent_binding (id, workspace_id, purpose, data_handling_tier, instance_model_id, enabled, timeout_seconds, max_concurrent_jobs, created_at, updated_at)
-VALUES (3, 1, 'MENTOR', 'IN_HOUSE', 3, true, 300, 1, now(), now())
+INSERT INTO workspace_agent_binding (id, workspace_id, purpose, data_handling_tier, instance_model_id, enabled, timeout_seconds, created_at, updated_at)
+VALUES (3, 1, 'MENTOR', 'IN_HOUSE', 3, true, 300, now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- A model with no price never starts a turn, and Hephaestus reads as not set up without one.
