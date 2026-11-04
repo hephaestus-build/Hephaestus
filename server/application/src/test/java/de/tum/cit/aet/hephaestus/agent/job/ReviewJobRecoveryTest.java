@@ -22,7 +22,7 @@ class ReviewJobRecoveryTest {
 
     @ParameterizedTest(name = "staged={0}")
     @ValueSource(booleans = {true, false})
-    void shouldLeaveARetainedPracticeOneMoreAttemptToSealWhenAnAttemptRunsAgain(boolean staged) {
+    void shouldGiveOnlyARetainedPracticeOneMoreAttemptToSealAtTheRetryLimit(boolean staged) {
         var jobs = mock(ReviewJobRepository.class);
         var properties = mock(AgentProperties.class);
         when(properties.maxRetries()).thenReturn(5);
@@ -34,12 +34,13 @@ class ReviewJobRecoveryTest {
         job.setAttempt(5);
         when(jobs.lockById(job.getId())).thenReturn(Optional.of(job));
         when(continuation.hasStaged(job)).thenReturn(staged);
+        // As the query does: it requeues only while the spent attempts stay below the allowance.
         when(jobs.requeueOrphan(eq(job.getId()), eq(lease), any(Integer.class), any(Instant.class)))
-                .thenReturn(1);
+                .thenAnswer(call -> job.spentAttempts() < call.getArgument(2, Integer.class) ? 1 : 0);
         var recovery = new ReviewJobRecovery(
                 jobs, properties, new JsonMapper(), mock(ReviewAttemptUsageService.class), Optional.of(continuation));
 
-        assertThat(recovery.retryUnadmitted(job, lease, false)).isTrue();
+        assertThat(recovery.retryUnadmitted(job, lease, false)).isEqualTo(staged);
 
         // With practices retained, the next claim only seals them, as it does after a lost worker.
         verify(jobs).requeueOrphan(eq(job.getId()), eq(lease), eq(staged ? 6 : 5), any(Instant.class));

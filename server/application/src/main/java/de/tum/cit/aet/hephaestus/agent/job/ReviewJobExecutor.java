@@ -1499,13 +1499,18 @@ public class ReviewJobExecutor {
 
     /**
      * A capture that failed, or whose source was not ready, can succeed on another attempt; the same item captured on
-     * earlier attempts. Removed or hidden work, withheld consent and a lost version do not come back.
+     * earlier attempts. Removed or hidden work, withheld consent, a lost version and an occasion that kept no record do
+     * not come back.
      */
     private static boolean transientCapture(@Nullable ItemCaptureException capture) {
         return capture != null
                 && switch (capture.code()) {
-                    case CAPTURE_FAILED, SOURCE_NOT_READY, OCCASION_EVIDENCE_UNAVAILABLE -> true;
-                    case ITEM_REMOVED, ITEM_NOT_VISIBLE, CONSENT_WITHHELD, VERSION_UNAVAILABLE -> false;
+                    case CAPTURE_FAILED, SOURCE_NOT_READY -> true;
+                    case ITEM_REMOVED,
+                            ITEM_NOT_VISIBLE,
+                            CONSENT_WITHHELD,
+                            VERSION_UNAVAILABLE,
+                            OCCASION_EVIDENCE_UNAVAILABLE -> false;
                 };
     }
 

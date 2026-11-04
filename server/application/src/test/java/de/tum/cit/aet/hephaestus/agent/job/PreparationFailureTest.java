@@ -173,7 +173,7 @@ class PreparationFailureTest {
         return Stream.of(
                 Arguments.of(ItemCaptureCode.CAPTURE_FAILED, true),
                 Arguments.of(ItemCaptureCode.SOURCE_NOT_READY, true),
-                Arguments.of(ItemCaptureCode.OCCASION_EVIDENCE_UNAVAILABLE, true),
+                Arguments.of(ItemCaptureCode.OCCASION_EVIDENCE_UNAVAILABLE, false),
                 Arguments.of(ItemCaptureCode.ITEM_REMOVED, false),
                 Arguments.of(ItemCaptureCode.ITEM_NOT_VISIBLE, false),
                 Arguments.of(ItemCaptureCode.CONSENT_WITHHELD, false),
