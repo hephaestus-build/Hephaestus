@@ -1,7 +1,8 @@
 package de.tum.cit.aet.hephaestus.productfeedback.notification;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
-/** An erased report's GitHub cleanup now waits for a maintainer; it carries no person data. */
-public record ProductFeedbackCleanupNeedsActionEvent(UUID cleanupId, Instant since) {}
+/** Erased reports' GitHub cleanups that now wait for a maintainer, from one sweep; it carries no person data. */
+public record ProductFeedbackCleanupNeedsActionEvent(List<UUID> cleanupIds, Instant since) {}

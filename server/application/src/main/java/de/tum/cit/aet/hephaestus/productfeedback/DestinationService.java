@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbac
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -97,6 +98,7 @@ class DestinationService {
             ProductFeedbackDestination destination = repository
                     .findById(ProductFeedbackDestination.SINGLETON)
                     .orElseGet(ProductFeedbackDestination::new);
+            if (privateName == null && destination.getPrivateRepository() != null) refuseRemovingPrivate();
             boolean publicChanged = !Objects.equals(lower(destination.getPublicRepository()), lower(publicName));
             destination.setPublicRepository(publicName);
             destination.setPrivateRepository(privateName);
@@ -184,6 +186,27 @@ class DestinationService {
 
     private static @Nullable String lower(@Nullable String value) {
         return value == null ? null : value.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Make private and erasure cleanup move a public issue into the private repository, so it stays while one can.
+     * Another private repository can replace it: both read the current one when they move an issue.
+     */
+    private void refuseRemovingPrivate() {
+        long publicIssues = filings.countByStateAndRoute(FilingState.FILED, FilingRoute.PUBLIC);
+        long erased = cleanups.countByManualSinceIsNullAndPublicIssueTrue();
+        List<String> needs = new ArrayList<>();
+        if (publicIssues > 0)
+            needs.add(count(publicIssues, "public issue", "public issues") + " can still be made private");
+        if (erased > 0)
+            needs.add(count(erased, "erased public issue", "erased public issues") + " still wait to move there");
+        if (!needs.isEmpty())
+            throw invalid("Keep a private repository: " + String.join(", and ", needs)
+                    + ". You can replace it with another private repository.");
+    }
+
+    private static String count(long n, String one, String many) {
+        return n + " " + (n == 1 ? one : many);
     }
 
     private static ResponseStatusException invalid(String message) {

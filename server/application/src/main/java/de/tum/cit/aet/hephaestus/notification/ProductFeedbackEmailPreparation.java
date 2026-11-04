@@ -10,8 +10,10 @@ import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSub
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -34,20 +36,27 @@ public class ProductFeedbackEmailPreparation {
         requestForAdmins(
                 event.feedbackId(),
                 event.submittedAt(),
-                ProductFeedbackEmailRequested.Kind.valueOf(event.kind().name()));
+                ProductFeedbackEmailRequested.Kind.valueOf(event.kind().name()),
+                null);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void on(ProductFeedbackCleanupNeedsActionEvent event) {
-        requestForAdmins(event.cleanupId(), event.since(), ProductFeedbackEmailRequested.Kind.CLEANUP);
+        requestForAdmins(
+                event.cleanupIds().getFirst(),
+                event.since(),
+                ProductFeedbackEmailRequested.Kind.CLEANUP,
+                event.cleanupIds());
     }
 
-    private void requestForAdmins(UUID id, Instant at, ProductFeedbackEmailRequested.Kind kind) {
+    private void requestForAdmins(
+            UUID id, Instant at, ProductFeedbackEmailRequested.Kind kind, @Nullable List<UUID> cleanupIds) {
         var subscribed =
                 new HashSet<>(subscriptions.subscribedAccountIds(NotificationSubscriptionKind.PRODUCT_FEEDBACK));
         for (long accountId : contacts.activeVerifiedAdministratorIds()) {
             if (subscribed.contains(accountId)) {
-                events.publishEvent(new ProductFeedbackEmailRequested(id, accountId, at, at.plus(MAX_AGE), kind));
+                events.publishEvent(
+                        new ProductFeedbackEmailRequested(id, accountId, at, at.plus(MAX_AGE), kind, cleanupIds));
             }
         }
     }

@@ -43,6 +43,9 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private AccountRepository accounts;
 
+    @Autowired
+    private ProductFeedbackFilingRepository filings;
+
     /** A member account signed in the way production does: a numeric JWT subject wired to a workspace member. */
     private record Member(long accountId, Account.AppRole role, Workspace workspace) {
         Consumer<HttpHeaders> headers() {
@@ -244,6 +247,27 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .expectBody()
                 .jsonPath("$.id")
                 .isEqualTo(id.toString());
+    }
+
+    @Test
+    void shouldRefuseTriageWhenTheReportGoesToGitHub() {
+        Member member = member("feedback-on-github");
+        send(member, "Filed on GitHub").expectStatus().isOk().expectBody(Void.class);
+        ProductFeedback report = feedback.findAllByAccountId(member.accountId()).getFirst();
+        ProductFeedbackFiling filing = filings.findById(report.getId()).orElseThrow();
+        filing.setState(FilingState.FILED);
+        filings.save(filing);
+
+        webTestClient
+                .patch()
+                .uri("/admin/product-feedback/" + report.getId())
+                .headers(member.headers())
+                .bodyValue(Map.of("resolved", true))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.CONFLICT)
+                .expectBody(Void.class);
+        assertThat(feedback.findById(report.getId()).orElseThrow().isResolved()).isFalse();
     }
 
     private WebTestClient.ResponseSpec send(Member member, String message) {

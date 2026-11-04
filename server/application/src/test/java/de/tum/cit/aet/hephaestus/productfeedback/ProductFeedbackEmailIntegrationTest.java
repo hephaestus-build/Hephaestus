@@ -219,7 +219,12 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
 
         new TransactionTemplate(transactionManager)
                 .executeWithoutResult(status -> events.publishEvent(new ProductFeedbackEmailRequested(
-                        item.getId(), Objects.requireNonNull(admin.getId()), Instant.EPOCH, Instant.EPOCH, Kind.BUG)));
+                        item.getId(),
+                        Objects.requireNonNull(admin.getId()),
+                        Instant.EPOCH,
+                        Instant.EPOCH,
+                        Kind.BUG,
+                        null)));
 
         assertThat(mail.sent()).isEmpty();
         assertThat(publications(item.getId())).isEmpty();

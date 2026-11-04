@@ -14,7 +14,9 @@ import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscripti
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackNotificationQuery;
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
@@ -36,9 +38,10 @@ public class ProductFeedbackEmailListener {
 
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(ProductFeedbackEmailRequested event) {
-        boolean current = event.kind() == ProductFeedbackEmailRequested.Kind.CLEANUP
-                ? feedback.cleanupNeedsAction(event.feedbackId())
-                : feedback.exists(event.feedbackId());
+        boolean cleanup = event.kind() == ProductFeedbackEmailRequested.Kind.CLEANUP;
+        // Only the steps still waiting are listed; an admin may have confirmed some before a retry.
+        List<String> waiting = cleanup ? feedback.waitingCleanupIssues(listed(event)) : List.of();
+        boolean current = cleanup ? !waiting.isEmpty() : feedback.exists(event.feedbackId());
         if (!clock.instant().isBefore(event.expiresAt()) || !current) {
             metrics.record(EmailKind.PRODUCT_FEEDBACK, Outcome.EXPIRED);
             return;
@@ -64,7 +67,9 @@ public class ProductFeedbackEmailListener {
                         "unsubscribeUrl",
                         unsubscribeLinks.confirmationUrl(token.get()),
                         "feedbackKind",
-                        event.kind().name()));
+                        event.kind().name(),
+                        "cleanupIssues",
+                        waiting));
         var result = gateway.send(new EmailMessage(
                 EmailKind.PRODUCT_FEEDBACK,
                 to.get(),
@@ -75,5 +80,10 @@ public class ProductFeedbackEmailListener {
         if (result.outcome().retryable()) {
             throw new NotificationDeliveryUnavailableException(EmailKind.PRODUCT_FEEDBACK, event.accountId());
         }
+    }
+
+    private static List<UUID> listed(ProductFeedbackEmailRequested event) {
+        List<UUID> ids = event.cleanupIds();
+        return ids == null ? List.of(event.feedbackId()) : ids;
     }
 }

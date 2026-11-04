@@ -1,7 +1,8 @@
 [(${subject})]
 
 [(#{${'email.product-feedback.' + feedbackKind}})]
-
+[# th:each="issue : ${cleanupIssues}"]- [(${issue})]
+[/]
 Open product feedback: [(${webappUrl})]/admin/feedback
 
 Unsubscribe from product-feedback email: [(${unsubscribeUrl})]

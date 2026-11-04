@@ -49,7 +49,10 @@ The card shows destination health, the draft count, the last filing time, and th
 A destination change is audited.
 It never redirects a report already queued for the previous repository.
 Those reports go to the admin email fallback with `DESTINATION_CHANGED`.
-Hephaestus refuses removal of a destination while followed issues or cleanup still need it.
+
+Hephaestus refuses to remove the private repository while a public issue can still be made private.
+It also refuses while erasure cleanup still has to move a public issue there.
+You can replace it with another private repository.
 
 ## Route reports
 
@@ -108,7 +111,7 @@ An uncertain GitHub response requires reconciliation before another write.
 Do not create another report or clear its state to bypass that check.
 
 Admin email covers every report that is not on GitHub: no destination, or filing stopped.
-It also announces each erasure step that needs a maintainer.
+It also lists the erased reports' issues that need a maintainer, in one email per cleanup run.
 It carries the kind and a link, never the report text or attached context.
 Active instance admins need a verified address and the relevant email subscription to receive it.
 Without email delivery, the saved report remains available in the console.
