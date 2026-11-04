@@ -163,6 +163,8 @@ public interface ActivityLedgerRepository extends Repository<ActivityEvent, UUID
             @Param("after") long after,
             @Param("last") long last);
 
+    @WorkspaceAgnostic("Provider source rows are shared; reconcileRepository checks that the workspace monitors the"
+            + " repository before any chunk is written")
     @Modifying
     @Query(value = CANDIDATES + """
             INSERT INTO activity_event
