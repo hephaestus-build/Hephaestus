@@ -31,11 +31,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResp
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler.HandleResult;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.metrics.GitLabMetrics;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabAdmissionTestFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -110,6 +112,10 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
 
     private GitLabDeletionSweepService service;
 
+    private final GitLabNoteReconciliationService noteReconciliation = mock(GitLabNoteReconciliationService.class);
+
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+
     /** Responses handed to the client in order, so a multi-page listing can be scripted. */
     private final Deque<Mono<ClientGraphQlResponse>> scriptedResponses = new ArrayDeque<>();
 
@@ -122,10 +128,9 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
                 Duration.ZERO,
                 Duration.ofMinutes(5));
 
-        var noteReconciliation = mock(GitLabNoteReconciliationService.class);
         lenient()
                 .when(noteReconciliation.reconcileRepository(anyLong(), any(), any(), any()))
-                .thenReturn(new GitLabNoteReconciliationService.Outcome(0, false));
+                .thenReturn(new GitLabNoteReconciliationService.Outcome(0, false, 0));
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
         lenient().when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         service = new GitLabDeletionSweepService(
@@ -139,7 +144,8 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
                 new TransactionTemplate(transactionManager),
                 noteReconciliation,
                 mock(SyncTargetProvider.class),
-                projectAdmission);
+                projectAdmission,
+                meters);
         // Default: the scope is connected to the repository's instance and may still write it.
         lenient().when(actorSelector.connectedProviderId(SCOPE_ID)).thenReturn(Optional.of(PROVIDER_ID));
         lenient()
@@ -293,6 +299,22 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
                     .tombstonePullRequestsByRepositoryIdAndNumbers(eq(REPO_ID), captor.capture(), any(Instant.class));
             assertThat(captor.getValue()).containsExactly(11);
             assertThat(outcome.mergeRequestsTombstoned()).isEqualTo(1);
+        }
+
+        @Test
+        void shouldCountTheNoteParentsThatTheSweepCouldNotCheck() {
+            scriptedResponses.add(Mono.just(issuePage(List.of(1), false, 1)));
+            scriptedResponses.add(Mono.just(mergeRequestPage(List.of(), false, 0)));
+            stubLocalNumbers(List.of(1), List.of());
+            when(noteReconciliation.reconcileRepository(anyLong(), any(), any(), any()))
+                    .thenReturn(new GitLabNoteReconciliationService.Outcome(0, true, 3));
+
+            var outcome = service.sweepRepository(SCOPE_ID, repository(), handle);
+
+            assertThat(outcome.skipped()).isTrue();
+            assertThat(meters.counter(GitLabMetrics.GITLAB_NOTE_RECONCILIATION_UNVERIFIED)
+                            .count())
+                    .isEqualTo(3);
         }
 
         @Test

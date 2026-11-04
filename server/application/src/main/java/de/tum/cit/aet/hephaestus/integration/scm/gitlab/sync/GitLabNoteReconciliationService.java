@@ -90,7 +90,8 @@ public class GitLabNoteReconciliationService {
         this.client = builder.build();
     }
 
-    public record Outcome(int removed, boolean skipped) {}
+    /** {@code unverified} counts the parents whose notes could not be checked; the next reconciliation checks them. */
+    public record Outcome(int removed, boolean skipped, int unverified) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record Note(long id) {}
@@ -99,7 +100,7 @@ public class GitLabNoteReconciliationService {
         return admission
                 .capture(workspaceId, repository)
                 .map(read -> reconcileRepository(workspaceId, repository, handle, read))
-                .orElseGet(() -> new Outcome(0, false));
+                .orElseGet(() -> new Outcome(0, false, 0));
     }
 
     public Outcome reconcileRepository(
@@ -107,10 +108,11 @@ public class GitLabNoteReconciliationService {
             Repository repository,
             @Nullable SyncExecutionHandle handle,
             GitLabProjectAdmission.ProjectRead read) {
-        if (!admission.current(read)) return new Outcome(0, false);
-        if (!workspaceLinks.mayWriteRepository(workspaceId, repository)) return new Outcome(0, true);
+        if (!admission.current(read)) return new Outcome(0, false, 0);
+        if (!workspaceLinks.mayWriteRepository(workspaceId, repository)) return new Outcome(0, true, 0);
         int removed = 0;
         boolean skipped = false;
+        int unverified = 0;
         // Note deletion need not update its parent; inspect all stored live parents.
         // Keyset pagination tolerates parents inserted during the traversal.
         long after = 0;
@@ -118,14 +120,33 @@ public class GitLabNoteReconciliationService {
             List<Issue> parents = issues.findLiveNoteParents(repository.getId(), after, PageRequest.of(0, 100));
             if (parents.isEmpty()) break;
             for (Issue parent : parents) {
-                if (cancelled(handle)) return new Outcome(removed, true);
+                if (cancelled(handle)) {
+                    reportUnverified(workspaceId, repository, unverified);
+                    return new Outcome(removed, true, unverified);
+                }
                 Outcome outcome = reconcileParent(workspaceId, repository, parent, handle, read);
                 removed += outcome.removed();
                 skipped |= outcome.skipped();
+                unverified += outcome.unverified();
                 after = parent.getId();
             }
         }
-        return new Outcome(removed, skipped);
+        reportUnverified(workspaceId, repository, unverified);
+        return new Outcome(removed, skipped, unverified);
+    }
+
+    /**
+     * One record per repository pass. An unreachable instance fails every parent, and a record per parent then floods
+     * the log. The next reconciliation checks every parent again.
+     */
+    private static void reportUnverified(long workspaceId, Repository repository, int unverified) {
+        if (unverified == 0) return;
+        log.warn(
+                "GitLab note reconciliation incomplete, deleted notes stay until the next reconciliation:"
+                        + " workspaceId={}, repositoryId={}, parentsUnverified={}",
+                workspaceId,
+                repository.getId(),
+                unverified);
     }
 
     public Outcome reconcileParent(
@@ -133,7 +154,7 @@ public class GitLabNoteReconciliationService {
         return admission
                 .capture(workspaceId, repository)
                 .map(read -> reconcileParent(workspaceId, repository, parent, handle, read))
-                .orElseGet(() -> new Outcome(0, false));
+                .orElseGet(() -> new Outcome(0, false, 0));
     }
 
     public Outcome reconcileParent(
@@ -144,7 +165,7 @@ public class GitLabNoteReconciliationService {
             GitLabProjectAdmission.ProjectRead read) {
         if (parent.getRepository() == null
                 || !parent.getRepository().getId().equals(repository.getId())
-                || !workspaceLinks.mayWriteRepository(workspaceId, repository)) return new Outcome(0, true);
+                || !workspaceLinks.mayWriteRepository(workspaceId, repository)) return new Outcome(0, true, 0);
         // Snapshot candidates before network reads so concurrent inserts cannot be deleted.
         var localComments = comments.findNoteIdsByParentId(parent.getId());
         var localDiff = parent instanceof PullRequest
@@ -153,7 +174,7 @@ public class GitLabNoteReconciliationService {
         var localThreads = parent instanceof PullRequest
                 ? threads.findRecentIdsByPullRequestId(parent.getId(), Pageable.unpaged())
                 : List.<Long>of();
-        if (localComments.isEmpty() && localDiff.isEmpty() && localThreads.isEmpty()) return new Outcome(0, false);
+        if (localComments.isEmpty() && localDiff.isEmpty() && localThreads.isEmpty()) return new Outcome(0, false, 0);
         try {
             Set<Long> upstream = listNotes(
                     workspaceId,
@@ -161,8 +182,9 @@ public class GitLabNoteReconciliationService {
                     parent.getNumber(),
                     parent instanceof PullRequest,
                     handle);
-            if (!admission.current(read)) return new Outcome(0, false);
-            if (upstream == null || cancelled(handle)) return new Outcome(0, true);
+            if (!admission.current(read)) return new Outcome(0, false, 0);
+            if (cancelled(handle)) return new Outcome(0, true, 0);
+            if (upstream == null) return new Outcome(0, true, 1);
             List<Long> staleComments = localComments.stream()
                     .filter(c -> !upstream.contains(c.getNativeId()))
                     .map(c -> c.getId())
@@ -188,7 +210,10 @@ public class GitLabNoteReconciliationService {
                     parent.getNumber(),
                     parent instanceof PullRequest,
                     missingNativeIds,
-                    handle)) return new Outcome(0, admission.current(read));
+                    handle)) {
+                boolean unverified = admission.current(read) && !cancelled(handle);
+                return new Outcome(0, admission.current(read), unverified ? 1 : 0);
+            }
             Integer removed = transactions.execute(status -> {
                 if (cancelled(handle)
                         || !admission.hold(read)
@@ -223,11 +248,15 @@ public class GitLabNoteReconciliationService {
                 }
                 return count;
             });
-            return new Outcome(Objects.requireNonNull(removed), false);
+            return new Outcome(Objects.requireNonNull(removed), false, 0);
         } catch (RuntimeException e) {
-            if (!admission.current(read)) return new Outcome(0, false);
-            log.warn("GitLab note reconciliation incomplete: workspaceId={}, parentId={}", workspaceId, parent.getId());
-            return new Outcome(0, true);
+            if (!admission.current(read)) return new Outcome(0, false, 0);
+            log.debug(
+                    "GitLab note reconciliation failed for parent: workspaceId={}, parentId={}, error={}",
+                    workspaceId,
+                    parent.getId(),
+                    e.getClass().getSimpleName());
+            return new Outcome(0, true, 1);
         }
     }
 

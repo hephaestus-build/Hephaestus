@@ -15,9 +15,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.metrics.GitLabMetrics;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -125,6 +128,7 @@ public class GitLabDeletionSweepService {
 
     private final SyncTargetProvider syncTargetProvider;
     private final GitLabNoteReconciliationService noteReconciliation;
+    private final Counter unverifiedNoteParents;
     private final IssueRepository issueRepository;
     private final RepositoryRepository repositoryRepository;
     private final GitLabGraphQlClientProvider graphQlClientProvider;
@@ -145,8 +149,12 @@ public class GitLabDeletionSweepService {
             TransactionTemplate transactionTemplate,
             GitLabNoteReconciliationService noteReconciliation,
             SyncTargetProvider syncTargetProvider,
-            GitLabProjectAdmission admission) {
+            GitLabProjectAdmission admission,
+            MeterRegistry meters) {
         this.admission = admission;
+        this.unverifiedNoteParents = Counter.builder(GitLabMetrics.GITLAB_NOTE_RECONCILIATION_UNVERIFIED)
+                .description("GitLab issues and merge requests whose note deletions a sweep could not check")
+                .register(meters);
         this.syncTargetProvider = syncTargetProvider;
         this.noteReconciliation = noteReconciliation;
         this.issueRepository = issueRepository;
@@ -448,6 +456,7 @@ public class GitLabDeletionSweepService {
         }
 
         var noteOutcome = noteReconciliation.reconcileRepository(scopeId, repository, handle, read);
+        unverifiedNoteParents.increment(noteOutcome.unverified());
         if (!admission.current(read)) return SweepOutcome.NOTHING;
         return new SweepOutcome(
                 issuesTombstoned, mergeRequestsTombstoned, noteOutcome.removed(), skipped || noteOutcome.skipped());

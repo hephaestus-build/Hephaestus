@@ -32,9 +32,13 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -186,6 +190,27 @@ class GitLabNoteReconciliationIntegrationTest extends AbstractWorkspaceIntegrati
         assertThat(result.removed()).isEqualTo(1);
         assertThat(comments.findById(note.getId())).isPresent();
         assertThat(comments.findById(other.getId())).isEmpty();
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void shouldReportEveryUnverifiedParentOfARepositoryInOneRecordWhenGitLabFailsEachRead(CapturedOutput output) {
+        var issueNote = comment(issue, 5300);
+        var mrNote = comment(mr, 5301);
+        var service = service(request ->
+                Mono.just(ClientResponse.create(HttpStatus.SERVICE_UNAVAILABLE).build()));
+
+        var result = service.reconcileRepository(workspaceId, repository, null);
+
+        assertThat(result.skipped()).isTrue();
+        assertThat(result.unverified()).isEqualTo(2);
+        assertThat(comments.findById(issueNote.getId())).isPresent();
+        assertThat(comments.findById(mrNote.getId())).isPresent();
+        String summary = "GitLab note reconciliation incomplete, deleted notes stay until the next reconciliation:"
+                + " workspaceId=" + workspaceId + ", repositoryId=" + repository.getId() + ", parentsUnverified=2";
+        assertThat(output.getOut()).contains(summary);
+        assertThat(output.getOut().split(Pattern.quote("GitLab note reconciliation incomplete"), -1))
+                .hasSize(2);
     }
 
     @Test
