@@ -69,7 +69,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 
 - Use Java 21 features where they simplify code. Records, pattern matching, and sealed hierarchies improve readability.
 - Keep controllers thin. Push orchestration into services and prefer constructor helpers over static util classes.
-- Expose dedicated DTO mappers in the package instead of sprinkling conversion logic across layers.
+- A read returns a record shaped like the screen from its query, so it needs no mapper. [Read and write the database](./read-and-write-the-database.mdx) owns the pattern.
 - Treat `Optional` as a signal for missing data. Avoid returning `null` from repository methods.
 
 ### Null safety
@@ -124,7 +124,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 ## Performance reminders
 
 - Batch network calls and paginate large results.
-- Cache expensive computations when you reuse them. TanStack Query handles client caching. Use memoized services or projections on the server.
+- TanStack Query handles client caching. On the server, make a slow read fast with its query, its shape or its index, not with a cache.
 - Measure before tuning. Add logging or metrics when you touch critical latency paths.
 - Profile React work with the DevTools profiler and Chrome Performance panel. Profile Java code with JFR and async-profiler.
 

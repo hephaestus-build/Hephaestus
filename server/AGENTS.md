@@ -177,6 +177,12 @@ Never write cleanup that another test depends on having run.
   A value the server never sends is typed as one it always sends. Use
   `@Nullable T`.
 
+## Database reads and writes
+
+A read returns a record from a JPQL `select new` or a native query, and an entity is for a write.
+Declare every association lazy.
+`docs/contributor/read-and-write-the-database.mdx` owns the rules and the cost tests (ADR 0076).
+
 ## Schema changes
 
 Procedure: `docs/contributor/database-migration.mdx`. What the drift gate reads from an entity:

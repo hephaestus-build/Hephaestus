@@ -64,6 +64,7 @@ const sidebars: SidebarsConfig = {
 				"sync-lifecycle",
 				"database-schema",
 				"database-migration",
+				"read-and-write-the-database",
 				"activity-people-aggregate",
 				"instance-admin",
 				"product-feedback",
