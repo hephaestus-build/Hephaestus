@@ -625,7 +625,11 @@ await test("a release package ships the alert rules without their promtool cases
 	const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-release-chart-"));
 	t.after(async () => rm(directory, { recursive: true, force: true }));
 	const packaged = await packageReleaseChart(prepared.release.version, chart, prepared, directory);
-	const listing = spawnSync("tar", ["-tzf", packaged], { encoding: "utf8" });
+	// A relative name: GNU tar on Windows reads the "C:" of an absolute path as a remote host.
+	const listing = spawnSync("tar", ["-tzf", path.basename(packaged)], {
+		cwd: path.dirname(packaged),
+		encoding: "utf8",
+	});
 	assert.equal(listing.status, 0, listing.stderr);
 	const files = listing.stdout.split("\n");
 	assert.ok(files.includes("hephaestus/files/hephaestus-alerts.yml"), "the rules");
