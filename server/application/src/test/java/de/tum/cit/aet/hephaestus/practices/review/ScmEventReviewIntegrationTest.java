@@ -127,6 +127,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -136,6 +137,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -1905,6 +1907,228 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                                         head,
                                         pull.getBaseRefOid()),
                         GitHubPullRequestDTO.class);
+    }
+
+    /**
+     * An item row is locked with {@code FOR NO KEY UPDATE}. Admission inserts review rows whose foreign keys take
+     * {@code FOR KEY SHARE} on the item, so a stronger lock on the item would block admission.
+     */
+    @Test
+    void shouldLockTheItemRowWithoutBlockingAForeignKeyToIt() throws Exception {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var held = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var holder =
+                Executors.newSingleThreadExecutor(Thread.ofPlatform().daemon().factory());
+        try {
+            Future<?> locked = holder.submit(() -> transactions.executeWithoutResult(ignored -> {
+                writer.lock(prepared.item().workspaceId(), prepared.item().itemId());
+                held.countDown();
+                awaitLatch(release);
+            }));
+            awaitLatch(held);
+
+            Long shared = transactions.execute(ignored -> {
+                jdbc.execute("SET LOCAL lock_timeout = '2s'");
+                return jdbc.queryForObject(
+                        "SELECT id FROM item WHERE id = ? FOR KEY SHARE",
+                        Long.class,
+                        prepared.item().itemId());
+            });
+
+            assertThat(shared).isEqualTo(prepared.item().itemId());
+            release.countDown();
+            locked.get(20, TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            holder.shutdownNow();
+        }
+    }
+
+    /**
+     * Pushes to several pull requests of one workspace arrive at once. Every occasion is decided, and each pull request
+     * gets one review: the later pushes wait for it.
+     */
+    @Test
+    void shouldDecideEveryOccasionOfABurstOnSeveralItemsWithOneReviewEach() throws Exception {
+        var first = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        var items = new ArrayList<>(List.of(first));
+        for (int number = 4; number < 7; number++) items.add(anotherPullRequest(first, number));
+
+        burst(items, 3);
+
+        for (var item : items) {
+            assertThat(synchronizations(item))
+                    .hasSize(3)
+                    .noneMatch(occasion -> occasion.getState() == ItemEventState.RECORDED);
+            assertThat(measuringReviews(item)).hasSize(1);
+        }
+    }
+
+    /**
+     * A person asks for a review of the pull request while its pushes are decided. Admission serializes both on the
+     * workspace row: every occasion is decided, and the pull request has one review that measures the practice.
+     */
+    @Test
+    void shouldKeepOneMeasuringReviewWhenAPersonRequestsOneDuringABurst() throws Exception {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        long workspace = prepared.item().workspaceId();
+        long requester = memberAccount(workspace);
+        var executor =
+                Executors.newSingleThreadExecutor(Thread.ofPlatform().daemon().factory());
+        try {
+            Future<?> manual = executor.submit(() -> {
+                try {
+                    service.request(ReviewRequest.builder()
+                            .workspaceId(workspace)
+                            .itemId(prepared.item().itemId())
+                            .kind(ReviewKind.ITEM)
+                            .version(prepared.version())
+                            .origin(ReviewOrigin.REQUEST)
+                            .requestedById(requester)
+                            .practiceIds(List.of())
+                            .build());
+                } catch (ReviewRequestRejected refused) {
+                    // A push admitted its review first, or moved the work past the requested version.
+                }
+                return null;
+            });
+
+            burst(List.of(prepared), 3);
+            manual.get(20, TimeUnit.SECONDS);
+
+            assertThat(synchronizations(prepared))
+                    .hasSize(3)
+                    .noneMatch(occasion -> occasion.getState() == ItemEventState.RECORDED);
+            assertThat(measuringReviews(prepared)).hasSize(1);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private List<ItemEvent> synchronizations(Prepared prepared) {
+        return itemEvents(prepared).stream()
+                .filter(occasion -> occasion.getName().equals(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED.value()))
+                .toList();
+    }
+
+    private List<Review> measuringReviews(Prepared prepared) {
+        return itemReviews(prepared).stream()
+                .filter(review ->
+                        review.getStatus() == ReviewStatus.QUEUED || review.getStatus() == ReviewStatus.RUNNING)
+                .toList();
+    }
+
+    /**
+     * Delivers {@code rounds} pushes to each item, one thread per item and round. Each thread holds two connections
+     * (the delivery and its synchronous listener), so four threads fit the test pool.
+     */
+    private void burst(List<Prepared> items, int rounds) throws Exception {
+        var pool = Executors.newFixedThreadPool(4, Thread.ofPlatform().daemon().factory());
+        try {
+            var deliveries = new ArrayList<Future<?>>();
+            var go = new CountDownLatch(1);
+            for (int round = 0; round < rounds; round++)
+                for (int index = 0; index < items.size(); index++) {
+                    var item = items.get(index);
+                    var payload = pullRequestPayload(
+                            item,
+                            String.format("%040x", 0xabc000L + round * 100L + index),
+                            Instant.now().plusSeconds(60L + round * 100L + index));
+                    deliveries.add(pool.submit(() -> {
+                        awaitLatch(go);
+                        deliver(item, "synchronize", payload);
+                        return null;
+                    }));
+                }
+            go.countDown();
+            for (var delivery : deliveries) delivery.get(60, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** A second pull request in the workspace of {@code first}, on its repository. */
+    private Prepared anotherPullRequest(Prepared first, int number) {
+        return Objects.requireNonNull(transactions.execute(ignored -> {
+            var original = pulls.findById(Objects.requireNonNull(first.item().sourceId()))
+                    .orElseThrow();
+            var repository = Objects.requireNonNull(original.getRepository());
+            var pull = new PullRequest();
+            pull.setNativeId(nativeId());
+            pull.setProvider(original.getProvider());
+            pull.setRepository(repository);
+            pull.setNumber(number);
+            pull.setTitle("A bounded change");
+            pull.setBody("Describe this change");
+            pull.setState(Issue.State.OPEN);
+            pull.setDraft(false);
+            pull.setAuthor(original.getAuthor());
+            pull.setHtmlUrl(repository.getHtmlUrl() + "/pull/" + number);
+            pull.setCreatedAt(Instant.now());
+            pull.setUpdatedAt(Instant.now());
+            pull.setBaseRefName("main");
+            pull.setHeadRefName("topic-" + number);
+            pull.setBaseRefOid("a".repeat(40));
+            pull.setHeadRefOid("b".repeat(40));
+            pull = pulls.saveAndFlush(pull);
+            var ref = writer.upsert(new ItemRegistration(
+                    first.item().workspaceId(),
+                    ScmItemEvents.PULL_REQUEST,
+                    pull.getId(),
+                    first.item().parentId(),
+                    null));
+            return new Prepared(ref, first.version(), first.name(), first.event());
+        }));
+    }
+
+    @Autowired
+    SqlStatementCounter statementCounter;
+
+    /** Admission reads the review scope, the members and the item's people once, not once per selected practice. */
+    @Test
+    void shouldReadScopeAndRolesOnceWhenAdmittingAReviewOfManyPractices() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        long one = admissionStatements(prepared, 1);
+        for (int number = 2; number <= 6; number++) addPractice(prepared, number);
+        long six = admissionStatements(prepared, 6);
+
+        // Each further practice adds only its own rows: the scope, the members and the item's people are read once.
+        assertThat(six - one).isLessThanOrEqualTo(5L * 2);
+    }
+
+    /** The statements of one manual review request of the item, rolled back so that the item can be requested again. */
+    private long admissionStatements(Prepared prepared, int practices) {
+        long workspace = prepared.item().workspaceId();
+        long requester = memberAccount(workspace);
+        return Objects.requireNonNull(transactions.execute(status -> {
+            var measured = statementCounter.measure(() -> service.request(ReviewRequest.builder()
+                    .workspaceId(workspace)
+                    .itemId(prepared.item().itemId())
+                    .kind(ReviewKind.ITEM)
+                    .version(prepared.version())
+                    .origin(ReviewOrigin.REQUEST)
+                    .requestedById(requester)
+                    .practiceIds(List.of())
+                    .build()));
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM review_practice WHERE review_id = ?",
+                            Integer.class,
+                            measured.value()))
+                    .isEqualTo(practices);
+            status.setRollbackOnly();
+            return measured.statements();
+        }));
+    }
+
+    private void addPractice(Prepared prepared, int number) {
+        var workspace = workspaces.findById(prepared.item().workspaceId()).orElseThrow();
+        var definition = DefinitionTestFixtures.definition(
+                ScmItemEvents.PULL_REQUEST, "Describe the work " + number, "Explain the work.", null);
+        versions.create(new PracticeVersionService.NewPractice(
+                workspace, "event-test-" + number, ScmItemEvents.PULL_REQUEST, definition, null, number, null));
     }
 
     private void deliver(Prepared prepared, String action, GitHubPullRequestDTO payload) {
