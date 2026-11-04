@@ -11,6 +11,7 @@ import {
 	updateConnectionStatusMutation,
 	updateOutlineCollectionStateMutation,
 } from "@/api/@tanstack/react-query.gen";
+import type { ConnectionSummary } from "@/api/types.gen";
 import type { OutlineMirrorState } from "@/components/admin/integrations/outline/OutlineCollectionsSection";
 import type { OutlineConnectInput } from "@/components/admin/integrations/outline/OutlineConnectCard";
 import { syncPollInterval } from "@/components/admin/integrations/sync-format";
@@ -21,6 +22,19 @@ import { problemDetailOf } from "@/lib/problem-detail";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 const TOKEN_STATUS_STALE_MS = 5 * 60_000;
+
+function newestConnection(connections: ConnectionSummary[]): ConnectionSummary | undefined {
+	let newest: ConnectionSummary | undefined;
+	for (const connection of connections) {
+		if (
+			newest === undefined ||
+			(connection.createdAt?.getTime() ?? 0) > (newest.createdAt?.getTime() ?? 0)
+		) {
+			newest = connection;
+		}
+	}
+	return newest;
+}
 
 export function useOutlineIntegration(workspaceSlug: string) {
 	const queryClient = useQueryClient();
@@ -33,9 +47,15 @@ export function useOutlineIntegration(workspaceSlug: string) {
 	});
 	const connections = connectionsQuery.data;
 
-	const outlineConnection = (connections ?? []).find(
-		(connection) => connection.kind === "OUTLINE" && connection.state !== "UNINSTALLED",
+	const outlineConnections = (connections ?? []).filter(
+		(connection) => connection.kind === "OUTLINE",
 	);
+	const outlineConnection = outlineConnections.find(
+		(connection) => connection.state !== "UNINSTALLED",
+	);
+	// With no live connection, the newest uninstalled one still says whether its provider teardown
+	// was confirmed. The integration catalog picks the connection by the same rule.
+	const reportingConnection = outlineConnection ?? newestConnection(outlineConnections);
 	const hasConnection = outlineConnection != null;
 	const isConnectionActive = outlineConnection?.state === "ACTIVE";
 	const connectionId = outlineConnection?.id;
@@ -221,7 +241,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		connectionState: outlineConnection?.state,
 		credentialsUnreadableSince: outlineConnection?.credentialsUnreadableSince,
 		providerCleanupUnconfirmed:
-			outlineConnection?.attentionProblem === "PROVIDER_CLEANUP_UNCONFIRMED",
+			reportingConnection?.attentionProblem === "PROVIDER_CLEANUP_UNCONFIRMED",
 		isLoading: connectionsQuery.isLoading,
 		connectionsError: connectionsQuery.error,
 		retryConnections: () => {

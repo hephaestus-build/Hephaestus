@@ -72,7 +72,7 @@ public class WorkspaceAlertEmailListener {
                     case PROVIDER_CLEANUP_UNCONFIRMED ->
                         switch (change.kind()) {
                             case GITHUB ->
-                                "We could not confirm that GitHub removed the app from the disconnected organization. Uninstall the Hephaestus app in the organization’s GitHub settings.";
+                                "We could not confirm that GitHub removed the app from the disconnected account. Uninstall the Hephaestus app in the GitHub settings of that organization or personal account.";
                             case GITLAB ->
                                 "We could not confirm that GitLab removed the webhook of the disconnected group. Delete the Hephaestus webhook in the group’s GitLab settings, and revoke the token you gave Hephaestus.";
                             case SLACK ->
