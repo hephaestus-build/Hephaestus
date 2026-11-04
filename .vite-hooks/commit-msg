@@ -1,2 +1,2 @@
 #!/bin/sh
-exec vp exec commitlint --edit "$1"
+exec "$(dirname -- "$0")/run" commit-msg vp exec commitlint --edit "$1"

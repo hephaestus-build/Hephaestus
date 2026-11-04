@@ -102,21 +102,29 @@ rename are evaluated. Git documents the underlying change statuses in
 
 ## Pre-push hook
 
-`vp install` configures the Vite+ hook dispatcher, which runs the project hooks in `.vite-hooks/`.
-It preserves a custom `core.hooksPath` and the local preference set by `vp hooks disable`.
-`vp hooks enable` re-enables the dispatcher. `vp hooks status` shows which hooks are active.
-
-Every worktree of a clone shares `core.hooksPath`.
-The install sets it to the dispatcher's path relative to the worktree root.
-Git resolves a relative hooks path against the worktree that runs the hook
+Git runs the hooks in the tracked `.vite-hooks/` directory.
+Every worktree of a clone shares `core.hooksPath`, and Git resolves a relative path against the worktree that runs the hook
 ([`core.hooksPath`](https://git-scm.com/docs/git-config#Documentation/git-config.txt-corehooksPath)).
-So each worktree runs its own dispatcher, its own hooks and its own `vp`.
-The install removes an absolute dispatcher path, which older Vite+ releases wrote, before it configures the relative one.
+`vp install` sets the path to `.vite-hooks`, which exists in every checkout.
+Thus, a new worktree runs its own hooks from its first checkout, before any install.
 
-Each worktree needs its own `vp install`, which creates that worktree's dispatcher in `.vite-hooks/`.
-A worktree without one has no dispatcher, so Git runs no hook in it.
-`vp hooks status` reports the dispatcher as missing.
-It never falls back to another checkout's `vp` or to one on `PATH`, because that `vp` may not read this worktree's configuration.
+The install replaces a path to this repository's hooks in one checkout, and a path to the dispatcher that Vite+ generates in each worktree.
+An absolute path runs one worktree's hooks and `vp` in every other worktree.
+Git runs no hook, without a warning, in a worktree where the dispatcher is missing.
+
+The install also removes each worktree's own `core.hooksPath` override that names these hooks, in every worktree of the clone.
+Thus, no worktree depends on which checkout last ran an install.
+The install keeps a contributor's own hooks directory.
+Do not set `core.hooksPath` by hand.
+
+Each hook starts through `.vite-hooks/run`, which runs the `vp` that the install of that worktree put in its `node_modules`.
+In a worktree without an install, the hook refuses the commit or push and says to install, instead of skipping.
+The install and `vp run check:affected` warn when the hooks path that Git uses in a worktree does not exist.
+
+To skip the hooks once, set `VP_GIT_HOOKS=0`.
+`git config vp.hooks.disabled true` turns them off in a clone, and the install keeps that setting.
+Do not run `vp hooks enable`: it points every worktree back at the generated dispatcher.
+A worktree on a branch from before the tracked launcher runs its old hook directly, so it needs `vp` on `PATH` until you rebase it.
 
 The pre-push hook runs `vp run check:push` with one task worker.
 It compares the same paths as `check:affected` and runs selected format, lint, TypeScript and prose checks.

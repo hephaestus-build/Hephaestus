@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { parse } from "yaml";
 
+import { missingHooksWarning } from "./enable-hooks.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { isRecord } from "./lib/json.ts";
@@ -291,5 +292,10 @@ function main(): void {
 }
 
 if (import.meta.main) {
+	// The pre-push hook repeats these checks; say so when Git would skip it.
+	const warning = missingHooksWarning();
+	if (warning !== undefined) {
+		process.stderr.write(warning);
+	}
 	main();
 }

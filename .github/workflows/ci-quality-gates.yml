@@ -132,7 +132,7 @@ jobs:
           run-install: false
       - run: vp install --frozen-lockfile
       - run: vp run gate:toolchain
-      - run: test "$(git config core.hooksPath)" = ".vite-hooks/_"
+      - run: test "$(git config core.hooksPath)" = ".vite-hooks"
 
   webapp-stories:
     name: "Webapp: Stories"

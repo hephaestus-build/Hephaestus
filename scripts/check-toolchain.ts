@@ -66,13 +66,13 @@ if (typeof vitePlusPin !== "string" || !/^\d+\.\d+\.\d+$/u.test(vitePlusPin)) {
 const vitePlus: string = vitePlusPin;
 const huskyFiles = execFileSync("git", ["ls-files", ".husky"], { encoding: "utf8" }).trim();
 if ("husky" in devDependencies || huskyFiles !== "") {
-	throw new Error("Git hooks run through the Vite+ dispatcher; remove husky");
+	throw new Error("Git hooks run from the tracked .vite-hooks; remove husky");
 }
 const { scripts } = manifest;
 if (!isRecord(scripts) || scripts.prepare !== "node scripts/enable-hooks.ts") {
-	throw new Error("package.json#scripts.prepare must enable the Vite+ hook dispatcher");
+	throw new Error("package.json#scripts.prepare must point Git at the tracked hooks");
 }
-for (const hook of ["commit-msg", "pre-push"]) {
+for (const hook of ["commit-msg", "pre-push", "run"]) {
 	const file = `.vite-hooks/${hook}`;
 	// Git carries the executable bit; a Windows checkout does not, so the index is the answer.
 	const indexed = execFileSync("git", ["ls-files", "-s", file], { encoding: "utf8" });

@@ -66,7 +66,7 @@ vp run schema:nats --event push --event pull_request:opened
 
 The retained shell files run where shell is already part of the runtime:
 
-- `.vite-hooks/commit-msg` and `.vite-hooks/pre-push` are the project-owned Git hooks the Vite+ dispatcher runs.
+- `.vite-hooks/commit-msg` and `.vite-hooks/pre-push` are the Git hooks, and `.vite-hooks/run` starts them with the worktree's own `vp`.
 - `deploy/platform/k3s-install.sh` installs an operator deployment before the repository toolchain is available; its test
   orchestration is typed TypeScript under `scripts/`.
 - `webapp/docker/entrypoint.sh` prepares assets in the final nginx image, which does not contain Node.

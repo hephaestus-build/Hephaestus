@@ -110,7 +110,7 @@ jobs:
         if: (inputs.leg == 'tooling' || inputs.leg == 'windows') && !cancelled()
         run: |
           node scripts/enable-hooks.ts
-          test "$(git config core.hooksPath)" = ".vite-hooks/_"
+          test "$(git config core.hooksPath)" = ".vite-hooks"
           git config user.name ci
           git config user.email ci@example.invalid
           if git commit --allow-empty --quiet -m "bad message"; then
@@ -119,7 +119,7 @@ jobs:
           fi
           git commit --allow-empty --quiet -m "chore(ci): probe the commit-msg hook"
 
-      # The dispatcher prepends node_modules/.bin to PATH, so the launcher is shadowed there; the
+      # The hook launcher prepends node_modules/.bin to PATH, so the launcher is shadowed there; the
       # gate itself must not run a second time.
       - name: Pre-push hook
         if: (inputs.leg == 'tooling' || inputs.leg == 'windows') && !cancelled()
