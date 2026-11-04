@@ -388,8 +388,8 @@ erDiagram
         BIGINT author_id FK
         BIGINT pull_request_id FK
         TEXT body
-        TIMESTAMP created_at
-        TIMESTAMP updated_at
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
         BOOLEAN author_can_push_to_repository
         BIGINT native_id UK "NOT NULL"
         BIGINT provider_id FK,UK "NOT NULL"
