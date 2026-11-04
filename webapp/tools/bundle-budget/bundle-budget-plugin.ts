@@ -1,31 +1,18 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { Plugin } from "vite";
 
 import { BUNDLE_METADATA_FILE } from "../bundle-packages.ts";
-import {
-	checkBudget,
-	bundleMetadata,
-	bundleSizes,
-	measure,
-	TOLERANCE_BYTES,
-	updatedBaseline,
-} from "./bundle-budget.ts";
+import { bundleMetadata, entryViolations, measure } from "./bundle-budget.ts";
 
 /**
- * Every page's cold load fetches the entry's static JavaScript before it renders, and a lazy chunk
- * fetches what it adds when its route or component first shows. With the router plugin's default
- * groupings, only a route's `component`, `errorComponent` and `notFoundComponent` are split: an
- * import that `validateSearch`, `beforeLoad`, `loader` or `pendingComponent` uses stays in the entry,
- * with everything it imports.
+ * Every page's cold load fetches the entry's static JavaScript before it renders. With the router
+ * plugin's default groupings, only a route's `component`, `errorComponent` and `notFoundComponent`
+ * are split: an import that `validateSearch`, `beforeLoad`, `loader` or `pendingComponent` uses stays
+ * in the entry, with everything it imports. Growth against the base build is
+ * `scripts/verify-webapp-build.ts`'s; this plugin holds what no build may do.
  */
-const BASELINE = new URL("baseline.json", import.meta.url);
-
-const BASELINE_PATH = "webapp/tools/bundle-budget/baseline.json";
-
-const UPDATE_COMMAND = "BUNDLE_BUDGET=update vp run build:webapp";
-
 const routeOnlyPackages = [
 	"@dnd-kit/core",
 	"@monaco-editor/react",
@@ -38,10 +25,6 @@ const routeOnlyPackages = [
 	"shiki",
 	"streamdown",
 ];
-
-async function readBaseline() {
-	return bundleSizes.parse(JSON.parse(await readFile(BASELINE, "utf8")));
-}
 
 export function bundleBudget(): Plugin {
 	let outDir = "";
@@ -59,34 +42,12 @@ export function bundleBudget(): Plugin {
 					JSON.parse(await readFile(path.join(outDir, BUNDLE_METADATA_FILE), "utf8")),
 				);
 				const measured = measure(metadata.chunks);
-				if (process.env.BUNDLE_BUDGET === "update") {
-					// A conflicted file holds merge markers, and this update is how to resolve it.
-					const recorded = await readBaseline().catch(() => undefined);
-					const updated = updatedBaseline(measured.sizes, recorded);
-					await writeFile(BASELINE, `${JSON.stringify(updated, null, "\t")}\n`);
-					this.info(`bundle budget: wrote ${BASELINE.pathname}`);
-					return;
-				}
-				const baseline = await readBaseline();
-				const { violations, lowerable } = checkBudget(measured, baseline, routeOnlyPackages);
+				const violations = entryViolations(measured, routeOnlyPackages);
 				if (violations.length > 0) {
-					throw new Error(
-						[
-							...violations,
-							`Growth of up to ${TOLERANCE_BYTES} bytes keeps the baseline. When the growth is intended, run \`${UPDATE_COMMAND}\` and commit ${BASELINE_PATH}.`,
-						].join("\n"),
-					);
-				}
-				if (lowerable.length > 0) {
-					this.info(
-						[
-							`bundle budget: the baseline can be lowered. \`${UPDATE_COMMAND}\` takes the saving, also in passing in the next pull request that touches ${BASELINE_PATH}.`,
-							...lowerable,
-						].join("\n"),
-					);
+					throw new Error(violations.join("\n"));
 				}
 				this.info(
-					`entry: ${measured.sizes.entry} gzip bytes; ${Object.keys(measured.sizes.lazy).length} lazy chunks within their baseline`,
+					`entry: ${measured.sizes.entry} gzip bytes; ${Object.keys(measured.sizes.lazy).length} lazy chunks`,
 				);
 			},
 		},

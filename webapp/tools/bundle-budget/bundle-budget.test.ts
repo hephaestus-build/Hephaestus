@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	type Acceptance,
+	acceptGrowth,
 	type BuiltChunk,
 	type BundleSizes,
-	checkBudget,
+	entryViolations,
+	growthViolations,
 	lazyKey,
 	measure,
+	ownAcceptances,
 	TOLERANCE_BYTES,
-	updatedBaseline,
 } from "./bundle-budget";
 
 const chunk = (overrides: Partial<BuiltChunk> & Pick<BuiltChunk, "fileName">): BuiltChunk => ({
@@ -61,116 +64,108 @@ describe("measure", () => {
 	});
 });
 
-describe("checkBudget", () => {
-	const measured = measure(build);
-	const baseline: BundleSizes = { entry: 400, lazy: { [PROFILE]: 450 } };
-	const kept = { violations: [], lowerable: [] };
-
-	it("keeps a build that grew within the tolerance", () => {
-		expect(checkBudget(measured, baseline, [])).toStrictEqual(kept);
-		expect(
-			checkBudget(measured, { entry: 400 - TOLERANCE_BYTES, lazy: { [PROFILE]: 450 } }, []),
-		).toStrictEqual(kept);
-	});
-
-	it("breaks on growth past the tolerance", () => {
-		expect(
-			checkBudget(measured, { entry: 400 - TOLERANCE_BYTES - 1, lazy: baseline.lazy }, []),
-		).toStrictEqual({
-			violations: [expect.stringContaining("The entry closure grew from")],
-			lowerable: [],
-		});
-	});
-
-	it("passes a saving and says the baseline can come down", () => {
-		expect(
-			checkBudget(measured, { entry: 400, lazy: { [PROFILE]: 450 + TOLERANCE_BYTES + 1 } }, []),
-		).toStrictEqual({
-			violations: [],
-			lowerable: [`${PROFILE} shrank from ${451 + TOLERANCE_BYTES} to 450 gzip bytes.`],
-		});
-	});
-
-	it("counts a new lazy chunk as growth from nothing", () => {
-		const large = measure([
-			...build.slice(0, 2),
-			chunk({
-				fileName: "profile.js",
-				isDynamicEntry: true,
-				facadeModule: PROFILE,
-				gzipBytes: TOLERANCE_BYTES + 1,
-			}),
-		]);
-		expect(checkBudget(large, { entry: 400, lazy: {} }, [])).toStrictEqual({
-			violations: [
-				`${PROFILE}, a new lazy chunk, grew from 0 to ${TOLERANCE_BYTES + 1} gzip bytes.`,
-			],
-			lowerable: [],
-		});
-		expect(checkBudget(measured, { entry: 400, lazy: {} }, [])).toStrictEqual(kept);
-	});
-
-	it("breaks when a lazy chunk is gone and the entry grew, and passes a removed one", () => {
-		const gone = { ...baseline.lazy, "src/routes/old.tsx": 10 };
-		expect(
-			checkBudget(measured, { entry: 400 - TOLERANCE_BYTES - 1, lazy: gone }, []).violations,
-		).toStrictEqual([
-			expect.stringContaining("The entry closure grew from"),
-			"src/routes/old.tsx is no longer a lazy chunk, and the entry grew: it may load with every page now.",
-		]);
-		expect(checkBudget(measured, { entry: 400, lazy: gone }, [])).toStrictEqual({
-			violations: [],
-			lowerable: ["src/routes/old.tsx is no longer a lazy chunk."],
-		});
-	});
-
+describe("entryViolations", () => {
 	it("breaks on a route-only package in the entry closure", () => {
-		expect(checkBudget(measured, baseline, ["react"]).violations).toStrictEqual([
+		expect(entryViolations(measure(build), ["react"])).toStrictEqual([
 			"react is in the entry closure; only the routes that use it may load it.",
 		]);
+		expect(entryViolations(measure(build), ["recharts"])).toStrictEqual([]);
 	});
 });
 
-describe("updatedBaseline", () => {
-	const baseline: BundleSizes = {
-		entry: 5000,
-		lazy: { "a.tsx": 5000, "b.tsx": 5000, "gone.tsx": 5 },
-	};
-	const checksClean = (measured: BundleSizes) => {
-		const updated = updatedBaseline(measured, baseline);
-		expect(checkBudget({ sizes: measured, entryPackages: [] }, updated, [])).toStrictEqual({
-			violations: [],
-			lowerable: [],
-		});
-		return updated;
-	};
+const accept = (load: string, gzipBytes: number): Acceptance => ({
+	load,
+	gzipBytes,
+	acceptedBy: "https://github.com/hephaestus-build/Hephaestus/pull/1",
+});
 
-	it("keeps a size that moved within the tolerance, in both directions", () => {
-		const updated = checksClean({
-			entry: 5000 + TOLERANCE_BYTES,
-			lazy: { "a.tsx": 5000 - TOLERANCE_BYTES, "b.tsx": 5003 },
-		});
-		expect(updated).toStrictEqual({ entry: 5000, lazy: { "a.tsx": 5000, "b.tsx": 5000 } });
+describe("growthViolations", () => {
+	const base: BundleSizes = { entry: 5000, lazy: { [PROFILE]: 5000 } };
+
+	it("passes growth within the tolerance of the base build, however far the base drifted", () => {
+		// Main measured this: earlier changes each grew the profile by less than the tolerance.
+		const drifted: BundleSizes = { entry: 5000, lazy: { [PROFILE]: 5000 + 950 } };
+		const head: BundleSizes = { entry: 5000, lazy: { [PROFILE]: 5000 + 950 + 300 } };
+		expect(growthViolations(head, drifted, [])).toStrictEqual([]);
+		expect(
+			growthViolations({ entry: 5000 + TOLERANCE_BYTES, lazy: base.lazy }, base, []),
+		).toStrictEqual([]);
 	});
 
-	it("records growth and savings past the tolerance, a new chunk, and no removed chunk", () => {
-		const measured: BundleSizes = {
-			entry: 5001 + TOLERANCE_BYTES,
-			lazy: { "a.tsx": 4999 - TOLERANCE_BYTES, "b.tsx": 5000, "new.tsx": 7 },
+	it("breaks on growth past the tolerance, unless this change accepts it", () => {
+		const head: BundleSizes = { entry: 5001 + TOLERANCE_BYTES, lazy: base.lazy };
+		expect(growthViolations(head, base, [])).toStrictEqual([
+			expect.stringContaining(`The entry closure grew from 5000 to ${5001 + TOLERANCE_BYTES}`),
+		]);
+		expect(growthViolations(head, base, [accept("entry", head.entry)])).toStrictEqual([]);
+		// An acceptance covers the size it records, not any growth of its load.
+		expect(
+			growthViolations({ ...head, entry: head.entry + TOLERANCE_BYTES + 1 }, base, [
+				accept("entry", head.entry),
+			]),
+		).toHaveLength(1);
+	});
+
+	it("counts a new lazy chunk as growth from nothing", () => {
+		const head: BundleSizes = {
+			entry: 5000,
+			lazy: { ...base.lazy, "new.tsx": TOLERANCE_BYTES + 1 },
 		};
-		expect(checksClean(measured)).toStrictEqual(measured);
+		expect(growthViolations(head, base, [])).toStrictEqual([
+			`new.tsx, a new lazy chunk, grew from 0 to ${TOLERANCE_BYTES + 1} gzip bytes.`,
+		]);
+		expect(growthViolations(head, base, [accept("new.tsx", TOLERANCE_BYTES + 1)])).toStrictEqual(
+			[],
+		);
+		expect(growthViolations({ entry: 5000, lazy: { "new.tsx": 10 } }, base, [])).toStrictEqual([]);
 	});
 
-	it("keeps every size of a build within the tolerance", () => {
-		const updated = checksClean({
-			entry: 5001,
-			lazy: { "a.tsx": 4999, "b.tsx": 5000, "gone.tsx": 5 },
-		});
-		expect(updated).toStrictEqual(baseline);
+	it("breaks when a lazy chunk is gone and the entry grew, and passes a removed one", () => {
+		const gone = { entry: 5000, lazy: { ...base.lazy, "old.tsx": 10 } };
+		expect(
+			growthViolations({ entry: 5001 + TOLERANCE_BYTES, lazy: base.lazy }, gone, []),
+		).toStrictEqual([
+			expect.stringContaining("The entry closure grew from"),
+			"old.tsx is no longer a lazy chunk, and the entry grew: it may load with every page now.",
+		]);
+		expect(growthViolations(base, gone, [])).toStrictEqual([]);
+	});
+});
+
+describe("ownAcceptances", () => {
+	const spent: Acceptance = { load: "a.tsx", gzipBytes: 9000, acceptedBy: "#1" };
+	const fresh: Acceptance = { load: "a.tsx", gzipBytes: 9500, acceptedBy: "#2" };
+
+	it("drops an acceptance that the base already holds: its growth is in the base build", () => {
+		expect(ownAcceptances([spent, fresh], [spent])).toStrictEqual([fresh]);
+		expect(ownAcceptances([spent], [spent])).toStrictEqual([]);
 	});
 
-	it("records the build when no baseline can be read", () => {
-		const measured: BundleSizes = { entry: 7, lazy: { "a.tsx": 8 } };
-		expect(updatedBaseline(measured, undefined)).toStrictEqual(measured);
+	it("keeps a spent acceptance from granting a later change growth past the base build", () => {
+		// The load shrank after #1 merged; a later change that grows it back past the tolerance fails.
+		const base: BundleSizes = { entry: 5000, lazy: { "a.tsx": 5000 } };
+		const head: BundleSizes = { entry: 5000, lazy: { "a.tsx": 9000 } };
+		expect(growthViolations(head, base, ownAcceptances([spent], [spent]))).toHaveLength(1);
+	});
+});
+
+describe("acceptGrowth", () => {
+	const base: BundleSizes = { entry: 5000, lazy: { "a.tsx": 5000, "b.tsx": 5000 } };
+
+	it("accepts each load that this change grew past the tolerance, by who accepts it, and then checks clean", () => {
+		const head: BundleSizes = {
+			entry: 5000 + TOLERANCE_BYTES,
+			lazy: { "a.tsx": 5001 + TOLERANCE_BYTES, "b.tsx": 5003, "new.tsx": 2 * TOLERANCE_BYTES },
+		};
+		const accepted = acceptGrowth(head, base, "#3");
+		expect(accepted).toStrictEqual([
+			{ load: "a.tsx", gzipBytes: 5001 + TOLERANCE_BYTES, acceptedBy: "#3" },
+			{ load: "new.tsx", gzipBytes: 2 * TOLERANCE_BYTES, acceptedBy: "#3" },
+		]);
+		expect(growthViolations(head, base, accepted)).toStrictEqual([]);
+	});
+
+	it("accepts nothing when no load grew past the tolerance", () => {
+		expect(acceptGrowth(base, base, "#3")).toStrictEqual([]);
 	});
 });
