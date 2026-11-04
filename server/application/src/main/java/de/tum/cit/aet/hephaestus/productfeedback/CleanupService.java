@@ -1,9 +1,12 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.auth.spi.ProductFeedbackAudit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssueUpdates;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
+import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.ProductFeedbackCleanupActionDTO;
+import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackCleanupNeedsActionEvent;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -13,14 +16,17 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Scrubs the issues of erased reports. A public issue first moves to the private repository; then its title and body
- * are replaced and it is closed. The app cannot delete an issue or its edit history, so a record that keeps failing
- * stays for a maintainer to finish by hand.
+ * Scrubs the issues of erased reports. A public issue first moves to the private repository when one can take it; then
+ * its title and body are replaced and it is closed. The app cannot delete an issue or its edit history, so each scrubbed
+ * issue, and each record that has not finished after {@link #MANUAL_AFTER}, becomes a manual step: the admins get an
+ * email, Needs action shows the locator, and the record stays until an admin confirms the step.
  */
 @Service
 @ConditionalOnServerRole
@@ -28,6 +34,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class CleanupService {
     private static final Logger log = LoggerFactory.getLogger(CleanupService.class);
     static final String ERASED = "Erased at the reporter's request";
+    static final Duration MANUAL_AFTER = Duration.ofDays(30);
 
     private final ProductFeedbackCleanupRepository cleanups;
     private final DestinationSettings destinations;
@@ -35,6 +42,8 @@ class CleanupService {
     private final ProductFeedbackIssueUpdates updates;
     private final TransactionTemplate transactions;
     private final ProductFeedbackMeters meters;
+    private final ApplicationEventPublisher events;
+    private final ProductFeedbackAudit audit;
     private final Clock clock;
 
     CleanupService(
@@ -44,6 +53,8 @@ class CleanupService {
             ProductFeedbackIssueUpdates updates,
             TransactionTemplate transactions,
             ProductFeedbackMeters meters,
+            ApplicationEventPublisher events,
+            ProductFeedbackAudit audit,
             Clock clock) {
         this.cleanups = cleanups;
         this.destinations = destinations;
@@ -51,6 +62,8 @@ class CleanupService {
         this.updates = updates;
         this.transactions = transactions;
         this.meters = meters;
+        this.events = events;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -65,28 +78,32 @@ class CleanupService {
 
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT2M")
     void cleanDue() {
-        Job job = transactions.execute(status -> cleanups.claimable(clock.instant())
-                .flatMap(cleanups::findById)
-                .map(row -> {
-                    // Pushes the next attempt out first, so a crash mid-way retries later instead of at once.
-                    row.setAttempts(row.getAttempts() + 1);
-                    row.setNextAttemptAt(
-                            clock.instant().plus(Duration.ofMinutes(Math.min(60, 5L * row.getAttempts()))));
-                    return new Job(
-                            row.getId(),
-                            new ProductFeedbackIssues.Repository(
-                                    row.getRepositoryId(),
-                                    "",
-                                    row.getRepository(),
-                                    row.getInstallationId(),
-                                    !row.isPublicIssue()),
-                            row.getMarker(),
-                            row.getIssueNumber(),
-                            row.getIssueNodeId(),
-                            row.isPublicIssue(),
-                            row.getSince());
-                })
-                .orElse(null));
+        Job job = transactions.execute(status -> {
+            Instant now = clock.instant();
+            ProductFeedbackCleanup row =
+                    cleanups.claimable(now).flatMap(cleanups::findById).orElse(null);
+            if (row == null) return null;
+            if (!row.getCreatedAt().plus(MANUAL_AFTER).isAfter(now)) {
+                needsMaintainer(row, ProductFeedbackCleanup.ManualStep.UNFINISHED, now);
+                return null;
+            }
+            // Pushes the next attempt out first, so a crash mid-way retries later instead of at once.
+            row.setAttempts(row.getAttempts() + 1);
+            row.setNextAttemptAt(now.plus(Duration.ofMinutes(Math.min(60, 5L * row.getAttempts()))));
+            return new Job(
+                    row.getId(),
+                    new ProductFeedbackIssues.Repository(
+                            row.getRepositoryId(),
+                            "",
+                            row.getRepository(),
+                            row.getInstallationId(),
+                            !row.isPublicIssue()),
+                    row.getMarker(),
+                    row.getIssueNumber(),
+                    row.getIssueNodeId(),
+                    row.isPublicIssue(),
+                    row.getSince());
+        });
         if (job == null) return;
         try {
             Long number = job.number();
@@ -127,12 +144,11 @@ class CleanupService {
             updates.edit(repository, issueNumber, ERASED, ERASED + ".");
             updates.close(repository, issueNumber, "not_planned");
             if (!moved) {
-                // Its edit history stays public until the issue moves; the record waits for a private repository.
-                meters.step("cleanup", "retried");
-                log.warn("Product feedback cleanup waits for a private repository: cleanupId={}", job.id());
-                return;
+                // No private repository took it: the scrubbed issue stays public, and so does its edit history.
+                log.warn("Product feedback cleanup scrubbed a public issue it could not move: cleanupId={}", job.id());
             }
-            done(job.id());
+            // The text is gone, but the edit history still shows it; only a maintainer can delete that.
+            handOver(job.id());
             meters.step("cleanup", "ok");
         } catch (RuntimeException failed) {
             meters.step("cleanup", "retried");
@@ -168,5 +184,51 @@ class CleanupService {
 
     private void done(UUID id) {
         transactions.executeWithoutResult(status -> cleanups.deleteById(id));
+    }
+
+    private void handOver(UUID id) {
+        transactions.executeWithoutResult(status -> cleanups.findById(id)
+                .ifPresent(
+                        row -> needsMaintainer(row, ProductFeedbackCleanup.ManualStep.EDIT_HISTORY, clock.instant())));
+    }
+
+    private void needsMaintainer(ProductFeedbackCleanup row, ProductFeedbackCleanup.ManualStep step, Instant now) {
+        row.setManualStep(step);
+        row.setManualSince(now);
+        events.publishEvent(new ProductFeedbackCleanupNeedsActionEvent(row.getId(), now));
+        meters.step("cleanup", "manual");
+        log.info("Product feedback cleanup needs a maintainer: cleanupId={}, step={}", row.getId(), step);
+    }
+
+    /** The steps that wait for a maintainer, with what they need to find the issue. */
+    @Transactional(readOnly = true)
+    public List<ProductFeedbackCleanupActionDTO> needsAction() {
+        return cleanups.findTop100ByManualSinceNotNullOrderByManualSinceDesc().stream()
+                .map(row -> new ProductFeedbackCleanupActionDTO(
+                        row.getId(),
+                        Objects.requireNonNull(row.getManualStep()),
+                        row.getRepository(),
+                        row.getIssueNumber(),
+                        row.getIssueNumber() == null
+                                ? null
+                                : "https://github.com/" + row.getRepository() + "/issues/" + row.getIssueNumber(),
+                        IssueRenderer.markerText(row.getMarker()),
+                        row.getCreatedAt(),
+                        Objects.requireNonNull(row.getManualSince())))
+                .toList();
+    }
+
+    /** An admin finished the manual step on GitHub; the locator goes with it, and the audit log keeps who and when. */
+    @Transactional
+    public boolean confirm(UUID id, long accountId) {
+        return cleanups.findByIdAndManualSinceNotNull(id)
+                .map(row -> {
+                    cleanups.delete(row);
+                    if (!audit.recordCleanupConfirmed(
+                            accountId, id, String.valueOf(row.getManualStep()), row.getRepository()))
+                        throw new IllegalStateException("The confirmation could not be audited");
+                    return true;
+                })
+                .orElse(false);
     }
 }

@@ -5,9 +5,12 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionKind;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
+import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackCleanupNeedsActionEvent;
 import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashSet;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
@@ -28,16 +31,23 @@ public class ProductFeedbackEmailPreparation {
     // Each recipient publication commits with the feedback. An async parent could duplicate the fan-out on retry.
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void on(ProductFeedbackSubmittedEvent event) {
+        requestForAdmins(
+                event.feedbackId(),
+                event.submittedAt(),
+                ProductFeedbackEmailRequested.Kind.valueOf(event.kind().name()));
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    public void on(ProductFeedbackCleanupNeedsActionEvent event) {
+        requestForAdmins(event.cleanupId(), event.since(), ProductFeedbackEmailRequested.Kind.CLEANUP);
+    }
+
+    private void requestForAdmins(UUID id, Instant at, ProductFeedbackEmailRequested.Kind kind) {
         var subscribed =
                 new HashSet<>(subscriptions.subscribedAccountIds(NotificationSubscriptionKind.PRODUCT_FEEDBACK));
         for (long accountId : contacts.activeVerifiedAdministratorIds()) {
             if (subscribed.contains(accountId)) {
-                events.publishEvent(new ProductFeedbackEmailRequested(
-                        event.feedbackId(),
-                        accountId,
-                        event.submittedAt(),
-                        event.submittedAt().plus(MAX_AGE),
-                        event.kind()));
+                events.publishEvent(new ProductFeedbackEmailRequested(id, accountId, at, at.plus(MAX_AGE), kind));
             }
         }
     }

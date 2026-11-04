@@ -137,6 +137,7 @@ export { clearOwnFeedbackResponseMutation } from './react-query/clearOwnFeedback
 export { closeResearchDisclosureMutation } from './react-query/closeResearchDisclosure.gen.js';
 export { completeFirstLoginConsentMutation } from './react-query/completeFirstLoginConsent.gen.js';
 export { configureAgentMutation } from './react-query/configureAgent.gen.js';
+export { confirmProductFeedbackCleanupMutation } from './react-query/confirmProductFeedbackCleanup.gen.js';
 export { countReviewFeedbackByLocationOptions, countReviewFeedbackByLocationQueryKey } from './react-query/countReviewFeedbackByLocation.gen.js';
 export { countReviewFeedbackByReasonOptions, countReviewFeedbackByReasonQueryKey } from './react-query/countReviewFeedbackByReason.gen.js';
 export { countWorkspaceConfigAuditEventsOptions, countWorkspaceConfigAuditEventsQueryKey } from './react-query/countWorkspaceConfigAuditEvents.gen.js';

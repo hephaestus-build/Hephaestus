@@ -481,6 +481,8 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "IntegrationAttentionChangedEvent", // Carries an explicit workspaceId and
                                         // connectionId
                                         "ProductFeedbackSubmittedEvent", // Instance-admin fan-out; submission UUID
+                                        "ProductFeedbackCleanupNeedsActionEvent", // Instance-admin fan-out; cleanup
+                                        // UUID
                                         "ProductFeedbackUpdatedEvent", // The reporter's own report; feedback UUID and
                                         // account
                                         // covers instance or workspace feedback

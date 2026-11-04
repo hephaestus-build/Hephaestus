@@ -14,10 +14,17 @@ import org.springframework.transaction.annotation.Transactional;
 @WorkspaceAgnostic("Instance administrators receive notifications for the instance-wide product-feedback inbox")
 class ProductFeedbackNotificationQueryService implements ProductFeedbackNotificationQuery {
     private final ProductFeedbackRepository feedback;
+    private final ProductFeedbackCleanupRepository cleanups;
 
     @Override
     @Transactional(readOnly = true)
     public boolean exists(UUID feedbackId) {
         return feedback.existsById(feedbackId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean cleanupNeedsAction(UUID cleanupId) {
+        return cleanups.findByIdAndManualSinceNotNull(cleanupId).isPresent();
     }
 }

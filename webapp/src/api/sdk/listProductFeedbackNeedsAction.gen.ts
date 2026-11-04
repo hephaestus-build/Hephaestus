@@ -7,7 +7,7 @@ import { listProductFeedbackNeedsActionResponseTransformer } from '../transforme
 import type { ListProductFeedbackNeedsActionData, ListProductFeedbackNeedsActionResponses } from '../types.gen.js';
 
 /**
- * List reports that failed to file
+ * List reports that failed to file and erased reports whose issues need a manual step
  */
 export const listProductFeedbackNeedsAction = <ThrowOnError extends boolean = false>(options?: Options<ListProductFeedbackNeedsActionData, ThrowOnError>): RequestResult<ListProductFeedbackNeedsActionResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListProductFeedbackNeedsActionResponses, unknown, ThrowOnError>({
     responseTransformer: listProductFeedbackNeedsActionResponseTransformer,

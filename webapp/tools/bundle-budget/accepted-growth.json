@@ -1,3 +1,9 @@
 {
-	"accepted": []
+	"accepted": [
+		{
+			"load": "src/routes/_authenticated/admin.feedback.tsx?tsr-split=component",
+			"gzipBytes": 53480,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/3766"
+		}
+	]
 }

@@ -10,6 +10,7 @@ import {
 	adminListProductFeedbackOptions,
 	adminListProductFeedbackQueryKey,
 	adminTriageProductFeedbackMutation,
+	confirmProductFeedbackCleanupMutation,
 	getProductFeedbackDestinationsOptions,
 	getProductFeedbackDestinationsQueryKey,
 	listProductFeedbackNeedsActionOptions,
@@ -46,6 +47,7 @@ import { pageParam, useSearchState } from "@/lib/search-params";
 const PAGE_SIZE = 20;
 const TRIAGE_KEY = ["adminTriageProductFeedback"];
 const RETRY_KEY = ["retryProductFeedbackFiling"];
+const CONFIRM_KEY = ["confirmProductFeedbackCleanup"];
 
 const STATUS_OPTIONS: { value: FeedbackStatusFilter; label: string }[] = [
 	{ value: "OPEN", label: "Open" },
@@ -139,8 +141,23 @@ function AdminFeedbackInboxPage() {
 			void queryClient.invalidateQueries({ queryKey: getProductFeedbackDestinationsQueryKey() });
 		},
 	});
+	const confirmCleanup = useMutation({
+		...filedUnder(CONFIRM_KEY, confirmProductFeedbackCleanupMutation()),
+		onSuccess: () => {
+			toast.success("Step confirmed");
+		},
+		onError: (error) =>
+			toast.error("We could not confirm the step", { description: problemDetailOf(error) }),
+		onSettled: () => {
+			void queryClient.invalidateQueries({ queryKey: listProductFeedbackNeedsActionQueryKey() });
+			void queryClient.invalidateQueries({ queryKey: getProductFeedbackDestinationsQueryKey() });
+		},
+	});
 	const retryingIds = usePendingMutationIds(RETRY_KEY, (variables) =>
 		pathString(variables, "feedbackId"),
+	);
+	const confirmingIds = usePendingMutationIds(CONFIRM_KEY, (variables) =>
+		pathString(variables, "cleanupId"),
 	);
 	let needsActionState: AdminProductFeedbackNeedsActionState;
 	if (needsActionQuery.isPending) {
@@ -154,7 +171,11 @@ function AdminFeedbackInboxPage() {
 			},
 		};
 	} else {
-		needsActionState = { status: "ready", items: needsActionQuery.data.items };
+		needsActionState = {
+			status: "ready",
+			items: needsActionQuery.data.items,
+			cleanups: needsActionQuery.data.cleanups,
+		};
 	}
 	const onPageChange = (next: number) => {
 		void setSearch((previous) => ({ ...previous, page: pageParam(next) }));
@@ -195,12 +216,13 @@ function AdminFeedbackInboxPage() {
 
 			<Section
 				title="Needs action"
-				description="Reports that failed to file on GitHub. The admin email already carries each one."
+				description="Reports that failed to file on GitHub, and erased reports whose issues a maintainer must finish removing. The admin email announces each one."
 			>
 				<AdminProductFeedbackNeedsActionList
 					state={needsActionState}
-					pendingIds={retryingIds}
+					pendingIds={new Set([...retryingIds, ...confirmingIds])}
 					onRetryFiling={(item) => retryFiling.mutate({ path: { feedbackId: item.id } })}
+					onConfirmCleanup={(cleanup) => confirmCleanup.mutate({ path: { cleanupId: cleanup.id } })}
 				/>
 			</Section>
 

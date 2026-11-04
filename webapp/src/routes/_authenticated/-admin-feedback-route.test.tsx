@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -101,12 +101,31 @@ const stopped = {
 			repository: "hephaestus-build/Hephaestus",
 		},
 	],
+	cleanups: [],
+} satisfies Wire<ProductFeedbackNeedsActionList>;
+
+const scrubbed = {
+	items: [],
+	cleanups: [
+		{
+			id: "e1e1e1e1-0000-0000-0000-000000000001",
+			step: "EDIT_HISTORY",
+			repository: "hephaestus-build/product-feedback",
+			issueNumber: 12,
+			issueUrl: "https://github.com/hephaestus-build/product-feedback/issues/12",
+			marker: "hephaestus-product-feedback:5d1c0a52-0000-0000-0000-000000000001",
+			erasedAt: "2026-09-11T08:00:00.000Z",
+			since: "2026-09-11T08:05:00.000Z",
+		},
+	],
 } satisfies Wire<ProductFeedbackNeedsActionList>;
 
 beforeEach(() => {
 	server.use(
 		http.get("*/admin/product-feedback/destinations", () => HttpResponse.json(destinations)),
-		http.get("*/admin/product-feedback/needs-action", () => HttpResponse.json({ items: [] })),
+		http.get("*/admin/product-feedback/needs-action", () =>
+			HttpResponse.json({ items: [], cleanups: [] }),
+		),
 		http.get("*/admin/llm/models", () => HttpResponse.json([draftingModel])),
 	);
 });
@@ -195,6 +214,31 @@ describe("instance product feedback destinations", () => {
 		await user.click(await screen.findByRole("button", { name: "Retry" }, ROUTE_RENDER_WAIT));
 
 		await waitFor(() => expect(retried).toStrictEqual([stopped.items[0]?.id]));
+	});
+
+	it("confirms an erased report's GitHub step only after the admin agrees", async () => {
+		mockInbox();
+		const confirmed: string[] = [];
+		server.use(
+			http.get("*/admin/product-feedback/needs-action", () => HttpResponse.json(scrubbed)),
+			http.post("*/admin/product-feedback/cleanups/:cleanupId/confirm", ({ params }) => {
+				confirmed.push(String(params.cleanupId));
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		renderRouteAt("/admin/feedback");
+		const user = userEvent.setup();
+
+		await user.click(
+			await screen.findByRole("button", { name: "Confirm done" }, ROUTE_RENDER_WAIT),
+		);
+		const dialog = await screen.findByRole("alertdialog", {
+			name: "Is the erased text gone from GitHub?",
+		});
+		expect(confirmed).toStrictEqual([]);
+		await user.click(within(dialog).getByRole("button", { name: "Confirm done" }));
+
+		await waitFor(() => expect(confirmed).toStrictEqual([scrubbed.cleanups[0]?.id]));
 	});
 });
 

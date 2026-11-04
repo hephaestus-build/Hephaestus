@@ -11,13 +11,11 @@ import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.ProductFeedbackDestinationsDTO;
-import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.ProductFeedbackNeedsActionDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.ProductFeedbackNeedsActionListDTO;
-import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.ReportRoute;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbackDestinationsDTO;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
-import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -39,7 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProductFeedbackDestinationsController {
     private final DestinationService destinations;
     private final FilingService filing;
-    private final ProductFeedbackRepository feedback;
+    private final CleanupService cleanups;
 
     @GetMapping("/destinations")
     @Operation(
@@ -58,24 +56,11 @@ public class ProductFeedbackDestinationsController {
     }
 
     @GetMapping("/needs-action")
-    @Operation(operationId = "listProductFeedbackNeedsAction", summary = "List reports that failed to file")
+    @Operation(
+            operationId = "listProductFeedbackNeedsAction",
+            summary = "List reports that failed to file and erased reports whose issues need a manual step")
     public ProductFeedbackNeedsActionListDTO needsAction() {
-        var items = filing.stopped().stream()
-                .flatMap(stopped -> feedback.findById(stopped.getFeedbackId()).stream()
-                        .map(report -> new ProductFeedbackNeedsActionDTO(
-                                report.getId(),
-                                report.getKind(),
-                                Objects.requireNonNull(report.getCreatedAt()),
-                                stopped.getUpdatedAt(),
-                                stopped.getReason() == null
-                                        ? "unknown"
-                                        : stopped.getReason().words(),
-                                stopped.getRoute() == null
-                                        ? ReportRoute.PRIVATE
-                                        : ReportRoute.valueOf(stopped.getRoute().name()),
-                                stopped.getRepository())))
-                .toList();
-        return new ProductFeedbackNeedsActionListDTO(items);
+        return new ProductFeedbackNeedsActionListDTO(filing.needsAction(), cleanups.needsAction());
     }
 
     @PostMapping("/{feedbackId}/retry")
@@ -85,6 +70,19 @@ public class ProductFeedbackDestinationsController {
     public ResponseEntity<Void> retry(@PathVariable UUID feedbackId) {
         if (!filing.retry(feedbackId))
             throw new EntityNotFoundException("Stopped product feedback", feedbackId.toString());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/cleanups/{cleanupId}/confirm")
+    @RecentSignInExempt(reason = "confirms a manual erasure step that is done on GitHub; grants no access")
+    @Audited(ledger = AuditLedger.AUTH_EVENT, type = "PRODUCT_FEEDBACK_CLEANUP_CONFIRMED")
+    @Operation(
+            operationId = "confirmProductFeedbackCleanup",
+            summary = "Confirm that a maintainer finished an erased report's manual step on GitHub")
+    @ApiResponse(responseCode = "204", description = "The step is confirmed and its issue locator is deleted")
+    public ResponseEntity<Void> confirmCleanup(@PathVariable UUID cleanupId) {
+        if (!cleanups.confirm(cleanupId, CurrentAccount.requireId()))
+            throw new EntityNotFoundException("Product feedback cleanup step", cleanupId.toString());
         return ResponseEntity.noContent().build();
     }
 }

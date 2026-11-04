@@ -13,8 +13,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -404,7 +406,30 @@ class FilingService {
         }
     }
 
-    List<ProductFeedbackFiling> stopped() {
-        return filings.findAllByStateOrderByUpdatedAtDesc(FilingState.STOPPED, PageRequest.of(0, 100));
+    /** The newest stopped reports with what an admin needs to retry them, in two reads. */
+    List<FilingDTOs.ProductFeedbackNeedsActionDTO> needsAction() {
+        List<ProductFeedbackFiling> stopped =
+                filings.findAllByStateOrderByUpdatedAtDesc(FilingState.STOPPED, PageRequest.of(0, 100));
+        Map<UUID, ProductFeedback> reports = new HashMap<>();
+        feedback.findAllById(stopped.stream()
+                        .map(ProductFeedbackFiling::getFeedbackId)
+                        .toList())
+                .forEach(report -> reports.put(report.getId(), report));
+        List<FilingDTOs.ProductFeedbackNeedsActionDTO> items = new ArrayList<>();
+        for (ProductFeedbackFiling filing : stopped) {
+            ProductFeedback report = reports.get(filing.getFeedbackId());
+            if (report == null) continue;
+            items.add(new FilingDTOs.ProductFeedbackNeedsActionDTO(
+                    report.getId(),
+                    report.getKind(),
+                    Objects.requireNonNull(report.getCreatedAt()),
+                    filing.getUpdatedAt(),
+                    filing.getReason() == null ? "unknown" : filing.getReason().words(),
+                    filing.getRoute() == null
+                            ? FilingDTOs.ReportRoute.PRIVATE
+                            : FilingDTOs.ReportRoute.valueOf(filing.getRoute().name()),
+                    filing.getRepository()));
+        }
+        return items;
     }
 }

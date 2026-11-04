@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
-import type { ProductFeedbackNeedsAction } from "@/api/types.gen";
-import { hoursBefore, minutesBefore } from "@/stories/story-clock";
+import type { ProductFeedbackCleanupAction, ProductFeedbackNeedsAction } from "@/api/types.gen";
+import { daysBefore, hoursBefore, minutesBefore } from "@/stories/story-clock";
 
 import { AdminProductFeedbackNeedsActionList } from "./AdminProductFeedbackNeedsActionList";
 
@@ -26,12 +26,35 @@ const unavailable = {
 	repository: "hephaestus-build/product-feedback",
 } satisfies ProductFeedbackNeedsAction;
 
+/** Scrubbed and closed; only its edit history is left for a maintainer. */
+const scrubbed = {
+	id: "e1e1e1e1-0000-0000-0000-000000000001",
+	step: "EDIT_HISTORY",
+	repository: "hephaestus-build/product-feedback",
+	issueNumber: 12,
+	issueUrl: "https://github.com/hephaestus-build/product-feedback/issues/12",
+	marker: "hephaestus-product-feedback:5d1c0a52-0000-0000-0000-000000000001",
+	erasedAt: hoursBefore(3),
+	since: hoursBefore(3),
+} satisfies ProductFeedbackCleanupAction;
+
+/** GitHub never answered for 30 days, so the app does not know whether the issue exists. */
+const unfinished = {
+	id: "e1e1e1e1-0000-0000-0000-000000000002",
+	step: "UNFINISHED",
+	repository: "hephaestus-build/Hephaestus",
+	marker: "hephaestus-product-feedback:5d1c0a52-0000-0000-0000-000000000002",
+	erasedAt: daysBefore(31),
+	since: hoursBefore(1),
+} satisfies ProductFeedbackCleanupAction;
+
 const meta = {
 	component: AdminProductFeedbackNeedsActionList,
 	args: {
-		state: { status: "ready", items: [refused, unavailable] },
+		state: { status: "ready", items: [refused, unavailable], cleanups: [] },
 		pendingIds: new Set<string>(),
 		onRetryFiling: fn(),
+		onConfirmCleanup: fn(),
 	},
 	tags: ["autodocs"],
 } satisfies Meta<typeof AdminProductFeedbackNeedsActionList>;
@@ -63,8 +86,49 @@ export const Retrying: Story = {
 	},
 };
 
+export const ErasedReports: Story = {
+	args: { state: { status: "ready", items: [refused], cleanups: [scrubbed, unfinished] } },
+	play: async ({ canvas, args, canvasElement }) => {
+		await expect(
+			canvas.getByRole("link", { name: /hephaestus-build\/product-feedback#12/u }),
+		).toHaveAttribute("href", scrubbed.issueUrl);
+		// Without an issue number, the marker is the only way to find the issue.
+		await expect(canvas.getByText(unfinished.marker)).toBeVisible();
+		const [first] = canvas.getAllByRole("button", { name: "Confirm done" });
+		if (first === undefined) {
+			throw new Error("No Confirm done button");
+		}
+		// The dialog renders in a portal, outside the story's canvas.
+		const body = within(canvasElement.ownerDocument.body);
+		const question = { name: "Is the erased text gone from GitHub?" };
+		await userEvent.click(first);
+		await userEvent.click(
+			within(await body.findByRole("alertdialog", question)).getByRole("button", {
+				name: "Cancel",
+			}),
+		);
+		await waitFor(async () => expect(first).toHaveFocus());
+		await expect(args.onConfirmCleanup).not.toHaveBeenCalled();
+
+		await userEvent.click(first);
+		const dialog = await body.findByRole("alertdialog", question);
+		await userEvent.click(within(dialog).getByRole("button", { name: "Confirm done" }));
+		await expect(args.onConfirmCleanup).toHaveBeenCalledWith(scrubbed);
+	},
+};
+
+export const ConfirmingErasedReport: Story = {
+	args: {
+		state: { status: "ready", items: [], cleanups: [scrubbed] },
+		pendingIds: new Set([scrubbed.id]),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Confirming…" })).toBeDisabled();
+	},
+};
+
 export const Empty: Story = {
-	args: { state: { status: "ready", items: [] } },
+	args: { state: { status: "ready", items: [], cleanups: [] } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Nothing needs action")).toBeVisible();
 	},

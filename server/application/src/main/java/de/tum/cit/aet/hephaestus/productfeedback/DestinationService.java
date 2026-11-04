@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.auth.spi.ProductFeedbackAudit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.ProductFeedbackDestinationsDTO;
@@ -33,22 +34,28 @@ class DestinationService {
     private final ProductFeedbackDestinationRepository repository;
     private final DestinationSettings settings;
     private final ProductFeedbackFilingRepository filings;
+    private final ProductFeedbackCleanupRepository cleanups;
     private final ProductFeedbackIssues issues;
     private final TransactionTemplate transactions;
+    private final ProductFeedbackAudit audit;
     private final Clock clock;
 
     DestinationService(
             ProductFeedbackDestinationRepository repository,
             DestinationSettings settings,
             ProductFeedbackFilingRepository filings,
+            ProductFeedbackCleanupRepository cleanups,
             ProductFeedbackIssues issues,
             TransactionTemplate transactions,
+            ProductFeedbackAudit audit,
             Clock clock) {
         this.repository = repository;
         this.settings = settings;
         this.filings = filings;
+        this.cleanups = cleanups;
         this.issues = issues;
         this.transactions = transactions;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -67,7 +74,7 @@ class DestinationService {
                 check(destination.getPublicRepository(), publicRepository, false, privateRepository),
                 check(destination.getPrivateRepository(), privateRepository, true, publicRepository),
                 filings.countDraftedSince(now.truncatedTo(ChronoUnit.DAYS)),
-                filings.countByState(FilingState.STOPPED),
+                filings.countByState(FilingState.STOPPED) + cleanups.countByManualSinceNotNull(),
                 filings.lastFiledAt().orElse(null),
                 filings.oldestWaiting().map(ProductFeedbackFiling::getCreatedAt).orElse(null),
                 destination.getSnapshotAt());
@@ -104,6 +111,9 @@ class DestinationService {
             destination.setUpdatedAt(clock.instant());
             destination.setUpdatedByAccountId(accountId);
             repository.save(destination);
+            if (!audit.recordDestinationsChanged(
+                    accountId, publicName, privateName, request.paused(), destination.getNoticeVersion()))
+                throw new IllegalStateException("The destination change could not be audited");
         });
         refreshSnapshot();
         return get();

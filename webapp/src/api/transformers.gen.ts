@@ -249,6 +249,12 @@ export const updateProductFeedbackDestinationsResponseTransformer = async (data:
     return data;
 };
 
+const productFeedbackCleanupActionSchemaResponseTransformer = (data: any) => {
+    data.erasedAt = new Date(data.erasedAt);
+    data.since = new Date(data.since);
+    return data;
+};
+
 const productFeedbackNeedsActionSchemaResponseTransformer = (data: any) => {
     data.createdAt = new Date(data.createdAt);
     data.stoppedAt = new Date(data.stoppedAt);
@@ -256,6 +262,7 @@ const productFeedbackNeedsActionSchemaResponseTransformer = (data: any) => {
 };
 
 const productFeedbackNeedsActionListSchemaResponseTransformer = (data: any) => {
+    data.cleanups = data.cleanups.map((item: any) => productFeedbackCleanupActionSchemaResponseTransformer(item));
     data.items = data.items.map((item: any) => productFeedbackNeedsActionSchemaResponseTransformer(item));
     return data;
 };

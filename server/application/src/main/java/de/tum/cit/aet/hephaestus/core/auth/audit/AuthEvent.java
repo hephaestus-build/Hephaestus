@@ -141,6 +141,8 @@ public class AuthEvent {
         PUBLIC_ACTIVITY_CHANGED,
         // Where instance product feedback is filed: GLOBAL, and it changes where personal data goes.
         PRODUCT_FEEDBACK_DESTINATIONS_CHANGED,
+        // An admin confirmed that a maintainer finished an erased report's manual step on GitHub.
+        PRODUCT_FEEDBACK_CLEANUP_CONFIRMED,
         // A pseudonymous research dataset left the instance, or its downstream removal was attested.
         // Recorded before the bytes are sent, so it proves the release, not that a client received it.
         RESEARCH_DATASET_RELEASED,

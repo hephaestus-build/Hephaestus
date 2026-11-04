@@ -12,10 +12,15 @@ import org.springframework.data.repository.query.Param;
 @WorkspaceAgnostic("GitHub locators left after erasure; instance-wide, with no workspace")
 interface ProductFeedbackCleanupRepository extends JpaRepository<ProductFeedbackCleanup, UUID> {
     @Query(
-            value = "SELECT id FROM product_feedback_cleanup WHERE next_attempt_at <= :now"
+            value = "SELECT id FROM product_feedback_cleanup WHERE manual_since IS NULL AND next_attempt_at <= :now"
                     + " ORDER BY next_attempt_at LIMIT 1 FOR UPDATE SKIP LOCKED",
             nativeQuery = true)
     Optional<UUID> claimable(@Param("now") Instant now);
 
-    List<ProductFeedbackCleanup> findAllByAttemptsGreaterThanEqualOrderByCreatedAt(int attempts);
+    /** The steps that wait for a maintainer, newest first, as Needs action lists them. */
+    List<ProductFeedbackCleanup> findTop100ByManualSinceNotNullOrderByManualSinceDesc();
+
+    long countByManualSinceNotNull();
+
+    Optional<ProductFeedbackCleanup> findByIdAndManualSinceNotNull(UUID id);
 }
