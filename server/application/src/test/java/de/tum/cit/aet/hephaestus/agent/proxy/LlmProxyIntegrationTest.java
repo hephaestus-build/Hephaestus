@@ -103,7 +103,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.netty.DisposableServer;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.http.server.HttpServer;
 import tools.jackson.databind.ObjectMapper;
@@ -607,6 +609,158 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .isPositive();
             assertThat(callRows.countActive(poolId)).isZero();
         }
+    }
+
+    /** Logos's shape when it fails: the head and a comment at once, and then nothing, with no error. */
+    private static DisposableServer silentAfterAComment() {
+        return HttpServer.create()
+                .host("127.0.0.1")
+                .port(0)
+                .handle((request, response) -> response.header("Content-Type", "text/event-stream")
+                        .sendString(Flux.concat(
+                                Mono.just(": logos-schedule x-logos-ettft-ms=51\n\n"), Mono.<String>never())))
+                .bindNow();
+    }
+
+    @Test
+    void shouldLowerTheLimitWhenAStreamSendsItsHeadAndACommentAndThenNothing() throws Exception {
+        var upstream = silentAfterAComment();
+        try {
+            var pool = streamUntilTheWorkEnds("http://127.0.0.1:" + upstream.port() + "/v1", 8, 50);
+            assertThat(pool.getLearnedLimit()).isEqualTo(5);
+            assertThat(pool.getThrottledAt()).isNotNull();
+            assertThat(pool.getBaselineFirstTokenMs()).isEqualTo(50);
+            assertThat(unansweredDecreases(pool)).isEqualTo(1);
+            assertThat(callRows.countActive(pool.getId())).isZero();
+        } finally {
+            upstream.disposeNow();
+        }
+    }
+
+    @Test
+    void shouldNotRaiseTheLimitForASilentStreamBeforeAnyFirstTokenIsKnown() throws Exception {
+        var upstream = silentAfterAComment();
+        try {
+            // At two, one background call binds the limit, which a served call would raise.
+            var pool = streamUntilTheWorkEnds("http://127.0.0.1:" + upstream.port() + "/v1", 2, null);
+            assertThat(pool.getLearnedLimit()).isEqualTo(2);
+            assertThat(pool.getThrottledAt()).isNull();
+            assertThat(unansweredDecreases(pool)).isZero();
+        } finally {
+            upstream.disposeNow();
+        }
+    }
+
+    @Test
+    void shouldLowerTheLimitWithoutABaselineWhenTheSilenceBoundCutsTheStream() throws Exception {
+        var upstream = silentAfterAComment();
+        try {
+            var pool = streamUntilTheWorkEnds(
+                    "http://127.0.0.1:" + upstream.port() + "/v1", 8, null, Duration.ofSeconds(1));
+            assertThat(pool.getLearnedLimit()).isEqualTo(5);
+            assertThat(unansweredDecreases(pool)).isEqualTo(1);
+        } finally {
+            upstream.disposeNow();
+        }
+    }
+
+    @Test
+    void shouldLowerTheLimitWithoutABaselineWhenAGatewaySendsOnlyCommentsPastTheSilenceBound() throws Exception {
+        // A comment every 300 ms keeps the stream from going silent, so only the work deadline ends it.
+        var upstream = HttpServer.create()
+                .host("127.0.0.1")
+                .port(0)
+                .handle((request, response) -> response.header("Content-Type", "text/event-stream")
+                        .sendString(Flux.interval(Duration.ofMillis(300)).map(tick -> ": logos-schedule\n\n")))
+                .bindNow();
+        try {
+            var pool = streamUntilTheWorkEnds(
+                    "http://127.0.0.1:" + upstream.port() + "/v1", 8, null, Duration.ofSeconds(1));
+            assertThat(pool.getLearnedLimit()).isEqualTo(5);
+            assertThat(unansweredDecreases(pool)).isEqualTo(1);
+        } finally {
+            upstream.disposeNow();
+        }
+    }
+
+    @Test
+    void shouldLowerTheLimitAndKeepTheBaselineWhenAStreamEndsWithOnlyAnError() throws Exception {
+        try (var upstream = new MockWebServer()) {
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "text/event-stream")
+                    .body("data: {\"error\":{\"message\":\"overloaded\"}}\n\n")
+                    .build());
+            upstream.start();
+            var pool = streamUntilTheWorkEnds(upstream.url("/v1").toString(), 8, 700);
+            assertThat(pool.getLearnedLimit()).isEqualTo(5);
+            assertThat(pool.getBaselineFirstTokenMs()).isEqualTo(700);
+            assertThat(pool.getWindowSamples()).isZero();
+            assertThat(unansweredDecreases(pool)).isEqualTo(1);
+        }
+    }
+
+    private LlmCallPool streamUntilTheWorkEnds(String baseUrl, int limit, @Nullable Integer baselineMillis)
+            throws Exception {
+        return streamUntilTheWorkEnds(baseUrl, limit, baselineMillis, Duration.ofMinutes(2));
+    }
+
+    /**
+     * One streamed review call on the model's own pool, which ends when the provider, the proxy's silence bound or the
+     * attempt's work does.
+     */
+    private LlmCallPool streamUntilTheWorkEnds(
+            String baseUrl, int limit, @Nullable Integer baselineMillis, Duration silence) throws Exception {
+        ReviewJob job = practiceScriptJob(baseUrl);
+        job.setLeasedUntil(Instant.now().plusSeconds(60));
+        job = jobRepository.saveAndFlush(job);
+        var model = Objects.requireNonNull(
+                ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper).model());
+        long poolId = modelRepository
+                .findById(Objects.requireNonNull(model.modelId()))
+                .orElseThrow()
+                .getCallPoolId();
+        jdbc.update(
+                "UPDATE llm_call_pool SET learned_limit=?,baseline_first_token_ms=? WHERE id=?",
+                limit,
+                baselineMillis,
+                poolId);
+        var capacity = new LlmCallPermits(
+                callPools,
+                callRows,
+                transactionTemplate,
+                new LlmCallPoolProperties(Duration.ofMinutes(1), Duration.ofMinutes(5)),
+                "worker-1",
+                meterRegistry,
+                modelResolver);
+        var service = proxyService(
+                200_000,
+                1000,
+                WebClient.create(),
+                mock(LlmBudgetService.class),
+                capacity,
+                new HephCallProperties(Duration.ofMinutes(5), silence));
+        var request = new MockHttpServletRequest("POST", "/internal/llm/chat/completions");
+        request.setRemoteAddr("127.0.0.1");
+        request.addHeader("Authorization", "Bearer " + tokenFor(job, Duration.ofSeconds(3)));
+        var response = new MockHttpServletResponse();
+        var body = objectMapper.createObjectNode().put("model", "caller-model").put("stream", true);
+        body.putArray("messages").addObject().put("role", "user").put("content", "Review.");
+        filter.doFilter(
+                request,
+                response,
+                (ignoredRequest, ignoredResponse) ->
+                        service.proxy(request, response, new HttpHeaders(), objectMapper.writeValueAsBytes(body)));
+        return callPools.findById(poolId).orElseThrow();
+    }
+
+    private double unansweredDecreases(LlmCallPool pool) {
+        var counter = meterRegistry
+                .find(AgentMetrics.LLM_POOL_LIMIT_DECREASES)
+                .tag("pool", pool.getSlug())
+                .tag("cause", "unanswered")
+                .counter();
+        return counter == null ? 0 : counter.count();
     }
 
     @ParameterizedTest
@@ -1121,6 +1275,22 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             WebClient client,
             LlmBudgetService budgetService,
             LlmCallPermits capacity) {
+        return proxyService(
+                maxTokensPerAttempt,
+                maxSearchUnitsPerAttempt,
+                client,
+                budgetService,
+                capacity,
+                new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)));
+    }
+
+    private LlmProxyService proxyService(
+            long maxTokensPerAttempt,
+            long maxSearchUnitsPerAttempt,
+            WebClient client,
+            LlmBudgetService budgetService,
+            LlmCallPermits capacity,
+            HephCallProperties silence) {
         ProxyRequestPolicy policy = mock(ProxyRequestPolicy.class);
         when(policy.allows(any())).thenReturn(true);
         return new LlmProxyService(
@@ -1151,7 +1321,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 new ProxyCallsInFlight(12),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 capacity,
-                new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)));
+                silence);
     }
 
     // The worker role is off here, so the accumulator is built with its own transaction boundary.
@@ -1306,7 +1476,11 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             int status, @Nullable Authentication authentication) {}
 
     private String tokenFor(ReviewJob job) {
-        Instant work = Instant.now().plus(Duration.ofMinutes(5));
+        return tokenFor(job, Duration.ofMinutes(5));
+    }
+
+    private String tokenFor(ReviewJob job, Duration workLeft) {
+        Instant work = Instant.now().plus(workLeft);
         return jwtIssuer.issueForReview(
                 job.getId(),
                 workspace.getId(),

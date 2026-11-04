@@ -164,7 +164,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: A model's call limit stayed at its floor of two calls for 30 minutes while its provider refused or queued
+          summary: A model's call limit stayed at its floor of two calls for 30 minutes while its provider refused, queued or did not answer
       - alert: HephaestusAgentJobsFailing
         expr: sum(increase(agent_job_total{job="hephaestus",outcome=~"failed|timed_out"}[1h])) >= 3
         labels:

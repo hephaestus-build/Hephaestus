@@ -513,7 +513,7 @@ They never see an upstream model ID, base URL, or credential.
 Every model has a call pool. You do not create it or set a number for it.
 The pool learns how many calls in flight the provider serves.
 The pool applies this limit across all workers and workspaces.
-When the provider refuses calls or queues them, all callers of that model wait, and their calls continue.
+When the provider refuses calls, queues them, or stops answering, all callers of that model wait, and their calls continue.
 
 A model server on your own GPUs, such as vLLM, queues calls by default. The pool reads this queue from the time to the first token.
 

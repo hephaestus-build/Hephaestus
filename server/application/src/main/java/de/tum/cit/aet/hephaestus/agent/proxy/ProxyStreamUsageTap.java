@@ -54,6 +54,9 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
 
     private @Nullable LongConsumer firstEvent;
 
+    /** Whether a content event arrived: text, reasoning or a tool call, not a role, an error or a comment. */
+    private boolean content;
+
     private long sentAt = System.nanoTime();
 
     /** Written by the exchange's thread when the head arrives, read by the request thread for the first event. */
@@ -70,10 +73,11 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
     }
 
     /**
-     * Receives the nanoseconds from the request to the stream's first event: the provider's first answer, after any
-     * time in its queue. Only a served stream counts, as a failure that answers at once says nothing about a queue.
+     * Receives the nanoseconds from the request to the stream's first content event: the provider's first answer, after
+     * any time in its queue. Only a served stream counts, as a failure that answers at once says nothing about a queue.
+     * A role, an error or a comment can arrive at once from a provider or a gateway that serves nothing after it.
      */
-    void onFirstEvent(LongConsumer firstEvent) {
+    void onFirstContent(LongConsumer firstEvent) {
         this.firstEvent = firstEvent;
     }
 
@@ -81,6 +85,22 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
     void sending() {
         sentAt = System.nanoTime();
         served = true;
+        content = false;
+    }
+
+    /** Whether the stream carried any content event. */
+    boolean hasContent() {
+        return content;
+    }
+
+    /** No content and no usage: whatever the provider sent, it answered nothing. */
+    boolean unanswered() {
+        return !content && observed == null;
+    }
+
+    /** Nanoseconds since the request left. */
+    long sinceSent() {
+        return System.nanoTime() - sentAt;
     }
 
     void answered(boolean success) {
@@ -118,10 +138,11 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
 
     private void handleLine(byte[] line) {
         int from = startsWith(line, DATA_PREFIX) ? DATA_PREFIX.length : -1;
-        if (from >= 0 && firstEvent != null) {
+        if (from >= 0 && !content && carriesContent(line, from)) {
+            content = true;
             LongConsumer first = firstEvent;
             firstEvent = null;
-            if (served) first.accept(System.nanoTime() - sentAt);
+            if (first != null && served) first.accept(System.nanoTime() - sentAt);
         }
         if (from < 0 || !contains(line, USAGE_MARKER)) {
             return;
@@ -167,6 +188,36 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
             log.debug(
                     "Unparseable SSE frame while looking for usage: {}",
                     e.getClass().getName());
+        }
+    }
+
+    /** Read only until the first content event, which is one or two events into a stream. */
+    private boolean carriesContent(byte[] line, int from) {
+        int start = from;
+        while (start < line.length && line[start] == ' ') start++;
+        if (start >= line.length || line[start] != '{') return false;
+        try {
+            JsonNode event =
+                    objectMapper.readTree(new String(line, start, line.length - start, StandardCharsets.UTF_8));
+            return switch (protocol) {
+                case ANTHROPIC_MESSAGES -> event.path("type").asString("").equals("content_block_delta");
+                case OPENAI_RESPONSES -> {
+                    String type = event.path("type").asString("");
+                    yield type.startsWith("response.") && type.endsWith(".delta");
+                }
+                default -> {
+                    for (JsonNode choice : event.path("choices")) {
+                        JsonNode delta = choice.path("delta");
+                        for (String field : new String[] {"content", "reasoning_content", "reasoning"})
+                            if (!delta.path(field).asString("").isEmpty()) yield true;
+                        if (!delta.path("tool_calls").isEmpty()
+                                || !choice.path("text").asString("").isEmpty()) yield true;
+                    }
+                    yield false;
+                }
+            };
+        } catch (RuntimeException unreadable) {
+            return false;
         }
     }
 

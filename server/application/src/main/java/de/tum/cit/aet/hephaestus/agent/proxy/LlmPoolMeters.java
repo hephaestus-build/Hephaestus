@@ -47,7 +47,7 @@ final class LlmPoolMeters {
             .toArray(Duration[]::new);
 
     /** What lowered a limit. */
-    static final List<String> DECREASE_CAUSES = List.of("refusal", "delay");
+    static final List<String> DECREASE_CAUSES = List.of("refusal", "delay", "unanswered");
 
     /** Why a call waited: {@code none} when its pool admitted it at once. */
     static final List<String> WAIT_REASONS = List.of("none", "capacity", "cooldown");
@@ -169,7 +169,7 @@ final class LlmPoolMeters {
 
     private Counter limitDecreasesCounter(String slug, String cause) {
         return Counter.builder(AgentMetrics.LLM_POOL_LIMIT_DECREASES)
-                .description("How often a provider's refusal or queue lowered a pool's limit")
+                .description("How often a provider's refusal, queue or unanswered stream lowered a pool's limit")
                 .tag("pool", slug)
                 .tag("cause", cause)
                 .register(registry);
