@@ -10,6 +10,7 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import java.lang.reflect.Method;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -24,7 +25,10 @@ class TestOnlyRepositoryMethodsArchitectureTest extends HephaestusArchitectureTe
     private static final List<TestOnlyMethod> TEST_ONLY = List.of(
             new TestOnlyMethod(IssueRepository.class, "count"),
             new TestOnlyMethod(IssueRepository.class, "findAll"),
-            new TestOnlyMethod(IssueRepository.class, "deleteAll"));
+            new TestOnlyMethod(IssueRepository.class, "deleteAll"),
+            new TestOnlyMethod(IssueCommentRepository.class, "count"),
+            new TestOnlyMethod(IssueCommentRepository.class, "findAll"),
+            new TestOnlyMethod(IssueCommentRepository.class, "deleteAll"));
 
     @Test
     void shouldCallNoTestOnlyRepositoryMethodFromProductionCode() {
