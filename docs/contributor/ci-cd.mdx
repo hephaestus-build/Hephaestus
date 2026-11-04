@@ -123,7 +123,7 @@ The job summary contains the report, including cache hits and miss reasons.
 
 A leg runs when the change
 detection in `cicd.yml` says its scope changed. The Windows leg uses the tooling scope.
-Both it and the tooling leg prove the hook dispatcher on rejected and accepted commits.
+Both it and the tooling leg prove the Git hooks on rejected and accepted commits.
 
 A pull request that changes only server files, documentation, changesets or `AGENTS.md` and `CLAUDE.md` files usually defers the Windows leg.
 This includes the practice catalog and guidance.

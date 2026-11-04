@@ -91,3 +91,17 @@ Supersedes the mechanism in the **Git hooks run through the Vite+ dispatcher** b
 `prepare` runs `scripts/enable-hooks.ts`, which calls `vp config --no-agent --hooks-dir .vite-hooks`
 through the `vite-plus` binary the lockfile resolves and neither reads nor unsets `core.hooksPath`;
 outside CI it also prints the commit-signing hint when the checkout is not configured to sign.
+
+## Update — 2026-11-04: hooks run from the tracked directory
+
+Supersedes the dispatcher in the **Git hooks run through the Vite+ dispatcher** bullet of § Decision and the 2026-09-17 update.
+`core.hooksPath` is shared by every worktree of a clone.
+It named the generated `.vite-hooks/_` dispatcher, which exists only after an install in that worktree.
+Git runs no hook, without a warning, in a worktree where the configured directory is missing, and many agent worktrees had none.
+
+`prepare` now sets `core.hooksPath` to the tracked `.vite-hooks`.
+It replaces an absolute path to one checkout's hooks, and it removes each worktree's override that names them.
+Each hook starts through the tracked `.vite-hooks/run`, which puts the worktree's own `node_modules/.bin` on `PATH` and honours `VP_GIT_HOOKS=0` and `vp.hooks.disabled`.
+Without an install, the hook refuses and says to install.
+A worktree on a branch from before this update runs its old hook directly, which needs `vp` on `PATH` until the branch is rebased.
+`vp staged` stays rejected.

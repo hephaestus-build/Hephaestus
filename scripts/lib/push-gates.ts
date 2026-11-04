@@ -25,5 +25,6 @@ export const pushStaticTasks = {
 	extension: extensionGates,
 	// One Gradle invocation: formatting, PMD, test compilation and the architecture tier.
 	server: [...serverStaticGates, "check:push:server"],
-	webapp: webappGates,
+	// The build enforces the bundle budget; it takes seconds, and the browser suites build the same bundle.
+	webapp: [...webappGates, "verification:webapp-build"],
 };

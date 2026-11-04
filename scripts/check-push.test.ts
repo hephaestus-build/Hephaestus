@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { readdirSync, realpathSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { setTimeout } from "node:timers/promises";
+import { pathToFileURL } from "node:url";
 
 import {
 	focusedTests,
@@ -167,6 +169,7 @@ async function fixture() {
 	for (const file of [
 		"check-push.ts",
 		"check-affected.ts",
+		"enable-hooks.ts",
 		"reorder-migrations.ts",
 		"lib/changelog.ts",
 		"lib/env.ts",
@@ -319,4 +322,73 @@ void test("instruction changes keep their owning static gate", () => {
 		assert.ok(pushTasks([file]).includes("gate:instructions"), file);
 	}
 	assert.ok(!pushTasks([".github/workflows/cicd.yml"]).includes("gate:instructions"));
+});
+
+void test("a webapp change runs the build that enforces the bundle budget", () => {
+	assert.ok(
+		pushTasks(["webapp/src/components/ui/button.tsx"]).includes("verification:webapp-build"),
+	);
+	assert.ok(
+		!pushTasks(["server/application/build.gradle.kts"]).includes("verification:webapp-build"),
+	);
+});
+
+/** Runs `runUnlessStalled` on `script` in its own process, so its output stays out of this report. */
+function watched(script: string, stallLimitMs: number, command = [process.execPath, "-e", script]) {
+	const module = JSON.stringify(
+		pathToFileURL(path.join(import.meta.dirname, "check-push.ts")).href,
+	);
+	const [program, ...args] = command;
+	return spawnSync(
+		process.execPath,
+		[
+			"--input-type=module",
+			"--eval",
+			`import { runUnlessStalled } from ${module};
+process.exitCode = await runUnlessStalled(${JSON.stringify(program)}, ${JSON.stringify(args)}, ${stallLimitMs});`,
+		],
+		{ encoding: "utf8", timeout: 60_000 },
+	);
+}
+
+void test("a frontend run that stops printing is stopped with its whole process tree, and fails", async (t) => {
+	if (process.platform === "win32") {
+		t.skip("Windows has no process groups or report signal");
+		return;
+	}
+	// A parent that waits forever on a silent child: what a hung Vitest run looks like from outside.
+	const hung = `const { spawn } = require("node:child_process");
+const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1e6)"], { stdio: "ignore" });
+console.log("child " + child.pid);
+setInterval(() => {}, 1e6);`;
+	const result = watched(hung, 1500);
+	assert.equal(result.status, 1, result.stderr);
+	assert.match(result.stderr, /printed nothing for 2 s, so the push check stopped it and failed/u);
+	const reports = /waited on: (?<directory>\S+)/u.exec(result.stderr)?.groups?.directory ?? "";
+	assert.equal(readdirSync(reports).filter((file) => file.endsWith(".json")).length, 2);
+	const grandchild = Number(/child (?<pid>\d+)/u.exec(result.stdout)?.groups?.pid);
+	assert.ok(grandchild > 0);
+	await setTimeout(6000);
+	assert.throws(() => process.kill(grandchild, 0), "the silent child is stopped too");
+});
+
+void test("a stalled run whose leader ends on the report signal leaves no worker behind", async (t) => {
+	if (process.platform === "win32") {
+		t.skip("Windows has no process groups or report signal");
+		return;
+	}
+	// A shell leader ends on SIGUSR2; its Node worker writes a report and would keep running.
+	const leader = `"${process.execPath}" -e "setInterval(() => {}, 1e6)" & echo "child $!"; wait`;
+	const result = watched("", 1500, ["sh", "-c", leader]);
+	assert.equal(result.status, 1, result.stderr);
+	const grandchild = Number(/child (?<pid>\d+)/u.exec(result.stdout)?.groups?.pid);
+	assert.ok(grandchild > 0);
+	await setTimeout(500);
+	assert.throws(() => process.kill(grandchild, 0), "the worker is stopped before the hook returns");
+});
+
+void test("a frontend run that keeps printing may run longer than the stall limit", () => {
+	const steady = `let n = 0; const t = setInterval(() => { console.log(n); if (++n === 6) clearInterval(t); }, 400);`;
+	assert.equal(watched(steady, 1500).status, 0);
+	assert.equal(watched("process.exit(3)", 1500).status, 3);
 });

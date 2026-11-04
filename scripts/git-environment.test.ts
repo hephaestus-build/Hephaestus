@@ -9,7 +9,16 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	cpSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
@@ -85,10 +94,14 @@ void test("a gate that runs git the wrong way cannot reach the repository being 
 	const before = fingerprint(decoy);
 
 	// Stands in for `vp run check`: a task that runs git in whatever environment it was handed, and
-	// records that it ran so a hook that never reached it cannot pass this test.
-	const stubs = temporaryDirectory("git-environment-gate-");
-	const marker = path.join(stubs, "ran");
-	const stub = path.join(stubs, "vp");
+	// records that it ran so a hook that never reached it cannot pass this test. The hooks run the `vp`
+	// of their own checkout, so the stub is that checkout's install.
+	const checkout = temporaryDirectory("git-environment-hooks-");
+	cpSync(HOOKS, path.join(checkout, ".vite-hooks"), { recursive: true });
+	const bin = path.join(checkout, "node_modules", ".bin");
+	mkdirSync(bin, { recursive: true });
+	const marker = path.join(checkout, "ran");
+	const stub = path.join(bin, "vp");
 	writeFileSync(
 		stub,
 		`#!/bin/sh\nprintf ran > "${marker}"\ngit config user.name intruder\ngit tag intruder\nexit 0\n`,
@@ -100,8 +113,7 @@ void test("a gate that runs git the wrong way cannot reach the repository being 
 		GIT_INDEX_FILE: path.join(decoy, ".git", "index"),
 		GIT_WORK_TREE: decoy,
 	});
-	environment.PATH = `${stubs}${path.delimiter}${environment.PATH ?? ""}`;
-	execFileSync("sh", ["-e", path.join(HOOKS, "pre-push")], {
+	execFileSync("sh", ["-e", path.join(checkout, ".vite-hooks", "pre-push")], {
 		cwd: temporaryDirectory("git-environment-worktree-"),
 		encoding: "utf8",
 		env: environment,
