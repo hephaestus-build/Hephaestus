@@ -38,6 +38,7 @@ import tools.jackson.databind.JsonNode;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ReviewItem {
+    /** History only: several migrated results for one assignment, and none chosen. No code writes it. */
     public static final String LEGACY_AMBIGUOUS_RESULTS = "LEGACY_AMBIGUOUS_RESULTS";
 
     @Column(name = "workspace_id", nullable = false)

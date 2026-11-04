@@ -131,6 +131,20 @@ These reasons establish nothing about the work.
 
 ## Legacy history reasons
 
+These values describe rows that a release before 1.0 left. No code writes them.
+They stay in the schema and on the wire, with their wording, because the rows stay.
+A rewrite to a current value would claim something that nobody recorded.
+They establish nothing about the work.
+
+**Evidence version 0** marks a result from before the capture contract.
+It is never current, never reused and never part of new feedback. The product shows it as an unverified observation.
+A practice's standing uses it only when no current review has decided the practice, and then says that the standing is based on earlier reviews.
+A trigger refuses it on a new result.
+
+`LEGACY_FAILURE` marks a review that was cancelled before stop reasons were recorded. Why it was cancelled is unknown.
+
+`LEGACY_SCOPE_UNKNOWN` marks a review that ran before its coverage was recorded. What it covered is unknown.
+
 `LEGACY_AMBIGUOUS_RESULTS` marks a withheld assignment with multiple migrated results for the same review, practice and item.
 Its result pointer is null. At cutover, the assignment records the producing job and the number of results.
 All original results remain separate history with evidence version 0. No sibling is selected as the assignment's answer.

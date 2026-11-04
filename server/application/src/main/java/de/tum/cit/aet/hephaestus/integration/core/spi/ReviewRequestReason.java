@@ -26,7 +26,10 @@ public enum ReviewRequestReason {
     VERSION_SUPERSEDED,
     PENDING_DEADLINE_EXCEEDED,
     ITEM_GONE,
-    /** A released review signal keyed by the pull request head; it names no review to resume. */
+    /**
+     * History only: a released review signal keyed by the pull request head; it names no review to resume. No code
+     * writes it, and old rows keep it.
+     */
     LEGACY_REVIEW_UNBOUND,
     /** The occasion kept no usable record of the work as it was; the current work is never reviewed in its place. */
     OCCASION_EVIDENCE_UNAVAILABLE,
