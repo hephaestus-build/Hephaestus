@@ -365,7 +365,7 @@ void test("the release-note rules hold a branch to what CI requires, against ori
 	// What #3787 hit in CI after its local checks passed: a deleted pending changeset ...
 	await attempt(() => {
 		git("rm", "--quiet", ".changeset/pending.md");
-	}, /Pending changesets may be edited .* not deleted or renamed: \.changeset\/pending\.md/u);
+	}, /not deleted or renamed: \.changeset\/pending\.md\. Restore them with `git checkout [0-9a-f]{40} -- \.changeset\/pending\.md`/u);
 	// ... and shipped code whose pull request only edits a changeset that main already has.
 	await attempt(async () => {
 		await write("webapp/src/a.ts", "export const a = 2;\n");
@@ -373,7 +373,7 @@ void test("the release-note rules hold a branch to what CI requires, against ori
 			".changeset/pending.md",
 			"---\n---\n\nCI only. No shipped application changes, rewritten.\n",
 		);
-	}, /changes shipped code but carries no changeset: webapp\/src\/a\.ts/u);
+	}, /changes shipped code but carries no changeset: webapp\/src\/a\.ts\nCreate \.changeset\/feature\.md with this content, commit it, and push again:\n\n---\n"hephaestus": patch\n---/u);
 	await attempt(async () => write("MIGRATION.md", "# Edited\n"), /Do not edit MIGRATION\.md/u);
 	await attempt(() => {
 		git("rm", "--quiet", ".migration/pending.md");

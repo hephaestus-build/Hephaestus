@@ -363,7 +363,6 @@ async function main(): Promise<void> {
 			[
 				...releaseNotes,
 				`These compare against the merge base with ${base}; if it is stale, run \`git fetch origin main\` and push again.`,
-				"Write a changeset with `vp exec changeset`; .changeset/README.md says which bump.",
 			].join("\n"),
 		);
 		process.exit(1);

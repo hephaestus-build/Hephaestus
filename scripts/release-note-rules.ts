@@ -17,6 +17,21 @@ const SHIPPED_PATHS = [
 	":!**/*.stories.tsx",
 ];
 
+/** A changeset file name from the branch name, such as `fix-installer-waits` for `fix/installer-waits`. */
+function changesetName(cwd: string): string {
+	let branch = "";
+	try {
+		branch = execFileSync("git", ["branch", "--show-current"], { cwd, encoding: "utf8" }).trim();
+	} catch {
+		// A detached HEAD has no branch name.
+	}
+	const name = branch
+		.toLowerCase()
+		.replaceAll(/[^a-z0-9]+/gu, "-")
+		.replaceAll(/^-+|-+$/gu, "");
+	return name === "" ? "my-change" : name;
+}
+
 /**
  * Why a pull request's release notes break the rules that hold for every pull request, compared from
  * its merge base with `base`: no edit to MIGRATION.md, no deleted pending fragment or changeset, and
@@ -39,25 +54,36 @@ export function releaseNoteProblems(base: string, cwd = process.cwd()): string[]
 	const problems: string[] = [];
 	if (changed("ACDMRT", "MIGRATION.md").length > 0) {
 		problems.push(
-			"Do not edit MIGRATION.md in a feature PR; add a .migration/<changeset-slug>.md fragment instead.",
+			`Do not edit MIGRATION.md in a feature PR. Restore it with \`git checkout ${base} -- MIGRATION.md\`, and put the upgrade step in .migration/<changeset-slug>.md (.changeset/README.md has the format).`,
 		);
 	}
 	const fragmentsRemoved = changed("DR", ".migration/*.md");
 	if (fragmentsRemoved.length > 0) {
 		problems.push(
-			`Pending migration fragments may be edited, but not deleted or renamed: ${fragmentsRemoved.join(", ")}`,
+			`Pending migration fragments may be edited, but not deleted or renamed: ${fragmentsRemoved.join(", ")}. Restore them with \`git checkout ${base} -- ${fragmentsRemoved.join(" ")}\`.`,
 		);
 	}
 	const changesetsRemoved = changed("DR", ".changeset/*.md");
 	if (changesetsRemoved.length > 0) {
 		problems.push(
-			`Pending changesets may be edited or converted to explained empty changesets, but not deleted or renamed: ${changesetsRemoved.join(", ")}`,
+			`Pending changesets may be edited or converted to explained empty changesets, but not deleted or renamed: ${changesetsRemoved.join(", ")}. Restore them with \`git checkout ${base} -- ${changesetsRemoved.join(" ")}\`, and add a new changeset for this change.`,
 		);
 	}
 	const shipped = changed("ACDMRT", ...SHIPPED_PATHS);
 	if (shipped.length > 0 && changed("A", ".changeset/*.md").length === 0) {
 		problems.push(
-			`This PR changes shipped code but carries no changeset: ${shipped.slice(0, 5).join(", ")}${shipped.length > 5 ? ", …" : ""}`,
+			[
+				`This PR changes shipped code but carries no changeset: ${shipped.slice(0, 5).join(", ")}${shipped.length > 5 ? ", …" : ""}`,
+				`Create .changeset/${changesetName(cwd)}.md with this content, commit it, and push again:`,
+				"",
+				"---",
+				'"hephaestus": patch',
+				"---",
+				"",
+				"<What changes for the user or the operator, in their words.>",
+				"",
+				"Use minor for a new capability. A change that no one notices keeps an empty frontmatter (two --- lines) and says why. `vp exec changeset` asks the same questions; .changeset/README.md has the rules.",
+			].join("\n"),
 		);
 	}
 	return problems;
