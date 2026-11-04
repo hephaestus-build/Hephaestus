@@ -2061,9 +2061,11 @@ async function turnAgainst(proxyUrl: string, protocol = "openai-completions"): P
 	return end;
 }
 
+// The proxy's words, which Pi would retry (pi-provider-usage.spec.ts): the host must stop on the code first.
 const STALL_PAYLOAD = {
 	error: {
-		message: "upstream_stalled: the model provider sent nothing for 120 seconds",
+		message:
+			"upstream_stalled: the model provider's stream timed out: it sent nothing for 120 seconds",
 		type: "upstream_stalled",
 		code: "upstream_stalled",
 	},

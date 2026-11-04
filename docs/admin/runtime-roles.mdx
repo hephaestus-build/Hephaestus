@@ -428,7 +428,7 @@ The turn fails with **Hephaestus took too long to reply and stopped. Try again.*
 At the call limit, the turn fails with **Hephaestus could not finish this reply. Try again.**
 The worker ends a stopped turn itself if the conversation host does not end it within 30 seconds.
 
-The worker's LLM proxy cuts a conversation model call whose provider stays silent too long.
+The worker's LLM proxy cuts a conversation model call, or a streamed model call of a practice review, whose provider stays silent too long.
 Two bounds apply:
 
 - `hephaestus.mentor.turn.model-first-byte-timeout` (default 5 minutes) bounds the wait for the response headers.
@@ -440,10 +440,11 @@ The turn's deadline also bounds both, because the stop at the deadline cancels t
 The turn fails with **Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment.**
 The worker logs the cut call and the failure with the reason `STALLED` and the bound that was passed.
 
-The same two bounds cut a streamed model call of a practice review.
-Without them, a provider that sends its headers and then nothing holds the call until the review's work time ends.
-The review runner retries the cut call.
-If a session's calls stay unanswered, the attempt ends early.
+For a practice review, the review runner retries the cut call up to 5 times.
+When two sessions in a row end with their calls unanswered, the review starts no new session.
+The attempt then ends early.
+If no call of the attempt was answered, the review runs again under the normal retry rules.
+`llm_proxy_upstream_stalled_total` counts each cut call.
 
 In a load test, the slowest 5 % of single calls took 21 seconds, and calls under load took 34 seconds on average.
 Both defaults are above these times.

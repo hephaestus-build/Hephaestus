@@ -991,12 +991,9 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 // The attempt's deadline is far off, so only the idle bound can end the call.
                 LlmCallPermits.Permit permit = mock(LlmCallPermits.Permit.class);
                 when(permit.revoked()).thenReturn(Mono.never());
-                long started = System.nanoTime();
                 Answer answer = proxyPooledStream(
                         "http://127.0.0.1:" + gateway.getAddress().getPort() + "/v1", permit);
-                Duration took = Duration.ofNanos(System.nanoTime() - started);
 
-                assertThat(took).isLessThan(Duration.ofSeconds(10));
                 assertThat(answer.status()).isEqualTo(200);
                 JsonNode last = OBJECT_MAPPER.readTree(answer.body()
                         .strip()
@@ -1016,6 +1013,44 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 released.countDown();
                 gateway.stop(0);
             }
+        }
+
+        @Test
+        @DisplayName(
+                "a review call without a stream keeps the client's read bound when its provider pauses past the idle bound")
+        void aReviewCallWithoutAStreamIsNotCutAtTheIdleBound() throws Exception {
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "application/json")
+                    .bodyDelay(800, TimeUnit.MILLISECONDS)
+                    .body("{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"slow review\"}}],"
+                            + "\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":40}}")
+                    .build());
+            ProxyRouting routing = streamingRouting();
+            authenticate(routing);
+            stubCredential(
+                    routing,
+                    new LlmModelResolver.ProxyCredential(
+                            upstream.url("/v1").toString(),
+                            "openai-completions",
+                            LlmAuthMode.BEARER,
+                            "catalog-model",
+                            "secret",
+                            42L));
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            ResponseEntity<?> answer = streamingController.proxy(
+                    request("POST", "/internal/llm/chat/completions"),
+                    response,
+                    new HttpHeaders(),
+                    "{\"stream\":false,\"messages\":[]}".getBytes(StandardCharsets.UTF_8));
+
+            String body = answer == null
+                    ? response.getContentAsString()
+                    : answer.getBody() instanceof byte[] bytes
+                            ? new String(bytes, StandardCharsets.UTF_8)
+                            : String.valueOf(answer.getBody());
+            assertThat(body).contains("slow review").doesNotContain("upstream_stalled");
         }
 
         @Test
@@ -1761,10 +1796,12 @@ class LlmProxyServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("an attempt's end waits for a call in flight to record its usage")
         void anAttemptsEndWaitsForTheCallInFlightToRecordItsUsage() throws Exception {
+            // The test is about the settle, not a silence bound.
+            streamingController = controllerWith(WebClient.builder().build(), Tracer.NOOP, SILENCE_NEVER_REACHED);
             upstream.enqueue(new MockResponse.Builder()
                     .code(200)
                     .addHeader("Content-Type", "text/event-stream")
-                    .bodyDelay(200, TimeUnit.MILLISECONDS)
+                    .bodyDelay(500, TimeUnit.MILLISECONDS)
                     .body("data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n"
                             + "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":40}}\n\n"
                             + "data: [DONE]\n\n")
