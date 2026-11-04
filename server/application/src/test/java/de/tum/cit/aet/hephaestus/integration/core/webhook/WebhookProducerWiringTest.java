@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsTraceContext;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsTraceContexts;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -44,6 +46,7 @@ class WebhookProducerWiringTest extends BaseUnitTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withBean("natsConnection", Connection.class, WebhookProducerWiringTest::natsConnection)
             .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
+            .withBean(NatsTraceContext.class, NatsTraceContexts::none)
             .withBean(WebhookProperties.class, WebhookPropertiesFixture::properties)
             .withBean(
                     NatsConnectionProperties.class,

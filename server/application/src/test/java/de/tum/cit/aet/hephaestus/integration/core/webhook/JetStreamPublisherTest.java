@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsTraceContexts;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.JetStreamPublisher.Cause;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.JetStreamPublisher.PublishFailedException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -50,7 +51,8 @@ class JetStreamPublisherTest extends BaseUnitTest {
 
     private final JetStream jetStream = mock(JetStream.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
-    private final JetStreamPublisher publisher = new JetStreamPublisher(jetStream, properties, meters);
+    private final JetStreamPublisher publisher =
+            new JetStreamPublisher(jetStream, properties, meters, NatsTraceContexts.none());
 
     @Test
     void shouldStoreTheDeliveryWhenTheBrokerFirstHasNoResponders() {

@@ -106,7 +106,8 @@ class IngestDurabilityIntegrationTest {
                     new IntegrationPoisonHandler(properties, new SimpleMeterRegistry(), deadLetters),
                     new IntegrationConsumerStats(),
                     mock(ConnectionActivityRecorder.class),
-                    List.of());
+                    List.of(),
+                    NatsTraceContexts.none());
             ScopeConsumer consumer = new ScopeConsumer(
                     42L,
                     "ordered",

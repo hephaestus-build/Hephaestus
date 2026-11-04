@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsTraceContexts;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier;
@@ -145,7 +146,8 @@ class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
     }
 
     private WebhookIngestPipeline pipeline() throws IOException {
-        JetStreamPublisher publisher = new JetStreamPublisher(connection.jetStream(), properties, meters);
+        JetStreamPublisher publisher =
+                new JetStreamPublisher(connection.jetStream(), properties, meters, NatsTraceContexts.none());
         return new WebhookIngestPipeline(
                 List.of(new AcceptingVerifier()), List.of(new FixedSubject()), publisher, new ObjectMapper());
     }

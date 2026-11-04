@@ -10,6 +10,8 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsTraceContext;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsTraceContexts;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.nats.client.Connection;
@@ -44,6 +46,7 @@ class JetStreamPublisherTopologyTest {
     private ApplicationContextRunner baseRunner() {
         return new ApplicationContextRunner()
                 .withUserConfiguration(WebhookConfiguration.class)
+                .withBean(NatsTraceContext.class, NatsTraceContexts::none)
                 .withBean(WebhookProperties.class, () -> properties)
                 // The stream monitor charges loss only to durables under this deployment's own name.
                 .withBean(

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsTraceContext;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import io.github.resilience4j.core.IntervalFunction;
 import io.micrometer.core.instrument.Counter;
@@ -45,11 +46,17 @@ public class JetStreamPublisher {
     private final JetStream jetStream;
     private final WebhookProperties properties;
     private final MeterRegistry meterRegistry;
+    private final NatsTraceContext traceContext;
     private final Counter retryCounter;
     private final Phaser inFlight = new Phaser(1);
 
-    JetStreamPublisher(JetStream jetStream, WebhookProperties properties, MeterRegistry meterRegistry) {
+    JetStreamPublisher(
+            JetStream jetStream,
+            WebhookProperties properties,
+            MeterRegistry meterRegistry,
+            NatsTraceContext traceContext) {
         this.jetStream = jetStream;
+        this.traceContext = traceContext;
         this.properties = properties;
         this.meterRegistry = meterRegistry;
         // Registered up front, so a rate over a stream that received nothing yet reads 0, not no data.
@@ -112,6 +119,8 @@ public class JetStreamPublisher {
             for (Map.Entry<String, String> entry : request.headers().entrySet()) {
                 headers.add(entry.getKey(), entry.getValue());
             }
+            // The consumer continues this request's trace, so the provider calls it makes join it.
+            traceContext.inject(headers);
             PublishOptions options;
             try {
                 options = PublishOptions.builder()
