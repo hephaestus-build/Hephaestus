@@ -136,6 +136,8 @@ public class ExportGenerationWorker {
                     exportId,
                     accountId,
                     recoveryFailure);
+            // The export is still in flight; an incomplete publication is resubmitted, a completed one is not.
+            throw recoveryFailure;
         }
     }
 
