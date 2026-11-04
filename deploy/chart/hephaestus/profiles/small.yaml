@@ -1,5 +1,5 @@
 # One small cluster: a single k3s node of 4 vCPU, 32 GiB and 150 GiB of disk. Bundled PostgreSQL and
-# NATS, one worker that runs one review at a time, and bounded caches; the chart derives the sandbox quotas.
+# NATS, one worker that runs five reviews at a time, and bounded caches; the chart derives the sandbox quotas.
 # docs/admin/kubernetes.mdx § Profiles gives the arithmetic; a chart test checks that the requests,
 # one upgrade beside them, and the quota fit.
 #
@@ -50,7 +50,10 @@ worker:
   # Drain the old worker before its replacement starts so the node holds 32 resident turns.
   # Reviews and conversations pause during the drain and replacement.
   rolloutStrategy: Recreate
-  reviews: 1
+  sandbox:
+    # Five reviews of 384 MiB. Each review beyond them takes 50m of CPU from the 32 resident turns
+    # while a backup runs.
+    reviewMemory: 1920Mi
   # The CPU budget admits 32 resident turns. The tools quota stays at eight plus two warm Pods.
   conversationTurns: auto
   gitCache:

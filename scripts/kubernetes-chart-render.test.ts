@@ -1159,8 +1159,9 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 		String(get(sandboxQuota(resources), "spec", "hard", "requests.ephemeral-storage")),
 		/^[1-9][0-9]*Mi$/u,
 	);
-	// One worker with Recreate: one review, one probe run, one host and the unchanged eight-plus-two tools quota.
-	assert.equal(get(tierQuota(resources, "reviews"), "spec", "hard", "pods"), "3");
+	// One worker with Recreate: its five reviews, one probe run of two Pods, one host and the unchanged
+	// eight-plus-two tools quota.
+	assert.equal(get(tierQuota(resources, "reviews"), "spec", "hard", "pods"), "7");
 	assert.equal(get(tierQuota(resources, "conversations"), "spec", "hard", "pods"), "11");
 
 	// Exactly the calls that the runtime makes, each in one namespace, and no cluster-wide authority.
@@ -1655,9 +1656,42 @@ await test("the worker schema refuses the retired hephTurns value", () => {
 	assert.match(result.stderr, /hephTurns/u);
 });
 
+/** One review Pod's memory request in MiB, from the table that the chart sizes the quota from. */
+const reviewPodMi = Number(
+	get(readJsonFileSync(path.join(chart, "sandbox-pod-requests.json")), "review", "memoryMi"),
+);
+/** The memory that holds this many review Pods. */
+const memoryFor = (reviewCount: number) => `${reviewCount * reviewPodMi}Mi`;
+const readValues = (file: string): unknown =>
+	parseAllDocuments(readFileSync(file, "utf8"))[0]?.toJS();
+/** worker.sandbox.reviewMemory as these layers set it, over the chart's default, in MiB. */
+const reviewMemoryMi = (layers: readonly Layer[]) => {
+	let value = get(readValues(path.join(chart, "values.yaml")), "worker", "sandbox", "reviewMemory");
+	for (const layer of layers) {
+		const values = typeof layer === "string" ? readValues(layer) : layer;
+		value = get(values, "worker", "sandbox", "reviewMemory") ?? value;
+	}
+	return amount(value) / 2 ** 20;
+};
+/** The reviews that one worker runs, and the Pods that the reviews quota holds. */
+const reviewWidth = (layers: Layer[]) => {
+	const resources = rendered(layers);
+	return {
+		sandboxes: envValue(workload(resources, "worker"), "SANDBOX_MAX_CONCURRENT"),
+		pods: get(tierQuota(resources, "reviews"), "spec", "hard", "pods"),
+	};
+};
+const workerMemory = (limit: string) => ({
+	worker: { resources: { limits: { memory: limit }, requests: { memory: limit } } },
+});
+
 const workerCapacity = (reviewCount: number) => {
 	const worker = workload(
-		rendered([...layersFor("small"), { worker: { reviews: reviewCount, conversationTurns: 8 } }]),
+		rendered([
+			...layersFor("small"),
+			{ worker: { sandbox: { reviewMemory: memoryFor(reviewCount) }, conversationTurns: 8 } },
+			workerMemory("3Gi"),
+		]),
 		"worker",
 	);
 	return {
@@ -1675,7 +1709,7 @@ await test("the webhook role's heap is sized from what that role loads", () => {
 	assert.equal(envValue(webhook, "JAVA_TOOL_OPTIONS"), "-XX:ReservedCodeCacheSize=64M");
 });
 
-await test("what a worker holds for its reviews follows worker.reviews", () => {
+await test("what a worker holds for its reviews follows the reviews that the sandbox nodes hold", () => {
 	// Up to eight reviews, the application's defaults hold. A larger worker must not stop at them.
 	assert.deepEqual(workerCapacity(1), {
 		active: "4",
@@ -1703,26 +1737,33 @@ await test("what a worker holds for its reviews follows worker.reviews", () => {
 	});
 });
 
-await test("a worker takes any number of reviews that its memory limit holds", () => {
-	const base = [...layersFor("small"), { worker: { conversationTurns: 8 } }];
-	assert.ok(
-		render([
-			...base,
-			{
-				worker: {
-					reviews: 66,
-					resources: { limits: { memory: "3Gi" }, requests: { memory: "3Gi" } },
-				},
-			},
-		]).ok,
-	);
-	// Too little memory does not lower the reviews. The JVM would not start, or would run out of heap.
-	const tooMany = render([...base, { worker: { reviews: 66 } }]);
-	assert.equal(tooMany.ok, false);
-	assert.match(
-		tooMany.stderr,
-		/worker\.reviews 66 needs worker\.resources\.limits\.memory of at least 2065Mi/u,
-	);
+await test("a worker runs the reviews that its memory limit holds, and the quota holds no more", () => {
+	const base = [
+		...layersFor("small"),
+		{ worker: { conversationTurns: 8, sandbox: { reviewMemory: memoryFor(66) } } },
+	];
+	// One worker, which drains before its replacement starts: its reviews and one probe of two Pods.
+	assert.deepEqual(reviewWidth([...base, workerMemory("3Gi")]), { sandboxes: "66", pods: "68" });
+	// 2 GiB holds 57 reviews' threads and heap, so the worker takes 57 and the quota holds no Pod for a 58th.
+	assert.deepEqual(reviewWidth(base), { sandboxes: "57", pods: "59" });
+	// Below one review the JVM would not start, or would run out of heap.
+	const tooSmall = render([...base, workerMemory("1022Mi")]);
+	assert.equal(tooSmall.ok, false);
+	assert.match(tooSmall.stderr, /must be at least 1023Mi for one review's threads and heap/u);
+	// A fraction does not convert to whole MiB, so the chart refuses it.
+	const fraction = render([...base, workerMemory("1.5Gi")]);
+	assert.equal(fraction.ok, false);
+	assert.match(fraction.stderr, /must be a whole number of Mi or Gi/u);
+	const noReview = render([
+		...layersFor("small"),
+		{ worker: { sandbox: { reviewMemory: "383Mi" } } },
+	]);
+	assert.equal(noReview.ok, false);
+	assert.match(noReview.stderr, /reviewMemory holds no review: one review Pod requests 384Mi/u);
+	// The review count is derived: a values file that still states it fails, and says which value.
+	const retired = render([...layersFor("small"), { worker: { reviews: 5 } }]);
+	assert.equal(retired.ok, false);
+	assert.match(retired.stderr, /reviews/u);
 });
 
 await test("the small profile keeps personal content inside the transport-buffer horizon", () => {
@@ -1787,9 +1828,10 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 				postgresql: { parameters: { max_connections: 180 } },
 			},
 		]),
+		// Three workers share the node's five reviews, and auto divides what is left across them.
 		{
-			worker: "3",
-			server: "9",
+			worker: "2",
+			server: "6",
 		},
 	);
 	assert.deepEqual(
@@ -1805,12 +1847,22 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 			server: "10",
 		},
 	);
-	assert.deepEqual(capacities([...layersFor("small"), { worker: { reviews: 15 } }]), {
-		worker: "24",
-		server: "24",
-	});
 	assert.deepEqual(
-		capacities([...layersFor("small"), { server: { resources: { requests: { cpu: "2" } } } }]),
+		capacities([...layersFor("small"), { worker: { sandbox: { reviewMemory: memoryFor(15) } } }]),
+		{
+			worker: "24",
+			server: "24",
+		},
+	);
+	// A larger server request comes out of the turns. One review keeps room for a few.
+	assert.deepEqual(
+		capacities([
+			...layersFor("small"),
+			{
+				server: { resources: { requests: { cpu: "2" } } },
+				worker: { sandbox: { reviewMemory: memoryFor(1) } },
+			},
+		]),
 		{ worker: "3", server: "3" },
 	);
 	const exhausted = render([
@@ -2132,31 +2184,35 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	);
 });
 
-// The quota and the Pods it admits come from one table and one review count. Any profile, at its own count
-// and at another, renders a quota of exactly what its workers may run: a review count or a Pod request that
-// moves alone fails here.
+// The quota and the Pods it admits come from one table and one review memory. Any profile, at its own memory
+// and at another, renders a quota of exactly what its workers may run: a memory or a Pod request that moves
+// alone fails here.
 for (const name of profiles) {
 	for (const reviewCount of [undefined, 3]) {
-		const label = `${name}${reviewCount === undefined ? "" : `, worker.reviews ${reviewCount}`}`;
+		const label = `${name}${reviewCount === undefined ? "" : `, memory for ${reviewCount} reviews`}`;
 		await test(`${label}: each tier's quota holds the sandboxes that its workers may run, and no more`, () => {
-			const resources = rendered([
+			const layers = [
 				...withWorker(name),
-				...(reviewCount === undefined ? [] : [{ worker: { reviews: reviewCount } }]),
-			]);
+				...(reviewCount === undefined
+					? []
+					: [{ worker: { sandbox: { reviewMemory: memoryFor(reviewCount) } } }]),
+			];
+			const resources = rendered(layers);
 			const worker = workload(resources, "worker");
 			assert.ok(worker, "the profile runs a worker");
-			// The reviews tier holds each worker's reviews once: new workers wait for the old ones' room. Every
-			// running worker, the old ones during a surge included, has its probe, Heph host and turn sandboxes.
+			// The reviews tier holds the reviews that the sandbox nodes hold, once: new workers wait for the old
+			// ones' room. Every running worker, the old ones during a surge included, has its probe, Heph host
+			// and turn sandboxes.
 			const replicas = Number(get(worker, "spec", "replicas"));
 			const running = replicas + surge(worker);
-			const workerReviews = replicas * Number(envValue(worker, "SANDBOX_MAX_CONCURRENT"));
+			const perWorker = Number(envValue(worker, "SANDBOX_MAX_CONCURRENT"));
+			// No profile states a RuntimeClass overhead; the overhead test below adds one.
+			const held = Math.floor(reviewMemoryMi(layers) / reviewPodMi);
+			assert.equal(perWorker, held, "each worker may run every review that the nodes hold");
 			if (reviewCount !== undefined) {
-				assert.equal(
-					workerReviews,
-					replicas * reviewCount,
-					"the worker runs the reviews that the quota holds",
-				);
+				assert.equal(held, reviewCount);
 			}
+			const workerReviews = Math.min(held, replicas * perWorker);
 			const turns = Number(envValue(worker, "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"));
 			assert.ok(Number.isInteger(turns), "the profile bounds the Heph turns");
 			const turnSandboxes =
@@ -2263,13 +2319,16 @@ const tierHard = (layers: Layer[]) => {
 };
 
 await test("each tier's quota counts the RuntimeClass overhead of every sandbox Pod that it holds", () => {
+	const overhead = { runtimeClassName: "gvisor", podOverhead: { cpuMillis: 100, memoryMi: 40 } };
 	const without = tierHard([...layersFor("small"), { worker: { conversationTurns: 32 } }]);
+	// The same five reviews, in memory that holds each review Pod's overhead too.
 	const withOverhead = tierHard([
 		...layersFor("small"),
 		{
 			worker: {
 				conversationTurns: 32,
-				runtime: { runtimeClassName: "gvisor", podOverhead: { cpuMillis: 100, memoryMi: 40 } },
+				runtime: overhead,
+				sandbox: { reviewMemory: `${5 * (reviewPodMi + 40)}Mi` },
 			},
 		},
 	]);
@@ -2281,6 +2340,12 @@ await test("each tier's quota counts the RuntimeClass overhead of every sandbox 
 			tier,
 		);
 	}
+	// In the profile's memory, the overhead leaves room for fewer reviews.
+	assert.equal(reviewWidth(layersFor("small")).sandboxes, "5");
+	assert.equal(
+		reviewWidth([...layersFor("small"), { worker: { runtime: overhead } }]).sandboxes,
+		"4",
+	);
 });
 
 const strategy = (name: (typeof profiles)[number], component: string) =>
@@ -2331,7 +2396,7 @@ const sum = (...parts: Budget[]): Budget => {
 	return budget;
 };
 
-await test("the 16 GiB profile runs a review and a Heph turn, and an upgrade, within one node of 16 GiB", () => {
+await test("the 16 GiB profile runs its reviews and Heph turns, and an upgrade, within one node of 16 GiB", () => {
 	// The recorded Node capacity, less the current kubelet reservations and hard eviction floor.
 	const node = nodeRoom(16_372_036 * 1024);
 	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
@@ -2347,6 +2412,7 @@ await test("the 16 GiB profile runs a review and a Heph turn, and an upgrade, wi
 	assert.ok(worker, "the profile runs a worker");
 	assert.equal(get(worker, "spec", "replicas"), 1);
 	const turns = Number(envValue(worker, "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"));
+	const reviewSlots = Number(envValue(worker, "SANDBOX_MAX_CONCURRENT"));
 	const backup = get(
 		resources.find((resource) => kindOf(resource) === "CronJob"),
 		"spec",
@@ -2359,21 +2425,22 @@ await test("the 16 GiB profile runs a review and a Heph turn, and an upgrade, wi
 		podSpec(resource),
 		Number(get(resource, "spec", "replicas") ?? 1),
 	]);
-	// Steady: every role, one backup, one review, the Heph host, the pooled turn sandboxes and one turn each running.
+	// Steady: every role, one backup, every review, the Heph host, the pooled turn sandboxes and one turn each running.
 	const steady = sum(total([...roles, [backup, 1]]), {
 		cpu:
-			sandboxPods.review.cpu +
+			reviewSlots * sandboxPods.review.cpu +
 			sandboxPods.hephHost.cpu +
 			(sandboxPods.pooledTurns + Math.min(turns, sandboxPods.activeTurnSandboxes)) *
 				sandboxPods.turn.cpu,
 		memory:
-			(sandboxGib.review +
+			(reviewSlots * sandboxGib.review +
 				sandboxGib.hephHost +
 				(sandboxGib.pooledTurns + Math.min(turns, sandboxPods.activeTurnSandboxes)) *
 					sandboxGib.turn) *
 			2 ** 30,
 	});
 	assert.equal(turns, 32);
+	assert.equal(reviewSlots, 5);
 	assert.ok(steady.cpu <= node.cpu, `steady: ${steady.cpu.toFixed(2)} CPU of ${node.cpu}`);
 	assert.ok(
 		steady.memory <= node.memory,
@@ -2407,7 +2474,7 @@ await test("the 16 GiB profile runs a review and a Heph turn, and an upgrade, wi
 		`upgrade: ${gib(upgrade.memory)} of ${gib(node.memory)} GiB`,
 	);
 	process.stdout.write(
-		`16 GiB budget of ${gib(node.memory)} GiB: steady ${gib(steady.memory)} GiB ${steady.cpu.toFixed(2)} CPU, with the probe ${gib(probing.memory)} GiB, upgrade ${gib(upgrade.memory)} GiB ${upgrade.cpu.toFixed(2)} CPU\n`,
+		`16 GiB budget of ${gib(node.memory)} GiB: ${reviewSlots} reviews, steady ${gib(steady.memory)} GiB ${steady.cpu.toFixed(2)} CPU, with the probe ${gib(probing.memory)} GiB, upgrade ${gib(upgrade.memory)} GiB ${upgrade.cpu.toFixed(2)} CPU\n`,
 	);
 });
 

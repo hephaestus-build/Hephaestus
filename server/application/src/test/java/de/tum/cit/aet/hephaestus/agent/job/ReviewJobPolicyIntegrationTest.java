@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
@@ -68,6 +69,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -318,6 +320,44 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertUnclaimed(second);
         when(sandboxes.roomFor(any())).thenReturn(2);
         assertThat(polling.processJob(second.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+    }
+
+    @Test
+    void shouldStopClaimingAtTheQuotaRoomAndThePoolWaiterBelowAHighWorkerCeiling() {
+        // The chart gives a worker a ceiling far above what the sandbox nodes hold, so the quota and the pool decide.
+        var selected = binding(DataHandlingTier.IN_HOUSE);
+        bindings.saveAndFlush(selected);
+        var queuedJobs = IntStream.range(0, 5).mapToObj(i -> queued(selected)).toList();
+        var sandboxes = mock(SandboxManager.class);
+        when(sandboxes.ready()).thenReturn(true);
+        when(sandboxes.roomFor(any())).thenReturn(3);
+        var calls = idleCalls();
+        var polling = pooledExecutor(
+                properties, calls, sandboxes, new SandboxProperties(64, 10, 60, SandboxTestLimits.REVIEW));
+
+        for (var job : queuedJobs.subList(0, 3)) {
+            assertThat(polling.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        }
+        assertThat(polling.processJob(queuedJobs.get(3).getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
+        assertUnclaimed(queuedJobs.get(3));
+        assertThat(polling.computeCapacity()).as("the ceiling still has room").isPositive();
+
+        // Room for one more Pod lets exactly one more review through.
+        when(sandboxes.roomFor(any())).thenReturn(4);
+        assertThat(polling.processJob(queuedJobs.get(3).getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(polling.processJob(queuedJobs.get(4).getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
+        assertUnclaimed(queuedJobs.get(4));
+
+        // With room to spare, a background waiter in the pool holds the claim until it is served.
+        when(sandboxes.roomFor(any())).thenReturn(Integer.MAX_VALUE);
+        when(calls.hasBackgroundWaiters(anyLong())).thenReturn(true);
+        assertThat(polling.processJob(queuedJobs.get(4).getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
+        assertUnclaimed(queuedJobs.get(4));
+        when(calls.hasBackgroundWaiters(anyLong())).thenReturn(false);
+        assertThat(polling.processJob(queuedJobs.get(4).getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(queuedJobs)
+                .extracting(job -> jobs.findById(job.getId()).orElseThrow().getStatus())
+                .containsOnly(ReviewJobStatus.RUNNING);
     }
 
     @Test
@@ -580,6 +620,11 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
 
     private ReviewJobExecutor pooledExecutor(
             AgentProperties settings, LlmCallPermits capacity, SandboxManager sandboxes) {
+        return pooledExecutor(settings, capacity, sandboxes, SandboxTestLimits.PROPERTIES);
+    }
+
+    private ReviewJobExecutor pooledExecutor(
+            AgentProperties settings, LlmCallPermits capacity, SandboxManager sandboxes, SandboxProperties limits) {
         var budgets = mock(LlmBudgetService.class);
         when(budgets.decide(anyLong())).thenReturn(LlmBudgetDecision.ALLOWED);
         var metrics = new SimpleMeterRegistry();
@@ -593,7 +638,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mock(PracticePiAdapter.class),
                 mock(AttemptTokenIssuer.class),
                 sandboxes,
-                SandboxTestLimits.PROPERTIES,
+                limits,
                 mock(AsyncTaskExecutor.class),
                 transactions,
                 mapper,

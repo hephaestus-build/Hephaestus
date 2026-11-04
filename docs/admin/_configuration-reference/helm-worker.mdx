@@ -15,7 +15,6 @@
 | `worker.resources.requests.cpu` | string | `"250m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
 | `worker.resources.requests.ephemeral-storage` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
 | `worker.resources.requests.memory` | string | `"2Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `worker.reviews` | integer | `5` | yes | `minimum: 1` |
 | `worker.rolloutStrategy` | string | `"RollingUpdate"` | yes | `enum: ["RollingUpdate","Recreate"]` |
 | `worker.runtime.nodeSelector` | object | `{}` | yes | `additionalProperties: {"type":"string","maxLength":63}` |
 | `worker.runtime.podOverhead.cpuMillis` | integer | `0` | yes | `minimum: 0` |
@@ -26,3 +25,4 @@
 | `worker.runtime.tolerations` | array | `[]` | yes | — |
 | `worker.sandbox.namespace` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
 | `worker.sandbox.quota.enabled` | boolean | `true` | yes | — |
+| `worker.sandbox.reviewMemory` | string | `"3840Mi"` | yes | The memory that the sandbox nodes give review Pods, in Mi or Gi. The reviews that run at once are this over one review Pod's request and its RuntimeClass overhead. |
