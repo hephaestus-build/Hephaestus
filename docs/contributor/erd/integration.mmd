@@ -76,6 +76,7 @@ erDiagram
         TEXT detail
         TIMESTAMPTZ occurred_at "NOT NULL"
         BIGINT actor_account_id FK
+        BIGINT workspace_id FK "NOT NULL"
     }
 
     ConsumerDeadLetter {
@@ -308,8 +309,8 @@ erDiagram
     }
 
     OrganizationMembership {
-        BIGINT organization_id PK
-        BIGINT user_id PK
+        BIGINT organization_id PK,FK
+        BIGINT user_id PK,FK
         VARCHAR(32) role "NOT NULL"
     }
 
@@ -627,8 +628,9 @@ erDiagram
     User ||--o{ CommitContributor : has
     GitCommit ||--o{ CommitFileChange : has
     Workspace ||--o{ Connection : has
-    Connection ||--o{ ConnectionAudit : has
+    Connection ||--o{ ConnectionAudit : connection_id
     Account ||--o{ ConnectionAudit : has
+    Connection ||--o{ ConnectionAudit : connection_id
     Workspace ||--o{ ConsumerDeadLetter : has
     Account ||--o{ ConsumerDeadLetter : references
     User ||--o{ GitCommit : authored_by
@@ -700,6 +702,8 @@ erDiagram
     Issue }o--o{ IssueBlocking : blocking_issue_id
     Issue }o--o{ IssueLabel : labeled
     Label }o--o{ IssueLabel : labeled
+    Organization }o--o{ OrganizationMembership : belongs_to
+    User }o--o{ OrganizationMembership : belongs_to
     Issue }o--o{ PullRequestClosingIssue : has
     Issue }o--o{ PullRequestClosingIssue : references
     Issue }o--o{ PullRequestRequestedReviewer : reviewed
