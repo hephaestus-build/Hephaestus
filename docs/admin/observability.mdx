@@ -37,6 +37,7 @@ The alert or the objective tells the operator when the answer needs work.
 | Is the data safe? | The WAL archive, backup and volume metrics | The critical alerts |
 | Which release runs in each Pod? | `application_build_info` | None |
 | Did feedback whose write was in doubt reach the work? | `practice_feedback_readback_total` | `HephaestusFeedbackReadbackUnknown` |
+| Does the cluster evaluate the rules of the release that runs? | The ConfigMap or the PrometheusRule of `observability.alertRules` | None. The project's own instances do not use them yet. Their vmalert loads a copy by hand: the ConfigMap `hephaestus-alert-rules` in the namespace `observability`. That copy does not follow the release |
 
 ### Questions without a signal
 
@@ -134,19 +135,28 @@ Set `job` to `hephaestus` with a relabeling.
 
 ### Alert rules
 
-The release checkout contains the alert rules in `deploy/observability/hephaestus-alerts.yml`.
-Load that file as it is, from the release that you run: `https://github.com/hephaestus-build/Hephaestus/blob/v<version>/deploy/observability/hephaestus-alerts.yml`.
-With the Prometheus Operator, put the `groups` list of the file into the `spec.groups` of a PrometheusRule.
+The chart contains the alert rules in `files/hephaestus-alerts.yml`.
+Each upgrade of the chart brings the rules of its release.
+Turn on one of two values, in the release's namespace:
 
-The chart does not render a PrometheusRule.
+| Value | Renders | For |
+| --- | --- | --- |
+| `observability.alertRules.configMap` | A ConfigMap with the file as it is, under the key `hephaestus-alerts.yml` | A Prometheus or a vmalert that mounts the ConfigMap |
+| `observability.alertRules.prometheusRule` | A PrometheusRule with the `groups` of the file | The Prometheus Operator. Its CRD must exist |
+
+Both are off by default.
+`observability.alertRules.labels` adds labels to both, so that the rule selector of your Prometheus finds them.
+For kube-prometheus-stack, set the `release` label of your monitoring release, or set its `ruleSelector`.
+Mount the ConfigMap into your Prometheus or vmalert, and let its rule loader read the mounted file.
+Without the chart, load the file as it is from the release that you run: `https://github.com/hephaestus-build/Hephaestus/blob/v<version>/deploy/chart/hephaestus/files/hephaestus-alerts.yml`.
+
 The rules of the group `hephaestus` read the `job` and `runtime_role` labels that your scrape configuration sets, not labels that the chart controls.
-Helm reads files only from the chart directory, so a template would need a second copy of the tested file.
-The plain file has one home, and it works with any Prometheus.
 [Alert response](./production-operations-runbook.mdx#alert-response) gives the response to each alert.
 
 The rule file is the home of each threshold, window, and summary.
 This section gives the reason for each threshold.
-`hephaestus-alerts.test.yml` beside the rules contains a `promtool` unit test for each alert.
+`hephaestus-alerts.test.yml` beside the rules in the repository contains a `promtool` unit test for each alert.
+The chart package does not contain it.
 Each test gives series that fire the alert and series that do not.
 CI runs these tests for each change to the rules.
 
@@ -272,7 +282,7 @@ PostgreSQL switches a segment only after WAL activity, so an idle database archi
 An archive command that hangs without a failure stops the next backup, because pgBackRest waits for the backup's WAL in the archive.
 `HephaestusBackupStale` and `HephaestusPostgresVolumeFilling` then fire.
 
-To adapt the rules:
+To adapt the rules, load your own copy of the file instead of the chart's values, and change the copy:
 
 1. Adjust windows, thresholds, and routing to your traffic and recovery objectives.
 2. If you change the monitor interval, increase the poll-age threshold.

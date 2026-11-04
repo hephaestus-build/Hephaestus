@@ -56,5 +56,5 @@ The operator's tools collect all of it.
 | --- | --- | --- |
 | Signal | A log event with an `event.name`, a meter, or a span | Focused tests on the event or the meter |
 | Name in the contract | [Observability](/admin/observability) | Review |
-| Alert | `deploy/observability/hephaestus-alerts.yml` | `vp run test:alerts`: each alert has a `promtool` case in which it fires and one in which it stays silent |
+| Alert | `deploy/chart/hephaestus/files/hephaestus-alerts.yml` | `vp run test:alerts`: each alert has a `promtool` case in which it fires and one in which it stays silent |
 | Runbook row | [Alert response](/admin/production-operations-runbook#alert-response) | `vp run test:alerts`: each alert has a row in that table |

@@ -52,7 +52,8 @@ import org.springframework.util.unit.DataSize;
  */
 class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
 
-    private static final Path ALERTS = Path.of("..", "..", "deploy", "observability", "hephaestus-alerts.yml");
+    private static final Path ALERTS =
+            Path.of("..", "..", "deploy", "chart", "hephaestus", "files", "hephaestus-alerts.yml");
     private static final Path CHART_VALUES = Path.of("..", "..", "deploy", "chart", "hephaestus", "values.yaml");
 
     /** GitHub deliveries a busy instance receives in a day. */

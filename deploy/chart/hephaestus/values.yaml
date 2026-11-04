@@ -246,6 +246,19 @@ webapp:
 # (docs/admin/kubernetes.mdx § Priorities). The chart creates them, which needs permission to create
 # cluster-wide objects. Where that is not allowed, set create to false and name three classes that
 # exist, with their values in that order.
+# The release's alert rules, files/hephaestus-alerts.yml, as the rule evaluator of the cluster
+# loads them. Both read the `job` and `runtime_role` labels that the scrape sets: docs/admin/observability.mdx.
+observability:
+  alertRules:
+    # A ConfigMap with the file as it is, under the key hephaestus-alerts.yml, for a Prometheus or
+    # vmalert that mounts it in the release's namespace.
+    configMap: false
+    # A PrometheusRule with the file's groups, for the Prometheus Operator. Its CRD must exist.
+    prometheusRule: false
+    # Labels for both, so that the rule selector of your Prometheus finds them, such as
+    # `release: <your monitoring release>` for kube-prometheus-stack.
+    labels: {}
+
 priorityClasses:
   create: true
   roles: ""

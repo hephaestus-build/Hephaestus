@@ -26,7 +26,7 @@ import { narrowedChartValues, removedChartValues } from "./verify-changesets.ts"
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 const CHART_SCHEMA = "deploy/chart/hephaestus/values.schema.json";
-const ALERT_RULES = "deploy/observability/hephaestus-alerts.yml";
+const ALERT_RULES = "deploy/chart/hephaestus/files/hephaestus-alerts.yml";
 const CATALOG_SCHEMA =
 	"server/application/src/main/resources/practices/default-catalog.schema.json";
 const CATALOG = "server/application/src/main/resources/practices/default-catalog.json";

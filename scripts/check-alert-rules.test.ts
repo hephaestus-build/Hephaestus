@@ -79,8 +79,8 @@ Check \`HephaestusUntested\` later.
 await test("every shipped alert fires in a promtool case and has a runbook row", async () => {
 	assert.deepEqual(
 		incompleteAlerts(
-			await read("deploy/observability/hephaestus-alerts.yml"),
-			await read("deploy/observability/hephaestus-alerts.test.yml"),
+			await read("deploy/chart/hephaestus/files/hephaestus-alerts.yml"),
+			await read("deploy/chart/hephaestus/files/hephaestus-alerts.test.yml"),
 			await read("docs/admin/production-operations-runbook.mdx"),
 		),
 		[],

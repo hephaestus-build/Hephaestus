@@ -12,7 +12,7 @@ import {
 } from "./check-public-contract.ts";
 
 const CHART = "deploy/chart/hephaestus/values.schema.json";
-const ALERTS = "deploy/observability/hephaestus-alerts.yml";
+const ALERTS = "deploy/chart/hephaestus/files/hephaestus-alerts.yml";
 const CATALOG_SCHEMA =
 	"server/application/src/main/resources/practices/default-catalog.schema.json";
 const CATALOG = "server/application/src/main/resources/practices/default-catalog.json";

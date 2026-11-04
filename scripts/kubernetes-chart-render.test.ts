@@ -596,6 +596,53 @@ await test("a release package runs the release's images with the operator's valu
 	assert.match(render([profile("small"), operator, reviews]).stderr, /images|release/u);
 });
 
+const alertRules = readFileSync(path.join(chart, "files", "hephaestus-alerts.yml"), "utf8");
+const alertRulesOn = {
+	observability: {
+		alertRules: { configMap: true, prometheusRule: true, labels: { release: "monitoring" } },
+	},
+};
+const ruleResources = (resources: Resource[]) =>
+	resources.filter((resource) => componentOf(resource) === "alert-rules");
+
+await test("the alert rules render as the tested file, and only when asked", () => {
+	assert.deepEqual(ruleResources(rendered(layersFor("small"))), []);
+	const resources = ruleResources(rendered([...layersFor("small"), alertRulesOn]));
+	assert.deepEqual(resources.map(kindOf), ["ConfigMap", "PrometheusRule"]);
+	// The rule selector of the operator's Prometheus finds both by the labels that it asks for.
+	for (const resource of resources) {
+		assert.equal(get(resource, "metadata", "labels", "release"), "monitoring");
+	}
+	const [configMap, prometheusRule] = resources;
+	assert.equal(get(configMap, "data", "hephaestus-alerts.yml"), alertRules);
+	assert.deepEqual(
+		get(prometheusRule, "spec", "groups"),
+		get(parseAllDocuments(alertRules)[0]?.toJS(), "groups"),
+	);
+});
+
+await test("a release package ships the alert rules without their promtool cases", async (t) => {
+	const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-release-chart-"));
+	t.after(async () => rm(directory, { recursive: true, force: true }));
+	const packaged = await packageReleaseChart(prepared.release.version, chart, prepared, directory);
+	// A relative name: GNU tar on Windows reads the "C:" of an absolute path as a remote host.
+	const listing = spawnSync("tar", ["-tzf", path.basename(packaged)], {
+		cwd: path.dirname(packaged),
+		encoding: "utf8",
+	});
+	assert.equal(listing.status, 0, listing.stderr);
+	const files = listing.stdout.split("\n");
+	assert.ok(files.includes("hephaestus/files/hephaestus-alerts.yml"), "the rules");
+	assert.ok(
+		!files.some((file) => file.endsWith("hephaestus-alerts.test.yml")),
+		"no promtool cases",
+	);
+	const resources = rendered([profile("small"), operator, reviews, alertRulesOn], {
+		source: packaged,
+	});
+	assert.equal(get(ruleResources(resources)[0], "data", "hephaestus-alerts.yml"), alertRules);
+});
+
 await test("the webapp runs the non-root image with one writable subtree on 8080", () => {
 	const resources = rendered(layersFor("small"));
 	const webapp = workload(resources, "webapp");
