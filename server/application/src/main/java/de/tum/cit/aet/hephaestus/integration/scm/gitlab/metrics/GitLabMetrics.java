@@ -9,6 +9,7 @@ public final class GitLabMetrics {
     public static final String GITLAB_GRAPHQL_RATELIMIT_SECONDS_UNTIL_RESET =
             "gitlab.graphql.ratelimit.seconds_until_reset";
     public static final String GITLAB_SYNC_ERRORS_TOTAL = "gitlab.sync.errors.total";
+    public static final String GITLAB_NOTE_RECONCILIATION_UNVERIFIED = "gitlab.note.reconciliation.unverified";
 
     private GitLabMetrics() {}
 }
