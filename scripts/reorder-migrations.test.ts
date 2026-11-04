@@ -60,33 +60,43 @@ void test("files also move after every migration that a queued pull request adds
 	assert.deepEqual(reorder(base, branch, at("2026-11-03T12:00:00Z")), []);
 });
 
-const response = (files: unknown[], hasNextPage = false) => ({
-	data: {
-		repository: {
-			mergeQueue: {
-				entries: {
-					nodes: [
-						{ pullRequest: { number: 7, files: { pageInfo: { hasNextPage }, nodes: files } } },
-					],
-				},
-			},
-		},
+const tree = (names: string[] | null) => ({
+	file: names === null ? null : { object: { entries: names.map((name) => ({ name })) } },
+});
+
+/** One queue entry: its merge-group commit, its head branch's tip, and its last commit. */
+const entry = (number: number, group?: string[], tip?: string[] | null, last?: string[]) => ({
+	headCommit: group === undefined ? null : tree(group),
+	pullRequest: {
+		number,
+		headRef: tip === undefined ? null : { target: tree(tip) },
+		commits: { nodes: last === undefined ? [] : [{ commit: tree(last) }] },
 	},
 });
 
-void test("the queued migrations are the next/ files that queued pull requests add", () => {
+const response = (...nodes: unknown[]) => ({
+	data: { repository: { mergeQueue: { entries: { nodes } } } },
+});
+
+void test("the queued migrations are the next/ files at each entry's merge-group commit, else at its head, however many files it changes", () => {
 	assert.deepEqual(
 		queuedMigrations(
-			response([
-				{ path: next("20261103154836-queued.xml"), changeType: "ADDED" },
-				{ path: next("20261101000000-old.xml"), changeType: "MODIFIED" },
-				{ path: "server/openapi.yaml", changeType: "ADDED" },
-			]),
+			response(
+				entry(7, ["20261101000000-base.xml", "20261103154836-grouped.xml", "README.md"]),
+				entry(8, undefined, ["20261104000000-waiting.xml"], ["20261102000000-older.xml"]),
+				entry(9, undefined, undefined, ["20261104010000-deleted-branch.xml"]),
+			),
 		),
-		[next("20261103154836-queued.xml")],
+		[
+			next("20261101000000-base.xml"),
+			next("20261103154836-grouped.xml"),
+			next("20261104000000-waiting.xml"),
+			next("20261104010000-deleted-branch.xml"),
+		],
 	);
+	assert.deepEqual(queuedMigrations(response(entry(7, undefined, null))), []);
+	assert.throws(() => queuedMigrations(response(entry(7))), /#7 has no commit/u);
 	assert.deepEqual(queuedMigrations({ data: { repository: { mergeQueue: null } } }), []);
-	assert.throws(() => queuedMigrations(response([], true)), /#7 changes more files/u);
 });
 
 void test("a file on main or in a release is never renamed", () => {
@@ -278,6 +288,23 @@ void test("with two migration pull requests in the queue, the branch moves after
 		problem ?? "",
 		/20261103060000-second-ahead\.xml, the newest that the merge queue adds/u,
 	);
+	// A queued head also lists main's files; the message still names the queue's newest.
+	const onMain = git(
+		"ls-tree",
+		"-r",
+		"--name-only",
+		"origin/main",
+		"--",
+		`${NEXT_CHANGELOG_DIRECTORY}/`,
+	)
+		.split("\n")
+		.filter(Boolean);
+	assert.match(
+		orderProblem("origin/main", cwd, [...onMain, ...queued]) ?? "",
+		/the newest that the merge queue adds/u,
+	);
+	// Main's files alone in the queued heads put nothing ahead of this branch.
+	assert.equal(orderProblem("origin/main", cwd, onMain), undefined);
 	const [rename] = reorderMigrations("origin/main", cwd, queued);
 	assert.ok(rename !== undefined);
 	assert.ok(path.basename(rename.to) > "20261103060000-second-ahead.xml", rename.to);
