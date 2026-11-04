@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { setTimeout } from "node:timers/promises";
+import { pathToFileURL } from "node:url";
 
 import {
 	focusedTests,
@@ -334,7 +335,9 @@ void test("a webapp change runs the build that enforces the bundle budget", () =
 
 /** Runs `runUnlessStalled` on `script` in its own process, so its output stays out of this report. */
 function watched(script: string, stallLimitMs: number, command = [process.execPath, "-e", script]) {
-	const module = JSON.stringify(path.join(import.meta.dirname, "check-push.ts"));
+	const module = JSON.stringify(
+		pathToFileURL(path.join(import.meta.dirname, "check-push.ts")).href,
+	);
 	const [program, ...args] = command;
 	return spawnSync(
 		process.execPath,

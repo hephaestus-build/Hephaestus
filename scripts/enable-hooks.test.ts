@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
+import { pathToFileURL } from "node:url";
 
 import { namesRepositoryHooks } from "./enable-hooks.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
@@ -112,7 +113,8 @@ void test("disabled hooks stay disabled: the launcher runs nothing", () => {
 	git("config", "vp.hooks.disabled", "true");
 	install(repository);
 	const run = (env: NodeJS.ProcessEnv) =>
-		spawnSync(path.join(repository, ".vite-hooks", "run"), ["pre-push", "false"], {
+		// Git starts hooks through sh, also on Windows, where the file itself is not executable.
+		spawnSync("sh", [path.join(repository, ".vite-hooks", "run"), "pre-push", "false"], {
 			cwd: repository,
 			encoding: "utf8",
 			env,
@@ -234,7 +236,7 @@ void test("check:affected warns in a clone whose hooks path is unset or missing"
 			[
 				"--input-type=module",
 				"--eval",
-				`import { missingHooksWarning } from ${JSON.stringify(SCRIPT)}; process.stdout.write(missingHooksWarning() ?? "");`,
+				`import { missingHooksWarning } from ${JSON.stringify(pathToFileURL(SCRIPT).href)}; process.stdout.write(missingHooksWarning() ?? "");`,
 			],
 			{ cwd: repository, encoding: "utf8", env: hookFreeEnv() },
 		);

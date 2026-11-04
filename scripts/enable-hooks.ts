@@ -62,7 +62,10 @@ export function namesRepositoryHooks(configured: string, checkouts: readonly str
 	}
 	return (
 		!existsSync(checkout) ||
-		checkouts.some((tree) => existsSync(tree) && realpathSync(tree) === realpathSync(checkout))
+		// The native form also expands Windows short names, which `git worktree list` never prints.
+		checkouts.some(
+			(tree) => existsSync(tree) && realpathSync.native(tree) === realpathSync.native(checkout),
+		)
 	);
 }
 
