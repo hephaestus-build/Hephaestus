@@ -210,7 +210,7 @@ if [ "$VERIFY" = false ]; then
 fi
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-for file in hephaestus-keys.sh k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
+for file in hephaestus-keys.sh k3s-wait-condition.sh k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
 	[ -f "$HERE/$file" ] || die "$file is not beside this script: download, verify and unpack the k3s bundle of the release first"
 done
 # Existing values can enable wildcard routing. Require an explicit certificate choice on reruns
@@ -566,15 +566,16 @@ if printf '%s\n' "$keys" | grep -qx 'Changed GITHUB_OAUTH_CLIENT_SECRET'; then o
 
 say "Waiting for cert-manager to issue the certificates"
 kubectl wait --for=create crd/certificates.cert-manager.io --timeout=10m >/dev/null
-kubectl wait --for=condition=Established crd/certificates.cert-manager.io --timeout=2m >/dev/null
+sh "$HERE/k3s-wait-condition.sh" - crd/certificates.cert-manager.io Established 120
 if [ "$WORKSPACE_SUBDOMAINS" = true ]; then
 	kubectl wait --for=create "clusterissuer/$DNS01_ISSUER" --timeout=5m >/dev/null ||
 		die "the DNS-01 ClusterIssuer $DNS01_ISSUER does not exist: install the issuer and its private credential first"
-	kubectl wait --for=condition=Ready "clusterissuer/$DNS01_ISSUER" --timeout=5m >/dev/null ||
+	sh "$HERE/k3s-wait-condition.sh" - "clusterissuer/$DNS01_ISSUER" Ready 300 ||
 		die "the DNS-01 ClusterIssuer $DNS01_ISSUER is not ready: check its account and credential"
 fi
 kubectl -n "$NAMESPACE" wait --for=create certificate/hephaestus-postgresql-tls --timeout=10m >/dev/null
-kubectl -n "$NAMESPACE" wait --for=condition=Ready certificate/hephaestus-postgresql-tls --timeout=10m >/dev/null
+sh "$HERE/k3s-wait-condition.sh" "$NAMESPACE" certificate/hephaestus-postgresql-tls Ready 600 ||
+	die "cert-manager issued no PostgreSQL certificate in 10 minutes: kubectl -n $NAMESPACE describe certificate hephaestus-postgresql-tls shows why"
 ready=$(kubectl -n "$GATEWAY_NAMESPACE" get certificate hephaestus-tls --ignore-not-found \
 	-o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
 if [ -z "$CERTIFICATES" ] && [ "$WORKSPACE_SUBDOMAINS" = false ] && [ "$ready" != True ]; then
@@ -582,7 +583,7 @@ if [ -z "$CERTIFICATES" ] && [ "$WORKSPACE_SUBDOMAINS" = false ] && [ "$ready" !
 	echo "    Without that path, stop now, and run this again with --certificates and your own certificate."
 fi
 kubectl -n "$GATEWAY_NAMESPACE" wait --for=create certificate/hephaestus-tls --timeout=10m >/dev/null
-kubectl -n "$GATEWAY_NAMESPACE" wait --for=condition=Ready certificate/hephaestus-tls --timeout=10m >/dev/null ||
+sh "$HERE/k3s-wait-condition.sh" "$GATEWAY_NAMESPACE" certificate/hephaestus-tls Ready 600 ||
 	die "cert-manager issued no certificate for $HOST in 10 minutes: kubectl describe challenges --all-namespaces shows why"
 
 if [ -f "$HERE/site.yaml" ]; then
