@@ -59,7 +59,6 @@ public class ReviewJobZombieSweeper {
     private final Duration renewEvery;
 
     Clock clock = Clock.systemUTC();
-    private final Instant startedAt = clock.instant();
 
     /**
      * A gap from the end of one lease check until the next one reads the database clock longer than this means that
@@ -160,33 +159,25 @@ public class ReviewJobZombieSweeper {
     private @Nullable ReviewJob reapIfStale(UUID jobId) {
         ReviewJob lockedJob = jobRepository.lockById(jobId).orElse(null);
         if (lockedJob == null || lockedJob.getStatus() != ReviewJobStatus.RUNNING) return null;
-        boolean cutover =
-                lockedJob.getLeasedUntil() == null && lockedJob.getLeaseId() != null && lockedJob.getDrainCount() > 0;
         int timeoutSeconds = getTimeoutFromSnapshot(lockedJob);
         Duration maxLifetime = Duration.ofSeconds(timeoutSeconds).plus(RUNNING_BUFFER);
-        // Give lease recovery a fresh timeout after this server starts, rather than the old claim's spent timeout.
-        Instant deadlineAnchor = cutover
-                ? startedAt
-                : lockedJob.getExecutionStartedAt() != null
-                        ? lockedJob.getExecutionStartedAt()
-                        : lockedJob.getStartedAt();
+        Instant deadlineAnchor = lockedJob.getExecutionStartedAt() != null
+                ? lockedJob.getExecutionStartedAt()
+                : lockedJob.getStartedAt();
         if (deadlineAnchor != null && deadlineAnchor.plus(maxLifetime).isAfter(clock.instant())) {
             return null;
         }
 
-        ReviewJobStatus terminalStatus = cutover ? ReviewJobStatus.FAILED : ReviewJobStatus.TIMED_OUT;
         int updated = jobRepository.transitionStatus(
                 jobId,
-                terminalStatus,
+                ReviewJobStatus.TIMED_OUT,
                 clock.instant(),
-                cutover
-                        ? "The server could not resume this review after the upgrade."
-                        : "The job exceeded its timeout. The executor may have crashed.",
+                "The job exceeded its timeout. The executor may have crashed.",
                 Set.of(ReviewJobStatus.RUNNING));
 
         if (updated > 0) {
             recordUnverifiableUsage(lockedJob);
-            lockedJob.setStatus(terminalStatus);
+            lockedJob.setStatus(ReviewJobStatus.TIMED_OUT);
             zombieReaped.increment();
             log.warn("Reaped stale RUNNING job: jobId={}, startedAt={}", jobId, lockedJob.getStartedAt());
             return lockedJob;
@@ -260,7 +251,7 @@ public class ReviewJobZombieSweeper {
     private boolean stillExpired(UUID jobId, Instant cutoff) {
         Instant leasedUntil =
                 jobRepository.lockById(jobId).map(ReviewJob::getLeasedUntil).orElse(null);
-        return leasedUntil == null || leasedUntil.isBefore(cutoff);
+        return leasedUntil != null && leasedUntil.isBefore(cutoff);
     }
 
     /**

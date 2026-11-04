@@ -41,14 +41,6 @@ public class MentorTurnService {
 
     private static final String LEASE_EXPIRED_CAUSE = "its lease expired on its last attempt";
 
-    /**
-     * Shown for a turn that the 1.0 upgrade interrupted (ADR 0070 § In-flight work); the upgrade's change set stores
-     * the same reply for the turns that were still queued.
-     */
-    private static final String UPGRADED = "Hephaestus was updated before it could answer. Ask again.";
-
-    private static final String UPGRADED_CAUSE = "an upgrade to 1.0 stopped it before it ended";
-
     private final MentorConversationRepository conversations;
     private final MentorEntryRepository entries;
     private final MentorTurnRepository turns;
@@ -345,9 +337,6 @@ public class MentorTurnService {
     /**
      * Takes an expired lease back. A running turn returns to the queue for its one retry, or fails after it; a stopped
      * turn stays stopped. The lost attempt stored nothing ({@link #end}).
-     *
-     * <p>A running turn without a lease was running when the old release stopped: every claim sets a lease, and the 1.0
-     * upgrade clears it. It ends and never runs again, so it never answers later without the developer asking.
      */
     @Transactional
     public Optional<LostAttempt> expireLease(UUID turnId) {
@@ -358,9 +347,6 @@ public class MentorTurnService {
         MentorTurn turn = locked.get();
         Instant now = turns.databaseClock();
         Instant leasedUntil = turn.getLeasedUntil();
-        if (turn.getStatus() == MentorTurn.Status.RUNNING && leasedUntil == null) {
-            return Optional.of(takeBack(turn, false, now, UPGRADED, UPGRADED_CAUSE));
-        }
         if (!turn.isLeased() || leasedUntil == null || !leasedUntil.isBefore(now)) {
             return Optional.empty();
         }

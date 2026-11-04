@@ -229,17 +229,16 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     long countByStatus(MentorTurn.Status status);
 
     /**
-     * Expired leases, and the running turns without one that only the 1.0 upgrade leaves ({@code expireLease}). The
-     * lease id finds the leased turns: no index covers the lease end, so that a renewal rewrites the row in place.
+     * Expired leases. The lease id finds the leased turns: no index covers the lease end, so that a renewal rewrites
+     * the row in place.
      */
     @WorkspaceAgnostic("The lease reaper sweeps expired leases across tenants")
     @Query("""
             SELECT t.id FROM MentorTurn t
-            WHERE (t.leaseId IS NOT NULL AND t.leasedUntil < :now
-                   AND t.status IN (de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING,
-                                    de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED))
-               OR (t.leasedUntil IS NULL AND t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING)
-            ORDER BY t.leasedUntil NULLS FIRST
+            WHERE t.leaseId IS NOT NULL AND t.leasedUntil < :now
+              AND t.status IN (de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING,
+                               de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED)
+            ORDER BY t.leasedUntil
             """)
     List<UUID> findExpiredLeases(@Param("now") Instant now);
 

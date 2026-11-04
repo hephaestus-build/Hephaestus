@@ -97,14 +97,6 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("a running attempt without an expiry, from a version before leases, is recovered")
-    void shouldRecoverTheAttemptWhenItHasNoExpiry() {
-        UUID id = runningJob(LEASE);
-
-        assertThat(expired()).extracting(OrphanedJobRef::getJobId).containsExactly(id);
-    }
-
-    @Test
     @DisplayName("a renewal names one attempt's exact lease, and never revives a lease that expired")
     void shouldRenewOnlyTheExactLiveLease() {
         UUID mine = runningJob(LEASE);
@@ -201,27 +193,6 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
         ReviewJob requeued = jobRepository.findById(id).orElseThrow();
         assertThat(requeued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
         assertThat(requeued.getLeaseId()).isNull();
-    }
-
-    @Autowired
-    private ReviewJobRecovery recovery;
-
-    @Test
-    @DisplayName("an attempt that 0.x claimed and the 1.0 changelog counted as a drain is requeued with no retry spent")
-    void shouldRequeueACutoverAttemptWithoutSpendingARetry() {
-        UUID id = runningJob(LEASE);
-        // In 0.x the attempt was number 1 with no drain: it had spent 1 retry. The changelog then counted one drain.
-        jdbc.update("UPDATE review_job SET attempt = 1, drain_count = 1, leased_until = NULL WHERE id = ?", id);
-
-        assertThat(expired()).extracting(OrphanedJobRef::getJobId).contains(id);
-        transactionTemplate.execute(s -> recovery.recover(id, LEASE, 1, null));
-
-        ReviewJob requeued = jobRepository.findById(id).orElseThrow();
-        assertThat(requeued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
-        assertThat(requeued.getAttempt()).isEqualTo(2);
-        assertThat(requeued.spentAttempts())
-                .as("the upgrade spent no retry: as many as in 0.x")
-                .isEqualTo(1);
     }
 
     @Test

@@ -16,10 +16,7 @@ import com.nimbusds.jose.jwk.JWKSet;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
-import org.springframework.mock.env.MockEnvironment;
 
 /**
  * Proves a freshly generated signing key survives the full seal-on-write / unseal-on-load round-trip
@@ -31,14 +28,8 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
 
     private static final String KEY = "0123456789abcdef0123456789abcdef"; // exactly 32 chars
 
-    private static MockEnvironment env(String profile) {
-        var environment = new MockEnvironment();
-        environment.setActiveProfiles(profile);
-        return environment;
-    }
-
     private JwtSigningKeyService serviceWith(JwtSigningKeyRepository repo, JwtSigningKeySealer sealer) {
-        return new JwtSigningKeyService(repo, env("dev"), sealer);
+        return new JwtSigningKeyService(repo, sealer);
     }
 
     @Test
@@ -76,6 +67,22 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRefuseToSignWithAnUnsealedKey() {
+        // No release writes an unsealed key, so a row like this one means tampering or a restore from before 1.0.
+        JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
+        JwtSigningKey legacy = new JwtSigningKey();
+        legacy.setKid("legacy-kid");
+        legacy.setEncryptionKeyId("v0-unsealed");
+        when(repo.findActive()).thenReturn(List.of(legacy));
+
+        JwtSigningKeyService service = new JwtSigningKeyService(repo, new JwtSigningKeySealer(systemKey(KEY, "prod")));
+
+        assertThatThrownBy(service::currentSigningKey)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("unsealed");
+    }
+
+    @Test
     void shouldRefuseToCreateAnUnsealedKeyWithoutAnEncryptionKey() {
         var sealer = new JwtSigningKeySealer(systemKey(null, "dev"));
         var repo = mock(JwtSigningKeyRepository.class);
@@ -83,42 +90,6 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("sealing is disabled");
         verify(repo, never()).save(any());
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"dev", "prod"})
-    void shouldRefuseExistingUnsealedKeysInEveryProfile(String profile) {
-        // An unsealed v0 row must fail closed at both the startup assertion and the signing path.
-        // ensureActiveKey() is intentionally NOT the guard here: it runs inside AuthJwtConfig's
-        // swallowing @PostConstruct, so making it the guard would be inert — the exact bug this pins.
-        JwtSigningKeySealer sealer = new JwtSigningKeySealer(systemKey(KEY, profile));
-        JwtSigningKeyRepository repo = mock(JwtSigningKeyRepository.class);
-
-        JwtSigningKey legacy = new JwtSigningKey();
-        legacy.setKid("legacy-kid");
-        legacy.setEncryptionKeyId("v0-unsealed");
-        when(repo.findActive()).thenReturn(List.of(legacy));
-
-        JwtSigningKeyService service = new JwtSigningKeyService(repo, env(profile), sealer);
-
-        // Startup assertion (called from AuthJwtConfig OUTSIDE the swallow) aborts boot.
-        assertThatThrownBy(service::assertKeysSealed)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("unsealed");
-        // Signing path also refuses to materialize the unsealed key.
-        assertThatThrownBy(service::currentSigningKey)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("unsealed");
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"specs", "cds-training"})
-    void shouldLoadTheAuthenticationContractWithoutADatabaseInBuildProfiles(String profile) {
-        var repo = mock(JwtSigningKeyRepository.class, invocation -> {
-            throw new IllegalStateException("No database is available for artifact generation");
-        });
-        var sealer = new JwtSigningKeySealer(systemKey(null, profile));
-        new JwtSigningKeyService(repo, env(profile), sealer).assertKeysSealed();
     }
 
     @Test
@@ -180,9 +151,9 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
         ArgumentCaptor<JwtSigningKey> saved = ArgumentCaptor.forClass(JwtSigningKey.class);
         when(repo.save(saved.capture())).thenAnswer(inv -> inv.getArgument(0));
 
-        JwtSigningKeyService service = new JwtSigningKeyService(repo, env("prod"), sealer);
+        JwtSigningKeyService service = new JwtSigningKeyService(repo, sealer);
 
-        // Prod + sealer enabled = OK to auto-generate a SEALED key (this is the fix that lets prod boot).
+        // Sealer enabled = OK to auto-generate a SEALED key (this is the fix that lets prod boot).
         service.ensureActiveKey();
 
         assertThat(saved.getValue().getEncryptionKeyId()).isEqualTo(JwtSigningKeySealer.KEY_ID);

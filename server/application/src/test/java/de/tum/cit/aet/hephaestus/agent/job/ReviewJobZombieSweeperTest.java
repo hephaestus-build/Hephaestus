@@ -162,6 +162,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
         ReviewJob job = runningJob(id, Instant.now().minusSeconds(180), 600);
         RuntimeJobTestData.initialize(job, workspace(workspaceId).getId());
         job.setLeaseId(EXPIRED_LEASE);
+        job.setLeasedUntil(START.minus(AGENT_PROPS.heartbeatInterval()).minusSeconds(1));
         job.setExecutionStartedAt(Instant.now());
         job.setAttempt(attempt);
         return job;
