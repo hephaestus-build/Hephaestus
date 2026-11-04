@@ -223,7 +223,16 @@ public class WorkspaceStatementInspector implements StatementInspector {
     public @Nullable String inspect(@Nullable String sql) {
         if (sql == null || sql.isBlank()) return sql;
         if (mode == TenancyEnforcement.OFF) return sql;
-        if (TenancyBypass.isActive()) return sql;
+        if (TenancyBypass.isActive()) {
+            Set<String> silencing = TenancyBypass.silencingTypes();
+            if (!silencing.isEmpty()) {
+                Decision bypassed = decisionCache.get(sql, this::analyze);
+                if (bypassed != null && bypassed.violated()) {
+                    reporter.reportBypassed(sql, bypassed.unguardedTables(), silencing);
+                }
+            }
+            return sql;
+        }
 
         Decision decision = decisionCache.get(sql, this::analyze);
         if (decision != null && decision.violated()) {

@@ -49,7 +49,7 @@ public class WorkspaceAgnosticAspect {
     public Object aroundAnnotatedMethod(ProceedingJoinPoint pjp) throws Throwable {
         WorkspaceAgnostic annotation =
                 ((MethodSignature) pjp.getSignature()).getMethod().getAnnotation(WorkspaceAgnostic.class);
-        return proceedWithBypass(pjp, annotation);
+        return proceedWithBypass(pjp, annotation, null);
     }
 
     @Around("@within(de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic) "
@@ -57,7 +57,7 @@ public class WorkspaceAgnosticAspect {
     public Object aroundAnnotatedType(ProceedingJoinPoint pjp) throws Throwable {
         Class<?> declaringType = pjp.getSignature().getDeclaringType();
         WorkspaceAgnostic annotation = declaringType.getAnnotation(WorkspaceAgnostic.class);
-        return proceedWithBypass(pjp, annotation);
+        return proceedWithBypass(pjp, annotation, declaringType);
     }
 
     /**
@@ -80,11 +80,11 @@ public class WorkspaceAgnosticAspect {
         if (target == null) {
             return pjp.proceed();
         }
-        WorkspaceAgnostic annotation = findAnnotationOnInterfaces(target.getClass());
-        if (annotation == null) {
+        Class<?> annotated = findAnnotatedInterface(target.getClass());
+        if (annotated == null) {
             return pjp.proceed();
         }
-        return proceedWithBypass(pjp, annotation);
+        return proceedWithBypass(pjp, AnnotationUtils.findAnnotation(annotated, WorkspaceAgnostic.class), annotated);
     }
 
     /**
@@ -92,21 +92,22 @@ public class WorkspaceAgnosticAspect {
      * {@link WorkspaceAgnostic}. We cannot rely on the JDK proxy class itself because
      * proxy classes do not inherit interface annotations; we must inspect each interface.
      */
-    private static @Nullable WorkspaceAgnostic findAnnotationOnInterfaces(Class<?> clazz) {
+    private static @Nullable Class<?> findAnnotatedInterface(Class<?> clazz) {
         for (Class<?> iface : clazz.getInterfaces()) {
             if (!Repository.class.isAssignableFrom(iface)) continue;
-            WorkspaceAgnostic ann = AnnotationUtils.findAnnotation(iface, WorkspaceAgnostic.class);
-            if (ann != null) return ann;
+            if (AnnotationUtils.findAnnotation(iface, WorkspaceAgnostic.class) != null) return iface;
         }
         return null;
     }
 
     // Closing the scope is the operation; its binding is intentionally unread.
     @SuppressWarnings("try")
-    private static Object proceedWithBypass(ProceedingJoinPoint pjp, WorkspaceAgnostic ann) throws Throwable {
+    private static Object proceedWithBypass(
+            ProceedingJoinPoint pjp, @Nullable WorkspaceAgnostic ann, @Nullable Class<?> markedType) throws Throwable {
         String reason = ann != null ? ann.value() : "anonymous";
 
-        try (TenancyBypass.Scope ignored = TenancyBypass.open(reason)) {
+        try (TenancyBypass.Scope ignored =
+                markedType == null ? TenancyBypass.open(reason) : TenancyBypass.openForType(reason, markedType)) {
             return pjp.proceed();
         }
     }

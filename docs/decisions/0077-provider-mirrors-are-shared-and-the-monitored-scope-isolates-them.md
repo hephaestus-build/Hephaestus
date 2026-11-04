@@ -48,6 +48,7 @@ The guard does **not** cover mirror reads in general. Read these limits with the
 - The integration tier runs the inspector in `throw` mode. Thus, a mirror read that only names the workspace fails there.
 - `WorkspaceTableColumnIntegrationTest` reads `MIRROR_TABLES` and does not list the mirror again.
 - Converting the type-level markers is a series of small changes, one type at a time. Each change is measured with the integration tier in `throw` mode.
+- Inside a bypass that only type-level markers opened, the inspector still checks each statement and counts a would-be violation in `tenancy.bypassed_violation.total{type}`, one count for each marked type on the call stack. It never refuses there. The count orders the conversion, and it shows each type whose marker can go.
 
 ## Revisit trigger
 
