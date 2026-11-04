@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -178,6 +179,12 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
                     return namespace.isPresent()
                             && ScmOrigin.of(namespace.get().serverUrl()).equals(origin);
                 });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ActorProfile> accountActors(long accountId) {
+        return userRepository.findAccountActors(accountId);
     }
 
     @Override

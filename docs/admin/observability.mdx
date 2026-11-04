@@ -346,7 +346,7 @@ A clean restart keeps them, and `SELECT pg_stat_statements_reset()` clears them.
 | `context.event.name`                              | Stable name on structured application events. Do not parse the message to identify these events  |
 | `context.traceId`, `context.spanId`               | The active trace scope, when there is one                                                         |
 | `context.job.id`, `context.workspace.id`          | Thread-scoped context, when available                                                            |
-| `context.installation_id`                         | The GitHub App installation of a workspace-scoped request, when it has one                      |
+| `context.installation_id`                         | The GitHub App installation of a sync run, when it has one                                      |
 | `context.integration.route`, `context.integration.delivery` | On `integration.message.failed`: provider and event (`github.push`), and the delivery count |
 | `context.*`                                       | Every other event field and thread-scoped value                                                  |
 | `error.type`, `error.stack_trace`                 | Exception class and frames when a call site includes the exception. Not present on every failure |

@@ -11,8 +11,6 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.security.WorkspaceElevationContext;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.workspace.CurrentAccountUsers;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
@@ -70,7 +68,6 @@ public class WorkspaceContextFilter implements Filter {
     private final CurrentAccountUsers currentAccountUsers;
     private final MembershipAutoSeeder membershipAutoSeeder;
     private final WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository;
-    private final ConnectionService connectionService;
     private final ObjectMapper objectMapper;
     private final WorkspaceElevationAudit elevationAudit;
     private final WorkspaceActorSelector actorSelector;
@@ -83,7 +80,6 @@ public class WorkspaceContextFilter implements Filter {
             CurrentAccountUsers currentAccountUsers,
             MembershipAutoSeeder membershipAutoSeeder,
             WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository,
-            ConnectionService connectionService,
             ObjectMapper objectMapper,
             WorkspaceElevationAudit elevationAudit,
             WorkspaceActorSelector actorSelector,
@@ -94,7 +90,6 @@ public class WorkspaceContextFilter implements Filter {
         this.currentAccountUsers = currentAccountUsers;
         this.membershipAutoSeeder = membershipAutoSeeder;
         this.workspaceSlugHistoryRepository = workspaceSlugHistoryRepository;
-        this.connectionService = connectionService;
         this.objectMapper = objectMapper;
         this.elevationAudit = elevationAudit;
         this.actorSelector = actorSelector;
@@ -207,11 +202,9 @@ public class WorkspaceContextFilter implements Filter {
                 return;
             }
 
-            Long installationId = connectionService
-                    .findActiveGitHubAppConfig(workspace.getId())
-                    .map(ConnectionConfig.GitHubAppConfig::installationId)
-                    .orElse(null);
-            WorkspaceContext context = WorkspaceContext.fromWorkspace(workspace, roles, installationId);
+            // A request carries no GitHub App installation: no handler reads it, and a lookup per request would only
+            // feed a log field. A sync run sets its own.
+            WorkspaceContext context = WorkspaceContext.fromWorkspace(workspace, roles, null);
 
             if (WorkspaceContextHolder.getContext() != null) {
                 log.warn("Detected context leak: reason=contextAlreadySet, workspaceSlug={}", safeSlug);

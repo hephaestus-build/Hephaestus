@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.user;
 
+import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import java.time.Instant;
@@ -9,6 +10,7 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
@@ -145,6 +147,26 @@ public interface UserRepository extends JpaRepository<User, Long> {
     }
 
     Optional<User> findByNativeIdAndProviderId(Long nativeId, Long providerId);
+
+    /**
+     * The human actors behind an account's enabled links to a git provider, oldest link first. A link with a team key or
+     * a non-numeric subject, or one whose actor has not synced yet, has no row. The guarded cast keeps a non-numeric
+     * subject from failing the query, and {@code disabled_at IS NULL} lets the partial index on the account's links
+     * serve it.
+     */
+    @NativeQuery("""
+        SELECT u.id, p.id, p.type, p.server_url, CAST(u.native_id AS text), u.login, COALESCE(u.name, u.login), true
+        FROM identity i
+        JOIN identity_provider p ON p.id = i.provider_id
+        JOIN "user" u ON u.provider_id = i.provider_id
+            AND u.native_id = CASE
+                WHEN i.provider_user_key ~ '^[0-9]+$' AND length(i.provider_user_key) <= 18
+                    THEN CAST(i.provider_user_key AS bigint)
+                END
+        WHERE i.account_id = :accountId AND i.disabled_at IS NULL AND i.team_key = '' AND u.type = 'USER'
+        ORDER BY i.id
+        """)
+    List<GitProviderRegistry.ActorProfile> findAccountActors(@Param("accountId") long accountId);
 
     /**
      * Try to acquire a transaction-scoped advisory lock on the given login.
