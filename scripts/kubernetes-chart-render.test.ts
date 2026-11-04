@@ -2226,7 +2226,17 @@ await test("the bundled broker requests its whole limit and keeps its heap under
 		{ nats: { resources: { limits: { memory: "3G" } } } },
 	]);
 	assert.equal(refused.ok, false);
-	assert.match(refused.stderr, /nats\.resources\.limits\.memory must end in Mi or Gi/u);
+	assert.match(
+		refused.stderr,
+		/nats\.resources\.limits\.memory must be a whole number of Mi or Gi/u,
+	);
+	// A fraction does not convert to whole MiB, so the chart refuses it.
+	const fraction = render([
+		...layersFor("small"),
+		{ nats: { resources: { requests: { memory: "1.5Gi" }, limits: { memory: "1.5Gi" } } } },
+	]);
+	assert.equal(fraction.ok, false);
+	assert.match(fraction.stderr, /must be a whole number of Mi or Gi/u);
 	// A site that raised only the request, as an older default invited, gets a reason instead of a rejected Pod.
 	const requestOnly = render([
 		...layersFor("small"),

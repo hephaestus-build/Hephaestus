@@ -1,6 +1,6 @@
 #### 🔴 Give the bundled NATS one memory size, in Mi or Gi
 
-The chart now sets the bundled broker's `GOMEMLIMIT` to 80 % of `nats.resources.limits.memory`, so it reads that limit. A render stops with `nats.resources.limits.memory must end in Mi or Gi` when the limit uses another unit, such as `3G` or a number of bytes.
+The chart now sets the bundled broker's `GOMEMLIMIT` to 80 % of `nats.resources.limits.memory`, so it reads that limit. A render stops with `nats.resources.limits.memory must be a whole number of Mi or Gi` when the limit uses another unit or a fraction, such as `3G`, `1.5Gi` or a number of bytes.
 
 The chart also requires the memory request to equal the limit. The broker's heap can grow to its soft limit during a catch-up, and with a request below that, the broker is among the first Pods that the node evicts when it runs short of memory.
 

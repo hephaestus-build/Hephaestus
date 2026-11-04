@@ -653,9 +653,9 @@ PostgreSQL volume.
 {{/* A memory quantity in MiB. The chart's sizes are whole Mi or Gi, so any other unit is refused rather than guessed. */}}
 {{- define "hephaestus.memoryMi" -}}
 {{- $value := .value | toString -}}
-{{- if hasSuffix "Gi" $value -}}{{- mul (trimSuffix "Gi" $value | int) 1024 -}}
-{{- else if hasSuffix "Mi" $value -}}{{- trimSuffix "Mi" $value | int -}}
-{{- else -}}{{- fail (printf "%s must end in Mi or Gi" .name) -}}
+{{- if regexMatch "^[1-9][0-9]*Gi$" $value -}}{{- mul (trimSuffix "Gi" $value | int) 1024 -}}
+{{- else if regexMatch "^[1-9][0-9]*Mi$" $value -}}{{- trimSuffix "Mi" $value | int -}}
+{{- else -}}{{- fail (printf "%s must be a whole number of Mi or Gi" .name) -}}
 {{- end -}}
 {{- end -}}
 
