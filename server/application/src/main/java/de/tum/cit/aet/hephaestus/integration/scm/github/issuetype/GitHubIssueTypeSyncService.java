@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueTyp
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueTypeColor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueTypeConnection;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -42,6 +43,7 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
@@ -62,6 +64,7 @@ public class GitHubIssueTypeSyncService {
     private final GitHubExceptionClassifier exceptionClassifier;
     private final SyncSchedulerProperties syncSchedulerProperties;
     private final GitHubGraphQlSyncCoordinator graphQlSyncHelper;
+    private final TransactionTemplate transactionTemplate;
     private static final int MAX_RETRY_ATTEMPTS = 3;
 
     public GitHubIssueTypeSyncService(
@@ -72,7 +75,8 @@ public class GitHubIssueTypeSyncService {
             GitHubSyncProperties syncProperties,
             GitHubExceptionClassifier exceptionClassifier,
             SyncSchedulerProperties syncSchedulerProperties,
-            GitHubGraphQlSyncCoordinator graphQlSyncHelper) {
+            GitHubGraphQlSyncCoordinator graphQlSyncHelper,
+            TransactionTemplate transactionTemplate) {
         this.issueTypeRepository = issueTypeRepository;
         this.organizationRepository = organizationRepository;
         this.syncTargetProvider = syncTargetProvider;
@@ -81,6 +85,7 @@ public class GitHubIssueTypeSyncService {
         this.exceptionClassifier = exceptionClassifier;
         this.syncSchedulerProperties = syncSchedulerProperties;
         this.graphQlSyncHelper = graphQlSyncHelper;
+        this.transactionTemplate = transactionTemplate;
     }
 
     /**
@@ -89,7 +94,6 @@ public class GitHubIssueTypeSyncService {
      * @param scopeId The scope to sync issue types for
      * @return Number of issue types synced, or -1 if skipped due to cooldown
      */
-    @Transactional
     public int syncIssueTypesForScope(Long scopeId) {
         Optional<SyncMetadata> metadataOpt = syncTargetProvider.getSyncMetadata(scopeId);
         if (metadataOpt.isEmpty()) {
@@ -127,9 +131,9 @@ public class GitHubIssueTypeSyncService {
 
         HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
 
+        List<GHIssueType> fetched = new ArrayList<>();
+        boolean complete;
         try {
-            Set<String> syncedIds = new HashSet<>();
-            int totalSynced = 0;
             int reportedTotalCount = -1;
             String cursor = null;
             boolean hasNextPage = true;
@@ -214,12 +218,7 @@ public class GitHubIssueTypeSyncService {
                     reportedTotalCount = response.getTotalCount();
                 }
 
-                for (var graphQlType : response.getNodes()) {
-                    String id = graphQlType.getId();
-                    syncIssueType(graphQlType, organization);
-                    syncedIds.add(id);
-                    totalSynced++;
-                }
+                fetched.addAll(response.getNodes());
 
                 var pageInfo = response.getPageInfo();
                 hasNextPage = pageInfo != null && Boolean.TRUE.equals(pageInfo.getHasNextPage());
@@ -227,18 +226,12 @@ public class GitHubIssueTypeSyncService {
                 retryAttempt = 0;
             }
 
-            // totalSynced is the raw node count here (incremented per node, no filter).
             if (reportedTotalCount >= 0) {
                 GraphQlConnectionOverflowDetector.checkPaginated(
-                        "issueTypes", totalSynced, reportedTotalCount, hasNextPage, safeOrgLogin);
+                        "issueTypes", fetched.size(), reportedTotalCount, hasNextPage, safeOrgLogin);
             }
 
-            removeDeletedIssueTypes(organization.getId(), syncedIds);
-            syncTargetProvider.updateScopeSyncTimestamp(
-                    scopeId, SyncTargetProvider.SyncType.ISSUE_TYPES, Instant.now());
-
-            log.info("Completed issue type sync: orgLogin={}, issueTypeCount={}", safeOrgLogin, totalSynced);
-            return totalSynced;
+            complete = !hasNextPage;
         } catch (InstallationNotFoundException e) {
             log.warn("Installation not found for scope {}, skipping issue type sync", scopeId);
             return 0;
@@ -250,6 +243,46 @@ public class GitHubIssueTypeSyncService {
             }
             return 0;
         }
+
+        // Deleted issue types are removed only after a complete listing: an aborted one would delete issue
+        // types that still exist.
+        if (!complete) {
+            log.warn("Skipped deleted issue type removal: reason=incompleteSync, orgLogin={}", safeOrgLogin);
+        }
+        // A database failure propagates, so the caller's transient-failure retry gets a fresh transaction.
+        Integer written =
+                transactionTemplate.execute(status -> writeIssueTypes(scopeId, organizationId, fetched, complete));
+        if (written == null) {
+            log.warn("Organization not found in database: orgLogin={}", safeOrgLogin);
+            return 0;
+        }
+
+        log.info("Completed issue type sync: orgLogin={}, issueTypeCount={}", safeOrgLogin, written);
+        return written;
+    }
+
+    /**
+     * Stores the issue types that GitHub listed, and removes the deleted ones if the listing is complete.
+     *
+     * @return the number stored, or {@code null} if the organization no longer exists
+     */
+    private @Nullable Integer writeIssueTypes(
+            Long scopeId, Long organizationId, List<GHIssueType> fetched, boolean complete) {
+        Organization organization =
+                organizationRepository.findById(organizationId).orElse(null);
+        if (organization == null) {
+            return null;
+        }
+        Set<String> syncedIds = new HashSet<>();
+        for (GHIssueType graphQlType : fetched) {
+            syncIssueType(graphQlType, organization);
+            syncedIds.add(graphQlType.getId());
+        }
+        if (complete) {
+            removeDeletedIssueTypes(organizationId, syncedIds);
+        }
+        syncTargetProvider.updateScopeSyncTimestamp(scopeId, SyncTargetProvider.SyncType.ISSUE_TYPES, Instant.now());
+        return fetched.size();
     }
 
     private void removeDeletedIssueTypes(Long organizationId, Set<String> syncedIds) {

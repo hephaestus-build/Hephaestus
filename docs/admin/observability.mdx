@@ -705,6 +705,17 @@ histogram_quantile(0.95, sum by (boundary, le) (rate(database_transaction_durati
 The bucket edges limit its resolution. Use the `_max` series for the longest transaction.
 Compare a slow boundary with `hikaricp_connections_pending` and `hikaricp_connections_acquire_seconds_max`.
 
+`database_transaction_http_requests_total` (Counter, label `boundary`) counts the outbound HTTP requests that started while a transaction was open.
+Such a request holds the connection and the row locks of its transaction until the other service answers.
+It counts the requests to GitHub, GitLab, Outline, model providers and other HTTP services.
+It does not count Slack, NATS or Kubernetes requests.
+
+The boundaries that make such requests, over 1 day:
+
+```promql
+sort_desc(sum by (boundary) (increase(database_transaction_http_requests_total[1d])))
+```
+
 ## Provider teardown metrics
 
 After a disconnect, the server role removes the app installation, token, or webhook at the provider, then deletes the stored credential.

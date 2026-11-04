@@ -21,18 +21,17 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GraphQlPagination
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHLabel;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHLabelConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.dto.GitHubLabelDTO;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for synchronizing GitHub labels via GraphQL API.
@@ -80,7 +79,6 @@ public class GitHubLabelSyncService {
      * @param repositoryId the repository ID to sync labels for
      * @return number of labels synced
      */
-    @Transactional
     public int syncLabelsForRepository(Long scopeId, Long repositoryId) {
         Repository repository = repositoryRepository.findById(repositoryId).orElse(null);
         if (repository == null) {
@@ -99,10 +97,7 @@ public class GitHubLabelSyncService {
 
         try {
             HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
-            ProcessingContext context = ProcessingContext.forSync(scopeId, repository);
-            AtomicInteger totalSynced = new AtomicInteger(0);
-            Set<String> syncedNames = new HashSet<>();
-
+            List<GitHubLabelDTO> fetched = new ArrayList<>();
             PaginationResult result = paginationHelper.paginate(PaginationRequest.<GHLabelConnection>builder()
                     .client(client)
                     .scopeId(scopeId)
@@ -117,41 +112,33 @@ public class GitHubLabelSyncService {
                             return false; // Stop pagination
                         }
                         for (var graphQlLabel : connection.getNodes()) {
-                            GitHubLabelDTO dto = convertToDTO(graphQlLabel);
-                            Label label = labelProcessor.process(dto, repository, context);
-                            if (label != null) {
-                                totalSynced.incrementAndGet();
-                                syncedNames.add(label.getName());
-                            }
+                            fetched.add(convertToDTO(graphQlLabel));
                         }
                         return true; // Continue to next page
                     })
                     .contextDescription("labels for " + safeNameWithOwner)
                     .build());
 
-            // Remove stale labels (labels in DB that no longer exist on GitHub)
-            // CRITICAL: Only remove stale labels if sync completed fully.
-            // If sync was aborted (rate limit, error, etc.), we don't have the complete
-            // list of labels and would incorrectly delete valid data.
-            int removedCount = 0;
-            if (result.isComplete()) {
-                removedCount = removeStaleLabels(repositoryId, syncedNames, context);
-            } else {
+            // Stale labels are removed only after a complete listing: an aborted one (rate limit, error) would
+            // delete labels that still exist.
+            if (!result.isComplete()) {
                 log.warn(
                         "Skipped stale label removal: reason=incompleteSync, repoName={}, pagesProcessed={}",
                         safeNameWithOwner,
                         result.pagesProcessed());
             }
+            // Each label commits in its own transaction (GitHubLabelProcessor#process), after GitHub has answered.
+            LabelWrite written = writeLabels(scopeId, repositoryId, fetched, result.isComplete());
 
             log.info(
                     "Completed label sync: repoName={}, labelCount={}, removedCount={}, pagesProcessed={}, completed={}, scopeId={}",
                     safeNameWithOwner,
-                    totalSynced.get(),
-                    removedCount,
+                    written.synced(),
+                    written.removed(),
                     result.pagesProcessed(),
                     result.isComplete(),
                     scopeId);
-            return totalSynced.get();
+            return written.synced();
         } catch (InstallationNotFoundException e) {
             // Re-throw to abort the entire sync operation
             throw e;
@@ -194,6 +181,28 @@ public class GitHubLabelSyncService {
             }
             return 0;
         }
+    }
+
+    private record LabelWrite(int synced, int removed) {}
+
+    /** Stores the labels that GitHub listed, and removes the stale ones if the listing is complete. */
+    private LabelWrite writeLabels(Long scopeId, Long repositoryId, List<GitHubLabelDTO> fetched, boolean complete) {
+        Repository repository = repositoryRepository.findById(repositoryId).orElse(null);
+        if (repository == null) {
+            return new LabelWrite(0, 0);
+        }
+        ProcessingContext context = ProcessingContext.forSync(scopeId, repository);
+        Set<String> syncedNames = new HashSet<>();
+        int synced = 0;
+        for (GitHubLabelDTO dto : fetched) {
+            Label label = labelProcessor.process(dto, repository, context);
+            if (label != null) {
+                synced++;
+                syncedNames.add(label.getName());
+            }
+        }
+        int removed = complete ? removeStaleLabels(repositoryId, syncedNames, context) : 0;
+        return new LabelWrite(synced, removed);
     }
 
     /**

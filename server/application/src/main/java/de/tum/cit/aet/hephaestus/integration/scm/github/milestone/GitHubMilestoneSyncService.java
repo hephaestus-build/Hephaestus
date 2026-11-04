@@ -29,17 +29,19 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHMileston
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHMilestoneConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.dto.GitHubMilestoneDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
@@ -62,6 +64,7 @@ public class GitHubMilestoneSyncService {
     private final GitHubSyncProperties syncProperties;
     private final GitHubExceptionClassifier exceptionClassifier;
     private final GitHubGraphQlSyncCoordinator graphQlSyncHelper;
+    private final TransactionTemplate transactionTemplate;
     private static final int MAX_RETRY_ATTEMPTS = 3;
 
     public GitHubMilestoneSyncService(
@@ -71,7 +74,8 @@ public class GitHubMilestoneSyncService {
             GitHubMilestoneProcessor milestoneProcessor,
             GitHubSyncProperties syncProperties,
             GitHubExceptionClassifier exceptionClassifier,
-            GitHubGraphQlSyncCoordinator graphQlSyncHelper) {
+            GitHubGraphQlSyncCoordinator graphQlSyncHelper,
+            TransactionTemplate transactionTemplate) {
         this.milestoneRepository = milestoneRepository;
         this.repositoryRepository = repositoryRepository;
         this.graphQlClientProvider = graphQlClientProvider;
@@ -79,6 +83,7 @@ public class GitHubMilestoneSyncService {
         this.syncProperties = syncProperties;
         this.exceptionClassifier = exceptionClassifier;
         this.graphQlSyncHelper = graphQlSyncHelper;
+        this.transactionTemplate = transactionTemplate;
     }
 
     /**
@@ -88,7 +93,6 @@ public class GitHubMilestoneSyncService {
      * @param repositoryId the repository ID to sync milestones for
      * @return number of milestones synced
      */
-    @Transactional
     public int syncMilestonesForRepository(Long scopeId, Long repositoryId) {
         Repository repository = repositoryRepository.findById(repositoryId).orElse(null);
         if (repository == null) {
@@ -106,11 +110,11 @@ public class GitHubMilestoneSyncService {
         String owner = parsedName.get().owner();
         String name = parsedName.get().name();
 
+        List<FetchedMilestone> fetched = new ArrayList<>();
+        boolean complete;
+        int pagesProcessed;
         try {
             HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
-            ProcessingContext context = ProcessingContext.forSync(scopeId, repository);
-            Set<Integer> syncedNumbers = new HashSet<>();
-            int totalSynced = 0;
             int milestonesReceived = 0;
             int reportedTotalCount = -1;
             String cursor = null;
@@ -198,13 +202,8 @@ public class GitHubMilestoneSyncService {
                 milestonesReceived += response.getNodes().size();
 
                 for (var graphQlMilestone : response.getNodes()) {
-                    GitHubMilestoneDTO dto = convertToDTO(graphQlMilestone);
-                    GitHubUserDTO creatorDto = GitHubUserDTO.fromActor(graphQlMilestone.getCreator());
-                    Milestone milestone = milestoneProcessor.process(dto, repository, creatorDto, context);
-                    if (milestone != null) {
-                        syncedNumbers.add(milestone.getNumber());
-                        totalSynced++;
-                    }
+                    fetched.add(new FetchedMilestone(
+                            convertToDTO(graphQlMilestone), GitHubUserDTO.fromActor(graphQlMilestone.getCreator())));
                 }
 
                 var pageInfo = response.getPageInfo();
@@ -226,25 +225,8 @@ public class GitHubMilestoneSyncService {
                         safeNameWithOwner);
             }
 
-            // CRITICAL: Only remove stale milestones if sync completed fully.
-            // If sync was aborted (rate limit, error, pagination limit), we don't have
-            // the complete list and would incorrectly delete valid milestones.
-            if (syncCompletedNormally) {
-                removeDeletedMilestones(repository.getId(), syncedNumbers, context);
-            } else {
-                log.warn(
-                        "Skipped stale milestone removal: reason=incompleteSync, repoName={}, pagesProcessed={}",
-                        safeNameWithOwner,
-                        pageCount);
-            }
-
-            log.info(
-                    "Completed milestone sync: repoName={}, milestoneCount={}, complete={}, scopeId={}",
-                    safeNameWithOwner,
-                    totalSynced,
-                    syncCompletedNormally,
-                    scopeId);
-            return totalSynced;
+            complete = syncCompletedNormally;
+            pagesProcessed = pageCount;
         } catch (InstallationNotFoundException e) {
             // Re-throw to abort the entire sync operation
             throw e;
@@ -256,6 +238,51 @@ public class GitHubMilestoneSyncService {
             }
             return 0;
         }
+
+        // Stale milestones are removed only after a complete listing: an aborted one (rate limit, error,
+        // pagination limit) would delete milestones that still exist.
+        if (!complete) {
+            log.warn(
+                    "Skipped stale milestone removal: reason=incompleteSync, repoName={}, pagesProcessed={}",
+                    safeNameWithOwner,
+                    pagesProcessed);
+        }
+        // A database failure propagates, so the caller's transient-failure retry gets a fresh transaction.
+        int totalSynced = Objects.requireNonNull(
+                transactionTemplate.execute(status -> writeMilestones(scopeId, repositoryId, fetched, complete)));
+
+        log.info(
+                "Completed milestone sync: repoName={}, milestoneCount={}, complete={}, scopeId={}",
+                safeNameWithOwner,
+                totalSynced,
+                complete,
+                scopeId);
+        return totalSynced;
+    }
+
+    private record FetchedMilestone(
+            GitHubMilestoneDTO milestone, @Nullable GitHubUserDTO creator) {}
+
+    /** Stores the milestones that GitHub listed, and removes the stale ones if the listing is complete. */
+    private int writeMilestones(Long scopeId, Long repositoryId, List<FetchedMilestone> fetched, boolean complete) {
+        Repository repository = repositoryRepository.findById(repositoryId).orElse(null);
+        if (repository == null) {
+            return 0;
+        }
+        ProcessingContext context = ProcessingContext.forSync(scopeId, repository);
+        Set<Integer> syncedNumbers = new HashSet<>();
+        int synced = 0;
+        for (FetchedMilestone entry : fetched) {
+            Milestone milestone = milestoneProcessor.process(entry.milestone(), repository, entry.creator(), context);
+            if (milestone != null) {
+                syncedNumbers.add(milestone.getNumber());
+                synced++;
+            }
+        }
+        if (complete) {
+            removeDeletedMilestones(repositoryId, syncedNumbers, context);
+        }
+        return synced;
     }
 
     private void removeDeletedMilestones(Long repositoryId, Set<Integer> syncedNumbers, ProcessingContext context) {

@@ -13,6 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.core.io.Resource;
+import org.springframework.graphql.support.DocumentSource;
 import org.springframework.graphql.support.ResourceDocumentSource;
 import reactor.core.publisher.Mono;
 
@@ -38,12 +39,16 @@ import reactor.core.publisher.Mono;
  * <p>
  * Fragment content is loaded and parsed once at construction time for efficiency.
  * <p>
+ * An operation document is read on the subscribing thread. Spring's {@link ResourceDocumentSource} reads it on a
+ * bounded-elastic thread, and the whole request then runs there: the request no longer starts on the thread whose
+ * transaction state {@code HttpRequestsInTransactions} reads.
+ * <p>
  * Pattern from: <a href="https://github.com/spring-projects/spring-graphql/issues/964">
  * spring-graphql#964</a>
  *
  * @see ResourceDocumentSource
  */
-public class FragmentMergingDocumentSource extends ResourceDocumentSource {
+public class FragmentMergingDocumentSource implements DocumentSource {
 
     // Matches "fragment FragmentName on TypeName { ... }" blocks.
     // Uses a simple brace-counting approach rather than regex for the body,
@@ -53,6 +58,8 @@ public class FragmentMergingDocumentSource extends ResourceDocumentSource {
     // Matches "...FragmentName" spreads (not inline spreads like "... on Type").
     private static final Pattern FRAGMENT_SPREAD = Pattern.compile("\\.\\.\\.(\\w+)");
 
+    private final List<Resource> locations;
+    private final List<String> extensions;
     private final Map<String, String> fragmentsByName;
 
     /**
@@ -65,13 +72,26 @@ public class FragmentMergingDocumentSource extends ResourceDocumentSource {
      */
     public FragmentMergingDocumentSource(
             List<Resource> locations, List<String> extensions, List<Resource> fragmentResources) {
-        super(locations, extensions);
+        this.locations = List.copyOf(locations);
+        this.extensions = List.copyOf(extensions);
         this.fragmentsByName = parseFragmentsPerResource(fragmentResources);
     }
 
     @Override
     public Mono<String> getDocument(String name) {
-        return super.getDocument(name).map(this::appendReferencedFragments);
+        return Mono.fromCallable(() -> appendReferencedFragments(readDocument(name)));
+    }
+
+    private String readDocument(String name) throws IOException {
+        for (Resource location : locations) {
+            for (String extension : extensions) {
+                Resource document = location.createRelative(name + extension);
+                if (document.exists()) {
+                    return document.getContentAsString(StandardCharsets.UTF_8);
+                }
+            }
+        }
+        throw new IllegalStateException("Failed to find document, name='" + name + "', under location(s)=" + locations);
     }
 
     /**
