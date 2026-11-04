@@ -42,7 +42,9 @@ void test(
 		const run = releaseStep.get("run");
 		assert.ok(typeof run === "string");
 		// The step runs this checkout's scripts against the fixture repository.
-		const shell = run.replaceAll("node scripts/", `node ${path.resolve("scripts")}/`);
+		// Quoted, with forward slashes: bash on Windows reads backslashes as escapes.
+		const scripts = path.resolve("scripts").replaceAll("\\", "/");
+		const shell = run.replaceAll(/node scripts\/(?<script>\S+)/gu, `node "${scripts}/$<script>"`);
 		const directory = await mkdtemp(path.join(tmpdir(), "changeset-merge-"));
 		t.after(async () => rm(directory, { recursive: true, force: true }));
 		const env = environmentForGitFixture();
