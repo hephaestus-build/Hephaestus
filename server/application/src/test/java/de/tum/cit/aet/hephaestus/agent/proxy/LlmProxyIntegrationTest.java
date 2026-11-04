@@ -676,6 +676,25 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
+    void shouldKeepAModelsRefusalThatCameWithoutContentOrUsage() throws Exception {
+        var upstream = HttpServer.create()
+                .host("127.0.0.1")
+                .port(0)
+                .handle((request, response) -> response.header("Content-Type", "text/event-stream")
+                        .sendString(Flux.just(
+                                "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"content_filter\"}]}\n\n",
+                                "data: [DONE]\n\n")))
+                .bindNow();
+        try {
+            var pool = streamUntilTheWorkEnds("http://127.0.0.1:" + upstream.port() + "/v1", 8, null);
+            assertThat(calls(pool, "refused")).isEqualTo(1);
+            assertThat(calls(pool, "unanswered")).isZero();
+        } finally {
+            upstream.disposeNow();
+        }
+    }
+
+    @Test
     void shouldNotRaiseTheLimitForASilentStreamBeforeAnyFirstTokenIsKnown() throws Exception {
         var upstream = silentAfterAComment();
         try {

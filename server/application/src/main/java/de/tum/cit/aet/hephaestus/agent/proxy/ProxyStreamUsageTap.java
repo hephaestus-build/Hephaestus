@@ -39,6 +39,8 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
     private static final byte[] USAGE_MARKER = "usage".getBytes(StandardCharsets.US_ASCII);
     /** Anthropic's {@code stop_reason} and OpenAI's {@code finish_reason}; the responses API's ride with usage. */
     private static final byte[] STOP_MARKER = "_reason".getBytes(StandardCharsets.US_ASCII);
+    /** The responses API's terminal event of a failed answer, which can carry neither usage nor a reason. */
+    private static final byte[] FAILED_MARKER = "response.failed".getBytes(StandardCharsets.US_ASCII);
 
     private final ObjectMapper objectMapper;
     private final LlmApiProtocol protocol;
@@ -148,7 +150,8 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
             firstEvent = null;
             if (first != null && served) first.accept(System.nanoTime() - sentAt);
         }
-        if (from < 0 || !(contains(line, USAGE_MARKER) || contains(line, STOP_MARKER))) {
+        if (from < 0
+                || !(contains(line, USAGE_MARKER) || contains(line, STOP_MARKER) || contains(line, FAILED_MARKER))) {
             return;
         }
         try {

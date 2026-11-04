@@ -41,11 +41,15 @@ class ProxyStreamUsageTapTest extends BaseUnitTest {
         feed(completions, "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":7}}\n\n");
         var responses = new ProxyStreamUsageTap(MAPPER, true);
         feed(responses, "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hi\"}\n\n");
+        var failed = new ProxyStreamUsageTap(MAPPER, true);
+        // A failed answer's terminal event names neither usage nor a reason.
+        feed(failed, "data: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\"}}\n\n");
 
         assertThat(anthropic.stopReason()).isEqualTo("refusal");
         assertThat(completions.stopReason()).isEqualTo("length");
         assertThat(completions.observed()).isNotNull();
         assertThat(responses.stopReason()).isNull();
+        assertThat(failed.stopReason()).isEqualTo("failed");
     }
 
     @Test

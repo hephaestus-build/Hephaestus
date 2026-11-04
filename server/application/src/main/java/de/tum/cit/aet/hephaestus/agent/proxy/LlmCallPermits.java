@@ -618,6 +618,8 @@ public class LlmCallPermits {
         private volatile boolean unanswered;
         private final long grantedAt = System.nanoTime();
         private volatile @Nullable String outcome;
+        /** When the provider's part ended, before the proxy settles the call's usage. */
+        private volatile long endedAt;
 
         /** The limit's mark when the call started: an answer about an older limit says nothing about this one. */
         private final @Nullable Long throttleMark;
@@ -641,6 +643,7 @@ public class LlmCallPermits {
          * asked; a permit closed without one never reached a provider and counts no call.
          */
         public void outcome(String outcome) {
+            this.endedAt = System.nanoTime();
             this.outcome = outcome;
         }
 
@@ -679,8 +682,15 @@ public class LlmCallPermits {
         public void close() {
             if (!closed.compareAndSet(false, true)) return;
             String ended = outcome;
+            // The model's own stop reason outranks an answer without content: a refusal can come with no text.
             if (ended != null)
-                meters.pool(pool).called(callClass, unanswered ? "unanswered" : ended, System.nanoTime() - grantedAt);
+                meters.pool(pool)
+                        .called(
+                                callClass,
+                                unanswered && !ended.equals("refused") && !ended.equals("length")
+                                        ? "unanswered"
+                                        : ended,
+                                endedAt - grantedAt);
             if (held.remove(id, this)) meters.pool(pool).active(callClass).decrementAndGet();
             pendingRelease.add(id);
             try {

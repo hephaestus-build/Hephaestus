@@ -24,8 +24,8 @@ final class ModelStopReason {
      * The stop reason in a buffered answer or in one event of a streamed answer, or {@code null} when it names none.
      * Anthropic writes it as {@code stop_reason}, in a stream under {@code delta}. OpenAI chat completions write a
      * {@code finish_reason} per choice. The responses API states an incomplete answer's reason under
-     * {@code incomplete_details}, in a stream inside the terminal event's {@code response}, and a refusal as a
-     * {@code refusal} content part.
+     * {@code incomplete_details}, in a stream inside the terminal event's {@code response}, a refusal as a
+     * {@code refusal} content part, and a failed answer as the status {@code failed}.
      */
     static @Nullable String of(@Nullable JsonNode node, LlmApiProtocol protocol) {
         if (node == null || !node.isObject()) {
@@ -43,6 +43,7 @@ final class ModelStopReason {
             }
             case OPENAI_RESPONSES -> {
                 JsonNode response = node.has("response") ? node.path("response") : node;
+                if ("failed".equals(response.path("status").asString(""))) yield "failed";
                 String reason = text(response.path("incomplete_details").path("reason"));
                 if (reason != null) yield reason;
                 for (JsonNode item : response.path("output")) {
@@ -56,10 +57,16 @@ final class ModelStopReason {
         };
     }
 
-    /** The outcome of a served call that stopped for {@code reason}: {@code refused}, {@code length} or {@code completed}. */
+    /**
+     * The outcome of a served call that stopped for {@code reason}: {@code refused}, {@code length}, {@code error} for a
+     * responses API answer whose status is {@code failed}, or {@code completed}.
+     */
     static String outcome(@Nullable String reason) {
         if (reason == null) {
             return "completed";
+        }
+        if (reason.equals("failed")) {
+            return "error";
         }
         if (REFUSED.contains(reason)) {
             return "refused";

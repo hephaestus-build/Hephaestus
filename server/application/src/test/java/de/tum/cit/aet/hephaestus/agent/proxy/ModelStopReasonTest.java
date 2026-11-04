@@ -28,10 +28,12 @@ class ModelStopReasonTest extends BaseUnitTest {
                 "OPENAI_RESPONSES | {\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"}} | length",
                 "OPENAI_RESPONSES | {\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"content_filter\"}} | refused",
                 "OPENAI_RESPONSES | {\"output\":[{\"content\":[{\"type\":\"refusal\",\"refusal\":\"No.\"}]}]} | refused",
+                "OPENAI_RESPONSES | {\"status\":\"failed\",\"error\":{\"code\":\"server_error\"}} | error",
                 // Streamed events.
                 "ANTHROPIC_MESSAGES | {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"refusal\"}} | refused",
                 "OPENAI_COMPLETIONS | {\"choices\":[{\"delta\":{},\"finish_reason\":null}]} | completed",
                 "OPENAI_RESPONSES | {\"type\":\"response.incomplete\",\"response\":{\"incomplete_details\":{\"reason\":\"max_output_tokens\"}}} | length",
+                "OPENAI_RESPONSES | {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\"}} | error",
             })
     void shouldTellACompleteAnswerFromACutOrRefusedOne(LlmApiProtocol protocol, String json, String outcome) {
         assertThat(ModelStopReason.outcome(ModelStopReason.of(MAPPER.readTree(json), protocol)))

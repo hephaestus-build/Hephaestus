@@ -552,9 +552,9 @@ class LlmProxyService {
             } catch (Exception e) {
                 // Only a failure before a stream's head reaches here, so nothing has been written to the client.
                 permit.failed(e);
-                if (practiceScript != null) accounting.recordUsage(attempt, practiceScript, null);
                 Bounds bounds = exchange.bounds();
                 poolPermit.outcome(bounds != null && ProxyStreamingUtils.readTimedOut(e) ? "stalled" : "error");
+                if (practiceScript != null) accounting.recordUsage(attempt, practiceScript, null);
                 if (bounds != null && ProxyStreamingUtils.readTimedOut(e)) {
                     callPermits.unanswered(poolPermit, true, tap.sinceSent(), instanceCredential);
                     accounting.recordError(routing.apiProtocol());
