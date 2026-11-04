@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubMembershipEventDTO;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 class GitHubMembershipMessageHandlerIntegrationTest extends BaseIntegrationTest {
@@ -40,6 +42,12 @@ class GitHubMembershipMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
     @Autowired
     private OrganizationRepository organizationRepository;
+
+    @Autowired
+    private TeamMembershipRepository teamMembershipRepository;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
@@ -138,6 +146,33 @@ class GitHubMembershipMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
         // Then - handler processes without error
         assertThat(event.action()).isEqualTo("removed");
+    }
+
+    @Test
+    void shouldAddAndRemoveTheMemberOfTheTeamWithGitHubsTeamId() throws Exception {
+        GitHubMembershipEventDTO added = loadPayload("membership.added");
+        long nativeTeamId = required(required(added.team()).id());
+        createTestTeam(nativeTeamId, required(added.team()).name());
+        long teamId = required(testTeam.getId());
+        assertThat(teamId).as("stored and GitHub ids must differ here").isNotEqualTo(nativeTeamId);
+
+        // Production runs each event in a transaction (AbstractIntegrationMessageHandler).
+        transactionTemplate.executeWithoutResult(status -> handler.handleEvent(added));
+
+        long nativeUserId = required(required(added.member()).id());
+        long userId = required(userRepository
+                .findByNativeIdAndProviderId(nativeUserId, required(gitProvider.getId()))
+                .orElseThrow()
+                .getId());
+        assertThat(userId).as("stored and GitHub ids must differ here").isNotEqualTo(nativeUserId);
+        assertThat(teamMembershipRepository.existsByTeam_IdAndUser_Id(teamId, userId))
+                .isTrue();
+
+        GitHubMembershipEventDTO removed = loadPayload("membership.removed");
+        transactionTemplate.executeWithoutResult(status -> handler.handleEvent(removed));
+
+        assertThat(teamMembershipRepository.existsByTeam_IdAndUser_Id(teamId, userId))
+                .isFalse();
     }
 
     private GitHubMembershipEventDTO loadPayload(String filename) throws IOException {
