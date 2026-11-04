@@ -39,8 +39,10 @@ void test(
 			(step) => isMap(step) && step.get("name") === "Check release-note presence",
 		);
 		assert.ok(isMap(releaseStep));
-		const shell = releaseStep.get("run");
-		assert.ok(typeof shell === "string");
+		const run = releaseStep.get("run");
+		assert.ok(typeof run === "string");
+		// The step runs this checkout's scripts against the fixture repository.
+		const shell = run.replaceAll("node scripts/", `node ${path.resolve("scripts")}/`);
 		const directory = await mkdtemp(path.join(tmpdir(), "changeset-merge-"));
 		t.after(async () => rm(directory, { recursive: true, force: true }));
 		const env = environmentForGitFixture();
@@ -91,7 +93,7 @@ void test(
 		git("merge", "--quiet", "--no-ff", "invalid-migration", "-m", "PR merge");
 		const migration = check();
 		assert.notEqual(migration.status, 0);
-		assert.match(migration.stdout, /Do not edit MIGRATION\.md/u);
+		assert.match(migration.stdout + migration.stderr, /Do not edit MIGRATION\.md/u);
 
 		git("checkout", "--quiet", "-b", "missing-note");
 		await write("server/Service.java", "class Service {}\n");
@@ -101,6 +103,6 @@ void test(
 		git("merge", "--quiet", "--no-ff", "missing-note", "-m", "PR merge");
 		const missing = check();
 		assert.notEqual(missing.status, 0);
-		assert.match(missing.stdout, /changes shipped code but carries no changeset/u);
+		assert.match(missing.stdout + missing.stderr, /changes shipped code but carries no changeset/u);
 	},
 );

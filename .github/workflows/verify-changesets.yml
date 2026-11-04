@@ -48,37 +48,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Image contents and the Chrome extension, excluding tests and in-tree documentation.
-          SHIPPED_PATHS=(
-            "server" "webapp" "docker" "extension"
-            ":!**/*.md" ":!server/application/src/test" ":!webapp/e2e" ":!extension/e2e"
-            ":!**/*.test.ts" ":!**/*.test.tsx" ":!**/*.stories.tsx"
-          )
+          # MIGRATION.md, deleted fragments or changesets, and shipped code without a changeset. The
+          # pre-push hook runs the same rules through `vp run gate:changesets`.
+          node scripts/verify-changesets.ts --release-notes "$BASE_SHA"
 
-          # Compare from the merge base so only this PR's changes count.
-          shipped_changed=$(git diff --name-only "$BASE_SHA"...HEAD -- "${SHIPPED_PATHS[@]}")
-          mapfile -t changesets_added < <(git diff --diff-filter=A --name-only "$BASE_SHA"...HEAD -- '.changeset/*.md' | grep -v 'README\.md' || true)
           mapfile -t changesets_changed < <(git diff --diff-filter=AM --name-only "$BASE_SHA"...HEAD -- '.changeset/*.md' | grep -v 'README\.md' || true)
-          mapfile -t changesets_removed < <(git diff --diff-filter=DR --name-only "$BASE_SHA"...HEAD -- '.changeset/*.md' | grep -v 'README\.md' || true)
           mapfile -t migration_changed < <(git diff --diff-filter=AM --name-only "$BASE_SHA"...HEAD -- '.migration/*.md' | grep -v 'README\.md' || true)
-          mapfile -t migration_removed < <(git diff --diff-filter=DR --name-only "$BASE_SHA"...HEAD -- '.migration/*.md' | grep -v 'README\.md' || true)
-
-          if git diff --quiet "$BASE_SHA"...HEAD -- MIGRATION.md; then :; else
-            echo "::error::Do not edit MIGRATION.md in a feature PR; add a .migration/<changeset-slug>.md fragment instead."
-            exit 1
-          fi
-
-          if [ "${#migration_removed[@]}" -gt 0 ]; then
-            echo "::error::Pending migration fragments may be edited, but not deleted or renamed:"
-            printf '%s\n' "${migration_removed[@]}"
-            exit 1
-          fi
-
-          if [ "${#changesets_removed[@]}" -gt 0 ]; then
-            echo "::error::Pending changesets may be edited or converted to explained empty changesets, but not deleted or renamed:"
-            printf '%s\n' "${changesets_removed[@]}"
-            exit 1
-          fi
 
           if [ "${#changesets_changed[@]}" -gt 0 ]; then
             vp exec changeset status --since "$BASE_SHA" --output /tmp/changeset-status.json
@@ -100,12 +75,6 @@ jobs:
 
           if git diff --name-only "$BASE_SHA"...HEAD -- server/application/src/main/resources/db/changelog/ | grep . >/dev/null; then
             echo "::notice::This PR contains Liquibase changesets — the release notes will flag the migration automatically. If the operator must act, add **Operators:** to its changeset and a matching .migration fragment."
-          fi
-
-          if [ -n "$shipped_changed" ] && [ "${#changesets_added[@]}" -eq 0 ]; then
-            echo "::error::This PR changes shipped code but carries no changeset:"
-            echo "$shipped_changed"
-            exit 1
           fi
 
           echo "Changeset check passed."

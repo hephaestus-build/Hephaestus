@@ -10,6 +10,7 @@ import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { repositoryCli } from "./lib/process.ts";
 import { PUSH_CHECK_ENV, pushStaticTasks } from "./lib/push-gates.ts";
+import { localReleaseNoteProblems } from "./release-note-rules.ts";
 import { orderProblem, readQueue } from "./reorder-migrations.ts";
 
 const allScopes = Object.keys(pushStaticTasks).filter(
@@ -353,6 +354,19 @@ async function main(): Promise<void> {
 			console.error(problem);
 			process.exit(1);
 		}
+	}
+	// Also milliseconds, and otherwise CI's: a change to shipped code needs a changeset even when the
+	// push changes no .changeset file, which is when gate:changesets does not run.
+	const releaseNotes = localReleaseNoteProblems(process.cwd(), base);
+	if (releaseNotes.length > 0) {
+		console.error(
+			[
+				...releaseNotes,
+				`These compare against the merge base with ${base}; if it is stale, run \`git fetch origin main\` and push again.`,
+				"Write a changeset with `vp exec changeset`; .changeset/README.md says which bump.",
+			].join("\n"),
+		);
+		process.exit(1);
 	}
 	const tasks = pushTasks(paths);
 	if (tasks.length === 0) {

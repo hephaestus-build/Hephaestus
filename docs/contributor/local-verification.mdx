@@ -16,7 +16,11 @@ Before you push, let the pre-push hook run `check:push`: it runs the checks that
 Run `check` when you change a shared input, such as the lockfile, or before you push another local ref.
 
 `check` validates the contents of all pending changeset files through `gate:changesets`.
-CI also checks release-note presence and changes against the tested merge base.
+The pre-push hook also applies CI's release-note rules, on every push, against the merge base with `origin/main` as last fetched.
+A branch must not edit `MIGRATION.md`, or delete or rename a pending changeset or migration fragment.
+A change to shipped code needs an added changeset.
+CI applies the same rules against the tested merge base, and exempts drafts, bots and verified reverts.
+
 Before you request review, run `verify`.
 `vp run` with no task name lists every task, and `vite.config.ts` is where each one is defined.
 

@@ -10,6 +10,7 @@ import { asArray, asRecord, asString, isRecord, parseJson, readJsonFile } from "
 import { migrationGuideSections } from "./lib/migration-guide.ts";
 import { CLAUDE_SESSION_PATTERN } from "./lib/model-attribution.ts";
 import { parseVersion } from "./lib/release-version.ts";
+import { releaseNoteProblems } from "./release-note-rules.ts";
 
 const changesetEntries = (status: unknown): Map<string, Record<string, unknown>> => {
 	const entries = asArray(
@@ -322,7 +323,7 @@ async function main(): Promise<void> {
 	const [statusJson, ...arguments_] = process.argv.slice(2);
 	if (!isSet(statusJson)) {
 		throw new Error(
-			"usage: verify-changesets.ts --local | --removed-chart-values <base> <files...> | <changeset-status-json> <files...>",
+			"usage: verify-changesets.ts --local | --release-notes <base> | --removed-chart-values <base> <files...> | <changeset-status-json> <files...>",
 		);
 	}
 	if (statusJson === "--local") {
@@ -330,6 +331,17 @@ async function main(): Promise<void> {
 			throw new Error("--local reads all pending changesets and takes no file arguments");
 		}
 		await verifyLocalChangesets(process.cwd());
+		return;
+	}
+	if (statusJson === "--release-notes") {
+		const [base] = arguments_;
+		if (!isSet(base)) {
+			throw new Error("--release-notes needs the base commit");
+		}
+		const problems = releaseNoteProblems(base);
+		if (problems.length > 0) {
+			throw new Error(problems.join("\n"));
+		}
 		return;
 	}
 	if (statusJson === "--removed-chart-values") {
