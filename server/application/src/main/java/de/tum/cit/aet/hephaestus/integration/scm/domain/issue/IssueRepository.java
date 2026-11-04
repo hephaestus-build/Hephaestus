@@ -20,6 +20,16 @@ import org.springframework.transaction.annotation.Transactional;
  */
 public interface IssueRepository extends JpaRepository<Issue, Long> {
 
+    /** Every workspace's mirror rows. Only tests call it, to check what sync stored; production code reads by scope. */
+    @Override
+    @WorkspaceAgnostic("Reads every workspace's mirror rows; only tests call it, to check what sync stored")
+    long count();
+
+    /** Every workspace's mirror rows. Only tests call it, to check what sync stored; production code reads by scope. */
+    @Override
+    @WorkspaceAgnostic("Reads every workspace's mirror rows; only tests call it, to check what sync stored")
+    List<Issue> findAll();
+
     /** The row that holds a provider's issue or pull request id, with the repository it is stored under. */
     interface Holding {
         long getId();
@@ -90,6 +100,8 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
      * @param number the issue number within the repository
      * @return the issue if found
      */
+    @WorkspaceAgnostic("Sync and review context load one shared mirror row of a repository they already hold: the"
+            + " provider event's, or the reviewed work's, which the review reached through its workspace")
     @Query("""
         SELECT i
         FROM Issue i
