@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -107,7 +108,8 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
         var localGit = new GitRepositoryManager(
                 new GitRepositoryProperties(true, 2, 8L * 1024 * 1024 * 1024),
                 new GitRepositoryLockManager(),
-                new FabricLayout(temporary.resolve("fabric").toString()));
+                new FabricLayout(temporary.resolve("fabric").toString()),
+                GitTransportFixtures.guarded());
         var localTransport = spy(localGit);
         doAnswer(invocation -> {
                     localGit.ensureRepository(KEY, remote.toUri().toString(), null);

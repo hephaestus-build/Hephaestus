@@ -7,20 +7,33 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
+import de.tum.cit.aet.hephaestus.core.security.ScmEgressProperties;
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.web.reactive.function.client.WebClient;
 
 class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
+    @BeforeAll
+    static void declarePublicHosts() {
+        OfflineNetwork.answer("gitlab.lrz.de", OfflineNetwork.PUBLIC_ADDRESS);
+    }
 
     private static final Set<String> STABLE_SUBJECT_ATTRIBUTES = Set.of("id", "sub");
+    private static final ScmServerEndpointPolicy ENDPOINTS =
+            new ScmServerEndpointPolicy(new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of()));
+
     private static final OutlineOriginPolicy OUTLINE_ORIGINS =
             new OutlineOriginPolicy(Set.of("https://wiki.example.com"));
 
@@ -44,8 +57,8 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
         LoginProviderRepository repo = mock(LoginProviderRepository.class);
         when(repo.findByRegistrationId("provider"))
                 .thenReturn(Optional.of(provider("provider", type, "https://wiki.example.com", "openid profile")));
-        var registrations =
-                new LoginProviderClientRegistrationRepository(repo, "https://hephaestus.build/api", OUTLINE_ORIGINS);
+        var registrations = new LoginProviderClientRegistrationRepository(
+                repo, "https://hephaestus.build/api", OUTLINE_ORIGINS, ENDPOINTS);
         var request = new MockHttpServletRequest("GET", "/oauth2/authorization/provider");
         request.setServletPath("/oauth2/authorization/provider");
         request.setScheme("https");
@@ -76,7 +89,7 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                                 "openid profile")));
 
         List<ClientRegistration> registrations = new LoginProviderClientRegistrationRepository(
-                        repo, "https://hephaestus.build", OUTLINE_ORIGINS)
+                        repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS)
                 .listRegistrations();
 
         assertThat(registrations).hasSize(2);
@@ -108,8 +121,8 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                 .thenReturn(Optional.of(provider(
                         "slack", LoginProvider.ProviderType.SLACK, "https://slack.com", "openid profile email")));
 
-        LoginProviderClientRegistrationRepository repository =
-                new LoginProviderClientRegistrationRepository(repo, "https://hephaestus.build", OUTLINE_ORIGINS);
+        LoginProviderClientRegistrationRepository repository = new LoginProviderClientRegistrationRepository(
+                repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS);
 
         List<ClientRegistration> picker = repository.listRegistrations();
         assertThat(picker).extracting(ClientRegistration::getRegistrationId).containsExactly("github", "slack");
@@ -133,7 +146,8 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                         Set.of(LoginProvider.ProviderType.GITHUB, LoginProvider.ProviderType.GITLAB)))
                 .thenReturn(true);
 
-        assertThat(new LoginProviderClientRegistrationRepository(repo, "https://hephaestus.build", OUTLINE_ORIGINS)
+        assertThat(new LoginProviderClientRegistrationRepository(
+                                repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS)
                         .hasEnabledPrimarySignInProvider())
                 .isTrue();
     }
@@ -141,7 +155,8 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
     @Test
     void signInReadinessQueriesOnlyPrimaryProviderTypes() {
         LoginProviderRepository repo = mock(LoginProviderRepository.class);
-        assertThat(new LoginProviderClientRegistrationRepository(repo, "https://hephaestus.build", OUTLINE_ORIGINS)
+        assertThat(new LoginProviderClientRegistrationRepository(
+                                repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS)
                         .hasEnabledPrimarySignInProvider())
                 .isFalse();
         verify(repo)
@@ -157,7 +172,7 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                         provider("outline", LoginProvider.ProviderType.OUTLINE, "https://wiki.example.com", "read")));
 
         ClientRegistration outline = new LoginProviderClientRegistrationRepository(
-                        repo, "https://hephaestus.build", OUTLINE_ORIGINS)
+                        repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS)
                 .findByRegistrationId("outline");
 
         assertNotNull(outline);
@@ -179,7 +194,7 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                         provider("outline", LoginProvider.ProviderType.OUTLINE, "https://wiki.example.com", "read")));
 
         ClientRegistration outline = new LoginProviderClientRegistrationRepository(
-                        repo, "https://hephaestus.build", new OutlineOriginPolicy(Set.of()))
+                        repo, "https://hephaestus.build", new OutlineOriginPolicy(Set.of()), ENDPOINTS)
                 .findByRegistrationId("outline");
 
         assertThat(outline).isNull();
@@ -193,7 +208,7 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                         provider("gitlab-lrz", LoginProvider.ProviderType.GITLAB, "https://gitlab.lrz.de", "openid")));
 
         ClientRegistration reg = new LoginProviderClientRegistrationRepository(
-                        repo, "https://hephaestus.build", OUTLINE_ORIGINS)
+                        repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS)
                 .findByRegistrationId("gitlab-lrz");
 
         assertNotNull(reg);
@@ -211,15 +226,35 @@ class LoginProviderClientRegistrationRepositoryTest extends BaseUnitTest {
                         provider("github", LoginProvider.ProviderType.GITHUB, "https://github.com", "read:user")));
 
         ClientRegistration prefixed = new LoginProviderClientRegistrationRepository(
-                        repo, "https://hephaestus.build/api", OUTLINE_ORIGINS)
+                        repo, "https://hephaestus.build/api", OUTLINE_ORIGINS, ENDPOINTS)
                 .findByRegistrationId("github");
         assertNotNull(prefixed);
         assertThat(prefixed.getRedirectUri()).isEqualTo("https://hephaestus.build/api/login/oauth2/code/github");
 
         ClientRegistration root = new LoginProviderClientRegistrationRepository(
-                        repo, "https://hephaestus.build", OUTLINE_ORIGINS)
+                        repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS)
                 .findByRegistrationId("github");
         assertNotNull(root);
         assertThat(root.getRedirectUri()).isEqualTo("https://hephaestus.build/login/oauth2/code/github");
+    }
+
+    @Test
+    void shouldEndSignInAtAStoredGitLabWhenItLeavesTheList() {
+        var repo = mock(LoginProviderRepository.class);
+        var stored = provider("corp", LoginProvider.ProviderType.GITLAB, "https://10.20.30.40", "read_user");
+        when(repo.findByRegistrationId("corp")).thenReturn(Optional.of(stored));
+        when(repo.findByEnabledTrueOrderByDisplayNameAsc()).thenReturn(List.of(stored));
+        var listed = new ScmServerEndpointPolicy(
+                new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of("10.20.30.40")));
+
+        var admitted = new LoginProviderClientRegistrationRepository(
+                repo, "https://hephaestus.build", OUTLINE_ORIGINS, listed);
+        assertNotNull(admitted.findByRegistrationId("corp"));
+        assertThat(admitted.listRegistrations()).hasSize(1);
+
+        var removed = new LoginProviderClientRegistrationRepository(
+                repo, "https://hephaestus.build", OUTLINE_ORIGINS, ENDPOINTS);
+        assertThat(removed.findByRegistrationId("corp")).isNull();
+        assertThat(removed.listRegistrations()).isEmpty();
     }
 }

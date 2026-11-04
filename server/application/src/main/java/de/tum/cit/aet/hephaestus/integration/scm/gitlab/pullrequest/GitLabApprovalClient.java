@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -30,9 +31,9 @@ public class GitLabApprovalClient {
     private final GitLabTokenService tokenService;
     private final WebClient webClient;
 
-    public GitLabApprovalClient(GitLabTokenService tokenService, WebClient.Builder builder) {
+    public GitLabApprovalClient(GitLabTokenService tokenService, GitLabWebClients builder) {
         this.tokenService = tokenService;
-        this.webClient = builder.build();
+        this.webClient = builder.builder().build();
     }
 
     public @Nullable Snapshot read(Long scopeId, long projectId, int iid) {

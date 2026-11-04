@@ -1,11 +1,12 @@
 package de.tum.cit.aet.hephaestus.core.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
-import org.junit.jupiter.api.BeforeAll;
+import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -13,10 +14,71 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class ServerUrlValidatorTest extends BaseUnitTest {
 
-    @BeforeAll
-    static void declarePublicHosts() {
-        OfflineNetwork.answer("gitlab.com", OfflineNetwork.PUBLIC_ADDRESS);
-        OfflineNetwork.answer("git.mycompany.org", OfflineNetwork.PUBLIC_ADDRESS);
+    // No name is declared to the offline resolver: a check that looked one up would fail this class.
+    @Test
+    void shouldCheckAHostNameWithoutLookingItUp() {
+        ServerUrlValidator.validate("https://gitlab.lrz.de:8443", PrivateHostAllowlist.parse(List.of(), List.of()));
+
+        assertThat(OfflineNetwork.attempts()).doesNotContain("gitlab.lrz.de");
+    }
+
+    /** What an attacker would write. Each stays refused even when the list names everything it may name. */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "https://127.0.0.1",
+                "https://127.1",
+                "https://0",
+                "https://0.0.0.0",
+                "https://2130706433",
+                "https://0x7f000001",
+                "https://0x7f.0.0.1",
+                "https://0177.0.0.1",
+                "https://[::1]",
+                "https://[::]",
+                "https://[::ffff:127.0.0.1]",
+                "https://[::ffff:7f00:1]",
+                "https://[::127.0.0.1]",
+                "https://169.254.169.254",
+                "https://2852039166",
+                "https://0xa9fea9fe",
+                "https://[::ffff:169.254.169.254]",
+                "https://[::ffff:a9fe:a9fe]",
+                "https://[fe80::1]",
+                "https://[2002:a9fe:a9fe::]",
+                "https://[64:ff9b::a9fe:a9fe]",
+                "https://100.100.100.200",
+                "https://localhost",
+                "https://LOCALHOST",
+                "https://localhost.",
+                "https://foo.localhost",
+                "https://metadata.google.internal",
+                "https://metadata.goog",
+                "https://metadata.google.internal.",
+                "https://gitlab.corp.example@127.0.0.1",
+                "https://127.0.0.1#@gitlab.corp.example",
+                "https://gitlab.corp.example/../",
+                "http://gitlab.corp.example",
+                "https://[::1%25nosuchif]",
+                "https://[fe80::1%25eth0]",
+                "https://[::ffff:0:a9fe:a9fe]",
+                "https://[::ffff:0:7f00:1]",
+                "https://[not-an-address]",
+            })
+    void shouldRefuseEveryLoopbackMetadataAndEncodedFormWhateverTheList(String url) {
+        var list = PrivateHostAllowlist.parse(List.of("gitlab.corp.example", "10.20.0.0/16"), List.of());
+
+        assertThatThrownBy(() -> ServerUrlValidator.validate(url)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ServerUrlValidator.validate(url, list)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"https://10.20.30.40", "https://[::ffff:10.20.30.40]", "https://gitlab.corp.internal"})
+    void shouldRefuseAPrivateHostUnlessTheListNamesIt(String url) {
+        var list = PrivateHostAllowlist.parse(List.of("gitlab.corp.internal", "10.20.0.0/16"), List.of());
+
+        assertThatThrownBy(() -> ServerUrlValidator.validate(url)).isInstanceOf(IllegalArgumentException.class);
+        ServerUrlValidator.validate(url, list);
     }
 
     @Nested
@@ -189,7 +251,8 @@ class ServerUrlValidatorTest extends BaseUnitTest {
 
         @Test
         void stillAcceptsPublicIpv6() {
-            assertThatCode(() -> ServerUrlValidator.validate("https://[2001:db8::1]"))
+            // 2001:db8::/32 is reserved for documentation, so a routable address stands in for a public host.
+            assertThatCode(() -> ServerUrlValidator.validate("https://[2606:4700:4700::1111]"))
                     .doesNotThrowAnyException();
         }
     }

@@ -8,18 +8,20 @@ import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSync
 import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants.TRANSPORT_MAX_BACKOFF;
 import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants.TRANSPORT_MAX_RETRIES;
 
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
 import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
-import io.netty.resolver.DefaultAddressResolverGroup;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import java.io.Serial;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -66,8 +68,16 @@ public class GitLabGraphQlConfig {
 
     private final GitLabRateLimitTracker rateLimitTracker;
 
-    public GitLabGraphQlConfig(@Lazy GitLabRateLimitTracker rateLimitTracker) {
+    private final ScmServerEndpointPolicy endpoints;
+
+    public GitLabGraphQlConfig(@Lazy GitLabRateLimitTracker rateLimitTracker, ScmServerEndpointPolicy endpoints) {
         this.rateLimitTracker = rateLimitTracker;
+        this.endpoints = endpoints;
+    }
+
+    @Bean
+    public GitLabWebClients gitLabWebClients(ObjectProvider<WebClient.Builder> builders) {
+        return () -> builders.getObject().clientConnector(endpoints.connector());
     }
 
     @Bean
@@ -101,7 +111,7 @@ public class GitLabGraphQlConfig {
 
         // 75s response timeout covers the extended GraphQL timeout (60s) with margin
         HttpClient httpClient = HttpClient.create(connectionProvider)
-                .resolver(DefaultAddressResolverGroup.INSTANCE)
+                .resolver(endpoints.resolverGroup())
                 .responseTimeout(Duration.ofSeconds(75));
 
         return webClients

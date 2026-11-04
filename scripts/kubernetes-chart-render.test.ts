@@ -2995,6 +2995,44 @@ await test("the migration knows the configured GitLab, which a connection withou
 	);
 });
 
+await test("a Git provider on a private network reaches the server and the worker, never the webhook role", () => {
+	const endpoint = { cidr: "10.30.0.0/16", ports: [443] };
+	const resources = rendered([
+		...layersFor("small"),
+		{
+			config: { scmPrivateHosts: ["gitlab.corp.example"] },
+			networkPolicy: { scmEndpoints: [endpoint] },
+		},
+	]);
+	const rule = {
+		to: [{ ipBlock: { cidr: endpoint.cidr } }],
+		ports: [{ port: 443, protocol: "TCP" }],
+	};
+	for (const component of ["server", "worker", "webhook"]) {
+		const calls = component !== "webhook";
+		assert.equal(
+			envValue(workload(resources, component), "HEPHAESTUS_SCM_EGRESS_PRIVATE_HOSTS"),
+			calls ? "gitlab.corp.example" : undefined,
+			component,
+		);
+		const policy = resources.find(
+			(resource) =>
+				kindOf(resource) === "NetworkPolicy" &&
+				get(resource, "metadata", "namespace") === undefined &&
+				isDeepStrictEqual(
+					get(resource, "spec", "podSelector", "matchLabels"),
+					get(workload(resources, component), "spec", "selector", "matchLabels"),
+				),
+		);
+		const egress = list(get(policy, "spec", "egress"));
+		assert.equal(
+			egress.some((candidate) => isDeepStrictEqual(candidate, rule)),
+			calls,
+			component,
+		);
+	}
+});
+
 await test("a model endpoint on a private network reaches the server and the worker, never the metadata range", () => {
 	const endpoint = { cidr: "10.20.0.0/16", ports: [8000] };
 	const resources = rendered([

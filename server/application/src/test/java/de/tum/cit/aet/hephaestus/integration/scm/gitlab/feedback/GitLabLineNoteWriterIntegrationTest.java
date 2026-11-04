@@ -55,25 +55,34 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
         when(tokens.resolveServerUrl(workspace.getId())).thenReturn("https://gitlab.example.test");
         when(tokens.getAccessToken(workspace.getId())).thenReturn("synthetic-token");
         var reads = new AtomicInteger();
-        var reader = new GitLabDiffVersionReader(tokens, WebClient.builder().exchangeFunction(request -> {
-            assertThat(request.url().getRawPath()).contains("group%2Fproject/merge_requests/42/versions");
-            String version = "{\"id\":1,\"state\":\"collected\",\"base_commit_sha\":\"" + base
-                    + "\",\"head_commit_sha\":\"" + head
-                    + "\",\"start_commit_sha\":\"" + start
-                    + "\",\"diffs\":[{\"old_path\":\"src/A.java\",\"new_path\":\"src/Renamed.java\",\"renamed_file\":true,\"diff\":\"@@ -10,3 +10,3 @@\\n context\\n-old\\n+new\\n last\\n\"}]}";
-            reads.incrementAndGet();
-            return Mono.just(ClientResponse.create(HttpStatus.OK)
-                    .header("Content-Type", "application/json")
-                    .body(
-                            request.url().getPath().endsWith("/1")
-                                    ? version
-                                    : "[{\"id\":2,\"base_commit_sha\":\"" + base + "\",\"head_commit_sha\":\""
-                                            + "d".repeat(40) + "\",\"start_commit_sha\":\"" + start + "\"}," + version
-                                            + "]")
-                    .build());
-        }));
+        var reader = new GitLabDiffVersionReader(
+                tokens,
+                () -> WebClient.builder().exchangeFunction(request -> {
+                    assertThat(request.url().getRawPath()).contains("group%2Fproject/merge_requests/42/versions");
+                    String version = "{\"id\":1,\"state\":\"collected\",\"base_commit_sha\":\"" + base
+                            + "\",\"head_commit_sha\":\"" + head
+                            + "\",\"start_commit_sha\":\"" + start
+                            + "\",\"diffs\":[{\"old_path\":\"src/A.java\",\"new_path\":\"src/Renamed.java\",\"renamed_file\":true,\"diff\":\"@@ -10,3 +10,3 @@\\n context\\n-old\\n+new\\n last\\n\"}]}";
+                    reads.incrementAndGet();
+                    return Mono.just(ClientResponse.create(HttpStatus.OK)
+                            .header("Content-Type", "application/json")
+                            .body(
+                                    request.url().getPath().endsWith("/1")
+                                            ? version
+                                            : "[{\"id\":2,\"base_commit_sha\":\"" + base + "\",\"head_commit_sha\":\""
+                                                    + "d".repeat(40) + "\",\"start_commit_sha\":\"" + start + "\"},"
+                                                    + version
+                                                    + "]")
+                            .build());
+                }));
         var writer = new GitLabLineNoteWriter(
-                gitlab.provider(), gitlab.rest(), tokens, guard, targets, reader, ScmFeedbackFixtures.formatter());
+                gitlab.provider(),
+                () -> gitlab.rest(),
+                tokens,
+                guard,
+                targets,
+                reader,
+                ScmFeedbackFixtures.formatter());
         var resolution = mock(FeedbackTargetResolver.class);
         when(resolution.resolve(any())).thenReturn(target);
         when(resolution.resolveExisting(any())).thenReturn(target);

@@ -19,6 +19,8 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import de.tum.cit.aet.hephaestus.core.security.ScmEgressProperties;
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlInterceptor;
@@ -69,6 +71,7 @@ import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -778,7 +781,10 @@ class GitLabMergeRequestSyncServiceTest extends BaseUnitTest {
                         .withValueInclusion(JsonInclude.Include.NON_NULL)
                         .withContentInclusion(JsonInclude.Include.NON_NULL))
                 .build();
-        var config = new GitLabGraphQlConfig(new GitLabRateLimitTracker(new SimpleMeterRegistry()));
+        var config = new GitLabGraphQlConfig(
+                new GitLabRateLimitTracker(new SimpleMeterRegistry()),
+                new ScmServerEndpointPolicy(
+                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())));
         // The application's builder carries the credential health filter through its customizer.
         var health = new GitLabCredentialHealthFilter(
                 new StaticListableBeanFactory().getBeanProvider(GitLabCredentialHealth.class));

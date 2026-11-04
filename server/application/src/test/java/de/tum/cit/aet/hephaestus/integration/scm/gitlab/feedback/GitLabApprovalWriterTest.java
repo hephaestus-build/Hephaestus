@@ -57,7 +57,7 @@ class GitLabApprovalWriterTest extends BaseUnitTest {
                 gitLabProvider,
                 tokenService,
                 feedbackChannel,
-                WebClient.builder(),
+                () -> WebClient.builder(),
                 egressGuard,
                 ScmFeedbackFixtures.resolver());
     }

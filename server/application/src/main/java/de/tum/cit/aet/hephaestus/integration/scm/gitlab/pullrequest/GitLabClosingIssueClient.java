@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest;
 
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,9 +33,9 @@ public class GitLabClosingIssueClient {
     private final GitLabTokenService tokenService;
     private final WebClient webClient;
 
-    public GitLabClosingIssueClient(GitLabTokenService tokenService, WebClient.Builder webClientBuilder) {
+    public GitLabClosingIssueClient(GitLabTokenService tokenService, GitLabWebClients webClientBuilder) {
         this.tokenService = tokenService;
-        this.webClient = webClientBuilder.build();
+        this.webClient = webClientBuilder.builder().build();
     }
 
     /**

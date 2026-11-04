@@ -11,6 +11,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import de.tum.cit.aet.hephaestus.core.security.ScmEgressProperties;
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
@@ -49,6 +51,7 @@ import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -241,7 +244,10 @@ class GitLabCollaboratorSyncServiceTest extends BaseUnitTest {
                         .withValueInclusion(JsonInclude.Include.NON_NULL)
                         .withContentInclusion(JsonInclude.Include.NON_NULL))
                 .build();
-        var config = new GitLabGraphQlConfig(new GitLabRateLimitTracker(new SimpleMeterRegistry()));
+        var config = new GitLabGraphQlConfig(
+                new GitLabRateLimitTracker(new SimpleMeterRegistry()),
+                new ScmServerEndpointPolicy(
+                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())));
         // The application's builder carries the credential health filter through its customizer.
         var health = new GitLabCredentialHealthFilter(
                 new StaticListableBeanFactory().getBeanProvider(GitLabCredentialHealth.class));

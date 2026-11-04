@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.MrCoordinates;
 import java.net.URI;
 import java.time.Duration;
@@ -46,13 +47,13 @@ public class GitLabApprovalWriter implements ApprovalWriter {
             GitLabGraphQlClientProvider gitLabProvider,
             GitLabTokenService tokenService,
             GitLabSummaryWriter feedbackChannel,
-            WebClient.Builder webClientBuilder,
+            GitLabWebClients webClientBuilder,
             OutboundEgressGuard egressGuard,
             ScmFeedbackTargetResolver targets) {
         this.gitLabProvider = gitLabProvider;
         this.tokenService = tokenService;
         this.feedbackChannel = feedbackChannel;
-        this.webClient = webClientBuilder.build();
+        this.webClient = webClientBuilder.builder().build();
         this.egressGuard = egressGuard;
         this.targets = targets;
     }

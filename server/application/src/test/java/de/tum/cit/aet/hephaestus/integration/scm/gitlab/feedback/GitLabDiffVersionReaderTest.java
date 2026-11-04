@@ -44,7 +44,7 @@ class GitLabDiffVersionReaderTest extends BaseUnitTest {
         gitlab.start();
         when(tokenService.resolveServerUrl(1L)).thenReturn(gitlab.url("/").toString());
         when(tokenService.getAccessToken(1L)).thenReturn("glpat-secret");
-        reader = new GitLabDiffVersionReader(tokenService, WebClient.builder());
+        reader = new GitLabDiffVersionReader(tokenService, () -> WebClient.builder());
     }
 
     @AfterEach

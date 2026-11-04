@@ -44,7 +44,7 @@ class GitLabCommitSyncServiceTest extends BaseUnitTest {
                 mock(CommitAuthorResolver.class),
                 tokens,
                 event -> {},
-                empty,
+                () -> empty,
                 admission);
 
         SyncResult result = service.syncCommitsForRepository(

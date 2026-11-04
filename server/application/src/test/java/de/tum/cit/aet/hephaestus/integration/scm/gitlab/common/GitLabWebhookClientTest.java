@@ -63,7 +63,7 @@ class GitLabWebhookClientTest extends BaseUnitTest {
         WebClient.Builder builder = mock(WebClient.Builder.class);
         when(builder.build()).thenReturn(mockWebClient);
 
-        webhookClient = new GitLabWebhookClient(graphQlClientProvider, tokenService, builder);
+        webhookClient = new GitLabWebhookClient(graphQlClientProvider, tokenService, () -> builder);
     }
 
     /** Sets up token service mocks for REST API tests. */

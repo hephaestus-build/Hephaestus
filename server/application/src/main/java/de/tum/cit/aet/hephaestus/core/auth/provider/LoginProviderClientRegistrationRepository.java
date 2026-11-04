@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.core.auth.spi.IdentityProviderCatalog;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.List;
@@ -29,6 +30,7 @@ public class LoginProviderClientRegistrationRepository
 
     private final LoginProviderRepository loginProviderRepository;
     private final OutlineOriginPolicy outlineOriginPolicy;
+    private final ScmServerEndpointPolicy scmEndpoints;
 
     private final String callbackBase;
 
@@ -40,9 +42,11 @@ public class LoginProviderClientRegistrationRepository
     public LoginProviderClientRegistrationRepository(
             LoginProviderRepository loginProviderRepository,
             String callbackBase,
-            OutlineOriginPolicy outlineOriginPolicy) {
+            OutlineOriginPolicy outlineOriginPolicy,
+            ScmServerEndpointPolicy scmEndpoints) {
         this.loginProviderRepository = loginProviderRepository;
         this.outlineOriginPolicy = outlineOriginPolicy;
+        this.scmEndpoints = scmEndpoints;
         this.callbackBase = callbackBase;
     }
 
@@ -89,8 +93,19 @@ public class LoginProviderClientRegistrationRepository
     }
 
     private boolean isApproved(LoginProvider provider) {
+        if (provider.getType() == LoginProvider.ProviderType.GITLAB) return allowedGitLab(provider.getBaseUrl());
         return (provider.getType() != LoginProvider.ProviderType.OUTLINE
                 || outlineOriginPolicy.allows(provider.getBaseUrl()));
+    }
+
+    /** A stored GitLab keeps following the current list: removing a host from it ends sign-in there. */
+    private boolean allowedGitLab(String baseUrl) {
+        try {
+            scmEndpoints.validate(baseUrl);
+            return true;
+        } catch (IllegalArgumentException refused) {
+            return false;
+        }
     }
 
     private ClientRegistration toRegistration(LoginProvider provider) {

@@ -78,7 +78,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         return new GitRepositoryManager(
                 new GitRepositoryProperties(enabled, 2, maxSnapshotBytes),
                 new GitRepositoryLockManager(),
-                new FabricLayout(fabric.toString()));
+                new FabricLayout(fabric.toString()),
+                GitTransportFixtures.guarded());
     }
 
     @Test

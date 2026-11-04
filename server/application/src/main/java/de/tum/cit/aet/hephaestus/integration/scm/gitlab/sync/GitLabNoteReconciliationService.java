@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
 import java.time.Clock;
@@ -71,7 +72,7 @@ public class GitLabNoteReconciliationService {
             GitLabTokenService tokens,
             GitLabProperties properties,
             TransactionTemplate transactions,
-            WebClient.Builder builder,
+            GitLabWebClients builder,
             GitLabWorkspaceLinkService workspaceLinks,
             ApplicationEventPublisher events,
             Clock clock,
@@ -87,7 +88,7 @@ public class GitLabNoteReconciliationService {
         this.tokens = tokens;
         this.properties = properties;
         this.transactions = transactions;
-        this.client = builder.build();
+        this.client = builder.builder().build();
     }
 
     public record Outcome(int removed, boolean skipped) {}
