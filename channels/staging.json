@@ -1,13 +1,5 @@
 {
-	"commit": "1cf17d780662540baea091a0c089bae6c3440edb",
-	"images": {
-		"HEPHAESTUS_IMAGE_NATS": "docker.io/synadia/nats-server@sha256:e7c229e0f6415993d29a7ada7ef61f5fd380d7c1134b9038f70f6eff2813b0a0",
-		"HEPHAESTUS_IMAGE_WEBAPP": "ghcr.io/hephaestus-build/webapp@sha256:79d0eb438cceca29d17c9db68887b549b7ee279e2f6ed1272a89012cb8c6b734",
-		"HEPHAESTUS_IMAGE_APPLICATION_SERVER": "ghcr.io/hephaestus-build/application-server@sha256:e21c2330f9e4472929f3199539b98ce8aa35a3c04434c851c8a12f6c57f1227d",
-		"HEPHAESTUS_IMAGE_AGENT_PI": "ghcr.io/hephaestus-build/agent-pi@sha256:dc80a4dadacf1c8bba0467b44f9152aac56c656d94bf3e37309cdb82a3e78648",
-		"HEPHAESTUS_IMAGE_POSTGRES": "ghcr.io/hephaestus-build/postgres@sha256:05e76a7a71047fc5a274036df6dcf3282bfcb7f9a2aa8e70c042256c0fd7bc73"
-	},
-	"allowRollback": false,
-	"freeze": true,
-	"refreshDatabaseImage": false
+	"release": "v1.0.0-rc.1",
+	"allowRollback": true,
+	"freeze": true
 }
