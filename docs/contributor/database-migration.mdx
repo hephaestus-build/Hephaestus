@@ -241,6 +241,8 @@ The 1.0 cutover dropped every earlier pending contraction, so the table is empty
    It compares the fingerprint of the upgraded schema with a fresh install.
    It checks readiness, seeded relationships, the practice catalog and authenticated reads.
    Release publication depends on this upgrade. The same procedure runs weekly.
+   A merge group runs it on its own images when it changes a changelog or `BaselineSynchronization`.
+   Thus, a migration that breaks the upgrade fails before it merges.
    [Previous release on the new schema](#previous-release-on-the-new-schema) describes its other checks.
 
 The empty-database replay sets no context filter. It evaluates the full chain, but preconditions can
