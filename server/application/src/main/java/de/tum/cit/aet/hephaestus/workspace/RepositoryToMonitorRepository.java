@@ -23,11 +23,13 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
 
     @Modifying
     @Transactional
+    @WorkspaceAgnostic("Keyed by the sync target id of the sync run that records its own error")
     @Query("UPDATE RepositoryToMonitor m SET m.recentSyncError = :error WHERE m.id = :id")
     int updateRecentSyncError(@Param("id") Long id, @Param("error") @Nullable String error);
 
     @Modifying
     @Transactional
+    @WorkspaceAgnostic("Keyed by the sync target id of the sync run that records its own error")
     @Query("UPDATE RepositoryToMonitor m SET m.historicalBackfillSyncError = :error WHERE m.id =" + " :id")
     int updateHistoricalBackfillSyncError(@Param("id") Long id, @Param("error") @Nullable String error);
 
