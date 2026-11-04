@@ -719,10 +719,10 @@ A chart test adds up what that node holds during an upgrade, with backups on:
 
 | Part | Memory | CPU requests | Disk |
 | --- | --- | --- | --- |
-| Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 9.2 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
+| Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 8.7 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
 | An upgrade: the new webhook and webapp Pods, the migration Job, the stanza Job and one backup | 3.2 GiB | 0.75 | The new Pods' caches |
 | The sandbox quotas: one review, one isolation probe, one conversation host and ten tools Pods, including up to two warm Pods | 3.0 GiB | 0.50 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
-| Total, against the node less platform reservations and the hard eviction floor | 15.4 GiB of 30.25 GiB | 2.50 of 3.5 | 65 GiB of the 110 GiB left beside images and review workspaces |
+| Total, against the node less platform reservations and the hard eviction floor | 14.9 GiB of 30.25 GiB | 2.50 of 3.5 | 65 GiB of the 110 GiB left beside images and review workspaces |
 
 The worker uses `Recreate` in both single-node profiles.
 The old worker drains before its replacement starts, so reviews and conversations pause during each upgrade.
@@ -747,7 +747,7 @@ The table gives the measured resident memory of each role and the chart's sizes.
 Each JVM role requests all of its memory limit, because the heap is sized from the limit, and the limit is the measurement plus headroom.
 PostgreSQL and its backup containers also request their full memory limits.
 CPU remains burstable, so these Pods keep the Burstable quality-of-service class.
-NATS requests less than its limit, because JetStream's caches grow above the request.
+NATS also requests its full memory limit. The chart sets its `GOMEMLIMIT` to 80 % of that limit ([NATS memory](#nats-memory)).
 
 | Role | Measured | Request | Limit |
 | --- | --- | --- | --- |
@@ -756,7 +756,7 @@ NATS requests less than its limit, because JetStream's caches grow above the req
 | Webhook role | 0.6 GiB | 640 MiB | 640 MiB |
 | PostgreSQL, at rest in the earlier staging capture | 0.7 GiB | 2 GiB | 2 GiB |
 | pgBackRest | Not measured | 512 MiB | 512 MiB |
-| NATS, with JetStream's memory and file caches | 1.3 to 2.7 GiB | 1.5 GiB | 3 GiB |
+| NATS | About 100 MiB at rest, and up to its soft limit in a catch-up | 1 GiB | 1 GiB |
 
 The server's and the worker's caches have a bound of 10 GiB each.
 Thus, the node does not run out of disk and evict a draining worker.
@@ -770,7 +770,6 @@ For one node of 16 GiB, apply `small-16gib.yaml` after `small.yaml`:
 --values deploy/chart/hephaestus/profiles/small-16gib.yaml
 ```
 
-The overlay lowers the NATS request to 512 MiB and keeps its limit at 3 GiB.
 It keeps worker updates at `Recreate`, with a drain of at most 10 minutes.
 It admits 32 resident turns with the same tools-Pod quota as `small.yaml`.
 The worker still runs one review and up to 32 resident conversation turns at a time, as in `small.yaml`.
@@ -783,9 +782,9 @@ A chart test adds up what one node of 16 GiB holds, with backups on:
 
 | State | Memory | CPU requests |
 | --- | --- | --- |
-| Steady: every role, one backup, one review, the conversation host, two pooled turn sandboxes and 8 running turns | 10.9 GiB of 13.9 GiB | 1.70 of 3.5 |
-| The same, with the isolation probe | 11.5 GiB | — |
-| An upgrade. The old worker is gone. The webhook and webapp surge, with the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 11.8 GiB of 13.9 GiB | 2.40 of 3.5 |
+| Steady: every role, one backup, one review, the conversation host, two pooled turn sandboxes and 8 running turns | 11.4 GiB of 13.9 GiB | 1.70 of 3.5 |
+| The same, with the isolation probe | 12.0 GiB | — |
+| An upgrade. The old worker is gone. The webhook and webapp surge, with the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 12.3 GiB of 13.9 GiB | 2.40 of 3.5 |
 
 The table counts requests.
 Its node budget uses the recorded Node capacity of 16 372 036 KiB, less the current platform reservations and hard eviction floor.
@@ -811,6 +810,28 @@ For a cluster with several nodes, start from `small.yaml`, and set the workers, 
 
 [ADR 0035](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md) owns what a preview can run.
 The preview profile sets only capacity.
+
+### NATS memory
+
+The bundled broker requests 1 GiB and is limited to 1 GiB.
+The chart sets `GOMEMLIMIT` to 80 % of `nats.resources.limits.memory`: 819 MiB by default.
+If you change the limit, `GOMEMLIMIT` follows it.
+Set `nats.resources.requests.memory` to the same size. The chart refuses a request that differs from the limit.
+
+At rest, the broker's heap is about 100 MiB.
+Page cache over the stream files can fill the rest of the limit, and the kernel reclaims it under pressure.
+A catch-up is different: the Go heap grows with it.
+
+A test on NATS 2.14.8 caught up two streams of 4.6 GB each, one uncompressed and one S2.
+The messages were 16 KB on average, with some deliveries of 25 MiB.
+Four consumers read at the same time, while new deliveries arrived:
+
+| Memory limit | `GOMEMLIMIT` | Peak heap | Result |
+| --- | --- | --- | --- |
+| 1 GiB | Not set | 993 MiB | The kernel stopped the broker |
+| 3 GiB | Not set | 2,835 MiB | The broker continued, at its limit |
+| 1 GiB | 820 MiB | 813 MiB | All four caught up, at about 150 MB/s each |
+| 512 MiB | 410 MiB | 402 MiB | All four caught up, at about 165 MB/s each |
 
 ## External PostgreSQL and NATS
 

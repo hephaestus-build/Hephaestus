@@ -12,7 +12,7 @@
 | `nats.persistence.storageClassName` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
 | `nats.resources.limits.cpu` | string | `"1"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
 | `nats.resources.limits.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `nats.resources.limits.memory` | string | `"3Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `nats.resources.limits.memory` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
 | `nats.resources.requests.cpu` | string | `"100m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
 | `nats.resources.requests.ephemeral-storage` | string | `"64Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `nats.resources.requests.memory` | string | `"1536Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `nats.resources.requests.memory` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
