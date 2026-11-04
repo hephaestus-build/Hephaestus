@@ -232,8 +232,9 @@ public class LlmCallPermits {
     /**
      * One admission round: grants whatever the pool has room for, in fair order, whichever worker's requests they are,
      * and hands this worker's grants to its waiters. So one round per worker and pool is enough, however many calls
-     * wait, and the database's load does not grow with them. A new conversation call queues for its round, as it must
-     * not lose time to the review calls that wait beside it.
+     * wait. The round runs under the pool's row lock, so it writes no waiter's row: {@link #renew()} keeps them alive
+     * four times per lease. A new conversation call queues for its round, as it must not lose time to the review calls
+     * that wait beside it.
      */
     private void admit(long poolId, boolean interactive, boolean arrived) {
         Admissions local = admissions.computeIfAbsent(poolId, key -> new Admissions());
@@ -250,9 +251,7 @@ public class LlmCallPermits {
             Round round = Objects.requireNonNull(transactions.execute(status -> {
                 var pool = pools.lockAdmission(poolId)
                         .orElseThrow(() -> new IllegalStateException("Configured call pool is unavailable"));
-                long lease = properties.permitLease().toSeconds();
-                rows.renew(workerId, mine.keySet(), lease);
-                rows.prune(poolId, lease);
+                rows.prune(poolId, properties.permitLease().toSeconds());
                 grantWhileRoom(poolId, pool, true);
                 grantWhileRoom(poolId, pool, false);
                 Map<UUID, Boolean> queued = new HashMap<>();
