@@ -44,6 +44,8 @@ Spring: "self-invocation (in effect, a method within the target object calling a
 - If a row lock must stay across a call, record the reason in an ADR.
   `GitLabTokenLifecycleService` and `ProviderTeardown` hold such a lock.
 - `LlmCallPermits` refuses a model call that starts in a transaction.
+- `database_transaction_http_requests_total` counts the HTTP requests that start in a transaction, by boundary.
+  It shows which boundaries still break this rule.
 
 PostgreSQL keeps row locks until the transaction ends ([Explicit locking](https://www.postgresql.org/docs/18/explicit-locking.html)).
 A slow call therefore blocks every writer of the same rows, and it holds a pooled connection.

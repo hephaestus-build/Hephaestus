@@ -98,13 +98,26 @@ class FragmentMergingDocumentSourceTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldReadTheDocumentOnTheSubscribingThread() {
+            FragmentMergingDocumentSource source = new FragmentMergingDocumentSource(
+                    List.of(new ClassPathResource("graphql/github/operations/")),
+                    List.of(".graphql"),
+                    List.of(byteResource("fragment F on T { f }", "test-fragment")));
+
+            String thread = source.getDocument("GetRepository")
+                    .map(document -> Thread.currentThread().getName())
+                    .block();
+
+            assertThat(thread).isEqualTo(Thread.currentThread().getName());
+        }
+
+        @Test
         void shouldThrowWhenDocumentNotFound() {
             FragmentMergingDocumentSource source = new FragmentMergingDocumentSource(
                     List.of(new ClassPathResource("graphql/github/operations/")),
                     List.of(".graphql"),
                     List.of(byteResource("fragment F on T { f }", "test-fragment")));
 
-            // Act & Assert — ResourceDocumentSource throws IllegalStateException for missing documents
             assertThatThrownBy(() -> source.getDocument("NonExistentDocument").block())
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("NonExistentDocument");

@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHReposito
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRepositoryPermission;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -40,7 +41,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
@@ -63,6 +64,7 @@ public class GitHubCollaboratorSyncService {
     private final GitHubSyncProperties syncProperties;
     private final GitHubExceptionClassifier exceptionClassifier;
     private final GitHubGraphQlSyncCoordinator graphQlSyncHelper;
+    private final TransactionTemplate transactionTemplate;
     private static final int MAX_RETRY_ATTEMPTS = 3;
 
     public GitHubCollaboratorSyncService(
@@ -72,7 +74,8 @@ public class GitHubCollaboratorSyncService {
             GitHubUserProcessor userProcessor,
             GitHubSyncProperties syncProperties,
             GitHubExceptionClassifier exceptionClassifier,
-            GitHubGraphQlSyncCoordinator graphQlSyncHelper) {
+            GitHubGraphQlSyncCoordinator graphQlSyncHelper,
+            TransactionTemplate transactionTemplate) {
         this.repositoryRepository = repositoryRepository;
         this.collaboratorRepository = collaboratorRepository;
         this.graphQlClientProvider = graphQlClientProvider;
@@ -80,6 +83,7 @@ public class GitHubCollaboratorSyncService {
         this.syncProperties = syncProperties;
         this.exceptionClassifier = exceptionClassifier;
         this.graphQlSyncHelper = graphQlSyncHelper;
+        this.transactionTemplate = transactionTemplate;
     }
 
     /**
@@ -89,7 +93,6 @@ public class GitHubCollaboratorSyncService {
      * @param repositoryId the repository ID to sync collaborators for
      * @return number of collaborators synced
      */
-    @Transactional
     public int syncCollaboratorsForRepository(Long scopeId, Long repositoryId) {
         Repository repository = repositoryRepository.findById(repositoryId).orElse(null);
         if (repository == null) {
@@ -106,14 +109,15 @@ public class GitHubCollaboratorSyncService {
         String owner = parsedName.get().owner();
         String name = parsedName.get().name();
 
+        List<FetchedCollaborator> fetched = new ArrayList<>();
+        boolean complete;
+        int pagesProcessed;
         try {
             HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
-            int totalSynced = 0;
             int collaboratorsReceived = 0;
             int reportedTotalCount = -1;
             String cursor = null;
             boolean hasNextPage = true;
-            Set<Long> syncedUserIds = new HashSet<>();
             int pageCount = 0;
             int retryAttempt = 0;
 
@@ -204,25 +208,11 @@ public class GitHubCollaboratorSyncService {
                         continue;
                     }
 
-                    // Convert GraphQL User to DTO and upsert
                     GitHubUserDTO userDTO = GitHubUserDTO.fromUser(graphQlUser);
                     if (userDTO == null) {
                         continue;
                     }
-                    User user = userProcessor.findOrCreate(
-                            userDTO,
-                            Objects.requireNonNull(repository.getProvider().getId()));
-                    if (user == null) {
-                        continue;
-                    }
-
-                    // Get permission from edge
-                    RepositoryCollaborator.Permission permission = parsePermission(edge.getPermission());
-
-                    // Upsert collaborator relationship
-                    upsertCollaborator(repository, user, permission);
-                    syncedUserIds.add(user.getId());
-                    totalSynced++;
+                    fetched.add(new FetchedCollaborator(userDTO, parsePermission(edge.getPermission())));
                 }
 
                 var pageInfo = response.getPageInfo();
@@ -244,26 +234,8 @@ public class GitHubCollaboratorSyncService {
                         safeNameWithOwner);
             }
 
-            // CRITICAL: Only remove stale collaborators if sync completed fully.
-            // If sync was aborted (rate limit, error, pagination limit), we don't have
-            // the complete list and would incorrectly delete valid collaborators.
-            int removedCount = 0;
-            if (syncCompletedNormally) {
-                removedCount = removeStaleCollaborators(repositoryId, syncedUserIds);
-            } else {
-                log.warn(
-                        "Skipped stale collaborator removal: reason=incompleteSync, repoName={}, pagesProcessed={}",
-                        safeNameWithOwner,
-                        pageCount);
-            }
-
-            log.info(
-                    "Completed collaborator sync: repoName={}, collaboratorCount={}, removedCount={}, complete={}",
-                    safeNameWithOwner,
-                    totalSynced,
-                    removedCount,
-                    syncCompletedNormally);
-            return totalSynced;
+            complete = syncCompletedNormally;
+            pagesProcessed = pageCount;
         } catch (InstallationNotFoundException e) {
             // Re-throw to abort the entire sync operation
             throw e;
@@ -275,6 +247,53 @@ public class GitHubCollaboratorSyncService {
             }
             return 0;
         }
+
+        // Stale collaborators are removed only after a complete listing: an aborted one (rate limit, error,
+        // pagination limit) would delete collaborators who still have access.
+        if (!complete) {
+            log.warn(
+                    "Skipped stale collaborator removal: reason=incompleteSync, repoName={}, pagesProcessed={}",
+                    safeNameWithOwner,
+                    pagesProcessed);
+        }
+        // A database failure propagates, so the caller's transient-failure retry gets a fresh transaction.
+        CollaboratorWrite written = Objects.requireNonNull(
+                transactionTemplate.execute(status -> writeCollaborators(repositoryId, fetched, complete)));
+
+        log.info(
+                "Completed collaborator sync: repoName={}, collaboratorCount={}, removedCount={}, complete={}",
+                safeNameWithOwner,
+                written.synced(),
+                written.removed(),
+                complete);
+        return written.synced();
+    }
+
+    private record FetchedCollaborator(GitHubUserDTO user, RepositoryCollaborator.Permission permission) {}
+
+    private record CollaboratorWrite(int synced, int removed) {}
+
+    /** Stores the collaborators that GitHub listed, and removes the stale ones if the listing is complete. */
+    private CollaboratorWrite writeCollaborators(
+            Long repositoryId, List<FetchedCollaborator> fetched, boolean complete) {
+        Repository repository = repositoryRepository.findById(repositoryId).orElse(null);
+        if (repository == null) {
+            return new CollaboratorWrite(0, 0);
+        }
+        long providerId = Objects.requireNonNull(repository.getProvider().getId());
+        Set<Long> syncedUserIds = new HashSet<>();
+        int synced = 0;
+        for (FetchedCollaborator entry : fetched) {
+            User user = userProcessor.findOrCreate(entry.user(), providerId);
+            if (user == null) {
+                continue;
+            }
+            upsertCollaborator(repository, user, entry.permission());
+            syncedUserIds.add(user.getId());
+            synced++;
+        }
+        int removed = complete ? removeStaleCollaborators(repositoryId, syncedUserIds) : 0;
+        return new CollaboratorWrite(synced, removed);
     }
 
     /**
