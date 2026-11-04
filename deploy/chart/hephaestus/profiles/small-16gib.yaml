@@ -7,7 +7,3 @@ worker:
   rolloutStrategy: Recreate
   # An upgrade waits for the drain, so the outage stays short.
   drainTimeoutSeconds: 600
-nats:
-  # JetStream's caches grow above the request, up to the limit of small.yaml.
-  resources:
-    requests: { memory: 512Mi }

@@ -163,10 +163,11 @@ nats:
     maxFileBytes: 17179869184
   persistence:
     storageClassName: ""
-  # JetStream's memory and file caches grow above the request, up to the limit.
+  # The broker requests its whole limit, and the chart sets GOMEMLIMIT to 80 % of it. A catch-up of
+  # several streams fills the limit with heap, not page cache (docs/admin/kubernetes.mdx § NATS memory).
   resources:
-    requests: { cpu: 100m, memory: 1536Mi, ephemeral-storage: 64Mi }
-    limits: { cpu: "1", memory: 3Gi, ephemeral-storage: 256Mi }
+    requests: { cpu: 100m, memory: 1Gi, ephemeral-storage: 64Mi }
+    limits: { cpu: "1", memory: 1Gi, ephemeral-storage: 256Mi }
   external:
     url: ""
     cidr: ""

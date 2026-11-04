@@ -2194,6 +2194,61 @@ for (const name of profiles) {
 	}
 }
 
+/** The bundled broker's soft limit, memory request and memory limit, rendered from these layers. */
+const broker = (layers: Layer[]) => {
+	const nats = workload(rendered(layers), "nats");
+	return {
+		goMemLimit: envValue(nats, "GOMEMLIMIT"),
+		request: String(get(container(nats), "resources", "requests", "memory")),
+		limit: String(get(container(nats), "resources", "limits", "memory")),
+	};
+};
+
+// A catch-up of several streams fills the broker's limit with heap, so the Go runtime gets a soft limit below it.
+await test("the bundled broker requests its whole limit and keeps its heap under 80 % of it", () => {
+	for (const name of profiles.filter((each) => each !== "external")) {
+		assert.deepEqual(
+			broker(layersFor(name)),
+			{ goMemLimit: "819MiB", request: "1Gi", limit: "1Gi" },
+			name,
+		);
+	}
+	// A site's own limit moves the soft limit with it.
+	const sized = (memory: string) =>
+		broker([
+			...layersFor("small"),
+			{ nats: { resources: { requests: { memory }, limits: { memory } } } },
+		]).goMemLimit;
+	assert.equal(sized("3Gi"), "2457MiB");
+	assert.equal(sized("1536Mi"), "1228MiB");
+	const refused = render([
+		...layersFor("small"),
+		{ nats: { resources: { limits: { memory: "3G" } } } },
+	]);
+	assert.equal(refused.ok, false);
+	assert.match(
+		refused.stderr,
+		/nats\.resources\.limits\.memory must be a whole number of Mi or Gi/u,
+	);
+	// A fraction does not convert to whole MiB, so the chart refuses it.
+	const fraction = render([
+		...layersFor("small"),
+		{ nats: { resources: { requests: { memory: "1.5Gi" }, limits: { memory: "1.5Gi" } } } },
+	]);
+	assert.equal(fraction.ok, false);
+	assert.match(fraction.stderr, /must be a whole number of Mi or Gi/u);
+	// A site that raised only the request, as an older default invited, gets a reason instead of a rejected Pod.
+	const requestOnly = render([
+		...layersFor("small"),
+		{ nats: { resources: { requests: { memory: "3Gi" } } } },
+	]);
+	assert.equal(requestOnly.ok, false);
+	assert.match(
+		requestOnly.stderr,
+		/nats\.resources\.requests\.memory \(3072Mi\) must equal nats\.resources\.limits\.memory \(1024Mi\)/u,
+	);
+});
+
 /** The requests that each tier's quota holds, rendered from these layers. */
 const tierHard = (layers: Layer[]) => {
 	const resources = rendered(layers);

@@ -77,6 +77,8 @@ spec:
           env:
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "NATS_USERNAME") | nindent 12 }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "NATS_PASSWORD") | nindent 12 }}
+            - name: GOMEMLIMIT
+              value: {{ include "hephaestus.natsGoMemLimit" . | quote }}
           ports:
             - name: client
               containerPort: 4222
