@@ -146,3 +146,9 @@ pathological input class worth handling explicitly).
 `off` remain explicit diagnostic overrides and are not production settings. This changes only the
 default response to a violation the inspector already detects. The documented parser carve-outs and
 the requirement for workspace authorization remain unchanged.
+
+## Update — 2026-11-04 ([ADR 0077](0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md))
+
+A statement that reads a provider mirror table must now bind the workspace to a parameter.
+Mentioning `workspace_id` anywhere is no longer enough for these tables.
+ADR 0077 also replaces the type-level `@WorkspaceAgnostic` that § Consequences prescribes for foreign-key chains with method-level markers, and states what the guard still does not cover.

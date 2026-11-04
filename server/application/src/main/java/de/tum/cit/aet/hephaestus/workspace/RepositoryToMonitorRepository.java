@@ -14,7 +14,6 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 @Repository
-@WorkspaceAgnostic("Configuration table mapping repositories to workspaces")
 public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryToMonitor, Long> {
     boolean existsByWorkspaceIdAndNameWithOwner(Long workspaceId, String nameWithOwner);
 
@@ -68,14 +67,18 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
     boolean existsByWorkspaceIdAndIdAndUnavailableSinceIsNotNull(Long workspaceId, Long id);
 
     /** Resolves which workspace a repository belongs to during sync, by full name (owner/name). */
+    @WorkspaceAgnostic("Resolves the workspace of a repository by its full name, before any workspace is known")
     Optional<RepositoryToMonitor> findByNameWithOwner(String nameWithOwner);
 
     /** Every workspace monitoring this repository, with workspace data ready for callers. */
+    @WorkspaceAgnostic("A provider event fans out to every workspace that monitors the repository")
     @Query("SELECT m FROM RepositoryToMonitor m JOIN FETCH m.workspace WHERE m.nameWithOwner ="
             + " :nameWithOwner ORDER BY m.workspace.id")
     List<RepositoryToMonitor> findAllWithWorkspaceByNameWithOwner(@Param("nameWithOwner") String nameWithOwner);
 
     /** Resolve monitors by provider-stable id across workspaces; a renamed path cannot serve as the lookup key. */
+    @WorkspaceAgnostic(
+            "A provider event fans out to every workspace that monitors the repository, by its provider-stable id")
     @Query(
             value = "SELECT rtm.* FROM repository_to_monitor rtm WHERE rtm.native_id = :nativeId"
                     + " AND "
@@ -88,6 +91,7 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
      * A stored id is foreign only with a verified own-provider replacement and no own-provider
      * owner of the old id.
      */
+    @WorkspaceAgnostic("Keyed by a monitor id that the caller already holds from its own workspace")
     @Query(
             value = """
                     SELECT EXISTS (SELECT 1 FROM repository_to_monitor rtm JOIN repository r ON r.native_id = :resolvedNativeId
@@ -132,6 +136,7 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
             @Param("workspaceId") Long workspaceId, @Param("repositoryId") Long repositoryId);
 
     /** Exact mirrored repository ids covered by the monitor being removed. */
+    @WorkspaceAgnostic("Keyed by a monitor id that the caller already holds from its own workspace")
     @Query(
             value = "SELECT r.id FROM repository_to_monitor rtm JOIN repository r ON"
                     + " r.name_with_owner = rtm.name_with_owner WHERE rtm.id = :monitorId AND "
@@ -143,6 +148,8 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
      * Remaining monitors of this exact source repository; a foreign same-named repository does not
      * count.
      */
+    @WorkspaceAgnostic(
+            "deleteRepositoryIfOrphaned deletes a shared mirror repository only when no workspace monitors it, so it counts the monitors of every workspace")
     @Query(
             value = "SELECT COUNT(*) FROM repository_to_monitor rtm JOIN repository r ON"
                     + " r.name_with_owner = rtm.name_with_owner WHERE r.id = :repositoryId AND "
@@ -167,8 +174,6 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
     boolean existsByWorkspaceIdAndNativeIdAndIdNot(Long workspaceId, Long nativeId, Long id);
 
     boolean existsByWorkspaceIdAndNameWithOwnerAndIdNot(Long workspaceId, String nameWithOwner, Long id);
-
-    long countByNameWithOwner(String nameWithOwner);
 
     /** Deletes all repository monitors for a workspace (workspace purge). */
     @Modifying

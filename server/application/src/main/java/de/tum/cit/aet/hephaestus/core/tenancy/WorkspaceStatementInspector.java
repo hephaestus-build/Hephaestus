@@ -5,6 +5,8 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import io.micrometer.core.instrument.Counter;
 import java.io.Serial;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -24,7 +26,8 @@ import org.slf4j.LoggerFactory;
  *   <li>Active bypass on the thread ({@code @WorkspaceAgnostic}) — pass</li>
  *   <li>Mode {@link TenancyEnforcement#OFF} — pass</li>
  *   <li>Caffeine cache hit on the literal SQL — return cached decision</li>
- *   <li>Word-boundary regex: {@code workspace_id} mentioned anywhere — pass</li>
+ *   <li>Word-boundary regex: {@code workspace_id} mentioned anywhere — pass, unless the statement reads a
+ *       provider mirror table, which must bind the workspace to a parameter (ADR 0077)</li>
  *   <li>Table-extract regex: pull table names from {@code FROM/JOIN/UPDATE/INTO} clauses,
  *       intersect with {@link WorkspaceScopedTables#scopedTables()}. Any match without
  *       a {@code workspace_id} reference anywhere in the statement is a violation.</li>
@@ -61,6 +64,20 @@ public class WorkspaceStatementInspector implements StatementInspector {
      * queries.
      */
     private static final Pattern WORKSPACE_ID_PATTERN = Pattern.compile("\\bworkspace_id\\b", Pattern.CASE_INSENSITIVE);
+    /** {@code workspace_id = ?}, {@code = CAST(? …)}, {@code = ANY(?)} or {@code IN (?, …)}: the workspace bound to a value. */
+    private static final Pattern BOUND_WORKSPACE_PREDICATE_PATTERN = Pattern.compile(
+            "\\bworkspace_id\"?\\s*(?:=\\s*(?:ANY\\s*\\(\\s*)?(?:CAST\\s*\\(\\s*)?\\?|IN\\s*\\(\\s*\\?)",
+            Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern COMMENT_OR_LITERAL_PATTERN =
+            Pattern.compile("--[^\\n]*|/\\*.*?\\*/|'(?:''|[^'])*'", Pattern.DOTALL);
+    /** The alias of the {@code workspace} table in a FROM or JOIN. */
+    private static final Pattern WORKSPACE_ALIAS_PATTERN = Pattern.compile(
+            "\\b(?:FROM|JOIN)\\s+(?:public\\s*\\.\\s*)?\"?workspace\"?\\s+(?:AS\\s+)?(?!(?:ON|WHERE|JOIN|LEFT|INNER|CROSS)\\b)([A-Za-z_][A-Za-z0-9_]*)",
+            Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern NEGATION_PATTERN =
+            Pattern.compile("\\bNOT\\s*(?:EXISTS\\s*|IN\\s*)?$", Pattern.CASE_INSENSITIVE);
 
     // Inspect read tables in Hibernate SQL with explicit JOIN syntax; INSERT is outside this read-leak check.
     // Native queries with comma joins require explicit workspace predicates.
@@ -161,7 +178,9 @@ public class WorkspaceStatementInspector implements StatementInspector {
             "^\\s*SELECT\\b.+?\\bFROM\\s+\"?[A-Za-z_][A-Za-z0-9_]*\"?\\s+([A-Za-z_][A-Za-z0-9_]*)\\b" + ".*?"
                     + "\\bWHERE\\b"
                     + ".*?"
-                    + "\\b\\1\\s*\\.\\s*\"?(?:id|[A-Za-z_][A-Za-z0-9_]*_id)\"?\\s*=\\s*(?:\\?|ANY\\s*\\(\\s*\\?\\s*\\))"
+                    // workspace_id is a workspace predicate, not a key: the workspace check below reads it, negations
+                    // included (ADR 0077).
+                    + "\\b\\1\\s*\\.\\s*\"?(?!workspace_id\\b)(?:id|[A-Za-z_][A-Za-z0-9_]*_id)\"?\\s*=\\s*(?:\\?|ANY\\s*\\(\\s*\\?\\s*\\))"
                     + ".*?$",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
@@ -297,7 +316,9 @@ public class WorkspaceStatementInspector implements StatementInspector {
             return Decision.ok();
         }
         if (WORKSPACE_ID_PATTERN.matcher(sql).find()) {
-            return Decision.ok();
+            // A mirror row carries no workspace_id, so the word alone proves nothing about it (ADR 0077).
+            Set<String> mirrors = mirrorTablesIn(sql);
+            return mirrors.isEmpty() || bindsWorkspace(sql) ? Decision.ok() : Decision.violation(mirrors);
         }
         try {
             Set<String> unguarded = new HashSet<>();
@@ -324,6 +345,68 @@ public class WorkspaceStatementInspector implements StatementInspector {
     }
 
     /** Strip dialect quotes and the schema prefix from an identifier. */
+    private static Set<String> mirrorTablesIn(String sql) {
+        Set<String> mirrors = new HashSet<>();
+        Matcher matcher = TABLE_REFERENCE_PATTERN.matcher(sql);
+        while (matcher.find()) {
+            String name = unqualify(matcher.group(1)).toLowerCase(Locale.ROOT);
+            if (WorkspaceScopedTables.MIRROR_TABLES.contains(name)) mirrors.add(name);
+        }
+        return mirrors;
+    }
+
+    /**
+     * True iff the statement binds the workspace: a {@code workspace_id}, or the {@code id} of the {@code workspace}
+     * table, equal to or in bound parameters, outside comments and string literals and not under a negation. A join
+     * of two {@code workspace_id} columns binds nothing.
+     */
+    private static boolean bindsWorkspace(String sql) {
+        String text = COMMENT_OR_LITERAL_PATTERN.matcher(sql).replaceAll(" ");
+        if (anyUnnegated(text, BOUND_WORKSPACE_PREDICATE_PATTERN)) return true;
+        // The organization path binds the workspace row itself: workspace w … WHERE w.id = ?.
+        Matcher workspace = WORKSPACE_ALIAS_PATTERN.matcher(text);
+        while (workspace.find()) {
+            Pattern boundId = Pattern.compile("\\b" + Pattern.quote(workspace.group(1)) + "\\s*\\.\\s*id\\s*=\\s*\\?");
+            if (anyUnnegated(text, boundId)) return true;
+        }
+        return false;
+    }
+
+    private static boolean anyUnnegated(String text, Pattern pattern) {
+        Matcher predicate = pattern.matcher(text);
+        while (predicate.find()) {
+            if (!negated(text, predicate.start())) return true;
+        }
+        return false;
+    }
+
+    /** True iff the predicate at {@code start} sits under {@code NOT}, {@code NOT EXISTS} or {@code NOT IN}. */
+    private static boolean negated(String text, int start) {
+        Deque<Boolean> groups = new ArrayDeque<>();
+        for (int i = 0; i < start; i++) {
+            char c = text.charAt(i);
+            if (c == '(') {
+                groups.push(endsWithNegation(text, i));
+            } else if (c == ')' && !groups.isEmpty()) {
+                groups.pop();
+            }
+        }
+        if (groups.contains(true)) return true;
+        int operand = start;
+        while (operand > 0 && isIdentifierPart(text.charAt(operand - 1))) operand--;
+        return endsWithNegation(text, operand);
+    }
+
+    private static boolean endsWithNegation(String text, int end) {
+        return NEGATION_PATTERN
+                .matcher(text.substring(Math.max(0, end - 24), end))
+                .find();
+    }
+
+    private static boolean isIdentifierPart(char c) {
+        return Character.isLetterOrDigit(c) || c == '_' || c == '.' || c == '"';
+    }
+
     private static String unqualify(String raw) {
         if (raw == null) return "";
         String s = raw.trim();

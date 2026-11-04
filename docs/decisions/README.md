@@ -115,5 +115,6 @@ Admin Guide (`docs/admin/`), and the ADR links to it.
 | [0074](0074-a-reviews-width-and-count-follow-the-provider.md) | A review's width and count follow the provider | Accepted (2026-11-02). Amends 0068 and 0069. |
 | [0075](0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) | A transaction is one use case and talks to nothing | Accepted (2026-11-03). Builds on 0003 and 0044. Relates to 0076. |
 | [0076](0076-reads-are-shaped-like-the-screen.md) | Reads are shaped like the screen, entities are for writes | Accepted (2026-11-03). Relates to 0072 and 0075. |
+| [0077](0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md) | Provider mirrors are shared, and the monitored scope isolates them | Accepted (2026-11-04). Amends 0004. |
 
 Template: [0000-template.md](0000-template.md).

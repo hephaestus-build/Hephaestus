@@ -95,6 +95,90 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         verifyNoInteractions(reporter, scopedTables);
     }
 
+    // provider mirror tables (ADR 0077): the workspace must be bound, not only named
+
+    @Test
+    void shouldReportMirrorReadWhenTheWorkspaceIsOnlyExcluded() {
+        assertMirrorViolation(
+                "SELECT r.id FROM repository r JOIN repository_to_monitor m"
+                        + " ON m.name_with_owner = r.name_with_owner AND m.workspace_id <> ?",
+                "repository");
+    }
+
+    @Test
+    void shouldReportMirrorReadWhenTheBoundWorkspaceSitsUnderNotExists() {
+        assertMirrorViolation(
+                "SELECT i.id FROM issue i WHERE NOT EXISTS (SELECT 1 FROM item it WHERE it.workspace_id = ? AND it.id = i.id)",
+                "issue");
+    }
+
+    @Test
+    void shouldReportMirrorReadWhenTheWorkspaceIsOnlyInAComment() {
+        assertMirrorViolation(
+                "SELECT r.id FROM repository r /* workspace_id = ? */ WHERE r.name_with_owner = ?", "repository");
+    }
+
+    @Test
+    void shouldReportMirrorReadWhenTheWorkspaceIsOnlyInAStringLiteral() {
+        assertMirrorViolation(
+                "SELECT r.id FROM repository r WHERE r.name_with_owner <> 'workspace_id = ?'", "repository");
+    }
+
+    @Test
+    void shouldReportMirrorReadWhenWorkspaceColumnsAreOnlyJoined() {
+        assertMirrorViolation(
+                "SELECT COUNT(*) FROM repository_to_monitor rtm JOIN repository r ON r.name_with_owner = rtm.name_with_owner"
+                        + " JOIN connection c ON c.workspace_id = rtm.workspace_id WHERE r.id = ?",
+                "repository");
+    }
+
+    @Test
+    void shouldAcceptMirrorReadWhenTheMonitoredScopeBindsTheWorkspace() {
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+        for (String sql : List.of(
+                "SELECT r.id FROM repository r JOIN repository_to_monitor rtm ON rtm.name_with_owner = r.name_with_owner"
+                        + " WHERE rtm.workspace_id = ?",
+                "SELECT i.id FROM issue i WHERE EXISTS (SELECT 1 FROM repository_to_monitor rtm WHERE rtm.workspace_id=?"
+                        + " AND rtm.native_id = i.repository_id)",
+                "SELECT r.id FROM repository r WHERE r.id IN (SELECT 1 FROM repository_to_monitor m"
+                        + " WHERE m.workspace_id IN (?, ?))",
+                "SELECT r.id FROM repository r JOIN repository_to_monitor m ON m.workspace_id = ANY(?)",
+                "SELECT r.id FROM repository r JOIN repository_to_monitor m ON m.workspace_id = CAST(? AS bigint)",
+                "SELECT t.id FROM team t JOIN workspace w ON w.organization_id = t.organization_id"
+                        + " JOIN membership m ON m.workspace_id = w.id WHERE w.id = ?")) {
+            inspector.inspect(sql);
+        }
+        verifyNoInteractions(reporter);
+    }
+
+    @Test
+    void shouldReportMirrorReadWhenTheWorkspaceRowIsOnlyExcluded() {
+        assertMirrorViolation(
+                "SELECT t.id FROM team t JOIN workspace w ON w.organization_id = t.organization_id"
+                        + " JOIN membership m ON m.workspace_id = w.id WHERE NOT w.id = ?",
+                "team");
+    }
+
+    @Test
+    void shouldAcceptMirrorPrimaryKeyLoad() {
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+        inspector.inspect("SELECT r1_0.id, r1_0.name_with_owner FROM repository r1_0 WHERE r1_0.id = ?");
+        verifyNoInteractions(reporter);
+    }
+
+    @Test
+    void shouldKeepAcceptingAWorkspaceTableThatOnlyNamesItsWorkspaceColumn() {
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+        inspector.inspect("SELECT f.id FROM feedback f JOIN item i ON i.workspace_id = f.workspace_id");
+        verifyNoInteractions(reporter);
+    }
+
+    private void assertMirrorViolation(String sql, String mirror) {
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        inspector.inspect(sql);
+        verify(reporter).report(sql, Set.of(mirror), TenancyEnforcement.LOG);
+    }
+
     // table extraction
 
     @Test
