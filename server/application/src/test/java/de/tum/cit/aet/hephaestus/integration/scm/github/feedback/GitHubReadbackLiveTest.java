@@ -140,25 +140,29 @@ class GitHubReadbackLiveTest {
         return HttpGraphQlClient.builder(web).documentSource(documents).build();
     }
 
-    // A line or file copy is a review comment, which GitHub deletes; the summary is the body of a submitted review,
-    // which it does not, so the test empties it.
+    // A line or file copy is a review comment, which GitHub deletes. The summary is the body of a submitted review,
+    // which GitHub neither deletes nor lets go empty, so the test replaces it with a short note.
     private static void remove(HttpGraphQlClient client, List<CopyReceipt> posted) {
         for (var receipt : posted) {
             String ref = receipt.externalRef();
             if (ref == null) continue;
-            if (ref.startsWith("PRR_"))
-                client.document("""
-                                mutation($id: ID!) {
-                                  updatePullRequestReview(input: {pullRequestReviewId: $id, body: "Removed after a readback test."}) {
-                                    clientMutationId
-                                  }
-                                }
-                                """).variable("id", ref).execute().block(TIMEOUT);
-            else client.document("""
-                                mutation($id: ID!) {
-                                  deletePullRequestReviewComment(input: {id: $id}) { clientMutationId }
-                                }
-                                """).variable("id", ref).execute().block(TIMEOUT);
+            String mutation = ref.startsWith("PRR_") ? """
+                    mutation($id: ID!) {
+                      updatePullRequestReview(input: {pullRequestReviewId: $id, body: "Removed after a readback test."}) {
+                        clientMutationId
+                      }
+                    }
+                    """ : """
+                    mutation($id: ID!) {
+                      deletePullRequestReviewComment(input: {id: $id}) { clientMutationId }
+                    }
+                    """;
+            var response =
+                    client.document(mutation).variable("id", ref).execute().block(TIMEOUT);
+            assertThat(response).as("cleanup of %s", ref).isNotNull();
+            assertThat(Objects.requireNonNull(response).getErrors())
+                    .as("cleanup of %s", ref)
+                    .isEmpty();
         }
     }
 }
