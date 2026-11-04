@@ -106,9 +106,12 @@ export function chartImagesFrom(
 export function mapImages(reference: (name: ChartImage) => string): ChartImages {
 	return {
 		"agent-pi": reference("agent-pi"),
+		alertmanager: reference("alertmanager"),
 		"application-server": reference("application-server"),
 		nats: reference("nats"),
 		postgres: reference("postgres"),
+		"victoria-metrics": reference("victoria-metrics"),
+		vmalert: reference("vmalert"),
 		webapp: reference("webapp"),
 	};
 }

@@ -145,12 +145,24 @@
 		"images": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["agent-pi", "application-server", "nats", "postgres", "webapp"],
+			"required": [
+				"agent-pi",
+				"alertmanager",
+				"application-server",
+				"nats",
+				"postgres",
+				"victoria-metrics",
+				"vmalert",
+				"webapp"
+			],
 			"properties": {
 				"agent-pi": { "$ref": "#/definitions/image" },
+				"alertmanager": { "$ref": "#/definitions/image" },
 				"application-server": { "$ref": "#/definitions/image" },
 				"nats": { "$ref": "#/definitions/image" },
 				"postgres": { "$ref": "#/definitions/image" },
+				"victoria-metrics": { "$ref": "#/definitions/image" },
+				"vmalert": { "$ref": "#/definitions/image" },
 				"webapp": { "$ref": "#/definitions/image" }
 			}
 		},
@@ -574,6 +586,30 @@
 						"labels": {
 							"description": "Labels for the ConfigMap and the PrometheusRule, for the rule selector of your Prometheus.",
 							"$ref": "#/definitions/labels"
+						}
+					}
+				},
+				"stack": {
+					"description": "A monitoring stack in the release's namespace: VictoriaMetrics, vmalert and Alertmanager.",
+					"type": "object",
+					"additionalProperties": false,
+					"properties": {
+						"enabled": { "type": "boolean" },
+						"retention": {
+							"description": "How long VictoriaMetrics keeps samples, in days or weeks.",
+							"type": "string",
+							"pattern": "^[1-9][0-9]*[dw]$"
+						},
+						"persistence": { "$ref": "#/definitions/volume" },
+						"alertmanager": {
+							"type": "object",
+							"additionalProperties": false,
+							"properties": {
+								"configSecret": {
+									"description": "The Secret with the key alertmanager.yml. Required when the stack is enabled.",
+									"$ref": "#/definitions/name"
+								}
+							}
 						}
 					}
 				}

@@ -256,6 +256,12 @@ const chartChannelImages = (omit?: string): Record<string, string> =>
 					`ghcr.io/hephaestus-build/application-server@sha256:${"2".repeat(64)}`,
 				],
 				["HEPHAESTUS_IMAGE_NATS", `docker.io/synadia/nats-server@sha256:${"3".repeat(64)}`],
+				[
+					"HEPHAESTUS_IMAGE_VICTORIA_METRICS",
+					`docker.io/victoriametrics/victoria-metrics@sha256:${"6".repeat(64)}`,
+				],
+				["HEPHAESTUS_IMAGE_VMALERT", `docker.io/victoriametrics/vmalert@sha256:${"7".repeat(64)}`],
+				["HEPHAESTUS_IMAGE_ALERTMANAGER", `docker.io/prom/alertmanager@sha256:${"8".repeat(64)}`],
 				["HEPHAESTUS_IMAGE_POSTGRES", `ghcr.io/hephaestus-build/postgres@sha256:${"4".repeat(64)}`],
 				["HEPHAESTUS_IMAGE_WEBAPP", `ghcr.io/hephaestus-build/webapp@sha256:${"5".repeat(64)}`],
 			] satisfies [string, string][]
@@ -876,6 +882,21 @@ async function reconcilerFixture(directory: string, targetRelease = "v1.0.0") {
 					name: "nats",
 					repository: "docker.io/synadia/nats-server",
 					digest: `sha256:${"3".repeat(64)}`,
+				},
+				{
+					name: "victoria-metrics",
+					repository: "docker.io/victoriametrics/victoria-metrics",
+					digest: `sha256:${"6".repeat(64)}`,
+				},
+				{
+					name: "vmalert",
+					repository: "docker.io/victoriametrics/vmalert",
+					digest: `sha256:${"7".repeat(64)}`,
+				},
+				{
+					name: "alertmanager",
+					repository: "docker.io/prom/alertmanager",
+					digest: `sha256:${"8".repeat(64)}`,
 				},
 			],
 		}),

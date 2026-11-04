@@ -489,9 +489,16 @@ matchExpressions:
 {{- if and .Values.networkPolicy.metrics.namespace (not .Values.networkPolicy.metrics.podLabels) -}}
 {{- fail "networkPolicy.metrics.podLabels needs at least one label: a namespace alone would admit every pod in it." -}}
 {{- end -}}
-{{- if .Values.networkPolicy.metrics.namespace -}}
+{{- if .Values.networkPolicy.metrics.namespace }}
 - from:
     {{- include "hephaestus.peer" .Values.networkPolicy.metrics | nindent 4 }}
+  ports:
+    - port: management
+      protocol: TCP
+{{- end }}
+{{- if .Values.observability.stack.enabled }}
+- from:
+    {{- include "hephaestus.componentPeer" (dict "root" . "component" "victoria-metrics") | nindent 4 }}
   ports:
     - port: management
       protocol: TCP

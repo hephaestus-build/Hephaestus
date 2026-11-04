@@ -41,6 +41,13 @@ const resolved = ["webapp", "application-server", "agent-pi", "postgres"].map((i
 }));
 const upstream = [
 	{ name: "nats", repository: "docker.io/synadia/nats-server", digest: digest("e") },
+	{
+		name: "victoria-metrics",
+		repository: "docker.io/victoriametrics/victoria-metrics",
+		digest: digest("f"),
+	},
+	{ name: "vmalert", repository: "docker.io/victoriametrics/vmalert", digest: digest("9") },
+	{ name: "alertmanager", repository: "docker.io/prom/alertmanager", digest: digest("8") },
 	{ name: "alpine", repository: "docker.io/library/alpine", digest: digest("a") },
 ];
 const images = chartImagesFrom(resolved, upstream);
@@ -48,9 +55,12 @@ const images = chartImagesFrom(resolved, upstream);
 await test("the chart's images come from the resolved first-party images and the upstream pins", () => {
 	assert.deepEqual(images, {
 		"agent-pi": `ghcr.io/hephaestus-build/agent-pi@${digest("2")}`,
+		alertmanager: `docker.io/prom/alertmanager@${digest("8")}`,
 		"application-server": `ghcr.io/hephaestus-build/application-server@${digest("1")}`,
 		nats: `docker.io/synadia/nats-server@${digest("e")}`,
 		postgres: `ghcr.io/hephaestus-build/postgres@${digest("3")}`,
+		"victoria-metrics": `docker.io/victoriametrics/victoria-metrics@${digest("f")}`,
+		vmalert: `docker.io/victoriametrics/vmalert@${digest("9")}`,
 		webapp: `ghcr.io/hephaestus-build/webapp@${digest("0")}`,
 	});
 	assert.throws(() => chartImagesFrom(resolved.slice(1), upstream), /no image for webapp/u);

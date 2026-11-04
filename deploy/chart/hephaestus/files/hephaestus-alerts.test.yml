@@ -26,6 +26,25 @@ tests:
             exp_annotations:
               summary: A Hephaestus metrics target cannot be scraped
 
+  - name: the watchdog fires while a role is scraped, and stops when none is
+    interval: 1m
+    input_series:
+      - series: 'up{job="hephaestus",instance="server:9090",runtime_role="server"}'
+        values: "1x5 0x5"
+      - series: 'up{job="hephaestus",instance="worker:9090",runtime_role="worker"}'
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HephaestusWatchdog
+        exp_alerts:
+          - exp_labels:
+              severity: none
+            exp_annotations:
+              summary: The monitoring of Hephaestus scrapes, evaluates and notifies
+      - eval_time: 8m
+        alertname: HephaestusWatchdog
+        exp_alerts: []
+
   - name: a product feedback report waiting over 30 minutes fires, a fresh one does not
     interval: 1m
     input_series:

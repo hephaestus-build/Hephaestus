@@ -37,7 +37,8 @@ The alert or the objective tells the operator when the answer needs work.
 | Is the data safe? | The WAL archive, backup and volume metrics | The critical alerts |
 | Which release runs in each Pod? | `application_build_info` | None |
 | Did feedback whose write was in doubt reach the work? | `practice_feedback_readback_total` | `HephaestusFeedbackReadbackUnknown` |
-| Does the cluster evaluate the rules of the release that runs? | The ConfigMap or the PrometheusRule of `observability.alertRules` | None. The project's own instances do not use them yet. Their vmalert loads a copy by hand: the ConfigMap `hephaestus-alert-rules` in the namespace `observability`. That copy does not follow the release |
+| Is the monitoring itself working? | `up` | `HephaestusWatchdog`, at an outside dead-man check |
+| Does the cluster evaluate the rules of the release that runs? | The [monitoring stack](#monitoring-stack), or the ConfigMap or the PrometheusRule of `observability.alertRules` | None. The project's own instances do not use them yet. Their vmalert loads a copy by hand: the ConfigMap `hephaestus-alert-rules` in the namespace `observability`. That copy does not follow the release |
 
 ### Questions without a signal
 
@@ -133,6 +134,60 @@ Set `networkPolicy.metrics` to the namespace and the pod labels of this Promethe
 With the Prometheus Operator, a PodMonitor must give the same labels.
 Set `job` to `hephaestus` with a relabeling.
 
+### Monitoring stack
+
+This is optional.
+`observability.stack.enabled` runs a small monitoring stack in the release's namespace:
+
+| Part | Does |
+| --- | --- |
+| VictoriaMetrics | Scrapes the management port of each role of this release every 30 seconds, as [Scrape metrics](#scrape-metrics) describes. Keeps the samples for `observability.stack.retention`, by default 30 days, on a volume of `observability.stack.persistence.size` |
+| vmalert | Evaluates the release's [alert rules](#alert-rules) every 30 seconds |
+| Alertmanager | Sends the alerts to the receivers of your configuration |
+
+Before you turn it on:
+
+1. Write the routes and receivers in a file `alertmanager.yml`.
+   Route `HephaestusWatchdog` to an outside dead-man check: a service that alerts you when the alert stops arriving.
+
+   ```yaml
+   route:
+     receiver: team
+     routes:
+       - matchers: ['alertname="HephaestusWatchdog"']
+         receiver: dead-man
+         repeat_interval: 5m
+   receivers:
+     - name: team
+       email_configs:
+         - to: ops@example.com
+           from: alerts@example.com
+           smarthost: smtp.example.com:587
+           auth_username: alerts@example.com
+           auth_password_file: /etc/alertmanager/smtp-password
+     - name: dead-man
+       webhook_configs:
+         - url: https://dead-man.example.com/ping/<id>
+   ```
+
+2. Put it in a Secret in the release's namespace, with any password file beside it:
+   `kubectl create secret generic hephaestus-alertmanager --from-file=alertmanager.yml --from-file=smtp-password`.
+3. Set `observability.stack.alertmanager.configSecret` to the Secret's name.
+4. Set `networkPolicy.kubernetesApi`. VictoriaMetrics finds the Pods through the Kubernetes API, with a Role in the release's namespace.
+
+Alertmanager reaches its receivers on ports 443, 465 and 587 of `networkPolicy.externalEgress`.
+Silences live only until Alertmanager restarts.
+
+The stack needs no host path and no cluster-wide access, so it does not run the node and cluster exporters.
+Without them, the groups `hephaestus-kubernetes` and `hephaestus-pull-deploy` stay silent: they read kube-state-metrics, the kubelet's volume statistics, node-exporter, and cert-manager.
+To use those groups, run the exporters in a namespace that allows host paths, and add their scrape jobs to your own Prometheus or VictoriaMetrics.
+The project's test instance runs kube-state-metrics and node-exporter in such a namespace, with a ClusterRole for the kubelet scrape.
+The stack collects no logs: see [Collecting logs](#collecting-logs).
+
+On the project's test instance, VictoriaMetrics used at most 470 MiB while it scraped the roles and the kubelets, and vmalert used 22 MiB.
+Both used less than 0.05 of a CPU.
+The stack's requests and limits follow these numbers.
+
 ### Alert rules
 
 The chart contains the alert rules in `files/hephaestus-alerts.yml`.
@@ -160,10 +215,11 @@ The chart package does not contain it.
 Each test gives series that fire the alert and series that do not.
 CI runs these tests for each change to the rules.
 
-Each alert has one of two `severity` labels:
+Each alert has one of three `severity` labels:
 
 - `critical`: data is at risk now. Send these alerts to a person at once. The critical alerts are a full PostgreSQL volume, a failing WAL archive, a stale backup, and no ready webhook receiver.
 - `warning`: a fault needs work during working hours. All other alerts are warnings.
+- `none`: `HephaestusWatchdog` only. It fires while the monitoring works. Route it to an outside dead-man check.
 
 The rules read the exported Prometheus names, not the dotted Micrometer names.
 The rules of the group `hephaestus` read the application's metrics.

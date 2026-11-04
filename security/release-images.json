@@ -7,6 +7,24 @@
 			"repository": "docker.io/synadia/nats-server",
 			"tag": "2.14.8-alpine3.22",
 			"digest": "sha256:e7c229e0f6415993d29a7ada7ef61f5fd380d7c1134b9038f70f6eff2813b0a0"
+		},
+		{
+			"name": "victoria-metrics",
+			"repository": "docker.io/victoriametrics/victoria-metrics",
+			"tag": "v1.155.0",
+			"digest": "sha256:f60dc268b54ecf87f6e09d740c2b732838aa9193090cc741417c9f6386a130df"
+		},
+		{
+			"name": "vmalert",
+			"repository": "docker.io/victoriametrics/vmalert",
+			"tag": "v1.155.0",
+			"digest": "sha256:3256cba5ddaca5974eae6141105cec4ce37871f1c213f0a5c267ec0111bc68e1"
+		},
+		{
+			"name": "alertmanager",
+			"repository": "docker.io/prom/alertmanager",
+			"tag": "v0.34.2",
+			"digest": "sha256:39d8bb3966c694a124428a3a88fbcffd40bd069129ecd47c059f8a3f17c55f3b"
 		}
 	]
 }

@@ -28,7 +28,7 @@ void describe("planUpstreamSubjects", () => {
 		const subjects = planUpstreamSubjects(inventory);
 		assert.deepEqual(
 			subjects.map((subject) => subject.image),
-			["nats"],
+			["nats", "victoria-metrics", "vmalert", "alertmanager"],
 		);
 		// A tag would resolve to whatever it points at today rather than to the artefact the release
 		// promotes, which is the whole reason the inventory pins digests.

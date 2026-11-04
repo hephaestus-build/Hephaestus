@@ -18,9 +18,12 @@ import type { ReleaseImageLock } from "./release-image-lock.ts";
  */
 export const chartImages = [
 	"agent-pi",
+	"alertmanager",
 	"application-server",
 	"nats",
 	"postgres",
+	"victoria-metrics",
+	"vmalert",
 	"webapp",
 ] as const;
 
@@ -70,9 +73,12 @@ export function chartValues(lock: ReleaseImageLock, inventory: ImageInventory): 
 		release: { version: lock.release, commit: lock.commit },
 		images: {
 			"agent-pi": reference("agent-pi"),
+			alertmanager: reference("alertmanager"),
 			"application-server": reference("application-server"),
 			nats: reference("nats"),
 			postgres: reference("postgres"),
+			"victoria-metrics": reference("victoria-metrics"),
+			vmalert: reference("vmalert"),
 			webapp: reference("webapp"),
 		},
 	};
@@ -136,9 +142,12 @@ export function commitChartValues(
 		release: { version: commit, commit },
 		images: {
 			"agent-pi": reference("agent-pi"),
+			alertmanager: reference("alertmanager"),
 			"application-server": reference("application-server"),
 			nats: reference("nats"),
 			postgres: reference("postgres"),
+			"victoria-metrics": reference("victoria-metrics"),
+			vmalert: reference("vmalert"),
 			webapp: reference("webapp"),
 		},
 	};

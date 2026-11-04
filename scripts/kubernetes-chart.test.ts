@@ -202,12 +202,18 @@ await test("a lock that does not cover exactly the release image inventory is re
 
 await test("a commit lock names the chart images by digest, its upstream images at the inventory pins", () => {
 	const commit = "c".repeat(40);
-	const nats = inventory.upstream.find((entry) => entry.name === "nats");
-	assert.ok(nats);
+	const pin = (name: string) => {
+		const entry = inventory.upstream.find((candidate) => candidate.name === name);
+		assert.ok(entry, name);
+		return `${entry.repository}@${entry.digest}`;
+	};
 	const images = {
 		HEPHAESTUS_IMAGE_AGENT_PI: `ghcr.io/hephaestus-build/agent-pi@${digest("1")}`,
+		HEPHAESTUS_IMAGE_ALERTMANAGER: pin("alertmanager"),
 		HEPHAESTUS_IMAGE_APPLICATION_SERVER: `ghcr.io/hephaestus-build/application-server@${digest("2")}`,
-		HEPHAESTUS_IMAGE_NATS: `${nats.repository}@${nats.digest}`,
+		HEPHAESTUS_IMAGE_NATS: pin("nats"),
+		HEPHAESTUS_IMAGE_VICTORIA_METRICS: pin("victoria-metrics"),
+		HEPHAESTUS_IMAGE_VMALERT: pin("vmalert"),
 		HEPHAESTUS_IMAGE_POSTGRES: `ghcr.io/hephaestus-build/postgres@${digest("4")}`,
 		HEPHAESTUS_IMAGE_WEBAPP: `ghcr.io/hephaestus-build/webapp@${digest("5")}`,
 		// The Compose edge, which the chart does not run.
@@ -224,7 +230,10 @@ await test("a commit lock names the chart images by digest, its upstream images 
 	assert.throws(
 		() =>
 			commitChartValues(
-				{ ...images, HEPHAESTUS_IMAGE_NATS: `${nats.repository}@${digest("e")}` },
+				{
+					...images,
+					HEPHAESTUS_IMAGE_NATS: pin("nats").replace(/@sha256:[0-9a-f]+$/u, `@${digest("e")}`),
+				},
 				inventory,
 				commit,
 			),

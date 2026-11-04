@@ -258,6 +258,19 @@ observability:
     # Labels for both, so that the rule selector of your Prometheus finds them, such as
     # `release: <your monitoring release>` for kube-prometheus-stack.
     labels: {}
+  # A monitoring stack in the release's namespace: VictoriaMetrics scrapes the roles, vmalert evaluates
+  # the alert rules, and Alertmanager sends the alerts. Node and cluster exporters are not part of it:
+  # docs/admin/observability.mdx § Monitoring stack.
+  stack:
+    enabled: false
+    retention: 30d
+    persistence:
+      size: 5Gi
+      storageClassName: ""
+    alertmanager:
+      # Required with the stack: a Secret in the release's namespace with the key alertmanager.yml, which
+      # holds the routes and receivers. Route HephaestusWatchdog to an outside dead-man check.
+      configSecret: ""
 
 priorityClasses:
   create: true

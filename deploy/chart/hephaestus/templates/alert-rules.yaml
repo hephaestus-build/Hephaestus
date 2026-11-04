@@ -1,6 +1,7 @@
 {{- /* files/hephaestus-alerts.yml is the one home of the rules; vp run test:alerts tests that file. */}}
 {{- $rules := .Files.Get "files/hephaestus-alerts.yml" }}
-{{- if .Values.observability.alertRules.configMap }}
+{{- /* The stack's vmalert mounts the ConfigMap. */}}
+{{- if or .Values.observability.alertRules.configMap .Values.observability.stack.enabled }}
 ---
 apiVersion: v1
 kind: ConfigMap

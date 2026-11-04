@@ -49,6 +49,8 @@ export function renderDeployTopology(root = REPO_ROOT, workerEnabled = true): st
 			},
 		},
 		worker: { enabled: workerEnabled, sandbox: { namespace: "hephaestus-sandboxes" } },
+		// The monitoring stack runs the upstream images that the release pins.
+		observability: { stack: { enabled: true, alertmanager: { configSecret: "alertmanager" } } },
 	};
 	const result = spawnSync(
 		"helm",
