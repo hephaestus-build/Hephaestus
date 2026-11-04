@@ -1,6 +1,9 @@
-import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import { setTimeout } from "node:timers/promises";
 
 import { changedPaths, parseBase, pathFilters, scopesFor, type Scope } from "./check-affected.ts";
 import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
@@ -204,15 +207,14 @@ export function frontendCommands(paths: string[] | undefined, cwd = process.cwd(
 	});
 }
 
+const pushEnvironment = (): NodeJS.ProcessEnv => ({
+	...environmentWithoutGitRepository(),
+	VP_RUN_CONCURRENCY_LIMIT: "1",
+	[PUSH_CHECK_ENV]: "true",
+});
+
 function run(program: string, args: string[]): void {
-	const result = spawnSync(program, args, {
-		stdio: "inherit",
-		env: {
-			...environmentWithoutGitRepository(),
-			VP_RUN_CONCURRENCY_LIMIT: "1",
-			[PUSH_CHECK_ENV]: "true",
-		},
-	});
+	const result = spawnSync(program, args, { stdio: "inherit", env: pushEnvironment() });
 	if (result.error !== undefined) {
 		throw result.error;
 	}
@@ -221,7 +223,112 @@ function run(program: string, args: string[]): void {
 	}
 }
 
-function main(): void {
+/**
+ * How long a frontend unit run may print nothing before the hook stops it. The slowest test file
+ * took 30 seconds on one worker of a heavily loaded host, and a run prints as each file finishes.
+ */
+export const STALL_LIMIT_MS = 5 * 60_000;
+
+/**
+ * Runs a frontend unit project, and fails it loudly when it prints nothing for `stallLimitMs`:
+ * Vitest has hung there with no worker left, and a hook that never ends teaches `--no-verify`.
+ * Before it stops the run, each Node process of it writes a diagnostic report of what it waits on.
+ */
+export async function runUnlessStalled(
+	program: string,
+	args: string[],
+	stallLimitMs = STALL_LIMIT_MS,
+): Promise<number> {
+	const posix = process.platform !== "win32";
+	const reports = mkdtempSync(path.join(tmpdir(), "check-push-stall-"));
+	// Windows has no report signal.
+	const reportOptions = posix
+		? ` --report-on-signal --report-signal=SIGUSR2 --report-directory="${reports}"`
+		: "";
+	const environment = pushEnvironment();
+	const child = spawn(program, args, {
+		detached: posix,
+		stdio: ["ignore", "pipe", "pipe"],
+		env: {
+			...environment,
+			NODE_OPTIONS: `${environment.NODE_OPTIONS ?? ""}${reportOptions}`.trim(),
+			...(process.stdout.isTTY ? { FORCE_COLOR: "1" } : {}),
+		},
+	});
+	// The whole tree: its own process group on POSIX, `taskkill /T` on Windows.
+	const signal = (name: NodeJS.Signals) => {
+		if (child.pid === undefined) {
+			return;
+		}
+		if (!posix) {
+			spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+			return;
+		}
+		try {
+			process.kill(-child.pid, name);
+		} catch {
+			// Every process of the group already ended.
+		}
+	};
+	// Its own process group does not receive the terminal's Ctrl-C, so pass it on.
+	const onInterrupt = () => signal("SIGINT");
+	const onTerminate = () => signal("SIGTERM");
+	const onHangup = () => signal("SIGHUP");
+	process.on("SIGINT", onInterrupt).on("SIGTERM", onTerminate).on("SIGHUP", onHangup);
+	let lastOutput = Date.now();
+	child.stdout.on("data", (chunk: Buffer) => {
+		lastOutput = Date.now();
+		process.stdout.write(chunk);
+	});
+	child.stderr.on("data", (chunk: Buffer) => {
+		lastOutput = Date.now();
+		process.stderr.write(chunk);
+	});
+	// Time for each process to write its report before the whole run is killed.
+	const reportGraceMs = 5000;
+	const state = { stalledAt: 0 };
+	const watch = setInterval(
+		() => {
+			if (state.stalledAt !== 0 || Date.now() - lastOutput < stallLimitMs) {
+				return;
+			}
+			state.stalledAt = Date.now();
+			signal("SIGUSR2");
+			void (async () => {
+				await setTimeout(reportGraceMs);
+				signal("SIGKILL");
+			})();
+		},
+		Math.min(10_000, stallLimitMs / 4),
+	);
+	try {
+		await once(child, "exit");
+		// A grandchild can hold the pipes open, so wait for the last output only briefly.
+		const drained = [child.stdout, child.stderr]
+			.filter((stream) => !stream.readableEnded)
+			.map(async (stream) => once(stream, "end"));
+		await Promise.race([Promise.all(drained), setTimeout(1000)]);
+	} finally {
+		clearInterval(watch);
+		process.off("SIGINT", onInterrupt).off("SIGTERM", onTerminate).off("SIGHUP", onHangup);
+	}
+	if (state.stalledAt !== 0) {
+		// The leader can end before its workers do; nothing of the run may outlive the hook.
+		await setTimeout(Math.max(0, state.stalledAt + reportGraceMs - Date.now()));
+		signal("SIGKILL");
+		const where = posix
+			? `\nDiagnostic reports of its Node processes, with what each waited on: ${reports}`
+			: "";
+		console.error(
+			`\nThe frontend unit run printed nothing for ${Math.round(stallLimitMs / 1000)} s, so the push check stopped it and failed.${where}\nRetry the push. If it stalls again, keep the reports and tell the maintainers; do not skip the hook.`,
+		);
+		return 1;
+	}
+	rmSync(reports, { recursive: true, force: true });
+	return child.exitCode ?? 1;
+}
+
+async function main(): Promise<void> {
 	const base = parseBase(process.argv.slice(2));
 	let paths: string[] | undefined;
 	try {
@@ -264,7 +371,10 @@ function main(): void {
 	}
 	for (const command of frontendCommands(paths)) {
 		console.log(`Frontend unit selection: ${command.join(" ")}`);
-		run(process.execPath, [cli, ...command]);
+		const status = await runUnlessStalled(process.execPath, [cli, ...command]);
+		if (status !== 0) {
+			process.exit(status);
+		}
 	}
 	if (skipsImportedTests(paths)) {
 		console.log(
@@ -277,5 +387,5 @@ function main(): void {
 }
 
 if (import.meta.main) {
-	main();
+	await main();
 }

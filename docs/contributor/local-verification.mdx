@@ -108,13 +108,14 @@ Every worktree of a clone shares `core.hooksPath`, and Git resolves a relative p
 `vp install` sets the path to `.vite-hooks`, which exists in every checkout.
 Thus, a new worktree runs its own hooks from its first checkout, before any install.
 
-The install replaces a path to this repository's hooks in one checkout, and a path to the dispatcher that Vite+ generates in each worktree.
+The install replaces a path to this repository's hooks in one worktree of the clone or in a removed checkout.
+It also replaces a path to the dispatcher that Vite+ generates in each worktree.
 An absolute path runs one worktree's hooks and `vp` in every other worktree.
 Git runs no hook, without a warning, in a worktree where the dispatcher is missing.
 
 The install also removes each worktree's own `core.hooksPath` override that names these hooks, in every worktree of the clone.
 Thus, no worktree depends on which checkout last ran an install.
-The install keeps a contributor's own hooks directory.
+The install keeps a contributor's own hooks directory, also one named `.vite-hooks` in another project.
 Do not set `core.hooksPath` by hand.
 
 Each hook starts through `.vite-hooks/run`, which runs the `vp` that the install of that worktree put in its `node_modules`.
@@ -151,12 +152,17 @@ The hook then prints that CI runs the tests that reach the change through import
 Shared inputs, test helpers, network mocks, deleted files and non-code resources select the complete unit project.
 The extension selects its unit project only.
 Each test runner uses one worker.
+If a frontend unit run prints nothing for five minutes, the hook stops it and fails.
+On Linux and macOS, each Node process of the run first writes a diagnostic report, and the hook prints their directory.
+
+A webapp change also builds the webapp, which enforces the bundle budget.
+The build takes seconds, and the browser suites in CI build the same bundle.
 
 A change under `scripts/` selects the tooling checks and each tree whose CI path filter in `cicd.yml` names the file.
 Pull request CI runs the same trees for that change.
 
 An unknown path or missing merge base selects every scoped check and both frontend unit projects.
-The hook does not fetch, install tools, start a browser or build a distributable artifact.
+The hook does not fetch, install tools, start a browser or build an artifact other than the webapp bundle.
 If a pinned tool is absent from the shared cache, run `vp run check` once in any worktree of the clone.
 The hook reports its selected scope and the suites that still require the full gate or CI.
 It checks the current worktree, its HEAD and pending changes.
