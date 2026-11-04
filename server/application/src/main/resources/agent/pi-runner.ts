@@ -3205,8 +3205,12 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					roomForSession({ running, scriptHeapBytes: SCRIPT_HEAP_BYTES, baseHeapBytes }),
 				);
 				let sessionsAtOnce = 0;
+				// Two unanswered sessions stop new starts only: a running session that is answered keeps its work, and
+				// one that waits ends on its own retries.
+				const stalledStarts = new AbortController();
 				const startsEnd = AbortSignal.any([
 					measuringEnded.signal,
+					stalledStarts.signal,
 					AbortSignal.timeout(Math.max(0, measureEnd - RETURN_MS - Date.now())),
 				]);
 				const runSession = async (work: (typeof planned)[number], scope: ReviewSessionState) => {
@@ -3214,10 +3218,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						const stop = await sessionScopes.run(scope, async () =>
 							runScope(work.label, work.heading, [work.slug]),
 						);
-						if (stalled(stop) && !measuringEnded.signal.aborted) {
+						if (stalled(stop) && !stalledStarts.signal.aborted) {
 							unreachedReason = "unavailable";
 							diagnose("measurement.ended", { reason: "stalled" });
-							measuringEnded.abort(new UnratedError("unavailable", "the model stopped answering"));
+							stalledStarts.abort();
 						}
 					} catch (error) {
 						measurementClosed = true;
