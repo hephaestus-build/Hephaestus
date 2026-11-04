@@ -94,7 +94,9 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
         }
 
         // Get the team
-        Team team = teamRepository.findById(teamId).orElse(null);
+        // The payload carries GitHub's team id, not the stored team's.
+        Team team =
+                teamRepository.findByNativeIdAndProviderId(teamId, providerId).orElse(null);
         if (team == null) {
             // Team should be created by team webhook
             log.warn("Skipped membership event: reason=unknownTeam, teamId={}", teamDto.id());

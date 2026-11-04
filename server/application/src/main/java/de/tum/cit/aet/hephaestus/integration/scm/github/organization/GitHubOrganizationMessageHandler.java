@@ -9,9 +9,12 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserialize
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener.MembershipChangedEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMemberRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.organization.dto.GitHubOrganizationEventDTO;
@@ -19,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -38,6 +42,8 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
     private final GitHubUserProcessor userProcessor;
     private final IdentityProviderRepository gitProviderRepository;
     private final OrganizationMembershipRepository membershipRepository;
+    private final OrganizationRepository organizationRepository;
+    private final UserRepository userRepository;
     private final OrganizationMembershipListener membershipListener;
 
     GitHubOrganizationMessageHandler(
@@ -45,6 +51,8 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
             GitHubUserProcessor userProcessor,
             IdentityProviderRepository gitProviderRepository,
             OrganizationMembershipRepository membershipRepository,
+            OrganizationRepository organizationRepository,
+            UserRepository userRepository,
             OrganizationMembershipListener membershipListener,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
@@ -58,6 +66,8 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
         this.userProcessor = userProcessor;
         this.gitProviderRepository = gitProviderRepository;
         this.membershipRepository = membershipRepository;
+        this.organizationRepository = organizationRepository;
+        this.userRepository = userRepository;
         this.membershipListener = membershipListener;
     }
 
@@ -81,18 +91,24 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
                 .orElseThrow(() -> new IllegalStateException("IdentityProvider not found for GitHub"))
                 .getId());
-        Long organizationId = Objects.requireNonNull(orgDto.id());
+        // The payload carries GitHub's ids. Memberships and their events use the stored organization's and person's
+        // ids.
+        Long nativeOrganizationId = Objects.requireNonNull(orgDto.id());
 
         switch (event.actionType()) {
             case GitHubEventAction.Organization.MEMBER_ADDED -> {
                 if (event.membership() != null && event.membership().user() != null) {
                     var userDto = event.membership().user();
+                    Organization organization = storedOrganization(nativeOrganizationId, providerId, event);
+                    if (organization == null) return;
                     User user = Objects.requireNonNull(userProcessor.ensureExists(userDto, providerId));
+                    Long organizationId = Objects.requireNonNull(organization.getId());
+                    Long userId = Objects.requireNonNull(user.getId());
                     OrganizationMemberRole role = parseRole(event.membership().role());
-                    membershipRepository.upsertMembership(organizationId, Objects.requireNonNull(user.getId()), role);
+                    membershipRepository.upsertMembership(organizationId, userId, role);
                     log.info(
                             "Added member to organization: orgId={}, orgLogin={}, userLogin={}, role={}",
-                            orgDto.id(),
+                            organizationId,
                             sanitizeForLog(orgDto.login()),
                             sanitizeForLog(userDto.login()),
                             role);
@@ -101,7 +117,7 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
                     membershipListener.onMemberAdded(new MembershipChangedEvent(
                             organizationId,
                             orgDto.login(),
-                            Objects.requireNonNull(userDto.id()),
+                            userId,
                             userDto.login(),
                             event.membership().role()));
                 }
@@ -109,28 +125,52 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
             case GitHubEventAction.Organization.MEMBER_REMOVED -> {
                 if (event.membership() != null && event.membership().user() != null) {
                     var userDto = event.membership().user();
-                    membershipRepository.deleteByOrganizationIdAndUserIdIn(
-                            organizationId, List.of(Objects.requireNonNull(userDto.id())));
+                    Organization organization = storedOrganization(nativeOrganizationId, providerId, event);
+                    if (organization == null) return;
+                    Long organizationId = Objects.requireNonNull(organization.getId());
+                    var user = userRepository.findByNativeIdAndProviderId(
+                            Objects.requireNonNull(userDto.id()), providerId);
+                    if (user.isEmpty()) {
+                        log.debug(
+                                "Skipped member removal: reason=unknownUser, orgId={}, userLogin={}",
+                                organizationId,
+                                sanitizeForLog(userDto.login()));
+                        return;
+                    }
+                    Long userId = Objects.requireNonNull(user.get().getId());
+                    membershipRepository.deleteByOrganizationIdAndUserIdIn(organizationId, List.of(userId));
                     log.info(
                             "Removed member from organization: orgId={}, orgLogin={}, userLogin={}",
-                            orgDto.id(),
+                            organizationId,
                             sanitizeForLog(orgDto.login()),
                             sanitizeForLog(userDto.login()));
 
                     // Notify listeners about membership change
-                    membershipListener.onMemberRemoved(new MembershipChangedEvent(
-                            organizationId,
-                            orgDto.login(),
-                            Objects.requireNonNull(userDto.id()),
-                            userDto.login(),
-                            null));
+                    membershipListener.onMemberRemoved(
+                            new MembershipChangedEvent(organizationId, orgDto.login(), userId, userDto.login(), null));
                 }
             }
             case GitHubEventAction.Organization.RENAMED ->
-                organizationProcessor.rename(organizationId, orgDto.login(), providerId);
-            case GitHubEventAction.Organization.DELETED -> organizationProcessor.delete(organizationId, providerId);
+                organizationProcessor.rename(nativeOrganizationId, orgDto.login(), providerId);
+            case GitHubEventAction.Organization.DELETED ->
+                organizationProcessor.delete(nativeOrganizationId, providerId);
             default -> organizationProcessor.process(orgDto, providerId);
         }
+    }
+
+    /** The stored organization for GitHub's id, or null when the organization has not been synced yet. */
+    private @Nullable Organization storedOrganization(
+            Long nativeOrganizationId, Long providerId, GitHubOrganizationEventDTO event) {
+        Organization organization = organizationRepository
+                .findByNativeIdAndProviderId(nativeOrganizationId, providerId)
+                .orElse(null);
+        if (organization == null) {
+            log.debug(
+                    "Skipped organization member event: reason=unknownOrganization, action={}, nativeOrgId={}",
+                    event.action(),
+                    nativeOrganizationId);
+        }
+        return organization;
     }
 
     /**

@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -35,6 +36,9 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private OrganizationMembershipRepository membershipRepository;
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
@@ -128,6 +132,41 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
 
         // Then - handler processes without error
         assertThat(organizationRepository.findById(testOrganization.getId())).isPresent();
+    }
+
+    @Test
+    void shouldStoreAnAddedMemberUnderTheStoredOrganizationAndPerson() throws Exception {
+        GitHubOrganizationEventDTO event = loadPayload("organization.member_added");
+        long nativeOrganizationId = required(event.organization().id());
+        long organizationId = required(testOrganization.getId());
+        assertThat(organizationId).as("stored and GitHub ids must differ here").isNotEqualTo(nativeOrganizationId);
+
+        handler.handleEvent(event);
+
+        long nativeUserId =
+                required(required(required(event.membership()).user()).id());
+        User member = userRepository
+                .findByNativeIdAndProviderId(nativeUserId, githubProviderId())
+                .orElseThrow();
+        assertThat(member.getId()).as("stored and GitHub ids must differ here").isNotEqualTo(nativeUserId);
+        assertThat(membershipRepository.findUserIdsByOrganizationId(organizationId))
+                .containsExactly(member.getId());
+        assertThat(membershipRepository.findUserIdsByOrganizationId(nativeOrganizationId))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldRemoveAMemberStoredUnderTheStoredOrganizationAndPerson() throws Exception {
+        GitHubOrganizationEventDTO addEvent = loadPayload("organization.member_added");
+        handler.handleEvent(addEvent);
+        long organizationId = required(testOrganization.getId());
+        assertThat(membershipRepository.findUserIdsByOrganizationId(organizationId))
+                .hasSize(1);
+
+        handler.handleEvent(loadPayload("organization.member_removed"));
+
+        assertThat(membershipRepository.findUserIdsByOrganizationId(organizationId))
+                .isEmpty();
     }
 
     @Test
