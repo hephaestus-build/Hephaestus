@@ -29,6 +29,7 @@ The alert or the objective tells the operator when the answer needs work.
 | Do provider events arrive and get processed? | `webhook_publish_total`, `webhook_stream_*`, `integration_consumer_*` | The webhook and stream alerts |
 | Is the data safe? | The WAL archive, backup and volume metrics | The critical alerts |
 | Which release runs in each Pod? | `application_build_info` | None |
+| Did feedback whose write was in doubt reach the work? | `practice_feedback_readback_total` | `HephaestusFeedbackReadbackUnknown` |
 
 ### Questions without a signal
 
@@ -50,7 +51,7 @@ These questions have no signal yet. The most important is first.
 7. What does a reader wait for on a page?
    When does the browser show the first word of an answer?
    No signal exists.
-8. Does feedback earn trust: the outcomes of each practice, corrections, disagreement and readback?
+8. Does feedback earn trust: the outcomes of each practice, corrections and disagreement?
    These are only in the database.
    A practice is not a metric label, because each workspace can add practices.
 
@@ -215,6 +216,7 @@ For a release name longer than 34 characters, change the name patterns of these 
 | `HephaestusReviewSandboxFailing` | `agent_job_infra_retry_requeued_total{cause="sandbox"}` | The sandbox could not start, initialize or finish, and the attempt runs again. Three in one hour point to the cluster: the sandbox namespace, its quota, the agent image or the nodes. The alert stays up for up to one hour after the last failure |
 | `HephaestusReviewUnreachable` | `agent_job_infra_retry_requeued_total` with `cause` `server_unreachable` or `provider_unreachable` | The sandbox reached neither the server's gateway nor the model provider. The `cause` label tells which. Three in one hour point to the network policy or to the provider. The alert stays up for up to one hour after the last failure |
 | `HephaestusReviewPreparationFailing` | `agent_job_infra_retry_requeued_total{cause="preparation"}` | An attempt failed before its sandbox started, for example because the reviewed source was not captured yet. A few retries are normal after a push. Retries that continue point to provider sync or the database |
+| `HephaestusFeedbackReadbackUnknown` | `practice_feedback_readback_total{outcome="unknown"}`, over one day | Hephaestus could not tell whether a copy reached the work, so the feedback stays Unconfirmed. The copy may be missing, and a retry could post it twice. Readback runs only when a write was in doubt, so one count already needs a look. A proved absence does not fire: there a resend is safe. The alert stays up for one day after the last count |
 | `HephaestusReviewWorkerLost` | `agent_job_orphan_failed_total` | Each count is a review that failed because a worker stopped during each of its attempts. Workers that stop that often are evicted, out of memory, or on lost nodes. The alert stays up for one hour after the count |
 | `HephaestusAgentQueueStalled` | `agent_queue_oldest_age_seconds` | A practice review usually runs for 10 to 16 minutes. A wait of several review durations shows that no worker claims work |
 | `HephaestusSandboxIsolationFailed` | `sandbox_isolation_passed` of a worker | A later probe failed, and the worker starts no sandbox until a probe passes. The wait covers the first probe at the start |
@@ -477,6 +479,26 @@ The `review.stop_reason` and `review_item.reason` columns keep the same reasons 
 The server registers each status and stop reason of `practice_review_ended_total` at zero when it starts.
 Thus, `increase()` also counts the first end after a start.
 An item series starts with its first count, so `increase()` does not count the first items of a new state and reason after a start.
+
+## Feedback readback metric
+
+When a write of feedback on the work was in doubt, the server reads the work again before it does anything else.
+This is readback.
+A write that the provider confirmed is not read back.
+
+| Prometheus name | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `practice_feedback_readback_total` | Counter | `provider`, `outcome` | Copies of feedback that readback looked for |
+
+`provider` is `github` or `gitlab`.
+`outcome` is `found`, `absent` or `unknown`.
+
+`found` records the copy as delivered.
+`absent` records that the copy is not on the work. Only an admin retry posts it again.
+`unknown` keeps the feedback Unconfirmed. A later attempt reads back again, up to eight attempts.
+The `feedback_copy.readback` column records only `absent` and `unknown`: a copy that readback found looks the same as a copy that its write confirmed.
+
+The server registers each provider and outcome at zero when it starts.
 
 ## Release metric
 

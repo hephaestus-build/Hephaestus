@@ -290,6 +290,15 @@ groups:
           severity: warning
         annotations:
           summary: More than a quarter of the item reviews of the last six hours did not end complete
+      # Readback that cannot tell whether a copy reached the work leaves the feedback Unconfirmed: the copy may be
+      # missing, and a retry could post it twice. A proved absence is the case where a resend is safe, so it does not fire.
+      - alert: HephaestusFeedbackReadbackUnknown
+        expr: >-
+          sum by (provider) (increase(practice_feedback_readback_total{job="hephaestus",outcome="unknown"}[1d])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Readback could not tell whether feedback reached the work on {{ $labels.provider }}
   - name: hephaestus-kubernetes
     rules:
       - alert: HephaestusWebhookReceiverDown

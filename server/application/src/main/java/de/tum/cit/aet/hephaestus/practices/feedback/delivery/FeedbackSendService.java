@@ -36,6 +36,7 @@ public class FeedbackSendService {
     private final List<SummaryWriter> summaries;
     private final List<LineNoteWriter> notes;
     private final PostedCopyCorrector corrector;
+    private final FeedbackReadbackMeters readbacks;
 
     public void send(long workspaceId, UUID feedbackId) {
         String owner = UUID.randomUUID().toString();
@@ -91,6 +92,7 @@ public class FeedbackSendService {
                 Objects.requireNonNull(copy.getWriteMarker()));
         if (copy.getState() == FeedbackCopyState.WRITE_STARTED) {
             var lookup = writer.findExistingSummary(target, content);
+            readbacks.record(target.integration().kind(), lookup.presence());
             if (lookup.presence() == LookupPresence.FOUND) {
                 var handle = Objects.requireNonNull(lookup.handle());
                 transactions.receipt(
@@ -157,6 +159,10 @@ public class FeedbackSendService {
             var written = new ArrayList<>(copies(attempt, FeedbackCopyState.POSTED));
             written.addAll(unresolved);
             var found = writer.findPosted(target, publication(attempt, written));
+            for (var copy : unresolved)
+                readbacks.record(
+                        target.integration().kind(),
+                        found == null ? LookupPresence.UNKNOWN : FeedbackReadbackMeters.outcome(found, copy.getId()));
             if (found == null) return;
             var ids = unresolved.stream().map(FeedbackCopy::getId).toList();
             transactions.receipt(

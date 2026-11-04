@@ -18,11 +18,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.practices.feedback.AbstractFeedbackDeliveryIntegrationTest;
+import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackReadbackMeters;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.PostedCopyCorrector;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -78,7 +80,12 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
         var corrector =
                 new PostedCopyCorrector(copies, visibility, List.of(gitlab.channel()), List.of(writer), transactions);
         sender = new FeedbackSendService(
-                transactions, resolution, List.of(gitlab.channel()), List.of(writer), corrector);
+                transactions,
+                resolution,
+                List.of(gitlab.channel()),
+                List.of(writer),
+                corrector,
+                new FeedbackReadbackMeters(new SimpleMeterRegistry()));
         prepare(true);
         sender.send(workspace.getId(), feedbackId);
         if (rejected) {
