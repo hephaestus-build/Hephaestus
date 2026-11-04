@@ -64,10 +64,27 @@ export function reorder(
 	});
 }
 
+/** The `next/` names that one commit of `QUEUE_QUERY` lists; none when it has no such directory. */
+function nextFilesAt(commit: unknown): string[] | undefined {
+	if (commit === null || commit === undefined) {
+		return undefined;
+	}
+	const { file } = asRecord(commit, "commit");
+	if (file === null || file === undefined) {
+		return [];
+	}
+	const tree = asRecord(asRecord(file, "file").object, "object");
+	return asArray(tree.entries, "entries")
+		.map((node) => asString(asRecord(node, "entry").name, "name"))
+		.filter((name) => name.endsWith(".xml"))
+		.map((name) => `${NEXT_CHANGELOG_DIRECTORY}/${name}`);
+}
+
 /**
- * The `next/` files that pull requests in `main`'s merge queue add, from the response to
- * `QUEUE_QUERY`. Throws when a pull request changes more files than one page shows: a missed file
- * would let this branch sort before it.
+ * The `next/` files of each entry in `main`'s merge queue, from the response to `QUEUE_QUERY`: at the
+ * entry's merge-group commit, which holds `main` and every entry ahead, or before the queue builds one,
+ * at the pull request's head. A directory listing holds every migration, however many files the pull
+ * request changes, and also the base's, which sort no later.
  */
 export function queuedMigrations(response: unknown): string[] {
 	const data = asRecord(asRecord(response, "response").data, "data");
@@ -76,26 +93,32 @@ export function queuedMigrations(response: unknown): string[] {
 		return [];
 	}
 	const entries = asRecord(asRecord(queue, "mergeQueue").entries, "entries");
-	return asArray(entries.nodes, "entries").flatMap((entry) => {
-		const pullRequest = asRecord(asRecord(entry, "entry").pullRequest, "pullRequest");
-		const files = asRecord(pullRequest.files, "files");
-		if (asRecord(files.pageInfo, "pageInfo").hasNextPage === true) {
+	return asArray(entries.nodes, "entries").flatMap((node) => {
+		const entry = asRecord(node, "entry");
+		const pullRequest = asRecord(entry.pullRequest, "pullRequest");
+		const { headRef } = pullRequest;
+		const branchTip =
+			headRef === null || headRef === undefined ? undefined : asRecord(headRef, "headRef").target;
+		// A deleted head branch leaves only the commit list, whose last commit is the head.
+		const lastCommit = asArray(asRecord(pullRequest.commits, "commits").nodes, "commits").at(-1);
+		const files =
+			nextFilesAt(entry.headCommit) ??
+			nextFilesAt(branchTip) ??
+			nextFilesAt(
+				lastCommit === undefined ? undefined : asRecord(lastCommit, "commit node").commit,
+			);
+		if (files === undefined) {
 			throw new Error(
-				`Queued pull request #${String(pullRequest.number)} changes more files than one page shows. Check its migrations by hand.`,
+				`Queued pull request #${String(pullRequest.number)} has no commit to read its migrations from. Check them by hand.`,
 			);
 		}
-		return asArray(files.nodes, "files").flatMap((node) => {
-			const file = asRecord(node, "file");
-			const name = asString(file.path, "path");
-			return file.changeType === "ADDED" && name.startsWith(`${NEXT_CHANGELOG_DIRECTORY}/`)
-				? [name]
-				: [];
-		});
+		return files;
 	});
 }
 
-const QUEUE_QUERY =
-	'query($owner:String!,$name:String!){repository(owner:$owner,name:$name){mergeQueue(branch:"main"){entries(first:100){nodes{pullRequest{number files(first:100){pageInfo{hasNextPage} nodes{path changeType}}}}}}}}';
+const NEXT_FILES = "file(path:$path){object{... on Tree{entries{name}}}}";
+
+const QUEUE_QUERY = `query($owner:String!,$name:String!,$path:String!){repository(owner:$owner,name:$name){mergeQueue(branch:"main"){entries(first:100){nodes{headCommit{${NEXT_FILES}} pullRequest{number headRef{target{... on Commit{${NEXT_FILES}}}} commits(last:1){nodes{commit{${NEXT_FILES}}}}}}}}}}`;
 
 /** The `next/` files that the merge queue of a GitHub origin adds; none for any other remote. */
 export function readQueue(cwd: string): string[] {
@@ -111,7 +134,18 @@ export function readQueue(cwd: string): string[] {
 	const [owner = "", name = ""] = repository.split("/");
 	const result = spawnSync(
 		"gh",
-		["api", "graphql", "-f", `query=${QUEUE_QUERY}`, "-f", `owner=${owner}`, "-f", `name=${name}`],
+		[
+			"api",
+			"graphql",
+			"-f",
+			`query=${QUEUE_QUERY}`,
+			"-f",
+			`owner=${owner}`,
+			"-f",
+			`name=${name}`,
+			"-f",
+			`path=${NEXT_CHANGELOG_DIRECTORY}`,
+		],
 		{ cwd, encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES },
 	);
 	if (result.status !== 0) {
@@ -215,7 +249,8 @@ export function orderProblem(
 		return undefined;
 	}
 	const own = new Set(found.branch);
-	const ahead = queued.filter((file) => !own.has(file));
+	// A queued head also lists the base's files; only the others are what the queue adds.
+	const ahead = queued.filter((file) => !own.has(file) && !found.base.includes(file));
 	const newest =
 		[...found.base, ...ahead]
 			.toSorted((a, b) => path.posix.basename(a).localeCompare(path.posix.basename(b)))
