@@ -342,6 +342,7 @@ If the provider rotated the token but its response was lost, replace the token.
 
 If rotation fails or is not permitted, workspace admins subscribed to **Workspace connection alerts** receive one email for the recorded problem.
 A refused token records a separate credential problem and sends one alert.
+The sync of that workspace then pauses and makes no more calls with the token.
 Rotation or replacement clears the problem and sends a recovery email.
 Repeated checks do not repeat alerts for the same problem revision.
 

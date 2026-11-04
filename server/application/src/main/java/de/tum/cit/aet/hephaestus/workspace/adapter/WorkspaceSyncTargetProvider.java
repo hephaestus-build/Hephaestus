@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
@@ -19,12 +20,15 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
+import de.tum.cit.aet.hephaestus.workspace.metrics.WorkspaceMetrics;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -52,6 +56,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
     private final ObjectProvider<IntegrationNatsConsumer> natsConsumerService;
 
     private final ReviewScopeRepositoryRepository practiceReviewRepositoryTargetRepository;
+    private final MeterRegistry meterRegistry;
 
     public WorkspaceSyncTargetProvider(
             WorkspaceRepository workspaceRepository,
@@ -61,7 +66,9 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
             NatsConnectionProperties natsProperties,
             ObjectProvider<IntegrationNatsConsumer> natsConsumerService,
             ReviewScopeRepositoryRepository practiceReviewRepositoryTargetRepository,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.workspaceScopeFilter = workspaceScopeFilter;
@@ -79,6 +86,29 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                 workspace.getId(),
                 e.connectionId(),
                 e.kind());
+    }
+
+    /**
+     * A credential its provider refused pauses every sync of the scope until it is replaced or accepted
+     * again: each call would only repeat the refusal. {@code IntegrationAttentionService} logs the change.
+     */
+    private boolean credentialRefused(long workspaceId) {
+        return Stream.of(IntegrationKind.GITHUB, IntegrationKind.GITLAB)
+                .flatMap(kind -> connectionService.findActive(workspaceId, kind).stream())
+                .anyMatch(connection -> connection.getAttentionProblem() == Problem.CREDENTIAL_REVOKED);
+    }
+
+    private boolean syncable(Workspace workspace, IntegrationKind kind) {
+        if (!credentialRefused(workspace.getId())) return true;
+        meterRegistry
+                .counter(
+                        WorkspaceMetrics.WORKSPACE_SYNC_PAUSED,
+                        "kind",
+                        kind.name().toLowerCase(Locale.ROOT),
+                        "reason",
+                        "credential_revoked")
+                .increment();
+        return false;
     }
 
     private boolean hasActiveProvider(Workspace workspace, IntegrationKind kind) {
@@ -128,7 +158,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
     public boolean isScopeActiveForSync(Long scopeId) {
         return workspaceRepository
                 .findById(scopeId)
-                .map(ws -> ws.getStatus() == WorkspaceStatus.ACTIVE)
+                .map(ws -> ws.getStatus() == WorkspaceStatus.ACTIVE && !credentialRefused(ws.getId()))
                 .orElse(false);
     }
 
@@ -598,6 +628,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                 .filter(ws -> ws.getStatus() == WorkspaceStatus.ACTIVE)
                 .filter(ws -> hasActiveProvider(ws, kind))
                 .filter(workspaceScopeFilter::isWorkspaceAllowed)
+                .filter(ws -> syncable(ws, kind))
                 .<SyncSession>mapMulti((ws, sessions) -> {
                     try {
                         sessions.accept(toSyncSession(ws));
@@ -616,6 +647,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                 .filter(ws -> ws.getStatus() == WorkspaceStatus.ACTIVE)
                 .filter(ws -> hasActiveProvider(ws, kind))
                 .filter(workspaceScopeFilter::isWorkspaceAllowed)
+                .filter(ws -> syncable(ws, kind))
                 .map(this::toSyncSession);
     }
 

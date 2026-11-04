@@ -451,6 +451,7 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
 
     private GitLabDataSyncScheduler gitLabScheduler(List<SyncSession> sessions, Executor executor) {
         SyncTargetProvider targets = mock(SyncTargetProvider.class);
+        when(targets.isScopeActiveForSync(sessions.getFirst().scopeId())).thenReturn(true);
         when(targets.getSyncSessions(IntegrationKind.GITLAB)).thenAnswer(ignored -> {
             scheduledSync.set(Thread.currentThread());
             return sessions;

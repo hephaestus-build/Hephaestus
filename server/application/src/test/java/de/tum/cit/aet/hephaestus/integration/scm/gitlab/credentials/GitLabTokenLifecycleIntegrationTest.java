@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -19,16 +20,22 @@ import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionCha
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
+import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDataSyncScheduler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.status.GitLabConnectionSyncStateProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookService;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.metrics.WorkspaceMetrics;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -38,8 +45,12 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.graphql.client.HttpGraphQlClient;
@@ -83,8 +94,59 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Autowired
     private ApplicationEvents events;
 
+    @Autowired
+    private SyncTargetProvider syncTargets;
+
+    @Autowired
+    private GitLabDataSyncScheduler scheduler;
+
+    @Autowired
+    private MeterRegistry meters;
+
     @MockitoBean
     private GitLabTokenRotationClient rotation;
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void shouldPauseEverySyncOfARefusedCredentialUntilItIsReplaced(CapturedOutput output) {
+        var connection = connection("refused");
+        long workspace = connection.getWorkspace().getId();
+        assertThat(syncTargets.getSyncSession(workspace, IntegrationKind.GITLAB))
+                .isPresent();
+        double pausedBefore = paused();
+
+        health.observe(workspace, "refused", true);
+        health.observe(workspace, "refused", true);
+
+        assertThat(syncTargets.getSyncSessions(IntegrationKind.GITLAB))
+                .extracting(SyncSession::scopeId)
+                .doesNotContain(workspace);
+        assertThat(syncTargets.getSyncSession(workspace, IntegrationKind.GITLAB))
+                .isEmpty();
+        assertThat(syncTargets.isScopeActiveForSync(workspace)).isFalse();
+        // A manual sync is refused before any GitLab call, with the reason in its message.
+        assertThatThrownBy(() -> scheduler.syncWorkspaceNow(workspace, mock(), SyncJobType.RECONCILIATION))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("refused its credential");
+        assertThat(paused() - pausedBefore).isEqualTo(3);
+        String refused =
+                "Integration credential refused, its sync waits for a reconnect: workspaceId=" + workspace + ",";
+        assertThat(output.getOut().split(Pattern.quote(refused), -1)).hasSize(2);
+
+        connections.rotateBearerToken(workspace, IntegrationKind.GITLAB, new BearerToken("replacement", null));
+
+        assertThat(syncTargets.getSyncSession(workspace, IntegrationKind.GITLAB))
+                .isPresent();
+        assertThat(syncTargets.isScopeActiveForSync(workspace)).isTrue();
+        assertThat(output).contains("Integration credential accepted again: workspaceId=" + workspace + ",");
+    }
+
+    private double paused() {
+        var counter = meters.find(WorkspaceMetrics.WORKSPACE_SYNC_PAUSED)
+                .tags("kind", "gitlab", "reason", "credential_revoked")
+                .counter();
+        return counter == null ? 0 : counter.count();
+    }
 
     @Test
     void shouldRotateAScheduledTokenAndKeepAnotherWorkspaceUnchanged() {

@@ -26,8 +26,9 @@ public interface SyncTargetProvider
     List<SyncTarget> getSyncTargetsForScope(Long scopeId);
 
     /**
-     * Checks if a scope is active and eligible for synchronization (e.g., not SUSPENDED or
-     * PURGED). Check before initiating sync to avoid wasted API calls for disabled scopes.
+     * Checks if a scope is active and eligible for synchronization: not SUSPENDED or PURGED, and
+     * its credential not refused by the provider. Check before initiating sync to avoid wasted API
+     * calls for disabled scopes.
      */
     boolean isScopeActiveForSync(Long scopeId);
 
