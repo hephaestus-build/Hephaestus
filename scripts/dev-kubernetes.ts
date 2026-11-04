@@ -15,7 +15,7 @@ import {
 } from "./kubernetes-cluster.ts";
 import { claimDevNamespace, ownsDevNamespace } from "./lib/dev-namespace.ts";
 import { positivePort, readEnvFile } from "./lib/env.ts";
-import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, asString, isRecord, parseJson, readJsonFileSync } from "./lib/json.ts";
 import { output, run } from "./lib/process.ts";
 
 const ROOT = path.join(import.meta.dirname, "..");
@@ -85,6 +85,19 @@ export function hostPorts(settings: NodeJS.ProcessEnv): {
 	return { namespace: `heph-dev-${server}-${gateway}`, server, gateway, management };
 }
 
+/** The memory of one review Pod, so that the host loop's reviews quota holds exactly one review. */
+function oneReviewMemory(): string {
+	const table = asRecord(
+		readJsonFileSync(path.join(CHART, "sandbox-pod-requests.json")),
+		"sandbox-pod-requests.json",
+	);
+	const { memoryMi } = asRecord(table.review, "review");
+	if (typeof memoryMi !== "number") {
+		throw new TypeError("sandbox-pod-requests.json review.memoryMi must be a number");
+	}
+	return `${memoryMi}Mi`;
+}
+
 export function hostValues(namespace: string, address: string): Record<string, unknown> {
 	return {
 		...operatorValues({
@@ -95,10 +108,9 @@ export function hostValues(namespace: string, address: string): Record<string, u
 		worker: {
 			enabled: true,
 			replicas: 1,
-			reviews: 1,
 			conversationTurns: 1,
 			rolloutStrategy: "Recreate",
-			sandbox: { namespace },
+			sandbox: { namespace, reviewMemory: oneReviewMemory() },
 		},
 	};
 }

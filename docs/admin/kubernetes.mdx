@@ -714,15 +714,15 @@ If a change of profile changes a volume size, read [Change a volume size](#chang
 | `small-16gib.yaml`, on top of `small.yaml` | One k3s node of 16 GiB | Bundled, bounded streams |
 
 `small.yaml` fits one node of 4 vCPU, 32 GiB and 150 GiB of disk.
-Its one worker runs one review and up to 32 resident conversation turns at a time.
+Its one worker runs five reviews and up to 32 resident conversation turns at a time.
 A chart test adds up what that node holds during an upgrade, with backups on:
 
 | Part | Memory | CPU requests | Disk |
 | --- | --- | --- | --- |
 | Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 8.7 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
 | An upgrade: the new webhook and webapp Pods, the migration Job, the stanza Job and one backup | 3.2 GiB | 0.75 | The new Pods' caches |
-| The sandbox quotas: one review, one isolation probe, one conversation host and ten tools Pods, including up to two warm Pods | 3.0 GiB | 0.50 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
-| Total, against the node less platform reservations and the hard eviction floor | 14.9 GiB of 30.25 GiB | 2.50 of 3.5 | 65 GiB of the 110 GiB left beside images and review workspaces |
+| The sandbox quotas: five reviews, one isolation probe, one conversation host and ten tools Pods, including up to two warm Pods | 4.3 GiB | 0.65 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
+| Total, against the node less platform reservations and the hard eviction floor | 16.2 GiB of 30.25 GiB | 2.65 of 3.5 | 69 GiB of the 110 GiB left beside images and review workspaces |
 
 The worker uses `Recreate` in both single-node profiles.
 The old worker drains before its replacement starts, so reviews and conversations pause during each upgrade.
@@ -772,7 +772,7 @@ For one node of 16 GiB, apply `small-16gib.yaml` after `small.yaml`:
 
 It keeps worker updates at `Recreate`, with a drain of at most 10 minutes.
 It admits 32 resident turns with the same tools-Pod quota as `small.yaml`.
-The worker still runs one review and up to 32 resident conversation turns at a time, as in `small.yaml`.
+The worker still runs five reviews and up to 32 resident conversation turns at a time, as in `small.yaml`.
 
 A second worker's conversation host and turn pool do not fit in 16 GiB beside the first.
 Thus, the upgrade stops reviews and conversation turns for the drain, the new worker's start and its isolation probe.
@@ -782,8 +782,8 @@ A chart test adds up what one node of 16 GiB holds, with backups on:
 
 | State | Memory | CPU requests |
 | --- | --- | --- |
-| Steady: every role, one backup, one review, the conversation host, two pooled turn sandboxes and 8 running turns | 11.4 GiB of 13.9 GiB | 1.70 of 3.5 |
-| The same, with the isolation probe | 12.0 GiB | — |
+| Steady: every role, one backup, five reviews, the conversation host, two pooled turn sandboxes and 8 running turns | 12.9 GiB of 13.9 GiB | 1.90 of 3.5 |
+| The same, with the isolation probe | 13.5 GiB | — |
 | An upgrade. The old worker is gone. The webhook and webapp surge, with the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 12.3 GiB of 13.9 GiB | 2.40 of 3.5 |
 
 The table counts requests.
@@ -1286,7 +1286,7 @@ The chart runs the workers as one Deployment:
   A practice review usually takes 10 to 16 minutes. An attempt that outlasts the drain is tried again.
 - A worker on a lost node is replaced after 60 seconds.
 - `AGENT_ENABLED=true` on the workers and the server, so that the server submits practice reviews and the workers run them. Without a worker, the server submits none.
-- `worker.reviews` sets the reviews that one worker runs at once, and `worker.conversationTurns` the resident conversation turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, `auto` by default). Tools start on demand within the separate conversations quota ([Runtime roles § Conversation turn capacity](./runtime-roles#conversation-turn-capacity)). `small.yaml` resolves 32.
+- `worker.sandbox.reviewMemory` sets the memory that the sandbox nodes give review Pods, 3840 MiB by default. The reviews that run at once are that memory over one review Pod's request and `worker.runtime.podOverhead`: 10 by default, five in `small.yaml`. Each worker runs as many of them as its memory limit holds, and the reviews quota holds them once. `worker.conversationTurns` sets the resident conversation turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, `auto` by default). Tools start on demand within the separate conversations quota ([Runtime roles § Conversation turn capacity](./runtime-roles#conversation-turn-capacity)). `small.yaml` resolves 32.
 - The sandbox namespace and the Pod name and address from the Downward API ([Runtime roles § Sandbox runtime](./runtime-roles#sandbox-runtime)).
 - The existing gateway setting `SANDBOX_API_PORT`, with the value 8081.
 
@@ -1295,7 +1295,7 @@ The chart creates no namespace.
 It writes these objects into it:
 
 - One ResourceQuota for each PriorityClass tier: reviews, and conversations for the conversation host and turn sandboxes.
-  The chart derives both from `sandbox-pod-requests.json` and from `worker.replicas`, `worker.reviews` and `worker.conversationTurns`.
+  The chart derives both from `sandbox-pod-requests.json` and from `worker.sandbox.reviewMemory`, `worker.replicas` and `worker.conversationTurns`.
   They count requests, not limits: sandbox Pods may use more than they request, up to their limits.
   Thus, Hephaestus's sandboxes never take a review's room, and reviews never take Hephaestus's.
   Each tier's quota counts Pods, CPU and memory. Kubernetes does not let a quota that selects a PriorityClass count disk.
@@ -1853,8 +1853,8 @@ A change of NATS itself stops reception: while NATS is down, the receiver answer
 | A worker stays unready, and its log says that the cluster does not hold the sandbox boundary | The isolation probe failed. The log names each failed check. A failed egress check usually means that the network plugin does not enforce NetworkPolicy, or that `networkPolicy.kubernetesApi` names an address that the plugin does not see. |
 | A worker log says that the network policy did not filter a sandbox Pod in time | The network plugin applied the policy of a new Pod more than 60 seconds after the Pod started. The attempt is tried again. |
 | A review fails with "The sandbox quota is smaller than one review sandbox" | A quota of your own holds less than one review sandbox requests. Raise it. The chart's quotas always hold one. |
-| A sandbox Pod stays `Pending` with a quota error | Its tier's quota is full. The chart sizes each tier for its workers' capacity, so check a quota of your own, or `worker.reviews` and `worker.conversationTurns`. |
-| Reviews stay queued, and the worker log says that reviews wait for room in the sandbox quota | The reviews tier holds the running reviews and the isolation probe. The reviews start when a sandbox ends. To run more at once, raise `worker.reviews`. |
+| A sandbox Pod stays `Pending` with a quota error | Its tier's quota is full. The chart sizes each tier for its workers' capacity, so check a quota of your own, or `worker.sandbox.reviewMemory` and `worker.conversationTurns`. |
+| Reviews stay queued, and the worker log says that reviews wait for room in the sandbox quota | The reviews tier holds the running reviews and the isolation probe. The reviews start when a sandbox ends. To run more at once, raise `worker.sandbox.reviewMemory`, if the sandbox nodes hold that memory. The worker's memory limit can cap its `SANDBOX_MAX_CONCURRENT` below that count. If it does, raise `worker.resources.limits.memory` too. |
 | Every path returns `404`, and `kubectl get httproute` shows `Accepted=False NotAllowedByListeners` | The listener of the Gateway does not allow routes from the release namespace. Set `allowedRoutes.namespaces` on the listener, as [Gateway routes](#gateway-routes) shows. |
 | A new Pod restarts during an upgrade, and its log names a pending change set | It waited 10 minutes for the schema. Check the migration Job's log. A longer migration needs the [database maintenance](#database-maintenance) procedure. |
 | A backup Job fails with `unable to find primary cluster` | The Job cannot reach pgBackRest's TLS server on port 8432 of the PostgreSQL Service, or its client certificate is not for `hephaestus-backup` from `ca.crt`. |

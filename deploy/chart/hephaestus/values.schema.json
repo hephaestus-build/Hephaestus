@@ -587,7 +587,6 @@
 			"required": [
 				"enabled",
 				"replicas",
-				"reviews",
 				"conversationTurns",
 				"drainTimeoutSeconds",
 				"rolloutStrategy",
@@ -603,7 +602,6 @@
 				},
 				"enabled": { "type": "boolean" },
 				"replicas": { "type": "integer", "minimum": 0, "maximum": 16 },
-				"reviews": { "type": "integer", "minimum": 1 },
 				"conversationTurns": {
 					"description": "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX: auto, or the conversation turns that one worker runs at once. The server's HEPHAESTUS_MENTOR_TURN_CAPACITY is replicas times this.",
 					"oneOf": [{ "const": "auto" }, { "type": "integer", "minimum": 0, "maximum": 64 }]
@@ -666,11 +664,16 @@
 				"sandbox": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["namespace", "quota"],
+					"required": ["namespace", "reviewMemory", "quota"],
 					"properties": {
 						"namespace": {
 							"type": "string",
 							"pattern": "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"
+						},
+						"reviewMemory": {
+							"description": "The memory that the sandbox nodes give review Pods, in Mi or Gi. The reviews that run at once are this over one review Pod's request and its RuntimeClass overhead.",
+							"type": "string",
+							"pattern": "^[1-9][0-9]*(?:Mi|Gi)$"
 						},
 						"quota": { "$ref": "#/definitions/sandboxQuota" }
 					}

@@ -7,7 +7,6 @@ on a schedule, that the cluster enforces them (the isolation probe, docs/admin/k
 § Sandbox prerequisites).
 */}}
 {{- if .Values.worker.enabled }}
-{{- include "hephaestus.workerMemoryFitsReviews" . }}
 {{- $name := include "hephaestus.name" (dict "root" . "component" "worker") }}
 {{- $port := include "hephaestus.gatewayPort" . | int }}
 {{- $sandboxes := include "hephaestus.sandboxNamespace" (dict "root" .) }}
@@ -26,9 +25,9 @@ on a schedule, that the cluster enforces them (the isolation probe, docs/admin/k
 {{- /*
 Each PriorityClass tier has its own quota, so that review and conversation sandboxes cannot take each
 other's room. sandbox-pod-requests.json holds what each sandbox Pod requests; SandboxPodRequestsTableTest
-pins it to the Pods the worker builds, and the chart's fit tests read it too. The reviews tier holds each worker's reviews once: during
-a rollout the new workers wait for the old ones' room. Every running worker, the old ones during a rollout
-included, has its isolation probe there. The conversations tier holds its host, two warm tools Pods and
+pins it to the Pods the worker builds, and the chart's fit tests read it too. The reviews tier holds the
+reviews that worker.sandbox.reviewMemory holds, once: during a rollout the new workers wait for the old
+ones' room. Every running worker, the old ones during a rollout included, has its isolation probe there. The conversations tier holds its host, two warm tools Pods and
 at most eight assigned tools Pods. Resident turn admission does not enlarge that memory quota.
 */}}
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson }}
@@ -41,7 +40,7 @@ at most eight assigned tools Pods. Resident turn admission does not enlarge that
 {{- $turn := $table.turnSandbox }}
 {{- $tools := min $turns (int $table.activeTurnSandboxes) }}
 {{- $turnSandboxes := add (int $table.pooledTurnSandboxes) $tools }}
-{{- $reviews := mul $replicas (int .Values.worker.reviews) }}
+{{- $reviews := int (include "hephaestus.reviews" .) }}
 {{- /* Requests, not limits: sandbox Pods are Burstable, and a quota on limits would admit about half the reviews
 that the node holds. The scheduler places Pods by their requests; a limit bounds one Pod's own peak. */}}
 {{- /* A quota counts a Pod's RuntimeClass overhead with its requests, so each Pod adds the class's overhead. */}}
@@ -331,7 +330,7 @@ spec:
             # Also the review capacity: a worker claims no more reviews than it may run sandboxes. A review that
             # writes its feedback after its sandbox ends holds no slot; AGENT_MAX_CONCURRENT_COMPOSITIONS bounds those.
             - name: SANDBOX_MAX_CONCURRENT
-              value: {{ .Values.worker.reviews | int | quote }}
+              value: {{ include "hephaestus.workerReviews" . | quote }}
             # What a review needs after its sandbox follows the reviews, from the floors that the application defaults to.
             - name: AGENT_MAX_ACTIVE_COMPOSITIONS
               value: {{ include "hephaestus.activeCompositions" . | quote }}
@@ -339,7 +338,7 @@ spec:
               value: {{ include "hephaestus.concurrentCompositions" . | quote }}
             # The buildpack sizes the heap from this count. A worker runs about 100 threads, and about 7 more per review.
             - name: BPL_JVM_THREAD_COUNT
-              value: {{ add 120 (mul 8 (int .Values.worker.reviews)) | quote }}
+              value: {{ add 120 (mul 8 (int (include "hephaestus.workerReviews" .))) | quote }}
             - name: HEPHAESTUS_WORKER_DRAIN_TIMEOUT
               value: {{ printf "%ds" $drain | quote }}
             # The review-ledger worker identity stays per process: no HEPHAESTUS_WORKER_ID here.

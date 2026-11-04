@@ -796,7 +796,7 @@ It reads providers from the same instance/workspace catalog as the app pod.
 [Tunables](#tunables) gives the Conversation turn capacity.
 
 The JVM binds `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` and `SANDBOX_MAX_CONCURRENT`.
-Set `worker.conversationTurns` and `worker.reviews` through the chart.
+Set `worker.conversationTurns` and `worker.sandbox.reviewMemory` through the chart. The chart derives `SANDBOX_MAX_CONCURRENT` from the review memory and the worker's memory limit ([Kubernetes](./kubernetes)).
 
 `SANDBOX_MAX_CONCURRENT` is the review capacity.
 A worker never claims a review when it already runs that many review sandboxes.

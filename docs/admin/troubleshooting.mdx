@@ -36,7 +36,7 @@ Do not print Secret objects or credentials while collecting diagnostics.
 | Sandboxes do not start or the worker is unready. | Inspect the worker isolation-probe result and sandbox Pod events. Verify the chart service account, namespace, quota, and NetworkPolicy. See [Kubernetes](./kubernetes#worker). |
 | A sandbox Pod is refused or cannot start.                    | Inspect its events and the worker log. Check admission policy, quota, image pulls and [sandbox prerequisites](./kubernetes#sandbox-prerequisites).                                                            |
 | A worker or sandbox ends with `OOMKilled`.                   | Compare its peak memory and limit under the qualified workload. [Sizing](./sizing) owns the resource budget.                                                                                                  |
-| Reviews wait past their deadline.                            | Read queue depth and oldest age, then check the model and `worker.reviews`. [Sizing](./sizing) owns capacity. [Practice review operations](./practice-review-operations#queue-health) owns queue diagnostics. |
+| Reviews wait past their deadline.                            | Read queue depth and oldest age, then check the model and `worker.sandbox.reviewMemory`. [Sizing](./sizing) owns capacity. [Practice review operations](./practice-review-operations#queue-health) owns queue diagnostics. |
 | Script runs end with `Practice script stopped without a result: it ran out of time.` | The model provider is slow or limits the rate of calls. [Practice review operations](./practice-review-operations) lists the reasons. Raise the provider limits or use a faster model before you raise concurrency. |
 
 ## Disk and storage

@@ -163,6 +163,8 @@ A review of 200 practices on a limit of 1 ended every practice with a result in 
 Chart limits, composition and the turn budget follow `worker.reviews`.
 Composition and its active limit move together: the active limit alone saturates at about 8 reviews on a real model, and raising only the total makes composers wait until they withhold feedback.
 
+2026-11-04: `worker.sandbox.reviewMemory` replaces `worker.reviews` ([#3776](https://github.com/hephaestus-build/Hephaestus/pull/3776)). The chart derives the review count from it.
+
 ### Shared loop host
 
 Not built, unless the bench shows that Pods are still the first limit after these changes.

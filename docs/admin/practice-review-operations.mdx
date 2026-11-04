@@ -122,7 +122,8 @@ The whole review can therefore take that much longer than the timeout of its **P
 While the worker writes, the review holds no sandbox, so the worker can start the next review.
 `AGENT_MAX_CONCURRENT_COMPOSITIONS` (default 16) sets how many reviews one worker runs at once, with or without a sandbox.
 `AGENT_MAX_ACTIVE_COMPOSITIONS` (default 4) sets how many of them write feedback at once. The others wait without their inputs.
-The Helm chart sets both from `worker.reviews`: 3/2 of it and 1/2 of it, and at least the defaults.
+The Helm chart sets both from `SANDBOX_MAX_CONCURRENT`, the reviews that one worker runs.
+It sets 3/2 of it and 1/2 of it, and at least the defaults.
 
 Feedback that the worker cannot write is withheld with the most specific reason:
 

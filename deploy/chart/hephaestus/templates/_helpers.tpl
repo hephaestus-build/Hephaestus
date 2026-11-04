@@ -674,27 +674,49 @@ catch-up only slows (docs/admin/kubernetes.mdx § NATS memory).
 {{- end -}}
 
 {{/*
-What a worker's memory limit must hold for its reviews. The buildpack reserves 240 MiB of code cache, 261 MiB of
-metaspace and a stack per thread, and gives the heap the rest. Too little does not bound the reviews: the JVM stops at its
-start, or runs out of heap. The heap needs what the role holds at rest, and what each review holds while it runs.
+The reviews that the sandbox nodes hold at once: the memory they give review Pods over one review Pod's request and its
+RuntimeClass overhead. A smaller request in sandbox-pod-requests.json runs more reviews in the same memory.
 */}}
-{{- define "hephaestus.workerMemoryFitsReviews" -}}
-{{- $mi := include "hephaestus.memoryMi" (dict "value" .Values.worker.resources.limits.memory "name" "worker.resources.limits.memory") -}}
-{{- $reviews := int .Values.worker.reviews -}}
-{{- $required := add 501 120 (mul 8 $reviews) 256 (mul 10 $reviews) -}}
-{{- if lt (int $mi) (int $required) -}}
-{{- fail (printf "worker.reviews %d needs worker.resources.limits.memory of at least %dMi for its threads and heap" $reviews $required) -}}
+{{- define "hephaestus.clusterReviews" -}}
+{{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
+{{- $memory := include "hephaestus.memoryMi" (dict "value" .Values.worker.sandbox.reviewMemory "name" "worker.sandbox.reviewMemory") | int -}}
+{{- $review := add (int $table.review.memoryMi) (int .Values.worker.runtime.podOverhead.memoryMi) -}}
+{{- if lt $memory $review -}}
+{{- fail (printf "worker.sandbox.reviewMemory holds no review: one review Pod requests %dMi" $review) -}}
 {{- end -}}
+{{- div $memory $review -}}
+{{- end -}}
+
+{{/*
+The reviews that one worker runs at once: the sandbox nodes' reviews, up to what the worker's memory limit holds. The
+buildpack reserves 240 MiB of code cache, 261 MiB of metaspace, the worker's 128 MiB of direct memory
+(JAVA_TOOL_OPTIONS) and 1 MiB of stack per thread, and gives the heap the rest.
+The worker runs 120 threads at rest and 8 more per review; its heap holds 256 MiB at rest and 10 MiB per review. A limit
+below one review fails the render: the JVM would stop at its start, or run out of heap.
+*/}}
+{{- define "hephaestus.workerReviews" -}}
+{{- $mi := include "hephaestus.memoryMi" (dict "value" .Values.worker.resources.limits.memory "name" "worker.resources.limits.memory") | int -}}
+{{- $atRest := add 501 128 120 256 -}}
+{{- $perReview := add 8 10 -}}
+{{- if lt $mi (add $atRest $perReview) -}}
+{{- fail (printf "worker.resources.limits.memory must be at least %dMi for one review's threads and heap" (add $atRest $perReview)) -}}
+{{- end -}}
+{{- min (int (include "hephaestus.clusterReviews" .)) (div (sub $mi $atRest) $perReview) -}}
+{{- end -}}
+
+{{/* The reviews that all workers run at once, which the reviews tier's quota holds. */}}
+{{- define "hephaestus.reviews" -}}
+{{- min (int (include "hephaestus.clusterReviews" .)) (mul (int .Values.worker.replicas) (int (include "hephaestus.workerReviews" .))) -}}
 {{- end -}}
 
 {{/* Compositions run after a review's sandbox ends, and they take about half as long as the sandbox. */}}
 {{- define "hephaestus.activeCompositions" -}}
-{{- max 4 (div (add (int .Values.worker.reviews) 1) 2) -}}
+{{- max 4 (div (add (int (include "hephaestus.workerReviews" .)) 1) 2) -}}
 {{- end -}}
 
 {{/* Every local review attempt: those that hold a sandbox, and those that compose. */}}
 {{- define "hephaestus.concurrentCompositions" -}}
-{{- max 16 (div (add (mul 3 (int .Values.worker.reviews)) 1) 2) -}}
+{{- max 16 (div (add (mul 3 (int (include "hephaestus.workerReviews" .))) 1) 2) -}}
 {{- end -}}
 
 {{/* The existing review tier CPU reservation, including each running worker's probe and Pod overhead. */}}
@@ -702,7 +724,7 @@ start, or runs out of heap. The heap needs what the role holds at rest, and what
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
 {{- $replicas := int .Values.worker.replicas -}}
 {{- $running := ternary $replicas (mul $replicas 2) (eq .Values.worker.rolloutStrategy "Recreate") -}}
-{{- $reviews := mul $replicas (int .Values.worker.reviews) -}}
+{{- $reviews := int (include "hephaestus.reviews" .) -}}
 {{- $pods := add (mul $reviews (int $table.review.pods)) (mul $running (int $table.isolationProbe.pods)) -}}
 {{- add (mul $reviews (int $table.review.cpuMillis)) (mul $running (int $table.isolationProbe.cpuMillis)) (mul $pods (int .Values.worker.runtime.podOverhead.cpuMillis)) -}}
 {{- end -}}
