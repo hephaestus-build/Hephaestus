@@ -30,10 +30,7 @@ import org.jspecify.annotations.Nullable;
 @Entity
 @Table(
         name = "commit_file_change",
-        indexes = {
-            @Index(name = "idx_commit_file_change_commit_id", columnList = "commit_id"),
-            @Index(name = "idx_commit_file_change_filename", columnList = "filename"),
-        })
+        indexes = {@Index(name = "idx_commit_file_change_commit_id", columnList = "commit_id")})
 @Getter
 @Setter
 @NoArgsConstructor
