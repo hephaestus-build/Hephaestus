@@ -913,11 +913,13 @@ export async function runReviewJob(): Promise<void> {
 			);
 			stagedPractices.add(practiceSlug);
 		} catch (error) {
-			stagingFailure ??= { error };
 			// A server error for one practice leaves the others to stage; an unreachable server reaches none.
+			// Any other error replaces an earlier server error, so an unreachable server still exits retryable.
 			if (!isAdmissionServerError(error)) {
+				stagingFailure = { error };
 				throw error;
 			}
+			stagingFailure ??= { error };
 			diagnose("practice.staging_failed", { practice: practiceAt(practiceSlug) });
 		}
 	}
