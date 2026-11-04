@@ -391,9 +391,8 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
     }
 
     private void removeMonitor(Long syncTargetId) {
-        // A workspace holds its monitors eagerly with orphan removal: one deleted while its loaded
-        // workspace still
-        // holds it would be persisted again at flush, so it is removed from that set as well.
+        // The workspace's monitor set removes orphans. A monitor deleted while a loaded set still holds it would be
+        // persisted again at flush, so it is removed from that set as well.
         repositoryToMonitorRepository.findById(syncTargetId).ifPresent(monitor -> {
             Workspace workspace = monitor.getWorkspace();
             List<Long> repositoryIds = repositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(syncTargetId);
