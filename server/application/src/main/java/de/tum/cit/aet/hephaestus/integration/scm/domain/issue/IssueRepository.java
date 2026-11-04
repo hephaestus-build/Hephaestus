@@ -18,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
  * All queries filter by repository ID, which inherently carries scope
  * through the repository -> workspace relationship chain.
  */
-@WorkspaceAgnostic("Issues scoped through repository_id -> repository.workspace_id")
 public interface IssueRepository extends JpaRepository<Issue, Long> {
 
     /** The row that holds a provider's issue or pull request id, with the repository it is stored under. */
@@ -28,6 +27,8 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
         long getRepositoryId();
     }
 
+    @WorkspaceAgnostic(
+            "Sync finds which repository holds a provider's work; the mirror row is shared by every workspace that monitors it")
     @Query(
             value = "SELECT id, repository_id AS repositoryId FROM issue WHERE provider_id = :providerId"
                     + " AND native_id = :nativeId AND issue_type = :issueType",
@@ -38,6 +39,8 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
             @Param("issueType") String issueType);
 
     /** Whether any workspace registered an item of {@code kind} for this row. An item's parent never changes. */
+    @WorkspaceAgnostic(
+            "Sync must not move a mirror row that any workspace registered as an item, so it checks every workspace; the answer only labels the skip reason")
     @Query(value = "SELECT EXISTS(SELECT 1 FROM item WHERE kind = :kind AND source_id = :issueId)", nativeQuery = true)
     boolean registeredAsItem(@Param("kind") String kind, @Param("issueId") long issueId);
 
@@ -49,6 +52,8 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
      *
      * @return 1 when the row moved, else 0
      */
+    @WorkspaceAgnostic(
+            "Sync moves one shared mirror row to the repository the provider reports, and only when no workspace registered it as an item")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Transactional
     @Query(value = """
@@ -101,6 +106,7 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
      * Locks the issue without loading it, so a compare with its stored state and the write after it are atomic. The
      * caller then reads it through {@link #findByRepositoryIdAndNumber}, which fetches what the compare needs.
      */
+    @WorkspaceAgnostic("Sync locks one shared mirror row of a repository taken from the provider event")
     @Query(
             value = "SELECT id FROM issue WHERE repository_id = :repositoryId AND number = :number"
                     + " AND issue_type = 'ISSUE' FOR NO KEY UPDATE",
@@ -185,12 +191,16 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
      * @param repositoryIds the repository IDs to count for
      * @return one projection row per repository that has at least one live issue
      */
+    @WorkspaceAgnostic(
+            "Counts the shared mirror rows of repositories that the caller resolved through the workspace's monitors")
     @Query(
             "SELECT i.repository.id AS repositoryId, COUNT(i) AS itemCount FROM Issue i WHERE TYPE(i) = Issue AND i.deletedAt IS NULL AND i.repository.id IN :repositoryIds GROUP BY i.repository.id")
     List<RepositoryItemCountProjection> countIssuesGroupedByRepositoryIds(
             @Param("repositoryIds") Collection<Long> repositoryIds);
 
     /** Per-repository count of live pull/merge requests. Counterpart to {@link #countIssuesGroupedByRepositoryIds}. */
+    @WorkspaceAgnostic(
+            "Counts the shared mirror rows of repositories that the caller resolved through the workspace's monitors")
     @Query(
             "SELECT i.repository.id AS repositoryId, COUNT(i) AS itemCount FROM Issue i WHERE TYPE(i) = PullRequest AND i.deletedAt IS NULL AND i.repository.id IN :repositoryIds GROUP BY i.repository.id")
     List<RepositoryItemCountProjection> countPullRequestsGroupedByRepositoryIds(
@@ -229,6 +239,7 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
      *
      * @return the number of rows newly tombstoned
      */
+    @WorkspaceAgnostic("Sync and the deletion sweep mark the shared mirror rows of one repository as deleted")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Transactional
     @Query(
@@ -245,6 +256,7 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
      *
      * @return the number of rows newly tombstoned
      */
+    @WorkspaceAgnostic("Sync and the deletion sweep mark the shared mirror rows of one repository as deleted")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Transactional
     @Query(
@@ -289,6 +301,7 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
      * @param milestoneId the milestone ID to detach from issues
      * @return the number of issues updated
      */
+    @WorkspaceAgnostic("Sync clears a deleted milestone from the shared mirror rows that reference it")
     @Modifying
     @Query("UPDATE Issue i SET i.milestone = null WHERE i.milestone.id = :milestoneId")
     int clearMilestoneReferences(@Param("milestoneId") @Nullable Long milestoneId);
@@ -317,6 +330,7 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
      * the single-table-inheritance CHECK constraint; {@code upsertCore} overwrites them with
      * real values immediately after.
      */
+    @WorkspaceAgnostic("Sync corrects the type of one shared mirror row of a repository taken from the provider event")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Transactional
     @Query(
