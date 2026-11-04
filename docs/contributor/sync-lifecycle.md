@@ -54,6 +54,10 @@ A connection whose provider refused its credential (`CREDENTIAL_REVOKED`) is not
 `WorkspaceSyncTargetProvider` applies this rule to the session list, to a single session, and to `isScopeActiveForSync`.
 Thus, the scheduled sync, a manual sync, the backfills and the push fetches stop for that workspace.
 A GitLab run that sees the refusal stops before its next repository.
+
+A GitHub refusal is an HTTP 401 on a GraphQL call made with the stored personal access token (`GitHubCredentialRefusalFilter`).
+A 403 refuses one call, not the token, and an installation token has no stored copy, so neither records a problem.
+`IntegrationAttentionService.observeCredential` ignores a refusal of a token that was already replaced.
 `IntegrationAttentionService` logs the change once, and `workspace.sync.paused` counts each paused sync.
 A replaced credential, or a later accepted call such as the daily token check, clears the problem, and the next sync runs.
 

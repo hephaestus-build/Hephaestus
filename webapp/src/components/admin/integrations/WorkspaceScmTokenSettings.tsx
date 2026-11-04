@@ -80,9 +80,9 @@ export function WorkspaceScmTokenSettings({
 					) : (
 						<p className="text-sm text-muted-foreground">{expiryDescription}</p>
 					)}
-					{isGitLab && attentionProblem === "CREDENTIAL_REVOKED" && (
+					{attentionProblem === "CREDENTIAL_REVOKED" && (
 						<Alert variant="destructive">
-							<AlertTitle>GitLab no longer accepts this token</AlertTitle>
+							<AlertTitle>{providerLabel} no longer accepts this token</AlertTitle>
 							<AlertDescription>
 								Replace the token below to restore sync. Existing repositories and synced work are
 								kept.

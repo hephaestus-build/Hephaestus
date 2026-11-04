@@ -4,9 +4,14 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionLifecycleEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -18,7 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @WorkspaceAgnostic("Each connection lookup includes its owning workspace")
 public class IntegrationAttentionService {
+    @PersistenceContext
+    private @Nullable EntityManager entityManager;
+
     private final ConnectionRepository connections;
+    private final ConnectionService connectionService;
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
@@ -26,6 +35,34 @@ public class IntegrationAttentionService {
     public void report(
             long connectionId, long workspaceId, IntegrationAttentionChangedEvent.Problem problem, boolean recovered) {
         recordChange(connectionId, workspaceId, problem, recovered);
+    }
+
+    /**
+     * Records whether the provider accepted the stored token that made a call. The observation is scoped to that
+     * token, not just its workspace: an old in-flight request must not degrade (or recover) a replacement token.
+     */
+    @Transactional
+    public void observeCredential(IntegrationKind kind, long workspaceId, String token, boolean refused) {
+        connectionService.findActive(workspaceId, kind).ifPresent(connection -> {
+            if (refused
+                    ? connection.getAttentionProblem() == IntegrationAttentionChangedEvent.Problem.CREDENTIAL_REVOKED
+                    : connection.getAttentionProblem() != IntegrationAttentionChangedEvent.Problem.CREDENTIAL_REVOKED) {
+                return;
+            }
+            connections.acquireLifecycleLock(connection.getId(), workspaceId);
+            Objects.requireNonNull(entityManager).refresh(connection);
+            if (connectionService
+                    .findActiveBearerToken(workspaceId, kind)
+                    .filter(current -> current.token().equals(token))
+                    .isEmpty()) {
+                return;
+            }
+            recordChange(
+                    connection.getId(),
+                    workspaceId,
+                    IntegrationAttentionChangedEvent.Problem.CREDENTIAL_REVOKED,
+                    !refused);
+        });
     }
 
     private void recordChange(
