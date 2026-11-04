@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
@@ -78,6 +79,49 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .exchange()
                 .expectStatus()
                 .isForbidden()
+                .expectBody(Void.class);
+    }
+
+    @Test
+    void shouldAnswerMembershipRequiredWhenSignedInAccountWithoutLinkedIdentityIsNotAMember() {
+        Account account = persistAccount("unlinked-visitor");
+        Workspace workspace = createWorkspace(
+                "unlinked-space", "Unlinked", "unlinked", AccountType.ORG, persistUser("unlinked-owner"));
+
+        ProblemDetail problem = webTestClient
+                .get()
+                .uri("/workspaces/{workspaceSlug}/context-echo", workspace.getWorkspaceSlug())
+                .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account.getId()))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(ProblemDetail.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(problem).isNotNull();
+        assertThat(problem.getTitle()).isEqualTo("Membership required");
+    }
+
+    @Test
+    void shouldAdmitMemberWhenSignedInAccountHasNoLinkedIdentity() {
+        Account account = persistAccount("unlinked-member");
+        Workspace workspace = createWorkspace(
+                "unlinked-member-space",
+                "Unlinked member",
+                "unlinkedmember",
+                AccountType.ORG,
+                persistUser("unlinked-member-owner"));
+        workspaceMembershipService.createMembership(
+                workspace, Objects.requireNonNull(account.getId()), Membership.WorkspaceRole.MEMBER);
+
+        webTestClient
+                .get()
+                .uri("/workspaces/{workspaceSlug}/context-echo", workspace.getWorkspaceSlug())
+                .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account.getId()))
+                .exchange()
+                .expectStatus()
+                .isOk()
                 .expectBody(Void.class);
     }
 
