@@ -597,7 +597,11 @@ await test("a release package runs the release's images with the operator's valu
 });
 
 const alertRules = readFileSync(path.join(chart, "files", "hephaestus-alerts.yml"), "utf8");
-const alertRulesOn = { observability: { alertRules: { configMap: true, prometheusRule: true } } };
+const alertRulesOn = {
+	observability: {
+		alertRules: { configMap: true, prometheusRule: true, labels: { release: "monitoring" } },
+	},
+};
 const ruleResources = (resources: Resource[]) =>
 	resources.filter((resource) => componentOf(resource) === "alert-rules");
 
@@ -605,6 +609,10 @@ await test("the alert rules render as the tested file, and only when asked", () 
 	assert.deepEqual(ruleResources(rendered(layersFor("small"))), []);
 	const resources = ruleResources(rendered([...layersFor("small"), alertRulesOn]));
 	assert.deepEqual(resources.map(kindOf), ["ConfigMap", "PrometheusRule"]);
+	// The rule selector of the operator's Prometheus finds both by the labels that it asks for.
+	for (const resource of resources) {
+		assert.equal(get(resource, "metadata", "labels", "release"), "monitoring");
+	}
 	const [configMap, prometheusRule] = resources;
 	assert.equal(get(configMap, "data", "hephaestus-alerts.yml"), alertRules);
 	assert.deepEqual(

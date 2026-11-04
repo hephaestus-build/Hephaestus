@@ -255,6 +255,9 @@ observability:
     configMap: false
     # A PrometheusRule with the file's groups, for the Prometheus Operator. Its CRD must exist.
     prometheusRule: false
+    # Labels for both, so that the rule selector of your Prometheus finds them, such as
+    # `release: <your monitoring release>` for kube-prometheus-stack.
+    labels: {}
 
 priorityClasses:
   create: true

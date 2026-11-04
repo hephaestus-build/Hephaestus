@@ -3,4 +3,5 @@
 | Key | Type | Default | Required in object | Constraints |
 | --- | --- | --- | --- | --- |
 | `observability.alertRules.configMap` | boolean | `false` |  | Render a ConfigMap with the rule file as it is. |
+| `observability.alertRules.labels` | object | `{}` |  | Labels for the ConfigMap and the PrometheusRule, for the rule selector of your Prometheus. |
 | `observability.alertRules.prometheusRule` | boolean | `false` |  | Render a PrometheusRule with the groups of the rule file. The CRD of the Prometheus Operator must exist. |

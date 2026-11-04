@@ -570,6 +570,10 @@
 						"prometheusRule": {
 							"description": "Render a PrometheusRule with the groups of the rule file. The CRD of the Prometheus Operator must exist.",
 							"type": "boolean"
+						},
+						"labels": {
+							"description": "Labels for the ConfigMap and the PrometheusRule, for the rule selector of your Prometheus.",
+							"$ref": "#/definitions/labels"
 						}
 					}
 				}
