@@ -10,6 +10,7 @@ import io.micrometer.core.instrument.distribution.CountAtBucket;
 import io.micrometer.core.instrument.distribution.HistogramSnapshot;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -91,10 +92,13 @@ class HttpRequestMetricsIntegrationTest extends BaseIntegrationTest {
                 .expectStatus()
                 .is4xxClientError()
                 .expectBody(Void.class);
-        // The API read objective (hephaestus-alerts.yml, group hephaestus-slos) reads the bucket at 2 s.
+        // The objectives read these bounds: API reads at 2 s, Activity reads at 1 s (hephaestus-alerts.yml).
         assertThat(meterRegistry.find("http.server.requests").timers())
                 .isNotEmpty()
-                .allSatisfy(timer -> assertThat(within(timer.takeSnapshot())).isNotNull());
+                .allSatisfy(timer -> assertThat(
+                                Arrays.stream(timer.takeSnapshot().histogramCounts())
+                                        .map(bucket -> bucket.bucket(TimeUnit.SECONDS)))
+                        .containsExactly(0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0));
 
         Timer probe = meterRegistry.timer("http.server.requests", "uri", "/slo-probe/" + UUID.randomUUID());
         probe.record(Duration.ofMillis(100));

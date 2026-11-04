@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.CopyWriteFence;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import jakarta.annotation.PostConstruct;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -73,10 +74,7 @@ public class MentorTurnCompletion {
             long workspaceId, UUID turnId, int attempt, UUID leaseId, JsonNode partial, @Nullable Instant startedAt) {
         turns.updatePartial(workspaceId, turnId, attempt, leaseId, partial);
         if (startedAt != null) {
-            Timer.builder(AgentMetrics.MENTOR_TURN_FIRST_TOKEN)
-                    .publishPercentileHistogram()
-                    .register(meters)
-                    .record(Duration.between(startedAt, clock.instant()));
+            firstToken(meters).record(Duration.between(startedAt, clock.instant()));
         }
     }
 
@@ -147,10 +145,7 @@ public class MentorTurnCompletion {
         Instant started = turn.getStartedAt();
         Instant finished = turn.getFinishedAt();
         if (started != null && finished != null) {
-            Timer.builder(AgentMetrics.MENTOR_TURN_DURATION)
-                    .publishPercentileHistogram()
-                    .register(meters)
-                    .record(Duration.between(started, finished));
+            duration(meters).record(Duration.between(started, finished));
         }
         return turn;
     }
@@ -343,5 +338,44 @@ public class MentorTurnCompletion {
                         .baseUnit("usd")
                         .register(meters)
                         .record(cost.doubleValue()));
+    }
+
+    /** Registers both timers at zero, so {@code increase()} also counts the first turn after a start. */
+    @PostConstruct
+    void registerTimers() {
+        firstToken(meters);
+        duration(meters);
+    }
+
+    /** The conversation objective's 10 seconds, with room above it. */
+    private static Timer firstToken(MeterRegistry meters) {
+        return Timer.builder(AgentMetrics.MENTOR_TURN_FIRST_TOKEN)
+                .serviceLevelObjectives(
+                        Duration.ofMillis(500),
+                        Duration.ofSeconds(1),
+                        Duration.ofSeconds(2),
+                        Duration.ofSeconds(5),
+                        Duration.ofSeconds(10),
+                        Duration.ofSeconds(20),
+                        Duration.ofSeconds(30),
+                        Duration.ofSeconds(60))
+                .register(meters);
+    }
+
+    /** An attempt can run for minutes; a percentile histogram stops at 30 seconds. */
+    private static Timer duration(MeterRegistry meters) {
+        return Timer.builder(AgentMetrics.MENTOR_TURN_DURATION)
+                .serviceLevelObjectives(
+                        Duration.ofSeconds(1),
+                        Duration.ofSeconds(2),
+                        Duration.ofSeconds(5),
+                        Duration.ofSeconds(10),
+                        Duration.ofSeconds(20),
+                        Duration.ofSeconds(30),
+                        Duration.ofMinutes(1),
+                        Duration.ofMinutes(2),
+                        Duration.ofMinutes(5),
+                        Duration.ofMinutes(10))
+                .register(meters);
     }
 }

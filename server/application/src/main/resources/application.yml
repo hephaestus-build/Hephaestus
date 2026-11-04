@@ -187,10 +187,11 @@ server:
 management:
     metrics:
         distribution:
-            # One histogram bound for the API read objective (hephaestus-alerts.yml, group hephaestus-slos):
-            # a bucket at 2 s and +Inf, not a full histogram: two series for each label set of the meter.
+            # Explicit buckets, not a percentile histogram: they hold each objective's bound exactly (the API reads 2 s,
+            # Activity 1 s) and give a p95 per route, at nine buckets for each label set of the meter.
             slo:
-                "[http.server.requests]": 2s
+                "[http.server.requests]": 25ms,50ms,100ms,250ms,500ms,1s,2s,5s,10s
+                "[hikaricp.connections.acquire]": 1ms,5ms,10ms,50ms,100ms,500ms,1s,5s,10s,30s
         web:
             server:
                 # The API has more route templates than Boot's default 100. The integration test
