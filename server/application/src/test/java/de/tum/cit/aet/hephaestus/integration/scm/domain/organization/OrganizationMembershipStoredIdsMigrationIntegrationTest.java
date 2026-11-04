@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.organization;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
@@ -32,7 +31,7 @@ class OrganizationMembershipStoredIdsMigrationIntegrationTest extends BaseIntegr
 
     @Test
     void shouldMoveWebhookRowsToTheStoredOrganizationAndKeepTheSyncsRole() {
-        List<Map<String, Object>> rows = transactionTemplate.execute(status -> {
+        var rows = transactionTemplate.execute(status -> {
             try {
                 jdbc.execute("CREATE SCHEMA membership_remap_fixture");
                 jdbc.execute("SET LOCAL search_path TO membership_remap_fixture");
