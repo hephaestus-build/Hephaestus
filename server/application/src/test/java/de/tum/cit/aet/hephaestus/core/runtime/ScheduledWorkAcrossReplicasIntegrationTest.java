@@ -12,18 +12,13 @@ import de.tum.cit.aet.hephaestus.testconfig.SharedTestDoubles;
 import de.tum.cit.aet.hephaestus.testconfig.StubInstallationRepositoryEnumerator;
 import de.tum.cit.aet.hephaestus.testconfig.TestAsyncConfiguration;
 import de.tum.cit.aet.hephaestus.testconfig.TestSecurityConfig;
-import java.lang.reflect.Method;
-import java.net.URL;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
@@ -35,57 +30,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
-import org.springframework.core.MethodIntrospector;
-import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.env.Environment;
-import org.springframework.core.type.classreading.MetadataReader;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.support.ScheduledMethodRunnable;
-import org.springframework.util.ClassUtils;
 
 /**
- * Two server replicas share one database. Every {@code @Scheduled} method either takes a ShedLock, so that only one
- * replica runs it at a time, or is listed below with the reason it is safe on every replica. A second application
- * context on the same database plays the other replica.
+ * Two server replicas share one database. {@link ScheduledJobLockTest} holds every {@code @Scheduled} method to a
+ * ShedLock or a stated reason; this test proves the locks: a second application context on the same database plays
+ * the other replica.
  */
 class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
-
-    /**
-     * Jobs that run on every replica on purpose. ROW: the job claims or locks its rows, so a second pass finds
-     * nothing to do. LOCAL: the job acts only on this process's memory, gauges or streams.
-     */
-    private static final Map<String, String> UNLOCKED = Map.ofEntries(
-            Map.entry("AgentQueueHealthSampler#sample", "LOCAL"),
-            Map.entry("WalArchiveMonitor#sample", "LOCAL"),
-            Map.entry("FeedbackDeliveryFreshness#sample", "LOCAL"),
-            Map.entry("ReviewJobZombieSweeper#reapStaleRunningJobs", "ROW"),
-            Map.entry("ReviewJobZombieSweeper#recoverOrphanedJobs", "ROW"),
-            Map.entry("ReviewJobZombieSweeper#purgeStaleWorkerRegistrations", "ROW"),
-            Map.entry("MentorTurnQueueSampler#sample", "LOCAL"),
-            Map.entry("MentorLiveHub#heartbeat", "LOCAL"),
-            Map.entry("ContributorService#evictContributorsCache", "LOCAL"),
-            Map.entry("ReleaseCheckService#poll", "LOCAL"),
-            Map.entry("CredentialRotationService#rotateBatch", "ROW"),
-            Map.entry("SyncJobService#refreshLeases", "LOCAL"),
-            Map.entry("SyncJobService#flushBufferedProgress", "LOCAL"),
-            Map.entry("SyncJobZombieSweeper#hourlySweep", "ROW"),
-            Map.entry("SyncEventHub#sendHeartbeats", "LOCAL"),
-            Map.entry("OutlineRateLimitTracker#evictStaleEntries", "LOCAL"),
-            Map.entry("ScopedRateLimitTracker#evictStaleEntries", "LOCAL"),
-            Map.entry("GitLabRateLimitTracker#evictStaleEntries", "LOCAL"),
-            Map.entry("SlackRateLimitTracker#evictStaleEntries", "LOCAL"),
-            Map.entry("ConversationFeedbackTtlSweeper#sweep", "ROW"),
-            Map.entry("FeedbackSendRecovery#recover", "ROW"),
-            Map.entry("CleanupService#cleanDue", "ROW"),
-            Map.entry("FilingService#fileDue", "ROW"),
-            Map.entry("FilingService#measureWaiting", "LOCAL"),
-            Map.entry("FollowService#promoteDue", "ROW"),
-            Map.entry("RoutingService#routeAnswered", "ROW"));
-
-    private static final URL MAIN_CLASSES =
-            Application.class.getProtectionDomain().getCodeSource().getLocation();
 
     private static ConfigurableApplicationContext secondReplica;
 
@@ -133,35 +87,6 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    @Test
-    void shouldLockOrJustifyEveryScheduledJob() {
-        Map<String, Method> jobs = scheduledJobs();
-        List<String> unclassified = jobs.entrySet().stream()
-                .filter(job -> !job.getValue().isAnnotationPresent(SchedulerLock.class))
-                .map(Map.Entry::getKey)
-                .filter(id -> !UNLOCKED.containsKey(id))
-                .sorted()
-                .toList();
-        List<String> stale = UNLOCKED.keySet().stream()
-                .filter(id -> !jobs.containsKey(id) || jobs.get(id).isAnnotationPresent(SchedulerLock.class))
-                .sorted()
-                .toList();
-        Map<String, Long> lockNames = jobs.values().stream()
-                .map(method -> method.getAnnotation(SchedulerLock.class))
-                .filter(Objects::nonNull)
-                .collect(Collectors.groupingBy(SchedulerLock::name, Collectors.counting()));
-
-        assertThat(unclassified)
-                .as("scheduled jobs with neither a lock nor a reason")
-                .isEmpty();
-        assertThat(stale)
-                .as("reasons for jobs that no longer exist or now hold a lock")
-                .isEmpty();
-        assertThat(lockNames)
-                .as("lock names shared by two jobs")
-                .allSatisfy((name, count) -> assertThat(count).isOne());
-    }
-
     /**
      * The lock each job's annotation configures, held by one context, keeps the other context out, and its row
      * stays held for at least the job's floor after the run. The floor is read from the row, not waited for.
@@ -171,7 +96,7 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
         LockProvider secondLocks = secondReplica.getBean(LockProvider.class);
         List<String> names = new ArrayList<>();
         try {
-            for (var job : scheduledJobs().entrySet()) {
+            for (var job : ScheduledJobLockTest.scheduledJobs().entrySet()) {
                 if (!job.getValue().isAnnotationPresent(SchedulerLock.class)) {
                     continue;
                 }
@@ -283,28 +208,5 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
     private boolean nonceExists(String nonce) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
                 "SELECT EXISTS (SELECT 1 FROM oauth_state_nonce WHERE nonce = ?)", Boolean.class, nonce));
-    }
-
-    /** Every {@code @Scheduled} method in the application, keyed {@code SimpleClassName#method}. */
-    private static Map<String, Method> scheduledJobs() {
-        // Overridden rather than filtered: the default check also drops beans whose conditions this profile turns off.
-        var scanner = new ClassPathScanningCandidateComponentProvider(false) {
-            @Override
-            protected boolean isCandidateComponent(MetadataReader reader) {
-                return reader.getAnnotationMetadata().hasAnnotatedMethods(Scheduled.class.getName());
-            }
-        };
-        Map<String, Method> jobs = new HashMap<>();
-        for (var candidate : scanner.findCandidateComponents(Application.class.getPackageName())) {
-            Class<?> type = ClassUtils.resolveClassName(Objects.requireNonNull(candidate.getBeanClassName()), null);
-            if (!MAIN_CLASSES.equals(type.getProtectionDomain().getCodeSource().getLocation())) {
-                continue;
-            }
-            MethodIntrospector.selectMethods(type, (MethodIntrospector.MetadataLookup<Boolean>) method ->
-                            AnnotatedElementUtils.hasAnnotation(method, Scheduled.class) ? Boolean.TRUE : null)
-                    .keySet()
-                    .forEach(method -> jobs.put(type.getSimpleName() + "#" + method.getName(), method));
-        }
-        return jobs;
     }
 }

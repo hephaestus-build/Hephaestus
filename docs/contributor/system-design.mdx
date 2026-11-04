@@ -46,10 +46,10 @@ Every `@Scheduled` method therefore does one of these:
 - It claims or locks its rows (`FOR UPDATE SKIP LOCKED`, a conditional `UPDATE`, a lease), so a second pass finds no work.
 - It acts only on the memory, gauges or streams of its own process, so it must run on every replica.
 
-`ScheduledWorkAcrossReplicasIntegrationTest` lists each unlocked job with its reason.
-It also checks every lock between two application contexts on one database.
+`ScheduledJobLockTest` lists each unlocked job with its reason.
+A new `@Scheduled` method fails that architecture test, in pull request CI and before a push, until it holds a lock or has a reason.
+`ScheduledWorkAcrossReplicasIntegrationTest` checks every lock between two application contexts on one database.
 Then it runs one real job while the other context holds its lock.
-A new `@Scheduled` method fails that test until it holds a lock or has a reason.
 
 The scheduler is a pool of `spring.task.scheduling.pool.size` threads.
 A long job holds one thread.
