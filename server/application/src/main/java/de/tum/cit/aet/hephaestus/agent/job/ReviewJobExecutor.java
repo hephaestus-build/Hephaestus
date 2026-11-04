@@ -39,6 +39,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -1388,15 +1389,18 @@ public class ReviewJobExecutor {
                     e.getClass().getName(),
                     e);
         } else {
-            // Bounded facts only, as on the job row: the exception types of the chain show an unclassified cause.
+            // Bounded facts only, as on the job row: an exception message can name a private path or repository. The
+            // exception types and the throwing location show an unclassified cause.
             log.error(
-                    "Review preparation failed: jobId={}, stage={}, kind={}, reason={}, exceptionTypes={}",
+                    "Review preparation failed: jobId={}, stage={}, kind={}, reason={}, captureCode={}, capturedAt={},"
+                            + " exceptionTypes={}",
                     jobId,
                     preparation.stage().name(),
                     preparation.kind().name(),
                     preparation.reason().name(),
-                    preparation.exceptionTypes(),
-                    e);
+                    preparation.captureCode(),
+                    preparation.capturedAt(),
+                    preparation.exceptionTypes());
         }
 
         if (isRetryableExecutionFailure(e)) {
@@ -1489,7 +1493,25 @@ public class ReviewJobExecutor {
     static boolean isRetryableExecutionFailure(Exception e) {
         return e instanceof ReviewSourceNotReadyException
                 || e instanceof SandboxInfrastructureException
-                || e instanceof IOException;
+                || e instanceof IOException
+                || transientCapture(PreparationFailure.captureOf(e));
+    }
+
+    /**
+     * A capture that failed, or whose source was not ready, can succeed on another attempt; the same item captured on
+     * earlier attempts. Removed or hidden work, withheld consent, a lost version and an occasion that kept no record do
+     * not come back.
+     */
+    private static boolean transientCapture(@Nullable ItemCaptureException capture) {
+        return capture != null
+                && switch (capture.code()) {
+                    case CAPTURE_FAILED, SOURCE_NOT_READY -> true;
+                    case ITEM_REMOVED,
+                            ITEM_NOT_VISIBLE,
+                            CONSENT_WITHHELD,
+                            VERSION_UNAVAILABLE,
+                            OCCASION_EVIDENCE_UNAVAILABLE -> false;
+                };
     }
 
     private static @Nullable RequeueCause unreachableReason(int exitCode) {

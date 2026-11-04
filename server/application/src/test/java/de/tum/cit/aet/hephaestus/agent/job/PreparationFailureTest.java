@@ -152,4 +152,31 @@ class PreparationFailureTest {
                         .reason())
                 .isEqualTo(JobPreparationException.Reason.UNCLASSIFIED);
     }
+
+    @ParameterizedTest(name = "{0} retries: {1}")
+    @MethodSource("captureCodes")
+    void shouldRetryACaptureThatCanSucceedOnAnotherAttemptAndKeepItsMessageOut(ItemCaptureCode code, boolean retried) {
+        var failure = new JobPreparationException(
+                JobPreparationException.Reason.REQUIRED_SOURCE_COLLECTION_FAILED,
+                "private",
+                new ItemCaptureException(code, "token=private path=/private/student/repository"));
+
+        var prepared = PreparationFailure.of(PreparationFailure.Stage.INPUTS, failure);
+
+        assertThat(ReviewJobExecutor.isRetryableExecutionFailure(failure)).isEqualTo(retried);
+        assertThat(prepared.captureCode()).isEqualTo(code);
+        assertThat(prepared.capturedAt()).startsWith("PreparationFailureTest.").doesNotContain("private");
+        assertThat(prepared.message()).doesNotContain("private");
+    }
+
+    static Stream<Arguments> captureCodes() {
+        return Stream.of(
+                Arguments.of(ItemCaptureCode.CAPTURE_FAILED, true),
+                Arguments.of(ItemCaptureCode.SOURCE_NOT_READY, true),
+                Arguments.of(ItemCaptureCode.OCCASION_EVIDENCE_UNAVAILABLE, false),
+                Arguments.of(ItemCaptureCode.ITEM_REMOVED, false),
+                Arguments.of(ItemCaptureCode.ITEM_NOT_VISIBLE, false),
+                Arguments.of(ItemCaptureCode.CONSENT_WITHHELD, false),
+                Arguments.of(ItemCaptureCode.VERSION_UNAVAILABLE, false));
+    }
 }
