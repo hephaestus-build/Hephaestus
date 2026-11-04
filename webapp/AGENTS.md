@@ -218,16 +218,13 @@ TanStack Router Vite plugin regenerates it when the dev server runs.
 `validateSearch`, `beforeLoad`, `loader`, `pendingComponent` and everything they import load with the entry chunk, on every page's cold load.
 Thus, keep a search schema, its constants and a skeleton in a light module of their own, never in a component module.
 
-The build holds two gzip sizes to a committed baseline (`tools/bundle-budget/`): the entry's static JavaScript, and what each lazy chunk adds.
-It is a one-way ratchet.
-It fails when a size grows by more than 1 KiB, a new lazy chunk counting from zero.
-It also fails when the entry holds a route-only package, or when a lazy chunk is gone while the entry grew.
+`vp run verification:webapp-build` holds two gzip sizes (`tools/bundle-budget/`): the entry's static JavaScript, and what each lazy chunk adds.
+It also builds the commit that the change merges onto.
+A change fails when it grows a size by more than 1 KiB, a new lazy chunk counting from zero.
+The build fails when the entry holds a route-only package.
 
-For intended growth, run `BUNDLE_BUDGET=update vp run build:webapp` and commit `tools/bundle-budget/baseline.json`.
-The update keeps every size that moved by 1 KiB or less. It records the rest, adds new chunks and drops removed chunks.
-Two pull requests then conflict less often.
-A saving passes with a notice that the baseline can be lowered.
-Do not add a baseline commit only for a saving: the next pull request that touches the baseline lowers it in passing.
+For intended growth, run `BUNDLE_BUDGET=update vp run verification:webapp-build` and commit `tools/bundle-budget/accepted-growth.json`.
+It records each grown load with the pull request that accepts it, and counts only in that change.
 
 The route's `workspaceSlug` is the only source for workspace-scoped data. There is no store.
 

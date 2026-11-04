@@ -26,14 +26,12 @@ export const bundleMetadata = z.object({
 export type BuiltChunk = z.infer<typeof builtChunk>;
 
 /** The gzip bytes that each load fetches. */
-export const bundleSizes = z.object({
+export interface BundleSizes {
 	/** A cold load of any page: the entry chunk and every chunk it imports statically. */
-	entry: z.number().int().nonnegative(),
+	entry: number;
 	/** What each lazy chunk adds when it loads, by its facade module: its static closure past the entry's. */
-	lazy: z.record(z.string(), z.number().int().nonnegative()),
-});
-
-export type BundleSizes = z.infer<typeof bundleSizes>;
+	lazy: Record<string, number>;
+}
 
 export interface Measured {
 	sizes: BundleSizes;
@@ -41,7 +39,7 @@ export interface Measured {
 	entryPackages: string[];
 }
 
-/** Growth up to this keeps the baseline: a small feature or fix fits in it. */
+/** Growth that one change may add to a size: a small feature or fix fits in it. */
 export const TOLERANCE_BYTES = 1024;
 
 /** The chunks a load fetches before `start` runs: `start` and its static imports, transitively. */
@@ -104,90 +102,104 @@ export function measure(chunks: readonly BuiltChunk[]): Measured {
 	};
 }
 
-function settled(now: number, recorded: number | undefined): number {
-	return recorded !== undefined && Math.abs(now - recorded) <= TOLERANCE_BYTES ? recorded : now;
-}
-
-/**
- * The baseline after an update. A size that moved by no more than the tolerance keeps its recorded
- * value: a change elsewhere renames the hashed chunks that a chunk imports, which moves its gzip size
- * by a few bytes, and rewriting those sizes makes pull requests conflict over sizes that neither
- * changed. It uses the tolerance of `checkBudget`, so the build that it records checks clean.
- * Without a readable baseline, it records the build.
- */
-export function updatedBaseline(
-	measured: BundleSizes,
-	baseline: BundleSizes | undefined,
-): BundleSizes {
-	return {
-		entry: settled(measured.entry, baseline?.entry),
-		lazy: Object.fromEntries(
-			Object.entries(measured.lazy).map(([facade, now]) => [
-				facade,
-				settled(now, baseline?.lazy[facade]),
-			]),
-		),
-	};
-}
-
-export interface BudgetCheck {
-	/** Why the build breaks its budget. */
-	violations: string[];
-	/** Savings the baseline still counts as bytes: `update` lowers it. */
-	lowerable: string[];
-}
-
-/**
- * A one-way ratchet. Growth past the tolerance, a route-only package in the entry, or a lazy chunk
- * that moved into the entry breaks the budget. A saving passes and only asks for the baseline to come
- * down, so a pull request that shrinks the bundle needs no baseline commit and does not have to merge
- * after another one that changes it. The next `update` takes the saving.
- *
- * The build metadata does not say which modules a chunk holds, so a lazy chunk that is gone counts as
- * moved into the entry when the entry grew past the tolerance, and as removed otherwise.
- */
-export function checkBudget(
+/** Why the entry closure holds a package that only some routes use: it then loads with every page. */
+export function entryViolations(
 	measured: Measured,
-	baseline: BundleSizes,
 	routeOnlyPackages: readonly string[],
-): BudgetCheck {
-	const violations: string[] = [];
-	const lowerable: string[] = [];
-	const compare = (what: string, now: number, then: number, hint = "") => {
-		if (now > then + TOLERANCE_BYTES) {
-			violations.push(`${what} grew from ${then} to ${now} gzip bytes.${hint}`);
-		} else if (now < then - TOLERANCE_BYTES) {
-			lowerable.push(`${what} shrank from ${then} to ${now} gzip bytes.`);
-		}
-	};
-	const entryGrew = measured.sizes.entry > baseline.entry + TOLERANCE_BYTES;
-	compare(
-		"The entry closure",
-		measured.sizes.entry,
-		baseline.entry,
-		" Find the route option (validateSearch, beforeLoad, loader, pendingComponent) that imports a component module.",
+): string[] {
+	return routeOnlyPackages
+		.filter((name) => measured.entryPackages.includes(name))
+		.map((name) => `${name} is in the entry closure; only the routes that use it may load it.`);
+}
+
+/** One load that a change grew past the tolerance on purpose, and the change that accepted it. */
+const acceptance = z.object({
+	/** `entry`, or a lazy chunk's facade module. */
+	load: z.string().min(1),
+	gzipBytes: z.number().int().nonnegative(),
+	/** The pull request, or the branch before it has one. */
+	acceptedBy: z.string().min(1),
+});
+
+/** `accepted-growth.json`: the acceptances of the change that commits it. */
+export const acceptedGrowth = z.object({ accepted: z.array(acceptance) });
+
+export type Acceptance = z.infer<typeof acceptance>;
+
+const sameAcceptance = (a: Acceptance, b: Acceptance) =>
+	a.load === b.load && a.gzipBytes === b.gzipBytes && a.acceptedBy === b.acceptedBy;
+
+/**
+ * The acceptances that this change adds. One that the base already holds was spent by the change
+ * that added it: its growth is in the base build, so it grants nothing more.
+ */
+export function ownAcceptances(
+	head: readonly Acceptance[],
+	base: readonly Acceptance[],
+): Acceptance[] {
+	return head.filter((entry) => !base.some((spent) => sameAcceptance(entry, spent)));
+}
+
+/** Every load of a build: the entry first, then each lazy chunk by its facade module. */
+function loads(sizes: BundleSizes): [string, number][] {
+	return [["entry", sizes.entry], ...Object.entries(sizes.lazy)];
+}
+
+function sizeOf(sizes: BundleSizes, load: string): number | undefined {
+	return load === "entry" ? sizes.entry : sizes.lazy[load];
+}
+
+/** The loads that this change grew by more than the tolerance against the build it merges onto. */
+function grownLoads(head: BundleSizes, base: BundleSizes): [string, number][] {
+	return loads(head).filter(([load, now]) => now > (sizeOf(base, load) ?? 0) + TOLERANCE_BYTES);
+}
+
+/**
+ * Why the change breaks the budget: each load that it grew past the tolerance against the build of
+ * the commit it merges onto, and that none of its own acceptances covers, and a lazy chunk that moved
+ * into a grown entry. Growth that landed earlier is in the base build, so it never counts against a
+ * later change.
+ */
+export function growthViolations(
+	head: BundleSizes,
+	base: BundleSizes,
+	accepted: readonly Acceptance[],
+): string[] {
+	const grown = grownLoads(head, base).filter(
+		([load, now]) =>
+			!accepted.some((entry) => entry.load === load && now <= entry.gzipBytes + TOLERANCE_BYTES),
 	);
-	for (const [facade, now] of Object.entries(measured.sizes.lazy)) {
-		compare(
-			baseline.lazy[facade] === undefined ? `${facade}, a new lazy chunk,` : facade,
-			now,
-			baseline.lazy[facade] ?? 0,
-		);
-	}
-	for (const facade of Object.keys(baseline.lazy)) {
-		if (facade in measured.sizes.lazy) {
-			continue;
+	const violations = grown.map(([load, now]) => {
+		const then = sizeOf(base, load);
+		let what = load;
+		if (load === "entry") {
+			what = "The entry closure";
+		} else if (then === undefined) {
+			what = `${load}, a new lazy chunk,`;
 		}
-		if (entryGrew) {
+		const hint =
+			load === "entry"
+				? " Find the route option (validateSearch, beforeLoad, loader, pendingComponent) that imports a component module."
+				: "";
+		return `${what} grew from ${then ?? 0} to ${now} gzip bytes.${hint}`;
+	});
+	// The build metadata does not say which modules a chunk holds, so a lazy chunk that is gone counts as
+	// moved into the entry when the entry grew past the tolerance.
+	if (grown.some(([load]) => load === "entry")) {
+		for (const facade of Object.keys(base.lazy).filter((key) => !(key in head.lazy))) {
 			violations.push(
 				`${facade} is no longer a lazy chunk, and the entry grew: it may load with every page now.`,
 			);
-		} else {
-			lowerable.push(`${facade} is no longer a lazy chunk.`);
 		}
 	}
-	for (const name of routeOnlyPackages.filter((pkg) => measured.entryPackages.includes(pkg))) {
-		violations.push(`${name} is in the entry closure; only the routes that use it may load it.`);
-	}
-	return { violations, lowerable };
+	return violations;
+}
+
+/** This change's acceptances: one for each load that it grew past the tolerance. */
+export function acceptGrowth(
+	head: BundleSizes,
+	base: BundleSizes,
+	acceptedBy: string,
+): Acceptance[] {
+	return grownLoads(head, base).map(([load, gzipBytes]) => ({ load, gzipBytes, acceptedBy }));
 }
