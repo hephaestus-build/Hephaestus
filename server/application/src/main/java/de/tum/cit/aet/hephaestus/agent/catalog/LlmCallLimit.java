@@ -5,7 +5,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * A pool's limit of calls in flight, as its provider taught it: additive increase, multiplicative decrease. Nobody has
  * to guess the provider's capacity. The limit rises while served calls find it binding, and falls on a provider's
- * refusal. An instance admin's maximum is a ceiling on it.
+ * refusal or on {@link LlmCallDelay queueing}. An instance admin's maximum is a ceiling on it.
  *
  * <p>While {@code probing}, each served call raises the limit, which doubles it per call duration. Once the provider
  * has refused recently, a whole limit's worth of served calls raises it by one.
@@ -15,11 +15,25 @@ import org.jspecify.annotations.Nullable;
  */
 public record LlmCallLimit(int learned, int credit) {
 
-    /** One background call beside one conversation call. Below this, a pool could not keep its reserve. */
-    static final int FLOOR = 2;
+    /**
+     * One background call beside one conversation call. Below this, a pool could not keep its reserve. No higher value
+     * is safe, as a server with one slot queues from the second call on, and a delay from elsewhere cannot hold a pool
+     * here: at this floor, {@link LlmCallDelay} takes a new baseline.
+     */
+    public static final int FLOOR = 2;
 
+    /**
+     * Keeps 70 %, from RFC 9438's balance of throughput and convergence. A sawtooth down to this share runs at about 85 %
+     * of the capacity, while a halving loses a quarter, and a slow start's overshoot still falls away in two refusals.
+     */
     public LlmCallLimit afterThrottle() {
         return new LlmCallLimit(Math.max(FLOOR, learned * 7 / 10), 0);
+    }
+
+    /** Lowers the limit by what the delay asks for, by one call at least and never by more than a refusal. */
+    public LlmCallLimit afterDelay(double keep) {
+        int asked = (int) (learned * keep);
+        return new LlmCallLimit(Math.max(afterThrottle().learned, Math.min(learned - 1, asked)), 0);
     }
 
     public LlmCallLimit afterServedCall(boolean probing) {

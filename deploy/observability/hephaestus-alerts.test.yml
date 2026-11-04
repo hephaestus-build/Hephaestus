@@ -1459,3 +1459,61 @@ tests:
       - eval_time: 30m
         alertname: HephaestusReviewsIncomplete
         exp_alerts: []
+
+  - name: refusals that keep reaching callers fire, refusals that callers only waited out do not
+    interval: 1m
+    input_series:
+      - series: 'llm_pool_upstream_throttled_total{job="hephaestus",instance="worker:9090",pool="own-model-1",status="429"}'
+        values: "0+2x40"
+      - series: 'llm_pool_upstream_absorbed_total{job="hephaestus",instance="worker:9090",pool="own-model-1"}'
+        values: "0+1x40"
+      - series: 'llm_pool_upstream_throttled_total{job="hephaestus",instance="worker:9090",pool="own-model-2",status="429"}'
+        values: "0+2x40"
+      - series: 'llm_pool_upstream_absorbed_total{job="hephaestus",instance="worker:9090",pool="own-model-2"}'
+        values: "0+2x40"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusModelRefusalsReachCallers
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: HephaestusModelRefusalsReachCallers
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              pool: own-model-1
+            exp_annotations:
+              summary: A model provider's refusals kept reaching callers for 15 minutes instead of only slowing them
+
+  - name: a limit held at the floor by a queue fires, a ceiling of two or a recovered limit does not
+    interval: 1m
+    input_series:
+      - series: 'llm_pool_limit{job="hephaestus",instance="worker:9090",pool="own-model-1"}'
+        values: "2x80"
+      - series: 'llm_pool_limit_decreases_total{job="hephaestus",instance="worker:9090",pool="own-model-1",cause="delay"}'
+        values: "0x80"
+      - series: 'llm_pool_first_token_baseline_resets_total{job="hephaestus",instance="worker:9090",pool="own-model-1"}'
+        values: "0+1x80"
+      - series: 'llm_pool_limit{job="hephaestus",instance="worker:9090",pool="capped"}'
+        values: "2x80"
+      - series: 'llm_pool_limit_decreases_total{job="hephaestus",instance="worker:9090",pool="capped",cause="delay"}'
+        values: "0x80"
+      - series: 'llm_pool_first_token_baseline_resets_total{job="hephaestus",instance="worker:9090",pool="capped"}'
+        values: "0x80"
+      - series: 'llm_pool_limit{job="hephaestus",instance="worker:9090",pool="own-model-3"}'
+        values: "2x10 12x70"
+      - series: 'llm_pool_limit_decreases_total{job="hephaestus",instance="worker:9090",pool="own-model-3",cause="refusal"}'
+        values: "0+1x10 10x70"
+      - series: 'llm_pool_first_token_baseline_resets_total{job="hephaestus",instance="worker:9090",pool="own-model-3"}'
+        values: "0x80"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HephaestusModelLimitAtFloor
+        exp_alerts: []
+      - eval_time: 70m
+        alertname: HephaestusModelLimitAtFloor
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              pool: own-model-1
+            exp_annotations:
+              summary: A model's call limit stayed at its floor of two calls for 30 minutes while its provider refused or queued

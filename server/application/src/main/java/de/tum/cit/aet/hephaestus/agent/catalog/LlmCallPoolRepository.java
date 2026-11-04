@@ -36,6 +36,14 @@ public interface LlmCallPoolRepository extends JpaRepository<LlmCallPool, Long> 
         boolean getDedicated();
 
         @Nullable
+        Integer getBaselineFirstTokenMs();
+
+        @Nullable
+        Integer getWindowFirstTokenMs();
+
+        int getWindowSamples();
+
+        @Nullable
         Integer getRequestsPerMinute();
 
         @Nullable
@@ -51,6 +59,8 @@ public interface LlmCallPoolRepository extends JpaRepository<LlmCallPool, Long> 
     @Query(
             value = "SELECT slug AS \"slug\", max_concurrent_calls AS \"maxConcurrentCalls\","
                     + " learned_limit AS \"learnedLimit\", limit_credit AS \"limitCredit\", dedicated AS \"dedicated\","
+                    + " baseline_first_token_ms AS \"baselineFirstTokenMs\", window_first_token_ms AS \"windowFirstTokenMs\","
+                    + " window_samples AS \"windowSamples\","
                     + " throttled_at IS NULL OR throttled_at < clock_timestamp() - interval '10 minutes' AS \"probing\","
                     + " CAST(EXTRACT(EPOCH FROM throttled_at) * 1000000 AS BIGINT) AS \"throttleMark\","
                     + " requests_per_minute AS \"requestsPerMinute\", tokens_per_minute AS \"tokensPerMinute\", tokens_per_call AS \"tokensPerCall\","
@@ -78,10 +88,23 @@ public interface LlmCallPoolRepository extends JpaRepository<LlmCallPool, Long> 
     /** Lowers the limit and starts a new mark; the caller holds the pool row lock. */
     @Modifying
     @Query(
-            value = "UPDATE llm_call_pool SET learned_limit = :limit, limit_credit = 0,"
-                    + " throttled_at = clock_timestamp() WHERE id = :id",
+            value =
+                    "UPDATE llm_call_pool SET learned_limit = :limit, limit_credit = 0,"
+                            + " window_first_token_ms = NULL, window_samples = 0, throttled_at = clock_timestamp() WHERE id = :id",
             nativeQuery = true)
     int throttled(@Param("id") long id, @Param("limit") int limit);
+
+    /** Writes what first tokens taught; the caller holds the pool row lock. */
+    @Modifying
+    @Query(
+            value = "UPDATE llm_call_pool SET baseline_first_token_ms = :baseline, window_first_token_ms = :window,"
+                    + " window_samples = :samples WHERE id = :id",
+            nativeQuery = true)
+    int firstTokens(
+            @Param("id") long id,
+            @Param("baseline") @Nullable Integer baseline,
+            @Param("window") @Nullable Integer window,
+            @Param("samples") int samples);
 
     /** Serialize rare membership edits without taking admission locks on unrelated pools. */
     @Query(value = "SELECT true FROM pg_advisory_xact_lock(728193463)", nativeQuery = true)

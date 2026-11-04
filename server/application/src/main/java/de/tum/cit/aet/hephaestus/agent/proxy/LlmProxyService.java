@@ -495,6 +495,8 @@ class LlmProxyService {
                     Mono.firstWithSignal(call.cancelled(), poolPermit.revoked()),
                     transports);
             ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, protocol);
+            boolean instanceCredential = routing.connectionScope() == UsageFundingSource.INSTANCE;
+            tap.onFirstEvent(waited -> callPermits.firstToken(poolPermit, waited, instanceCredential));
             // Both requests below share the attempt's one deadline; the second one does not get a new window.
             Instant deadline = routing.workDeadline();
             boolean reviewStream = practiceScript == null && requestsStream(prepared.body());
@@ -588,7 +590,6 @@ class LlmProxyService {
                 accounting.recordError(routing.apiProtocol());
                 return ResponseEntity.status(502).body("Upstream provider unavailable");
             }
-            boolean instanceCredential = routing.connectionScope() == UsageFundingSource.INSTANCE;
             if (upstream.status() >= 200 && upstream.status() < 300) poolPermit.served(instanceCredential);
             if (LlmCallPermits.throttles(upstream.status())) {
                 Duration asked =
@@ -735,6 +736,7 @@ class LlmProxyService {
             @Nullable Instant deadline,
             boolean reviewStream) {
         Duration limit = exchangeWait(deadline, reviewStream);
+        tap.sending();
         span.event("upstream.request");
         Bounds bounds = exchange.bounds();
         var request = webClient.method(HttpMethod.POST).uri(exchange.uri()).headers(headers -> {
@@ -759,6 +761,7 @@ class LlmProxyService {
         var parts = request.bodyValue(outgoingBody)
                 .exchangeToFlux(upstream -> {
                     answered.set(true);
+                    tap.answered(upstream.statusCode().is2xxSuccessful());
                     // No cap on a stream's body: it would cut a conversation answer that keeps writing, and the
                     // exchange's
                     // limit bounds every call.

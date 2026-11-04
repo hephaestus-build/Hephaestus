@@ -16481,6 +16481,11 @@ components:
       type: object
       description: Provider capacity that the models in it share
       properties:
+        baselineFirstTokenMs:
+          type: integer
+          format: int32
+          description: "The fastest first token known from the provider, in milliseconds;\
+            \ null before the first"
         conversationReserve:
           type: integer
           format: int32
@@ -16524,7 +16529,8 @@ components:
         throttledAt:
           type: string
           format: date-time
-          description: When a provider's refusal last lowered the learned limit
+          description: When a provider's refusal or queue last lowered the learned
+            limit
         tokensPerCall:
           type: integer
           format: int64

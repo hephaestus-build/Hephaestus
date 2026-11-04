@@ -61,7 +61,7 @@ public class LlmCallPool {
     private Integer maxConcurrentCalls;
 
     /** What {@link LlmCallLimit} learned from the provider. The database sets the first value and workers change it. */
-    @ColumnDefault("8")
+    @ColumnDefault("4")
     @Generated(event = EventType.INSERT)
     @Column(name = "learned_limit", nullable = false, insertable = false, updatable = false)
     private int learnedLimit;
@@ -72,10 +72,26 @@ public class LlmCallPool {
     @Column(name = "limit_credit", nullable = false, insertable = false, updatable = false)
     private int limitCredit;
 
-    /** When the provider's refusal last lowered the {@link #learnedLimit}; {@code null} before the first. */
+    /** When the provider's refusal or queue last lowered the {@link #learnedLimit}; {@code null} before the first. */
     @Nullable
     @Column(name = "throttled_at", insertable = false, updatable = false)
     private Instant throttledAt;
+
+    /** See {@link LlmCallDelay#baselineMillis()}. */
+    @Nullable
+    @Column(name = "baseline_first_token_ms", insertable = false, updatable = false)
+    private Integer baselineFirstTokenMs;
+
+    /** See {@link LlmCallDelay#windowMillis()}. */
+    @Nullable
+    @Column(name = "window_first_token_ms", insertable = false, updatable = false)
+    private Integer windowFirstTokenMs;
+
+    /** See {@link LlmCallDelay#samples()}. */
+    @ColumnDefault("0")
+    @Generated(event = EventType.INSERT)
+    @Column(name = "window_samples", nullable = false, insertable = false, updatable = false)
+    private int windowSamples;
 
     /** The pool the database made for one model. It lives and ends with the model and takes no other member. */
     @ColumnDefault("false")

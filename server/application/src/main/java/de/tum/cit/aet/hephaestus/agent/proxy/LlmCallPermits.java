@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallDelay;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallLimit;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolProperties;
@@ -440,7 +441,7 @@ public class LlmCallPermits {
                         new LlmCallLimit(limit(pool), pool.getLimitCredit())
                                 .afterThrottle()
                                 .learned());
-                meters.pool(permit.pool).limitDecreased();
+                meters.pool(permit.pool).limitDecreased("refusal");
             }
             pools.coolDown(permit.poolId, millis);
             return true;
@@ -456,6 +457,49 @@ public class LlmCallPermits {
         return status == 429 || status == 503 || status == 529;
     }
 
+    /**
+     * A stream's first event. The caller is about to relay it to someone who waits for it, so the row is written beside
+     * it. The same tenant rule as for a refusal applies. A call under an older limit says nothing about this one.
+     */
+    public void firstToken(Permit permit, long nanos, boolean instanceCredential) {
+        int millis = Math.toIntExact(Math.min(TimeUnit.NANOSECONDS.toMillis(nanos), Integer.MAX_VALUE));
+        permit.firstTokenMillis = millis;
+        meters.pool(permit.pool).firstToken(permit.callClass, millis);
+        var unused = Thread.ofVirtual().name("llm-first-token").start(() -> {
+            try {
+                transactions.executeWithoutResult(status -> learnFromFirstToken(permit, millis, instanceCredential));
+            } catch (RuntimeException failed) {
+                log.warn(
+                        "Model call first token not recorded: pool={}, error={}",
+                        permit.pool,
+                        failed.getClass().getSimpleName());
+            }
+        });
+    }
+
+    private void learnFromFirstToken(Permit permit, int millis, boolean instanceCredential) {
+        var pool = pools.lockAdmission(permit.poolId).orElse(null);
+        if (pool == null || !Objects.equals(pool.getThrottleMark(), permit.throttleMark)) return;
+        if (!instanceCredential && !pool.getDedicated()) return;
+        int limit = limit(pool);
+        var known =
+                new LlmCallDelay(pool.getBaselineFirstTokenMs(), pool.getWindowFirstTokenMs(), pool.getWindowSamples());
+        var step = known.afterFirstToken(millis, limit);
+        var delay = step.delay();
+        pools.firstTokens(permit.poolId, delay.baselineMillis(), delay.windowMillis(), delay.samples());
+        if (step.keep() < 1) {
+            pools.throttled(
+                    permit.poolId,
+                    new LlmCallLimit(limit, pool.getLimitCredit())
+                            .afterDelay(step.keep())
+                            .learned());
+            meters.pool(permit.pool).limitDecreased("delay");
+        } else if (known.baselineMillis() != null
+                && delay.baselineMillis() != null
+                && delay.baselineMillis() > known.baselineMillis())
+            meters.pool(permit.pool).baselineReset();
+    }
+
     /** Raises the limit for a served call that started under it and found it binding; the caller is in a transaction. */
     private void learn(Permit permit) {
         var pool = pools.lockAdmission(permit.poolId).orElse(null);
@@ -463,6 +507,10 @@ public class LlmCallPermits {
         if (!permit.instanceCredential && !pool.getDedicated()) return;
         Integer maximum = pool.getMaxConcurrentCalls();
         if (maximum != null && pool.getLearnedLimit() >= maximum) return;
+        // A call that did not stream shows no queue, so it cannot raise a limit that first tokens watch.
+        var delay = new LlmCallDelay(pool.getBaselineFirstTokenMs(), null, 0);
+        Integer waited = permit.firstTokenMillis;
+        if (waited == null ? delay.baselineMillis() != null : delay.queued(waited)) return;
         int limit = limit(pool);
         if (rows.countActive(permit.poolId) < limit
                 && rows.countBackground(permit.poolId) < limit - LlmCallLimit.reserve(limit)) return;
@@ -532,6 +580,7 @@ public class LlmCallPermits {
         private volatile BooleanSupplier ended = () -> false;
         private volatile boolean served;
         private volatile boolean instanceCredential;
+        private volatile @Nullable Integer firstTokenMillis;
 
         /** The limit's mark when the call started: an answer about an older limit says nothing about this one. */
         private final @Nullable Long throttleMark;

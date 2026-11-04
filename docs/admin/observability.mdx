@@ -213,6 +213,8 @@ For a release name longer than 34 characters, change the name patterns of these 
 | `HephaestusWebhookEventsUnrecovered` | `github_webhook_unrecovered` | Each counted event failed all six delivery attempts |
 | `HephaestusBudgetExhausted` | `llm_budget_exhausted_total` | A workspace crossed the instance-funded monthly cap |
 | `HephaestusBudgetBlocked` | `llm_budget_blocked_total` | Admission refused work at a cap. A single refusal is expected at a cap. Refusals that continue for 15 minutes need a decision on the budget |
+| `HephaestusModelRefusalsReachCallers` | `llm_pool_upstream_throttled_total` less `llm_pool_upstream_absorbed_total`, per pool | Callers wait out most refusals. Refusals that reach callers for 15 minutes mean a spent account, a pause longer than a call can wait, or an outage |
+| `HephaestusModelLimitAtFloor` | `llm_pool_limit` at 2 while `llm_pool_limit_decreases_total` or `llm_pool_first_token_baseline_resets_total` rises | A pool that an admin capped at 2 does not fire it. A provider that refuses or queues even two calls for 30 minutes does |
 | `HephaestusAgentJobsFailing` | `agent_job_total` with `failed` or `timed_out` | All terminal failures, whatever their cause. Three in one hour point to the platform also on a small instance that runs a few reviews each day. Cancellations do not count. The alert stays up for up to one hour after the last failure |
 | `HephaestusReviewSandboxFailing` | `agent_job_infra_retry_requeued_total{cause="sandbox"}` | The sandbox could not start, initialize or finish, and the attempt runs again. Three in one hour point to the cluster: the sandbox namespace, its quota, the agent image or the nodes. The alert stays up for up to one hour after the last failure |
 | `HephaestusReviewUnreachable` | `agent_job_infra_retry_requeued_total` with `cause` `server_unreachable` or `provider_unreachable` | The sandbox reached neither the server's gateway nor the model provider. The `cause` label tells which. Three in one hour point to the network policy or to the provider. The alert stays up for up to one hour after the last failure |
@@ -619,10 +621,11 @@ The worker fails each such turn and continues to claim.
 Each worker reports the [call pools](./runtime-roles.mdx#call-pools) whose models it calls.
 A worker registers every series of a shared pool at start, so a rate starts from zero. It registers a model's own pool at that pool's first call.
 
-The labels are `pool`, `class`, `reason`, `status` and `queue`.
+The labels are `pool`, `class`, `reason`, `status`, `queue` and `cause`.
 `pool` is the pool's slug. An instance model's own pool has the slug `own-model-<id>`.
 All pools of workspaces' own models report under the one label `workspace-models`.
-`status` is `429`, `503`, or `529`. `queue` is `conversation` or `background`.
+
+`status` is `429`, `503`, or `529`. `queue` is `conversation` or `background`. `cause` is `refusal` or `delay`.
 
 `class` is `turn`, `composition`, `request`, `event`, `schedule`, `backfill`, or `product_feedback`.
 It identifies conversation, composition, product feedback, or the origin of a review call.
@@ -636,7 +639,10 @@ No series names a workspace, a workspace's model, a job or a turn.
 | `llm_pool_permits_granted_total`           | Counter   | `pool`, `class`            | Grants that this worker's calls received |
 | `llm_pool_limit`                           | Gauge     | `pool`                     | The calls in flight that the pool allows now: the learned limit under its ceiling. All workers read it from the database. Take the maximum over the workers. `workspace-models` is the sum of its pools |
 | `llm_pool_waiters`                         | Gauge     | `pool`, `queue`            | Live calls that wait for the pool. All workers read it from the database. Take the maximum over the workers |
-| `llm_pool_limit_decreases_total`           | Counter   | `pool`                     | How often a provider's answer lowered the limit |
+| `llm_pool_limit_decreases_total`           | Counter   | `pool`, `cause`            | How often a provider's refusal or queue lowered the limit |
+| `gen_ai_client_operation_time_to_first_chunk_seconds` | Histogram | `pool`, `class` | How long a served stream waited for its provider's first event, from the request after the grant. The limit learns from the same samples. Buckets follow the GenAI semantic conventions, up to 327.68 seconds |
+| `llm_pool_first_token_baseline`            | Gauge     | `pool`                     | The fastest first token that the pool knows, in milliseconds. All workers read it from the database. `workspace-models` is the largest of its pools |
+| `llm_pool_first_token_baseline_resets_total` | Counter | `pool`                     | How often a pool at its floor took a new baseline. A repeating rise means that the provider stays slow with no load from this instance |
 | `llm_pool_upstream_throttled_total`        | Counter   | `pool`, `status`           | Answers of the pool's provider that it serves too many calls |
 | `llm_pool_upstream_absorbed_total`         | Counter   | `pool`                     | Those answers that the caller never saw, because its call waited and asked again |
 | `llm_pool_cooldown_active`                 | Gauge     | `pool`                     | 1 while this worker knows the pool to be paused after a refusal. Take the maximum over the workers |

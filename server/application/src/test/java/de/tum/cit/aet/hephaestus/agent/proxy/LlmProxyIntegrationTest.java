@@ -597,7 +597,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             var learned = callPools.findById(poolId).orElseThrow();
             assertThat(refused.get()).isPositive();
             assertThat(learned.getThrottledAt()).isNotNull();
-            assertThat(learned.getLearnedLimit()).isLessThan(8);
+            assertThat(learned.getLearnedLimit()).isLessThan(4);
             assertThat(meterRegistry
                             .get(AgentMetrics.LLM_POOL_UPSTREAM_THROTTLED)
                             .tag("pool", learned.getSlug())

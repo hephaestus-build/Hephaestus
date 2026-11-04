@@ -200,7 +200,8 @@ The same name is the source capture code that causes it.
 | **Conversation host**                  | The one long-lived sandboxed process on a worker that runs conversation turns.                      | `heph-host.ts`, `HephHost`         |
 | **Turn**                       | One run of Hephaestus for one question in a conversation, with its attempts, lease, partial answer and usage.       | mentor_turn, conversation_turn from 1.0                    |
 | **Call pool**                  | Provider capacity that the models in it share, whichever workspace calls them: a learned limit of calls in flight, a conversation reserve and a cooldown. Every model has one. | llm_call_pool |
-| **Learned limit**              | The calls in flight that a call pool thinks its provider serves. It rises while served calls fill it, and falls when the provider refuses. | llm_call_pool.learned_limit |
+| **Learned limit**              | The calls in flight that a call pool thinks its provider serves. It rises while served calls fill it, and falls when the provider refuses or queues. | llm_call_pool.learned_limit |
+| **First-token baseline**       | The fastest first token that a call pool knows from its provider. Later first tokens are compared with it to detect a queue at the provider. | llm_call_pool.baseline_first_token_ms |
 | **Conversation reserve**       | The part of a call pool's limit that only conversation turns may use: a quarter, rounded up. | LlmCallLimit.reserve |
 | **Call permit**                | One model call's share of its call pool, held as a lease by the worker that makes the call. | llm_call_permit |
 | **Call class**                 | Whose call takes a permit: a conversation turn, or a review of one origin. Only a turn may use the conversation reserve. | LlmCallClass |
