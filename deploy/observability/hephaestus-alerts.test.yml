@@ -1516,7 +1516,7 @@ tests:
               severity: warning
               pool: own-model-1
             exp_annotations:
-              summary: A model's call limit stayed at its floor of two calls for 30 minutes while its provider refused or queued
+              summary: A model's call limit stayed at its floor of two calls for 30 minutes while its provider refused, queued or did not answer
 
   - name: three failed deliveries to one destination in one hour fire, two do not
     interval: 1m

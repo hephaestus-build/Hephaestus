@@ -458,7 +458,7 @@ public class LlmCallPermits {
     }
 
     /**
-     * A stream's first event. The caller is about to relay it to someone who waits for it, so the row is written beside
+     * A stream's first content event. The caller is about to relay it to someone who waits for it, so the row is written beside
      * it. The same tenant rule as for a refusal applies. A call under an older limit says nothing about this one.
      */
     public void firstToken(Permit permit, long nanos, boolean instanceCredential) {
@@ -500,8 +500,42 @@ public class LlmCallPermits {
             meters.pool(permit.pool).baselineReset();
     }
 
+    /**
+     * A served stream that ended without a content token. A provider can fail this way with no error: it sends its head,
+     * a comment or a role, and then nothing, or it ends the stream. Such a call never raises the limit. It lowers the
+     * limit like a refusal when the provider stopped answering: it ended the stream, or sent no content for the proxy's
+     * silence bound, {@code hephaestus.mentor.turn.model-idle-timeout}. Without that, it lowers the limit when the call
+     * waited past what the first-token baseline allows. A caller that ended the call sooner says nothing about the
+     * provider.
+     */
+    public void unanswered(Permit permit, boolean stoppedAnswering, long nanos, boolean instanceCredential) {
+        permit.unanswered = true;
+        int millis = Math.toIntExact(Math.min(TimeUnit.NANOSECONDS.toMillis(nanos), Integer.MAX_VALUE));
+        try {
+            transactions.executeWithoutResult(status -> {
+                var pool = pools.lockAdmission(permit.poolId).orElse(null);
+                if (pool == null || !Objects.equals(pool.getThrottleMark(), permit.throttleMark)) return;
+                if (!instanceCredential && !pool.getDedicated()) return;
+                if (!stoppedAnswering && !new LlmCallDelay(pool.getBaselineFirstTokenMs(), null, 0).queued(millis))
+                    return;
+                pools.throttled(
+                        permit.poolId,
+                        new LlmCallLimit(limit(pool), pool.getLimitCredit())
+                                .afterThrottle()
+                                .learned());
+                meters.pool(permit.pool).limitDecreased("unanswered");
+            });
+        } catch (RuntimeException failed) {
+            log.warn(
+                    "Unanswered model call not recorded: pool={}, error={}",
+                    permit.pool,
+                    failed.getClass().getSimpleName());
+        }
+    }
+
     /** Raises the limit for a served call that started under it and found it binding; the caller is in a transaction. */
     private void learn(Permit permit) {
+        if (permit.unanswered) return;
         var pool = pools.lockAdmission(permit.poolId).orElse(null);
         if (pool == null || !Objects.equals(pool.getThrottleMark(), permit.throttleMark)) return;
         if (!permit.instanceCredential && !pool.getDedicated()) return;
@@ -581,6 +615,7 @@ public class LlmCallPermits {
         private volatile boolean served;
         private volatile boolean instanceCredential;
         private volatile @Nullable Integer firstTokenMillis;
+        private volatile boolean unanswered;
 
         /** The limit's mark when the call started: an answer about an older limit says nothing about this one. */
         private final @Nullable Long throttleMark;

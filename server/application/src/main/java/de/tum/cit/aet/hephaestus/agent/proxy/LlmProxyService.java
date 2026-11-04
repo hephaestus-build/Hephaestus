@@ -506,7 +506,7 @@ class LlmProxyService {
                     transports);
             ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, protocol);
             boolean instanceCredential = routing.connectionScope() == UsageFundingSource.INSTANCE;
-            tap.onFirstEvent(waited -> callPermits.firstToken(poolPermit, waited, instanceCredential));
+            tap.onFirstContent(waited -> callPermits.firstToken(poolPermit, waited, instanceCredential));
             // Both requests below share the attempt's one deadline; the second one does not get a new window.
             Instant deadline = routing.workDeadline();
             UpstreamResult upstream;
@@ -558,6 +558,7 @@ class LlmProxyService {
                 if (practiceScript != null) accounting.recordUsage(attempt, practiceScript, null);
                 Bounds bounds = exchange.bounds();
                 if (bounds != null && ProxyStreamingUtils.readTimedOut(e)) {
+                    callPermits.unanswered(poolPermit, true, tap.sinceSent(), instanceCredential);
                     accounting.recordError(routing.apiProtocol());
                     accounting.recordUpstreamStalled(routing.apiProtocol());
                     String stall =
@@ -600,6 +601,22 @@ class LlmProxyService {
                 return ResponseEntity.status(502).body("Upstream provider unavailable");
             }
             if (upstream.status() >= 200 && upstream.status() < 300) poolPermit.served(instanceCredential);
+            StreamOutcome ended = upstream.streamOutcome();
+            if (ended != null
+                    && upstream.status() >= 200
+                    && upstream.status() < 300
+                    && tap.unanswered()
+                    && !poolPermit.isRevoked()) {
+                // The provider ended the stream or went silent; otherwise the caller ended it.
+                boolean providerEnded = ended == StreamOutcome.COMPLETED
+                        || ended == StreamOutcome.UPSTREAM_IDLE
+                        || ended == StreamOutcome.STREAM_FAILED;
+                // The silence bound is the one that cuts the call: a provider that sends only comments never trips it.
+                Bounds silence = exchange.bounds();
+                boolean stoppedAnswering = (providerEnded && !call.isCancelled())
+                        || (silence != null && tap.sinceSent() >= silence.idle().toNanos());
+                callPermits.unanswered(poolPermit, stoppedAnswering, tap.sinceSent(), instanceCredential);
+            }
             if (LlmCallPermits.throttles(upstream.status())) {
                 Duration asked =
                         callPermits.throttled(poolPermit, upstream.status(), upstream.headers(), instanceCredential);

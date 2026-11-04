@@ -29,25 +29,64 @@ class ProxyStreamUsageTapTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldReportTheFirstEventOnceAndOnlyForAServedStream() {
+    void shouldReportTheFirstContentOnceAndOnlyForAServedStream() {
         List<Long> served = new ArrayList<>();
         var tap = completionsTap();
-        tap.onFirstEvent(served::add);
+        tap.onFirstContent(served::add);
         tap.sending();
         tap.answered(true);
-        feed(tap, ": keep-alive\n\ndata: {\"choices\":[]}\n\ndata: {\"choices\":[]}\n\n");
+        feed(
+                tap,
+                ": logos-schedule x-logos-ettft-ms=51\n\n"
+                        + "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"\"}}]}\n\n");
+        assertThat(served).isEmpty();
+        assertThat(tap.hasContent()).isFalse();
+
+        feed(
+                tap,
+                "data: {\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"!\"}}]}\n\n");
 
         assertThat(served).hasSize(1);
         assertThat(served.getFirst()).isNotNegative();
+        assertThat(tap.hasContent()).isTrue();
 
         List<Long> refused = new ArrayList<>();
         var failed = completionsTap();
-        failed.onFirstEvent(refused::add);
+        failed.onFirstContent(refused::add);
         failed.sending();
         failed.answered(false);
         feed(failed, "data: {\"error\":{\"message\":\"busy\"}}\n\n");
 
         assertThat(refused).isEmpty();
+    }
+
+    @Test
+    void shouldTakeNoErrorOrRoleForContentInAnyProtocol() {
+        var completions = completionsTap();
+        completions.sending();
+        feed(completions, "data: {\"error\":{\"message\":\"overloaded\"}}\n\ndata: [DONE]\n\n");
+        assertThat(completions.hasContent()).isFalse();
+        feed(completions, "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"Let me\"}}]}\n\n");
+        assertThat(completions.hasContent()).isTrue();
+
+        var tools = completionsTap();
+        feed(tools, "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0}]}}]}\n\n");
+        assertThat(tools.hasContent()).isTrue();
+
+        var responses = new ProxyStreamUsageTap(MAPPER, LlmApiProtocol.OPENAI_RESPONSES);
+        feed(responses, "data: {\"type\":\"response.created\"}\n\ndata: {\"type\":\"error\"}\n\n");
+        assertThat(responses.hasContent()).isFalse();
+        feed(responses, "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hi\"}\n\n");
+        assertThat(responses.hasContent()).isTrue();
+
+        var anthropic = new ProxyStreamUsageTap(MAPPER, LlmApiProtocol.ANTHROPIC_MESSAGES);
+        feed(
+                anthropic,
+                "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{}}\n\n"
+                        + "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\"}}\n\n");
+        assertThat(anthropic.hasContent()).isFalse();
+        feed(anthropic, "data: {\"type\":\"content_block_delta\",\"delta\":{\"text\":\"Hi\"}}\n\n");
+        assertThat(anthropic.hasContent()).isTrue();
     }
 
     @Test

@@ -524,9 +524,11 @@ No worker holds a database connection while its call waits for a grant or for th
 | Such a call ended, and the limit fell in the last 10 minutes | The limit rises by 1 for each limit's worth of such calls |
 | The provider answers 429, 529, or 503 | The limit falls to 70%, and never below 2. No call starts until the provider's `Retry-After` has passed, or for 5 seconds without one |
 | Even the fastest first token of a window of calls exceeds twice the baseline plus 1 second | The limit falls in proportion to that delay, to 70% at most and never below 2. Calls continue with no pause |
+| A served stream ends with no content and no usage. The provider ended it, or sent no content for `hephaestus.mentor.turn.model-idle-timeout`, or the call waited past twice the baseline plus 1 second | The limit falls to 70%, and never below 2. Calls continue with no pause. Such a call never raises the limit |
 
 A model server such as vLLM queues calls by default and refuses none, so a limit that learns only from refusals keeps rising.
-The pool measures the time from each streamed call's request to its first event.
+The pool measures the time from each streamed call's request to its first content event: text, reasoning, or a tool call.
+A role, an error event, or an SSE comment does not count, as a gateway can send one at once and then serve nothing.
 A window holds at least 4 such samples, and half of the limit when that is more.
 The baseline is the fastest first token that the pool knows.
 A queue delays every call behind it, and a long prompt delays only itself, so the pool compares only the fastest call of a window.
@@ -534,6 +536,12 @@ A queue delays every call behind it, and a long prompt delays only itself, so th
 A call without a stream, such as a feedback composition, gives no sample. It cannot raise a limit that first tokens watch.
 A model that only such calls use learns from refusals only.
 A failed answer gives no sample either, as it can arrive at once even behind a queue.
+
+A provider can also fail without an error: it sends its head, and then nothing.
+A stream without content and usage is such a call, also when it carries only an error event.
+The proxy cuts a stream whose provider sends nothing for `hephaestus.mentor.turn.model-idle-timeout`, and the limit falls then.
+A provider that sends only SSE comments is not cut. A call without content for that long still lowers the limit, also before the pool knows a baseline.
+A caller that ends such a call sooner lowers the limit only if the call waited longer than the baseline allows.
 
 The baseline is one value for all calls of a pool.
 Short prompts can set it, and only long prompts that miss the cache can follow.
