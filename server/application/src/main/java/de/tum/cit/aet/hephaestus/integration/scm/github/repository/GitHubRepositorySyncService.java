@@ -34,10 +34,12 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.dao.DataAccessException;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
@@ -64,6 +66,7 @@ public class GitHubRepositorySyncService {
     private final GitHubGraphQlSyncCoordinator graphQlSyncHelper;
     private static final int MAX_RETRY_ATTEMPTS = 3;
     private final WebClient restClient;
+    private final TransactionTemplate transactionTemplate;
 
     public GitHubRepositorySyncService(
             GitHubGraphQlClientProvider graphQlClientProvider,
@@ -72,7 +75,8 @@ public class GitHubRepositorySyncService {
             GitHubSyncProperties syncProperties,
             GitHubExceptionClassifier exceptionClassifier,
             GitHubGraphQlSyncCoordinator graphQlSyncHelper,
-            @Qualifier("gitHubGraphQlWebClient") WebClient webClient) {
+            @Qualifier("gitHubGraphQlWebClient") WebClient webClient,
+            TransactionTemplate transactionTemplate) {
         this.restClient = webClient.mutate().baseUrl("https://api.github.com").build();
         this.graphQlClientProvider = graphQlClientProvider;
         this.repositoryRepository = repositoryRepository;
@@ -80,6 +84,7 @@ public class GitHubRepositorySyncService {
         this.syncProperties = syncProperties;
         this.exceptionClassifier = exceptionClassifier;
         this.graphQlSyncHelper = graphQlSyncHelper;
+        this.transactionTemplate = transactionTemplate;
     }
 
     /**
@@ -91,7 +96,6 @@ public class GitHubRepositorySyncService {
      * @param expectedNativeId the monitored identity, or null until it has been captured
      * @return the synced repository, or empty on a transient or incomplete response
      */
-    @Transactional
     public Optional<Repository> syncRepository(
             Long scopeId, String nameWithOwner, IdentityProvider provider, @Nullable Long expectedNativeId) {
         return syncRepositoryWithRetry(scopeId, nameWithOwner, provider, expectedNativeId, 0);
@@ -233,50 +237,9 @@ public class GitHubRepositorySyncService {
                 throw new RepositoryIdentityMismatchException(nameWithOwner, expectedNativeId, githubDatabaseId);
             }
 
-            GHRepositoryOwner owner = repoData.getOwner();
-            Organization organization = ensureOrganization(owner, provider);
-            Repository repository = repositoryRepository
-                    .findByNativeIdAndProviderId(githubDatabaseId, Objects.requireNonNull(provider.getId()))
-                    .orElseGet(Repository::new);
-
-            repository.setNativeId(githubDatabaseId);
-            repository.setProvider(provider);
-            repository.setName(repoData.getName());
-            repository.setNameWithOwner(repoData.getNameWithOwner());
-            repository.setDescription(repoData.getDescription());
-            repository.setHtmlUrl(Objects.requireNonNull(repoData.getUrl()).toString());
-            repository.setOrganization(organization);
-
-            repository.setPrivate(repoData.getIsPrivate());
-            repository.setArchived(repoData.getIsArchived());
-            repository.setDisabled(repoData.getIsDisabled());
-
-            if (repoData.getCreatedAt() != null) {
-                repository.setCreatedAt(repoData.getCreatedAt().toInstant());
-            }
-            if (repoData.getUpdatedAt() != null) {
-                repository.setUpdatedAt(repoData.getUpdatedAt().toInstant());
-            }
-            if (repoData.getPushedAt() != null) {
-                repository.setPushedAt(repoData.getPushedAt().toInstant());
-            }
-
-            if (repoData.getDefaultBranchRef() != null) {
-                repository.setDefaultBranch(repoData.getDefaultBranchRef().getName());
-            } else {
-                repository.setDefaultBranch("main");
-            }
-
-            if (repoData.getVisibility() != null) {
-                repository.setVisibility(
-                        Repository.Visibility.valueOf(repoData.getVisibility().name()));
-            } else {
-                repository.setVisibility(Repository.Visibility.PRIVATE);
-            }
-
-            repository.setLastSyncAt(Instant.now());
-
-            repository = repositoryRepository.save(repository);
+            // GitHub has answered: the write is its own short transaction, so no connection waits on GitHub.
+            Repository repository = Objects.requireNonNull(
+                    transactionTemplate.execute(status -> store(provider, repoData, githubDatabaseId)));
             log.info(
                     "Synced repository: scopeId={}, repoId={}, repoName={}",
                     scopeId,
@@ -287,6 +250,9 @@ public class GitHubRepositorySyncService {
         } catch (InstallationNotFoundException
                 | RepositoryNotFoundOnGitProviderException
                 | RepositoryIdentityMismatchException e) {
+            throw e;
+        } catch (DataAccessException | TransactionException e) {
+            // A failed write is not a GitHub error: the caller records it and the next sync stores the repository.
             throw e;
         } catch (Exception e) {
             ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
@@ -304,6 +270,54 @@ public class GitHubRepositorySyncService {
                     log));
             return Optional.empty();
         }
+    }
+
+    /** Creates or updates the repository and its organization from GitHub's answer. */
+    private Repository store(IdentityProvider provider, GHRepository repoData, long githubDatabaseId) {
+        GHRepositoryOwner owner = repoData.getOwner();
+        Organization organization = ensureOrganization(owner, provider);
+        Repository repository = repositoryRepository
+                .findByNativeIdAndProviderId(githubDatabaseId, Objects.requireNonNull(provider.getId()))
+                .orElseGet(Repository::new);
+
+        repository.setNativeId(githubDatabaseId);
+        repository.setProvider(provider);
+        repository.setName(repoData.getName());
+        repository.setNameWithOwner(repoData.getNameWithOwner());
+        repository.setDescription(repoData.getDescription());
+        repository.setHtmlUrl(Objects.requireNonNull(repoData.getUrl()).toString());
+        repository.setOrganization(organization);
+
+        repository.setPrivate(repoData.getIsPrivate());
+        repository.setArchived(repoData.getIsArchived());
+        repository.setDisabled(repoData.getIsDisabled());
+
+        if (repoData.getCreatedAt() != null) {
+            repository.setCreatedAt(repoData.getCreatedAt().toInstant());
+        }
+        if (repoData.getUpdatedAt() != null) {
+            repository.setUpdatedAt(repoData.getUpdatedAt().toInstant());
+        }
+        if (repoData.getPushedAt() != null) {
+            repository.setPushedAt(repoData.getPushedAt().toInstant());
+        }
+
+        if (repoData.getDefaultBranchRef() != null) {
+            repository.setDefaultBranch(repoData.getDefaultBranchRef().getName());
+        } else {
+            repository.setDefaultBranch("main");
+        }
+
+        if (repoData.getVisibility() != null) {
+            repository.setVisibility(
+                    Repository.Visibility.valueOf(repoData.getVisibility().name()));
+        } else {
+            repository.setVisibility(Repository.Visibility.PRIVATE);
+        }
+
+        repository.setLastSyncAt(Instant.now());
+
+        return repositoryRepository.save(repository);
     }
 
     /**
