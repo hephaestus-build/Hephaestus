@@ -41,6 +41,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.web.webauthn.api.Bytes;
 import org.springframework.security.web.webauthn.api.ImmutableCredentialRecord;
@@ -249,9 +250,9 @@ class AccountExportServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void requestExport_persistsPendingRow_auditsAndHandsOff() {
+    void requestExport_persistsPendingRow_auditsAndPublishesTheOwedGeneration() {
         AccountExportRepository repo = mock(AccountExportRepository.class);
-        ExportGenerationWorker worker = mock(ExportGenerationWorker.class);
+        ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
         AuthEventLogger logger = mock(AuthEventLogger.class);
         AuthEventLogger.Draft draft = mock(AuthEventLogger.Draft.class);
         lenient().when(logger.event(any(), any())).thenReturn(draft);
@@ -264,36 +265,35 @@ class AccountExportServiceTest extends BaseUnitTest {
             return e;
         });
 
-        // No active transaction in a unit test → TransactionCallbacks.afterCommit runs the handoff
-        // inline.
-        AccountExportService service = new AccountExportService(repo, worker, logger, clock);
+        AccountExportService service = new AccountExportService(repo, events, logger, clock);
 
         AccountExport created = service.requestExport(ACCOUNT_ID);
 
         assertThat(created.getId()).isEqualTo(1234L);
         assertThat(created.getStatus()).isEqualTo(AccountExport.Status.PENDING);
         verify(logger).event(AuthEvent.EventType.EXPORT_REQUESTED, AuthEvent.Result.SUCCESS);
-        verify(worker).generate(1234L, ACCOUNT_ID);
+        verify(events).publishEvent(new AccountExportRequested(1234L, ACCOUNT_ID));
     }
 
     @Test
     void requestExport_rejectsWhenInFlightExportExists() {
         AccountExportRepository repo = mock(AccountExportRepository.class);
-        ExportGenerationWorker worker = mock(ExportGenerationWorker.class);
+        ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
         AuthEventLogger logger = mock(AuthEventLogger.class);
         when(repo.existsByAccountIdAndStatusIn(eq(ACCOUNT_ID), any())).thenReturn(true);
 
-        AccountExportService service = new AccountExportService(repo, worker, logger, clock);
+        AccountExportService service = new AccountExportService(repo, events, logger, clock);
 
         assertThatExceptionOfType(ResponseStatusException.class)
                 .isThrownBy(() -> service.requestExport(ACCOUNT_ID))
                 .satisfies(ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
         verify(repo, never()).save(any());
-        verify(worker, never()).generate(any(), any());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     private AccountExportService newService(AccountExportRepository repo) {
-        return new AccountExportService(repo, mock(ExportGenerationWorker.class), mock(AuthEventLogger.class), clock);
+        return new AccountExportService(
+                repo, mock(ApplicationEventPublisher.class), mock(AuthEventLogger.class), clock);
     }
 
     private static void setId(Object entity, Long id) {

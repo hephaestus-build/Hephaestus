@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.core.auth.export;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -20,6 +22,11 @@ import org.springframework.stereotype.Repository;
 public interface AccountExportRepository extends JpaRepository<AccountExport, Long> {
     /** Ownership-scoped lookup. Empty if the id doesn't exist OR belongs to another account. */
     Optional<AccountExport> findByIdAndAccountId(Long id, Long accountId);
+
+    /** The ownership-scoped row, locked until the transaction ends, so one generation at a time decides its state. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM AccountExport e WHERE e.id = :id AND e.accountId = :accountId")
+    Optional<AccountExport> lockByIdAndAccountId(@Param("id") Long id, @Param("accountId") Long accountId);
 
     /**
      * True if the account already has an in-flight export (PENDING or PROCESSING). Backs the

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth.export;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -49,7 +50,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
 
     private AccountExport existingExport() {
         AccountExport export = new AccountExport(ACCOUNT_ID);
-        when(repository.findByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenReturn(Optional.of(export));
+        when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenReturn(Optional.of(export));
         return export;
     }
 
@@ -111,7 +112,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
     @Test
     void shouldMarkFailedWhenTheInitialLookupFails() {
         AccountExport export = new AccountExport(ACCOUNT_ID);
-        when(repository.findByIdAndAccountId(EXPORT_ID, ACCOUNT_ID))
+        when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID))
                 .thenThrow(new IllegalStateException("lookup failed"))
                 .thenReturn(Optional.of(export));
 
@@ -145,10 +146,11 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldReportFailureWhenTheDatabaseCannotRecordIt() {
-        when(repository.findByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenThrow(new IllegalStateException("db down"));
+    void shouldReportFailureAndRethrowWhenTheDatabaseCannotRecordIt() {
+        when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenThrow(new IllegalStateException("db down"));
 
-        worker.generate(EXPORT_ID, ACCOUNT_ID);
+        // Rethrowing leaves the publication incomplete, so the registry resubmits the generation.
+        assertThatThrownBy(() -> worker.generate(EXPORT_ID, ACCOUNT_ID)).hasMessage("db down");
 
         assertThat(registry.get("privacy.job.completed")
                         .tags("job", "export_generation", "outcome", "failure")
@@ -164,7 +166,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
 
     @Test
     void shouldWriteNothingAndReportFailureWhenRowIsMissing() {
-        when(repository.findByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenReturn(Optional.empty());
 
         worker.generate(EXPORT_ID, ACCOUNT_ID);
 
