@@ -152,6 +152,7 @@ public class IntegrationNatsConsumer {
     private final IntegrationConsumerStats stats;
     private final ConnectionActivityRecorder activityRecorder;
     private final List<RouteAdmission> routeAdmissions;
+    private final NatsTraceContext traceContext;
 
     public IntegrationNatsConsumer(
             NatsConnectionProperties connectionProperties,
@@ -161,7 +162,8 @@ public class IntegrationNatsConsumer {
             IntegrationPoisonHandler poisonHandler,
             IntegrationConsumerStats stats,
             ConnectionActivityRecorder activityRecorder,
-            List<RouteAdmission> routeAdmissions) {
+            List<RouteAdmission> routeAdmissions,
+            NatsTraceContext traceContext) {
         this.connectionProperties = connectionProperties;
         this.consumerProperties = consumerProperties;
         this.subscriptionProvider = subscriptionProvider;
@@ -170,6 +172,7 @@ public class IntegrationNatsConsumer {
         this.stats = stats;
         this.activityRecorder = activityRecorder;
         this.routeAdmissions = List.copyOf(routeAdmissions);
+        this.traceContext = traceContext;
     }
 
     // Lifecycle
@@ -833,6 +836,10 @@ public class IntegrationNatsConsumer {
 
     /** ACK after the handler commits; liveness reporting must not repeat a completed handler. */
     void handleMessage(@Nullable Long scopeId, Message msg) {
+        traceContext.process(msg, () -> dispatchMessage(scopeId, msg));
+    }
+
+    private void dispatchMessage(@Nullable Long scopeId, Message msg) {
         if (shuttingDown.get()) {
             safeNak(msg);
             return;

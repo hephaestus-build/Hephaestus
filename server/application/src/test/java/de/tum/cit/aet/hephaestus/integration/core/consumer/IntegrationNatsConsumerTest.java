@@ -83,7 +83,8 @@ class IntegrationNatsConsumerTest {
                 mock(IntegrationPoisonHandler.class),
                 new IntegrationConsumerStats(),
                 mock(ConnectionActivityRecorder.class),
-                List.of());
+                List.of(),
+                NatsTraceContexts.none());
         try {
             consumer.stopConsumingScopeForPurge(7L);
             consumer.startConsumingScope(7L);
@@ -110,7 +111,8 @@ class IntegrationNatsConsumerTest {
                         mock(IntegrationPoisonHandler.class),
                         new IntegrationConsumerStats(),
                         mock(ConnectionActivityRecorder.class),
-                        List.of()) {
+                        List.of(),
+                        NatsTraceContexts.none()) {
                     @Override
                     void ensureNatsConnectionEstablished() {}
 
@@ -243,7 +245,8 @@ class IntegrationNatsConsumerTest {
                     poisonHandler,
                     new IntegrationConsumerStats(),
                     mock(ConnectionActivityRecorder.class),
-                    List.of(admission));
+                    List.of(admission),
+                    NatsTraceContexts.none());
         }
 
         @Test
@@ -317,7 +320,8 @@ class IntegrationNatsConsumerTest {
                     mock(IntegrationPoisonHandler.class),
                     new IntegrationConsumerStats(),
                     activityRecorder,
-                    List.of());
+                    List.of(),
+                    NatsTraceContexts.none());
         }
 
         @Test
@@ -567,7 +571,8 @@ class IntegrationNatsConsumerTest {
                         mock(IntegrationPoisonHandler.class),
                         new IntegrationConsumerStats(),
                         mock(ConnectionActivityRecorder.class),
-                        List.of());
+                        List.of(),
+                        NatsTraceContexts.none());
                 this.failingStreams = new ConcurrentSkipListSet<>(failingStreams);
                 this.subscribedStreams = subscribedStreams;
             }

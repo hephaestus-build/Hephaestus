@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsTraceContext;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.nats.client.Connection;
 import io.nats.client.JetStream;
@@ -57,8 +58,11 @@ class WebhookProducerBeans {
 
     @Bean
     JetStreamPublisher jetStreamPublisher(
-            JetStream jetStream, WebhookProperties properties, MeterRegistry meterRegistry) {
-        return new JetStreamPublisher(jetStream, properties, meterRegistry);
+            JetStream jetStream,
+            WebhookProperties properties,
+            MeterRegistry meterRegistry,
+            NatsTraceContext traceContext) {
+        return new JetStreamPublisher(jetStream, properties, meterRegistry, traceContext);
     }
 
     @Bean

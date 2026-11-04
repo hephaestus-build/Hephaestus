@@ -1024,6 +1024,16 @@ the HTTP outcome and the token usage that the provider reported, as `gen_ai.usag
 `gen_ai.usage.output_tokens`. A reranking call that a provider billed in search units records
 `hephaestus.usage.search_units` instead.
 
+A provider event crosses the message broker between the webhook role and the server.
+The webhook role writes the trace context of its request into the message, as the W3C `traceparent` header.
+The server continues that trace in a consumer span, `process <stream>`, around the handler.
+The handler's provider calls are child spans of it.
+Thus, one trace shows the webhook request, the handling of the event, and the calls that the handling made.
+
+The consumer span records `messaging.system`, `messaging.operation.type` and `messaging.destination.name`, the message subject.
+A subject names the provider's owner and repository, as the URL of a provider call does.
+A message that a release before this one stored has no trace context, so its handling starts a new trace.
+
 Framework HTTP spans describe the transport. Prompts, tool results, request bodies,
 headers and tokens used for authentication are not span attributes.
 

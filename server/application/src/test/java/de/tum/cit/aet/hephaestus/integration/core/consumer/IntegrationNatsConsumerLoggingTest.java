@@ -162,7 +162,8 @@ class IntegrationNatsConsumerLoggingTest {
                 poison,
                 new IntegrationConsumerStats(),
                 mock(ConnectionActivityRecorder.class),
-                List.of());
+                List.of(),
+                NatsTraceContexts.none());
     }
 
     @Test

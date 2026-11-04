@@ -199,7 +199,8 @@ class ScopeConsumerReconcileIntegrationTest {
                         mock(IntegrationPoisonHandler.class),
                         new IntegrationConsumerStats(),
                         mock(ConnectionActivityRecorder.class),
-                        List.of()) {
+                        List.of(),
+                        NatsTraceContexts.none()) {
                     // A real durable whose second subscribe (the subject recycle) fails once.
                     @Override
                     ScopeConsumer createScopeConsumer(Long scopeId, StreamSubscription subscription)
@@ -264,7 +265,8 @@ class ScopeConsumerReconcileIntegrationTest {
                         mock(IntegrationPoisonHandler.class),
                         stats,
                         mock(ConnectionActivityRecorder.class),
-                        List.of()) {
+                        List.of(),
+                        NatsTraceContexts.none()) {
                     // Real durables on both streams; the GitLab filter update fails once when armed.
                     @Override
                     ScopeConsumer createScopeConsumer(Long scopeId, StreamSubscription subscription)
@@ -342,7 +344,8 @@ class ScopeConsumerReconcileIntegrationTest {
                 mock(IntegrationPoisonHandler.class),
                 new IntegrationConsumerStats(),
                 mock(ConnectionActivityRecorder.class),
-                List.of());
+                List.of(),
+                NatsTraceContexts.none());
         consumer.onApplicationReady();
         return consumer;
     }
