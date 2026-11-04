@@ -2142,19 +2142,31 @@ export type ListedScanReportItem = {
  */
 export type LlmCallPool = {
     /**
+     * How many of the effective limit's calls only conversations may use
+     */
+    conversationReserve: number;
+    /**
+     * True for the pool a model has of its own; false for one that models share
+     */
+    dedicated: boolean;
+    /**
      * Human-readable name
      */
     displayName: string;
+    /**
+     * The calls in flight the pool allows now: the learned limit under the ceiling
+     */
+    effectiveLimit: number;
     /**
      * Pool id
      */
     id: number;
     /**
-     * Calls only conversations may use
+     * Calls in flight the provider is thought to serve, learned from its answers
      */
-    interactiveReserve: number;
+    learnedLimit: number;
     /**
-     * Most model calls in flight at once; null does not limit them
+     * Ceiling on the learned limit; null leaves it uncapped
      */
     maxConcurrentCalls?: number;
     /**
@@ -2166,17 +2178,20 @@ export type LlmCallPool = {
      * Unique slug; also the pool label of its metrics
      */
     slug: string;
+    /**
+     * When a provider's refusal last lowered the learned limit
+     */
+    throttledAt?: string;
     tokensPerCall?: number;
     tokensPerMinute?: number;
 };
 
 /**
- * Tenant-visible membership, without shared activity or cooldown information.
+ * Tenant-visible membership, without what the pool learned, its activity or its cooldown.
  */
 export type LlmCallPoolMembership = {
     displayName: string;
     id: number;
-    interactiveReserve: number;
     maxConcurrentCalls?: number;
     slug: string;
 };
@@ -2186,9 +2201,9 @@ export type LlmCallPoolMembership = {
  */
 export type LlmCallPoolModel = {
     /**
-     * The pool the model is in; null for none
+     * The pool the model is in; a model has its own until an admin moves it
      */
-    callPoolId?: number;
+    callPoolId: number;
     /**
      * Connection's display name
      */
@@ -2282,7 +2297,7 @@ export type LlmModel = {
      */
     brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
     /**
-     * The pool whose capacity the model's calls share; null for none
+     * The pool whose capacity the model's calls share; a model has its own by default
      */
     callPoolId?: number;
     /**
@@ -5328,11 +5343,7 @@ export type SaveLlmCallPoolRequest = {
      */
     displayName: string;
     /**
-     * Calls only conversations may use
-     */
-    interactiveReserve: number;
-    /**
-     * Most model calls in flight at once; null does not limit them
+     * Ceiling on the limit the pool learns; null leaves it uncapped
      */
     maxConcurrentCalls?: number;
     requestsPerMinute?: number;
@@ -7603,6 +7614,10 @@ export type AdminDeleteLlmCallPoolData = {
 };
 
 export type AdminDeleteLlmCallPoolErrors = {
+    /**
+     * The pool is a model's own
+     */
+    400: unknown;
     /**
      * Pool not found
      */

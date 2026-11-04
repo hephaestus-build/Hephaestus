@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -35,6 +36,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.job.TerminalUsageTestFixtures;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
@@ -63,6 +65,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
@@ -71,8 +74,11 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import mockwebserver3.Dispatcher;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
@@ -456,19 +462,18 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             pool.setSlug("scripts-" + UUID.randomUUID());
             pool.setDisplayName("Shared script and composition capacity");
             pool.setMaxConcurrentCalls(4);
-            pool.setRequestsPerMinute(3);
-            pool.setTokensPerMinute(300L);
+            // Background calls get three quarters of these rates, which is what this test uses up.
+            pool.setRequestsPerMinute(4);
+            pool.setTokensPerMinute(400L);
             pool.setTokensPerCall(100L);
             pool = callPools.saveAndFlush(pool);
             long poolId = pool.getId();
             for (var model : List.of(
                     snapshot.model(), Objects.requireNonNull(snapshot.practiceScriptSlot(ModelKind.EMBEDDING)))) {
-                var catalog = modelRepository
-                        .findById(Objects.requireNonNull(
-                                Objects.requireNonNull(model).modelId()))
-                        .orElseThrow();
-                catalog.setCallPoolId(poolId);
-                modelRepository.saveAndFlush(catalog);
+                jdbc.update(
+                        "UPDATE llm_model SET call_pool_id=? WHERE id=?",
+                        poolId,
+                        Objects.requireNonNull(model).modelId());
             }
             var capacity = new LlmCallPermits(
                     callPools,
@@ -524,6 +529,82 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             assertThat(upstream.getRequestCount()).isEqualTo(3);
             assertThat(callRows.rates(poolId).getRequests()).isEqualTo(3);
             assertThat(callRows.rates(poolId).getTokens()).isEqualTo(300);
+            assertThat(callRows.countActive(poolId)).isZero();
+        }
+    }
+
+    @Test
+    void shouldSlowAndServeEveryCallOfAModelNobodySetALimitForWhenItsProviderRefuses() throws Exception {
+        var inFlight = new AtomicInteger();
+        var refused = new AtomicInteger();
+        try (var upstream = new MockWebServer()) {
+            upstream.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) throws InterruptedException {
+                    try {
+                        if (inFlight.incrementAndGet() > 2) {
+                            refused.incrementAndGet();
+                            return new MockResponse.Builder()
+                                    .code(429)
+                                    .addHeader("Content-Type", "application/json")
+                                    .addHeader("Retry-After", "1")
+                                    .body("{\"error\":{\"message\":\"too many\"}}")
+                                    .build();
+                        }
+                        TimeUnit.MILLISECONDS.sleep(150);
+                        return json("{\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}");
+                    } finally {
+                        inFlight.decrementAndGet();
+                    }
+                }
+            });
+            upstream.start();
+            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
+            job.setLeasedUntil(Instant.now().plusSeconds(120));
+            job = jobRepository.saveAndFlush(job);
+            var model = Objects.requireNonNull(ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper)
+                    .model());
+            // No one made this pool: the model has it from the moment it exists.
+            long poolId = modelRepository
+                    .findById(Objects.requireNonNull(model.modelId()))
+                    .orElseThrow()
+                    .getCallPoolId();
+            var row = callPools.findById(poolId).orElseThrow();
+            assertThat(row.isDedicated()).isTrue();
+            assertThat(row.getMaxConcurrentCalls()).isNull();
+            var capacity = new LlmCallPermits(
+                    callPools,
+                    callRows,
+                    transactionTemplate,
+                    new LlmCallPoolProperties(Duration.ofMinutes(1), Duration.ofMinutes(5)),
+                    "worker-1",
+                    meterRegistry,
+                    modelResolver);
+            var service = proxyService(2_000_000, 1000, WebClient.create(), mock(LlmBudgetService.class), capacity);
+            ReviewJob activeJob = job;
+            try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
+                List<Future<ProxyResult>> calls = new ArrayList<>();
+                for (int i = 0; i < 6; i++)
+                    calls.add(requests.submit(() -> callPracticeScript(
+                            service,
+                            activeJob,
+                            "/internal/llm/practice-script/chat/chat/completions",
+                            PRACTICE,
+                            "{\"messages\":[]}")));
+                for (var call : calls)
+                    assertThat(call.get(60, TimeUnit.SECONDS).status()).isEqualTo(200);
+            }
+            var learned = callPools.findById(poolId).orElseThrow();
+            assertThat(refused.get()).isPositive();
+            assertThat(learned.getThrottledAt()).isNotNull();
+            assertThat(learned.getLearnedLimit()).isLessThan(8);
+            assertThat(meterRegistry
+                            .get(AgentMetrics.LLM_POOL_UPSTREAM_THROTTLED)
+                            .tag("pool", learned.getSlug())
+                            .tag("status", "429")
+                            .counter()
+                            .count())
+                    .isPositive();
             assertThat(callRows.countActive(poolId)).isZero();
         }
     }
@@ -613,7 +694,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             request.setRemoteAddr("127.0.0.1");
             request.addHeader("Authorization", "Bearer " + tokenFor(job));
             var response = new MockHttpServletResponse();
-            var service = proxyService(200_000, 1000, WebClient.create(), budget, mock(LlmCallPermits.class));
+            var service = proxyService(200_000, 1000, WebClient.create(), budget, admittingPermits());
             var body = objectMapper
                     .createObjectNode()
                     .put("model", "caller-model")
@@ -1022,7 +1103,16 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 maxSearchUnitsPerAttempt,
                 client,
                 mock(LlmBudgetService.class),
-                mock(LlmCallPermits.class));
+                admittingPermits());
+    }
+
+    /** A pool that admits every call, as a model is always in a pool. */
+    private static LlmCallPermits admittingPermits() {
+        var permits = mock(LlmCallPermits.class);
+        var permit = mock(LlmCallPermits.Permit.class);
+        when(permit.revoked()).thenReturn(Mono.never());
+        when(permits.acquire(anyLong(), any(), any(), any(), any())).thenReturn(permit);
+        return permits;
     }
 
     private LlmProxyService proxyService(

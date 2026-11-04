@@ -1960,24 +1960,27 @@ export const zCurrentUserView = z.object({
  * Provider capacity that the models in it share
  */
 export const zLlmCallPool = z.object({
+    conversationReserve: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    dedicated: z.boolean(),
     displayName: z.string(),
+    effectiveLimit: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     id: z.int(),
-    interactiveReserve: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    learnedLimit: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     maxConcurrentCalls: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     noCallBefore: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
     requestsPerMinute: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     slug: z.string(),
+    throttledAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
     tokensPerCall: z.int().optional(),
     tokensPerMinute: z.int().optional()
 });
 
 /**
- * Tenant-visible membership, without shared activity or cooldown information.
+ * Tenant-visible membership, without what the pool learned, its activity or its cooldown.
  */
 export const zLlmCallPoolMembership = z.object({
     displayName: z.string(),
     id: z.int(),
-    interactiveReserve: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     maxConcurrentCalls: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     slug: z.string()
 });
@@ -1986,7 +1989,7 @@ export const zLlmCallPoolMembership = z.object({
  * A model and the pool its calls share
  */
 export const zLlmCallPoolModel = z.object({
-    callPoolId: z.int().optional(),
+    callPoolId: z.int(),
     connectionDisplayName: z.string(),
     displayName: z.string(),
     host: z.string().optional(),
@@ -4620,7 +4623,6 @@ export const zReleaseStatus = z.object({
  */
 export const zSaveLlmCallPoolRequest = z.object({
     displayName: z.string().min(0).max(128),
-    interactiveReserve: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     maxConcurrentCalls: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     requestsPerMinute: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     slug: z.string().min(0).max(64).regex(/[a-z0-9]+(-[a-z0-9]+)*/),

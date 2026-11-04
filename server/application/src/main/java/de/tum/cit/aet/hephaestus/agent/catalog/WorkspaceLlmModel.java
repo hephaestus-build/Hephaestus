@@ -27,6 +27,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -137,11 +139,11 @@ public class WorkspaceLlmModel {
     private String priceNote;
 
     /**
-     * The {@link LlmCallPool} whose capacity the model's calls share; {@code null} for none, which does not limit them.
-     * Only the instance admin sets it. Backed by {@code sfk_ws_llm_model_call_pool}.
+     * The {@link LlmCallPool} whose capacity the model's calls share. The database gives a model its own when none is
+     * set, also when the model leaves a shared one. Only the instance admin moves it. Backed by {@code sfk_ws_llm_model_call_pool}.
      */
-    @Nullable
-    @Column(name = "call_pool_id")
+    @Generated(event = EventType.INSERT)
+    @Column(name = "call_pool_id", nullable = false, insertable = false, updatable = false)
     private Long callPoolId;
 
     @ColumnDefault("false")

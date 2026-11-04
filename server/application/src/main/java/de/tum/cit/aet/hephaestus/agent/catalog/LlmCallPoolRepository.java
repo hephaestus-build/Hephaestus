@@ -22,7 +22,18 @@ public interface LlmCallPoolRepository extends JpaRepository<LlmCallPool, Long> 
         @Nullable
         Integer getMaxConcurrentCalls();
 
-        int getInteractiveReserve();
+        int getLearnedLimit();
+
+        int getLimitCredit();
+
+        /** Whether the provider has not refused recently, so that {@link LlmCallLimit} may rise quickly. */
+        boolean getProbing();
+
+        /** When the limit last fell, as an opaque mark: a permit keeps the one it started under. */
+        @Nullable
+        Long getThrottleMark();
+
+        boolean getDedicated();
 
         @Nullable
         Integer getRequestsPerMinute();
@@ -39,7 +50,9 @@ public interface LlmCallPoolRepository extends JpaRepository<LlmCallPool, Long> 
 
     @Query(
             value = "SELECT slug AS \"slug\", max_concurrent_calls AS \"maxConcurrentCalls\","
-                    + " interactive_reserve AS \"interactiveReserve\","
+                    + " learned_limit AS \"learnedLimit\", limit_credit AS \"limitCredit\", dedicated AS \"dedicated\","
+                    + " throttled_at IS NULL OR throttled_at < clock_timestamp() - interval '10 minutes' AS \"probing\","
+                    + " CAST(EXTRACT(EPOCH FROM throttled_at) * 1000000 AS BIGINT) AS \"throttleMark\","
                     + " requests_per_minute AS \"requestsPerMinute\", tokens_per_minute AS \"tokensPerMinute\", tokens_per_call AS \"tokensPerCall\","
                     + " CAST(GREATEST(0, CEIL(EXTRACT(EPOCH FROM (no_call_before - clock_timestamp())) * 1000)) AS BIGINT)"
                     + " AS \"cooldownMillis\""
@@ -54,6 +67,22 @@ public interface LlmCallPoolRepository extends JpaRepository<LlmCallPool, Long> 
                     + " clock_timestamp() + make_interval(secs => :millis / 1000.0)) WHERE id = :id",
             nativeQuery = true)
     int coolDown(@Param("id") long id, @Param("millis") long millis);
+
+    /** Writes what the provider taught; the caller holds the pool row lock. */
+    @Modifying
+    @Query(
+            value = "UPDATE llm_call_pool SET learned_limit = :limit, limit_credit = :credit WHERE id = :id",
+            nativeQuery = true)
+    int learned(@Param("id") long id, @Param("limit") int limit, @Param("credit") int credit);
+
+    /** Lowers the limit and starts a new mark; the caller holds the pool row lock. */
+    @Modifying
+    @Query(
+            value = "UPDATE llm_call_pool SET learned_limit = :limit, limit_credit = 0,"
+                    + " throttled_at = clock_timestamp() WHERE id = :id",
+            nativeQuery = true)
+    int throttled(@Param("id") long id, @Param("limit") int limit);
+
     /** Serialize rare membership edits without taking admission locks on unrelated pools. */
     @Query(value = "SELECT true FROM pg_advisory_xact_lock(728193463)", nativeQuery = true)
     boolean lockMembership();

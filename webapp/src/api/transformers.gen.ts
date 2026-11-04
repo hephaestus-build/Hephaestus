@@ -62,6 +62,9 @@ const llmCallPoolSchemaResponseTransformer = (data: any) => {
     if (data.noCallBefore) {
         data.noCallBefore = new Date(data.noCallBefore);
     }
+    if (data.throttledAt) {
+        data.throttledAt = new Date(data.throttledAt);
+    }
     return data;
 };
 

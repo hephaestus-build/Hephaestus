@@ -6,7 +6,9 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.Answers.RETURNS_DEFAULTS;
 import static org.mockito.Answers.RETURNS_SELF;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -14,6 +16,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -140,6 +143,16 @@ class LlmProxyServiceTest extends BaseUnitTest {
     private LlmProxyService controller;
     private SimpleMeterRegistry meterRegistry;
 
+    /** A pool that admits every call, as a model is always in a pool. */
+    private static LlmCallPermits admittingPermits() {
+        LlmCallPermits permits = mock(LlmCallPermits.class);
+        LlmCallPermits.Permit permit = mock(LlmCallPermits.Permit.class);
+        lenient().when(permit.revoked()).thenReturn(Mono.never());
+        lenient().when(permits.acquire(anyLong(), any(), any(), any(), any())).thenReturn(permit);
+        lenient().when(permits.beforeRetry(any(), any(), any())).thenReturn(true);
+        return permits;
+    }
+
     @BeforeEach
     void setUp() {
         lenient().when(requestPolicy.allows(any())).thenReturn(true);
@@ -156,7 +169,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 routingService,
                 new ProxyCallsInFlight(12),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
-                mock(LlmCallPermits.class),
+                admittingPermits(),
                 new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
     }
 
@@ -643,7 +656,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     routingService,
                     new ProxyCallsInFlight(12),
                     new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
-                    mock(LlmCallPermits.class),
+                    admittingPermits(),
                     new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
             var routing = routing("openai-completions");
             authenticate(routing);
@@ -739,7 +752,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     routingService,
                     new ProxyCallsInFlight(12),
                     new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
-                    mock(LlmCallPermits.class),
+                    admittingPermits(),
                     new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
             authenticate(practiceScriptRouting(slot, protocol));
             when(resolver.resolveProxyCredential(any())).thenReturn(credential(protocol, LlmAuthMode.BEARER));
@@ -779,7 +792,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         private LlmProxyService streamingController;
         private SimpleMeterRegistry streamingMeterRegistry;
         private final ProxyCallsInFlight streamingCalls = new ProxyCallsInFlight(12);
-        private final LlmCallPermits streamingPermits = mock(LlmCallPermits.class);
+        private final LlmCallPermits streamingPermits = admittingPermits();
         private final CircuitBreakerRegistry streamingBreakers = CircuitBreakerRegistry.ofDefaults();
         private final LlmConnectionHealth streamingHealth = new LlmConnectionHealth(streamingBreakers);
 
@@ -862,7 +875,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-completions",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
             MockHttpServletResponse response = new MockHttpServletResponse();
             controllerProxy(response);
             return response;
@@ -899,7 +913,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             stubCredential(
                     routing,
                     new LlmModelResolver.ProxyCredential(
-                            baseUrl, "openai-completions", LlmAuthMode.BEARER, "catalog-model", "secret"));
+                            baseUrl, "openai-completions", LlmAuthMode.BEARER, "catalog-model", "secret", 42L));
             MockHttpServletResponse response = new MockHttpServletResponse();
             controllerProxy(response);
             return response;
@@ -1028,23 +1042,140 @@ class LlmProxyServiceTest extends BaseUnitTest {
             verify(permit).close();
         }
 
-        @Test
-        @DisplayName("a rate limit answer pauses the model's pool and still reaches the caller")
-        void aRateLimitAnswerPausesThePool() throws Exception {
+        private LlmCallPermits.Permit throttledPermit(@Nullable Duration asked) {
             LlmCallPermits.Permit permit = mock(LlmCallPermits.Permit.class);
             when(permit.revoked()).thenReturn(Mono.never());
-            upstream.enqueue(new MockResponse.Builder()
-                    .code(429)
-                    .addHeader("Retry-After", "3")
-                    .body("{\"error\":{\"message\":\"busy\"}}")
-                    .build());
+            when(streamingPermits.throttled(eq(permit), anyInt(), any(), anyBoolean()))
+                    .thenReturn(asked);
+            return permit;
+        }
+
+        private MockResponse refused(int status, String body, String... retryAfter) {
+            var response = new MockResponse.Builder()
+                    .code(status)
+                    .addHeader("Content-Type", "application/json")
+                    .body(body);
+            for (String value : retryAfter) response.addHeader("Retry-After", value);
+            return response.build();
+        }
+
+        private MockResponse servedAnswer() {
+            return new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"choices\":[{\"message\":{\"content\":\"complete\"}}]}")
+                    .build();
+        }
+
+        @Test
+        @DisplayName("a rate limit answer lowers the pool's limit and the caller only waits")
+        void aRateLimitAnswerSlowsTheCallerWithoutFailingIt() throws Exception {
+            LlmCallPermits.Permit permit = throttledPermit(Duration.ofSeconds(3));
+            upstream.enqueue(refused(429, "{\"error\":{\"message\":\"busy\"}}", "3"));
+            upstream.enqueue(servedAnswer());
+
+            Answer answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
+
+            assertThat(answer.status()).isEqualTo(200);
+            assertThat(answer.body()).contains("complete");
+            assertThat(upstream.getRequestCount()).isEqualTo(2);
+            verify(streamingPermits)
+                    .throttled(
+                            eq(permit),
+                            eq(429),
+                            argThat(headers -> "3".equals(headers.getFirst("Retry-After"))),
+                            eq(true));
+            verify(permit).absorbed();
+            verify(permit).served(true);
+            verify(permit, times(2)).close();
+        }
+
+        @Test
+        @DisplayName("an overload answer lowers the pool's limit, and the connection's breaker hears nothing")
+        void anOverloadAnswerSlowsTheCallerWithoutFailingIt() throws Exception {
+            LlmCallPermits.Permit permit = throttledPermit(Duration.ofSeconds(5));
+            upstream.enqueue(refused(529, "{\"error\":{\"type\":\"overloaded_error\"}}"));
+            upstream.enqueue(refused(503, "{\"error\":{\"message\":\"busy\"}}", "1"));
+            upstream.enqueue(servedAnswer());
+
+            Answer answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
+
+            assertThat(answer.status()).isEqualTo(200);
+            assertThat(upstream.getRequestCount()).isEqualTo(3);
+            assertThat(streamingBreakers
+                            .circuitBreaker("llm-connection-INSTANCE-7")
+                            .getMetrics()
+                            .getNumberOfFailedCalls())
+                    .isZero();
+        }
+
+        @Test
+        @DisplayName("a pause past the wait a call can take reaches the caller as the provider's answer")
+        void aLongPauseReachesTheCaller() throws Exception {
+            LlmCallPermits.Permit permit = throttledPermit(Duration.ofHours(1));
+            upstream.enqueue(refused(429, "{\"error\":{\"message\":\"daily limit\"}}", "3600"));
 
             Answer answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
 
             assertThat(answer.status()).isEqualTo(429);
-            verify(streamingPermits)
-                    .coolDown(eq(permit), argThat(headers -> "3".equals(headers.getFirst("Retry-After"))));
-            verify(permit).close();
+            assertThat(answer.body()).contains("daily limit");
+            assertThat(upstream.getRequestCount()).isEqualTo(1);
+            verify(permit, never()).absorbed();
+        }
+
+        @Test
+        @DisplayName("a spent account reaches the caller, as no wait mends it")
+        void aSpentAccountReachesTheCaller() throws Exception {
+            LlmCallPermits.Permit permit = throttledPermit(Duration.ofSeconds(1));
+            upstream.enqueue(refused(429, "{\"error\":{\"code\":\"insufficient_quota\"}}", "1"));
+
+            Answer answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
+
+            assertThat(answer.status()).isEqualTo(429);
+            assertThat(upstream.getRequestCount()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("a 503 that names no pause may be an outage: the caller and the breaker hear it at once")
+        void anOutageReachesTheCallerAndTheBreaker() throws Exception {
+            LlmCallPermits.Permit permit = throttledPermit(Duration.ofSeconds(5));
+            upstream.enqueue(refused(503, "{\"error\":{\"message\":\"down\"}}"));
+
+            Answer answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
+
+            assertThat(answer.status()).isEqualTo(503);
+            assertThat(upstream.getRequestCount()).isEqualTo(1);
+            assertThat(streamingBreakers
+                            .circuitBreaker("llm-connection-INSTANCE-7")
+                            .getMetrics()
+                            .getNumberOfFailedCalls())
+                    .isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("a workspace credential's limit in a pool that models share reaches only its caller")
+        void aWorkspaceCredentialInASharedPoolReachesItsCaller() throws Exception {
+            LlmCallPermits.Permit permit = throttledPermit(null);
+            upstream.enqueue(refused(429, "{\"error\":{\"message\":\"busy\"}}", "1"));
+
+            Answer answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
+
+            assertThat(answer.status()).isEqualTo(429);
+            assertThat(upstream.getRequestCount()).isEqualTo(1);
+            verify(permit, never()).absorbed();
+        }
+
+        @Test
+        @DisplayName("a client error says nothing about capacity, and the limit stays")
+        void aClientErrorLeavesTheLimitAlone() throws Exception {
+            LlmCallPermits.Permit permit = throttledPermit(null);
+            upstream.enqueue(refused(400, "{\"error\":{\"message\":\"bad request\"}}"));
+
+            Answer answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
+
+            assertThat(answer.status()).isEqualTo(400);
+            verify(streamingPermits, never()).throttled(any(), anyInt(), any(), anyBoolean());
+            verify(permit, never()).served(anyBoolean());
         }
 
         @Test
@@ -1163,7 +1294,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-completions",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
             MockHttpServletResponse response = new MockHttpServletResponse();
             controllerProxy(response);
             return response;
@@ -1265,7 +1397,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-completions",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
 
             ResponseEntity<?> result = streamingController.proxy(
                     request("POST", "/internal/llm/chat/completions"),
@@ -1299,7 +1432,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-completions",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
             upstream.enqueue(new MockResponse.Builder()
                     .code(503)
                     .addHeader("Content-Type", "application/json")
@@ -1406,7 +1540,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-completions",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
             upstream.enqueue(new MockResponse.Builder()
                     .code(503)
                     .addHeader("Content-Type", "application/json")
@@ -1441,7 +1576,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-completions",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
 
             ResponseEntity<?> result = streamingController.proxy(
                     request("POST", "/internal/llm/chat/completions"),
@@ -1471,7 +1607,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-completions",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
             for (int call = 0; call < 3; call++) {
                 upstream.enqueue(new MockResponse.Builder()
                         .code(400)
@@ -1534,7 +1671,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-completions",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
 
             controllerProxy(new MockHttpServletResponse());
 
@@ -1557,7 +1695,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             stubCredential(
                     routing,
                     new LlmModelResolver.ProxyCredential(
-                            closed, "openai-completions", LlmAuthMode.BEARER, "catalog-model", "secret"));
+                            closed, "openai-completions", LlmAuthMode.BEARER, "catalog-model", "secret", 42L));
 
             controllerProxy(new MockHttpServletResponse());
 
@@ -1583,7 +1721,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-completions",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
             MockHttpServletResponse response = new MockHttpServletResponse();
             var security = SecurityContextHolder.getContext();
             CompletableFuture<Void> call = CompletableFuture.runAsync(() -> {
@@ -1622,7 +1761,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-completions",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
             var security = SecurityContextHolder.getContext();
             CompletableFuture<Void> call = CompletableFuture.runAsync(() -> {
                 SecurityContextHolder.setContext(security);
@@ -1672,7 +1812,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     routingService,
                     calls,
                     new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
-                    mock(LlmCallPermits.class),
+                    admittingPermits(),
                     new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
             upstream.enqueue(new MockResponse.Builder()
                     .code(200)
@@ -1692,7 +1832,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-completions",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
             var security = SecurityContextHolder.getContext();
             CompletableFuture<@Nullable ResponseEntity<?>> call = CompletableFuture.supplyAsync(() -> {
                 SecurityContextHolder.setContext(security);
@@ -1801,7 +1942,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-completions",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
             MockHttpServletResponse response = new MockHttpServletResponse();
 
             controllerProxy(response);
@@ -1852,7 +1994,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-responses",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
             MockHttpServletResponse response = new MockHttpServletResponse();
 
             streamingController.proxy(
@@ -1890,7 +2033,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             "openai-completions",
                             LlmAuthMode.BEARER,
                             "catalog-model",
-                            "secret"));
+                            "secret",
+                            42L));
         }
 
         private @Nullable ResponseEntity<?> proxyReview(ProxyRouting routing, HttpServletResponse response) {
@@ -2142,7 +2286,12 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 stubCredential(
                         routing,
                         new LlmModelResolver.ProxyCredential(
-                                base + "/v1", "openai-completions", LlmAuthMode.BEARER, "catalog-model", "secret"));
+                                base + "/v1",
+                                "openai-completions",
+                                LlmAuthMode.BEARER,
+                                "catalog-model",
+                                "secret",
+                                42L));
                 authenticate(routing);
                 MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -2374,7 +2523,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         @Test
         void shouldNotInjectAuthWhenKeyIsBlank() {
             var credential = new LlmModelResolver.ProxyCredential(
-                    "https://api.example.com/v1", "openai-completions", LlmAuthMode.BEARER, "catalog-model", " ");
+                    "https://api.example.com/v1", "openai-completions", LlmAuthMode.BEARER, "catalog-model", " ", 42L);
 
             HttpHeaders output = LlmProxyService.buildUpstreamHeaders(incomingHeaders(), credential);
 
@@ -2488,7 +2637,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
     private static LlmModelResolver.ProxyCredential credential(String protocol, LlmAuthMode authMode) {
         return new LlmModelResolver.ProxyCredential(
-                "https://api.example.com/v1", protocol, authMode, "catalog-model", "secret");
+                "https://api.example.com/v1", protocol, authMode, "catalog-model", "secret", 42L);
     }
 
     private void authenticate(ProxyRouting routing) {

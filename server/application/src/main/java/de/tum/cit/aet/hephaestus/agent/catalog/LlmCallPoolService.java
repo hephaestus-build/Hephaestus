@@ -26,6 +26,9 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class LlmCallPoolService {
 
+    /** What the database's trigger starts the slug of a model's own pool with. */
+    private static final String OWN_POOL_SLUG = "own-";
+
     private final LlmCallPoolRepository pools;
     private final LlmModelRepository instanceModels;
     private final WorkspaceLlmModelRepository workspaceModels;
@@ -45,6 +48,9 @@ public class LlmCallPoolService {
 
     @Transactional
     public LlmCallPool create(SaveLlmCallPoolRequestDTO request) {
+        if (request.slug().startsWith(OWN_POOL_SLUG))
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "A call pool's slug cannot start with " + OWN_POOL_SLUG + ".");
         if (pools.existsBySlug(request.slug())) throw new LlmCallPoolSlugConflictException(request.slug(), null);
         LlmCallPool pool = new LlmCallPool();
         pool.setSlug(request.slug());
@@ -69,11 +75,12 @@ public class LlmCallPoolService {
         return pool;
     }
 
-    /** Removing an idle pool makes its models unpooled. Active calls must close first. */
+    /** Removing an idle shared pool gives each of its models a pool of its own. Active calls must close first. */
     @Transactional
     public void delete(Long id) {
         lockMembership();
         LlmCallPool pool = idle(id);
+        requireShared(pool, "A model's own call pool ends with the model.");
         instanceModels.leaveCallPool(id);
         workspaceModels.leaveCallPool(id);
         permits.deleteClosed(id);
@@ -123,12 +130,12 @@ public class LlmCallPoolService {
                             && request.instanceModelIds().contains(model.modelId()))
                     || (model.scope() == UsageFundingSource.WORKSPACE
                             && request.workspaceModelIds().contains(model.modelId()))) {
-                Long source = model.callPoolId();
-                if (source != null) affected.add(source);
+                affected.add(model.callPoolId());
             }
         }
         for (Long poolId : affected) idle(poolId);
         LlmCallPool pool = get(id);
+        requireShared(pool, "A model's own call pool takes no other model. Create a pool for the models to share.");
         instanceModels.leaveCallPool(id);
         workspaceModels.leaveCallPool(id);
         join(id, request.instanceModelIds(), "LlmModel", instanceModels::joinCallPool);
@@ -147,6 +154,10 @@ public class LlmCallPoolService {
         if (join.apply(poolId, distinct) != distinct.size()) {
             throw new EntityNotFoundException(entity, distinct.toString());
         }
+    }
+
+    private static void requireShared(LlmCallPool pool, String refusal) {
+        if (pool.isDedicated()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, refusal);
     }
 
     private void lockMembership() {
@@ -171,7 +182,6 @@ public class LlmCallPoolService {
     private static void apply(LlmCallPool pool, SaveLlmCallPoolRequestDTO request) {
         pool.setDisplayName(request.displayName().strip());
         pool.setMaxConcurrentCalls(request.maxConcurrentCalls());
-        pool.setInteractiveReserve(request.interactiveReserve());
         pool.setRequestsPerMinute(request.requestsPerMinute());
         pool.setTokensPerMinute(request.tokensPerMinute());
         pool.setTokensPerCall(request.tokensPerCall());

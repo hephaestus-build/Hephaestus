@@ -73,7 +73,7 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
     @ParameterizedTest
     @EnumSource(value = LlmCallClass.class, names = "PRODUCT_FEEDBACK", mode = EnumSource.Mode.EXCLUDE)
     void shouldGrantHigherClassesWhenProductFeedbackWasQueuedFirst(LlmCallClass higher) throws Exception {
-        long pool = pool(1, 0);
+        long pool = pool(1);
         var occupied = admit(first, pool, LlmCallClass.EVENT, 1L);
         var feedback = submit(first, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
         awaitWaiting(pool, LlmCallClass.PRODUCT_FEEDBACK);
@@ -91,8 +91,8 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldAdmitFeedbackWhenHigherDemandTargetsAnotherEndpoint() throws Exception {
-        long busyPool = pool(1, 0);
-        long idlePool = pool(1, 0);
+        long busyPool = pool(1);
+        long idlePool = pool(1);
         admit(first, busyPool, LlmCallClass.EVENT, 1L);
         var review = submit(second, busyPool, LlmCallClass.REQUEST, 2L);
         awaitWaiting(busyPool, LlmCallClass.REQUEST);
@@ -104,7 +104,7 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldLeaveInteractiveCapacityWhenFeedbackWaits() throws Exception {
-        long pool = pool(2, 1);
+        long pool = pool(2);
         var occupied = admit(first, pool, LlmCallClass.EVENT, 1L);
         var feedback = submit(first, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
         awaitWaiting(pool, LlmCallClass.PRODUCT_FEEDBACK);
@@ -118,7 +118,7 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldLimitFeedbackToOneCallWhenWorkersShareAPool() throws Exception {
-        long pool = pool(3, 1);
+        long pool = pool(3);
         var feedback = admit(first, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
         var another = submit(second, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
         awaitWaiting(pool, LlmCallClass.PRODUCT_FEEDBACK);
@@ -138,7 +138,7 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldRetainFeedbackUntilClosureWhenAHigherClassArrives() throws Exception {
-        long pool = pool(1, 0);
+        long pool = pool(1);
         var feedback = admit(first, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
         var review = submit(second, pool, LlmCallClass.REQUEST, 2L);
         awaitWaiting(pool, LlmCallClass.REQUEST);
@@ -156,7 +156,7 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldGrantOnlyOneFeedbackCallWhenWorkersAcquireTogether() throws Exception {
-        long pool = pool(4, 1);
+        long pool = pool(4);
         var start = new CyclicBarrier(2);
         var a = calls.submit(() -> {
             start.await(10, TimeUnit.SECONDS);
@@ -195,7 +195,7 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldWaitForSharedCooldownWhenFeedbackRequestsAGrant() throws Exception {
-        long pool = pool(2, 0);
+        long pool = pool(2);
         var cooling = pools.findById(pool).orElseThrow();
         cooling.setNoCallBefore(Instant.now().plusSeconds(30));
         pools.saveAndFlush(cooling);
@@ -210,10 +210,11 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldDebitSharedRateBudgetWhenFeedbackRetries() {
-        long pool = pool(3, 0);
+        long pool = pool(3);
         var budget = pools.findById(pool).orElseThrow();
-        budget.setRequestsPerMinute(3);
-        budget.setTokensPerMinute(300L);
+        // Background calls get two thirds of these rates.
+        budget.setRequestsPerMinute(5);
+        budget.setTokensPerMinute(500L);
         budget.setTokensPerCall(100L);
         pools.saveAndFlush(budget);
         admit(first, pool, LlmCallClass.REQUEST, 2L).close();
@@ -234,13 +235,15 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
         assertThat(rates.getTokens()).isEqualTo(300);
     }
 
-    private long pool(int maximum, int reserve) {
+    /** A pool that has already learned its maximum, so that the maximum decides in these tests. */
+    private long pool(int maximum) {
         var pool = new LlmCallPool();
         pool.setSlug("pf-" + UUID.randomUUID());
         pool.setDisplayName("Product feedback contention");
         pool.setMaxConcurrentCalls(maximum);
-        pool.setInteractiveReserve(reserve);
-        return pools.saveAndFlush(pool).getId();
+        long id = pools.saveAndFlush(pool).getId();
+        jdbc.update("UPDATE llm_call_pool SET learned_limit=? WHERE id=?", maximum, id);
+        return id;
     }
 
     private Future<LlmCallPermits.Permit> submit(

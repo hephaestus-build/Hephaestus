@@ -80,7 +80,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     void shouldHoldTheReferenceBudgetAndEightTurnReserveAcrossTwoWorkers(TestReporter reporter) throws Exception {
         workerA.start();
         workerB.start();
-        long pool = pool(32, 8);
+        long pool = pool(32);
         List<LlmCallPermits.Permit> reviews = new ArrayList<>();
         for (int i = 0; i < 24; i++) reviews.add(admit(i % 2 == 0 ? workerA : workerB, pool, LlmCallClass.REQUEST, 1));
         assertThat(probe(workerA, pool, LlmCallClass.EVENT, 1)).isNull();
@@ -124,7 +124,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldNeverExceedCapacityWhenTwoWorkersGrantConcurrently() throws Exception {
-        long pool = pool(3, 0);
+        long pool = pool(3);
         AtomicInteger active = new AtomicInteger();
         AtomicInteger peak = new AtomicInteger();
         try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -149,7 +149,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldServeAnotherWorkspaceAndCompositionBeforeABusyWorkspaceRepeats() throws Exception {
-        long pool = pool(1, 0);
+        long pool = pool(1);
         var busy = admit(workerA, pool, LlmCallClass.EVENT, 1);
         try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
             var repeat = calls.submit(() -> admit(workerA, pool, LlmCallClass.EVENT, 1));
@@ -170,7 +170,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldCancelAnExpiredLocalLeaseBeforeTheNextFenceTick() {
-        long pool = pool(1, 0);
+        long pool = pool(1);
         try (var call = admit(workerA, pool, LlmCallClass.EVENT, 1)) {
             ReflectionTestUtils.setField(
                     call,
@@ -186,7 +186,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldCancelAReclaimedGrantOnRenewalWithoutReleasingItsReplacement() {
-        long pool = pool(1, 0);
+        long pool = pool(1);
         try (var expired = admit(workerA, pool, LlmCallClass.EVENT, 1)) {
             var active = workerAMeters
                     .get(AgentMetrics.LLM_POOL_PERMITS_ACTIVE)
@@ -211,7 +211,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldRetainARevokedPermitUntilItsCallCloses() {
-        long pool = pool(1, 0);
+        long pool = pool(1);
         var call = admit(workerA, pool, LlmCallClass.EVENT, 1);
         workerA.fence(System.nanoTime() + PROPERTIES.selfFenceAfter().toNanos() + 1);
         assertThat(call.isRevoked()).isTrue();
@@ -238,7 +238,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldRetainRateDebitsAndFenceTheExpiredOwnerAfterReclaimingCapacity() {
-        long pool = pool(1, 0);
+        long pool = pool(1);
         var expired = admit(workerA, pool, LlmCallClass.EVENT, 1);
         jdbc.update(
                 "UPDATE llm_call_permit SET tokens=17,renewed_at=clock_timestamp()-interval '21 seconds' WHERE pool_id=?",
@@ -259,7 +259,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldRejectExpiredRenewalAndRetryBeforeAnotherWorkerPrunes() {
-        long pool = pool(1, 0);
+        long pool = pool(1);
         var call = admit(workerA, pool, LlmCallClass.EVENT, 1);
         var row = jdbc.queryForMap("SELECT id,worker_id FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE'", pool);
         jdbc.update(
@@ -280,7 +280,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldRenewQueuedCallsWhileAnotherWaiterHoldsLocalAdmission() throws Exception {
-        long pool = pool(1, 0);
+        long pool = pool(1);
         var gatedPools = mock(LlmCallPoolRepository.class);
         var blockNext = new AtomicBoolean();
         var entered = new CompletableFuture<Void>();
@@ -347,7 +347,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldStopAnEndedWaiterWithoutGrantingIt() throws Exception {
-        long pool = pool(1, 0);
+        long pool = pool(1);
         var held = admit(workerA, pool, LlmCallClass.EVENT, 1);
         AtomicBoolean ended = new AtomicBoolean();
         try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -363,7 +363,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldShareRequestAndTokenRatesAcrossCompositionScriptsAndWorkers() {
-        long pool = pool(8, 0);
+        long pool = pool(8);
         transactions.executeWithoutResult(status -> {
             var settings = pools.findById(pool).orElseThrow();
             settings.setRequestsPerMinute(3);
@@ -373,8 +373,9 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         });
         admit(workerA, pool, LlmCallClass.EVENT, 1).close();
         admit(workerB, pool, LlmCallClass.COMPOSITION, 2).close();
-        var script = admit(workerB, pool, LlmCallClass.REQUEST, 2);
-        script.close();
+        // Background calls get three quarters of the limit, and so of the rates. The rest stays for a conversation.
+        assertThat(probe(workerB, pool, LlmCallClass.REQUEST, 2)).isNull();
+        admit(workerB, pool, LlmCallClass.TURN, 2).close();
         assertThat(probe(workerA, pool, LlmCallClass.TURN, 1)).isNull();
         assertThat(rows.rates(pool).getRequests()).isEqualTo(3);
         assertThat(rows.rates(pool).getTokens()).isEqualTo(300);
@@ -385,7 +386,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldDebitPhysicalRetriesInTheSameRateAccount() {
-        long pool = pool(4, 0);
+        long pool = pool(4);
         var call = admit(workerA, pool, LlmCallClass.COMPOSITION, 1);
         assertThat(workerA.beforeRetry(call, () -> false, Instant.now().plusSeconds(2)))
                 .isTrue();
@@ -395,7 +396,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepAnInteractiveRateShareWhenBackgroundWorkIsBusy() {
-        long pool = pool(4, 1);
+        long pool = pool(4);
         transactions.executeWithoutResult(status -> {
             var settings = pools.findById(pool).orElseThrow();
             settings.setRequestsPerMinute(4);
@@ -408,14 +409,14 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepTheLongerProviderCooldownAcrossWorkers() {
-        long pool = pool(4, 0);
+        long pool = pool(4);
         var call = admit(workerA, pool, LlmCallClass.EVENT, 1);
         HttpHeaders longPause = new HttpHeaders();
         longPause.set(HttpHeaders.RETRY_AFTER, "30");
-        workerA.coolDown(call, longPause);
+        workerA.throttled(call, 429, longPause, true);
         HttpHeaders shortPause = new HttpHeaders();
         shortPause.set(HttpHeaders.RETRY_AFTER, "1");
-        workerA.coolDown(call, shortPause);
+        workerA.throttled(call, 429, shortPause, true);
         call.close();
         assertThat(probe(workerB, pool, LlmCallClass.TURN, 2)).isNull();
         var deadline = Objects.requireNonNull(pools.findById(pool).orElseThrow().getNoCallBefore());
@@ -424,14 +425,14 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldCloseAFreshGrantWhenTheFinalOwnershipReadThrows() {
-        long pool = pool(1, 0);
+        long pool = pool(1);
         AtomicInteger checks = new AtomicInteger();
         assertThatThrownBy(() -> workerA.acquire(
                         pool,
                         LlmCallClass.REQUEST,
                         caller(1),
                         () -> {
-                            if (checks.incrementAndGet() == 3) throw new IllegalStateException("ownership read failed");
+                            if (checks.incrementAndGet() == 2) throw new IllegalStateException("ownership read failed");
                             return false;
                         },
                         Instant.now().plusSeconds(5)))
@@ -444,7 +445,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepTurnHistoryOutOfBackgroundWorkspaceFairness() throws Exception {
-        long pool = pool(3, 1);
+        long pool = pool(3);
         var busy = admit(workerB, pool, LlmCallClass.EVENT, 2);
         var otherBusy = admit(workerB, pool, LlmCallClass.EVENT, 2);
         try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -484,8 +485,8 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepAnActiveCallWhileItsAttemptAcquiresAnotherPool() {
-        long primary = pool(1, 0);
-        long auxiliary = pool(1, 0);
+        long primary = pool(1);
+        long auxiliary = pool(1);
         var caller = caller(1);
         try (var active = Objects.requireNonNull(workerA.acquire(
                 primary,
@@ -510,7 +511,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldRefuseToWaitForCapacityInsideAnOpenTransaction() {
-        long pool = pool(1, 0);
+        long pool = pool(1);
         transactions.executeWithoutResult(status -> assertThatThrownBy(() -> workerA.acquire(
                         pool,
                         LlmCallClass.REQUEST,
@@ -522,13 +523,15 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         assertThat(rows.countActive(pool)).isZero();
     }
 
-    private long pool(int maximum, int reserve) {
+    /** A pool that has already learned its maximum, so that the maximum decides in these tests. */
+    private long pool(int maximum) {
         var pool = new LlmCallPool();
         pool.setSlug("pool-" + UUID.randomUUID());
         pool.setDisplayName("Endpoint");
         pool.setMaxConcurrentCalls(maximum);
-        pool.setInteractiveReserve(reserve);
-        return pools.save(pool).getId();
+        long id = pools.save(pool).getId();
+        jdbc.update("UPDATE llm_call_pool SET learned_limit=? WHERE id=?", maximum, id);
+        return id;
     }
 
     private static LlmCallPermits.Caller caller(long workspace) {

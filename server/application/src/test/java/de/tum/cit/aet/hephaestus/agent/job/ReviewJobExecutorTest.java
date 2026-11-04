@@ -168,7 +168,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         });
         var telemetry = new ReviewJobTelemetry(meters, Tracer.NOOP);
         var callPermits = mock(LlmCallPermits.class);
-        lenient().when(callPermits.poolFor(any())).thenReturn(null);
+        lenient().when(callPermits.poolFor(any())).thenReturn(1L);
         return new ReviewJobExecutor(
                 properties(),
                 jobs,

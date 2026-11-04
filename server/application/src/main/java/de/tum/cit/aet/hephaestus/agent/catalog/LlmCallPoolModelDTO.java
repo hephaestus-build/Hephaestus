@@ -29,5 +29,5 @@ public record LlmCallPoolModelDTO(
         @Nullable @Schema(description = "Slug of the workspace that owns the model; null for an instance model")
         String workspaceSlug,
 
-        @Nullable @Schema(description = "The pool the model is in; null for none")
+        @NonNull @Schema(description = "The pool the model is in; a model has its own until an admin moves it")
         Long callPoolId) {}

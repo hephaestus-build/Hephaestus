@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793744619975-1" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="Rename the call pools whose slug starts with own- before upgrading">
+            <sqlCheck expectedResult="0">SELECT count(*) FROM llm_call_pool WHERE slug LIKE 'own-%'</sqlCheck>
+        </preConditions>
+        <comment>The pool that the database makes for a model takes a slug with this prefix.</comment>
+        <empty/>
+        <rollback/>
+    </changeSet>
+    <changeSet id="1793744619975-2" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="llm_call_pool" columnName="learned_limit"/>
+            </not>
+        </preConditions>
+        <comment>A pool learns its limit from the provider and derives the conversation reserve from it, so the reserve no longer is a setting.</comment>
+        <addColumn tableName="llm_call_pool">
+            <column name="learned_limit" type="INTEGER" defaultValueNumeric="8">
+                <constraints nullable="false"/>
+            </column>
+            <column name="limit_credit" type="INTEGER" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="throttled_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="dedicated" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <dropColumn tableName="llm_call_pool" columnName="interactive_reserve"/>
+        <rollback>
+            <addColumn tableName="llm_call_pool">
+                <column name="interactive_reserve" type="INTEGER" defaultValueNumeric="0">
+                    <constraints nullable="false"/>
+                </column>
+            </addColumn>
+            <dropColumn tableName="llm_call_pool" columnName="dedicated"/>
+            <dropColumn tableName="llm_call_pool" columnName="throttled_at"/>
+            <dropColumn tableName="llm_call_pool" columnName="limit_credit"/>
+            <dropColumn tableName="llm_call_pool" columnName="learned_limit"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1793744619975-3" author="hephaestus">
+        <comment>Every model has a call pool. The database gives a model its own when it has none, whichever path wrote it, and ends that pool with the model or its move to a shared pool.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION llm_model_gets_own_call_pool() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.call_pool_id IS NULL THEN
+        INSERT INTO llm_call_pool (slug, display_name, dedicated, created_at, updated_at)
+        VALUES (TG_ARGV[0] || NEW.id, 'Own capacity of ' || TG_ARGV[0] || NEW.id, TRUE, now(), now())
+        RETURNING id INTO NEW.call_pool_id;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION llm_model_ends_own_call_pool() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' AND NEW.call_pool_id IS NOT DISTINCT FROM OLD.call_pool_id THEN
+        RETURN NULL;
+    END IF;
+    -- The pool row first, as admission locks it before it writes a permit.
+    PERFORM 1 FROM llm_call_pool WHERE id = OLD.call_pool_id AND dedicated FOR UPDATE;
+    IF FOUND THEN
+        DELETE FROM llm_call_permit WHERE pool_id = OLD.call_pool_id;
+        DELETE FROM llm_call_pool WHERE id = OLD.call_pool_id;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER llm_model_own_call_pool BEFORE INSERT OR UPDATE OF call_pool_id ON llm_model
+    FOR EACH ROW EXECUTE FUNCTION llm_model_gets_own_call_pool('own-model-');
+CREATE OR REPLACE TRIGGER llm_model_end_own_call_pool AFTER UPDATE OF call_pool_id OR DELETE ON llm_model
+    FOR EACH ROW EXECUTE FUNCTION llm_model_ends_own_call_pool();
+CREATE OR REPLACE TRIGGER workspace_llm_model_own_call_pool BEFORE INSERT OR UPDATE OF call_pool_id ON workspace_llm_model
+    FOR EACH ROW EXECUTE FUNCTION llm_model_gets_own_call_pool('own-workspace-model-');
+CREATE OR REPLACE TRIGGER workspace_llm_model_end_own_call_pool AFTER UPDATE OF call_pool_id OR DELETE ON workspace_llm_model
+    FOR EACH ROW EXECUTE FUNCTION llm_model_ends_own_call_pool();
+
+UPDATE llm_model SET call_pool_id = NULL WHERE call_pool_id IS NULL;
+UPDATE workspace_llm_model SET call_pool_id = NULL WHERE call_pool_id IS NULL;
+]]></sql>
+        <addNotNullConstraint tableName="llm_model" columnName="call_pool_id"/>
+        <addNotNullConstraint tableName="workspace_llm_model" columnName="call_pool_id"/>
+        <rollback>
+            <dropNotNullConstraint tableName="workspace_llm_model" columnName="call_pool_id"/>
+            <dropNotNullConstraint tableName="llm_model" columnName="call_pool_id"/>
+            <sql splitStatements="false"><![CDATA[
+DROP TRIGGER workspace_llm_model_end_own_call_pool ON workspace_llm_model;
+DROP TRIGGER workspace_llm_model_own_call_pool ON workspace_llm_model;
+DROP TRIGGER llm_model_end_own_call_pool ON llm_model;
+DROP TRIGGER llm_model_own_call_pool ON llm_model;
+DROP FUNCTION llm_model_ends_own_call_pool();
+DROP FUNCTION llm_model_gets_own_call_pool();
+DELETE FROM llm_call_permit WHERE pool_id IN (SELECT id FROM llm_call_pool WHERE dedicated);
+DELETE FROM llm_call_pool WHERE dedicated;
+]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -146,7 +146,7 @@ export const adminListLlmCallPoolModels = <ThrowOnError extends boolean = false>
 });
 
 /**
- * Delete a pool; its models are no longer limited
+ * Delete a shared pool; each of its models gets a pool of its own
  */
 export const adminDeleteLlmCallPool = <ThrowOnError extends boolean = false>(options: Options<AdminDeleteLlmCallPoolData, ThrowOnError>): RequestResult<AdminDeleteLlmCallPoolResponses, AdminDeleteLlmCallPoolErrors, ThrowOnError> => (options.client ?? client).delete<AdminDeleteLlmCallPoolResponses, AdminDeleteLlmCallPoolErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

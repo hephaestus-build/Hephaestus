@@ -131,9 +131,10 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     private ReviewJobExecutor executor;
     private final ReviewMethodVerifier methods = mock(ReviewMethodVerifier.class);
 
-    private static LlmCallPermits unpooledCalls() {
+    /** A pool with no one waiting. */
+    private static LlmCallPermits idleCalls() {
         var capacity = mock(LlmCallPermits.class);
-        when(capacity.poolFor(any())).thenReturn(null);
+        when(capacity.poolFor(any())).thenReturn(1L);
         return capacity;
     }
 
@@ -183,7 +184,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                         budgets,
                         admission,
                         new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                        unpooledCalls()),
+                        idleCalls()),
                 new ReviewJobRecovery(
                         jobs,
                         properties,
@@ -269,8 +270,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         pool.setMaxConcurrentCalls(2);
         pool = context.getBean(LlmCallPoolRepository.class).saveAndFlush(pool);
         var model = Objects.requireNonNull(binding.getInstanceModel());
-        model.setCallPoolId(pool.getId());
-        models.saveAndFlush(model);
+        jdbc.update("UPDATE llm_model SET call_pool_id=? WHERE id=?", pool.getId(), model.getId());
         return pool.getId();
     }
 
@@ -303,8 +303,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         jobs.saveAndFlush(running);
         var open = binding(DataHandlingTier.CLOUD);
         var model = Objects.requireNonNull(open.getInstanceModel());
-        model.setCallPoolId(poolId);
-        models.saveAndFlush(model);
+        jdbc.update("UPDATE llm_model SET call_pool_id=? WHERE id=?", poolId, model.getId());
         var runnable = queued(open);
         var capacity = LlmCallPermitsTestFixtures.worker(context, "test-worker");
         var polling = pooledExecutor(properties, capacity, roomySandboxes());
@@ -322,7 +321,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         var sandboxes = mock(SandboxManager.class);
         when(sandboxes.roomFor(any())).thenReturn(0, 1);
-        var polling = pooledExecutor(properties, unpooledCalls(), sandboxes);
+        var polling = pooledExecutor(properties, idleCalls(), sandboxes);
 
         assertThat(polling.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
         assertUnclaimed(job);
@@ -338,7 +337,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var second = queued(selected);
         var sandboxes = mock(SandboxManager.class);
         when(sandboxes.roomFor(any())).thenReturn(1);
-        var polling = pooledExecutor(properties, unpooledCalls(), sandboxes);
+        var polling = pooledExecutor(properties, idleCalls(), sandboxes);
 
         assertThat(polling.processJob(first.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
         assertThat(polling.processJob(second.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
@@ -354,7 +353,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         when(sandboxes.roomFor(any()))
                 .thenThrow(new IllegalStateException("quota unavailable"))
                 .thenReturn(1);
-        var polling = pooledExecutor(properties, unpooledCalls(), sandboxes);
+        var polling = pooledExecutor(properties, idleCalls(), sandboxes);
 
         assertThat(polling.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
         assertUnclaimed(job);
@@ -401,7 +400,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                     workspace.getId(),
                     UUID.randomUUID(),
                     0));
-            assertThat(rows.grant(active, 0, "active-call")).isEqualTo(1);
+            assertThat(rows.grant(active, 0)).isEqualTo(1);
         });
         var job = queued(selected);
         var capacity = LlmCallPermitsTestFixtures.worker(context, "test-worker");
@@ -586,7 +585,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                unpooledCalls());
+                idleCalls());
     }
 
     private void assertUnclaimed(ReviewJob job) {
@@ -654,8 +653,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         pool.setMaxConcurrentCalls(1);
         pool = context.getBean(LlmCallPoolRepository.class).saveAndFlush(pool);
         var selectedModel = Objects.requireNonNull(selected.getInstanceModel());
-        selectedModel.setCallPoolId(pool.getId());
-        models.saveAndFlush(selectedModel);
+        jdbc.update("UPDATE llm_model SET call_pool_id=? WHERE id=?", pool.getId(), selectedModel.getId());
         var job = queued(selected);
         var capacity = LlmCallPermitsTestFixtures.worker(context, "test-worker");
         var busyWorkspace = workspaces.saveAndFlush(TestEntities.activeWorkspace("busy-pool-" + UUID.randomUUID()));
@@ -844,7 +842,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                unpooledCalls());
+                idleCalls());
 
         var claim = claims.claimJob(job.getId(), () -> true, properties.maxRetries());
 
@@ -990,7 +988,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                unpooledCalls());
+                idleCalls());
 
         assertThat(claims.claimJob(job.getId(), () -> true, properties.maxRetries()))
                 .isInstanceOfSatisfying(
@@ -1022,7 +1020,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mock(LlmBudgetService.class),
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                unpooledCalls());
+                idleCalls());
 
         assertThat(claims.claimJob(job.getId(), () -> true, properties.maxRetries()))
                 .isInstanceOfSatisfying(

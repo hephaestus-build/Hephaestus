@@ -256,8 +256,8 @@ public class ReviewJobClaimService {
 
         if (!composing) {
             if (!reviewRoom.getAsBoolean()) return ClaimOutcome.QUOTA_FULL;
-            Long poolId = callPermits.poolFor(snapshot.model().connectionRef());
-            if (poolId != null && callPermits.hasBackgroundWaiters(poolId)) return new PoolWait(poolId);
+            long poolId = callPermits.poolFor(snapshot.model().connectionRef());
+            if (callPermits.hasBackgroundWaiters(poolId)) return new PoolWait(poolId);
         }
 
         if (!reviewStart.start(job.getWorkspaceId(), job.getReviewId())) return cancelWithParent(job);
