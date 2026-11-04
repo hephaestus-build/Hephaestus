@@ -50,6 +50,13 @@ class ProxyStreamUsageTapTest extends BaseUnitTest {
         assertThat(completions.observed()).isNotNull();
         assertThat(responses.stopReason()).isNull();
         assertThat(failed.stopReason()).isEqualTo("failed");
+        var incomplete = new ProxyStreamUsageTap(MAPPER, true);
+        // An incomplete answer's terminal event can name its reason without usage.
+        feed(
+                incomplete,
+                "data: {\"type\":\"response.incomplete\",\"response\":"
+                        + "{\"incomplete_details\":{\"reason\":\"max_output_tokens\"}}}\n\n");
+        assertThat(incomplete.stopReason()).isEqualTo("max_output_tokens");
     }
 
     @Test

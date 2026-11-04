@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -59,6 +60,9 @@ final class LlmPoolMeters {
      */
     static final List<String> CALL_OUTCOMES =
             List.of("completed", "length", "refused", "unanswered", "error", "stalled", "cancelled");
+
+    /** The outcomes that the provider stated, which a stream without content keeps instead of {@code unanswered}. */
+    static final Set<String> EXPLICIT_OUTCOMES = Set.of("refused", "length", "error");
 
     /** The token buckets that a provider bills apart. */
     static final List<String> TOKEN_TYPES = List.of("input", "output", "cache_read", "cache_write");

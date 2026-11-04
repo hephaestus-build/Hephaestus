@@ -682,14 +682,12 @@ public class LlmCallPermits {
         public void close() {
             if (!closed.compareAndSet(false, true)) return;
             String ended = outcome;
-            // The model's own stop reason outranks an answer without content: a refusal can come with no text.
+            // The provider's own word outranks an answer without content: a refusal or a failure can come with no text.
             if (ended != null)
                 meters.pool(pool)
                         .called(
                                 callClass,
-                                unanswered && !ended.equals("refused") && !ended.equals("length")
-                                        ? "unanswered"
-                                        : ended,
+                                unanswered && !LlmPoolMeters.EXPLICIT_OUTCOMES.contains(ended) ? "unanswered" : ended,
                                 endedAt - grantedAt);
             if (held.remove(id, this)) meters.pool(pool).active(callClass).decrementAndGet();
             pendingRelease.add(id);
