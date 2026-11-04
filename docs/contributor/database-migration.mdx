@@ -62,7 +62,7 @@ If a global table has a `workspace_id`, also record why in `GLOBAL_NAMING_A_WORK
 SQL tenancy enforcement does not check a global table, so its `workspace_id` gives no isolation.
 
 The provider mirror tables in `WorkspaceScopedTables.MIRROR_TABLES` have no `workspace_id`, because more than one workspace shares each row.
-A read of a mirror table binds the workspace through the monitored scope ([ADR 0077](../decisions/0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md)).
+A read of a mirror table binds the workspace through the monitored scope ([ADR 0077](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md)).
 Add a mirror table only for a new provider object that more than one workspace can monitor.
 
 The test also lists the tables from before this rule. Do not add to that list.
