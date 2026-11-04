@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth.spi;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -17,9 +18,10 @@ public interface GitProviderRegistry {
     @Nullable
     String providerServerUrl(@Nullable Long gitProviderId);
 
-    Optional<Long> findActorId(long gitProviderId, String subject);
-
     Optional<ActorProfile> actor(long actorId);
+
+    /** The human actors behind the account's enabled git provider links, oldest link first, in one read. */
+    List<ActorProfile> accountActors(long accountId);
 
     record ActorProfile(
             long actorId,

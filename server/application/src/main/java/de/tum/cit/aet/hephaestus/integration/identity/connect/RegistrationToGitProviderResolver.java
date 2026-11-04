@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -111,19 +112,6 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
                 .orElse(null);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<Long> findActorId(long gitProviderId, String subject) {
-        return actorId(gitProviderId, subject);
-    }
-
-    private Optional<Long> actorId(long gitProviderId, String subject) {
-        return nativeId(subject)
-                .flatMap(id -> userRepository
-                        .findByNativeIdAndProviderId(id, gitProviderId)
-                        .map(User::getId));
-    }
-
     private static Optional<Long> nativeId(String subject) {
         try {
             return Optional.of(Long.parseLong(subject));
@@ -178,6 +166,12 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
                     return namespace.isPresent()
                             && ScmOrigin.of(namespace.get().serverUrl()).equals(origin);
                 });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ActorProfile> accountActors(long accountId) {
+        return userRepository.findAccountActors(accountId);
     }
 
     @Override

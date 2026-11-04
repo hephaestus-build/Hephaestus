@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.context;
 
-import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.MentorUserCounts;
 import de.tum.cit.aet.hephaestus.integration.core.spi.MentorWorkQuery;
@@ -21,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ScmMentorWorkQuery implements MentorWorkQuery {
-    private final AccountIdentityQuery identities;
     private final GitProviderRegistry providers;
     private final WorkspaceActorSelector selector;
     private final MentorContextQueryRepository queries;
@@ -42,10 +40,9 @@ public class ScmMentorWorkQuery implements MentorWorkQuery {
         return selector.connectedProviderId(workspaceId)
                 .map(connected -> new Actors(
                         connected,
-                        identities.activeLinksForAccount(accountId).stream()
-                                .filter(link -> link.providerId().equals(connected))
-                                .map(link -> providers.findActorId(link.providerId(), link.providerUserKey()))
-                                .flatMap(Optional::stream)
+                        providers.accountActors(accountId).stream()
+                                .filter(actor -> actor.providerId() == connected)
+                                .map(GitProviderRegistry.ActorProfile::actorId)
                                 .distinct()
                                 .toList()));
     }

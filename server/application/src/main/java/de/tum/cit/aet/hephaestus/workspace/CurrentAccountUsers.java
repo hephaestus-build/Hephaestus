@@ -9,7 +9,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,20 +62,9 @@ public class CurrentAccountUsers {
     }
 
     private List<ActorProfile> resolveAccountUsers(Long accountId) {
-        // Preserve linking order: adding another identity must not change an existing
-        // representative actor.
+        // Keep linking order: a newly linked identity must not change an existing representative actor.
         Map<Long, ActorProfile> byId = new LinkedHashMap<>();
-        for (AccountIdentityQuery.IdentityView link : accountIdentityQuery.activeLinksForAccount(accountId)) {
-            resolveLinkUser(link).ifPresent(user -> byId.putIfAbsent(user.actorId(), user));
-        }
+        providers.accountActors(accountId).forEach(actor -> byId.putIfAbsent(actor.actorId(), actor));
         return List.copyOf(byId.values());
-    }
-
-    private Optional<ActorProfile> resolveLinkUser(AccountIdentityQuery.IdentityView link) {
-        if (!link.teamKey().isEmpty()) return Optional.empty();
-        return providers
-                .findActorId(link.providerId(), link.providerUserKey())
-                .flatMap(providers::actor)
-                .filter(ActorProfile::human);
     }
 }

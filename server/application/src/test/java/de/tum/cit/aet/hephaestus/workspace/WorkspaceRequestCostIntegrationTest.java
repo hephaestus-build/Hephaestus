@@ -12,7 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-/** The statements that every workspace request costs before its handler runs. */
+/**
+ * The statements that every workspace request costs before its handler runs. Three of them come from the mock JWT
+ * decoder of the test context; in production, the decoder makes one admission read instead.
+ */
 class WorkspaceRequestCostIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
@@ -26,7 +29,7 @@ class WorkspaceRequestCostIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Test
     @WithAdminUser
-    void shouldResolveTheWorkspaceInTenStatementsWhenTheHandlerReadsNothing() {
+    void shouldResolveTheWorkspaceInSevenStatementsWhenTheHandlerReadsNothing() {
         User owner = persistUser("admin");
         Workspace workspace = createWorkspace("request-cost", "Request Cost", "request-cost", AccountType.ORG, owner);
         ensureAdminMembership(workspace);
@@ -41,7 +44,7 @@ class WorkspaceRequestCostIntegrationTest extends AbstractWorkspaceIntegrationTe
                         .isOk()
                         .expectBody(Void.class));
 
-        assertThat(request.statements()).isLessThanOrEqualTo(10);
+        assertThat(request.statements()).isLessThanOrEqualTo(7);
         assertThat(plans.fullScans(request.sql())).isEmpty();
     }
 

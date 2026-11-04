@@ -77,7 +77,7 @@ var request = requests.measure(webTestClient, client -> client.get()
         .isOk()
         .expectBody(Void.class));
 
-assertThat(request.statements()).isLessThanOrEqualTo(10);
+assertThat(request.statements()).isLessThanOrEqualTo(7);
 assertThat(plans.fullScans(request.sql())).isEmpty();
 ```
 
