@@ -440,6 +440,11 @@ The turn's deadline also bounds both, because the stop at the deadline cancels t
 The turn fails with **Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment.**
 The worker logs the cut call and the failure with the reason `STALLED` and the bound that was passed.
 
+The same two bounds cut a streamed model call of a practice review.
+Without them, a provider that sends its headers and then nothing holds the call until the review's work time ends.
+The review runner retries the cut call.
+If a session's calls stay unanswered, the attempt ends early.
+
 In a load test, the slowest 5 % of single calls took 21 seconds, and calls under load took 34 seconds on average.
 Both defaults are above these times.
 A gateway that buffers the whole answer and sends nothing until then shows a slow answer as one long silence.
@@ -725,8 +730,8 @@ A load test that asks more questions as one account must raise the capacity.
 | ------------------------------------------- | ------------- | ----------------------------------------------------------------------- |
 | `hephaestus.worker.capacity.mentor-max`     | `auto` (8)    | The number of conversation turns that one worker's conversation host runs at once ([Conversation turn capacity](#conversation-turn-capacity)) |
 | `hephaestus.mentor.turn.lease`              | `PT1M`        | The lease of a running turn. The worker renews it at one third of this. |
-| `hephaestus.mentor.turn.model-first-byte-timeout` | `PT5M`  | How long one model call of a turn may wait for the provider's response headers |
-| `hephaestus.mentor.turn.model-idle-timeout` | `PT2M`        | How long the stream of one model call of a turn may send nothing |
+| `hephaestus.mentor.turn.model-first-byte-timeout` | `PT5M`  | How long one model call of a turn, or one streamed model call of a review, may wait for the provider's response headers |
+| `hephaestus.mentor.turn.model-idle-timeout` | `PT2M`        | How long the stream of one model call of a turn or of a review may send nothing |
 | `hephaestus.mentor.turn.lease-reaper-delay` | `PT15S`       | The interval at which the server looks for expired leases               |
 | `hephaestus.mentor.turn.max-follow-ups`     | `3`           | The number of questions that can wait in one conversation or thread |
 | `hephaestus.mentor.turn.capacity`           | Not set       | The conversation turns that all workers together run at once. Only the server reads it ([Conversation turn capacity](#conversation-turn-capacity)) |

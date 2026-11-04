@@ -109,7 +109,7 @@ class LlmProxyService {
     private final ProxyRoutingService routingService;
     private final ProxyCallsInFlight callsInFlight;
     private final LlmConnectionHealth health;
-    private final Bounds hephBounds;
+    private final Bounds silenceBounds;
     private final LlmCallPermits callPermits;
 
     LlmProxyService(
@@ -136,7 +136,7 @@ class LlmProxyService {
         this.routingService = routingService;
         this.callsInFlight = callsInFlight;
         this.health = health;
-        this.hephBounds = new Bounds(hephProperties.modelFirstByteTimeout(), hephProperties.modelIdleTimeout());
+        this.silenceBounds = new Bounds(hephProperties.modelFirstByteTimeout(), hephProperties.modelIdleTimeout());
         this.callPermits = callPermits;
     }
 
@@ -488,16 +488,18 @@ class LlmProxyService {
                                 + LlmConnectionHealth.OPEN_FOR.toSeconds() + " seconds before it calls it again");
             }
             span.tag("gen_ai.request.model", credential.upstreamModelId());
+            boolean reviewStream = practiceScript == null && requestsStream(prepared.body());
+            // A review's stream may run until the attempt's deadline, so without these bounds a silent provider would
+            // hold its call, and its place in the pool, that long.
             Exchange exchange = new Exchange(
                     upstreamUri,
                     buildUpstreamHeaders(incomingHeaders, credential),
-                    attempt.sourceType() == UsageSourceType.MENTOR_TURN ? hephBounds : null,
+                    attempt.sourceType() == UsageSourceType.MENTOR_TURN || reviewStream ? silenceBounds : null,
                     Mono.firstWithSignal(call.cancelled(), poolPermit.revoked()),
                     transports);
             ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, protocol);
             // Both requests below share the attempt's one deadline; the second one does not get a new window.
             Instant deadline = routing.workDeadline();
-            boolean reviewStream = practiceScript == null && requestsStream(prepared.body());
             UpstreamResult upstream;
             try {
                 if (workTimeOver(routing)) {
@@ -549,7 +551,7 @@ class LlmProxyService {
                 if (bounds != null && ProxyStreamingUtils.readTimedOut(e)) {
                     accounting.recordError(routing.apiProtocol());
                     accounting.recordUpstreamStalled(routing.apiProtocol());
-                    String stall = "the model provider sent no first byte within "
+                    String stall = "the model provider timed out: it sent no first byte within "
                             + bounds.firstByte().toSeconds() + " seconds";
                     if (!routing.hephTurn())
                         log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
@@ -614,7 +616,7 @@ class LlmProxyService {
             Bounds bounds = exchange.bounds();
             if (bounds != null && upstream.streamOutcome() == StreamOutcome.UPSTREAM_IDLE) {
                 accounting.recordUpstreamStalled(routing.apiProtocol());
-                String stall = "the model provider's stream sent nothing for "
+                String stall = "the model provider's stream timed out: it sent nothing for "
                         + bounds.idle().toSeconds() + " seconds";
                 if (!routing.hephTurn())
                     log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
@@ -696,8 +698,10 @@ class LlmProxyService {
     }
 
     /**
-     * How long a conversation turn's provider may send nothing. A provider can queue a request before it sends its response
-     * headers, so the first byte gets its own, longer bound. The turn's deadline bounds both: its stop cancels the call.
+     * How long the provider of a conversation turn's call, or of a review's stream, may send nothing. A provider can
+     * queue a request before it sends its response headers, so the first byte gets its own, longer bound. The turn's or
+     * the attempt's deadline bounds both: its stop cancels the call. The stall error says "timed out", which the review
+     * runner's model client retries; a conversation host stops the turn on the {@code upstream_stalled} code instead.
      *
      * @param firstByte until the response headers
      * @param idle between two reads of the response body; an SSE comment counts
