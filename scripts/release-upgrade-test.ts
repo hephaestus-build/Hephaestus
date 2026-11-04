@@ -17,30 +17,14 @@ import {
 import { parseVersion } from "./lib/release-version.ts";
 import { researchConsentFields } from "./lib/research-consent.ts";
 
-const [previousImage = "", candidateImage = "", postgresImage = "", ...options] =
-	process.argv.slice(2);
-
-const USAGE =
-	"Usage: node scripts/release-upgrade-test.ts <previous-app-image> <candidate-app-image> <postgres-image> [--require-seed=heph-chat]";
+const [previousImage = "", candidateImage = "", postgresImage = ""] = process.argv.slice(2);
 
 if (previousImage === "" || candidateImage === "" || postgresImage === "") {
-	throw new Error(USAGE);
+	throw new Error(
+		"Usage: node scripts/release-upgrade-test.ts <previous-app-image> <candidate-app-image> <postgres-image>",
+	);
 }
 
-/**
- * Seeds that a run can require. A seed runs only when the previous release keeps the data it seeds, so a later
- * release that no longer has that data still upgrades without it. A qualification run that must prove one data
- * upgrade requires its seed: the run then fails when the previous release cannot take it.
- */
-const REQUIRABLE_SEEDS: ReadonlySet<string> = new Set(["heph-chat"]);
-const requiredSeeds = new Set<string>();
-for (const option of options) {
-	const seed = /^--require-seed=(?<seed>.+)$/u.exec(option)?.groups?.seed;
-	if (seed === undefined || !REQUIRABLE_SEEDS.has(seed)) {
-		throw new Error(`Unknown option: ${option}\n${USAGE}`);
-	}
-	requiredSeeds.add(seed);
-}
 // The upgrade also starts the previous release on the candidate's schema, unless the candidate's migration
 // guide entries say that its release stops every role. Those entries come after the previous version.
 const previousVersion = process.env.PREVIOUS_VERSION ?? "";
@@ -534,12 +518,11 @@ function preservedPeople(): PreservedPeopleIds {
 }
 
 function executeFixture(
-	name: "released-seed.sql" | "assert-migrated.sql" | "assert-upgraded.sql" | "result-parent.sql",
-	directory: "practice-cutover" | "heph-upgrade" | "practice-native" = "practice-cutover",
+	name: "assert-migrated.sql" | "result-parent.sql",
 	database = "hephaestus",
 ): void {
 	const input = readFileSync(
-		new URL(`../server/application/src/test/resources/db/${directory}/${name}`, import.meta.url),
+		new URL(`../server/application/src/test/resources/db/practice-native/${name}`, import.meta.url),
 		"utf8",
 	);
 	const result = spawnSync(
@@ -590,15 +573,6 @@ function workspacePracticeCount(workspaceSlug: string): number {
 			to_jsonb(workspace)->>'slug'
 		) = '${workspaceSlug}';
 	`);
-}
-
-/** Whether the previous release keeps Heph chat history that conversation copies point to. */
-function keepsHephChatHistory(): boolean {
-	return (
-		count(`SELECT count(*) FROM information_schema.columns
-			WHERE table_schema = 'public' AND table_name = 'feedback_copy' AND column_name = 'chat_message_id';`) ===
-		1
-	);
 }
 
 /** The schema fingerprint query, shared with the server's tests (`db/schema-fingerprint.sql`). */
@@ -732,7 +706,7 @@ function withFixture(database: string, seed: () => void): void {
  * (`practice-native/result-parent.sql`). Alice administers its workspace, so she can bind the review model.
  */
 function seedReview(database: string): void {
-	executeFixture("result-parent.sql", "practice-native", database);
+	executeFixture("result-parent.sql", database);
 	query(
 		`UPDATE review_item SET detail = '{"developerId":978003}' WHERE review_id = '${REVIEW_ID}';
 		INSERT INTO membership (workspace_id, account_id, role)
@@ -1181,14 +1155,6 @@ try {
 	await assertCoreReads(port, previousSession);
 	docker("stop", "--time", "30", application);
 	docker("rm", application);
-	const hephChatSource = keepsHephChatHistory();
-	if (hephChatSource) {
-		executeFixture("released-seed.sql", "heph-upgrade");
-	} else if (requiredSeeds.has("heph-chat")) {
-		throw new Error(
-			"The required heph-chat seed was not admitted: the previous release keeps no Heph chat history",
-		);
-	}
 	const preserved = preservedPeople();
 	const seededData = dataFingerprint(preserved);
 	for (const kind of ["account", "identity", "user", "workspace", "membership", "connection"]) {
@@ -1218,9 +1184,6 @@ try {
 	await waitUntilReady(application, port);
 	const upgradedData = dataFingerprint(preserved);
 	executeFixture("assert-migrated.sql");
-	if (hephChatSource) {
-		executeFixture("assert-upgraded.sql", "heph-upgrade");
-	}
 	if (upgradedData !== seededData) {
 		throw new Error("Seeded application data changed during upgrade");
 	}
@@ -1270,7 +1233,7 @@ try {
 		candidateChanges - previousChanges,
 	);
 	await assertFreshSchemaEqualsUpgraded(candidateImage);
-	console.log(`Seeded release upgrade passed (Heph chat seed: ${hephChatSource}).`);
+	console.log("Seeded release upgrade passed.");
 } catch (error) {
 	for (const name of [application, postgres]) {
 		printLogs(name);

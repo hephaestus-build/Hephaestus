@@ -122,3 +122,99 @@ void test("malformed XML and the wrong root fail closed", () => {
 		assert.notDeepEqual(violations(original(), { ...original(), master: content }), []);
 	}
 });
+
+const rc1File = `${directory}1793168406889_changelog.xml`;
+const rc1Next = `${directory}next/20261101103000-erasure-history-redaction.xml`;
+const laterNext = `${directory}next/20261102210500-issue-native-id-per-type.xml`;
+const rc1 = (): ChangelogSnapshot => ({
+	blobs: new Map([
+		[master, "rc1-master-blob"],
+		[`${directory}0000000000000_baseline_v0_77_4.xml`, "legacy-baseline"],
+		[rc1File, "legacy-change"],
+		[rc1Next, "rc1-head"],
+	]),
+	master: xml(
+		include("0000000000000_baseline_v0_77_4.xml") +
+			include("1793168406889_changelog.xml") +
+			automatic,
+	),
+});
+const legacy = (): ChangelogSnapshot => changed(rc1(), laterNext, "later");
+const baselined = (): ChangelogSnapshot => ({
+	blobs: new Map([
+		[master, "baseline-master-blob"],
+		[`${directory}1.0.0/baseline.xml`, "baseline"],
+		[`${directory}1.0.0/baseline.sql`, "baseline-sql"],
+		[laterNext, "later"],
+	]),
+	master: xml(include("1.0.0/baseline.xml") + automatic),
+});
+const check = (before: ChangelogSnapshot, after: ChangelogSnapshot) =>
+	violations(before, after, rc1);
+
+void test("the 1.0 baseline replaces the chain of its release and keeps every later file", () => {
+	assert.deepEqual(check(legacy(), baselined()), []);
+	// A file that merges while the baseline waits needs nothing from this rule.
+	const later = `${directory}next/20261103000000-another.xml`;
+	assert.deepEqual(check(changed(legacy(), later, "new"), changed(baselined(), later, "new")), []);
+});
+
+void test("the exemption expires when the replacement merges", () => {
+	const base = baselined();
+	assert.notDeepEqual(check(base, changed(base, `${directory}1.0.0/baseline.sql`, "other")), []);
+	assert.notDeepEqual(check(base, changed(base, laterNext)), []);
+	assert.notDeepEqual(
+		check(base, { ...base, master: xml(include("1.0.0/other.xml") + automatic) }),
+		[],
+	);
+});
+
+void test("a replacement that does anything else gets no exemption", () => {
+	const head = baselined();
+	for (const [name, before, after] of [
+		["keeps a file of the release", legacy(), changed(head, rc1File, "legacy-change")],
+		["keeps a next file of the release", legacy(), changed(head, rc1Next, "rc1-head")],
+		["edits a later file", legacy(), changed(head, laterNext, "edited")],
+		["drops a later file", legacy(), changed(head, laterNext)],
+		[
+			"renames a later file",
+			legacy(),
+			changed(changed(head, laterNext), `${directory}next/20261102210501-renamed.xml`, "later"),
+		],
+		[
+			"adds a next file with the replacement",
+			legacy(),
+			changed(head, `${directory}next/20261103000000-new.xml`, "new"),
+		],
+		["adds a file elsewhere", legacy(), changed(head, `${directory}1.0.1/baseline.xml`, "other")],
+		["replaces an edited release file", changed(legacy(), rc1File, "edited"), head],
+		["the base lost a release file", changed(legacy(), rc1File), head],
+		[
+			"keeps an include",
+			legacy(),
+			{ ...head, master: xml(include("1.0.0/baseline.xml") + include("old.xml") + automatic) },
+		],
+		[
+			"filters the baseline",
+			legacy(),
+			{
+				...head,
+				master: xml(
+					include("1.0.0/baseline.xml").replace("/>", ' contextFilter="dev"/>') + automatic,
+				),
+			},
+		],
+	] as const) {
+		assert.notDeepEqual(check(before, after), [], name);
+	}
+	const noAutomatic = { ...head, master: xml(include("1.0.0/baseline.xml")) };
+	assert.notDeepEqual(check(legacy(), noAutomatic), []);
+});
+
+void test("an unreadable release tag fails the replacement", () => {
+	assert.throws(() =>
+		violations(legacy(), baselined(), () => {
+			throw new Error("no tag");
+		}),
+	);
+});

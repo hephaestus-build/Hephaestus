@@ -219,10 +219,7 @@ inheritance commit together, under capture admission. The synchronous listener i
 `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/IdentityRestrictionService.java`
 copies only exact type/origin/subject/Slack-workspace controls. It does not infer account ownership.
 
-Existing sources are registered by
-`server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/PersonSourceProviderBackfillChange.java`.
-A bound connection cannot be changed to a different network origin. A legacy Outline mirror without
-an exact provider instance stops the upgrade instead of guessing a binding or deleting visible work.
+A bound connection cannot be changed to a different network origin.
 
 Each active database store has an export and erasure contributor in its owning module. The shared
 mechanics in `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/spi/JdbcPersonDataStore.java`

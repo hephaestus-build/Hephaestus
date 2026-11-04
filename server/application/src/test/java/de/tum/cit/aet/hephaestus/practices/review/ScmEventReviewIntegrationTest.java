@@ -114,7 +114,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultStore;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobSnapshot;
@@ -892,121 +891,6 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         item.workspaceId(),
                         item.itemId()))
                 .isEqualTo(1L);
-    }
-
-    @Test
-    void shouldResumeAndCaptureAQueuedReviewWithACustomizedPracticeAfterItsSourceContractMigrates() throws Exception {
-        var mirror = new JsonMapper();
-        var prepared = prepare(IdentityProviderType.GITHUB, false);
-        long workspace = prepared.item().workspaceId();
-        long practice = Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT id FROM practice WHERE workspace_id=? AND slug='event-test'", Long.class, workspace));
-        String criteria = "Keep my customized criterion.\n  Preserve its whitespace.\n";
-        var original = mirror.readValue(
-                Objects.requireNonNull(jdbc.queryForObject(
-                        "SELECT v.definition::text FROM practice p JOIN practice_version v ON v.id=p.current_version_id WHERE p.id=?",
-                        String.class,
-                        practice)),
-                ObjectNode.class);
-        original.withObject("/reads").put("contract", "2.0.0");
-        original.put("criteria", criteria);
-        // Selection no longer takes a practice pinned to an earlier contract, so the review that an earlier release
-        // queued is built here: the event selects the practice, then the queued assignment names the 2.0.0 version.
-        publish(prepared);
-        var review = itemReviews(prepared).getFirst();
-        long recorded = Objects.requireNonNull(transactions.execute(ignored -> {
-            long id = Objects.requireNonNull(jdbc.queryForObject(
-                    "INSERT INTO practice_version(workspace_id,practice_id,number,definition,created_at) VALUES (?,?,2,?::jsonb,now()) RETURNING id",
-                    Long.class,
-                    workspace,
-                    practice,
-                    original.toString()));
-            jdbc.update(
-                    "UPDATE practice SET current_version_id=? WHERE id=? AND workspace_id=?", id, practice, workspace);
-            jdbc.update(
-                    "UPDATE review_practice SET practice_version_id=? WHERE review_id=? AND practice_id=? AND workspace_id=?",
-                    id,
-                    review.getId(),
-                    practice,
-                    workspace);
-            return id;
-        }));
-        assertThat(jdbc.queryForObject(
-                        "SELECT practice_version_id FROM review_practice WHERE review_id=? AND practice_id=? AND workspace_id=?",
-                        Long.class,
-                        review.getId(),
-                        practice,
-                        workspace))
-                .isEqualTo(recorded);
-        try (var input =
-                Objects.requireNonNull(getClass().getResourceAsStream("/db/changelog/source-contract-3.sql"))) {
-            String migration = new String(input.readAllBytes(), StandardCharsets.UTF_8);
-            // The released changelog ran while review_job still had the worker column that a later changelog drops.
-            transactions.executeWithoutResult(ignored -> {
-                jdbc.execute("ALTER TABLE review_job ADD COLUMN worker_id varchar(255)");
-                jdbc.execute(migration);
-                jdbc.execute("ALTER TABLE review_job DROP COLUMN worker_id");
-            });
-        }
-        var current = practices
-                .findByWorkspaceIdAndSlug(workspace, "event-test")
-                .orElseThrow()
-                .getCurrentVersion();
-        var definition = versions.definitionOf(current);
-        assertThat(current.getId()).isNotEqualTo(recorded);
-        assertThat(definition.reads().contract()).isEqualTo("3.0.0");
-        assertThat(definition.criteria()).isEqualTo(criteria);
-        assertThat(definition.script())
-                .isEqualTo(
-                        original.path("script").isNull()
-                                ? null
-                                : original.path("script").asString());
-        assertThat(definition.reads().sources()).anySatisfy(read -> {
-            assertThat(read.source()).isEqualTo(PullRequestContentSource.CHECKS);
-            assertThat(read.need()).isEqualTo(ReadNeed.OPTIONAL);
-        });
-        var historical = mirror.readTree(Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT definition::text FROM practice_version WHERE id=?", String.class, recorded)));
-        assertThat(historical).isEqualTo(original);
-
-        assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactly(review.getId());
-        assertThat(onlyEvent(prepared).getState()).isEqualTo(ItemEventState.STARTED);
-        assertThat(jdbc.queryForObject(
-                        "SELECT v.definition#>>'{reads,contract}' FROM review_practice r JOIN practice_version v ON v.id=r.practice_version_id WHERE r.review_id=? AND r.practice_id=?",
-                        String.class,
-                        review.getId(),
-                        practice))
-                .isEqualTo("3.0.0");
-        var assignment = assignmentQuery
-                .find(
-                        workspace,
-                        new ReviewAssignmentId(
-                                review.getId(), practice, prepared.item().itemId()))
-                .orElseThrow();
-        assertThat(assignment.practice().definition().reads().contract()).isEqualTo("3.0.0");
-        assertThat(assignment.practice().definition().criteria()).isEqualTo(criteria);
-        var core = PullRequestContentSource.CORE;
-        var checks = PullRequestContentSource.CHECKS;
-        var pinned = source.pin(prepared.item(), prepared.version());
-        var files = source.capture(
-                        pinned,
-                        new CaptureRequest(
-                                review.getId(),
-                                UUID.randomUUID(),
-                                1,
-                                Set.of(core, checks),
-                                "3.0.0",
-                                3,
-                                null,
-                                Set.of(core, checks)))
-                .files();
-        assertThat(files).containsKeys("context/metadata.json", "context/checks.json");
-        assertThat(mirror.readTree(files.get("context/checks.json"))
-                        .path("commit_sha")
-                        .asString())
-                .isEqualTo("b".repeat(40));
-        assertThat(mirror.readTree(files.get("context/metadata.json")).has("head_checks"))
-                .isFalse();
     }
 
     private ReviewIntegrationData.Scenario reviewScenario(Prepared prepared) {

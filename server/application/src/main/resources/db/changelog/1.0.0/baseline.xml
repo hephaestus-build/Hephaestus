@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+        The schema of 1.0.0-rc.1. It replaced the 0.x chain once, and it never changes: db/fingerprint/baseline-*.txt pin it,
+        and a database on 1.0.0-rc.1 is recorded here only when it matches them (BaselineSynchronization).
+    -->
+    <changeSet id="1.0.0-schema" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT"
+                       onFailMessage="This database already has a schema, but no 1.0 baseline. The migrate run mode upgrades a database on 1.0.0-rc.1. For a local database, run vp run dev:reset.">
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
+                  AND c.relname NOT IN ('databasechangelog', 'databasechangeloglock')
+                  AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_class'::regclass
+                                  AND d.objid = c.oid AND d.deptype = 'e')
+            ]]></sqlCheck>
+        </preConditions>
+        <sqlFile path="baseline.sql" relativeToChangelogFile="true" splitStatements="false"/>
+    </changeSet>
+    <changeSet id="1.0.0-seed" author="hephaestus">
+        <sql><![CDATA[
+            INSERT INTO public.identity_provider (type, server_url)
+            VALUES ('GITHUB', 'https://github.com'), ('GITLAB', 'https://gitlab.com'), ('SLACK', 'https://slack.com');
+            INSERT INTO public.instance_settings (id, silent_mode_engaged) VALUES (1, TRUE);
+            INSERT INTO public.instance_llm_settings (id, allowed_egress_hosts, allow_workspace_connections)
+            VALUES (1, NULL, TRUE);
+            SELECT partman.create_parent(p_parent_table := 'public.auth_event', p_control := 'occurred_at',
+                                         p_interval := '1 month', p_premake := 2);
+            UPDATE partman.part_config SET retention = '12 months', retention_keep_table = false,
+                retention_keep_index = false, infinite_time_partitions = true
+            WHERE parent_table = 'public.auth_event';
+        ]]></sql>
+    </changeSet>
+    <changeSet id="1.0.0-audit" author="hephaestus" context="prod">
+        <sqlFile path="baseline-audit.sql" relativeToChangelogFile="true" splitStatements="false"/>
+    </changeSet>
+    <changeSet id="1.0.0-tag" author="hephaestus">
+        <tagDatabase tag="1.0.0-baseline"/>
+    </changeSet>
+</databaseChangeLog>

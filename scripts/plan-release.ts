@@ -18,6 +18,7 @@ import { appendFile, readFile } from "node:fs/promises";
 import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asRecord, asString, parseJson } from "./lib/json.ts";
+import { BASELINE_RELEASE } from "./lib/previous-release.ts";
 import { output } from "./lib/process.ts";
 import {
 	compareVersions,
@@ -205,7 +206,13 @@ export function planRelease(
 		kind: "cut",
 		major: parsed.major,
 		minor: parsed.minor,
-		previousVersion: formatVersion(previous),
+		// The 1.0 baseline refuses every 0.x database, so a 1.0 candidate upgrades from the baseline's release.
+		previousVersion:
+			parsed.major >= 1 &&
+			previous.major === 0 &&
+			releases.some((release) => release.tag === BASELINE_RELEASE && !release.isDraft)
+				? BASELINE_RELEASE.slice(1)
+				: formatVersion(previous),
 		resumesDraft: existing !== undefined,
 		sha,
 		tag,

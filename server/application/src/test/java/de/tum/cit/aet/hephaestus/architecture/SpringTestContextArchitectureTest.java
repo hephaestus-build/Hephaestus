@@ -51,7 +51,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("core.auth.dev.DevLoginIntegrationTest", "dev-login"),
             assignment("core.auth.webauthn.PasskeyLifecycleIntegrationTest", "required-passkeys"),
             assignment("core.auth.webauthn.TestInstanceAssuranceIntegrationTest", "test-instance-assurance"),
-            assignment("core.database.PracticeV1ReviewJobsIntegrationTest", "practice-upgrade-history"),
             assignment("integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest", "slack-signed"),
             assignment("integration.core.sync.api.SyncControllerIntegrationTest", "sync-controller-focused"),
             assignment("integration.core.webhook.WebhookRoleContextIntegrationTest", "webhook-role"),
@@ -147,10 +146,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry("webhook-role", "the webhook role alone, with real JetStream and no database"),
             Map.entry("outline-enabled", "enabled Outline integration wiring"),
             Map.entry("outline-origin", "enabled Outline integration wiring with one allowed document origin"),
-            Map.entry(
-                    "practice-upgrade-history",
-                    "authenticated HTTP reads and sibling custody/erasure against populated released history"
-                            + " after the production migration"),
             Map.entry(
                     "practice-script-live",
                     "worker role with the real LLM proxy and mocked Kubernetes orchestration, calling live models"),
@@ -265,7 +260,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     private static final Set<String> PROPERTY_SOURCE_TESTS = names(
             "core.auth.webauthn.TestInstanceAssuranceIntegrationTest",
             "core.auth.webauthn.PasskeyLifecycleIntegrationTest",
-            "core.database.PracticeV1ReviewJobsIntegrationTest",
             "core.auth.clientsession.ClientSessionConcurrencyIntegrationTest",
             "core.auth.clientsession.ClientSessionIntegrationTest",
             "core.auth.consent.ConsentSignInBootstrapIntegrationTest",
@@ -324,7 +318,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "core.runtime.RuntimeRoleContextIntegrationTest$WorkerGraph",
             "workspace.ManualRepositoryAuthorityIntegrationTest",
             "workspace.WorkspaceRepositoryCoverageIntegrationTest",
-            "core.database.PracticeV1ReviewJobsIntegrationTest",
             "agent.adapter.EvidenceDeliveryAuthorizationIntegrationTest",
             "agent.mentor.weeklydigest.WeeklyDigestIntegrationTest",
             "agent.handler.PublicReviewEligibilityIntegrationTest",

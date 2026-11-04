@@ -254,7 +254,7 @@ container names this version, commit and environment.
   value: {{ .Values.config.tracing.otlpEndpoint | quote }}
 {{- end -}}
 
-{{/* The migration and application roles use the same stored-secret keys. */}}
+{{/* The application roles use the same stored-secret keys. */}}
 {{- define "hephaestus.env.encryptionKeys" -}}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_ENCRYPTION_KEY") }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY") }}

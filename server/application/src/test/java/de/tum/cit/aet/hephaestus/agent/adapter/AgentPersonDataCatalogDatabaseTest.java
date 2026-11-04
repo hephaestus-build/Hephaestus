@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
+import de.tum.cit.aet.hephaestus.core.database.PracticeMigrationFixture;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
@@ -14,8 +15,6 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.practices.adapter.PracticesPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyCleanupCustody;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
-import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -33,16 +32,10 @@ import tools.jackson.databind.json.JsonMapper;
 class AgentPersonDataCatalogDatabaseTest {
     @Test
     void shouldExportAndEraseDeveloperJobsAndProductRowsAgainstTheCutoverSchema() throws Exception {
-        var database = PostgreSQLTestContainer.createReleasedDatabase(
-                "agent_erasure_" + UUID.randomUUID().toString().replace("-", ""), "prod");
+        var database = PracticeMigrationFixture.migratedDatabase("prod");
         var jdbc = new NamedParameterJdbcTemplate(
                 new DriverManagerDataSource(database.jdbcUrl(), database.username(), database.password()));
         var plain = jdbc.getJdbcTemplate();
-        try (var seed =
-                Objects.requireNonNull(getClass().getResourceAsStream("/db/practice-cutover/released-seed.sql"))) {
-            plain.execute(new String(seed.readAllBytes(), StandardCharsets.UTF_8));
-        }
-        PostgreSQLTestContainer.migrateDatabase(database, "prod");
         var mapper = JsonMapper.builder().findAndAddModules().build();
         var lifecycle = mock(ReviewJobLifecycleService.class);
         var noAcknowledgement =

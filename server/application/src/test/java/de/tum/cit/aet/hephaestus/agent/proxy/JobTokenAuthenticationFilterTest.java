@@ -97,7 +97,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
 
     @Test
     void turnModelCallOfAnAttemptThatLostItsLeaseGetsConflict() throws Exception {
-        // The database decides which lease is live (ConversationAttemptLeaseDatabaseTest); here the turn holds none.
+        // The database decides which lease is live; here the turn holds none.
         var jwt = turnJwt();
         when(verifier.verify("turn-token")).thenReturn(jwt);
         when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.of(mock(MentorTurn.class)));

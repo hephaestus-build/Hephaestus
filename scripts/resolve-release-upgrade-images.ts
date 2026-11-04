@@ -5,7 +5,7 @@ import process from "node:process";
 import { currentReleaseIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
 
 import { isSet, requiredEnv } from "./lib/env.ts";
-import { previousReleaseOf } from "./lib/previous-release.ts";
+import { upgradeFromOf } from "./lib/previous-release.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { parseVersion } from "./lib/release-version.ts";
 
@@ -96,8 +96,7 @@ if (
 	previousApplication = previousApplicationReference(suppliedPreviousVersion);
 } else {
 	const requestedPrevious = nonEmpty(process.env.REQUESTED_PREVIOUS);
-	// The changelog compatibility guard judges the same baseline.
-	const previous = requestedPrevious ?? previousReleaseOf("HEAD") ?? "";
+	const previous = requestedPrevious ?? upgradeFromOf("HEAD") ?? "";
 	if (!previous.startsWith("v") || parseVersion(previous.slice(1)) === undefined) {
 		throw new Error("Previous release must be a vX.Y.Z or vX.Y.Z-rc.N tag");
 	}

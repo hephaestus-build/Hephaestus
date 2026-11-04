@@ -5,13 +5,9 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Pattern;
-import java.util.stream.IntStream;
 import liquibase.Contexts;
-import liquibase.LabelExpression;
 import liquibase.Liquibase;
 import liquibase.database.Database;
 import liquibase.database.DatabaseFactory;
@@ -36,7 +32,6 @@ public final class PostgreSQLTestContainer {
 
     private static @Nullable PostgreSQLContainer container;
     private static boolean migratedTemplateReady;
-    private static final Set<String> RELEASED_TEMPLATES = new HashSet<>();
 
     private PostgreSQLTestContainer() {}
 
@@ -91,49 +86,12 @@ public final class PostgreSQLTestContainer {
         return database(postgres, name);
     }
 
-    public static synchronized TestDatabase createReleasedDatabase(String name, String contexts) {
-        validateDatabaseName(name);
-        String templateName = "hephaestus_released_" + contexts;
-        validateDatabaseName(templateName);
-        if (!RELEASED_TEMPLATES.contains(templateName)) {
-            migrateReleasedDatabase(createDatabase(templateName), contexts);
-            RELEASED_TEMPLATES.add(templateName);
-        }
-        return cloneDatabase(name, templateName);
-    }
-
-    public static void migrateReleasedDatabase(TestDatabase testDatabase, String contexts) {
-        try (Connection connection =
-                DriverManager.getConnection(testDatabase.jdbcUrl(), testDatabase.username(), testDatabase.password())) {
-            Database database =
-                    DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
-            try (Liquibase liquibase = new Liquibase("db/master.xml", new ClassLoaderResourceAccessor(), database)) {
-                var selectedContexts = new Contexts(contexts);
-                var labels = new LabelExpression();
-                var pending = liquibase.listUnrunChangeSets(selectedContexts, labels);
-                int releasedChanges = IntStream.range(0, pending.size())
-                        .filter(index -> pending.get(index).getId().equals("1791486276211-v1-cutover"))
-                        .findFirst()
-                        .orElseThrow(() -> new IllegalStateException("Production changelog has no practice migration"));
-                liquibase.update(releasedChanges, selectedContexts, labels);
-            }
-        } catch (Exception exception) {
-            throw new IllegalStateException("Failed to prepare the production released prefix", exception);
-        }
-    }
-
     public static void migrateDatabase(TestDatabase testDatabase, String contexts) {
         try (Connection connection =
                 DriverManager.getConnection(testDatabase.jdbcUrl(), testDatabase.username(), testDatabase.password())) {
             Database database =
                     DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
             try (Liquibase liquibase = new Liquibase("db/master.xml", new ClassLoaderResourceAccessor(), database)) {
-                // Fixtures can seed a pre-cut-point history before completing the current schema.
-                liquibase
-                        .getDatabaseChangeLog()
-                        .getPreconditions()
-                        .getNestedPreconditions()
-                        .clear();
                 liquibase.update(new Contexts(contexts));
             }
         } catch (Exception exception) {

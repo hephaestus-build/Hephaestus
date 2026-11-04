@@ -24,7 +24,7 @@ It delivers practice feedback on the work itself, on the developer's own practic
    See `docs/contributor/workspace-context.mdx`.
 3. **Self-hosters get a release they can verify.** Releases have signed images, provenance, and SBOMs.
    The vulnerability policy is evaluated at build and release time.
-   A released migration never changes.
+   From 1.0.0 on, a released migration never changes.
    See `docs/contributor/release-management.mdx` and `docs/contributor/database-migration.mdx`.
 4. **The artifact tested is the artifact shipped.** CI packages the server once.
    The OpenAPI spec, browser suite, and container image all come from that JAR.
@@ -230,7 +230,7 @@ Never hand-edit a generated file: the spec, `webapp/src/api/**`, `extension/src/
 
 A branch has one changelog, written by `db:draft-changelog`.
 Never edit, rename, or delete a file under `db/changelog/` that reached `main`.
-`master.xml` keeps its released include prefix fixed.
+`master.xml` includes the 1.0 baseline and `next/`. Only a future major baseline changes it.
 New migrations use timestamped XML files in `db/changelog/next/`, discovered by its one `includeAll`.
 Wipe an older local database with `vp run dev:reset`.
 

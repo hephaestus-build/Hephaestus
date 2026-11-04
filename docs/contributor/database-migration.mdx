@@ -120,10 +120,8 @@ if history never changes underneath an instance that already ran part of it.
    Fresh installs silently get a different schema. Fix mistakes **forward** with a new changelog file. Liquibase [excludes preconditions, contexts and labels from checksums](https://www.liquibase.com/blog/what-affects-changeset-checksums).
    It ignores deleted changesets.
    Thus, those edits make installed instances inconsistent without an error.
-2. **Keep released includes fixed.**
-   Never change their files, paths, or order.
-   This includes the migration released in 0.95.1 after the 0.95.0 cut-point.
-   One `includeAll` follows that prefix and reads XML files directly from `db/changelog/next` in filename order.
+2. **Keep `master.xml` fixed.**
+   It holds the [1.0 baseline](#the-10-baseline) and one `includeAll`, which reads XML files directly from `db/changelog/next` in filename order.
    Name new files `YYYYMMDDHHMMSS-<slug>.xml` in UTC.
    A new file must sort after every migration already on the base branch.
    The generator chooses the next timestamp when the current second is already used.
@@ -135,14 +133,12 @@ if history never changes underneath an instance that already ran part of it.
    Both also compare with the migrations that pull requests already in the merge queue add.
    Reset a local database that applied the moved file with `vp run dev:reset`.
    Do not add explicit includes or nested directories. The immutability guard rejects invalid filenames and insertion before existing history.
-   The changelog-level cut-point precondition protects startup and synchronization without changing released changesets.
+   The changelog-level precondition protects startup and synchronization without changing released changesets.
 3. **Release *N* runs correctly on the schema of release *N+1*.** A single
    release must stay bootable against the schema left behind by the previous one.
    The [migrate run mode](../admin/runtime-roles#database-migrations) migrates before the rollout, so the old roles run on the new schema until they stop.
    After a rollback or a failed migration, the previous release also runs on that schema.
    [Expand and contract](#expand-and-contract) gives the rules.
-   An ADR can grant an exception: see [Practice model cutover](#practice-model-cutover)
-   and [Conversation ledger](#conversation-ledger).
 
 CI enforces rules 1 and 2.
 For rule 3, the compatibility guard rejects the change sets that [Expand and contract](#expand-and-contract) lists.
@@ -225,9 +221,10 @@ The 1.0 cutover dropped every earlier pending contraction, so the table is empty
    Pull requests and merge groups both run it.
    A pull request run does not repeat when its base advances.
    Thus, the merge group judges migrations that reached `main` after that run.
-   No file under `db/changelog/` can have a modification, rename, or deletion after it reaches the base branch.
+   No file under `db/changelog/` can change after it reaches the base branch.
+   [The one replacement](#what-the-replacement-was-allowed-to-do) was the only exception.
    New migration files must have a valid UTC timestamp and sort after that branch’s existing migrations.
-   The fixed `<include>` prefix and the final `includeAll` cannot change.
+   The `<include>` of the baseline and the final `includeAll` cannot change.
    New explicit includes also fail the check.
    A prohibited change fails the check.
 3. **Changelog compatibility** — Security workflow, same job, step *Changelog compatibility guard*.
@@ -235,6 +232,8 @@ The 1.0 cutover dropped every earlier pending contraction, so the table is empty
    It checks the changelogs that the latest release tag does not have.
    It reads the tags, so the job checks out the full history.
 4. **Seeded release upgrade** — `release-upgrade.yml` upgrades the previous supported release.
+   Until 1.0.0 publishes, that release is 1.0.0-rc.1.
+   It compares the fingerprint of the upgraded schema with a fresh install.
    It checks readiness, seeded relationships, the practice catalog and authenticated reads.
    Release publication depends on this upgrade. The same procedure runs weekly.
    [Previous release on the new schema](#previous-release-on-the-new-schema) describes its other checks.
@@ -294,99 +293,50 @@ If the candidate adds fewer than two change sets, no partial schema exists, and 
 If a migration guide entry of the candidate stops every role, the previous release does not start.
 The log names the entry in a warning.
 
-## Baseline release gates
+## The 1.0 baseline
 
-The existing baseline and released migrations remain immutable.
-A future baseline requires both a major-version boundary and automated synchronization.
+Hephaestus 1.0 starts from one baseline.
+`db/changelog/1.0.0/baseline.xml` holds the schema of 1.0.0-rc.1.
+It replaced the 0.x chain once.
+A database never replays or revalidates anything because of the replacement.
 
-A global Liquibase precondition checks the database cut-point before either update or synchronization.
-Liquibase permits one global `preConditions` container, so the guard shares it with the PostgreSQL 18
-check. Its failure message covers both prerequisites. Migration identities use id, author and logical
-filename, not just id or row count. An empty history is permitted for fresh initialization. The
-baseline's existing schema precondition still refuses a partially populated schema.
+| Database | What the migrate run does |
+| --- | --- |
+| Empty | Runs the baseline, then every change set in `next/`. |
+| Has the baseline | Runs the change sets in `next/` that it lacks. |
+| On 1.0.0-rc.1 | Compares the schema fingerprint with `db/fingerprint/baseline-<context>.txt`. If they are equal, records the baseline change sets as run, without DDL, then runs `next/`. If they differ, refuses and writes nothing. |
+| Past 1.0.0-rc.1 on the old chain | Refuses and writes nothing: a change set from a later `next/` file is in its history, so the fingerprint cannot judge its schema. |
+| Older | The guard in `master.xml` refuses and writes nothing. The operator installs 1.0.0-rc.1 first. |
 
-[Liquibase preconditions](https://docs.liquibase.com/concepts/changelogs/preconditions.html) use lazy
-evaluation, so a missing history table never reaches the row query.
-[Liquibase 5.0.4 validates the changelog](https://github.com/liquibase/liquibase/blob/v5.0.4/liquibase-standard/src/main/java/liquibase/command/core/helpers/DatabaseChangelogCommandStep.java)
-before `changeLogSyncToTag`. Changeset-level preconditions cannot protect that command.
-The baseline integration suite proves these properties in both `dev` and `prod`:
+A database on 1.0.0-rc.1 keeps its older history rows. Liquibase ignores them, and 1.0.0-rc.1 needs them after a rollback.
+`BaselineSynchronization` runs under the migration lock in the migrate run only. A local database that migrates at start stops at the baseline's precondition. Reset it with `vp run dev:reset`.
 
-- Refusal without DDL.
-- Fresh initialization.
-- Refusal of an incorrect cut-point identity.
-- Upgrade from the supported cut-point without changing existing instance settings.
-- Lock recovery.
+`db/schema-fingerprint.sql` gives one sorted line for each object that the changelog decides.
+It leaves out what no changelog decides: runtime partitions, sequence positions, everything that an extension owns, and the names of not-null constraints.
+`pg_dump` and `pg_upgrade` restore some expressions in another form, so a list of varchar literals and a `BETWEEN` check each print as one form. A database that went through either matches its own release.
+The synchronization also admits an extension that an operator added, such as `pg_stat_statements`. A missing or different extension still refuses.
 
-## Practice model cutover
+The pins come from databases that the published 1.0.0-rc.1 image built.
+`SchemaFingerprintDatabaseTest` requires that the baseline builds exactly those lines.
+The baseline's rows are not in the fingerprint, because administrators change them. `LiquibaseBaselineIntegrationTest` checks them on a fresh install.
 
-The practice model cutover is a maintainer-approved exception to rule 3 of the [immutability policy](#changelog-immutability-policy).
-One changelog transforms the complete released schema directly to the final practice model.
-Rules 1 and 2 still apply: the changelog appends and edits no released changeset.
-Neither release can run against the schema of the other, so all components upgrade together and rollback restores a verified backup.
-[ADR 0056](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0056-one-practice-model-for-items-and-scans.md) owns the decision.
-The [operator migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) owns what the upgrade preserves.
+### What the replacement was allowed to do
 
-### Removed settings and diagnostic data
+`scripts/check-changelog-immutability.ts` admitted the replacement once. It admitted a change only when all of these were true:
 
-| Released data | Cutover behavior |
-|---|---|
-| `workspace.practice_skip_drafts` | Reviews include draft work when a practice's `reviewOn` declaration permits it. `practice_skip_drafts` is removed. The migration preserves each pinned practice version. |
-| `consent_decision.notice_sha256` | The duplicate hash is removed. Each decision keeps its immutable `notice_version`, which names the release that published the wording. 1.0 drops the `consent_notice` archive. |
-| Legacy job diagnostics: `container_logs`, `prompt_digest`, `inputs_digest`, `model_labels`, and unmapped `metadata` | These database values are not copied into the new practice records. Retain the pre-upgrade backup when this diagnostic history is needed. |
+1. The base's `master.xml` included the v0.77.4 baseline. This is false after the replacement, so the exemption cannot run again.
+2. The head's `master.xml` has exactly one `include`, the baseline, then the one `includeAll`.
+3. The change deletes exactly the files of tag `v1.0.0-rc.1` under `db/changelog/`, and each one in the base is identical to the tag.
+4. Every other file in the base stays in the head with an identical blob. A file from `next/` that is later than the tag cannot change, move or disappear.
+5. The change adds files only under `db/changelog/1.0.0/`.
+6. The guard fails if it cannot read the tag.
 
-## Conversation ledger
-
-The Conversation ledger is a second maintainer-approved exception to rule 3 of the [immutability policy](#changelog-immutability-policy).
-One changelog, `1792397538973_changelog.xml`, drops the released Hephaestus chat tables and creates the ledger.
-It clears and renames the message link of earlier conversation copies.
-Rules 1 and 2 still apply.
-Stop every role before the upgrade.
-[ADR 0057](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0057-one-heph-conversation-per-developer.md) owns the decision and what the upgrade drops.
-
-On the upgrade from the previous stable release, `scripts/release-upgrade-test.ts` seeds Hephaestus chat history and conversation copies.
-After the upgrade, it checks them (`server/application/src/test/resources/db/heph-upgrade/`).
-
-## Prove the released-state upgrade
-
-Seed the schema at the complete released changelog tail before the cutover changelog.
-Use realistic results, unclaimed people, disabled identities, separate cards and uncertain provider writes.
-Run Liquibase, without Hibernate creating the final schema.
-Assert preserved IDs, tenant relationships, exact receipts, actor redaction and current-claim order.
-Check native constraints, partial indexes and source-person erasure.
-Fresh and upgraded databases must have the same final schema.
-
-The drift gate alone cannot prove data migration or native database behavior.
-The generated ERD must come from the final migrated schema.
+From 1.0.0 on, a released change set never changes, and `master.xml` never changes.
+A future baseline needs a major release, an automated synchronization like this one, and a decision record.
 
 ## Upgrade and recovery
 
 The [operator migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) owns the release procedure and rollback.
-
-## Native Hibernate JSON cutover
-
-Five semantic String columns use TEXT: `auth_event.details`, `config_audit_event.old_value`,
-`config_audit_event.new_value`, `project_field.options`, and `connection_audit.detail`.
-Typed JSONB fields use Hibernate 7.4.5.Final's native `Jackson3JsonFormatMapper` with Spring's configured `JsonMapper`.
-
-The forward migration converts each old JSONB value once.
-SQL null and JSON null become SQL null.
-A JSONB String becomes its decoded text, including whitespace, Unicode, and backslashes.
-The JSONB String `"null"` stays the literal text `null`.
-Other JSON values become canonical JSON text.
-
-The conversion does not decode serialized JSON inside a String again.
-It preserves row metadata and embedded payload hashes.
-Checksums over the old storage representation can change.
-
-The parent authentication table alteration includes existing and default partitions.
-The migration resolves the pg_partman template from its native configuration and alters that template too.
-Unexpected source types or partition/template states stop the migration.
-The migration does not issue row updates or disable append-only guards.
-Populated PostgreSQL tests cover conversion, guards, retention, future partitions, export shape, and reruns.
-
-Authentication and configuration HTTP and CSV fields remain Strings.
-The [release migration entry](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) owns the person-data export change.
-The [operator procedure](../admin/native-hibernate-json-cutover) owns shutdown, backup, upgrade, export checks, and recovery.
 
 ## Resources
 

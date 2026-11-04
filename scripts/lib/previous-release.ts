@@ -33,3 +33,20 @@ const tags = (...args: string[]): string[] =>
 export function previousReleaseOf(head: string): string | undefined {
 	return previousRelease(tags("--merged", head, "--list", "v*"), tags("--points-at", head));
 }
+
+/** The 1.0 baseline refuses a database from before this release. */
+export const BASELINE_RELEASE = "v1.0.0-rc.1";
+
+/**
+ * The release that an upgrade test of `head` starts from: the previous stable release, or the baseline's release while
+ * the stable line is still 0.x, because the baseline refuses every 0.x database.
+ */
+export function upgradeFromOf(head: string): string | undefined {
+	const previous = previousReleaseOf(head);
+	const beforeBaseline = previous?.startsWith("v0.") ?? true;
+	return beforeBaseline &&
+		tags("--merged", head, "--list", BASELINE_RELEASE).length > 0 &&
+		tags("--points-at", head, "--list", BASELINE_RELEASE).length === 0
+		? BASELINE_RELEASE
+		: previous;
+}
