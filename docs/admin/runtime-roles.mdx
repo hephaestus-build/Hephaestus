@@ -427,7 +427,7 @@ The turn fails with **Hephaestus took too long to reply and stopped. Try again.*
 At the call limit, the turn fails with **Hephaestus could not finish this reply. Try again.**
 The worker ends a stopped turn itself if the conversation host does not end it within 30 seconds.
 
-The worker's LLM proxy cuts a conversation model call whose provider stays silent too long.
+The worker's LLM proxy cuts a conversation model call, or a streamed model call of a practice review, whose provider stays silent too long.
 Two bounds apply:
 
 - `hephaestus.mentor.turn.model-first-byte-timeout` (default 5 minutes) bounds the wait for the response headers.
@@ -438,6 +438,12 @@ Any byte counts, also an SSE comment that a gateway sends to keep the connection
 The turn's deadline also bounds both, because the stop at the deadline cancels the call.
 The turn fails with **Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment.**
 The worker logs the cut call and the failure with the reason `STALLED` and the bound that was passed.
+
+For a practice review, the review runner retries the cut call up to 5 times.
+When two sessions in a row end with their calls unanswered, the review starts no new session.
+The attempt then ends early.
+If no call of the attempt was answered, the review runs again under the normal retry rules.
+`llm_proxy_upstream_stalled_total` counts each cut call.
 
 In a load test, the slowest 5 % of single calls took 21 seconds, and calls under load took 34 seconds on average.
 Both defaults are above these times.
@@ -745,8 +751,8 @@ A load test that asks more questions as one account must raise the capacity.
 | ------------------------------------------- | ------------- | ----------------------------------------------------------------------- |
 | `hephaestus.worker.capacity.mentor-max`     | `auto` (8)    | The number of conversation turns that one worker's conversation host runs at once ([Conversation turn capacity](#conversation-turn-capacity)) |
 | `hephaestus.mentor.turn.lease`              | `PT1M`        | The lease of a running turn. The worker renews it at one third of this. |
-| `hephaestus.mentor.turn.model-first-byte-timeout` | `PT5M`  | How long one model call of a turn may wait for the provider's response headers |
-| `hephaestus.mentor.turn.model-idle-timeout` | `PT2M`        | How long the stream of one model call of a turn may send nothing |
+| `hephaestus.mentor.turn.model-first-byte-timeout` | `PT5M`  | How long one model call of a turn, or one streamed model call of a review, may wait for the provider's response headers |
+| `hephaestus.mentor.turn.model-idle-timeout` | `PT2M`        | How long the stream of one model call of a turn or of a review may send nothing |
 | `hephaestus.mentor.turn.lease-reaper-delay` | `PT15S`       | The interval at which the server looks for expired leases               |
 | `hephaestus.mentor.turn.max-follow-ups`     | `3`           | The number of questions that can wait in one conversation or thread |
 | `hephaestus.mentor.turn.capacity`           | Not set       | The conversation turns that all workers together run at once. Only the server reads it ([Conversation turn capacity](#conversation-turn-capacity)) |

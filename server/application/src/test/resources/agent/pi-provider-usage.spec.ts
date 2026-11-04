@@ -507,6 +507,45 @@ assert.equal(isRetryableAssistantError({ ...message, errorMessage: "504: Gateway
 	assert.equal(native.status, 0, native.stderr);
 });
 
+void test("the native SDK retries the proxy's stall errors", () => {
+	const proxySource = readFileSync(
+		new URL(
+			"../../../main/java/de/tum/cit/aet/hephaestus/agent/proxy/LlmProxyService.java",
+			import.meta.url,
+		),
+		"utf8",
+	);
+	// A review's call that the proxy cut for silence runs again; a conversation host stops on the code first.
+	const stalls = ["FIRST_BYTE_STALLED", "STREAM_STALLED"].map((name) => {
+		const literal = new RegExp(
+			`static final String ${name}\\s*=\\s*(?<literal>"(?:[^"\\\\]|\\\\.)*");`,
+			"u",
+		).exec(proxySource)?.groups?.literal;
+		assert.ok(literal !== undefined, `the proxy owns the ${name} wording`);
+		const wording: unknown = JSON.parse(literal);
+		assert.ok(typeof wording === "string" && wording.includes("%d"));
+		return `upstream_stalled: ${wording.replace("%d", "120")}`;
+	});
+	const native = spawnSync(
+		process.execPath,
+		[
+			"--experimental-import-meta-resolve",
+			"--input-type=module",
+			"-e",
+			`import assert from "node:assert/strict";
+const sdk = import.meta.resolve("@earendil-works/pi-coding-agent");
+const { isRetryableAssistantError } = await import(import.meta.resolve("@earendil-works/pi-ai", sdk));
+for (const errorMessage of JSON.parse(process.argv[1])) {
+	assert.equal(isRetryableAssistantError({ role: "assistant", stopReason: "error", errorMessage, content: [] }), true, errorMessage);
+}
+`,
+			JSON.stringify(stalls),
+		],
+		{ encoding: "utf8", cwd: process.cwd() },
+	);
+	assert.equal(native.status, 0, native.stderr);
+});
+
 void test("openai-completions records a stream that ends without a finish reason", async () => {
 	const chunk = { id: "c", object: "chat.completion.chunk", created: 0, model: "gpt-5" };
 	const message = await completeWith("openai-completions", (response) =>

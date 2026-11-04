@@ -89,6 +89,14 @@ class LlmProxyService {
     /** The provider sent no byte for the idle bound of the call. */
     static final String UPSTREAM_STALLED = "upstream_stalled";
 
+    /**
+     * The words of a stall. They say "timed out", which the review runner's model client retries
+     * ({@code pi-provider-usage.spec.ts} pins it); a conversation host stops the turn on the code instead.
+     */
+    static final String FIRST_BYTE_STALLED = "the model provider timed out: it sent no first byte within %d seconds";
+
+    static final String STREAM_STALLED = "the model provider's stream timed out: it sent nothing for %d seconds";
+
     /** The connection's breaker refuses calls after repeated failures. */
     static final String UPSTREAM_PAUSED = "upstream_paused";
 
@@ -109,7 +117,7 @@ class LlmProxyService {
     private final ProxyRoutingService routingService;
     private final ProxyCallsInFlight callsInFlight;
     private final LlmConnectionHealth health;
-    private final Bounds hephBounds;
+    private final Bounds silenceBounds;
     private final LlmCallPermits callPermits;
 
     LlmProxyService(
@@ -136,7 +144,7 @@ class LlmProxyService {
         this.routingService = routingService;
         this.callsInFlight = callsInFlight;
         this.health = health;
-        this.hephBounds = new Bounds(hephProperties.modelFirstByteTimeout(), hephProperties.modelIdleTimeout());
+        this.silenceBounds = new Bounds(hephProperties.modelFirstByteTimeout(), hephProperties.modelIdleTimeout());
         this.callPermits = callPermits;
     }
 
@@ -488,10 +496,12 @@ class LlmProxyService {
                                 + LlmConnectionHealth.OPEN_FOR.toSeconds() + " seconds before it calls it again");
             }
             span.tag("gen_ai.request.model", credential.upstreamModelId());
+            boolean reviewStream = practiceScript == null && requestsStream(prepared.body());
+            // A review's stream runs until the attempt's deadline; these bounds free a silent provider's call sooner.
             Exchange exchange = new Exchange(
                     upstreamUri,
                     buildUpstreamHeaders(incomingHeaders, credential),
-                    attempt.sourceType() == UsageSourceType.MENTOR_TURN ? hephBounds : null,
+                    attempt.sourceType() == UsageSourceType.MENTOR_TURN || reviewStream ? silenceBounds : null,
                     Mono.firstWithSignal(call.cancelled(), poolPermit.revoked()),
                     transports);
             ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, protocol);
@@ -499,7 +509,6 @@ class LlmProxyService {
             tap.onFirstEvent(waited -> callPermits.firstToken(poolPermit, waited, instanceCredential));
             // Both requests below share the attempt's one deadline; the second one does not get a new window.
             Instant deadline = routing.workDeadline();
-            boolean reviewStream = practiceScript == null && requestsStream(prepared.body());
             UpstreamResult upstream;
             try {
                 if (workTimeOver(routing)) {
@@ -551,8 +560,8 @@ class LlmProxyService {
                 if (bounds != null && ProxyStreamingUtils.readTimedOut(e)) {
                     accounting.recordError(routing.apiProtocol());
                     accounting.recordUpstreamStalled(routing.apiProtocol());
-                    String stall = "the model provider sent no first byte within "
-                            + bounds.firstByte().toSeconds() + " seconds";
+                    String stall =
+                            FIRST_BYTE_STALLED.formatted(bounds.firstByte().toSeconds());
                     if (!routing.hephTurn())
                         log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
                     call.failed(new MentorTurn.FailedCall(UPSTREAM_STALLED, null));
@@ -615,8 +624,7 @@ class LlmProxyService {
             Bounds bounds = exchange.bounds();
             if (bounds != null && upstream.streamOutcome() == StreamOutcome.UPSTREAM_IDLE) {
                 accounting.recordUpstreamStalled(routing.apiProtocol());
-                String stall = "the model provider's stream sent nothing for "
-                        + bounds.idle().toSeconds() + " seconds";
+                String stall = STREAM_STALLED.formatted(bounds.idle().toSeconds());
                 if (!routing.hephTurn())
                     log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
                 if (response != null) errors.writeStallFrame(response, protocol, stall);
@@ -697,8 +705,9 @@ class LlmProxyService {
     }
 
     /**
-     * How long a conversation turn's provider may send nothing. A provider can queue a request before it sends its response
-     * headers, so the first byte gets its own, longer bound. The turn's deadline bounds both: its stop cancels the call.
+     * How long the provider of a conversation turn's call, or of a review's stream, may send nothing. A provider can
+     * queue a request before it sends its response headers, so the first byte gets its own, longer bound. The turn's or
+     * the attempt's deadline bounds both: its stop cancels the call.
      *
      * @param firstByte until the response headers
      * @param idle between two reads of the response body; an SSE comment counts
@@ -722,8 +731,10 @@ class LlmProxyService {
     /**
      * One upstream exchange, run on this request thread, which alone writes the servlet response. With a work deadline,
      * the whole exchange — waiting for the head, the body, and a stream — ends by the deadline; a review's stream may
-     * use all of the attempt's remaining time, while every other call also keeps the proxy's own ceiling. A conversation
-     * turn has no work deadline: its call ends on the turn's {@code bounds}, when the turn ends, or at the turn ceiling.
+     * use all of the attempt's remaining time while its provider keeps sending, and ends on the exchange's
+     * {@code bounds} when it goes silent. Every other call of a review also keeps the proxy's own ceiling. A
+     * conversation turn has no work deadline: its call ends on its {@code bounds}, when the turn ends, or at the turn
+     * ceiling.
      *
      * @return {@code null} when the attempt's end cancelled the call before the provider answered
      */

@@ -166,6 +166,7 @@ For later turns, the path builder removes the tool calls from the cut-off answer
 The deadline of a turn is the LLM timeout of the conversation model binding, at most 15 minutes (`AgentBindingLimits.MAX_HEPH_TURN_SECONDS`).
 The deadline is the hard ceiling of a turn that keeps making progress.
 A stall ends a turn earlier: the worker's LLM proxy cuts a silent model call (`LlmProxyService`, `upstream_stalled`), and the host ends the turn as `STALLED`.
+The proxy cuts a review's streamed call on the same bounds, and the review runner retries it ([Runtime roles](/admin/runtime-roles)).
 Set the ceiling above the time of a few of the slowest model calls, because an answer takes a few calls.
 A worker runs few turns at once, so a turn as long as a review would keep every question queued behind it waiting.
 

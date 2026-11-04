@@ -50,7 +50,8 @@ class LlmProxyWebClientConfig {
     /**
      * How long a response may send nothing: the review runner's {@code STALL_MS} in {@code pi-runner.ts}, after which
      * it gives up on a silent session. A silent stream then frees its place in the attempt's cap at the same time.
-     * {@code ReviewRunnerConstantsTest} pins the two.
+     * {@code ReviewRunnerConstantsTest} pins the two. A review's streamed call ends sooner, on
+     * {@code hephaestus.mentor.turn.model-idle-timeout}.
      */
     static final Duration IDLE = Duration.ofMinutes(5);
 

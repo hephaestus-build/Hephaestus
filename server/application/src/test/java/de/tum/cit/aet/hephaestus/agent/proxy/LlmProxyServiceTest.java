@@ -809,6 +809,10 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         private LlmProxyService controllerWith(WebClient client, Tracer tracer) {
+            return controllerWith(client, tracer, new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
+        }
+
+        private LlmProxyService controllerWith(WebClient client, Tracer tracer, HephCallProperties silence) {
             return new LlmProxyService(
                     tracer,
                     client,
@@ -826,7 +830,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     streamingCalls,
                     streamingHealth,
                     streamingPermits,
-                    new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
+                    silence);
         }
 
         @AfterEach
@@ -960,6 +964,93 @@ class LlmProxyServiceTest extends BaseUnitTest {
             } finally {
                 gateway.stop(0);
             }
+        }
+
+        @Test
+        @DisplayName(
+                "a review stream whose provider sends its headers and one comment, then nothing, ends at the idle bound")
+        void aReviewStreamThatGoesSilentAfterAKeepAliveCommentEndsAtTheIdleBound() throws Exception {
+            // The shape of a gateway that schedules the call and never answers: headers, one comment, then silence.
+            CountDownLatch released = new CountDownLatch(1);
+            com.sun.net.httpserver.HttpServer gateway = com.sun.net.httpserver.HttpServer.create(
+                    new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+            gateway.createContext("/v1/chat/completions", exchange -> {
+                exchange.getRequestBody().readAllBytes();
+                exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+                exchange.sendResponseHeaders(200, 0);
+                try (OutputStream body = exchange.getResponseBody()) {
+                    body.write(": logos-schedule\n\n".getBytes(StandardCharsets.UTF_8));
+                    body.flush();
+                    released.await(30, TimeUnit.SECONDS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            gateway.start();
+            try {
+                // The attempt's deadline is far off, so only the idle bound can end the call.
+                LlmCallPermits.Permit permit = mock(LlmCallPermits.Permit.class);
+                when(permit.revoked()).thenReturn(Mono.never());
+                Answer answer = proxyPooledStream(
+                        "http://127.0.0.1:" + gateway.getAddress().getPort() + "/v1", permit);
+
+                assertThat(answer.status()).isEqualTo(200);
+                JsonNode last = OBJECT_MAPPER.readTree(answer.body()
+                        .strip()
+                        .lines()
+                        .reduce((first, second) -> second)
+                        .orElseThrow()
+                        .substring("data: ".length()));
+                assertThat(last.path("error").path("code").asString()).isEqualTo("upstream_stalled");
+                // The review runner's model client retries an error that says it timed out.
+                assertThat(last.path("error").path("message").asString())
+                        .contains("timed out: it sent nothing for 0 seconds");
+                assertThat(streamingMeterRegistry
+                                .counter("llm.proxy.upstream.stalled", "apiProtocol", "openai-completions")
+                                .count())
+                        .isEqualTo(1.0);
+            } finally {
+                released.countDown();
+                gateway.stop(0);
+            }
+        }
+
+        @Test
+        @DisplayName(
+                "a review call without a stream keeps the client's read bound when its provider pauses past the idle bound")
+        void aReviewCallWithoutAStreamIsNotCutAtTheIdleBound() throws Exception {
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "application/json")
+                    .bodyDelay(800, TimeUnit.MILLISECONDS)
+                    .body("{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"slow review\"}}],"
+                            + "\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":40}}")
+                    .build());
+            ProxyRouting routing = streamingRouting();
+            authenticate(routing);
+            stubCredential(
+                    routing,
+                    new LlmModelResolver.ProxyCredential(
+                            upstream.url("/v1").toString(),
+                            "openai-completions",
+                            LlmAuthMode.BEARER,
+                            "catalog-model",
+                            "secret",
+                            42L));
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            ResponseEntity<?> answer = streamingController.proxy(
+                    request("POST", "/internal/llm/chat/completions"),
+                    response,
+                    new HttpHeaders(),
+                    "{\"stream\":false,\"messages\":[]}".getBytes(StandardCharsets.UTF_8));
+
+            String body = answer == null
+                    ? response.getContentAsString()
+                    : answer.getBody() instanceof byte[] bytes
+                            ? new String(bytes, StandardCharsets.UTF_8)
+                            : String.valueOf(answer.getBody());
+            assertThat(body).contains("slow review").doesNotContain("upstream_stalled");
         }
 
         @Test
@@ -1254,51 +1345,12 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .orElseThrow()
                     .substring("data: ".length()));
             assertThat(last.path("error").path("code").asString()).isEqualTo("upstream_stalled");
-            assertThat(last.path("error").path("message").asString()).contains("stream sent nothing for 0 seconds");
+            assertThat(last.path("error").path("message").asString())
+                    .contains("stream timed out: it sent nothing for 0 seconds");
             assertThat(streamingMeterRegistry
                             .counter("llm.proxy.upstream.stalled", "apiProtocol", "openai-completions")
                             .count())
                     .isEqualTo(1.0);
-        }
-
-        @Test
-        @DisplayName(
-                "a review call keeps the client's read bound when its provider pauses longer than a Hephaestus idle bound")
-        void aReviewCallIsNotCutAtTheHephIdleBound() throws Exception {
-            MockHttpServletResponse response =
-                    proxyStreamAfter(800, "{\"choices\":[{\"delta\":{\"content\":\"slow review\"}}]}", "[DONE]");
-
-            assertThat(response.getContentAsString())
-                    .contains("slow review")
-                    .contains("[DONE]")
-                    .doesNotContain("upstream_stalled");
-        }
-
-        private MockHttpServletResponse proxyStreamAfter(long delayMillis, String... sseFrames) {
-            StringBuilder body = new StringBuilder();
-            for (String frame : sseFrames) {
-                body.append("data: ").append(frame).append("\n\n");
-            }
-            upstream.enqueue(new MockResponse.Builder()
-                    .code(200)
-                    .addHeader("Content-Type", "text/event-stream")
-                    .bodyDelay(delayMillis, TimeUnit.MILLISECONDS)
-                    .body(body.toString())
-                    .build());
-            ProxyRouting routing = streamingRouting();
-            authenticate(routing);
-            stubCredential(
-                    routing,
-                    new LlmModelResolver.ProxyCredential(
-                            upstream.url("/v1").toString(),
-                            "openai-completions",
-                            LlmAuthMode.BEARER,
-                            "catalog-model",
-                            "secret",
-                            42L));
-            MockHttpServletResponse response = new MockHttpServletResponse();
-            controllerProxy(response);
-            return response;
         }
 
         @Test
@@ -1744,6 +1796,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("an attempt's end waits for a call in flight to record its usage")
         void anAttemptsEndWaitsForTheCallInFlightToRecordItsUsage() throws Exception {
+            // The test is about the settle, not a silence bound.
+            streamingController = controllerWith(WebClient.builder().build(), Tracer.NOOP, SILENCE_NEVER_REACHED);
             upstream.enqueue(new MockResponse.Builder()
                     .code(200)
                     .addHeader("Content-Type", "text/event-stream")
@@ -2280,7 +2334,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                         .retrieve()
                         .toBodilessEntity()
                         .block(Duration.ofSeconds(10));
-                var service = controllerWith(configured);
+                var service = controllerWith(configured, Tracer.NOOP, SILENCE_NEVER_REACHED);
                 Instant deadline = Instant.now().plusSeconds(1);
                 ProxyRouting routing = streamingRouting(deadline);
                 stubCredential(
@@ -2388,7 +2442,11 @@ class LlmProxyServiceTest extends BaseUnitTest {
                                             tailArmed.countDown();
                                         });
                                     });
-                                    var service = controllerWith(answering(requests, body), tracer);
+                                    // The review's stream is silent for 600 seconds, so only the mentor keeps its idle
+                                    // bound.
+                                    var service = mentor
+                                            ? controllerWith(answering(requests, body), tracer)
+                                            : controllerWith(answering(requests, body), tracer, SILENCE_NEVER_REACHED);
                                     authenticate(routing);
                                     try {
                                         assertThat(service.proxy(
@@ -2565,11 +2623,15 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 .count();
     }
 
-    // How long a conversation turn's provider may take to its first byte in these tests.
+    // How long a conversation turn's or a review stream's provider may take to its first byte in these tests.
     private static final Duration HEPH_FIRST_BYTE = Duration.ofMillis(1500);
 
-    // How long a conversation turn's stream may send no byte in these tests.
+    // How long a conversation turn's stream, or a review's stream, may send no byte in these tests.
     private static final Duration HEPH_IDLE = Duration.ofMillis(400);
+
+    // Silence bounds that no test reaches, for a test of another bound.
+    private static final HephCallProperties SILENCE_NEVER_REACHED =
+            new HephCallProperties(Duration.ofHours(1), Duration.ofHours(1));
 
     // The review cap at practice concurrency 3: 2 × (3 + 1) + 4.
     private static final int REVIEW_CALLS_AT_THREE = 12;

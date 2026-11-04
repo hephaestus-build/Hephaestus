@@ -8,9 +8,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * How long one model call of a conversation turn may hear nothing from its provider, bound from
- * {@code hephaestus.mentor.turn.*}. A provider can queue a request before it sends its response headers, so the first
- * byte gets its own, longer bound.
+ * How long one model call of a conversation turn, or one streamed model call of a review, may hear nothing from its
+ * provider, bound from {@code hephaestus.mentor.turn.*}. Both are the same fact: the model stopped answering. A provider
+ * can queue a request before it sends its response headers, so the first byte gets its own, longer bound.
  *
  * @param modelFirstByteTimeout until the response headers
  * @param modelIdleTimeout between two reads of the response body; an SSE comment counts
