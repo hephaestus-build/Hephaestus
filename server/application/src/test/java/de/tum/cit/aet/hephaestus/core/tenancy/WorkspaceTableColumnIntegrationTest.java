@@ -24,12 +24,21 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
      * Tables that belong to no workspace and that no entity maps, so {@link WorkspaceScopedTables#GLOBAL_TABLES},
      * which must match the global entities, cannot list them.
      */
-    private static final Set<String> GLOBAL_WITHOUT_ENTITY =
-            Set.of("account_public_activity_hidden_by_default", "auth_rate_limit_bucket", "shedlock");
+    private static final Set<String> GLOBAL_WITHOUT_ENTITY = Set.of(
+            "account_public_activity_hidden_by_default",
+            "auth_rate_limit_bucket",
+            "shedlock",
+            // The Spring Modulith event registry: the library owns its shape, and completed events are deleted.
+            "event_publication");
 
     /** These nullable-workspace tables still require SQL tenancy enforcement. */
-    private static final Map<String, String> MIXED_SCOPE_TABLES =
-            Map.of("consumer_dead_letter", "Installation lifecycle failures can arrive before a workspace exists");
+    private static final Map<String, String> MIXED_SCOPE_TABLES = Map.of(
+            "consumer_dead_letter",
+            "Installation lifecycle failures can arrive before a workspace exists",
+            "config_audit_event",
+            "workspace_id is NULL only for a curated practice change, which belongs to the instance",
+            "product_feedback",
+            "workspace_id is NULL only for product feedback sent outside a workspace");
 
     /**
      * Global tables that still have a {@code workspace_id}, and why it does not make the row workspace data. SQL tenancy
@@ -44,39 +53,12 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
             "workspace_slug_history",
             "a former slug resolves to its workspace before any workspace context exists");
 
-    private static final String MIRROR =
-            "a provider mirror that reaches its workspace through its repository or" + " organization";
-    private static final String OPTIONAL = "workspace_id is NULL for product feedback outside a workspace";
-
-    /** Tables from before this rule, with how they reach their workspace. Do not add to this list. */
-    private static final Map<String, String> BEFORE_THE_RULE = Map.ofEntries(
-            Map.entry("commit_contributor", MIRROR),
-            Map.entry("commit_file_change", MIRROR),
-            Map.entry("commit_pull_request", MIRROR),
-            Map.entry("git_commit", MIRROR),
-            Map.entry("issue", MIRROR),
-            Map.entry("issue_assignee", MIRROR),
-            Map.entry("issue_blocking", MIRROR),
-            Map.entry("issue_comment", MIRROR),
-            Map.entry("issue_label", MIRROR),
-            Map.entry("label", MIRROR),
-            Map.entry("milestone", MIRROR),
-            Map.entry("organization_membership", MIRROR),
-            Map.entry("pull_request_closing_issue", MIRROR),
-            Map.entry("pull_request_requested_reviewers", MIRROR),
-            Map.entry("pull_request_requested_team", MIRROR),
-            Map.entry("pull_request_review", MIRROR),
-            Map.entry("pull_request_review_comment", MIRROR),
-            Map.entry("pull_request_review_thread", MIRROR),
-            Map.entry("repository", MIRROR),
-            Map.entry("repository_collaborator", MIRROR),
-            Map.entry("team", MIRROR),
-            Map.entry("team_membership", MIRROR),
-            Map.entry("team_repository_permission", MIRROR),
-            Map.entry("config_audit_event", "workspace_id is NULL only for a curated practice change"),
-            Map.entry("product_feedback", OPTIONAL),
-            Map.entry("connection_audit", "reaches its workspace through its connection"),
-            Map.entry("event_publication", "the Spring Modulith event registry; a payload can name a workspace"));
+    /**
+     * Tables from before this rule, with how they reach their workspace. Do not add to this list. The provider mirror
+     * ({@link WorkspaceScopedTables#MIRROR_TABLES}) is shared by design and is not on it (ADR 0077).
+     */
+    private static final Map<String, String> BEFORE_THE_RULE =
+            Map.of("connection_audit", "reaches its workspace through its connection");
 
     private static final String TABLES_WITHOUT_WORKSPACE_ID = """
             SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -100,6 +82,7 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
                 .filteredOn(table -> !WorkspaceScopedTables.GLOBAL_TABLES.contains(table)
                         && !GLOBAL_WITHOUT_ENTITY.contains(table)
                         && !MIXED_SCOPE_TABLES.containsKey(table)
+                        && !WorkspaceScopedTables.MIRROR_TABLES.contains(table)
                         && !BEFORE_THE_RULE.containsKey(table))
                 .as("These tables have no workspace_id, or a nullable one. Give each a NOT NULL workspace_id, or record"
                         + " an approved exception as docs/contributor/database-migration.mdx"
@@ -109,6 +92,14 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
             assertThat(missing).as(reason).contains(table);
             assertThat(workspaceScopedTables.isScoped(table))
                     .as("Mixed-scope table %s must retain SQL tenancy enforcement", table)
+                    .isTrue();
+        });
+        assertThat(WorkspaceScopedTables.MIRROR_TABLES).allSatisfy(table -> {
+            assertThat(missing)
+                    .as("Mirror table %s must exist and carry no workspace_id (ADR 0077)", table)
+                    .contains(table);
+            assertThat(workspaceScopedTables.isScoped(table))
+                    .as("Mirror table %s must remain under SQL tenancy enforcement", table)
                     .isTrue();
         });
         assertThat(BEFORE_THE_RULE.keySet())

@@ -61,12 +61,19 @@ A table that belongs to no workspace is a security decision:
 If a global table has a `workspace_id`, also record why in `GLOBAL_NAMING_A_WORKSPACE` in the test.
 SQL tenancy enforcement does not check a global table, so its `workspace_id` gives no isolation.
 
+The provider mirror tables in `WorkspaceScopedTables.MIRROR_TABLES` have no `workspace_id`, because more than one workspace shares each row.
+A read of a mirror table binds the workspace through the monitored scope ([ADR 0077](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md)).
+Add a mirror table only for a new provider object that more than one workspace can monitor.
+
 The test also lists the tables from before this rule. Do not add to that list.
 
-`consumer_dead_letter` is a mixed-scope exception: installation lifecycle failures can arrive before a workspace exists.
-Its workspace column can be NULL, and it remains under SQL tenancy enforcement.
-The installation repository queries use `@WorkspaceAgnostic`, with an explicit `workspace IS NULL` predicate.
-The test records this decision in `MIXED_SCOPE_TABLES` and requires that the table remains scoped.
+A mixed-scope table has a nullable workspace column and remains under SQL tenancy enforcement.
+The test records each one in `MIXED_SCOPE_TABLES`, with its reason, and requires that the table remains scoped:
+
+- `consumer_dead_letter`: installation lifecycle failures can arrive before a workspace exists.
+  The installation repository queries use `@WorkspaceAgnostic`, with an explicit `workspace IS NULL` predicate.
+- `config_audit_event`: the column is NULL only for a curated practice change, which belongs to the instance.
+- `product_feedback`: the column is NULL only for product feedback sent outside a workspace.
 
 ## Native objects the JPA diff does not cover
 

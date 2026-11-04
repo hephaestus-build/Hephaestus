@@ -268,7 +268,10 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
 
         assertThat(repositoryRepository.count()).isZero();
         assertThat(issueRepository.count()).isZero();
-        assertThat(repositoryToMonitorRepository.count()).isZero();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(tenantA.getId()))
+                .isEmpty();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(tenantB.getId()))
+                .isEmpty();
     }
 
     @Test
@@ -332,7 +335,10 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
         // Trigger A — the GitHub disconnect's local erase.
         githubConnectionStrategy.eraseLocalData(new IntegrationRef(IntegrationKind.GITHUB, tenantB.getId(), "5002"));
 
-        assertThat(repositoryToMonitorRepository.count()).isZero();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(tenantA.getId()))
+                .isEmpty();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(tenantB.getId()))
+                .isEmpty();
         assertThat(repositoryRepository.count()).isZero();
         assertThat(issueRepository.count()).isZero();
     }

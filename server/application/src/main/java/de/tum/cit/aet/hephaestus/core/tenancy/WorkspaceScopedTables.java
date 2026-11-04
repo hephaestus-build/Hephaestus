@@ -109,6 +109,36 @@ public class WorkspaceScopedTables {
             "databasechangelog",
             "databasechangeloglock");
 
+    /**
+     * The provider mirror: one row per provider object, shared by every workspace that monitors it, so no row
+     * carries a {@code workspace_id} (ADR 0077). A read reaches the workspace through the monitored scope, and
+     * {@link WorkspaceStatementInspector} requires that read to bind the workspace.
+     */
+    public static final Set<String> MIRROR_TABLES = Set.of(
+            "commit_contributor",
+            "commit_file_change",
+            "commit_pull_request",
+            "git_commit",
+            "issue",
+            "issue_assignee",
+            "issue_blocking",
+            "issue_comment",
+            "issue_label",
+            "label",
+            "milestone",
+            "organization_membership",
+            "pull_request_closing_issue",
+            "pull_request_requested_reviewers",
+            "pull_request_requested_team",
+            "pull_request_review",
+            "pull_request_review_comment",
+            "pull_request_review_thread",
+            "repository",
+            "repository_collaborator",
+            "team",
+            "team_membership",
+            "team_repository_permission");
+
     private volatile Set<String> scopedTables = Set.of();
     private volatile Set<String> manyToManyJoinTables = Set.of();
     private volatile Map<String, Set<String>> primaryKeyColumns = Map.of();
