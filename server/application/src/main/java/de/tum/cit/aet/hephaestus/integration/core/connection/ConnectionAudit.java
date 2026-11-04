@@ -48,6 +48,10 @@ public class ConnectionAudit {
     @JoinColumn(name = "connection_id", nullable = false)
     private Connection connection;
 
+    /** The workspace of {@link #connection}; a foreign key on both columns keeps them equal. */
+    @Column(name = "workspace_id", nullable = false, updatable = false)
+    private long workspaceId;
+
     @Column(name = "event_type", nullable = false, length = 48)
     private String eventType;
 
@@ -96,6 +100,7 @@ public class ConnectionAudit {
             @Nullable String correlationId,
             @Nullable String detail) {
         this.connection = connection;
+        this.workspaceId = connection.getWorkspace().getId();
         this.eventType = eventType;
         this.fromState = fromState;
         this.toState = toState;

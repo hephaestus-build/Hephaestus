@@ -53,13 +53,6 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
             "workspace_slug_history",
             "a former slug resolves to its workspace before any workspace context exists");
 
-    /**
-     * Tables from before this rule, with how they reach their workspace. Do not add to this list. The provider mirror
-     * ({@link WorkspaceScopedTables#MIRROR_TABLES}) is shared by design and is not on it (ADR 0077).
-     */
-    private static final Map<String, String> BEFORE_THE_RULE =
-            Map.of("connection_audit", "reaches its workspace through its connection");
-
     private static final String TABLES_WITHOUT_WORKSPACE_ID = """
             SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = ? AND c.relkind IN ('r', 'p') AND NOT c.relispartition
@@ -82,8 +75,7 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
                 .filteredOn(table -> !WorkspaceScopedTables.GLOBAL_TABLES.contains(table)
                         && !GLOBAL_WITHOUT_ENTITY.contains(table)
                         && !MIXED_SCOPE_TABLES.containsKey(table)
-                        && !WorkspaceScopedTables.MIRROR_TABLES.contains(table)
-                        && !BEFORE_THE_RULE.containsKey(table))
+                        && !WorkspaceScopedTables.MIRROR_TABLES.contains(table))
                 .as("These tables have no workspace_id, or a nullable one. Give each a NOT NULL workspace_id, or record"
                         + " an approved exception as docs/contributor/database-migration.mdx"
                         + " § Workspace column describes")
@@ -102,11 +94,6 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
                     .as("Mirror table %s must remain under SQL tenancy enforcement", table)
                     .isTrue();
         });
-        assertThat(BEFORE_THE_RULE.keySet())
-                .filteredOn(table -> !missing.contains(table))
-                .as("These tables now carry a NOT NULL workspace_id or no longer exist. Remove them from"
-                        + " BEFORE_THE_RULE")
-                .isEmpty();
     }
 
     @Test

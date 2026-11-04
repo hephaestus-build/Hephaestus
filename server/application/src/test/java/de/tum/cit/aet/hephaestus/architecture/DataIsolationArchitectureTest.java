@@ -76,7 +76,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             // Unified integration framework
             "Connection", // has direct Workspace field
             "ConsumerDeadLetter", // workspace-owned records; installation records have no workspace yet
-            "ConnectionAudit", // through Connection.workspace
+            "ConnectionAudit", // direct workspace_id scalar, equal to its connection's by foreign key
             // Product feedback and copies each carry the tenant independently.
             "Feedback", // direct workspace_id scalar
             "FeedbackCopy", // direct workspace_id scalar

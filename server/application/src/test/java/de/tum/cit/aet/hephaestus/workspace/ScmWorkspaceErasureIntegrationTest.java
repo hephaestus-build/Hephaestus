@@ -29,6 +29,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitMirrorRetention;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
@@ -117,6 +119,9 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private OrganizationMembershipRepository organizationMembershipRepository;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @Autowired
     private GitHubWorkspaceProvisioningAdapter provisioningAdapter;
@@ -362,7 +367,8 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
         Organization organization = persistOrganization(4242L, "acme");
         bindOrganization(tenantA, organization);
         persistTeam(organization, 7101L, "backend");
-        organizationMembershipRepository.upsertMembership(organization.getId(), 8101L, OrganizationMemberRole.MEMBER);
+        organizationMembershipRepository.upsertMembership(
+                organization.getId(), persistUser(8101L, "acme-member").getId(), OrganizationMemberRole.MEMBER);
 
         eraser.eraseWorkspaceScmMirror(tenantA.getId());
 
@@ -488,6 +494,19 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
         Workspace managed = workspaceRepository.findById(workspace.getId()).orElseThrow();
         managed.setOrganizationId(organization.getId());
         workspaceRepository.save(managed);
+    }
+
+    private User persistUser(long nativeId, String login) {
+        User user = new User();
+        user.setNativeId(nativeId);
+        user.setProvider(gitProvider);
+        user.setLogin(login);
+        user.setAvatarUrl("https://github.com/" + login + ".png");
+        user.setHtmlUrl("https://github.com/" + login);
+        user.setType(User.Type.USER);
+        user.setCreatedAt(Instant.now());
+        user.setUpdatedAt(Instant.now());
+        return userRepository.save(user);
     }
 
     private Team persistTeam(Organization organization, long nativeId, String slug) {

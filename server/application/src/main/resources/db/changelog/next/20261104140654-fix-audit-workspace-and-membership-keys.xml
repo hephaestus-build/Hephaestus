@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+  <changeSet id="1793791225425-1" author="hephaestus">
+    <comment>A connection audit row names its workspace, which must be the workspace of its connection. Every existing row takes it from its connection.</comment>
+    <sql>ALTER TABLE connection_audit ADD COLUMN workspace_id bigint; UPDATE connection_audit a SET workspace_id = c.workspace_id FROM connection c WHERE c.id = a.connection_id; ALTER TABLE connection_audit ALTER COLUMN workspace_id SET NOT NULL, ADD CONSTRAINT sfk_connection_audit_connection_workspace FOREIGN KEY (connection_id, workspace_id) REFERENCES connection (id, workspace_id)</sql>
+    <rollback>
+      <sql>ALTER TABLE connection_audit DROP CONSTRAINT IF EXISTS sfk_connection_audit_connection_workspace, DROP COLUMN IF EXISTS workspace_id</sql>
+    </rollback>
+  </changeSet>
+  <changeSet id="1793791225425-2" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the connection that connection_audit (connection_id, workspace_id) references scans connection_audit without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_connection_audit_connection_workspace; CREATE INDEX CONCURRENTLY idx_connection_audit_connection_workspace ON connection_audit (connection_id, workspace_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_connection_audit_connection_workspace</sql>
+    </rollback>
+  </changeSet>
+  <changeSet id="1793791225425-3" author="hephaestus">
+    <comment>Move memberships that earlier webhooks stored under GitHub's organization id to the stored organization, keep the full sync's row where both exist, and remove memberships whose organization or person no longer exists. Then organization_membership gets its foreign keys.</comment>
+    <sqlFile path="db/sql/organization-membership-stored-ids.sql" splitStatements="true"/>
+    <sql>ALTER TABLE organization_membership ADD CONSTRAINT sfk_organization_membership_organization FOREIGN KEY (organization_id) REFERENCES organization (id) ON DELETE CASCADE, ADD CONSTRAINT sfk_organization_membership_user FOREIGN KEY (user_id) REFERENCES "user" (id) ON DELETE CASCADE</sql>
+    <rollback>
+      <sql>ALTER TABLE organization_membership DROP CONSTRAINT IF EXISTS sfk_organization_membership_organization, DROP CONSTRAINT IF EXISTS sfk_organization_membership_user</sql>
+    </rollback>
+  </changeSet>
+  <changeSet id="1793791225425-4" author="hephaestus" runInTransaction="false">
+    <comment>A delete or update of the person that organization_membership.user_id references scans organization_membership without this index.</comment>
+    <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_organization_membership_user_id; CREATE INDEX CONCURRENTLY idx_organization_membership_user_id ON organization_membership (user_id)</sql>
+    <rollback>
+      <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_organization_membership_user_id</sql>
+    </rollback>
+  </changeSet>
+</databaseChangeLog>

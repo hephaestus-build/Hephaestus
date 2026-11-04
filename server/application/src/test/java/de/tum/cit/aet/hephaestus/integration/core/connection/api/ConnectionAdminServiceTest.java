@@ -114,6 +114,7 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
     @Test
     void auditForConnection_appliesLimit() {
         Workspace ws = new Workspace();
+        ws.setId(1L);
         Connection c = new Connection(
                 ws, IntegrationKind.GITHUB, "100", new ConnectionConfig.GitHubAppConfig(100L, null, null, Set.of()));
         List<ConnectionAudit> entries = List.of(
