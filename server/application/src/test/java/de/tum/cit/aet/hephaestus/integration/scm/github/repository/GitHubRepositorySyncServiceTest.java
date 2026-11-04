@@ -33,12 +33,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.graphql.support.ResourceDocumentSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.codec.json.JacksonJsonDecoder;
 import org.springframework.http.codec.json.JacksonJsonEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -81,7 +84,8 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 properties,
                 new GitHubExceptionClassifier(new SimpleMeterRegistry()),
                 mock(GitHubGraphQlSyncCoordinator.class),
-                webClient);
+                webClient,
+                new TransactionTemplate(mock(PlatformTransactionManager.class)));
     }
 
     @ParameterizedTest
@@ -125,6 +129,23 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
         assertThat(repository.getNameWithOwner()).isEqualTo("course/project");
         assertThat(repository.getProvider()).isSameAs(provider);
         verify(organizations).upsert(33L, 100L, "course", "course", null, null);
+    }
+
+    @Test
+    void shouldLetAFailedWriteReachTheCallerInsteadOfTreatingItAsAGitHubError() {
+        var repositories = mock(RepositoryRepository.class);
+        var organizations = mock(OrganizationRepository.class);
+        when(repositories.save(any())).thenThrow(new DataIntegrityViolationException("duplicate repository"));
+        var service = graphQlService("""
+                {"data":{"repository":{"databaseId":123,"name":"project","nameWithOwner":"course/project",
+                "url":"https://github.com/course/project","isPrivate":false,"isArchived":false,
+                "isDisabled":false,
+                "owner":{"__typename":"Organization","databaseId":33,"login":"course"}}}}
+                """, repositories, organizations);
+        var provider = TestEntities.gitProvider(100L, IdentityProviderType.GITHUB);
+
+        assertThatThrownBy(() -> service.syncRepository(7L, "course/project", provider, 123L))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -174,7 +195,14 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
                 .when(coordinator.classifyGraphQlErrors(any()))
                 .thenAnswer(invocation -> classifier.classifyGraphQlResponse(invocation.getArgument(0)));
         return new GitHubRepositorySyncService(
-                clients, repositories, organizations, properties, classifier, coordinator, webClient);
+                clients,
+                repositories,
+                organizations,
+                properties,
+                classifier,
+                coordinator,
+                webClient,
+                new TransactionTemplate(mock(PlatformTransactionManager.class)));
     }
 
     @ParameterizedTest

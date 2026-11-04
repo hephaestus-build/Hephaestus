@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuetype.IssueTypeRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
@@ -23,11 +24,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GraphQlPaginationHelper;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlConfig;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlFragments;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuetype.GitHubIssueTypeSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.GitHubLabelProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.GitHubLabelSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.GitHubMilestoneProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.GitHubMilestoneSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -46,10 +50,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.json.JacksonJsonDecoder;
+import org.springframework.http.codec.json.JacksonJsonEncoder;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionManager;
@@ -58,7 +65,9 @@ import org.springframework.transaction.interceptor.TransactionInterceptor;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * A repository sync asks GitHub with no transaction open, then writes what it received. A transaction open across the
@@ -124,9 +133,12 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
                 VALUES (?,?,'repo',?,false,false,false,'https://example.com/repo',now(),'PUBLIC') RETURNING id
                 """, Long.class, nativeId, providerId, "outside/" + unique));
 
-        HttpGraphQlClient client = context.getBean("gitHubGraphQlClient", HttpGraphQlClient.class)
-                .mutate()
-                .webClient(builder -> builder.exchangeFunction(request -> {
+        // A filter answers from the script, so no request leaves the test. The WebClient has no exchange function of
+        // its
+        // own: with one, the GraphQL client would decode with default codecs instead of GitHub's mapper.
+        WebClient github = WebClient.builder()
+                .baseUrl("https://api.github.com/graphql")
+                .filter((request, next) -> {
                     requests.add(new Request(
                             Thread.currentThread().getName(),
                             TransactionSynchronizationManager.isActualTransactionActive()));
@@ -134,10 +146,52 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
                             .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                             .body(Objects.requireNonNull(answers.poll(), "GitHub was asked more than the test answers"))
                             .build());
-                }))
+                })
+                .build();
+        JsonMapper mapper = GitHubGraphQlConfig.gitHubGraphQlObjectMapper(context.getBean(JsonMapper.class));
+        HttpGraphQlClient client = HttpGraphQlClient.builder(github)
+                .codecConfigurer(codecs -> {
+                    codecs.customCodecs().register(new JacksonJsonEncoder(mapper));
+                    codecs.customCodecs().register(new JacksonJsonDecoder(mapper));
+                })
+                .documentSource(new FragmentMergingDocumentSource(
+                        List.of(
+                                new ClassPathResource("graphql/github/operations/"),
+                                new ClassPathResource("graphql/github/fragments/")),
+                        List.of(".graphql", ".gql"),
+                        List.of(
+                                new ClassPathResource(GitHubGraphQlFragments.ACTOR_FRAGMENTS_RESOURCE),
+                                new ClassPathResource(GitHubGraphQlFragments.COMMIT_ENRICHMENT_FIELDS_RESOURCE))))
                 .build();
         when(clients.forScope(workspaceId)).thenReturn(client);
         lenient().when(clients.getRateLimitRemaining(workspaceId)).thenReturn(5000);
+    }
+
+    @Test
+    void shouldAskGitHubWithNoTransactionOpenAndStoreTheRepository() {
+        long nativeId = 4_000_000L + repositoryId;
+        String name = "outside-org-" + repositoryId + "/fresh";
+        serve("""
+                {"data":{%s,"repository":{"databaseId":%d,"name":"fresh","nameWithOwner":"%s",
+                "url":"https://github.com/%s","isPrivate":false,"isArchived":false,"isDisabled":false,
+                "owner":{"__typename":"Organization","databaseId":%d,"login":"outside-org-%d"}}}}
+                """.formatted(RATE_LIMIT, nativeId, name, name, 5_000_000L + repositoryId, repositoryId));
+
+        var synced = repositories()
+                .syncRepository(
+                        workspaceId,
+                        name,
+                        providers
+                                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
+                                .orElseThrow(),
+                        nativeId);
+
+        assertThat(synced).isPresent();
+        assertThat(requests).containsExactly(new Request(Thread.currentThread().getName(), false));
+        assertThat(jdbc.queryForObject("""
+                        SELECT o.login FROM repository r JOIN organization o ON o.id = r.organization_id
+                        WHERE r.native_id = ? AND r.name_with_owner = ?
+                        """, String.class, nativeId, name)).isEqualTo("outside-org-" + repositoryId);
     }
 
     @Test
@@ -251,6 +305,20 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
 
     private void serve(String body) {
         answers.add(body);
+    }
+
+    private GitHubRepositorySyncService repositories() {
+        return transactional(
+                GitHubRepositorySyncService.class,
+                new GitHubRepositorySyncService(
+                        clients,
+                        context.getBean(RepositoryRepository.class),
+                        context.getBean(OrganizationRepository.class),
+                        context.getBean(GitHubSyncProperties.class),
+                        context.getBean(GitHubExceptionClassifier.class),
+                        context.getBean(GitHubGraphQlSyncCoordinator.class),
+                        context.getBean("gitHubGraphQlWebClient", WebClient.class),
+                        context.getBean(TransactionTemplate.class)));
     }
 
     private GitHubMilestoneSyncService milestones() {
