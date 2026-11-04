@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.ProjectedKeys;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineWebhookSubscription;
@@ -339,25 +340,37 @@ public class OutlineWebhookRegistrar {
     }
 
     /**
-     * Reads the connection's stored subscription and token and returns the Outline call that deletes the
-     * subscription, which touches no database. Empty when no subscription is stored; throws when one is
-     * stored but cannot be deleted with what the connection holds.
+     * Reads a live connection's stored subscription and token and returns the Outline call that deletes the
+     * subscription. Empty for a disconnected connection, whose subscription the provider teardown removes.
      */
     public Optional<Runnable> prepareDeregistration(long workspaceId, long connectionId) {
-        Optional<Connection> connection = connectionService.findInWorkspace(workspaceId, connectionId);
+        Optional<Connection> connection = connectionService
+                .findInWorkspace(workspaceId, connectionId)
+                .filter(c -> c.getState() != IntegrationState.UNINSTALLED);
         if (connection.isEmpty() || !(connection.get().getConfig() instanceof ConnectionConfig.OutlineConfig config)) {
             return Optional.empty();
         }
+        return deregistration(
+                connectionId,
+                config,
+                connectionService.findBearerToken(workspaceId, connectionId).orElse(null));
+    }
+
+    /**
+     * The Outline call that deletes the stored subscription with the given token, which touches no database. Empty
+     * when no subscription is stored; throws when one is stored but cannot be deleted with what is given.
+     */
+    public Optional<Runnable> deregistration(
+            long connectionId, ConnectionConfig.OutlineConfig config, @Nullable BearerToken bearer) {
         String subscriptionId = config.webhookSubscriptionId();
         if (subscriptionId == null || subscriptionId.isBlank()) {
             return Optional.empty();
         }
         String serverUrl = config.serverUrl();
-        Optional<BearerToken> bearer = connectionService.findBearerToken(workspaceId, connectionId);
-        if (serverUrl == null || serverUrl.isBlank() || bearer.isEmpty()) {
+        if (serverUrl == null || serverUrl.isBlank() || bearer == null) {
             throw new IllegalStateException("Outline webhook credentials are unavailable");
         }
-        String token = bearer.get().token();
+        String token = bearer.token();
         return Optional.of(() -> {
             outlineApiClient.deleteWebhookSubscription(serverUrl, token, subscriptionId);
             log.info(

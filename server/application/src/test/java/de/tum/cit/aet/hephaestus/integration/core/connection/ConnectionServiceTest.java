@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -29,6 +28,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -49,9 +49,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.SimpleTransactionStatus;
-import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Tag("unit")
@@ -133,7 +131,8 @@ class ConnectionServiceTest extends BaseUnitTest {
                         transactionManager,
                         new SyncTaskExecutor(),
                         Clock.systemUTC()),
-                mock(SourceProviderNamespaces.class));
+                mock(SourceProviderNamespaces.class),
+                Clock.fixed(Instant.parse("2026-11-03T12:00:00Z"), ZoneOffset.UTC));
         // Default: the connection is free. Only the disconnect fence ever asks.
         lenient().when(syncJobService.requestCancelForTeardown(anyLong())).thenReturn(Optional.empty());
         workspace = new Workspace();
@@ -145,10 +144,6 @@ class ConnectionServiceTest extends BaseUnitTest {
     @AfterEach
     void clearSynchronization() {
         TransactionSynchronizationManager.clearSynchronization();
-    }
-
-    private void commit() {
-        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
     }
 
     @Test
@@ -361,12 +356,11 @@ class ConnectionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void disconnect_erasesAndPreparesTeardownUnderTheFenceButTearsDownOnlyAfterCommit() {
+    void disconnect_erasesUnderTheFenceAndKeepsTheFootprintForTheProviderTeardown() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
+        connection.setCredentials(new BearerToken("xoxb-secret", null), credentialConverter);
         ConnectionStrategy strategy = mock(ConnectionStrategy.class);
-        Runnable teardown = mock(Runnable.class);
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, workspace.getId(), "100", connection.getId());
-        when(strategy.prepareProviderTeardown(ref)).thenReturn(Optional.of(teardown));
         InOrder order = inOrder(connectionRepository, syncJobService, strategy, auditRepository);
 
         service.disconnect(connection, disconnectRequest(), strategy);
@@ -376,52 +370,14 @@ class ConnectionServiceTest extends BaseUnitTest {
         order.verify(connectionRepository).acquireLifecycleLock(connection.getId(), workspace.getId());
         order.verify(syncJobService).requestCancelForTeardown(connection.getId());
         order.verify(strategy).eraseLocalData(ref);
-        order.verify(strategy).prepareProviderTeardown(ref);
         order.verify(auditRepository).save(any(ConnectionAudit.class));
+        verify(strategy, never()).prepareProviderTeardown(any(), any());
         assertThat(connection.getState()).isEqualTo(IntegrationState.UNINSTALLED);
-        verify(teardown, never()).run();
-
-        commit();
-
-        verify(teardown).run();
-    }
-
-    @Test
-    void disconnect_preparesTheTeardownWithTheTransactionSuspended() {
-        Connection connection = connectionInState(IntegrationState.ACTIVE);
-
-        service.disconnect(connection, disconnectRequest(), mock(ConnectionStrategy.class));
-
-        ArgumentCaptor<TransactionDefinition> definition = ArgumentCaptor.forClass(TransactionDefinition.class);
-        verify(transactionManager).getTransaction(definition.capture());
-        assertThat(definition.getValue().getPropagationBehavior())
-                .isEqualTo(TransactionDefinition.PROPAGATION_NOT_SUPPORTED);
-    }
-
-    @Test
-    void disconnect_teardownCannotBePrepared_stillCommitsUninstalledWithNothingScheduled() {
-        Connection connection = connectionInState(IntegrationState.ACTIVE);
-        connection.setCredentials(new BearerToken("xoxb-secret", null), credentialConverter);
-        ConnectionStrategy strategy = mock(ConnectionStrategy.class);
-        when(strategy.prepareProviderTeardown(any())).thenThrow(new IllegalStateException("token unavailable"));
-
-        Connection result = service.disconnect(connection, disconnectRequest(), strategy);
-
-        assertThat(result.getState()).isEqualTo(IntegrationState.UNINSTALLED);
-        assertThat(result.getCredentialsEncrypted()).isNull();
-        assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
-    }
-
-    @Test
-    void disconnect_teardownFailsAfterCommit_isLoggedRatherThanThrown() {
-        Connection connection = connectionInState(IntegrationState.ACTIVE);
-        ConnectionStrategy strategy = mock(ConnectionStrategy.class);
-        when(strategy.prepareProviderTeardown(any())).thenReturn(Optional.of(() -> {
-            throw new IllegalStateException("provider unavailable");
-        }));
-        service.disconnect(connection, disconnectRequest(), strategy);
-
-        assertThatCode(this::commit).doesNotThrowAnyException();
+        assertThat(connection.getCredentialsEncrypted()).isNotNull();
+        assertThat(connection.getProviderTeardownRequestedAt()).isEqualTo(Instant.parse("2026-11-03T12:00:00Z"));
+        verify(eventPublisher)
+                .publishEvent(new ProviderTeardownRequested(
+                        connection.getId(), workspace.getId(), connection.getCredentialsGeneration()));
     }
 
     @Test
@@ -436,8 +392,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         assertThatThrownBy(() -> service.disconnect(connection, disconnectRequest(), strategy))
                 .isInstanceOf(QueryTimeoutException.class);
 
-        verify(strategy, never()).prepareProviderTeardown(any());
-        assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
+        verify(eventPublisher, never()).publishEvent(any(ProviderTeardownRequested.class));
         assertThat(connection.getState()).isEqualTo(IntegrationState.ACTIVE);
         assertThat(connection.getCredentialsEncrypted()).isNotNull();
         verify(auditRepository, never()).save(any());

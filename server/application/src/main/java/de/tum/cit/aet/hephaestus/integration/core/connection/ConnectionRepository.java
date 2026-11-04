@@ -80,6 +80,15 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
 
     List<Connection> findByWorkspaceIdAndState(long workspaceId, IntegrationState state);
 
+    /** Whether another workspace still removes what its disconnected connection to this instance left at the provider. */
+    @WorkspaceAgnostic("A connect refuses an instance whose removal another workspace has not finished")
+    boolean existsByKindAndInstanceKeyAndProviderTeardownRequestedAtNotNullAndWorkspace_IdNot(
+            IntegrationKind kind, String instanceKey, long workspaceId);
+
+    /** Disconnected connections whose provider teardown was requested before {@code cutoff}, across workspaces. */
+    @WorkspaceAgnostic("The expiry of retained credentials runs across workspaces")
+    List<Connection> findByStateAndProviderTeardownRequestedAtBefore(IntegrationState state, Instant cutoff);
+
     /**
      * The Connection by primary key, scoped to its workspace (the predicate the tenancy inspector
      * requires) and deliberately state-agnostic: deactivation cleanup runs after the row left ACTIVE.

@@ -344,7 +344,8 @@ public class SyncStatusService {
                             connected,
                             c == null ? null : c.getId(),
                             c == null ? null : c.getState(),
-                            c == null ? null : c.credentialsUnreadableSince());
+                            c == null ? null : c.credentialsUnreadableSince(),
+                            c == null ? null : c.getAttentionProblem());
                 })
                 .toList();
     }

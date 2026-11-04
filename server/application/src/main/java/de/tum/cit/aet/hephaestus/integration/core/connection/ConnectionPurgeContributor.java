@@ -12,6 +12,7 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -23,14 +24,20 @@ public class ConnectionPurgeContributor implements WorkspacePurgeContributor {
 
     private final ConnectionRepository connectionRepository;
     private final ConnectionService connectionService;
+    private final CredentialReader credentialReader;
+    private final ObjectProvider<ProviderTeardown> providerTeardown;
     private final Map<IntegrationKind, ConnectionStrategy> strategies;
 
     public ConnectionPurgeContributor(
             ConnectionRepository connectionRepository,
             ConnectionService connectionService,
+            CredentialReader credentialReader,
+            ObjectProvider<ProviderTeardown> providerTeardown,
             List<ConnectionStrategy> strategyBeans) {
         this.connectionRepository = connectionRepository;
         this.connectionService = connectionService;
+        this.credentialReader = credentialReader;
+        this.providerTeardown = providerTeardown;
         this.strategies = new EnumMap<>(IntegrationKind.class);
         for (ConnectionStrategy strategy : strategyBeans) {
             if (strategies.put(strategy.kind(), strategy) != null) {
@@ -42,6 +49,10 @@ public class ConnectionPurgeContributor implements WorkspacePurgeContributor {
     @Override
     public void deleteWorkspaceData(Long workspaceId) {
         List<Connection> connections = connectionRepository.findByWorkspaceId(workspaceId);
+        // A pending teardown is removed first: a failure then blocks the purge before anything else changes.
+        connections.stream()
+                .filter(c -> c.getState() == IntegrationState.UNINSTALLED && c.getProviderTeardownRequestedAt() != null)
+                .forEach(this::tearDownPending);
         for (Connection c : connections) {
             if (c.getState() == IntegrationState.UNINSTALLED) {
                 continue;
@@ -66,6 +77,27 @@ public class ConnectionPurgeContributor implements WorkspacePurgeContributor {
         }
     }
 
+    /** A disconnect that is still removing its footprint keeps a credential, which the erasure must not leave behind. */
+    private void tearDownPending(Connection connection) {
+        ProviderTeardown teardown = providerTeardown.getIfAvailable();
+        try {
+            if (teardown == null) {
+                throw new IllegalStateException("Provider teardown is unavailable in this runtime role");
+            }
+            teardown.tearDownForErasure(connection);
+        } catch (RuntimeException e) {
+            log.warn(
+                    "Pending provider teardown failed during workspace purge: kind={}, connectionId={}, error={}",
+                    connection.getKind(),
+                    connection.getId(),
+                    e.getClass().getSimpleName());
+            throw new WorkspacePurgeBlockedException(
+                    "Hephaestus could not confirm that " + providerName(connection.getKind())
+                            + " is disconnected, so it deleted no local data. Try again when the provider is available.",
+                    e);
+        }
+    }
+
     private void revokeProvider(Connection connection, @Nullable ConnectionStrategy strategy) {
         if (strategy == null) {
             log.warn(
@@ -75,11 +107,15 @@ public class ConnectionPurgeContributor implements WorkspacePurgeContributor {
             return;
         }
         try {
-            strategy.prepareProviderTeardown(new IntegrationRef(
-                            connection.getKind(),
-                            connection.getWorkspace().getId(),
-                            connection.getInstanceKey(),
-                            connection.getId()))
+            strategy.prepareProviderTeardown(
+                            new IntegrationRef(
+                                    connection.getKind(),
+                                    connection.getWorkspace().getId(),
+                                    connection.getInstanceKey(),
+                                    connection.getId()),
+                            new ConnectionStrategy.ProviderFootprint(
+                                    connection.getConfig(),
+                                    credentialReader.credentialsOf(connection).orElse(null)))
                     .ifPresent(Runnable::run);
         } catch (RuntimeException e) {
             log.warn(

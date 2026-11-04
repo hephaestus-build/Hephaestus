@@ -53,6 +53,8 @@ erDiagram
         TIMESTAMPTZ credentials_rotation_failed_at
         VARCHAR(32) attention_problem
         BIGINT attention_revision "NOT NULL"
+        BIGINT credentials_generation "NOT NULL"
+        TIMESTAMPTZ provider_teardown_requested_at
     }
 
     ConnectionActivity {

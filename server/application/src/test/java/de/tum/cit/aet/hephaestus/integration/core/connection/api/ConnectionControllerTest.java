@@ -437,7 +437,7 @@ class ConnectionControllerTest extends BaseUnitTest {
         public void eraseLocalData(IntegrationRef ref) {}
 
         @Override
-        public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref) {
+        public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref, ProviderFootprint footprint) {
             return Optional.empty();
         }
     }

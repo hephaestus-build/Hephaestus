@@ -705,6 +705,24 @@ histogram_quantile(0.95, sum by (boundary, le) (rate(database_transaction_durati
 The bucket edges limit its resolution. Use the `_max` series for the longest transaction.
 Compare a slow boundary with `hikaricp_connections_pending` and `hikaricp_connections_acquire_seconds_max`.
 
+## Provider teardown metrics
+
+After a disconnect, the server role removes the app installation, token, or webhook at the provider, then deletes the stored credential.
+
+| Prometheus name                         | Type    | Labels            | Meaning                                  |
+| --------------------------------------- | ------- | ----------------- | ---------------------------------------- |
+| `integration_provider_teardown_total`   | Counter | `kind`, `outcome` | Disconnects whose provider teardown ended |
+
+`kind` is `github`, `gitlab`, `slack`, or `outline`.
+`outcome` is one of these:
+
+- `revoked`: the provider confirmed the removal, or the connection left nothing there.
+- `purged_unrevoked`: the provider failed for 24 hours, so Hephaestus deleted the credential without the removal.
+- `adopted`: the same connection was connected again before the removal succeeded, so it uses the footprint again.
+
+A `purged_unrevoked` outcome sets a note on the connection and emails the workspace admins.
+A credential or webhook can then still work at the provider until an admin removes it there.
+
 ## WAL archive metrics
 
 The server role reads `pg_stat_archiver` and `archive_mode` from the database every 30 seconds.

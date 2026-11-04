@@ -251,6 +251,25 @@ export const Disconnected: Story = {
 	},
 };
 
+/** A disconnect could not confirm the removal at Slack, so the card says to check there. */
+export const DisconnectedWithCleanupUnconfirmed: Story = {
+	args: {
+		entry: {
+			kind: "SLACK",
+			displayName: "Slack",
+			connected: false,
+			connectionId: 9,
+			connectionState: "UNINSTALLED",
+			attentionProblem: "PROVIDER_CLEANUP_UNCONFIRMED",
+		},
+		status: undefined,
+	},
+	play: async ({ canvas }) => {
+		canvas.getByText(/not connected/iu);
+		canvas.getByText(/check slack for what hephaestus left/iu);
+	},
+};
+
 export const Loading: Story = { args: { status: undefined, isStatusLoading: true } };
 
 export const StoppingReconciliation: Story = {

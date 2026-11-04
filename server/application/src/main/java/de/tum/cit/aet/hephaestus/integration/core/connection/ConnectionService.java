@@ -12,6 +12,8 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncStateChangedEvent;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -51,6 +53,7 @@ public class ConnectionService {
     private final ConnectionLifecycleEffects lifecycleEffects;
     private final CredentialReader credentialReader;
     private final SourceProviderNamespaces sourceNamespaces;
+    private final Clock clock;
 
     public ConnectionService(
             ConnectionRepository connectionRepository,
@@ -60,8 +63,10 @@ public class ConnectionService {
             SyncJobService syncJobService,
             PlatformTransactionManager transactionManager,
             CredentialReader credentialReader,
-            SourceProviderNamespaces sourceNamespaces) {
+            SourceProviderNamespaces sourceNamespaces,
+            Clock clock) {
         this.connectionRepository = connectionRepository;
+        this.clock = clock;
         this.sourceNamespaces = sourceNamespaces;
         this.credentialReader = credentialReader;
         this.auditRepository = auditRepository;
@@ -402,7 +407,8 @@ public class ConnectionService {
                             correlationId + "-retire-" + existing.getId(),
                             "Replaced by GitHub App installation " + installationId),
                     null,
-                    /* fenceOnActiveSyncJob */ false);
+                    /* fenceOnActiveSyncJob */ false, /* retainForTeardown */
+                    false);
         }
 
         Connection connection = connectionRepository
@@ -437,7 +443,8 @@ public class ConnectionService {
                             correlationId,
                             "Linked workspace to GitHub App installation " + installationId),
                     null,
-                    /* fenceOnActiveSyncJob */ false);
+                    /* fenceOnActiveSyncJob */ false, /* retainForTeardown */
+                    false);
         }
 
         return connection;
@@ -474,7 +481,8 @@ public class ConnectionService {
                             correlationId,
                             "Provisioned PAT connection on workspace creation"),
                     null,
-                    /* fenceOnActiveSyncJob */ false);
+                    /* fenceOnActiveSyncJob */ false, /* retainForTeardown */
+                    false);
         }
 
         if (token != null && !token.isBlank()) {
@@ -497,7 +505,7 @@ public class ConnectionService {
      */
     @Transactional
     public Connection transition(Connection connection, TransitionRequest req) {
-        return applyTransition(connection, req, null, /* fenceOnActiveSyncJob */ false);
+        return applyTransition(connection, req, null, /* fenceOnActiveSyncJob */ false, /* retainForTeardown */ false);
     }
 
     /**
@@ -532,8 +540,10 @@ public class ConnectionService {
         return applyTransition(
                 connection,
                 req,
-                locked -> lifecycleEffects.eraseAndTearDownProviderAfterCommit(locked, strategy),
-                /* fenceOnActiveSyncJob */ true);
+                locked -> strategy.eraseLocalData(new IntegrationRef(
+                        locked.getKind(), locked.getWorkspace().getId(), locked.getInstanceKey(), locked.getId())),
+                /* fenceOnActiveSyncJob */ true,
+                /* retainForTeardown */ true);
     }
 
     /**
@@ -555,14 +565,20 @@ public class ConnectionService {
                     lifecycleEffects.revoke(revoke);
                     erase.run();
                 },
-                /* fenceOnActiveSyncJob */ false);
+                /* fenceOnActiveSyncJob */ false, /* retainForTeardown */
+                false);
     }
 
+    /**
+     * {@code retainForTeardown} keeps an UNINSTALLED connection's credential and provider ids for
+     * {@link ProviderTeardown}, which removes them at the provider and then here; otherwise they go now.
+     */
     private Connection applyTransition(
             Connection requested,
             TransitionRequest req,
             @Nullable Consumer<Connection> beforeLocalTransition,
-            boolean fenceOnActiveSyncJob) {
+            boolean fenceOnActiveSyncJob,
+            boolean retainForTeardown) {
         // For a persisted argument the row transitioned below is the one re-read under the
         // lifecycle
         // lock, never the caller's possibly-stale instance.
@@ -617,18 +633,21 @@ public class ConnectionService {
         }
         connection.setState(req.next());
         connection.setStateReason(req.detail());
+        Instant now = clock.instant();
         if (req.next() == IntegrationState.UNINSTALLED) {
-            if (connection.getCredentialsEncrypted() != null) {
-                connection.setCredentials(null, credentialConverter);
-                log.info("Purged credentials on UNINSTALLED transition for connection={}", connection.getId());
-            }
-            if (connection.getConfig() instanceof ConnectionConfig.GitLabConfig gitLabConfig) {
-                connection.setConfig(gitLabConfig.withGitlabWebhookId(null));
-            } else if (connection.getConfig() instanceof ConnectionConfig.OutlineConfig outlineConfig) {
-                connection.setConfig(outlineConfig.withWebhookSubscription(null, null));
+            if (retainForTeardown) {
+                connection.requestProviderTeardown(now);
+            } else {
+                connection.releaseProviderFootprint(credentialConverter);
             }
         }
         Connection saved = connectionRepository.save(connection);
+        if (req.next() == IntegrationState.UNINSTALLED && retainForTeardown) {
+            eventPublisher.publishEvent(new ProviderTeardownRequested(
+                    Objects.requireNonNull(saved.getId()),
+                    saved.getWorkspace().getId(),
+                    saved.getCredentialsGeneration()));
+        }
         lifecycleEffects.publishLifecycleEvent(saved, current, req.next());
         return saved;
     }

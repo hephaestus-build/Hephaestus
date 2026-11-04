@@ -26,8 +26,10 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Application-layer facade for the Connection registry's admin operations. Owns all
@@ -136,6 +138,12 @@ public class ConnectionAdminService {
         Connection connection = connectionRepository
                 .findByWorkspaceIdAndKindAndInstanceKey(workspaceId, kind, instanceKey)
                 .map(existing -> {
+                    // The webhook and token to remove are in this row; a new config would lose them at the provider.
+                    if (existing.getProviderTeardownRequestedAt() != null) {
+                        throw new ResponseStatusException(
+                                HttpStatus.CONFLICT,
+                                "Hephaestus is still removing the previous connection at the provider. Try again in a few minutes.");
+                    }
                     existing.setConfig(config);
                     return existing;
                 })

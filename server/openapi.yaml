@@ -13527,6 +13527,7 @@ components:
           - CREDENTIAL_EXPIRING
           - CREDENTIAL_REVOKED
           - PROVIDER_SUSPENDED
+          - PROVIDER_CLEANUP_UNCONFIRMED
         capabilities:
           type: array
           items:
@@ -13594,6 +13595,13 @@ components:
          credentials, no audit. Capabilities are looked up from the per-kind manifest at
          response build time so adding/removing a capability needs no DB migration.
       properties:
+        attentionProblem:
+          type: string
+          enum:
+          - CREDENTIAL_EXPIRING
+          - CREDENTIAL_REVOKED
+          - PROVIDER_SUSPENDED
+          - PROVIDER_CLEANUP_UNCONFIRMED
         capabilities:
           type: array
           items:
@@ -16046,6 +16054,15 @@ components:
       type: object
       description: Integration kind availability + connection status for this workspace
       properties:
+        attentionProblem:
+          type: string
+          description: A problem with the connection that an admin should act on;
+            absent while there is none
+          enum:
+          - CREDENTIAL_EXPIRING
+          - CREDENTIAL_REVOKED
+          - PROVIDER_SUSPENDED
+          - PROVIDER_CLEANUP_UNCONFIRMED
         connected:
           type: boolean
           description: Whether this workspace has a (non-UNINSTALLED) connection for

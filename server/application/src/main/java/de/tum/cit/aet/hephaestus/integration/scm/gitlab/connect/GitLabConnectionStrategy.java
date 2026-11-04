@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
@@ -58,10 +60,17 @@ public class GitLabConnectionStrategy implements ConnectionStrategy {
     }
 
     @Override
-    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref) {
+    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref, ProviderFootprint footprint) {
         if (ref.connectionId() == null) {
             throw new IllegalArgumentException("GitLab provider teardown requires a connection id");
         }
-        return webhookService.prepareWebhookDeregistration(ref.workspaceId(), ref.connectionId());
+        if (!(footprint.config() instanceof ConnectionConfig.GitLabConfig config)) {
+            return Optional.empty();
+        }
+        return webhookService.webhookDeregistration(
+                ref.workspaceId(),
+                ref.connectionId(),
+                config,
+                footprint.credentials() instanceof BearerToken bearer ? bearer : null);
     }
 }

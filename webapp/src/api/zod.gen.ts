@@ -605,7 +605,8 @@ export const zConnectionDetail = z.object({
     attentionProblem: z.enum([
         'CREDENTIAL_EXPIRING',
         'CREDENTIAL_REVOKED',
-        'PROVIDER_SUSPENDED'
+        'PROVIDER_SUSPENDED',
+        'PROVIDER_CLEANUP_UNCONFIRMED'
     ]).optional(),
     capabilities: z.array(z.enum([
         'WEBHOOK_INGEST',
@@ -651,6 +652,12 @@ export const zConnectionDetail = z.object({
  * response build time so adding/removing a capability needs no DB migration.
  */
 export const zConnectionSummary = z.object({
+    attentionProblem: z.enum([
+        'CREDENTIAL_EXPIRING',
+        'CREDENTIAL_REVOKED',
+        'PROVIDER_SUSPENDED',
+        'PROVIDER_CLEANUP_UNCONFIRMED'
+    ]).optional(),
     capabilities: z.array(z.enum([
         'WEBHOOK_INGEST',
         'TOKEN_REFRESH',
@@ -1760,6 +1767,12 @@ export const zInstanceSettings = z.object({
  * Integration kind availability + connection status for this workspace
  */
 export const zIntegrationCatalogEntry = z.object({
+    attentionProblem: z.enum([
+        'CREDENTIAL_EXPIRING',
+        'CREDENTIAL_REVOKED',
+        'PROVIDER_SUSPENDED',
+        'PROVIDER_CLEANUP_UNCONFIRMED'
+    ]).optional(),
     connected: z.boolean(),
     connectionId: z.int().optional(),
     connectionState: z.enum([

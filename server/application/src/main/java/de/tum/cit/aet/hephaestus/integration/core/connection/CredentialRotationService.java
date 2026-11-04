@@ -80,7 +80,7 @@ public class CredentialRotationService {
                         undecryptable.getMessage()));
                 continue;
             }
-            connection.setCredentials(credentials, converter);
+            connection.reencryptCredentials(credentials, converter);
         }
         afterCommit(() -> report(ids.size() - quarantined.size(), quarantined));
     }

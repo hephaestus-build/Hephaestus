@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Bear
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.CredentialReaders;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.List;
@@ -163,7 +164,8 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
         assertThat(result.getCredentialsAlg()).isEqualTo(CredentialBundleConverter.ALGORITHM_TAG);
         assertThat(result.getCredentialsEncrypted()).isNotNull();
         // Round-trip the freshly-encrypted blob to prove it's not a placeholder.
-        assertThat(result.credentials(credentialConverter)).contains(new BearerToken("ol-test", null));
+        assertThat(CredentialReaders.forTests(credentialConverter).credentialsOf(result))
+                .contains(new BearerToken("ol-test", null));
 
         ArgumentCaptor<TransitionRequest> req = ArgumentCaptor.forClass(TransitionRequest.class);
         verify(connectionService).transition(any(Connection.class), req.capture());

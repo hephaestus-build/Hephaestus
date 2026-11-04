@@ -102,6 +102,16 @@ public class Connection {
     @Nullable
     private Instant credentialsRotationFailedAt;
 
+    // Changes whenever the stored credential value changes, never on key rotation, so a pending provider teardown
+    // can tell its own credential from one that a reconnect stored later.
+    @Column(name = "credentials_generation", nullable = false)
+    @ColumnDefault("0")
+    private long credentialsGeneration;
+
+    // Set by a disconnect that left a credential, an installation or a webhook at the provider; cleared once removed.
+    @Column(name = "provider_teardown_requested_at")
+    private @Nullable Instant providerTeardownRequestedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private @Nullable Instant createdAt;
@@ -276,6 +286,7 @@ public class Connection {
 
     /** Encrypts or clears this connection's credentials. */
     public void setCredentials(@Nullable CredentialBundle bundle, CredentialBundleConverter converter) {
+        this.credentialsGeneration++;
         if (bundle == null) {
             this.credentialsEncrypted = null;
             this.credentialsAlg = null;
@@ -287,6 +298,46 @@ public class Connection {
         this.credentialsAlg = CredentialBundleConverter.ALGORITHM_TAG;
         this.credentialsKeyVersion = converter.activeKeyVersion();
         this.credentialsRotationFailedAt = null;
+    }
+
+    /** Keeps the credential and the provider ids until {@link ProviderTeardown} has removed them at the provider. */
+    void requestProviderTeardown(Instant requestedAt) {
+        this.providerTeardownRequestedAt = requestedAt;
+        // Each disconnect is its own generation, also for a connection whose credential never changes.
+        this.credentialsGeneration++;
+    }
+
+    /** A reconnect of this connection uses what it left at the provider again, so nothing is owed there any more. */
+    void adoptProviderFootprint() {
+        this.providerTeardownRequestedAt = null;
+        this.credentialsGeneration++;
+    }
+
+    public @Nullable Instant getProviderTeardownRequestedAt() {
+        return providerTeardownRequestedAt;
+    }
+
+    /** Clears the credential and the provider ids that a disconnect leaves at the provider. */
+    void releaseProviderFootprint(CredentialBundleConverter converter) {
+        this.providerTeardownRequestedAt = null;
+        setCredentials(null, converter);
+        if (config instanceof ConnectionConfig.GitLabConfig gitLabConfig) {
+            setConfig(gitLabConfig.withGitlabWebhookId(null));
+        } else if (config instanceof ConnectionConfig.OutlineConfig outlineConfig) {
+            setConfig(outlineConfig.withWebhookSubscription(null, null));
+        }
+    }
+
+    /** Re-encrypts the same credential under the active key; the stored value and its generation stay. */
+    void reencryptCredentials(CredentialBundle bundle, CredentialBundleConverter converter) {
+        this.credentialsEncrypted = converter.encrypt(bundle, encryptionContext());
+        this.credentialsAlg = CredentialBundleConverter.ALGORITHM_TAG;
+        this.credentialsKeyVersion = converter.activeKeyVersion();
+        this.credentialsRotationFailedAt = null;
+    }
+
+    public long getCredentialsGeneration() {
+        return credentialsGeneration;
     }
 
     /** The stored credential could not be read with the configured keys; cleared when it is replaced. */
@@ -304,7 +355,7 @@ public class Connection {
     }
 
     /** Returns the decrypted credentials, if configured. */
-    public Optional<CredentialBundle> credentials(CredentialBundleConverter converter) {
+    Optional<CredentialBundle> credentials(CredentialBundleConverter converter) {
         if (credentialsEncrypted == null) {
             return Optional.empty();
         }

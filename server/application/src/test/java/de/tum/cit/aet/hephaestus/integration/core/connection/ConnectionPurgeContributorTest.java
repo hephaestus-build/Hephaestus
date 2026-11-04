@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.testconfig.CredentialReaders;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeBlockedException;
 import java.lang.reflect.Field;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -28,6 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -69,7 +72,8 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
                 syncJobService,
                 transactionManager,
                 CredentialReaders.forTests(credentialConverter),
-                mock(SourceProviderNamespaces.class));
+                mock(SourceProviderNamespaces.class),
+                Clock.systemUTC());
         lenient().when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         lenient().when(connectionStrategy.kind()).thenReturn(IntegrationKind.GITHUB);
@@ -83,7 +87,7 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
         connection.setState(IntegrationState.SUSPENDED);
         when(connectionRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(connection));
         AtomicBoolean tornDownWithCredentials = new AtomicBoolean();
-        when(connectionStrategy.prepareProviderTeardown(erasureRef(connection)))
+        when(connectionStrategy.prepareProviderTeardown(eq(erasureRef(connection)), any()))
                 .thenReturn(
                         Optional.of(() -> tornDownWithCredentials.set(connection.getCredentialsEncrypted() != null)));
 
@@ -100,9 +104,10 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
     void purge_preservesCredentialsWhenProviderRevokeFails() throws Exception {
         Connection connection = activeConnectionWithCredentials();
         when(connectionRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(connection));
-        when(connectionStrategy.prepareProviderTeardown(erasureRef(connection))).thenReturn(Optional.of(() -> {
-            throw new RuntimeException("provider unavailable");
-        }));
+        when(connectionStrategy.prepareProviderTeardown(eq(erasureRef(connection)), any()))
+                .thenReturn(Optional.of(() -> {
+                    throw new RuntimeException("provider unavailable");
+                }));
 
         assertThatThrownBy(() -> contributor(List.of(connectionStrategy)).deleteWorkspaceData(WORKSPACE_ID))
                 .isInstanceOf(WorkspacePurgeBlockedException.class)
@@ -134,11 +139,16 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
         contributor(List.of(connectionStrategy)).deleteWorkspaceData(WORKSPACE_ID);
 
         verify(auditRepository, never()).save(any());
-        verify(connectionStrategy, never()).prepareProviderTeardown(any());
+        verify(connectionStrategy, never()).prepareProviderTeardown(any(), any());
     }
 
     private ConnectionPurgeContributor contributor(List<ConnectionStrategy> strategies) {
-        return new ConnectionPurgeContributor(connectionRepository, connectionService, strategies);
+        return new ConnectionPurgeContributor(
+                connectionRepository,
+                connectionService,
+                CredentialReaders.forTests(credentialConverter),
+                new StaticListableBeanFactory().getBeanProvider(ProviderTeardown.class),
+                strategies);
     }
 
     private static IntegrationRef erasureRef(Connection connection) {

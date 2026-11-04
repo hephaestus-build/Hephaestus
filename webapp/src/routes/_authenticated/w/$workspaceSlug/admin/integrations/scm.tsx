@@ -66,6 +66,7 @@ function ScmIntegrationPage() {
 				<ConnectionStateNotice
 					connectionState={scm.connectionState}
 					credentialsUnreadableSince={scm.credentialsUnreadableSince}
+					providerCleanupUnconfirmed={scm.providerCleanupUnconfirmed}
 					credentialRecovery={credentialRecovery}
 					displayName={label}
 				/>

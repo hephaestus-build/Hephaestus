@@ -209,10 +209,27 @@ provider cleanup. A workspace purge erases it too. Reconnecting does not restore
 
 The upstream repositories, messages, and documents remain.
 Materialized diagnostic output, worker-input copies, and broker messages expire within their documented bounded retention windows.
-Provider cleanup is best effort.
 If local erasure fails, the connection remains unchanged, and you can retry the disconnect.
-If the provider is unreachable, the mirror still erases and the connection disconnects.
-You may then need to remove an app installation, token, or webhook Hephaestus created at the provider.
+
+After the disconnect commits, Hephaestus removes what it created at the provider:
+
+| Integration | What Hephaestus removes at the provider |
+| --- | --- |
+| GitHub | The GitHub App installation, if no other Hephaestus workspace uses it |
+| GitLab | The group webhook. GitLab lets only you revoke the access token, so revoke it in GitLab. |
+| Slack | The bot token, if no other Hephaestus workspace is connected to the same Slack workspace |
+| Outline | The webhook subscription. Revoke the API key in Outline. |
+
+Until the provider confirms the removal, Hephaestus keeps the encrypted credential, and nothing else can use it.
+If the provider is unreachable, Hephaestus tries again every few minutes for at most 24 hours.
+After 24 hours, it deletes the credential without the removal.
+Then the integration's page and an email to the workspace admins tell you to remove the app, token, or webhook at the provider yourself.
+
+You can connect the same Slack workspace or GitHub installation again before the removal succeeds.
+The new connection then uses it again, and Hephaestus removes nothing.
+You can connect Outline again only after the removal ends.
+Another Hephaestus workspace cannot connect the same Slack workspace or GitHub installation until the removal ends.
+`integration_provider_teardown_total` counts each outcome (`docs/admin/observability.mdx`).
 
 A connection with its integration disabled instance-wide cannot disconnect until the integration is enabled again.
 Nothing else can erase its mirror.

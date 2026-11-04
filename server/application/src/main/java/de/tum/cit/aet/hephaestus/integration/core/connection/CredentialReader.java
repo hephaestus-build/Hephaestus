@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.config.CredentialReadabilityExecutor;
 import de.tum.cit.aet.hephaestus.core.security.EncryptionException;
 import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
@@ -60,7 +61,23 @@ public class CredentialReader {
         this.clock = clock;
     }
 
+    /**
+     * The credential for every use but provider teardown. A disconnected connection keeps its credential only
+     * until {@link ProviderTeardown} revokes it at the provider, so for that connection this is empty.
+     */
     public Optional<CredentialBundle> credentialsOf(Connection connection) {
+        if (connection.getState() == IntegrationState.UNINSTALLED) {
+            return Optional.empty();
+        }
+        return read(connection);
+    }
+
+    /** The credential a disconnect retained, read only to remove what it controls at the provider. */
+    Optional<CredentialBundle> retainedForTeardown(Connection connection) {
+        return read(connection);
+    }
+
+    private Optional<CredentialBundle> read(Connection connection) {
         byte[] ciphertext = connection.getCredentialsEncrypted();
         try {
             Optional<CredentialBundle> credentials = connection.credentials(converter);

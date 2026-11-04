@@ -5,6 +5,7 @@ public final class IntegrationCoreMetrics {
     public static final String CREDENTIAL_ROTATION_FAILURES = "integration.credential.rotation.failures";
     public static final String INTEGRATION_CONSUMER_NAK = "integration.consumer.nak";
     public static final String INTEGRATION_CONSUMER_POISON = "integration.consumer.poison";
+    public static final String INTEGRATION_PROVIDER_TEARDOWN = "integration.provider.teardown";
     public static final String INTEGRATION_SYNC_PUSH_MESSAGES = "integration.sync.push.messages";
     public static final String INTEGRATION_SYNC_SSE_EVENTS = "integration.sync.sse.events";
     public static final String INTEGRATION_SYNC_SSE_SUBSCRIBERS = "integration.sync.sse.subscribers";

@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-03
 **Authors:** Felix T.J. Dietrich
+**Relates to:** [ADR 0076](0076-reads-are-shaped-like-the-screen.md) (database reads), [Transactions and side effects](../contributor/transactions.md) (the rules).
 
 ## Context
 

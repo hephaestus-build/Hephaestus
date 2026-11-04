@@ -12,6 +12,7 @@ Some code that is older than ADR 0075 does not obey all the rules yet.
 Do not copy it.
 
 The rules use these versions: Spring Framework 7.0, Spring Modulith 2.1, Hibernate ORM 7 and PostgreSQL 18.
+[Read and write the database](./read-and-write-the-database.mdx) owns the shape of a read and a write inside a transaction (ADR 0076).
 
 ## 1. One use case is one transaction
 
@@ -41,7 +42,7 @@ Spring: "self-invocation (in effect, a method within the target object calling a
 - Use this sequence: read in a short transaction, call with no transaction, then write in a short transaction.
   The write checks the state again with a row lock or a compare-and-set.
 - If a row lock must stay across a call, record the reason in an ADR.
-  `GitLabTokenLifecycleService` holds such a lock.
+  `GitLabTokenLifecycleService` and `ProviderTeardown` hold such a lock.
 - `LlmCallPermits` refuses a model call that starts in a transaction.
 
 PostgreSQL keeps row locks until the transaction ends ([Explicit locking](https://www.postgresql.org/docs/18/explicit-locking.html)).

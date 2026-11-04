@@ -1,4 +1,10 @@
-import { CircleAlertIcon, CircleDashedIcon, KeyRoundIcon, PlugZapIcon } from "lucide-react";
+import {
+	CircleAlertIcon,
+	CircleDashedIcon,
+	KeyRoundIcon,
+	PlugZapIcon,
+	ShieldAlertIcon,
+} from "lucide-react";
 import type * as React from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -59,6 +65,11 @@ export interface ConnectionStateNoticeProps {
 	 * overview, which does not, points at the page.
 	 */
 	credentialRecovery?: string;
+	/**
+	 * A disconnect could not confirm that the provider removed the app, token, or webhook that
+	 * Hephaestus set up there, so the admin must check at the provider.
+	 */
+	providerCleanupUnconfirmed?: boolean;
 	/** The integration as the admin knows it — "Slack", "GitHub", "Outline". */
 	displayName: string;
 	className?: string;
@@ -80,11 +91,12 @@ export function ConnectionStateNotice({
 	connectionState,
 	credentialsUnreadableSince,
 	credentialRecovery = "The connection’s page says how to replace it",
+	providerCleanupUnconfirmed = false,
 	displayName,
 	className,
 }: ConnectionStateNoticeProps) {
 	const copy = connectionState ? STATE_COPY[connectionState] : undefined;
-	if (!copy && !credentialsUnreadableSince) {
+	if (!copy && !credentialsUnreadableSince && !providerCleanupUnconfirmed) {
 		return null;
 	}
 	return (
@@ -103,6 +115,18 @@ export function ConnectionStateNotice({
 					{copy.icon}
 					<AlertTitle>{copy.title}</AlertTitle>
 					<AlertDescription>{copy.describe(displayName)}</AlertDescription>
+				</Alert>
+			)}
+			{providerCleanupUnconfirmed && (
+				<Alert
+					variant="warning"
+					className={copy || credentialsUnreadableSince ? "mt-3" : undefined}
+				>
+					<ShieldAlertIcon />
+					<AlertTitle>{`Check ${displayName} for what Hephaestus left`}</AlertTitle>
+					<AlertDescription>
+						{`We could not confirm that ${displayName} removed the app, token, or webhook that Hephaestus set up there. It may still work. Remove it in your ${displayName} settings.`}
+					</AlertDescription>
 				</Alert>
 			)}
 		</div>
