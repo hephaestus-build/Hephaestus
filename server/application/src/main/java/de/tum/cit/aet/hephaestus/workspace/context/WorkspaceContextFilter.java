@@ -193,7 +193,8 @@ public class WorkspaceContextFilter implements Filter {
             }
 
             if (roles.isEmpty()) {
-                if (currentUsers.isEmpty()) {
+                // A signed-in account without a linked provider identity is still signed in: it lacks membership.
+                if (viewed == null && SecurityUtils.getCurrentAccountId().isEmpty()) {
                     sendWorkspaceUnauthorizedError(httpResponse, slug);
                 } else {
                     log.debug("Denied workspace access: reason=notMember, workspaceSlug={}", safeSlug);
