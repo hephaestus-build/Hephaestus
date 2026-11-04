@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedResultDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.RuntimeNonResultDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SubmittedResultDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
@@ -381,6 +382,68 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             .getOutcome())
                     .isEqualTo(ResultOutcome.DOES_NOT_APPLY);
             assertThat(resultIds(review)).hasSize(2);
+        }
+    }
+
+    @Test
+    void shouldWithholdAPracticeThatFailedWhileItsAttemptRunsAndJudgeItsSibling() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var scenario = review.pending().scenario();
+            var sibling = versions.create(new PracticeVersionService.NewPractice(
+                    scenario.workspace(),
+                    "judged-sibling",
+                    scenario.item().getKind(),
+                    DefinitionTestFixtures.definition(),
+                    null,
+                    1,
+                    review.developerId()));
+            admissions.assigned(review.pending(), sibling);
+            var identity = review.identity();
+            assertThat(jobs.findById(identity.jobId()).orElseThrow().getStatus())
+                    .isEqualTo(ReviewJobStatus.RUNNING);
+            var sent = request(review).results().getFirst();
+
+            // The runner stages each practice as it ends, while its attempt still runs: here a script that failed
+            // to load, then a sibling with a result.
+            admission.stage(
+                    identity,
+                    new AdmissionRequestDTO(
+                            3,
+                            review.reviewId(),
+                            identity.jobId(),
+                            identity.attempt(),
+                            List.of(),
+                            List.of(new RuntimeNonResultDTO(
+                                    review.practiceSlug(), ReviewStopReason.EXECUTION_FAILED))));
+            admission.stage(
+                    identity,
+                    new AdmissionRequestDTO(
+                            3,
+                            review.reviewId(),
+                            identity.jobId(),
+                            identity.attempt(),
+                            List.of(new SubmittedResultDTO(
+                                    sibling.getSlug(),
+                                    sent.itemId(),
+                                    sent.itemVersion(),
+                                    sent.candidate(),
+                                    sent.readReceipts())),
+                            List.of()));
+            var sealed = admission.admit(
+                    identity, new SealResultsRequestDTO(3, review.reviewId(), identity.jobId(), identity.attempt()));
+
+            assertThat(sealed.admitted())
+                    .singleElement()
+                    .satisfies(value -> assertThat(value.practiceSlug()).isEqualTo(sibling.getSlug()));
+            assertThat(jdbc.queryForObject(
+                            "SELECT state || '/' || reason FROM review_item WHERE workspace_id=? AND review_id=? AND"
+                                    + " practice_id=?",
+                            String.class,
+                            review.workspaceId(),
+                            review.reviewId(),
+                            review.practiceId()))
+                    .isEqualTo("WITHHELD/EXECUTION_FAILED");
+            assertThat(resultIds(review)).hasSize(1);
         }
     }
 

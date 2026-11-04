@@ -92,6 +92,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
                 .fail(
                         1,
                         assignment.id(),
+                        job.getId(),
                         ReviewStopReason.EXECUTION_FAILED,
                         "The execution ended without an admitted result");
         assertThat(job.getProcessingStatus()).isEqualTo(ProcessingStatus.FAILED);
@@ -118,6 +119,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
                 .fail(
                         1,
                         assignment.id(),
+                        job.getId(),
                         ReviewStopReason.BUDGET,
                         "Runtime execution ended without a result for this practice");
         var completion = ArgumentCaptor.forClass(ReviewCompletion.class);

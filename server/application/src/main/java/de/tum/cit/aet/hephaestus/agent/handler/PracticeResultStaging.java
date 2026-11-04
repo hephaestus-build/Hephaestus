@@ -146,6 +146,7 @@ public class PracticeResultStaging {
             membership.fail(
                     job.getWorkspaceId(),
                     assignment.id(),
+                    job.getId(),
                     reason,
                     "The attempt stopped before this practice could finish.");
             nonResults
