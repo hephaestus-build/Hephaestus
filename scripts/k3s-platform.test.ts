@@ -821,3 +821,79 @@ await test(
 		}
 	},
 );
+
+/**
+ * Runs the installer's condition wait against a kubectl stub that gives one answer per call. The
+ * answer `error` is what kubectl printed for a Certificate that had no status yet.
+ */
+function waitCondition(answers: string[], seconds: string) {
+	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-wait-"));
+	try {
+		const calls = path.join(directory, "calls");
+		const script = path.join(directory, "answers");
+		writeFileSync(script, `${answers.join("\n")}\n`);
+		writeFileSync(
+			path.join(directory, "kubectl"),
+			`#!/bin/sh
+echo "$*" >> "${calls}"
+answer=$(sed -n "$(wc -l < "${calls}")p" "${script}")
+if [ "$answer" = error ]; then
+	echo 'error: .status.conditions accessor error: <nil> is of the type <nil>, expected []interface{}' >&2
+	exit 1
+fi
+printf '%s' "$answer"
+`,
+			{ mode: 0o755 },
+		);
+		const started = Date.now();
+		const result = spawnSync(
+			"sh",
+			[
+				path.join(PLATFORM, "k3s-wait-condition.sh"),
+				"hephaestus",
+				"certificate/hephaestus-postgresql-tls",
+				"Ready",
+				seconds,
+			],
+			{
+				encoding: "utf8",
+				timeout: 30_000,
+				env: { ...process.env, PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}` },
+			},
+		);
+		return {
+			status: result.status,
+			stderr: result.stderr,
+			calls: readFileSync(calls, "utf8").trim().split("\n"),
+			elapsed: Date.now() - started,
+		};
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+}
+
+await test("a certificate without a status yet is waited for, not a failure", () => {
+	const waited = waitCondition(["error", "", "False", "True"], "60");
+	assert.equal(waited.status, 0, waited.stderr);
+	assert.equal(waited.calls.length, 4);
+	assert.match(
+		waited.calls[0] ?? "",
+		/^--request-timeout=10s -n hephaestus get certificate\/hephaestus-postgresql-tls -o jsonpath=/u,
+	);
+});
+
+await test("a certificate that never becomes ready fails the wait after its timeout, saying which", () => {
+	const waited = waitCondition(["", "error", "error", "error", "error", "error"], "1");
+	assert.equal(waited.status, 1);
+	assert.match(
+		waited.stderr,
+		/certificate\/hephaestus-postgresql-tls is not Ready after 1 seconds/u,
+	);
+	assert.ok(waited.elapsed < 10_000, `${waited.elapsed} ms`);
+});
+
+await test("the installer waits for every cert-manager condition through the wait that tolerates a missing status", () => {
+	const installer = read("k3s-install.sh");
+	assert.doesNotMatch(installer, /wait --for=condition=\S+ "?(?:crd|certificate|clusterissuer)\//u);
+	assert.match(installer, /for file in [^\n]*k3s-wait-condition\.sh/u);
+});

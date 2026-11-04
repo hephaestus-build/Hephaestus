@@ -865,6 +865,7 @@ The bundle holds these files:
 | --- | --- |
 | `k3s-install.sh` | The installer. It is a POSIX shell script, and it needs no Node.js and no checkout of the repository. |
 | `hephaestus-keys.sh` | Creates or completes the release Secret. The installer runs it. [Create the Secret](#create-the-secret) uses it on another cluster. |
+| `k3s-wait-condition.sh` | Waits until a cert-manager resource reports a condition as true, also while the resource has no status yet. The installer runs it. |
 | `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. |
 | `k3s-certificates.yaml` | The `Let's Encrypt` issuer, the Gateway certificate, and the PostgreSQL CA and server certificate. The installer writes your host name and address into it. |
 | `k3s-config.yaml` | The k3s configuration: the kubelet configuration file, and no bundled Traefik. |
