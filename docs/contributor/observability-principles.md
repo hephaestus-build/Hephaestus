@@ -58,3 +58,11 @@ The operator's tools collect all of it.
 | Name in the contract | [Observability](/admin/observability) | Review |
 | Alert | `deploy/chart/hephaestus/files/hephaestus-alerts.yml` | `vp run test:alerts`: each alert has a `promtool` case in which it fires and one in which it stays silent |
 | Runbook row | [Alert response](/admin/production-operations-runbook#alert-response) | `vp run test:alerts`: each alert has a row in that table |
+
+## The project's own instances
+
+The project's test instance does not yet run the chart's [monitoring stack](/admin/observability#monitoring-stack).
+Its vmalert loads a copy of the rule file by hand: the ConfigMap `hephaestus-alert-rules` in the namespace `observability`.
+That copy does not follow the release, so replace it from the commit that the instance runs when the rules change.
+The instance runs kube-state-metrics and node-exporter in that namespace, which allows host paths, with a ClusterRole for the kubelet scrape.
+Thus, it evaluates the groups `hephaestus-kubernetes` and `hephaestus-pull-deploy`, which the chart's stack does not load.

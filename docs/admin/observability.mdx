@@ -38,7 +38,7 @@ The alert or the objective tells the operator when the answer needs work.
 | Which release runs in each Pod? | `application_build_info` | None |
 | Did feedback whose write was in doubt reach the work? | `practice_feedback_readback_total` | `HephaestusFeedbackReadbackUnknown` |
 | Is the monitoring itself working? | `up` | `HephaestusWatchdog`, at an outside dead-man check |
-| Does the cluster evaluate the rules of the release that runs? | The [monitoring stack](#monitoring-stack), or the ConfigMap or the PrometheusRule of `observability.alertRules` | None. The project's own instances do not use them yet. Their vmalert loads a copy by hand: the ConfigMap `hephaestus-alert-rules` in the namespace `observability`. That copy does not follow the release |
+| Does the cluster evaluate the rules of the release that runs? | The [monitoring stack](#monitoring-stack), or the ConfigMap or the PrometheusRule of `observability.alertRules` | None |
 
 ### Questions without a signal
 
@@ -185,7 +185,6 @@ Thus, the stack does not load the groups `hephaestus-kubernetes` and `hephaestus
 Without these series, `HephaestusDeployMetricsMissing` would fire at all times.
 
 To use those groups, run the exporters in a namespace that allows host paths. Scrape them, and evaluate the [rule file](#alert-rules), with your own Prometheus or vmalert.
-The project's test instance runs kube-state-metrics and node-exporter in such a namespace, with a ClusterRole for the kubelet scrape.
 The stack collects no logs: see [Collecting logs](#collecting-logs).
 
 On the project's test instance, VictoriaMetrics used at most 470 MiB while it scraped the roles and the kubelets, and vmalert used 22 MiB.
