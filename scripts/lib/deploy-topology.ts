@@ -47,6 +47,8 @@ export function renderDeployTopology(root = REPO_ROOT, workerEnabled = true): st
 				clientTlsSecret: "backup-tls",
 				s3: { bucket: "backups", endpoint: "s3.example.com", region: "eu-central-1" },
 			},
+			// postgres_exporter, a pinned upstream image of its own.
+			metrics: { enabled: true },
 		},
 		worker: { enabled: workerEnabled, sandbox: { namespace: "hephaestus-sandboxes" } },
 		// The monitoring stack runs the upstream images that the release pins.

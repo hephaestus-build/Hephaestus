@@ -34,8 +34,8 @@
 		{
 			"name": "postgres-exporter",
 			"repository": "docker.io/prometheuscommunity/postgres-exporter",
-			"tag": "v0.20.1",
-			"digest": "sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e"
+			"tag": "master",
+			"digest": "sha256:c90657083f5d8ccbf9be16049d1174e221a55c3760121174a2c657a44e323ec6"
 		}
 	]
 }
