@@ -905,6 +905,59 @@ tests:
             exp_annotations:
               summary: No PostgreSQL backup completed in the last 30 hours
 
+  # A release name of more than 34 characters: the chart truncates and hashes the CronJob names, so only their labels
+  # tell the release. The full backup is old, the differential one is recent: the newest backup counts.
+  - name: backup CronJobs of a long release name are found by their labels
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_labels{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-full",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup",label_app_kubernetes_io_instance="hephaestus-production-for-the-whole-faculty"}'
+        values: "1x1860"
+      - series: 'kube_cronjob_labels{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-diff",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup",label_app_kubernetes_io_instance="hephaestus-production-for-the-whole-faculty"}'
+        values: "1x1860"
+      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-full"}'
+        values: "0x1860"
+      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-diff"}'
+        values: "0x1500 90000x360"
+    alert_rule_test:
+      - eval_time: 29h
+        alertname: HephaestusBackupStale
+        exp_alerts: []
+      - eval_time: 31h
+        alertname: HephaestusBackupStale
+        exp_alerts: []
+      - eval_time: 32h
+        alertname: HephaestusBackupStale
+        exp_alerts: []
+
+  - name: a stale backup of a long release name fires under its release
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_labels{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-full",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup",label_app_kubernetes_io_instance="hephaestus-production-for-the-whole-faculty"}'
+        values: "1x1860"
+      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-full"}'
+        values: "0x1860"
+      # A name match and a label match of one ordinary CronJob count once.
+      - series: 'kube_cronjob_labels{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup",label_app_kubernetes_io_instance="hephaestus"}'
+        values: "1x1860"
+      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
+        values: "0x1860"
+    alert_rule_test:
+      - eval_time: 31h
+        alertname: HephaestusBackupStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: hephaestus
+              release: hephaestus
+            exp_annotations:
+              summary: No PostgreSQL backup completed in the last 30 hours
+          - exp_labels:
+              severity: critical
+              namespace: hephaestus
+              release: hephaestus-production-for-the-whole-faculty
+            exp_annotations:
+              summary: No PostgreSQL backup completed in the last 30 hours
+
   - name: a PostgreSQL volume below 15 % free warns, below 5 % only the critical alert fires, more space is quiet
     interval: 1m
     input_series:

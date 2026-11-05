@@ -459,12 +459,21 @@ groups:
           severity: warning
         annotations:
           summary: A webhook receiver replica stayed unavailable for 15 minutes while another serves
+      # A release name longer than 34 characters truncates and hashes the CronJob names, which the name match then
+      # misses. The label match finds those CronJobs when kube-state-metrics exports their labels.
       - alert: HephaestusBackupStale
         expr: |-
           time() - max by (namespace, release) (
             label_replace(
               kube_cronjob_status_last_successful_time{cronjob=~".+-postgresql-backup-(full|diff)"},
               "release", "$1", "cronjob", "(.+)-postgresql-backup-(?:full|diff)"
+            )
+            or
+            label_replace(
+              kube_cronjob_status_last_successful_time
+              * on (namespace, cronjob) group_left (label_app_kubernetes_io_instance)
+              kube_cronjob_labels{label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup"},
+              "release", "$1", "label_app_kubernetes_io_instance", "(.+)"
             )
           ) > 30 * 3600
           or
@@ -476,11 +485,27 @@ groups:
                 kube_cronjob_created{cronjob=~".+-postgresql-backup-(full|diff)"},
                 "release", "$1", "cronjob", "(.+)-postgresql-backup-(?:full|diff)"
               )
+              or
+              label_replace(
+                kube_cronjob_created
+                * on (namespace, cronjob) group_left (label_app_kubernetes_io_instance)
+                kube_cronjob_labels{label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup"},
+                "release", "$1", "label_app_kubernetes_io_instance", "(.+)"
+              )
             ) > 30 * 3600
             unless on (namespace, release)
-            label_replace(
-              kube_cronjob_status_last_successful_time{cronjob=~".+-postgresql-backup-(full|diff)"},
-              "release", "$1", "cronjob", "(.+)-postgresql-backup-(?:full|diff)"
+            (
+              label_replace(
+                kube_cronjob_status_last_successful_time{cronjob=~".+-postgresql-backup-(full|diff)"},
+                "release", "$1", "cronjob", "(.+)-postgresql-backup-(?:full|diff)"
+              )
+              or
+              label_replace(
+                kube_cronjob_status_last_successful_time
+                * on (namespace, cronjob) group_left (label_app_kubernetes_io_instance)
+                kube_cronjob_labels{label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup"},
+                "release", "$1", "label_app_kubernetes_io_instance", "(.+)"
+              )
             )
           )
         labels:
