@@ -1,0 +1,184 @@
+package de.tum.cit.aet.hephaestus.observability;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.web.reactive.server.WebTestClient;
+
+/**
+ * The metric names that the release's alert rules read from the roles ({@code job="hephaestus"}) exist: in the code
+ * for every role, and on the scrape of this context for each meter that the server role registers at start. A renamed
+ * meter, or a rule that reads a name that no role exports, fails here instead of leaving an alert that never fires.
+ */
+class ScrapeContractIntegrationTest extends BaseIntegrationTest {
+
+    private static final Path RULES = Path.of("../../deploy/chart/hephaestus/files/hephaestus-alerts.yml");
+    private static final Path SOURCES = Path.of("src/main/java");
+
+    /** Name prefixes of meters that a library registers, not this code: Spring MVC and HikariCP. */
+    private static final Set<String> LIBRARY = Set.of("http_server_requests", "hikaricp_connections");
+
+    /**
+     * Rule metrics that this context does not export at start, each with the reason. A new name belongs here only
+     * when the meter cannot exist before its first event, or only another role registers it.
+     */
+    private static final Map<String, String> ABSENT_AT_START = Map.ofEntries(
+            Map.entry("http_server_requests_seconds", "a request creates its route's timer; checked after one below"),
+            Map.entry("web_vital_duration_seconds", "a browser report creates it"),
+            Map.entry("agent_job_infra_retry_requeued_total", "worker role"),
+            Map.entry("agent_job_server_error_total", "worker role"),
+            Map.entry("agent_queue_oldest_age_seconds", "worker role"),
+            Map.entry("sandbox_isolation_passed", "worker role"),
+            Map.entry("llm_pool_limit", "worker role"),
+            Map.entry("llm_pool_limit_decreases_total", "worker role"),
+            Map.entry("llm_pool_first_token_baseline_resets_total", "worker role"),
+            Map.entry("llm_pool_upstream_absorbed_total", "worker role"),
+            Map.entry("llm_pool_upstream_throttled_total", "worker role"),
+            Map.entry("llm_budget_blocked_total", "the first blocked call creates it, with its surface and cap"),
+            Map.entry("llm_budget_exhausted_total", "the first exhausted budget creates it, with its cap"),
+            Map.entry("mentor_turn_completed_total", "the first ended turn creates it, with its outcome"),
+            Map.entry("integration_consumer_nak_total", "the first negative acknowledgement creates it"),
+            Map.entry("integration_consumer_poison_total", "the first dead letter creates it"),
+            Map.entry("product_feedback_steps_total", "the first step creates it, with its outcome"),
+            Map.entry("webhook_publish_total", "webhook role"),
+            Map.entry("webhook_rejected_total", "webhook role"),
+            Map.entry("webhook_stream_age_bound_seconds", "webhook role"),
+            Map.entry("webhook_stream_bytes_utilization", "webhook role"),
+            Map.entry("webhook_stream_consumer_pending", "webhook role"),
+            Map.entry("webhook_stream_oldest_message_age_seconds", "webhook role"),
+            Map.entry("webhook_stream_poll_age_seconds", "webhook role"));
+
+    /** The bucket bounds that the objective rules divide by, with the family that must offer each. */
+    private static final Map<String, List<String>> OBJECTIVE_BUCKETS = Map.of(
+            "http_server_requests_seconds_bucket", List.of("1.0", "2.0"),
+            "mentor_turn_first_token_seconds_bucket", List.of("10.0"),
+            "practice_review_first_delivery_seconds_bucket", List.of("1800.0"));
+
+    /** The series of this context's scrape. A meter with an unbounded label grows past it. */
+    private static final int SERIES_BUDGET = 3000;
+
+    @Autowired
+    private PrometheusMeterRegistry prometheus;
+
+    @Autowired
+    private WebTestClient webTestClient;
+
+    @Test
+    void shouldFindEveryRuleMetricInTheCode() throws IOException {
+        Set<String> literals;
+        try (Stream<Path> files = Files.walk(SOURCES)) {
+            var literal = Pattern.compile("\"([a-z][a-z0-9]*(?:[._][a-z0-9]+)+)\"");
+            literals = files.filter(file -> file.toString().endsWith(".java"))
+                    .flatMap(file -> {
+                        try {
+                            return literal.matcher(Files.readString(file))
+                                    .results()
+                                    .map(match -> match.group(1));
+                        } catch (IOException e) {
+                            throw new IllegalStateException(e);
+                        }
+                    })
+                    .map(name -> name.replace('.', '_'))
+                    .collect(Collectors.toSet());
+        }
+        Map<String, Set<String>> unknown = new TreeMap<>();
+        for (String metric : ruleMetrics()) {
+            Set<String> families = families(metric);
+            if (families.stream()
+                    .noneMatch(family ->
+                            literals.contains(family) || LIBRARY.stream().anyMatch(family::startsWith))) {
+                unknown.put(metric, families);
+            }
+        }
+        assertThat(unknown).as("rule metrics without a meter name in the code").isEmpty();
+    }
+
+    @Test
+    void shouldExportEveryRuleMetricThatTheServerRegistersAtStart() throws IOException {
+        Set<String> exported = exportedNames(prometheus.scrape());
+        Set<String> rules = ruleMetrics();
+        Set<String> missing = new TreeSet<>();
+        for (String metric : rules) {
+            if (exported.contains(metric)) continue;
+            if (families(metric).stream().anyMatch(ABSENT_AT_START::containsKey)) continue;
+            missing.add(metric);
+        }
+        assertThat(missing)
+                .as("rule metrics that the server does not export at start")
+                .isEmpty();
+        assertThat(ABSENT_AT_START.keySet())
+                .as("every exception still names a metric that a rule reads")
+                .allMatch(name ->
+                        rules.stream().anyMatch(metric -> families(metric).contains(name)));
+    }
+
+    @Test
+    void shouldOfferTheBucketsThatTheObjectivesDivideByAndStayWithinTheSeriesBudget() {
+        webTestClient.get().uri("/actuator/health/liveness").exchange();
+        webTestClient.get().uri("/public/version").exchange();
+        String scrape = prometheus.scrape();
+
+        OBJECTIVE_BUCKETS.forEach((family, bounds) -> {
+            for (String bound : bounds) {
+                assertThat(scrape)
+                        .as("%s offers le=%s", family, bound)
+                        .containsPattern(
+                                Pattern.compile("(?m)^" + family + "\\{[^}]*le=\"" + Pattern.quote(bound) + "\""));
+            }
+        });
+        long series = scrape.lines()
+                .filter(line -> !line.isBlank() && !line.startsWith("#"))
+                .count();
+        assertThat(series).as("series of one scrape").isLessThanOrEqualTo(SERIES_BUDGET);
+    }
+
+    /** The names that the rules select with {@code job="hephaestus"}. */
+    private static Set<String> ruleMetrics() throws IOException {
+        Set<String> metrics = new TreeSet<>();
+        var selector =
+                Pattern.compile("([a-zA-Z_:][a-zA-Z0-9_:]*)\\{([^}]*)\\}").matcher(Files.readString(RULES));
+        while (selector.find()) {
+            if (selector.group(2).contains("job=\"hephaestus\"")
+                    && !selector.group(1).equals("up")) {
+                metrics.add(selector.group(1));
+            }
+        }
+        assertThat(metrics).as("the rules select role metrics").hasSizeGreaterThan(30);
+        return metrics;
+    }
+
+    /** The exposition name and the meter names it can come from: without the histogram and unit suffixes. */
+    private static Set<String> families(String metric) {
+        Set<String> names = new TreeSet<>(Set.of(metric));
+        for (String suffix : List.of("_bucket", "_count", "_sum")) {
+            if (metric.endsWith(suffix)) names.add(metric.substring(0, metric.length() - suffix.length()));
+        }
+        for (String name : Set.copyOf(names)) {
+            for (String suffix : List.of("_total", "_seconds")) {
+                if (name.endsWith(suffix)) names.add(name.substring(0, name.length() - suffix.length()));
+            }
+        }
+        return names;
+    }
+
+    private static Set<String> exportedNames(String scrape) {
+        return scrape.lines()
+                .filter(line -> !line.isBlank() && !line.startsWith("#"))
+                .map(line -> line.substring(0, line.indexOf('{') < 0 ? line.indexOf(' ') : line.indexOf('{')))
+                .collect(Collectors.toCollection(TreeSet::new));
+    }
+}
