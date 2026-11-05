@@ -12,6 +12,11 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Product feedback filings belong to instance-level reports, not to a workspace, which the type-level marker states. The
+ * methods that join a report by its account reach every workspace's reports and carry their own marker, which the
+ * tenancy check honours (ADR 0077).
+ */
 @WorkspaceAgnostic("Product feedback filings belong to instance-level reports, not to a workspace")
 interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackFiling, UUID> {
 
@@ -76,12 +81,15 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
     @Query(value = "SELECT count(*) FROM product_feedback_filing WHERE drafted_at >= :since", nativeQuery = true)
     long countDraftedSince(@Param("since") Instant since);
 
+    @WorkspaceAgnostic(
+            "Limits the product feedback reports one account drafts, across every workspace it sends feedback from")
     @Query(value = """
                     SELECT count(*) FROM product_feedback_filing f JOIN product_feedback p ON p.id = f.feedback_id
                     WHERE p.account_id = :accountId AND f.drafted_at >= :since
                     """, nativeQuery = true)
     long countDraftedByAccountSince(@Param("accountId") long accountId, @Param("since") Instant since);
 
+    @WorkspaceAgnostic("Limits the public issues one account files, across every workspace it sends feedback from")
     @Query(value = """
                     SELECT count(*) FROM product_feedback_filing f JOIN product_feedback p ON p.id = f.feedback_id
                     WHERE p.account_id = :accountId AND f.route = 'PUBLIC' AND f.state IN ('FILING','FILED')
@@ -107,6 +115,7 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
             nativeQuery = true)
     Optional<ProductFeedbackFiling> oldestWaiting();
 
+    @WorkspaceAgnostic("A person's own product feedback reports, from every workspace they sent one from")
     @Query(value = """
                     SELECT f.* FROM product_feedback_filing f JOIN product_feedback p ON p.id = f.feedback_id
                     WHERE p.account_id = :accountId
@@ -114,6 +123,7 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
     List<ProductFeedbackFiling> findAllByAccount(@Param("accountId") long accountId);
 
     /** Erasure holds these locks until it deletes the rows, so a promotion cannot freeze a recipient in between. */
+    @WorkspaceAgnostic("Erasure locks every product feedback filing of one person, in every workspace")
     @Query(value = """
                     SELECT f.* FROM product_feedback_filing f JOIN product_feedback p ON p.id = f.feedback_id
                     WHERE p.account_id = :accountId

@@ -7,6 +7,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Removes or anonymises one account's rows. Most tables here belong to the account and to no workspace, which the
+ * type-level marker states. The methods that reach a workspace's rows carry their own marker, which the tenancy check
+ * honours (ADR 0077).
+ */
 @WorkspaceAgnostic("Account erasure is account-scoped; the rows it removes span every workspace")
 interface AccountErasureRepository extends Repository<Account, Long> {
 
@@ -57,6 +62,7 @@ interface AccountErasureRepository extends Repository<Account, Long> {
     int redactAuthEvents(@Param("accountId") Long accountId);
 
     /** The append-only audit trigger permits nulling account references for erasure. */
+    @WorkspaceAgnostic("Account erasure removes a person from the audit entries of every workspace")
     @Modifying
     @Query(value = """
         UPDATE config_audit_event
