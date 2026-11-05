@@ -16,6 +16,7 @@ public final class AgentMetrics {
     public static final String AGENT_JOB_RETENTION_DELETED = "agent.job.retention.deleted";
     public static final String AGENT_JOB_RETENTION_STRIPPED = "agent.job.retention.stripped";
     public static final String AGENT_JOB_SNAPSHOT_UNREADABLE = "agent.job.snapshot.unreadable";
+    public static final String AGENT_JOB_STAGE_DURATION = "agent.job.stage.duration";
     public static final String AGENT_JOB_TOTAL = "agent.job.total";
     public static final String AGENT_JOB_ZOMBIE_REAPED = "agent.job.zombie.reaped";
     public static final String AGENT_PI_ENVELOPE_MISMATCH = "agent.pi.envelope.mismatch";

@@ -24,6 +24,7 @@ The alert or the objective tells the operator when the answer needs work.
 | How long after a push or a request does the developer get feedback? | `practice_review_first_delivery_seconds` | `HephaestusFeedbackDeliverySlow` |
 | Does feedback wait and never arrive? | `practice_feedback_oldest_waiting_seconds` | `HephaestusFeedbackDeliveryStalled` |
 | Do review attempts fail, and where? | `agent_job_total`, `agent_job_infra_retry_requeued_total`, `agent_job_orphan_failed_total` | `HephaestusAgentJobsFailing` and the other review alerts |
+| How long does each stage of a review take? | `agent_job_stage_duration_seconds`, by `stage` and `outcome`. Admission: `http_server_requests_seconds` on the two [admission routes](#agent-job-metrics) | None |
 | Does work wait for a worker? | `agent_queue_oldest_age_seconds`, `agent_job_duration_seconds` with `phase="queue"` | `HephaestusAgentQueueStalled` |
 | Do model calls wait for their pool? | `llm_pool_permit_wait_seconds`, `llm_pool_upstream_throttled_total` | None |
 | How long does a model call take, how many tokens does it use, and how does it end? | `gen_ai_client_operation_duration_seconds`, `gen_ai_client_tokens_total`, `gen_ai_client_calls_total` by `outcome` | None |
@@ -46,17 +47,15 @@ The alert or the objective tells the operator when the answer needs work.
 
 These questions have no signal yet. The most important is first.
 
-1. How long does each stage of a review take: capture, the practice sessions, admission and composition?
-   Only the durations of the whole job and of the sandbox exist.
-2. Which statements are slow, and do they wait for locks?
+1. Which statements are slow, and do they wait for locks?
    No exporter reads `pg_stat_statements`, lock waits, autovacuum or table growth.
-3. How long does an event wait in the broker, and how long does its handler take?
+2. How long does an event wait in the broker, and how long does its handler take?
    `integration_consumer_nak_total` and `integration_consumer_poison_total` count retries and dead letters.
    No histogram measures the wait or the handling.
-4. What does a reader wait for on a page?
+3. What does a reader wait for on a page?
    When does the browser show the first word of an answer?
    No signal exists.
-5. Does feedback earn trust: the outcomes of each practice, corrections and disagreement?
+4. Does feedback earn trust: the outcomes of each practice, corrections and disagreement?
    These are only in the database.
    A practice is not a metric label, because each workspace can add practices.
 
@@ -552,11 +551,39 @@ It has no phase, outcome or duration.
 | ----------------------------- | --------- | --------- | --------------------------------------------------------------- |
 | `agent_job_total`             | Counter   | `outcome` | Committed terminal transitions                                  |
 | `agent_job_duration_seconds`  | Histogram | `phase`   | Queue, execution-attempt, and total durations                   |
+| `agent_job_stage_duration_seconds` | Histogram | `stage`, `outcome` | Duration of one stage of a review attempt |
 
 `outcome` is one of `completed`, `failed`, `timed_out`, or `cancelled`. `phase` is one of `queue`,
 `execution`, or `total`. Identifiers, model and provider names, worker IDs, and exception text are not
 labels. See [Practice Review Operations](./practice-review-operations.mdx) for queue health and the
 existing execution metric.
+
+`agent_job_stage_duration_seconds` measures each stage of one attempt:
+
+| `stage` | From | To |
+| --- | --- | --- |
+| `capture` | The start of the evidence capture | The inputs of every practice are ready |
+| `sandbox` | The launch of the sandbox that runs the practice sessions | Its result |
+| `composition_wait` | The request for a composition slot | The slot |
+| `composition` | The start of the feedback composition, including `composition_wait` | Its end, or its hand-on to another attempt |
+
+Its `outcome` is `ok`, `failed` or `handed_on`.
+`handed_on` means that composition stopped for a passing cause, and another attempt continues it.
+A sandbox that exits with a code other than 0 is `failed`, also when it admitted results.
+A sandbox that had no room is not a sample: the attempt waits in the queue.
+
+The stages do not add up to the attempt.
+An attempt that resumes a composition has a `composition` sample, but no `capture` and no `sandbox` sample.
+Each stage is also a span, `practice_review.<stage>`, under the attempt's `practice_review.execute` span.
+
+The runner admits results through two worker routes.
+Their durations are in `http_server_requests_seconds`:
+
+```promql
+histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{uri=~"/internal/llm/(stage-result|admit-results)"}[1h])))
+```
+
+`stage-result` runs once for each practice, and `admit-results` runs once at the end of the sandbox.
 
 ## Practice review outcome metrics
 

@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.metrics.ReviewStageTelemetry;
 import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.agent.runtime.FeedbackWritingGuide;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -23,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Tracer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -88,6 +90,8 @@ public class WorkerFeedbackComposer {
     private final PracticeReviewProperties properties;
     private final AgentProperties agentProperties;
     private final MeterRegistry meters;
+    // The wait has no span of its own: the composition span of the attempt covers it.
+    private final ReviewStageTelemetry stages;
     private final ObjectMapper mapper;
     private final Duration providerRetryPause;
     private final String reviewSystem;
@@ -141,6 +145,7 @@ public class WorkerFeedbackComposer {
         this.properties = properties;
         this.agentProperties = agentProperties;
         this.meters = meters;
+        this.stages = new ReviewStageTelemetry(meters, Tracer.NOOP);
         this.mapper = mapper;
         this.providerRetryPause = providerRetryPause;
         String style = sharedStyle();
@@ -160,6 +165,18 @@ public class WorkerFeedbackComposer {
         }
     }
 
+    private CompositionCapacity.Slot acquireSlot(Instant notAfter) {
+        var wait = stages.start(ReviewStageTelemetry.Stage.COMPOSITION_WAIT);
+        try {
+            var slot = capacity.acquire(deadline(notAfter));
+            wait.end(ReviewStageTelemetry.Outcome.OK);
+            return slot;
+        } catch (RuntimeException refused) {
+            wait.end(ReviewStageTelemetry.Outcome.FAILED);
+            throw refused;
+        }
+    }
+
     /**
      * Composes the feedback of the attempt that just measured and admitted the review, from the inputs its folder
      * holds.
@@ -168,7 +185,7 @@ public class WorkerFeedbackComposer {
      * @throws CompositionHandedOnException when a passing cause left a destination open before the retry limit
      */
     public void composeAfterMeasurement(ReviewJob job, UUID leaseId, Instant notAfter) {
-        var slot = capacity.acquire(deadline(notAfter));
+        var slot = acquireSlot(notAfter);
         try {
 
             try {
@@ -197,7 +214,7 @@ public class WorkerFeedbackComposer {
             withholdWithoutInputs(job, leaseId, CompositionStop.RETRIES_EXHAUSTED);
             return;
         }
-        var slot = capacity.acquire(deadline(notAfter));
+        var slot = acquireSlot(notAfter);
         try {
             ReviewCompositionContinuation.Restored restored;
             try {
