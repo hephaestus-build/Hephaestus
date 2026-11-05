@@ -196,8 +196,8 @@ The kube-state-metrics, kubelet and cert-manager rules have no series outside Ku
 The webhook rules find the release's webhook Deployment, `<release>-webhook`, by the chart's labels `app.kubernetes.io/name=hephaestus` and `app.kubernetes.io/component=webhook`.
 kube-state-metrics exports these labels only when you allow them:
 
-- Start kube-state-metrics with `--metric-labels-allowlist=deployments=[app.kubernetes.io/name,app.kubernetes.io/component]`.
-- With kube-prometheus-stack, set the value `kube-state-metrics.metricLabelsAllowlist` to `["deployments=[app.kubernetes.io/name,app.kubernetes.io/component]"]`.
+- Start kube-state-metrics with `--metric-labels-allowlist=deployments=[app.kubernetes.io/name,app.kubernetes.io/component],cronjobs=[app.kubernetes.io/name,app.kubernetes.io/component,app.kubernetes.io/instance]`.
+- With kube-prometheus-stack, set the value `kube-state-metrics.metricLabelsAllowlist` to `["deployments=[app.kubernetes.io/name,app.kubernetes.io/component]", "cronjobs=[app.kubernetes.io/name,app.kubernetes.io/component,app.kubernetes.io/instance]"]`.
 
 Without these labels, the two webhook rules find no Deployment and never fire.
 
@@ -205,8 +205,11 @@ The other rules find the release's objects by the names that the chart gives the
 Another application in the cluster can use the same names, for example another PostgreSQL chart.
 To limit these rules to the release, add a matcher for its namespace, for example `namespace="hephaestus"`.
 Do the same for `HephaestusCertificateExpiring`, which covers every certificate that cert-manager manages in the cluster.
-The chart shortens a name above 52 characters, and then the name loses its suffix.
-For a release name longer than 34 characters, change the name patterns of these rules.
+
+The chart shortens a name above 52 characters, and then the name loses its suffix and gets a hash.
+A release name longer than 34 characters does that to the backup CronJobs and the volumes.
+`HephaestusBackupStale` then finds the backup CronJobs by their labels, which the `cronjobs` part of the allowlist above exports.
+For the volume rules, change their name patterns.
 
 | Alert | Signal | Why this threshold |
 | --- | --- | --- |
