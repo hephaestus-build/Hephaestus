@@ -26,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @ConditionalOnServerRole
 @Component
-@WorkspaceAgnostic("Pruning a workspace-agnostic table")
 public class OAuthStateNonceCleanupJob {
 
     private static final Logger log = LoggerFactory.getLogger(OAuthStateNonceCleanupJob.class);
@@ -53,6 +52,7 @@ public class OAuthStateNonceCleanupJob {
     }
 
     @Scheduled(cron = "0 0 4 * * *")
+    @WorkspaceAgnostic("Retention prunes the expired nonces of every workspace")
     @SchedulerLock(name = "oauth-state-nonce-cleanup", lockAtMostFor = "PT10M", lockAtLeastFor = "PT1M")
     @Transactional
     public void cleanupExpired() {
