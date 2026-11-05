@@ -962,10 +962,7 @@ public class ReviewJobExecutor {
             sandbox.end(ReviewStageTelemetry.Outcome.FAILED);
             throw failed;
         }
-        sandbox.end(
-                result.exitCode() == 0 && !result.timedOut()
-                        ? ReviewStageTelemetry.Outcome.OK
-                        : ReviewStageTelemetry.Outcome.FAILED);
+        sandbox.end(sandboxOutcome(result));
         AgentResult agentResult = practiceAgent.parseResult(result);
 
         ReviewJob retained;
@@ -1539,6 +1536,14 @@ public class ReviewJobExecutor {
                             VERSION_UNAVAILABLE,
                             OCCASION_EVIDENCE_UNAVAILABLE -> false;
                 };
+    }
+
+    private static ReviewStageTelemetry.Outcome sandboxOutcome(SandboxResult result) {
+        if (result.timedOut()) return ReviewStageTelemetry.Outcome.FAILED;
+        if (result.exitCode() == 0) return ReviewStageTelemetry.Outcome.OK;
+        return result.exitCode() == SandboxLayout.EXIT_PARTIAL_REVIEW
+                ? ReviewStageTelemetry.Outcome.PARTIAL
+                : ReviewStageTelemetry.Outcome.FAILED;
     }
 
     private static @Nullable RequeueCause unreachableReason(int exitCode) {

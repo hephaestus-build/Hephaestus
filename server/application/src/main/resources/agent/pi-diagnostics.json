@@ -25,6 +25,7 @@
 		"practice.result_refused",
 		"practice.staging_failed",
 		"practice.unsubmitted",
+		"practice.without_result",
 		"practice_scripts.truncated",
 		"provider.failed",
 		"provider.parse_failed",

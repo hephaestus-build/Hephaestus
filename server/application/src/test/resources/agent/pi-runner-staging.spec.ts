@@ -13,7 +13,12 @@ void test("an unavailable practice stays open while completed work is staged for
 	try {
 		stagePractices(first, [{ slug: "finished" }, { slug: "unavailable", inputs: false }]);
 		const interrupted = await runRunner(first, {});
-		assert.equal(interrupted.status, 1, interrupted.stderr);
+		// A designed partial end, not a failure: the worker reads the open practice by its index.
+		assert.equal(interrupted.status, 78, interrupted.stderr);
+		assert.match(
+			interrupted.stderr,
+			/^\[pi-runner\] practice\.without_result practice=1 program_stop=\S+$/mu,
+		);
 		const staged = capturedLines(first, "staging").map((entry) => field(entry, "body"));
 		assert.equal(staged.length, 1);
 		const results = field(staged[0], "results");

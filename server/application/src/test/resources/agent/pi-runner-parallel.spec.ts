@@ -215,7 +215,7 @@ void test("the deadline retains finished work and ends running and queued practi
 			{ "z-running": "hang", "y-waiting": "hang" },
 			{ AGENT_BUDGET_MS: "6500", PI_HOST_COLD_LEADER: "y-waiting" },
 		);
-		assert.equal(exit.status, 1, exit.stderr);
+		assert.equal(exit.status, 78, exit.stderr);
 		const { results } = resultsOf(cwd);
 		const body = readJsonFile(cwd, "out/result.json");
 		assert.deepEqual(capturedLines(cwd, "admission"), []);
@@ -330,7 +330,7 @@ void test("a session stop failure preserves completed siblings for admission and
 				PI_HOST_DELAYS: JSON.stringify({ "z-stop": 150 }),
 			},
 		);
-		assert.equal(exit.status, 1, exit.stderr);
+		assert.equal(exit.status, 78, exit.stderr);
 		assert.deepEqual(capturedLines(cwd, "admission"), []);
 		assert.deepEqual(
 			resultsOf(cwd).results.map((result: unknown) => field(result, "practiceSlug")),

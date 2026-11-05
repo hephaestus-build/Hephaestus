@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import io.fabric8.kubernetes.api.model.ContainerStateTerminated;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
 import io.fabric8.kubernetes.api.model.Pod;
@@ -48,6 +49,8 @@ public class SandboxExits {
     /** Why it ended; a closed set, so the metric and the alert stay bounded. */
     enum Reason {
         COMPLETED,
+        /** A review staged what it could and left a practice without a result; another attempt may continue it. */
+        PARTIAL,
         ERROR,
         OOM_KILLED,
         DEADLINE_EXCEEDED,
@@ -75,6 +78,9 @@ public class SandboxExits {
     private static final DiagnosticVocabulary DIAGNOSTICS = DiagnosticVocabulary.load();
 
     private static final Pattern DETAIL = Pattern.compile("[A-Za-z]{1,64}");
+
+    /** The runtime's line for one practice that the review left without a result. */
+    private static final String WITHOUT_RESULT = "[pi-runner] practice.without_result ";
 
     static final int TAIL_LINES_READ = 200;
     static final int TAIL_BYTES_READ = 65_536;
@@ -106,7 +112,7 @@ public class SandboxExits {
     public void record(Kind kind, String name) {
         try {
             Pod pod = pods.get(name);
-            report(kind, name, pod == null ? new Exit(Reason.NOT_FOUND, null, null, null) : exit(pod));
+            report(kind, name, pod == null ? new Exit(Reason.NOT_FOUND, null, null, null) : exit(kind, pod));
         } catch (RuntimeException e) {
             // The class only: the API's message can quote the request. The removal goes on.
             log.debug(
@@ -126,12 +132,14 @@ public class SandboxExits {
         if (exit.reason() == Reason.COMPLETED) {
             return;
         }
-        LoggingEventBuilder event = log.atWarn()
+        // A partial review is a designed end that another attempt may continue, so it is no warning.
+        LoggingEventBuilder event = (exit.reason() == Reason.PARTIAL ? log.atInfo() : log.atWarn())
                 .addKeyValue("event.name", "sandbox.exited")
                 .addKeyValue("sandbox.kind", kind.tag())
                 .addKeyValue("sandbox.exit.reason", exit.reason().tag());
         // A key that the MDC already holds would make the structured writer drop the whole line.
         if (MDC.get("sandbox.id") == null) event = event.addKeyValue("sandbox.id", name);
+        List<String> withoutResult = List.of();
         String container = exit.container();
         if (container != null) {
             event = event.addKeyValue("container.name", container);
@@ -142,6 +150,10 @@ public class SandboxExits {
                 Tail tail = stderrTail(pods.tail(name, container, TAIL_LINES_READ, TAIL_BYTES_READ));
                 if (!tail.text().isEmpty()) event = event.addKeyValue("sandbox.stderr.tail", tail.text());
                 if (tail.dropped() > 0) event = event.addKeyValue("sandbox.stderr.dropped", tail.dropped());
+                if (exit.reason() == Reason.PARTIAL) {
+                    withoutResult = withoutResult(tail.text());
+                    event = event.addKeyValue("sandbox.review.without_result", String.join("; ", withoutResult));
+                }
             }
         }
         Integer code = exit.exitCode();
@@ -149,7 +161,9 @@ public class SandboxExits {
         String detail = exit.detail();
         if (detail != null && DETAIL.matcher(detail).matches())
             event = event.addKeyValue("sandbox.exit.detail", detail);
-        event.log("A sandbox ended: {}", exit.reason().tag());
+        if (exit.reason() == Reason.PARTIAL)
+            event.log("A sandbox ended: partial, practices without a result: {}", withoutResult.size());
+        else event.log("A sandbox ended: {}", exit.reason().tag());
     }
 
     private void count(Kind kind, Reason reason) {
@@ -162,6 +176,18 @@ public class SandboxExits {
             @Nullable String container,
             @Nullable Integer exitCode,
             @Nullable String detail) {}
+
+    /** How a sandbox of {@code kind} ended: a review's partial exit is its own reason, not an error. */
+    static Exit exit(Kind kind, Pod pod) {
+        Exit exit = exit(pod);
+        Integer code = exit.exitCode();
+        if (kind == Kind.REVIEW
+                && exit.reason() == Reason.ERROR
+                && code != null
+                && code == SandboxLayout.EXIT_PARTIAL_REVIEW)
+            return new Exit(Reason.PARTIAL, exit.container(), code, exit.detail());
+        return exit;
+    }
 
     /** The first cause that explains the end, from the Pod as a whole to one container. */
     static Exit exit(Pod pod) {
@@ -205,6 +231,14 @@ public class SandboxExits {
         if ("Failed".equals(phase) || "Unknown".equals(phase)) return new Exit(Reason.UNKNOWN, null, null, podReason);
         // Every container that ended ended well. One that still runs is ended by its worker, as it should be.
         return new Exit(Reason.COMPLETED, null, null, null);
+    }
+
+    /** Each practice that the review left without a result, as its kept line names it: its position and why it stopped. */
+    static List<String> withoutResult(String tail) {
+        return tail.lines()
+                .filter(line -> line.startsWith(WITHOUT_RESULT))
+                .map(line -> line.substring(WITHOUT_RESULT.length()))
+                .toList();
     }
 
     /** The last diagnostic lines of a sandbox log, and how many other lines it left out. */

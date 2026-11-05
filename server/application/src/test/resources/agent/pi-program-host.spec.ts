@@ -94,7 +94,7 @@ const main = await run(
 );
 
 void test("an interrupted run retains completed results and leaves unavailable work open", () => {
-	assert.equal(main.status, 1, main.stderr);
+	assert.equal(main.status, 78, main.stderr);
 });
 
 void test("a partial run submits completed results and explicit runtime non-results separately", () => {
@@ -249,7 +249,7 @@ void test("a practice that the run's safety line stops before it starts is repor
 		{ "b-hangs": "hang" },
 		{ AGENT_BUDGET_MS: "7000", PI_HOST_COLD_LEADER: "b-hangs" },
 	);
-	assert.equal(stopped.status, 1, stopped.stderr);
+	assert.equal(stopped.status, 78, stopped.stderr);
 	const report = executionReport(stopped.cwd);
 	assert.partialDeepStrictEqual(entryOf(report.practices, "a-first"), { status: "ok" });
 	assert.partialDeepStrictEqual(entryOf(report.practices, "b-hangs"), {

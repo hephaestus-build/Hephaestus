@@ -207,6 +207,13 @@ public final class SandboxLayout {
      */
     public static final int EXIT_SERVER_ERROR = 77;
 
+    /**
+     * Exit code emitted by the Pi runner when the review staged what it could and left at least one practice without a
+     * result. It is a designed end, not a failure: the worker decides from what is staged whether another attempt
+     * continues the review.
+     */
+    public static final int EXIT_PARTIAL_REVIEW = 78;
+
     /** OCI label declaring the agent image runtime contract. */
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";
 

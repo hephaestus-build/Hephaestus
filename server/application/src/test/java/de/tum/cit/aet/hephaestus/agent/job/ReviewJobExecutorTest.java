@@ -287,6 +287,31 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         assertThat(stageCount("sandbox", "failed")).isEqualTo(1);
     }
 
+    @Test
+    void shouldTimeAReviewThatLeftPracticesOpenAsAPartialSandboxAndContinueIt() {
+        var job = configuredJob();
+        job.setStatus(ReviewJobStatus.RUNNING);
+        job.setLeaseId(UUID.randomUUID());
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(handler.hasStaged(job)).thenReturn(true);
+        when(handler.completeStaged(job)).thenReturn(false);
+        when(handler.endedPractices(job)).thenReturn(0, 16);
+        recovery = mock(ReviewJobRecovery.class);
+        when(recovery.continueProgressed(any(), any(UUID.class))).thenReturn(true);
+        var executor = runExecutor(
+                mock(ReviewCompositionContinuation.class),
+                new SandboxResult(SandboxLayout.EXIT_PARTIAL_REVIEW, Map.of(), "", false, Duration.ofSeconds(1)),
+                false);
+
+        assertThat(tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class)))
+                .isNull();
+
+        verify(recovery).continueProgressed(eq(job), any(UUID.class));
+        assertThat(stageCount("sandbox", "partial")).isEqualTo(1);
+        assertThat(stageCount("sandbox", "failed")).isZero();
+        assertThat(requeued("sandbox")).isZero();
+    }
+
     private long stageCount(String stage, String outcome) {
         return meters.get("agent.job.stage.duration")
                 .tags("stage", stage, "outcome", outcome)

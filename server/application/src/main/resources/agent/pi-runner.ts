@@ -1998,6 +1998,9 @@ export async function runReviewJob(): Promise<void> {
 	const PROVIDER_UNREACHABLE_EXIT = 76;
 	// The server answered staging or admission with its own error: the worker ends the attempt, with no retry.
 	const SERVER_ERROR_EXIT = 77;
+	// The review staged what it could and left at least one practice without a result. The worker decides from what is
+	// staged whether another attempt continues it; the code only tells this designed end from a failure.
+	const PARTIAL_REVIEW_EXIT = 78;
 
 	function readTaskEnvelope(): TaskEnvelope {
 		let raw: string;
@@ -3332,9 +3335,16 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		for (const practiceSlug of allSlugs) {
 			await stageEnded(practiceSlug);
 		}
-		if (allSlugs.some((slug) => !stagedPractices.has(slug))) {
+		const withoutResult = allSlugs.filter((slug) => !stagedPractices.has(slug));
+		if (withoutResult.length > 0) {
+			for (const slug of withoutResult) {
+				diagnose("practice.without_result", {
+					practice: practiceAt(slug),
+					program_stop: executions.get(slug)?.stopReason ?? unreachedReason,
+				});
+			}
 			finalizeOutput();
-			process.exit(1);
+			process.exit(PARTIAL_REVIEW_EXIT);
 		}
 
 		measurementClosed = true;

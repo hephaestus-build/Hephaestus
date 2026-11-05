@@ -567,9 +567,10 @@ existing execution metric.
 | `composition_wait` | The request for a composition slot | The slot |
 | `composition` | The start of the feedback composition, including `composition_wait` | Its end, or its hand-on to another attempt |
 
-Its `outcome` is `ok`, `failed` or `handed_on`.
+Its `outcome` is `ok`, `failed`, `partial` or `handed_on`.
 `handed_on` means that composition stopped for a passing cause, and another attempt continues it.
 A sandbox that exits with a code other than 0 is `failed`, also when it admitted results.
+A sandbox that left a practice without a result and staged the rest is `partial`. Another attempt can continue the review.
 A sandbox that had no room is not a sample: the attempt waits in the queue.
 
 The stages do not add up to the attempt.
