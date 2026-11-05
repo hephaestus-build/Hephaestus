@@ -212,8 +212,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(String.valueOf(result.getBody()))
                     .contains("Shared-model budget reached")
                     .contains("raises the budget");
-            assertThat(blocked("openai-completions", "instance")).isEqualTo(1);
-            assertThat(blocked("openai-completions", "byo")).isZero();
+            assertThat(blocked("instance")).isEqualTo(1);
+            assertThat(blocked("byo")).isZero();
         }
 
         @Test
@@ -233,8 +233,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(String.valueOf(result.getBody()))
                     .contains("Own-provider budget reached")
                     .contains("raises the cap");
-            assertThat(blocked("openai-completions", "byo")).isEqualTo(1);
-            assertThat(blocked("openai-completions", "instance")).isZero();
+            assertThat(blocked("byo")).isEqualTo(1);
+            assertThat(blocked("instance")).isZero();
         }
 
         /** 502, not 429: the credential resolves to nothing, so anything but 429 proves the call got through. */
@@ -542,8 +542,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(result.getStatusCode().value()).isEqualTo(402);
             assertThat(String.valueOf(result.getBody())).isEqualTo("Practice script budget spent");
             verifyNoInteractions(resolver);
-            assertThat(blocked("openai-embeddings", "practice_script_attempt")).isEqualTo(1);
-            assertThat(blocked("openai-embeddings", "instance")).isZero();
+            assertThat(blocked("practice_script_attempt")).isEqualTo(1);
+            assertThat(blocked("instance")).isZero();
         }
 
         @Test
@@ -563,8 +563,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(String.valueOf(result.getBody())).contains("Shared-model budget reached");
             verifyNoInteractions(resolver);
             // An admin fixes a monthly budget and an operator the attempt's cap, so an alert must tell them apart.
-            assertThat(blocked("openai-completions", "instance")).isEqualTo(1);
-            assertThat(blocked("openai-completions", "practice_script_attempt")).isZero();
+            assertThat(blocked("instance")).isEqualTo(1);
+            assertThat(blocked("practice_script_attempt")).isZero();
         }
 
         @ParameterizedTest
@@ -1705,7 +1705,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .isEqualTo("CALLS_IN_FLIGHT");
             assertThat(upstream.getRequestCount()).isZero();
             assertThat(streamingMeterRegistry
-                            .counter(AgentMetrics.SANDBOX_GATEWAY_CALLS_IN_FLIGHT_REFUSED)
+                            .counter(AgentMetrics.LLM_PROXY_REFUSED, "refusal", "calls_in_flight")
                             .count())
                     .isEqualTo(1.0);
         }
@@ -2617,9 +2617,9 @@ class LlmProxyServiceTest extends BaseUnitTest {
         return headers;
     }
 
-    private double blocked(String apiProtocol, String cap) {
+    private double blocked(String cap) {
         return meterRegistry
-                .counter("llm.proxy.budget.blocked", "apiProtocol", apiProtocol, "cap", cap)
+                .counter(AgentMetrics.LLM_BUDGET_BLOCKED, "surface", "model_call", "cap", cap)
                 .count();
     }
 

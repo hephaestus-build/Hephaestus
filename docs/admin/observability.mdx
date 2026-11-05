@@ -26,6 +26,8 @@ The alert or the objective tells the operator when the answer needs work.
 | Do review attempts fail, and where? | `agent_job_total`, `agent_job_infra_retry_requeued_total`, `agent_job_orphan_failed_total` | `HephaestusAgentJobsFailing` and the other review alerts |
 | Does work wait for a worker? | `agent_queue_oldest_age_seconds`, `agent_job_duration_seconds` with `phase="queue"` | `HephaestusAgentQueueStalled` |
 | Do model calls wait for their pool? | `llm_pool_permit_wait_seconds`, `llm_pool_upstream_throttled_total` | None |
+| How long does a model call take, how many tokens does it use, and how does it end? | `gen_ai_client_operation_duration_seconds`, `gen_ai_client_tokens_total`, `gen_ai_client_calls_total` by `outcome` | None |
+| Which calls does the proxy refuse before a provider sees them? | `llm_proxy_refused_total`, by `refusal` | None |
 | Does the API answer without errors, and fast enough? | `http_server_requests_seconds` | The API objectives |
 | Which route is slow at the 95th percentile? | `http_server_requests_seconds_bucket`, by `uri` | The Activity objective |
 | Does the database pool make requests wait? | `hikaricp_connections_acquire_seconds`, `hikaricp_connections_timeout_total` | `HephaestusDatabasePoolSlow`, `HephaestusDatabaseConnectionTimeouts` |
@@ -45,20 +47,15 @@ These questions have no signal yet. The most important is first.
 
 1. How long does each stage of a review take: capture, the practice sessions, admission and composition?
    Only the durations of the whole job and of the sandbox exist.
-2. How long does a model call of each pool take, and how soon does its first token come?
-   How many tokens go in and out, and how often does a model refuse?
-   `llm_proxy_duration_seconds` has no pool label and no buckets.
-   It also spans the wait for a pool permit, which `llm_pool_permit_wait_seconds` measures on its own.
-   Token counts are only in spans and in the database.
-3. Which statements are slow, and do they wait for locks?
+2. Which statements are slow, and do they wait for locks?
    No exporter reads `pg_stat_statements`, lock waits, autovacuum or table growth.
-4. How long does an event wait in the broker, and how long does its handler take?
+3. How long does an event wait in the broker, and how long does its handler take?
    `integration_consumer_nak_total` and `integration_consumer_poison_total` count retries and dead letters.
    No histogram measures the wait or the handling.
-5. What does a reader wait for on a page?
+4. What does a reader wait for on a page?
    When does the browser show the first word of an answer?
    No signal exists.
-6. Does feedback earn trust: the outcomes of each practice, corrections and disagreement?
+5. Does feedback earn trust: the outcomes of each practice, corrections and disagreement?
    These are only in the database.
    A practice is not a metric label, because each workspace can add practices.
 
@@ -227,7 +224,7 @@ For a release name longer than 34 characters, change the name patterns of these 
 | `HephaestusWebhookRedeliveriesRequested` | `github_webhook_redelivery_total{outcome="requested"}` divided by `webhook_publish_total{stream="github",outcome="success"}`, over one hour | The server asks for a redelivery when GitHub recorded no successful delivery of an event. This includes a delivery that the receiver never saw, for example at an ingress timeout or while the receiver restarted. One event can be asked for up to five times. A ratio scales with traffic: more than 1 request for each 20 received deliveries is more than occasional network faults. A minimum of three requests keeps a single redelivery in a quiet hour quiet. A client error from the receiver, such as from a wrong webhook secret, gives no request and no count. The alert stays up for up to one hour after the requests stop. Only GitHub reports its delivery outcomes: GitLab, Slack and Outline have no such metric |
 | `HephaestusWebhookEventsUnrecovered` | `github_webhook_unrecovered` | Each counted event failed all six delivery attempts |
 | `HephaestusBudgetExhausted` | `llm_budget_exhausted_total` | A workspace crossed the instance-funded monthly cap |
-| `HephaestusBudgetBlocked` | `llm_budget_blocked_total` | Admission refused work at a cap. A single refusal is expected at a cap. Refusals that continue for 15 minutes need a decision on the budget |
+| `HephaestusBudgetBlocked` | `llm_budget_blocked_total` | Work refused at a cap: at admission, or as a model call of a running job (`surface="model_call"`). A single refusal is expected at a cap. Refusals that continue for 15 minutes need a decision on the budget, whichever surface refused them |
 | `HephaestusModelRefusalsReachCallers` | `llm_pool_upstream_throttled_total` less `llm_pool_upstream_absorbed_total`, per pool | Callers wait out most refusals. Refusals that reach callers for 15 minutes mean a spent account, a pause longer than a call can wait, or an outage |
 | `HephaestusModelLimitAtFloor` | `llm_pool_limit` at 2 while `llm_pool_limit_decreases_total` or `llm_pool_first_token_baseline_resets_total` rises | A pool that an admin capped at 2 does not fire it. A provider that refuses or queues even two calls for 30 minutes does |
 | `HephaestusAgentJobsFailing` | `agent_job_total` with `failed` or `timed_out` | All terminal failures, whatever their cause. Three in one hour point to the platform also on a small instance that runs a few reviews each day. Cancellations do not count. The alert stays up for up to one hour after the last failure |
@@ -693,6 +690,9 @@ No series names a workspace, a workspace's model, a job or a turn.
 | `llm_pool_waiters`                         | Gauge     | `pool`, `queue`            | Live calls that wait for the pool. All workers read it from the database. Take the maximum over the workers |
 | `llm_pool_limit_decreases_total`           | Counter   | `pool`, `cause`            | How often a provider's refusal (`refusal`), queue (`delay`) or stream without an answer (`unanswered`) lowered the limit |
 | `gen_ai_client_operation_time_to_first_chunk_seconds` | Histogram | `pool`, `class` | How long a served stream waited for its provider's first content event, from the request after the grant. A role, an error event or a comment is not content. The limit learns from the same samples. Buckets follow the GenAI semantic conventions, up to 327.68 seconds |
+| `gen_ai_client_operation_duration_seconds` | Histogram | `pool`, `class` | How long a call took from its pool's grant to its end, with the GenAI buckets. The wait for the grant is `llm_pool_permit_wait_seconds` |
+| `gen_ai_client_calls_total` | Counter | `pool`, `class`, `outcome` | Calls that reached their provider, by how they ended |
+| `gen_ai_client_tokens_total` | Counter | `pool`, `class`, `type` | Tokens that the provider reported. `type` is `input`, `output`, `cache_read`, or `cache_write`. `input` excludes the cached tokens |
 | `llm_pool_first_token_baseline`            | Gauge     | `pool`                     | The fastest first token that the pool knows, in milliseconds. All workers read it from the database. `workspace-models` is the largest of its pools |
 | `llm_pool_first_token_baseline_resets_total` | Counter | `pool`                     | How often a pool at its floor took a new baseline. A repeating rise means that the provider stays slow with no load from this instance |
 | `llm_pool_upstream_throttled_total`        | Counter   | `pool`, `status`           | Answers of the pool's provider that it serves too many calls |
@@ -702,6 +702,23 @@ No series names a workspace, a workspace's model, a job or a turn.
 | `llm_pool_lease_renewal_failures_total`    | Counter   | none                       | Failed renewals of a worker's permits |
 
 Claim reservations do not add a second wait observation when the model call uses them.
+
+`outcome` tells how a call that reached its provider ended:
+
+| `outcome` | The call |
+| --- | --- |
+| `completed` | The model finished its answer |
+| `length` | The answer stopped at its token or context limit |
+| `refused` | The model declined to answer: Anthropic's `refusal`, or OpenAI's `content_filter` or a refusal part |
+| `unanswered` | A served stream sent no content and no usage |
+| `error` | The provider answered with an error status, failed the stream, or could not be reached |
+| `stalled` | The provider sent nothing for the proxy's silence bound |
+| `cancelled` | The caller or the attempt ended the call first |
+
+`refused` is the model's own decision.
+A call that the proxy refuses never reaches a provider, so it has no outcome.
+`llm_proxy_refused_total` counts those, by `refusal`: `capacity`, `calls_in_flight`, `budget`, `work_time`, `attempt_ended`, or `ai_choice`.
+A refusal at a budget cap also counts in `llm_budget_blocked_total`, with `surface="model_call"` and its `cap`.
 
 ## Privacy-job metrics
 

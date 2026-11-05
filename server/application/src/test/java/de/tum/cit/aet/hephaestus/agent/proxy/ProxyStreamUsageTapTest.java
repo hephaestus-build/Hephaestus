@@ -29,6 +29,37 @@ class ProxyStreamUsageTapTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldKeepTheStopReasonThatTheStreamReported() {
+        var anthropic = new ProxyStreamUsageTap(MAPPER, LlmApiProtocol.ANTHROPIC_MESSAGES);
+        feed(
+                anthropic,
+                "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"refusal\"},"
+                        + "\"usage\":{\"output_tokens\":3}}\n\n");
+        var completions = completionsTap();
+        // The final chunk names its finish reason without usage; the usage chunk follows.
+        feed(completions, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n");
+        feed(completions, "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":7}}\n\n");
+        var responses = new ProxyStreamUsageTap(MAPPER, true);
+        feed(responses, "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hi\"}\n\n");
+        var failed = new ProxyStreamUsageTap(MAPPER, true);
+        // A failed answer's terminal event names neither usage nor a reason.
+        feed(failed, "data: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\"}}\n\n");
+
+        assertThat(anthropic.stopReason()).isEqualTo("refusal");
+        assertThat(completions.stopReason()).isEqualTo("length");
+        assertThat(completions.observed()).isNotNull();
+        assertThat(responses.stopReason()).isNull();
+        assertThat(failed.stopReason()).isEqualTo("failed");
+        var incomplete = new ProxyStreamUsageTap(MAPPER, true);
+        // An incomplete answer's terminal event can name its reason without usage.
+        feed(
+                incomplete,
+                "data: {\"type\":\"response.incomplete\",\"response\":"
+                        + "{\"incomplete_details\":{\"reason\":\"max_output_tokens\"}}}\n\n");
+        assertThat(incomplete.stopReason()).isEqualTo("max_output_tokens");
+    }
+
+    @Test
     void shouldReportTheFirstContentOnceAndOnlyForAServedStream() {
         List<Long> served = new ArrayList<>();
         var tap = completionsTap();

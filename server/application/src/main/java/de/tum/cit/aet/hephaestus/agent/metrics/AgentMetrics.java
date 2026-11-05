@@ -37,6 +37,10 @@ public final class AgentMetrics {
     /** GenAI semantic conventions v1.41.1: from the request after the pool's grant to a served stream's first event. */
     public static final String GEN_AI_CLIENT_TIME_TO_FIRST_CHUNK = "gen_ai.client.operation.time_to_first_chunk";
 
+    public static final String GEN_AI_CLIENT_OPERATION_DURATION = "gen_ai.client.operation.duration";
+    public static final String GEN_AI_CLIENT_CALLS = "gen_ai.client.calls";
+    public static final String GEN_AI_CLIENT_TOKENS = "gen_ai.client.tokens";
+
     public static final String LLM_POOL_FIRST_TOKEN_BASELINE = "llm.pool.first.token.baseline";
     public static final String LLM_POOL_FIRST_TOKEN_BASELINE_RESETS = "llm.pool.first.token.baseline.resets";
     public static final String LLM_POOL_LIMIT = "llm.pool.limit";
@@ -50,9 +54,8 @@ public final class AgentMetrics {
     public static final String LLM_POOL_PERMITS_ACTIVE = "llm.pool.permits.active";
     public static final String LLM_POOL_SELF_FENCE_CANCELLED = "llm.pool.self_fence.cancelled";
     public static final String LLM_POOL_UPSTREAM_THROTTLED = "llm.pool.upstream.throttled";
-    public static final String LLM_PROXY_BUDGET_BLOCKED = "llm.proxy.budget.blocked";
-    public static final String LLM_PROXY_DURATION = "llm.proxy.duration";
     public static final String LLM_PROXY_ERRORS = "llm.proxy.errors";
+    public static final String LLM_PROXY_REFUSED = "llm.proxy.refused";
     public static final String LLM_PROXY_PRACTICE_SCRIPT_UNATTRIBUTED = "llm.proxy.practice_script.unattributed";
     public static final String LLM_PROXY_UPSTREAM_STALLED = "llm.proxy.upstream.stalled";
     public static final String LLM_PROXY_STREAM_USAGE_UNSUPPORTED = "llm.proxy.stream.usage.unsupported";
@@ -88,7 +91,6 @@ public final class AgentMetrics {
     public static final String SANDBOX_START_FAILURES = "sandbox.start.failures";
     public static final String SANDBOX_REVIEW_STARVED = "sandbox.review.starved";
     public static final String SANDBOX_EXECUTION_DURATION = "sandbox.execution.duration";
-    public static final String SANDBOX_GATEWAY_CALLS_IN_FLIGHT_REFUSED = "sandbox.gateway.calls_in_flight.refused";
     public static final String SANDBOX_GATEWAY_LIMITER_ERRORS = "sandbox.gateway.limiter.errors";
     public static final String SANDBOX_GATEWAY_REQUESTS = "sandbox.gateway.requests";
     public static final String SANDBOX_GATEWAY_REQUEST_SIZE = "sandbox.gateway.request.size";

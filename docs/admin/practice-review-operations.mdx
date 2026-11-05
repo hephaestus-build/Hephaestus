@@ -259,7 +259,7 @@ Use them for alerts instead of application logs.
   The passing causes are `provider`, `routing_unavailable` and `unexpected`.
 - **`agent.job.retention.stripped`** / **`agent.job.retention.deleted`** — rows pruned by the retention sweep.
 - **`llm.budget.exhausted`** / **`llm.budget.blocked`** — a crossed cap and work refused at a cap.
-- **`llm.proxy.budget.blocked`** — model calls of a running job that the LLM proxy refused at a cap, tagged by `apiProtocol` and `cap`.
+- **`llm.budget.blocked`** with `surface="model_call"` — model calls of a running job that the LLM proxy refused at a cap, tagged by `cap`.
   `instance` names the shared-model budget, and `byo` names the provider cap.
   An admin raises it.
   `practice_script_attempt` names the [direct model token limit or search unit limit of the attempt](./ai-providers.mdx#cost-and-limits).
@@ -431,7 +431,7 @@ Two metrics count practice script events on the worker:
   A value above 0 means that the agent image does not send the practice of each call.
   Run the agent image of the server's release.
 
-[Queue health](#queue-health) lists `llm.proxy.budget.blocked`, which also counts the direct model calls that a budget, a cap or the direct model limit of the attempt refused.
+[Queue health](#queue-health) lists `llm.budget.blocked` with `surface="model_call"`, which also counts the direct model calls that a budget, a cap or the direct model limit of the attempt refused.
 
 ### Log correlation
 

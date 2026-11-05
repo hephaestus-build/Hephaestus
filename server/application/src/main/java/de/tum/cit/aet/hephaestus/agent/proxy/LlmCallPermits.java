@@ -616,6 +616,10 @@ public class LlmCallPermits {
         private volatile boolean instanceCredential;
         private volatile @Nullable Integer firstTokenMillis;
         private volatile boolean unanswered;
+        private final long grantedAt = System.nanoTime();
+        private volatile @Nullable String outcome;
+        /** When the provider's part ended, before the proxy settles the call's usage. */
+        private volatile long endedAt;
 
         /** The limit's mark when the call started: an answer about an older limit says nothing about this one. */
         private final @Nullable Long throttleMark;
@@ -632,6 +636,20 @@ public class LlmCallPermits {
         public void served(boolean instanceCredential) {
             this.instanceCredential = instanceCredential;
             served = true;
+        }
+
+        /**
+         * How the call to the provider ended: one of {@link LlmPoolMeters#CALL_OUTCOMES}. Set once the provider was
+         * asked; a permit closed without one never reached a provider and counts no call.
+         */
+        public void outcome(String outcome) {
+            this.endedAt = System.nanoTime();
+            this.outcome = outcome;
+        }
+
+        /** The tokens that the provider reported for this call. */
+        public void tokens(ProxyTokenUsage usage) {
+            meters.pool(pool).tokens(callClass, usage);
         }
 
         /** The provider's answer never reached the caller, because the call asks again instead. */
@@ -663,6 +681,14 @@ public class LlmCallPermits {
         @Override
         public void close() {
             if (!closed.compareAndSet(false, true)) return;
+            String ended = outcome;
+            // The provider's own word outranks an answer without content: a refusal or a failure can come with no text.
+            if (ended != null)
+                meters.pool(pool)
+                        .called(
+                                callClass,
+                                unanswered && !LlmPoolMeters.EXPLICIT_OUTCOMES.contains(ended) ? "unanswered" : ended,
+                                endedAt - grantedAt);
             if (held.remove(id, this)) meters.pool(pool).active(callClass).decrementAndGet();
             pendingRelease.add(id);
             try {

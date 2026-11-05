@@ -59,6 +59,8 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
 import java.math.BigDecimal;
@@ -632,6 +634,61 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             assertThat(pool.getBaselineFirstTokenMs()).isEqualTo(50);
             assertThat(unansweredDecreases(pool)).isEqualTo(1);
             assertThat(callRows.countActive(pool.getId())).isZero();
+            assertThat(calls(pool, "unanswered")).isEqualTo(1);
+            assertThat(calls(pool, "completed")).isZero();
+        } finally {
+            upstream.disposeNow();
+        }
+    }
+
+    @Test
+    void shouldCountAModelsRefusalAsTheOutcomeOfItsCallAndNotAsTheProxysRefusal() throws Exception {
+        var upstream = HttpServer.create()
+                .host("127.0.0.1")
+                .port(0)
+                .handle((request, response) -> response.header("Content-Type", "text/event-stream")
+                        .sendString(Flux.just(
+                                "data: {\"choices\":[{\"delta\":{\"content\":\"I can't\"}}]}\n\n",
+                                "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"content_filter\"}]}\n\n",
+                                "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":4}}\n\n",
+                                "data: [DONE]\n\n")))
+                .bindNow();
+        try {
+            var pool = streamUntilTheWorkEnds("http://127.0.0.1:" + upstream.port() + "/v1", 8, null);
+            assertThat(calls(pool, "refused")).isEqualTo(1);
+            assertThat(calls(pool, "completed")).isZero();
+            assertThat(
+                            meterRegistry
+                                    .get(AgentMetrics.GEN_AI_CLIENT_OPERATION_DURATION)
+                                    .tag("pool", pool.getSlug())
+                                    .timers()
+                                    .stream()
+                                    .mapToLong(Timer::count)
+                                    .sum())
+                    .isEqualTo(1);
+            assertThat(tokens(pool, "input")).isEqualTo(11);
+            assertThat(tokens(pool, "output")).isEqualTo(4);
+            assertThat(meterRegistry.get(AgentMetrics.LLM_PROXY_REFUSED).counters())
+                    .allSatisfy(counter -> assertThat(counter.count()).isZero());
+        } finally {
+            upstream.disposeNow();
+        }
+    }
+
+    @Test
+    void shouldKeepAModelsRefusalThatCameWithoutContentOrUsage() throws Exception {
+        var upstream = HttpServer.create()
+                .host("127.0.0.1")
+                .port(0)
+                .handle((request, response) -> response.header("Content-Type", "text/event-stream")
+                        .sendString(Flux.just(
+                                "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"content_filter\"}]}\n\n",
+                                "data: [DONE]\n\n")))
+                .bindNow();
+        try {
+            var pool = streamUntilTheWorkEnds("http://127.0.0.1:" + upstream.port() + "/v1", 8, null);
+            assertThat(calls(pool, "refused")).isEqualTo(1);
+            assertThat(calls(pool, "unanswered")).isZero();
         } finally {
             upstream.disposeNow();
         }
@@ -752,6 +809,28 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 (ignoredRequest, ignoredResponse) ->
                         service.proxy(request, response, new HttpHeaders(), objectMapper.writeValueAsBytes(body)));
         return callPools.findById(poolId).orElseThrow();
+    }
+
+    private double calls(LlmCallPool pool, String outcome) {
+        return meterRegistry
+                .get(AgentMetrics.GEN_AI_CLIENT_CALLS)
+                .tag("pool", pool.getSlug())
+                .tag("outcome", outcome)
+                .counters()
+                .stream()
+                .mapToDouble(Counter::count)
+                .sum();
+    }
+
+    private double tokens(LlmCallPool pool, String type) {
+        return meterRegistry
+                .get(AgentMetrics.GEN_AI_CLIENT_TOKENS)
+                .tag("pool", pool.getSlug())
+                .tag("type", type)
+                .counters()
+                .stream()
+                .mapToDouble(Counter::count)
+                .sum();
     }
 
     private double unansweredDecreases(LlmCallPool pool) {
