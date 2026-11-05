@@ -211,6 +211,35 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         verify(reporter).report(sql, Set.of(mirror), TenancyEnforcement.LOG);
     }
 
+    // load by a list of bound keys (ADR 0004 fast paths)
+
+    @Test
+    void shouldAcceptALoadByAListOfBoundKeys() {
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
+        inspector.inspect("select r1_0.id,r1_0.name_with_owner from repository r1_0 where r1_0.id in (?,?)");
+        inspector.inspect("select r1_0.id from repository r1_0 where r1_0.id in ( ? )");
+        verifyNoInteractions(reporter);
+    }
+
+    @Test
+    void shouldReportALoadOutsideAListOfBoundKeys() {
+        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
+        when(scopedTables.isScoped("repository")).thenReturn(true);
+        List<String> statements = List.of(
+                "select r1_0.id from repository r1_0 where r1_0.id not in (?,?)",
+                "select r1_0.id from repository r1_0 where r1_0.id in (?, 1)",
+                "select r1_0.id from repository r1_0 where r1_0.id in (?,?) or r1_0.is_private=?",
+                "select r1_0.id from repository r1_0 where r1_0.id in (select m.repository_id from team_repository m)",
+                "select r1_0.id from repository r1_0 where r1_0.id in ()",
+                "select r1_0.id from repository r1_0 where r1_0.id in (1, 2)");
+        for (String sql : statements) {
+            inspector.inspect(sql);
+        }
+        for (String sql : statements) {
+            verify(reporter).report(sql, Set.of("repository"), TenancyEnforcement.LOG);
+        }
+    }
+
     // load by the complete composite key (ADR 0004 fast paths)
 
     private static final String REVIEWERS = "pull_request_requested_reviewers";

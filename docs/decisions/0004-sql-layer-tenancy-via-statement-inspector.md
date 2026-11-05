@@ -158,3 +158,8 @@ ADR 0077 also replaces the type-level `@WorkspaceAgnostic` that § Consequences 
 The pipeline also accepts a SELECT whose whole WHERE clause is a tuple `IN` of exactly the table's complete primary key, as the mapping metamodel reports it: `FROM t a WHERE (a.k1, a.k2) IN ((?, ?), …)`. Hibernate emits this to load an `@EmbeddedId` entity, and the caller already held each key, as for step 6.
 A tuple of part of the key, a tuple with a column that is not in the key, a tuple whose arity differs from the key, and any `OR` disqualify it.
 The check runs after step 7, so a key that includes `workspace_id` is settled there.
+
+## Update — 2026-11-05 (list of keys)
+
+Step 6 also accepts `alias.<id|*_id> IN (?, …)`, a list of bound keys, as `findAllById` emits it. It is the `= ANY(?)` batch form spelled out, and the caller already held each key.
+`NOT IN`, a list that holds anything but bound parameters, and any `OR` disqualify it, as they do for step 6.

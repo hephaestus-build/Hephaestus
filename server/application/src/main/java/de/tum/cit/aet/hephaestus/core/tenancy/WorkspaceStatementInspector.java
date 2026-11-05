@@ -164,6 +164,8 @@ public class WorkspaceStatementInspector implements StatementInspector {
      *   <li>That same initialisation under {@code @BatchSize}, where Hibernate fills several
      *       parents' collections in one round trip →
      *       {@code FROM child_table alias … WHERE alias.<parent>_id = ANY(?)}</li>
+     *   <li>{@code findAllById}, which spells that batch out as a list of bound keys →
+     *       {@code FROM table alias … WHERE alias.id IN (?, …)}</li>
      * </ul>
      *
      * <p>Safe by construction: the caller already had the surrogate key — or, in the batched form,
@@ -184,7 +186,9 @@ public class WorkspaceStatementInspector implements StatementInspector {
                     + ".*?"
                     // workspace_id is a workspace predicate, not a key: the workspace check below reads it, negations
                     // included (ADR 0077).
-                    + "\\b\\1\\s*\\.\\s*\"?(?!workspace_id\\b)(?:id|[A-Za-z_][A-Za-z0-9_]*_id)\"?\\s*=\\s*(?:\\?|ANY\\s*\\(\\s*\\?\\s*\\))"
+                    // A list of bound keys, as findAllById emits it, is the batch form spelled out.
+                    + "\\b\\1\\s*\\.\\s*\"?(?!workspace_id\\b)(?:id|[A-Za-z_][A-Za-z0-9_]*_id)\"?\\s*"
+                    + "(?:=\\s*(?:\\?|ANY\\s*\\(\\s*\\?\\s*\\))|IN\\s*\\(\\s*\\?(?:\\s*,\\s*\\?)*\\s*\\))"
                     + ".*?$",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
