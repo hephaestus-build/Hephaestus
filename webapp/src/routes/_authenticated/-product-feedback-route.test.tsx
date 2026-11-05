@@ -27,7 +27,7 @@ const publicIssue = {
 	canAllowPublic: false,
 } satisfies Wire<MyProductFeedback>;
 
-describe("your product feedback route", () => {
+describe("your reports route", () => {
 	it("makes a public issue private only after the confirmation", async () => {
 		const madePrivate: string[] = [];
 		let listed: Wire<MyProductFeedback> = publicIssue;

@@ -1,64 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
 	allowMyProductFeedbackPublicMutation,
 	editMyProductFeedbackDraftMutation,
-	getMyProductFeedbackOptions,
 	getMyProductFeedbackQueryKey,
 	keepMyProductFeedbackPrivateMutation,
 	listMyProductFeedbackQueryKey,
 	makeMyProductFeedbackPrivateMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { EditProductFeedbackDraft, FeedbackReceipt, MyProductFeedback } from "@/api/types.gen";
-import type { ReceiptReport } from "@/components/product-feedback/ProductFeedbackReceipt";
-import { isSettling, type ProductFeedbackAction } from "@/components/product-feedback/sharing-copy";
+import type { EditProductFeedbackDraft, MyProductFeedback } from "@/api/types.gen";
+import type { ProductFeedbackAction } from "@/components/product-feedback/sharing-copy";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { toast } from "@/lib/toast";
-
-/** How often an open confirmation reads a report that can still change on its own. */
-const FOLLOW_INTERVAL_MS = 3000;
-
-/** The receipt's fields read from the answer to Send, before the report itself has been read. */
-function fromReceipt(receipt: FeedbackReceipt): ReceiptReport {
-	return {
-		id: receipt.id,
-		state: receipt.state,
-		route: receipt.route,
-		filedAfter: receipt.filedAfter,
-		canKeepPrivate: false,
-		canEdit: false,
-	};
-}
-
-/**
- * Follows an accepted report while its confirmation is open: every few seconds while it can still
- * change on its own, and not at all once it settled or went to the admin email.
- */
-export function useFollowedProductFeedback(
-	receipt: FeedbackReceipt | undefined,
-	open: boolean,
-): ReceiptReport | undefined {
-	const followable = receipt !== undefined && receipt.state !== "SENT_TO_ADMINS";
-	const query = useQuery({
-		...getMyProductFeedbackOptions({ path: { feedbackId: receipt?.id ?? "" } }),
-		enabled: open && followable,
-		refetchInterval: (current) => {
-			const state = current.state.data?.state ?? receipt?.state;
-			return open && state !== undefined && isSettling(state) ? FOLLOW_INTERVAL_MS : false;
-		},
-	});
-	if (receipt === undefined) {
-		return;
-	}
-	const report = query.data;
-	if (report === undefined) {
-		return fromReceipt(receipt);
-	}
-	// The report carries its hold only once held; while it drafts, the answer to Send has it.
-	const filedAfter =
-		report.filedAfter ?? (report.state === "DRAFTING" ? receipt.filedAfter : undefined);
-	return { ...report, filedAfter } satisfies ReceiptReport;
-}
 
 /** The person's own changes to a report, shared by the confirmation and Your product feedback. */
 export function useMyProductFeedbackActions() {

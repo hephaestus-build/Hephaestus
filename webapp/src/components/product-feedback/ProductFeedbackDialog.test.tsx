@@ -12,6 +12,8 @@ function renderDialog(overrides: Partial<React.ComponentProps<typeof ProductFeed
 	const props = {
 		open: true,
 		onOpenChange: vi.fn(),
+		onRetrySharing: vi.fn(),
+		reportsLink: <a href="/product-feedback">Your reports</a>,
 		kind: "FEEDBACK" as const,
 		onKindChange: vi.fn(),
 		context,

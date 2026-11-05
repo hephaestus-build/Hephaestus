@@ -45,7 +45,6 @@ class ProductFeedbackRoutingEvalTest {
             String message = item.path("message").asString();
             var outcome = RoutingGate.evaluate(
                     item.path("allowPublic").asBoolean(),
-                    kind,
                     true,
                     true,
                     message,

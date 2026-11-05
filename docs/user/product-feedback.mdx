@@ -4,7 +4,7 @@ description: Send an idea or bug report, choose whether it can become public, an
 page_type: feature
 ---
 
-Use **Product feedback** in the header to report a bug, suggest a change, or tell the maintainers about Hephaestus.
+Use **Send feedback** in the header to report a bug, suggest a change, or tell the maintainers about Hephaestus.
 Select **Send**, and Hephaestus handles the rest.
 This is separate from practice feedback about your work.
 
@@ -12,18 +12,18 @@ This is separate from practice feedback about your work.
 
 Your instance admin chooses whether reports become GitHub issues and which repositories receive them.
 Until they set a repository, reports stay on your instance for its admins to read.
-When GitHub filing is enabled, an AI model from the provider named in the dialog drafts an issue.
+When GitHub filing is enabled, an AI model from the provider named in your instance’s privacy notice drafts an issue.
 Keeping a report private still sends it to that provider and the private GitHub repository.
 
-A bug or idea can become public only with your permission and after the checks pass.
+An actionable report can become public only with your permission and after the checks pass.
 If a check finds a security risk, secret, email address, or known person’s name, the report stays private.
 Reports about people, abuse, unclear reports, and reports without a usable draft stay private too.
-**Send feedback** reports, including praise and questions, take the private route automatically.
+Praise and support questions stay private. Choosing **General** does not prevent an actionable report from becoming public.
 If no private repository is available, your instance admins receive the report instead.
 
 Hephaestus saves your report before it tries GitHub.
 If filing stops, it notifies the instance admins, who can read the saved report and try again.
-The confirmation shows what has happened, including whether the report is still waiting.
+**Your reports** shows what has happened, including whether the report is still waiting.
 
 ## Public and private details
 
@@ -45,17 +45,21 @@ Private repository access follows the operator’s GitHub permissions.
 
 ## Send a report
 
-1. Select **Product feedback** in the header.
-2. Select **Share an idea**, **Report a bug**, or **Send feedback**.
-3. Enter the details the dialog asks for.
-4. Choose whether to include context with **Attach the page and browser you’re on**.
-5. Choose whether the report can become public, as described below.
-6. Select **Send**.
+1. Select **Send feedback** in the header to open the form. On a phone, open its icon menu first.
+2. Describe what happened or what you would like to improve. You can optionally choose **Bug** or **Idea**.
+3. Choose whether to include page and browser details and whether the report can become public.
+4. Select **Send**.
+
+Once your report is saved, the form closes and a short notice confirms receipt.
+**Your reports** in that notice opens its status and any available actions.
+You can also reach **Your reports** through the arrow beside **Send feedback** or the link in the form.
+Receipt means the report is saved. GitHub filing continues in the background.
 
 There’s no separate publish step or required review of the draft.
 For a bug, describe the action, what happened, and what you expected.
 You can change the kind of report without losing your text.
-Wait one minute before you send another report.
+
+Wait one minute between reports. Ordinary accounts can send up to five reports per UTC day across all workspaces. Instance admins are exempt from the daily submission limit.
 
 The attached page is the screen’s route, such as `/w/$workspaceSlug/activity`, without your workspace’s name or IDs.
 The browser context helps reproduce the problem.
@@ -71,8 +75,8 @@ Closing the dialog keeps your unsent text until you reload, switch workspace, or
 Your first report asks **Can this become a public GitHub issue?**
 Neither answer starts selected:
 
-- **Yes, share it publicly** allows a public issue if the checks pass.
-- **No, keep it private** sends the report privately to the maintainers.
+- **Share publicly** allows a public issue if the checks pass.
+- **Keep private** sends the report privately to the maintainers.
 
 **Send** becomes available after you choose.
 Hephaestus remembers your answer.
@@ -86,7 +90,7 @@ A report intended for the public repository waits five minutes after **Send** be
 Drafting happens during that time.
 You do not have to stay on the page or approve the draft.
 
-The confirmation offers **Keep private** and **Edit** while the report waits.
+**Your reports** offers **Keep private** and **Edit** while the report waits.
 **Keep private** sends it to the private route.
 **Edit** lets you change the draft and starts a new five-minute hold with new checks.
 An edit cannot clear a privacy or security risk already found in the report.
@@ -95,8 +99,8 @@ Use **Make private** after filing instead.
 
 ## Follow your reports
 
-1. Select **Product feedback** in the header.
-2. Select **Your product feedback**.
+1. Open the arrow beside **Send feedback** in the header.
+2. Select **Your reports**.
 
 The page lists your reports with their date, an excerpt, destination, and state.
 It also has issue links where available.
@@ -104,7 +108,7 @@ Every product feedback update email links to this page.
 
 ### Make a public issue private
 
-1. Open **Your product feedback**.
+1. Open **Your reports**.
 2. Find the public report.
 3. Select **Make private**.
 4. Confirm **Make private**.
@@ -116,7 +120,7 @@ If the move cannot finish, contact your instance admin.
 
 ### Allow a private report to become public
 
-1. Open **Your product feedback**.
+1. Open **Your reports**.
 2. Find the private report.
 3. Select **Allow public**.
 
@@ -150,7 +154,7 @@ Updates can take about 30 minutes to arrive.
 Private issue comments do not generate reporter emails.
 
 Use the unsubscribe link in an email or your email notification settings to stop these updates.
-Without email, you can still follow your reports in **Your product feedback**.
+Without email, you can still follow your reports in **Your reports**.
 
 ## Erase your report data
 
@@ -171,7 +175,7 @@ See [Privacy](./privacy) for account deletion, wider erasure requests, and your 
 
 ### Your report stayed private
 
-The confirmation explains why a check kept it private.
+Your report’s status explains why a check kept it private.
 The maintainers still receive it.
 If no draft was available, Hephaestus can file a private issue from the report text after removing detected personal details.
 

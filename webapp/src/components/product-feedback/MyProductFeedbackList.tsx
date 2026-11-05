@@ -72,7 +72,7 @@ export function MyProductFeedbackList({ state, pending, ...actions }: MyProductF
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="We could not load your product feedback"
+				title="We could not load your reports"
 				onRetry={state.onRetry}
 			/>
 		);
@@ -103,10 +103,8 @@ export function MyProductFeedbackList({ state, pending, ...actions }: MyProductF
 					<EmptyMedia variant="icon">
 						<MessageSquarePlus />
 					</EmptyMedia>
-					<EmptyTitle>No product feedback yet</EmptyTitle>
-					<EmptyDescription>
-						Ideas, bugs and feedback you send from the Product feedback menu appear here.
-					</EmptyDescription>
+					<EmptyTitle>No reports yet</EmptyTitle>
+					<EmptyDescription>Reports you send with Send feedback appear here.</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
 		);

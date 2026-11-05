@@ -25,6 +25,10 @@ public class InstanceFeedbackController {
     @PostMapping
     @Operation(operationId = "submitInstanceProductFeedback", summary = "Send instance-scoped product feedback")
     public FilingDTOs.FeedbackReceiptDTO feedback(@Valid @RequestBody FeedbackRequestDTO request) {
-        return service.add(request, CurrentAccount.requireId(), null);
+        return service.add(
+                request,
+                CurrentAccount.requireId(),
+                null,
+                CurrentAccount.roles().contains("app_admin"));
     }
 }

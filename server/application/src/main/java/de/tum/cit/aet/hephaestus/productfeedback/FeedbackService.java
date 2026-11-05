@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackItemDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent;
 import java.time.Clock;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -27,6 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @ConditionalOnServerRole
 class FeedbackService {
+    static final int ACCOUNT_DAILY_REPORTS = 5;
     private final ProductFeedbackRepository feedback;
     private final FeedbackRefs refs;
     private final Clock clock;
@@ -56,7 +58,19 @@ class FeedbackService {
     }
 
     @Transactional
-    public FilingDTOs.FeedbackReceiptDTO add(FeedbackRequestDTO request, Long accountId, @Nullable Long workspaceId) {
+    public FilingDTOs.FeedbackReceiptDTO add(
+            FeedbackRequestDTO request, Long accountId, @Nullable Long workspaceId, boolean instanceAdmin) {
+        if (!instanceAdmin) {
+            feedback.lockSubmission(accountId);
+            if (feedback.countByAccountIdAndCreatedAtGreaterThanEqual(
+                            accountId, clock.instant().truncatedTo(ChronoUnit.DAYS))
+                    >= ACCOUNT_DAILY_REPORTS) {
+                throw new ResponseStatusException(
+                        HttpStatus.TOO_MANY_REQUESTS,
+                        "You can send up to %d reports per day. Try again tomorrow (UTC)."
+                                .formatted(ACCOUNT_DAILY_REPORTS));
+            }
+        }
         try {
             ProductFeedback saved = feedback.saveAndFlush(new ProductFeedback(
                     accountId,

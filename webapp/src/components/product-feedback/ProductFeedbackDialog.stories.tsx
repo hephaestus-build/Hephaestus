@@ -5,7 +5,6 @@ import { expectSettledVisible } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
 
 import { ProductFeedbackDialog } from "./ProductFeedbackDialog";
-import { ProductFeedbackReceipt } from "./ProductFeedbackReceipt";
 
 const context = {
 	pagePath: "/w/$workspaceSlug/practice-profile",
@@ -17,6 +16,8 @@ const meta = {
 	args: {
 		open: true,
 		onOpenChange: fn(),
+		onRetrySharing: fn(),
+		reportsLink: <a href="/product-feedback">Your reports</a>,
 		kind: "FEEDBACK",
 		onKindChange: fn(),
 		context,
@@ -75,6 +76,7 @@ export const BugReport: Story = {
 		await expect(
 			dialog.getByRole("checkbox", { name: "Attach the page and browser you’re on" }),
 		).toBeChecked();
+		await userEvent.click(dialog.getByText("See page and browser details"));
 		await expectSettledVisible(dialog.getByText(context.pagePath));
 		await expectSettledVisible(dialog.getByText(context.userAgent));
 		await expectSettledVisible(dialog.getByRole("heading", { name: "Report a bug" }));
@@ -161,8 +163,8 @@ export const FirstTimeChoice: Story = {
 		const dialog = within(await screen.findByRole("dialog"));
 		await userEvent.type(dialog.getByRole("textbox", { name: "Your feedback" }), "Pin a practice.");
 		// The sharing field loads after the dialog opens.
-		const share = await dialog.findByRole("radio", { name: "Yes, share it publicly." });
-		const keep = dialog.getByRole("radio", { name: "No, keep it private." });
+		const share = await dialog.findByRole("radio", { name: "Share publicly" });
+		const keep = dialog.getByRole("radio", { name: "Keep private" });
 		await expect(share).not.toBeChecked();
 		await expect(keep).not.toBeChecked();
 		await expect(dialog.getByRole("button", { name: "Send" })).toBeDisabled();
@@ -200,7 +202,7 @@ export const PrivateRepositoryOnly: Story = {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(dialog.getByText(/private GitHub issue from your report/u));
 		await expect(dialog.queryByRole("switch", { name: "Public GitHub issue" })).toBeNull();
-		await expect(dialog.queryByRole("radio", { name: /share it publicly/u })).toBeNull();
+		await expect(dialog.queryByRole("radio", { name: /Share publicly/u })).toBeNull();
 		await userEvent.type(dialog.getByRole("textbox", { name: "Your feedback" }), "Private note.");
 		await userEvent.click(dialog.getByRole("button", { name: "Send" }));
 		await expect(args.onSubmit).toHaveBeenCalledWith(expect.not.objectContaining({ share: true }));
@@ -218,28 +220,17 @@ export const SharingLoading: Story = {
 	},
 };
 
-/** Once sent, the confirmation takes the form's place until the dialog closes. */
-export const Confirmation: Story = {
-	args: {
-		confirmation: (
-			<ProductFeedbackReceipt
-				report={{
-					id: "a1",
-					state: "SENT_TO_ADMINS",
-					route: "EMAIL",
-					canKeepPrivate: false,
-					canEdit: false,
-				}}
-				onKeepPrivate={fn()}
-				onEdit={fn(async () => true)}
-			/>
-		),
-	},
-	play: async ({ args }) => {
+/** A failed destination read never pretends reports stay on the instance. */
+export const SharingError: Story = {
+	args: { sharing: { status: "error" } },
+	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await expectSettledVisible(dialog.getByText("Thanks. The admins of this instance have it."));
-		await expect(dialog.queryByRole("textbox")).toBeNull();
-		await userEvent.click(dialog.getByRole("button", { name: "Done" }));
-		await expect(args.onOpenChange).toHaveBeenCalledWith(false);
+		await expectSettledVisible(dialog.getByRole("button", { name: "Try again" }));
+		await expect(dialog.getByRole("button", { name: "Send" })).toBeDisabled();
 	},
+};
+
+export const Mobile: Story = {
+	args: { sharing: { status: "ask" } },
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 };

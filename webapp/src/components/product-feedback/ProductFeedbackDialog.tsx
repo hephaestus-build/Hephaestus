@@ -20,7 +20,6 @@ import {
 	FieldLabel,
 	FieldLegend,
 	FieldSet,
-	FieldTitle,
 } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,11 +45,11 @@ export interface FeedbackContext {
 
 /**
  * Whether this report may become a public GitHub issue, as far as the composer has to ask.
- * `off`: the instance has no public repository, or the choice could not be read; then nothing is
- * asked and the server decides. `ask`: the person has not chosen for the current notice.
+ * `off`: the instance does not file to GitHub; then nothing is asked. `ask`: the person has not chosen for the current notice.
  */
 export type ProductFeedbackSharingChoice =
 	| { status: "loading" }
+	| { status: "error" }
 	| { status: "off" }
 	/** Reports become private GitHub issues; there is no public repository, so nothing is asked. */
 	| { status: "private" }
@@ -59,13 +58,16 @@ export type ProductFeedbackSharingChoice =
 
 /** Where a report goes, said before Send, from what the instance does with it. */
 function destinationCopy(sharing: ProductFeedbackSharingChoice): string {
-	if (sharing.status === "off" || sharing.status === "loading") {
+	if (sharing.status === "loading" || sharing.status === "error") {
+		return "Tell us what would make Hephaestus better.";
+	}
+	if (sharing.status === "off") {
 		return `This goes straight to ${READERS}. Your name and contact address go with it, so they can follow up.`;
 	}
 	if (sharing.status === "private") {
 		return "Hephaestus drafts a private GitHub issue from your report for the maintainers. Your name and contact address stay on this instance.";
 	}
-	return "Hephaestus drafts a GitHub issue from your report. The choice below decides who can read it.";
+	return "We turn actionable reports into GitHub issues. You choose whether yours can be public.";
 }
 
 export interface ProductFeedbackDialogProps {
@@ -79,8 +81,8 @@ export interface ProductFeedbackDialogProps {
 	error?: string;
 	/** Resolves to whether the submission was accepted; the draft is cleared only then. */
 	onSubmit: (request: FeedbackRequest) => Promise<boolean>;
-	/** The confirmation of the accepted report, shown in place of the form until the dialog closes. */
-	confirmation?: ReactNode;
+	onRetrySharing: () => void;
+	reportsLink: ReactNode;
 	/** The workspace the header keeps, so the settings link stays in it. */
 	workspaceSlug?: string;
 }
@@ -103,7 +105,8 @@ export function ProductFeedbackDialog({
 	isSubmitting,
 	error,
 	onSubmit,
-	confirmation,
+	onRetrySharing,
+	reportsLink,
 	workspaceSlug,
 }: ProductFeedbackDialogProps) {
 	const id = useId();
@@ -115,7 +118,7 @@ export function ProductFeedbackDialog({
 	const sharingReady =
 		sharing.status === "off" ||
 		sharing.status === "private" ||
-		(sharing.status !== "loading" && share !== undefined);
+		((sharing.status === "ask" || sharing.status === "remembered") && share !== undefined);
 	const copy = FEEDBACK_KIND_COPY[kind];
 	const remaining = MESSAGE_MAX_LENGTH - message.length;
 	const submit = async () => {
@@ -135,29 +138,6 @@ export function ProductFeedbackDialog({
 			setShareChoice(undefined);
 		}
 	};
-	if (confirmation !== undefined) {
-		return (
-			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent className="sm:max-w-lg">
-					<DialogHeader>
-						<DialogTitle>{copy.heading}</DialogTitle>
-						<DialogDescription className="sr-only">What happens to your report</DialogDescription>
-					</DialogHeader>
-					<DialogBody className="py-1">{confirmation}</DialogBody>
-					<DialogFooter>
-						<Button
-							type="button"
-							// oxlint-disable-next-line jsx-a11y/no-autofocus -- The receipt replaces the form and unmounts Send; without this, keyboard focus falls to the page.
-							autoFocus
-							onClick={() => onOpenChange(false)}
-						>
-							Done
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
-		);
-	}
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-lg">
@@ -175,33 +155,6 @@ export function ProductFeedbackDialog({
 					<DialogBody className="flex flex-col gap-5 py-1">
 						<FieldSet disabled={isSubmitting} className="gap-5">
 							<FieldLegend className="sr-only">Kind and message</FieldLegend>
-							<RadioGroup
-								aria-label="What is this about?"
-								value={kind}
-								onValueChange={onKindChange}
-								className="grid gap-2 sm:grid-cols-3"
-							>
-								{KINDS.map((value) => (
-									<FieldLabel key={value} htmlFor={`${id}-${value}`}>
-										<Field orientation="horizontal">
-											<FieldContent>
-												<FieldTitle id={`${id}-${value}-title`}>
-													{FEEDBACK_KIND_COPY[value].title}
-												</FieldTitle>
-												<FieldDescription id={`${id}-${value}-detail`}>
-													{FEEDBACK_KIND_COPY[value].detail}
-												</FieldDescription>
-											</FieldContent>
-											<RadioGroupItem
-												id={`${id}-${value}`}
-												value={value}
-												aria-labelledby={`${id}-${value}-title`}
-												aria-describedby={`${id}-${value}-detail`}
-											/>
-										</Field>
-									</FieldLabel>
-								))}
-							</RadioGroup>
 							<Field>
 								<FieldLabel htmlFor={`${id}-message`}>{copy.label}</FieldLabel>
 								<Textarea
@@ -223,6 +176,21 @@ export function ProductFeedbackDialog({
 									</span>
 								</FieldDescription>
 							</Field>
+							<RadioGroup
+								aria-label="What is this about?"
+								value={kind}
+								onValueChange={onKindChange}
+								className="flex flex-wrap gap-x-5 gap-y-2"
+							>
+								{KINDS.map((value) => (
+									<Field key={value} orientation="horizontal" className="w-auto">
+										<RadioGroupItem id={`${id}-${value}`} value={value} />
+										<FieldLabel htmlFor={`${id}-${value}`}>
+											{FEEDBACK_KIND_COPY[value].title}
+										</FieldLabel>
+									</Field>
+								))}
+							</RadioGroup>
 							{context && (
 								<Field orientation="horizontal">
 									<Checkbox
@@ -234,11 +202,12 @@ export function ProductFeedbackDialog({
 										<FieldLabel htmlFor={`${id}-context`}>
 											Attach the page and browser you’re on
 										</FieldLabel>
-										<FieldDescription className="break-all">
+										<details className="text-xs break-all text-muted-foreground">
+											<summary className="cursor-pointer">See page and browser details</summary>
 											<code className="text-xs">{context.pagePath}</code>
 											<br />
 											<span className="text-xs">{context.userAgent}</span>
-										</FieldDescription>
+										</details>
 									</FieldContent>
 								</Field>
 							)}
@@ -248,6 +217,7 @@ export function ProductFeedbackDialog({
 								share={share}
 								onShareChange={setShareChoice}
 								workspaceSlug={workspaceSlug}
+								onRetry={onRetrySharing}
 							/>
 						</FieldSet>
 						<p role="alert" className="text-sm text-destructive empty:hidden">
@@ -255,6 +225,7 @@ export function ProductFeedbackDialog({
 						</p>
 					</DialogBody>
 					<DialogFooter>
+						{reportsLink}
 						<Button type="submit" disabled={!message.trim() || isSubmitting || !sharingReady}>
 							{isSubmitting && <Spinner />}
 							{isSubmitting ? "Sending…" : "Send"}
@@ -272,6 +243,7 @@ interface SharingFieldProps {
 	share: boolean | undefined;
 	onShareChange: (share: boolean) => void;
 	workspaceSlug?: string;
+	onRetry: () => void;
 }
 
 /** The question is asked only where a public repository exists, so its code loads only there. */
@@ -289,12 +261,29 @@ function SharingSkeleton() {
 	);
 }
 
-function SharingField({ id, sharing, share, onShareChange, workspaceSlug }: SharingFieldProps) {
+function SharingField({
+	id,
+	sharing,
+	share,
+	onShareChange,
+	workspaceSlug,
+	onRetry,
+}: SharingFieldProps) {
 	if (sharing.status === "off" || sharing.status === "private") {
 		return null;
 	}
 	if (sharing.status === "loading") {
 		return <SharingSkeleton />;
+	}
+	if (sharing.status === "error") {
+		return (
+			<div className="text-sm" role="alert">
+				<p>We could not check where reports go. Try again before sending.</p>
+				<Button type="button" variant="outline" size="sm" onClick={onRetry}>
+					Try again
+				</Button>
+			</div>
+		);
 	}
 	return (
 		<Suspense fallback={<SharingSkeleton />}>

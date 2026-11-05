@@ -373,7 +373,8 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
         var receipt = feedbackService.add(
                 new FeedbackRequestDTO(ProductFeedback.Kind.BUG, "public-report-content", null, null, null),
                 Objects.requireNonNull(reporter.getId()),
-                null);
+                null,
+                false);
         ProductFeedbackFiling filing = filings.findById(receipt.id()).orElseThrow();
         filing.setState(FilingState.FILED);
         filing.setRoute(FilingRoute.PUBLIC);

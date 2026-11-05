@@ -295,10 +295,10 @@
 			"expected": {
 				"route": "private",
 				"reason": "low_confidence",
-				"decidedBy": "code"
+				"decidedBy": "model"
 			},
 			"mustNotAppear": [],
-			"note": "The kind Other never goes public."
+			"note": "The model keeps praise and support questions private regardless of the selected kind."
 		},
 		{
 			"id": "other-question",
@@ -308,10 +308,10 @@
 			"expected": {
 				"route": "private",
 				"reason": "low_confidence",
-				"decidedBy": "code"
+				"decidedBy": "model"
 			},
 			"mustNotAppear": [],
-			"note": "A support question with the kind Other."
+			"note": "The model keeps praise and support questions private regardless of the selected kind."
 		},
 		{
 			"id": "other-bug-like",
@@ -319,12 +319,12 @@
 			"allowPublic": true,
 			"message": "The theme switch does not remember dark mode after I sign out.",
 			"expected": {
-				"route": "private",
-				"reason": "low_confidence",
-				"decidedBy": "code"
+				"route": "public",
+				"reason": "none",
+				"decidedBy": "none"
 			},
 			"mustNotAppear": [],
-			"note": "Bug-like text with the kind Other. The kind decides, not the model."
+			"note": "Actionable general feedback can become public with permission and a valid, safe draft."
 		},
 		{
 			"id": "security-idor",

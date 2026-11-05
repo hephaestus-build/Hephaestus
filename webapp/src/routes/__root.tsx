@@ -35,7 +35,7 @@ import { AppSidebar, type SidebarContext } from "@/components/layout/sidebar/App
 import { SkipToContent } from "@/components/layout/SkipToContent";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import type { FeedbackKind } from "@/components/product-feedback/feedback-copy";
-import { ProductFeedbackMenu } from "@/components/product-feedback/ProductFeedbackMenu";
+import { ProductFeedbackButton } from "@/components/product-feedback/ProductFeedbackButton";
 import { Kbd } from "@/components/ui/kbd";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
@@ -227,10 +227,9 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 	const [composerLoaded, setComposerLoaded] = useState(false);
 	return (
 		<>
-			<ProductFeedbackMenu
+			<ProductFeedbackButton
 				workspaceSlug={workspaceSlug}
-				onSendFeedback={(kind) => {
-					setFeedbackKind(kind);
+				onSendFeedback={() => {
 					setFeedbackOpen(true);
 					setComposerLoaded(true);
 				}}

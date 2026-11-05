@@ -40,14 +40,14 @@ export const Loading: Story = {
 export const Empty: Story = {
 	args: { state: { status: "ready", reports: [] } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No product feedback yet")).toBeVisible();
+		await expect(canvas.getByText("No reports yet")).toBeVisible();
 	},
 };
 
 export const LoadError: Story = {
 	args: { state: { status: "error", error: new TypeError("Failed to fetch"), onRetry: fn() } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("We could not load your product feedback")).toBeVisible();
+		await expect(canvas.getByText("We could not load your reports")).toBeVisible();
 	},
 };
 

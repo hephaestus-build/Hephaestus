@@ -8,7 +8,6 @@ import {
 	FieldLabel,
 	FieldLegend,
 	FieldSet,
-	FieldTitle,
 } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
@@ -63,8 +62,8 @@ export function ProductFeedbackSharingField({
 		);
 	}
 	const options = [
-		{ value: "share", copy: SHARING_COPY.share },
-		{ value: "private", copy: SHARING_COPY.keepPrivate },
+		{ value: "share", title: SHARING_COPY.share.title },
+		{ value: "private", title: SHARING_COPY.keepPrivate.title },
 	] as const;
 	let picked: (typeof options)[number]["value"] | null = null;
 	if (share !== undefined) {
@@ -73,30 +72,22 @@ export function ProductFeedbackSharingField({
 	return (
 		<FieldSet className="gap-2">
 			<FieldLegend variant="label">{SHARING_COPY.question}</FieldLegend>
+			<FieldDescription id={`${id}-share-detail`}>
+				AI drafts the issue either way. Public issues are visible to anyone. Personal details can be
+				missed, and public copies can remain.
+			</FieldDescription>
 			<RadioGroup
 				aria-label={SHARING_COPY.question}
-				aria-describedby={`${id}-share-footnote`}
+				aria-describedby={`${id}-share-detail ${id}-share-footnote`}
 				value={picked}
 				onValueChange={(value) => onShareChange(value === "share")}
-				className="gap-2"
+				className="flex flex-wrap gap-x-5 gap-y-2"
 			>
-				{options.map(({ value, copy }) => (
-					<FieldLabel key={value} htmlFor={`${id}-share-${value}`}>
-						<Field orientation="horizontal">
-							<RadioGroupItem
-								id={`${id}-share-${value}`}
-								value={value}
-								aria-labelledby={`${id}-share-${value}-title`}
-								aria-describedby={`${id}-share-${value}-detail`}
-							/>
-							<FieldContent>
-								<FieldTitle id={`${id}-share-${value}-title`}>{copy.title}</FieldTitle>
-								<FieldDescription id={`${id}-share-${value}-detail`}>
-									{copy.detail}
-								</FieldDescription>
-							</FieldContent>
-						</Field>
-					</FieldLabel>
+				{options.map(({ value, title }) => (
+					<Field key={value} orientation="horizontal" className="w-auto">
+						<RadioGroupItem id={`${id}-share-${value}`} value={value} />
+						<FieldLabel htmlFor={`${id}-share-${value}`}>{title}</FieldLabel>
+					</Field>
 				))}
 			</RadioGroup>
 			<FieldDescription id={`${id}-share-footnote`}>{SHARING_COPY.footnote}</FieldDescription>

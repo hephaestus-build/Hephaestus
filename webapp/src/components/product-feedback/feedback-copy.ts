@@ -7,8 +7,7 @@ export const READERS = "your instance admins";
 
 interface KindCopy {
 	title: string;
-	detail: string;
-	/** The menu entry, and the dialog's heading once this kind is chosen. */
+	/** The dialog heading once this kind is chosen. */
 	heading: string;
 	label: string;
 	placeholder: string;
@@ -17,23 +16,20 @@ interface KindCopy {
 export const FEEDBACK_KIND_COPY: Record<FeedbackKind, KindCopy> = {
 	IDEA: {
 		title: "Idea",
-		detail: "A feature or change that would help.",
 		heading: "Share an idea",
 		label: "Your idea",
 		placeholder: "What would you change or add, and what would it let you do?",
 	},
 	BUG: {
 		title: "Bug",
-		detail: "Something broke or behaved unexpectedly.",
 		heading: "Report a bug",
 		label: "What happened?",
 		placeholder: "What were you doing, what happened, and what did you expect instead?",
 	},
 	FEEDBACK: {
-		title: "Feedback",
-		detail: "What works and what gets in your way.",
+		title: "General",
 		heading: "Send feedback",
 		label: "Your feedback",
-		placeholder: "What works well for you, and what does not?",
+		placeholder: "What happened, or what would you like to improve?",
 	},
 };

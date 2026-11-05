@@ -6,19 +6,11 @@ import type { MyProductFeedback } from "@/api/types.gen";
  */
 export const SHARING_COPY = {
 	question: "Can this become a public GitHub issue?",
-	share: {
-		title: "Yes, share it publicly.",
-		detail:
-			"Hephaestus removes personal details it finds, but it can miss some. Anyone can read a public issue, and copies can remain after you remove it.",
-	},
-	keepPrivate: {
-		title: "No, keep it private.",
-		detail: "The maintainers see it in a private GitHub repository.",
-	},
-	footnote:
-		"An AI model drafts the issue either way. We remember your choice, and you can change it for each report.",
+	share: { title: "Share publicly" },
+	keepPrivate: { title: "Keep private" },
+	footnote: "We remember your choice. You can change it for each report.",
 	switchLabel: "Public GitHub issue",
-	switchDetail: "Personal details removed",
+	switchDetail: "Checked before sharing. Public copies can remain.",
 	changeDefault: "Change default",
 	makePrivate:
 		"Move this issue to the private repository? It disappears from public view. Copies made while it was public can remain.",
@@ -33,7 +25,7 @@ const REASON_SENTENCES: Record<string, string> = {
 	security: "It may be about a security problem, so it stays private.",
 	redaction: "Hephaestus removed details from it, so it stays private.",
 	"about a person": "It is about a person, so it stays private.",
-	"low confidence": "A check was not sure it is safe to make public, so it stays private.",
+	"low confidence": "A check could not confirm an actionable public issue, so it stays private.",
 	abuse: "A check flagged its wording, so it stays private.",
 	"no draft": "No issue could be drafted from it, so it stays private.",
 	"destination changed":

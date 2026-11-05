@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
-import { ProductFeedbackMenu } from "@/components/product-feedback/ProductFeedbackMenu";
+import { ProductFeedbackButton } from "@/components/product-feedback/ProductFeedbackButton";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { expectSettledVisible } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
@@ -24,7 +24,7 @@ const meta = {
 		username: "johnDoe",
 		workspaceSlug: "demo-workspace",
 		sidebarTrigger: <SidebarTrigger />,
-		feedbackDialog: <ProductFeedbackMenu onSendFeedback={fn()} />,
+		feedbackDialog: <ProductFeedbackButton onSendFeedback={fn()} />,
 		onLogin: fn(),
 		onLogout: fn(),
 		onRetrySession: fn(),
@@ -152,7 +152,7 @@ export const AccountMenu: Story = {
 		session: "signed-in",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Product feedback" })).toBeVisible();
+		await expect(canvas.getByRole("group", { name: "Feedback about Hephaestus" })).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: /^Account/u }));
 		const menu = within(await screen.findByRole("menu"));
 		const settings = menu.getByRole("menuitem", { name: "User settings" });
@@ -192,7 +192,7 @@ export const Mobile: Story = {
 		// Firefox lays this row out wider than Chromium does, so Chromium has to show room to spare
 		// between the logo and the controls: a row that fits exactly here overflows there.
 		const logo = canvas.getByRole("link", { name: "Hephaestus home" });
-		const feedback = canvas.getByRole("button", { name: /^Product feedback/u });
+		const feedback = canvas.getByRole("button", { name: "Feedback options" });
 		await expect(
 			feedback.getBoundingClientRect().left - logo.getBoundingClientRect().right,
 		).toBeGreaterThanOrEqual(40);

@@ -30,7 +30,7 @@ export const Open: Story = {
 	play: async ({ canvas, args }) => {
 		await expect(canvas.getAllByText("Bug")).toHaveLength(1);
 		await expect(canvas.getAllByText("Idea")).toHaveLength(1);
-		await expect(canvas.getAllByText("Feedback")).toHaveLength(2);
+		await expect(canvas.getAllByText("General")).toHaveLength(2);
 		// An erased account and a submission from outside any workspace still read as sentences.
 		await expect(canvas.getByText("Deleted account")).toBeVisible();
 		await expect(canvas.getAllByText("No workspace")).toHaveLength(1);
