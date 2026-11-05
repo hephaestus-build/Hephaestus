@@ -4,6 +4,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
@@ -12,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import java.lang.reflect.Method;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -30,7 +32,10 @@ class TestOnlyRepositoryMethodsArchitectureTest extends HephaestusArchitectureTe
             new TestOnlyMethod(IssueCommentRepository.class, "count"),
             new TestOnlyMethod(IssueCommentRepository.class, "findAll"),
             new TestOnlyMethod(IssueCommentRepository.class, "deleteAll"),
-            new TestOnlyMethod(PullRequestRepository.class, "count"));
+            new TestOnlyMethod(PullRequestRepository.class, "count"),
+            new TestOnlyMethod(RepositoryRepository.class, "count"),
+            new TestOnlyMethod(RepositoryRepository.class, "deleteAll"),
+            new TestOnlyMethod(RepositoryRepository.class, "findByNameWithOwner", String.class));
 
     @Test
     void shouldCallNoTestOnlyRepositoryMethodFromProductionCode() {
@@ -40,7 +45,8 @@ class TestOnlyRepositoryMethodsArchitectureTest extends HephaestusArchitectureTe
     @Test
     void shouldNameDeclaredAndMarkedMethods() throws NoSuchMethodException {
         for (TestOnlyMethod entry : TEST_ONLY) {
-            Method method = entry.repository().getDeclaredMethod(entry.name());
+            Method method = entry.repository()
+                    .getDeclaredMethod(entry.name(), entry.parameters().toArray(Class<?>[]::new));
             assertThat(method.getAnnotation(WorkspaceAgnostic.class))
                     .as(
                             "%s.%s must carry a @WorkspaceAgnostic reason",
@@ -53,7 +59,9 @@ class TestOnlyRepositoryMethodsArchitectureTest extends HephaestusArchitectureTe
     void shouldReportAProductionCallOfATestOnlyMethod() {
         var fixture = new ClassFileImporter().importClasses(CallsATestOnlyMethod.class);
 
-        assertThat(RULE.evaluate(fixture).hasViolation()).isTrue();
+        assertThat(RULE.evaluate(fixture).getFailureReport().getDetails())
+                .as("the call without arguments and the call with one")
+                .hasSize(2);
     }
 
     private static final ArchRule RULE = noClasses()
@@ -64,22 +72,36 @@ class TestOnlyRepositoryMethodsArchitectureTest extends HephaestusArchitectureTe
                         public boolean test(JavaMethodCall call) {
                             // The bridge that javac adds for a narrowed return type is not a caller.
                             return !call.getOrigin().getModifiers().contains(JavaModifier.BRIDGE)
-                                    && call.getTarget().getRawParameterTypes().isEmpty()
                                     && TEST_ONLY.stream()
-                                            .anyMatch(entry ->
-                                                    call.getTargetOwner().isEquivalentTo(entry.repository())
-                                                            && call.getName().equals(entry.name()));
+                                            .anyMatch(entry -> call.getTarget().getRawParameterTypes().stream()
+                                                            .map(JavaClass::getName)
+                                                            .toList()
+                                                            .equals(entry.parameterNames())
+                                                    && call.getTargetOwner().isEquivalentTo(entry.repository())
+                                                    && call.getName().equals(entry.name()));
                         }
                     })
             .because(
                     "these methods read every workspace; production code reads through the monitored scope (ADR 0077)");
 
-    private record TestOnlyMethod(Class<?> repository, String name) {}
+    private record TestOnlyMethod(Class<?> repository, String name, List<Class<?>> parameters) {
+        TestOnlyMethod(Class<?> repository, String name, Class<?>... parameters) {
+            this(repository, name, List.of(parameters));
+        }
+
+        List<String> parameterNames() {
+            return parameters.stream().map(Class::getName).toList();
+        }
+    }
 
     /** Stands for production code in {@link #shouldReportAProductionCallOfATestOnlyMethod}. */
     static final class CallsATestOnlyMethod {
         long countEverything(IssueRepository issues) {
             return issues.count();
+        }
+
+        boolean findByName(RepositoryRepository repositories) {
+            return repositories.findByNameWithOwner("owner/name").isPresent();
         }
     }
 }

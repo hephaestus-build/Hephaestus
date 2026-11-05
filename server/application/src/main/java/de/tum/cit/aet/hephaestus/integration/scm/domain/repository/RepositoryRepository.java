@@ -29,14 +29,23 @@ import org.springframework.transaction.annotation.Transactional;
  * PK-only DML carve-out in {@code WorkspaceStatementInspector}.
  */
 @org.springframework.stereotype.Repository
-@WorkspaceAgnostic("Provider-domain lookups by native ID / full name; workspace resolved downstream")
 public interface RepositoryRepository extends JpaRepository<Repository, Long> {
+    /** Every workspace's repositories. Only tests call it, to check what sync stored; production code reads by scope. */
+    @Override
+    @WorkspaceAgnostic("Reads every workspace's mirror rows; only tests call it, to check what sync stored")
+    long count();
+
+    /** Deletes every workspace's repositories. Only tests call it, to start from an empty mirror. */
+    @Override
+    @WorkspaceAgnostic("Deletes every workspace's mirror rows; only tests call it, to start from an empty mirror")
+    void deleteAll();
+
     /**
      * A live workspace root keeps its canonical source until the transaction ends. Shared claims coexist with
      * other workspaces and ordinary mirror updates. They never wait behind deletion: a provider transaction can
      * already hold a work row that deletion needs.
      */
-    @Query(value = "SELECT id FROM repository WHERE id=:repositoryId FOR KEY SHARE NOWAIT", nativeQuery = true)
+    @Query(value = "SELECT r.id FROM repository r WHERE r.id=:repositoryId FOR KEY SHARE NOWAIT", nativeQuery = true)
     @Transactional(propagation = Propagation.MANDATORY)
     Optional<Long> acquireIndexClaim(@Param("repositoryId") long repositoryId);
 
@@ -50,14 +59,13 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
      * Fences source deletion against new workspace roots. NOWAIT also avoids a cycle with a caller's removed item
      * and an in-flight event that still sees the old monitor. A refused claim rolls the whole removal back.
      */
-    @Query(value = "SELECT id FROM repository WHERE id=:repositoryId FOR UPDATE NOWAIT", nativeQuery = true)
+    @Query(value = "SELECT r.id FROM repository r WHERE r.id=:repositoryId FOR UPDATE NOWAIT", nativeQuery = true)
     @Transactional(propagation = Propagation.MANDATORY)
     Optional<Long> acquireDeletionClaim(@Param("repositoryId") long repositoryId);
 
-    /**
-     * Finds a repository by its full name (owner/name).
-     * Used during sync operations to check if repository exists.
-     */
+    /** A repository by its full name on any provider. Only tests call it; production code also names the provider. */
+    @WorkspaceAgnostic(
+            "Reads a shared mirror row by name on any provider; only tests call it, to check what sync stored")
     Optional<Repository> findByNameWithOwner(String nameWithOwner);
 
     @EntityGraph(attributePaths = {"organization", "provider"})
@@ -96,6 +104,7 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
      * @param id         the repository ID
      * @param lastSyncAt the timestamp to set
      */
+    @WorkspaceAgnostic("GitLab sync stamps the shared mirror row of a repository it has just synced")
     @Transactional
     @Modifying
     @Query("UPDATE Repository r SET r.lastSyncAt = :lastSyncAt WHERE r.id = :id")
@@ -224,6 +233,7 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
      * {@code visibility} is derived from {@code isPrivate} and {@code html_url} from {@code nameWithOwner}
      * inside the SQL to keep the parameter count within architecture limits.
      */
+    @WorkspaceAgnostic("Monitoring a repository refreshes its shared mirror row from the provider's snapshot")
     @Transactional
     @Modifying(flushAutomatically = true)
     @Query(value = """
