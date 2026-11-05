@@ -260,8 +260,8 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
 
     private IssueComment reloaded(IssueComment comment) {
         return commentRepository
-                .findAllByIdWithRelations(List.of(Objects.requireNonNull(comment.getId())))
-                .getFirst();
+                .findById(Objects.requireNonNull(comment.getId()))
+                .orElseThrow();
     }
 
     private Long parentOf(IssueComment comment) {

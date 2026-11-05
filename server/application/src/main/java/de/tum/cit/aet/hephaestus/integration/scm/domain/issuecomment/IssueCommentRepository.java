@@ -19,7 +19,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
-@WorkspaceAgnostic("Comments scoped through issue_id -> repository.workspace_id")
 public interface IssueCommentRepository extends JpaRepository<IssueComment, Long> {
     /**
      * Comment {@code c} of repository {@code :repositoryId} hangs on issue row {@code i}, and that number is a
@@ -37,13 +36,32 @@ public interface IssueCommentRepository extends JpaRepository<IssueComment, Long
               AND c.provider_id=i.provider_id
             """;
 
+    /** Every workspace's mirror rows. Only tests call it, to check what sync stored; production code reads by scope. */
+    @Override
+    @WorkspaceAgnostic("Reads every workspace's mirror rows; only tests call it, to check what sync stored")
+    long count();
+
+    /** Every workspace's mirror rows. Only tests call it, to check what sync stored; production code reads by scope. */
+    @Override
+    @WorkspaceAgnostic("Reads every workspace's mirror rows; only tests call it, to check what sync stored")
+    List<IssueComment> findAll();
+
+    /** Deletes every workspace's mirror rows. Only tests call it, to start from an empty mirror. */
+    @Override
+    @WorkspaceAgnostic("Deletes every workspace's mirror rows; only tests call it, to start from an empty mirror")
+    void deleteAll();
+
     /** The highest comment id the repair may move now; later comments wait for the next pass. */
+    @WorkspaceAgnostic(
+            "GitHub comment sync repairs the parents of shared mirror rows in one repository taken from the sync")
     @Query(
             value = "SELECT coalesce(max(c.id),0) FROM issue_comment c WHERE EXISTS (SELECT 1 "
                     + CANONICAL_PULL_REQUEST_PARENT + ")",
             nativeQuery = true)
     long findCanonicalParentCeiling(@Param("repositoryId") long repositoryId);
 
+    @WorkspaceAgnostic(
+            "GitHub comment sync repairs the parents of shared mirror rows in one repository taken from the sync")
     @Query(
             value = "SELECT c.id FROM issue_comment c WHERE c.id > :after AND c.id <= :ceiling AND EXISTS (SELECT 1 "
                     + CANONICAL_PULL_REQUEST_PARENT + ") ORDER BY c.id LIMIT :limit",
@@ -59,6 +77,8 @@ public interface IssueCommentRepository extends JpaRepository<IssueComment, Long
      * The witness is evaluated again on the row being updated, so a current parent that no longer matches the
      * witness is left as it is. Only the parent column changes: no other comment field, source row or collection.
      */
+    @WorkspaceAgnostic(
+            "GitHub comment sync repairs the parents of shared mirror rows in one repository taken from the sync")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(
             value = "UPDATE issue_comment c SET issue_id=p.id " + CANONICAL_PULL_REQUEST_PARENT + " AND c.id IN :ids",
@@ -68,6 +88,8 @@ public interface IssueCommentRepository extends JpaRepository<IssueComment, Long
     @Query("SELECT c.id AS id, c.nativeId AS nativeId FROM IssueComment c WHERE c.issue.id = :parentId")
     List<NoteIdProjection> findNoteIdsByParentId(@Param("parentId") long parentId);
 
+    @WorkspaceAgnostic(
+            "GitLab note reconciliation deletes the notes that the provider no longer lists under one shared parent it syncs")
     @Modifying
     @Query("DELETE FROM IssueComment c WHERE c.issue.id = :parentId AND c.id IN :ids")
     int deleteReconciled(@Param("parentId") long parentId, @Param("ids") Collection<Long> ids);
@@ -96,22 +118,13 @@ public interface IssueCommentRepository extends JpaRepository<IssueComment, Long
      * <p>The predicate rides the {@code c.issue} join that the grouping already needs, so this stays one
      * grouped query for the whole connection.
      */
+    @WorkspaceAgnostic(
+            "Counts the shared mirror rows of repositories that the caller resolved through the workspace's monitors")
     @Query("SELECT c.issue.repository.id AS repositoryId, COUNT(c) AS itemCount FROM IssueComment c "
             + "WHERE c.issue.repository.id IN :repositoryIds AND c.issue.deletedAt IS NULL "
             + "GROUP BY c.issue.repository.id")
     List<RepositoryItemCountProjection> countGroupedByRepositoryIds(
             @Param("repositoryIds") Collection<Long> repositoryIds);
-
-    /** Comments by id, each with its issue or pull request, that work's author and its repository. */
-    @Query("""
-        SELECT ic
-        FROM IssueComment ic
-        LEFT JOIN FETCH ic.issue i
-        LEFT JOIN FETCH i.author
-        LEFT JOIN FETCH i.repository
-        WHERE ic.id IN :ids
-        """)
-    List<IssueComment> findAllByIdWithRelations(@Param("ids") Collection<Long> ids);
 
     @Query("SELECT ic FROM IssueComment ic LEFT JOIN FETCH ic.author "
             + "WHERE ic.issue.id = :issueId ORDER BY ic.createdAt DESC, ic.id DESC")
