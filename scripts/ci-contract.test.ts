@@ -4893,7 +4893,8 @@ void test("proves the toolchain on Windows and from a clean clone", async () => 
 	const quality = job(legSource, "quality");
 	assert.match(quality, /runs-on: .*inputs\.leg == 'windows'.*'windows-latest'.*'ubuntu-latest'/u);
 	assert.match(quality, /shell: bash/u);
-	assert.match(quality, /windows\) vp run --no-cache ci:windows/u);
+	assert.match(quality, /windows\) deadline vp run --no-cache ci:windows/u);
+	assert.match(quality, /deadline\(\) \{ node scripts\/ci-deadline\.ts 900 "\$@"; \}/u);
 	for (const name of ["Restore Vite task cache", "Save Vite task cache"]) {
 		assert.match(
 			String(namedStep(workflow, qualityPath, name).get("if")),
@@ -5019,19 +5020,21 @@ void test(
 	async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
 		const script = runScript(workflow, ["jobs", "quality"], "Quality gates");
-		const probe = `vp() { printf 'command=%s\\n' "$*" >> "$GITHUB_OUTPUT"; }\n${script}`;
+		// The task runs under the step's deadline: `node scripts/ci-deadline.ts <seconds> <vp arguments>`.
+		const probe = `node() { printf 'deadline=%s %s\\n' "$1" "$2" >> "$GITHUB_OUTPUT"; shift 2; printf 'command=%s\\n' "$*" >> "$GITHUB_OUTPUT"; }\n${script}`;
 		for (const leg of ["server", "tooling", "webapp", "extension", "windows"]) {
 			const result = await runStep(probe, { LEG: leg });
 			assert.equal(result.failed, false, result.diagnosis);
 			assert.equal(
 				result.outputs.command,
-				`run ${leg === "windows" ? "--no-cache " : ""}ci:${leg}`,
+				`vp run ${leg === "windows" ? "--no-cache " : ""}ci:${leg}`,
 			);
+			assert.equal(result.outputs.deadline, "scripts/ci-deadline.ts 900");
 		}
 		const invalid = await runStep(probe, { LEG: "unknown" });
 		assert.equal(invalid.failed, true);
 		assert.deepEqual(invalid.outputs, {});
-		const failed = await runStep(`vp() { return 1; }\n${script}`, { LEG: "server" });
+		const failed = await runStep(`node() { return 1; }\n${script}`, { LEG: "server" });
 		assert.equal(failed.failed, true, "a failing quality task must fail the job");
 	},
 );
