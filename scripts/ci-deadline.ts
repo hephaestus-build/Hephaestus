@@ -80,18 +80,31 @@ function windowsRows(text: string): ProcessRow[] {
 	});
 }
 
-/** The report of what still ran at the deadline, one line per process. */
+/** The processes of `running` that have no running child: the commands that the task waits on. */
+export function innermost(running: readonly ProcessRow[]): ProcessRow[] {
+	return running.filter((row) => !running.some((other) => other.ppid === row.pid));
+}
+
+/**
+ * The report of what still ran at the deadline. Its first line names the innermost commands, because an
+ * annotation shows that line first; the table lists every process.
+ */
 export function deadlineReport(seconds: number, running: readonly ProcessRow[]): string {
+	const waiting = innermost(running);
+	const headline =
+		waiting.length === 0
+			? `The step reached its deadline of ${seconds} s, under the job's time limit, and no process of its task was found. The task may have finished its work without exiting, or the process table could not be read.`
+			: `The step reached its deadline of ${seconds} s, under the job's time limit. Still running: ${waiting.map(({ elapsed, command }) => `${command.slice(0, 160)} (${elapsed})`).join("; ")}`;
 	const lines = running.map(
 		({ pid, elapsed, command }) =>
 			`${String(pid).padStart(7)}  ${elapsed.padStart(11)}  ${command.slice(0, 240)}`,
 	);
-	return [
-		`The step reached its deadline of ${seconds} s, under the job's time limit. Still running:`,
-		"",
-		"    pid      elapsed  command",
-		...lines,
-	].join("\n");
+	return [headline, "", "    pid      elapsed  command", ...lines].join("\n");
+}
+
+/** A workflow command's message: GitHub reads `%`, carriage return and newline only escaped. */
+export function annotation(message: string): string {
+	return message.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 }
 
 async function main(): Promise<void> {
@@ -130,7 +143,10 @@ async function main(): Promise<void> {
 		const running = child.pid === undefined ? [] : descendants(processTable(), child.pid);
 		state.listed = running.map(({ pid }) => pid);
 		const report = deadlineReport(seconds, running);
-		process.stderr.write(`\n::error::${report.split("\n")[0] ?? ""}\n${report}\n`);
+		// The whole report in the annotation: the checks page shows annotations, and a cancelled job's log can be lost.
+		process.stderr.write(
+			`\n::error title=Quality gates hit their deadline::${annotation(report)}\n${report}\n`,
+		);
 		const summary = process.env.GITHUB_STEP_SUMMARY;
 		if (summary !== undefined && summary !== "") {
 			appendFileSync(
