@@ -10,8 +10,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
-@WorkspaceAgnostic(
-        "Memberships scoped through organization_id; organization is global, membership filtered by workspace context")
+/**
+ * Organization memberships are shared mirror rows with no {@code workspace_id} (ADR 0077). Each read is keyed by
+ * the id of an organization that the caller resolved through its workspace or the sync.
+ */
 public interface OrganizationMembershipRepository
         extends JpaRepository<OrganizationMembership, OrganizationMembershipId> {
     @Query("SELECT m.userId FROM OrganizationMembership m WHERE m.organizationId = :orgId")
@@ -41,11 +43,16 @@ public interface OrganizationMembershipRepository
      * is global and survives; only the person↔org edges this instance mirrored are removed.
      * Idempotent.
      */
+    @WorkspaceAgnostic(
+            "Erasing the last workspace bound to a shared organization drops that organization's membership mirror")
     @Modifying
     @Transactional
     @Query("DELETE FROM OrganizationMembership m WHERE m.organizationId = :orgId")
     void deleteByOrganizationId(@Param("orgId") Long organizationId);
 
+    @WorkspaceAgnostic(
+            "Membership sync and webhooks remove the members that the provider no longer lists from one shared"
+                    + " organization")
     @Modifying
     @Transactional
     @Query("DELETE FROM OrganizationMembership m WHERE m.organizationId = :orgId AND m.userId IN :userIds")
