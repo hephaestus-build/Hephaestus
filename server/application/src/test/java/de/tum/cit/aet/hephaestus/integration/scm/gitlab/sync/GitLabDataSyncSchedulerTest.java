@@ -273,7 +273,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 .when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID))
                 .thenReturn(List.of());
         when(deletionSweepService.sweepScope(eq(WORKSPACE_ID), any()))
-                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, false));
+                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, false, 0));
 
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
 
@@ -302,7 +302,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 .when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID))
                 .thenReturn(List.of());
         when(deletionSweepService.sweepScope(eq(WORKSPACE_ID), any()))
-                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, true));
+                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, true, 0));
 
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
 

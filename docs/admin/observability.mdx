@@ -508,6 +508,7 @@ The admin sees the same state as an attention problem on the connection.
 A deletion sweep that cannot prove the provider's listing complete deletes nothing and logs `integration.deletion_sweep.skipped`, with `integration.kind` and `reason`.
 The record is a warning, except for `reason=featureDisabled`.
 That reason means that the repository switched its issues or its pull requests off, which is an expected state, so the record is informational.
+It also does not give the reconciliation job a warning. The sweep's summary counts these repositories.
 
 When the worker cannot read the quotas of the sandbox namespace, it logs `sandbox.quota.unreadable` as a warning, and reviews wait.
 When it can read them again, it logs `sandbox.quota.readable` with `duration.ms`, the time that reviews waited.

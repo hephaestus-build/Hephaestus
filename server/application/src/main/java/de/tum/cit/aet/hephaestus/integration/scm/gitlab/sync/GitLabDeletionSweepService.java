@@ -244,9 +244,12 @@ public class GitLabDeletionSweepService {
      * @param mergeRequestsTombstoned merge requests newly tombstoned
      * @param skipped                 true when at least one entity class could not be swept because its
      *                                upstream listing was incomplete — the job should report warnings
+     * @param featureOff              projects not swept for an entity class whose feature the owner switched
+     *                                off; an expected state, so not a warning
      */
-    public record SweepOutcome(int issuesTombstoned, int mergeRequestsTombstoned, int notesRemoved, boolean skipped) {
-        static final SweepOutcome NOTHING = new SweepOutcome(0, 0, 0, false);
+    public record SweepOutcome(
+            int issuesTombstoned, int mergeRequestsTombstoned, int notesRemoved, boolean skipped, int featureOff) {
+        static final SweepOutcome NOTHING = new SweepOutcome(0, 0, 0, false, 0);
 
         public int total() {
             return issuesTombstoned + mergeRequestsTombstoned + notesRemoved;
@@ -279,6 +282,7 @@ public class GitLabDeletionSweepService {
         int mergeRequests = 0;
         int notes = 0;
         boolean skipped = false;
+        int featureOff = 0;
         int done = 0;
         int total = repositories.size();
 
@@ -327,29 +331,39 @@ public class GitLabDeletionSweepService {
             mergeRequests += outcome.mergeRequestsTombstoned();
             notes += outcome.notesRemoved();
             skipped = skipped || outcome.skipped();
+            featureOff += outcome.featureOff();
             done++;
         }
 
-        SweepOutcome scopeOutcome = new SweepOutcome(issues, mergeRequests, notes, skipped);
+        SweepOutcome scopeOutcome = new SweepOutcome(issues, mergeRequests, notes, skipped, featureOff);
         report(handle, done, total, sweepSummary(scopeOutcome), null);
         log.info(
-                "GitLab deletion sweep finished: scopeId={}, projectsSwept={}, issuesTombstoned={}, mergeRequestsTombstoned={}, degraded={}",
+                "GitLab deletion sweep finished: scopeId={}, projectsSwept={}, issuesTombstoned={},"
+                        + " mergeRequestsTombstoned={}, degraded={}, featureOff={}",
                 scopeId,
                 done,
                 issues,
                 mergeRequests,
-                skipped);
+                skipped,
+                featureOff);
         return scopeOutcome;
     }
 
     /** The one sentence the admin UI renders for the sweep's terminal report. */
     static String sweepSummary(SweepOutcome outcome) {
+        String summary;
         if (outcome.total() == 0) {
-            return outcome.skipped()
+            summary = outcome.skipped()
                     ? "Checked for deleted items: some projects could not be verified"
                     : "Checked for deleted items: none found";
+        } else {
+            summary = "Retired " + outcome.total() + " item" + (outcome.total() == 1 ? "" : "s") + " deleted upstream";
         }
-        return "Retired " + outcome.total() + " item" + (outcome.total() == 1 ? "" : "s") + " deleted upstream";
+        if (outcome.featureOff() == 0) {
+            return summary;
+        }
+        return summary + ". Skipped " + outcome.featureOff() + " project" + (outcome.featureOff() == 1 ? "" : "s")
+                + " with issues or merge requests switched off";
     }
 
     private static void report(
@@ -399,6 +413,7 @@ public class GitLabDeletionSweepService {
         int issuesTombstoned = 0;
         int mergeRequestsTombstoned = 0;
         boolean skipped = false;
+        boolean featureOff = false;
 
         for (SweptEntity entity : SweptEntity.values()) {
             if (isCancelled(handle)) {
@@ -425,9 +440,11 @@ public class GitLabDeletionSweepService {
                 listing = UpstreamListing.incomplete("emptyUpstreamWithLiveMirror");
             }
             if (!listing.complete()) {
-                skipped = true;
                 // A project that switched a feature off is an expected state, not a fault.
-                log.atLevel(UpstreamListing.FEATURE_DISABLED.equals(listing.reason()) ? Level.INFO : Level.WARN)
+                boolean expected = UpstreamListing.FEATURE_DISABLED.equals(listing.reason());
+                featureOff = featureOff || expected;
+                skipped = skipped || !expected;
+                log.atLevel(expected ? Level.INFO : Level.WARN)
                         .addKeyValue("event.name", "integration.deletion_sweep.skipped")
                         .addKeyValue("integration.kind", "gitlab")
                         .addKeyValue("reason", listing.reason())
@@ -469,7 +486,11 @@ public class GitLabDeletionSweepService {
         unverifiedNoteParents.increment(noteOutcome.unverified());
         if (!admission.current(read)) return SweepOutcome.NOTHING;
         return new SweepOutcome(
-                issuesTombstoned, mergeRequestsTombstoned, noteOutcome.removed(), skipped || noteOutcome.skipped());
+                issuesTombstoned,
+                mergeRequestsTombstoned,
+                noteOutcome.removed(),
+                skipped || noteOutcome.skipped(),
+                featureOff ? 1 : 0);
     }
 
     /** The live local numbers for one entity class of one repository. */

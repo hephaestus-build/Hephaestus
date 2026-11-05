@@ -560,7 +560,9 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
             var outcome = service.sweepRepository(SCOPE_ID, repository(), handle);
 
             verifyNothingTombstoned();
-            assertThat(outcome.skipped()).isTrue();
+            // A feature that the owner switched off is an expected state: counted, not a warning.
+            assertThat(outcome.skipped()).isFalse();
+            assertThat(outcome.featureOff()).isEqualTo(1);
         }
 
         @Test
@@ -614,7 +616,9 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
 
             verifyNothingTombstoned();
             assertThat(outcome.issuesTombstoned()).isZero();
-            assertThat(outcome.skipped()).isTrue();
+            // A feature that the owner switched off is an expected state: counted, not a warning.
+            assertThat(outcome.skipped()).isFalse();
+            assertThat(outcome.featureOff()).isEqualTo(1);
         }
 
         @Test
@@ -630,7 +634,9 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
 
             verifyNothingTombstoned();
             assertThat(outcome.mergeRequestsTombstoned()).isZero();
-            assertThat(outcome.skipped()).isTrue();
+            // A feature that the owner switched off is an expected state: counted, not a warning.
+            assertThat(outcome.skipped()).isFalse();
+            assertThat(outcome.featureOff()).isEqualTo(1);
         }
 
         @Test
@@ -824,5 +830,17 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
             assertThat(outcome.total()).isZero();
             assertThat(outcome.skipped()).isFalse();
         }
+    }
+
+    @Test
+    void shouldCountProjectsWithASwitchedOffFeatureInTheSummaryWithoutCallingThemUnverified() {
+        assertThat(GitLabDeletionSweepService.sweepSummary(
+                        new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, false, 2)))
+                .isEqualTo("Checked for deleted items: none found. Skipped 2 projects with issues or merge requests"
+                        + " switched off");
+        assertThat(GitLabDeletionSweepService.sweepSummary(
+                        new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, true, 1)))
+                .isEqualTo("Checked for deleted items: some projects could not be verified. Skipped 1 project with"
+                        + " issues or merge requests switched off");
     }
 }

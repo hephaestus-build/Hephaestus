@@ -201,9 +201,11 @@ public class GitHubDeletionSweepService {
      * @param pullRequestsTombstoned pull requests newly tombstoned
      * @param skipped                true when at least one entity class could not be swept because its
      *                               upstream listing was incomplete — the job should report warnings
+     * @param featureOff             repositories not swept for an entity class whose feature the owner
+     *                               switched off; an expected state, so not a warning
      */
-    public record SweepOutcome(int issuesTombstoned, int pullRequestsTombstoned, boolean skipped) {
-        static final SweepOutcome NOTHING = new SweepOutcome(0, 0, false);
+    public record SweepOutcome(int issuesTombstoned, int pullRequestsTombstoned, boolean skipped, int featureOff) {
+        static final SweepOutcome NOTHING = new SweepOutcome(0, 0, false, 0);
 
         public int total() {
             return issuesTombstoned + pullRequestsTombstoned;
@@ -230,6 +232,7 @@ public class GitHubDeletionSweepService {
         int issues = 0;
         int pullRequests = 0;
         boolean skipped = false;
+        int featureOff = 0;
         int done = 0;
         int total = repositories.size();
 
@@ -268,29 +271,39 @@ public class GitHubDeletionSweepService {
             issues += outcome.issuesTombstoned();
             pullRequests += outcome.pullRequestsTombstoned();
             skipped = skipped || outcome.skipped();
+            featureOff += outcome.featureOff();
             done++;
         }
 
-        SweepOutcome scopeOutcome = new SweepOutcome(issues, pullRequests, skipped);
+        SweepOutcome scopeOutcome = new SweepOutcome(issues, pullRequests, skipped, featureOff);
         report(handle, done, total, sweepSummary(scopeOutcome), null);
         log.info(
-                "Deletion sweep finished: scopeId={}, reposSwept={}, issuesTombstoned={}, pullRequestsTombstoned={}, degraded={}",
+                "Deletion sweep finished: scopeId={}, reposSwept={}, issuesTombstoned={}, pullRequestsTombstoned={},"
+                        + " degraded={}, featureOff={}",
                 scopeId,
                 done,
                 issues,
                 pullRequests,
-                skipped);
+                skipped,
+                featureOff);
         return scopeOutcome;
     }
 
     /** The one sentence the admin UI renders for the sweep's terminal report. */
     static String sweepSummary(SweepOutcome outcome) {
+        String summary;
         if (outcome.total() == 0) {
-            return outcome.skipped()
+            summary = outcome.skipped()
                     ? "Checked for deleted items: some repositories could not be verified"
                     : "Checked for deleted items: none found";
+        } else {
+            summary = "Retired " + outcome.total() + " item" + (outcome.total() == 1 ? "" : "s") + " deleted upstream";
         }
-        return "Retired " + outcome.total() + " item" + (outcome.total() == 1 ? "" : "s") + " deleted upstream";
+        if (outcome.featureOff() == 0) {
+            return summary;
+        }
+        return summary + ". Skipped " + outcome.featureOff() + " repositor" + (outcome.featureOff() == 1 ? "y" : "ies")
+                + " with issues or pull requests switched off";
     }
 
     private static void report(
@@ -330,6 +343,7 @@ public class GitHubDeletionSweepService {
         int issuesTombstoned = 0;
         int pullRequestsTombstoned = 0;
         boolean skipped = false;
+        boolean featureOff = false;
 
         for (SweptEntity entity : SweptEntity.values()) {
             if (isCancelled(handle)) {
@@ -357,9 +371,11 @@ public class GitHubDeletionSweepService {
                 listing = UpstreamListing.incomplete("emptyUpstreamWithLiveMirror");
             }
             if (!listing.complete()) {
-                skipped = true;
                 // A repository that switched a feature off is an expected state, not a fault.
-                log.atLevel(UpstreamListing.FEATURE_DISABLED.equals(listing.reason()) ? Level.INFO : Level.WARN)
+                boolean expected = UpstreamListing.FEATURE_DISABLED.equals(listing.reason());
+                featureOff = featureOff || expected;
+                skipped = skipped || !expected;
+                log.atLevel(expected ? Level.INFO : Level.WARN)
                         .addKeyValue("event.name", "integration.deletion_sweep.skipped")
                         .addKeyValue("integration.kind", "github")
                         .addKeyValue("reason", listing.reason())
@@ -380,7 +396,7 @@ public class GitHubDeletionSweepService {
             }
         }
 
-        return new SweepOutcome(issuesTombstoned, pullRequestsTombstoned, skipped);
+        return new SweepOutcome(issuesTombstoned, pullRequestsTombstoned, skipped, featureOff ? 1 : 0);
     }
 
     /** The live local numbers for one entity class of one repository. */
