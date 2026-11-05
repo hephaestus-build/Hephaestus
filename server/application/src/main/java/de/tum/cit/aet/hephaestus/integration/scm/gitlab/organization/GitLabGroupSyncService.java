@@ -34,14 +34,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for syncing GitLab groups and their projects via GraphQL API.
  * <p>
  * This service:
  * <ul>
- *   <li>Fetches group metadata via {@code GetGroup} query → delegates to {@link GitLabGroupProcessor}</li>
  *   <li>Fetches all projects in a group via paginated {@code GetGroupProjects} query</li>
  *   <li>Delegates each project to {@link GitLabProjectProcessor} for entity mapping</li>
  * </ul>
@@ -55,7 +53,6 @@ public class GitLabGroupSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabGroupSyncService.class);
 
-    private static final String GET_GROUP_DOCUMENT = "GetGroup";
     private static final String GET_GROUP_PROJECTS_DOCUMENT = "GetGroupProjects";
 
     private final GitLabGraphQlClientProvider graphQlClientProvider;
@@ -100,75 +97,6 @@ public class GitLabGroupSyncService {
                 .findByTypeAndServerUrl(IdentityProviderType.GITLAB, effective)
                 .orElseThrow(() -> new IllegalStateException(
                         "IdentityProvider not found for type=GITLAB, serverUrl=" + effective));
-    }
-
-    /**
-     * Syncs a single GitLab group (without projects) from the GraphQL API.
-     *
-     * @param scopeId       the workspace/scope ID for authentication
-     * @param groupFullPath the full path of the group (e.g., {@code org/team})
-     * @param serverUrl     workspace's GitLab base URL, so a self-hosted instance is not stamped
-     *                      as the default one; null or blank falls back to the configured default
-     *                      server URL
-     * @return the synced Organization entity, or empty if not found or on error
-     */
-    @Transactional
-    public Optional<Organization> syncGroup(Long scopeId, @Nullable String groupFullPath, @Nullable String serverUrl) {
-        if (groupFullPath == null || groupFullPath.isBlank()) {
-            log.warn("Skipped group sync: reason=nullOrBlankGroupPath, scopeId={}", scopeId);
-            return Optional.empty();
-        }
-        String safeGroupPath = sanitizeForLog(groupFullPath);
-
-        try {
-            IdentityProvider provider = resolveProvider(serverUrl);
-            Long providerId = Objects.requireNonNull(provider.getId());
-            graphQlClientProvider.acquirePermission();
-            HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
-
-            ClientGraphQlResponse response = client.documentName(GET_GROUP_DOCUMENT)
-                    .variable("fullPath", groupFullPath)
-                    .execute()
-                    .block(gitLabProperties.graphqlTimeout());
-
-            var handleResult = responseHandler.handle(response, "group " + safeGroupPath, log);
-            if (handleResult.action() == GitLabGraphQlResponseHandler.HandleResult.Action.ABORT) {
-                graphQlClientProvider.recordFailure(new GitLabSyncException("Invalid GraphQL response"));
-                return Optional.empty();
-            }
-            // RETRY is not applicable for single requests, treat as success if CONTINUE
-            if (handleResult.action() == GitLabGraphQlResponseHandler.HandleResult.Action.RETRY) {
-                // For a single non-paginated request, a rate-limit retry is best handled
-                // by returning empty and letting the caller reschedule.
-                return Optional.empty();
-            }
-
-            graphQlClientProvider.recordSuccess();
-
-            GitLabGroupResponse group =
-                    Objects.requireNonNull(response).field("group").toEntity(GitLabGroupResponse.class);
-            if (group == null) {
-                log.warn(
-                        "Skipped group sync: reason=notFoundOnGitLab, scopeId={}, groupPath={}",
-                        scopeId,
-                        safeGroupPath);
-                return Optional.empty();
-            }
-
-            Organization organization = groupProcessor.process(group, Objects.requireNonNull(providerId));
-            if (organization != null) {
-                log.info(
-                        "Synced group: scopeId={}, orgId={}, groupPath={}",
-                        scopeId,
-                        organization.getId(),
-                        safeGroupPath);
-            }
-            return Optional.ofNullable(organization);
-        } catch (Exception e) {
-            graphQlClientProvider.recordFailure(e);
-            log.error("Failed to sync group: scopeId={}, groupPath={}", scopeId, safeGroupPath, e);
-            return Optional.empty();
-        }
     }
 
     /**

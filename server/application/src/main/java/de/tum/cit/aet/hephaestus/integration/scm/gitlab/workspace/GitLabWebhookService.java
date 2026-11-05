@@ -325,43 +325,6 @@ public class GitLabWebhookService {
         });
     }
 
-    /**
-     * Deregisters the workspace's webhook from GitLab. Best-effort: never throws.
-     *
-     * @param workspace the workspace whose webhook to remove
-     */
-    @Transactional
-    public void deregisterWebhook(Workspace workspace) {
-        Optional<GitLabConfig> configOpt = gitLabConfig(workspace);
-        if (configOpt.isEmpty()) {
-            return;
-        }
-        GitLabConfig config = configOpt.get();
-        if (config.gitlabWebhookId() == null || config.gitlabGroupId() == null) {
-            return;
-        }
-
-        var client = webhookClientProvider.getIfAvailable();
-        if (client == null) {
-            log.debug("Webhook deregistration skipped: client unavailable, workspaceId={}", workspace.getId());
-            clearWebhookFields(workspace);
-            return;
-        }
-
-        try {
-            client.deregisterGroupWebhook(workspace.getId(), config.gitlabGroupId(), config.gitlabWebhookId());
-        } catch (Exception e) {
-            // Best-effort: log and continue. 401/403 = GitLab auto-disables failing webhooks.
-            log.warn(
-                    "Webhook deregistration failed (best-effort): workspaceId={}, webhookId={}, error={}",
-                    workspace.getId(),
-                    config.gitlabWebhookId(),
-                    e.getClass().getSimpleName());
-        }
-
-        clearWebhookFields(workspace);
-    }
-
     /** Best-effort teardown for a connection that may no longer be active. */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void deregisterWebhookForConnection(long workspaceId, long connectionId) {
@@ -422,21 +385,6 @@ public class GitLabWebhookService {
                     connectionId,
                     webhookId);
         });
-    }
-
-    /**
-     * Deregisters webhook by workspace ID. Used by purge contributors.
-     *
-     * <p>Uses {@link Propagation#NOT_SUPPORTED} to suspend the outer purge
-     * transaction during the external HTTP call to GitLab. Running HTTP calls
-     * inside a transaction is an anti-pattern (ties up a DB connection for the
-     * duration of the network round-trip).
-     *
-     * @param workspaceId the workspace ID
-     */
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void deregisterWebhookByWorkspaceId(Long workspaceId) {
-        workspaceRepository.findById(workspaceId).ifPresent(this::deregisterWebhook);
     }
 
     /**
@@ -550,10 +498,5 @@ public class GitLabWebhookService {
         if (reregistered > 0) {
             log.info("Webhook health check: checked={}, reregistered={}", checked, reregistered);
         }
-    }
-
-    private void clearWebhookFields(Workspace workspace) {
-        updateGitLabConfig(
-                workspace.getId(), cfg -> cfg.withGitlabWebhookId(null).withGitlabGroupId(null));
     }
 }

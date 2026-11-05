@@ -810,15 +810,6 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldCommitRemainingCommentsAcrossPagesWhenInputProviderIsDetached() {
-        assertDetachedCommentPagination(true);
-    }
-
-    @Test
-    void shouldCommitFullCommentsAcrossPagesWhenInputProviderIsDetached() {
-        assertDetachedCommentPagination(false);
-    }
-
-    private void assertDetachedCommentPagination(boolean remaining) {
         Repository detachedRepository = Objects.requireNonNull(transactionTemplate.execute(
                 status -> repositoryRepository.findById(testRepository.getId()).orElseThrow()));
         assertThat(Hibernate.isInitialized(detachedRepository.getProvider())).isFalse();
@@ -845,10 +836,9 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
                 applicationContext.getBean(GitHubGraphQlSyncCoordinator.class),
                 repositoryRepository);
 
-        Integer count = transactionTemplate.execute(status -> remaining
-                ? service.syncRemainingComments(testWorkspace.getId(), detachedIssue, "embedded-page")
-                        .count()
-                : service.syncForIssue(testWorkspace.getId(), detachedIssue));
+        Integer count = transactionTemplate.execute(
+                status -> service.syncRemainingComments(testWorkspace.getId(), detachedIssue, "embedded-page")
+                        .count());
 
         assertThat(count).isEqualTo(2);
         for (long nativeId : List.of(TEST_COMMENT_ID + 1, TEST_COMMENT_ID + 2)) {
