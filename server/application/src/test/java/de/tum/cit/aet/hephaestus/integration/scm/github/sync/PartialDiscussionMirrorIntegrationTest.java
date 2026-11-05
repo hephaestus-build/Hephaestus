@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionCl
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueCommentConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
@@ -64,6 +65,7 @@ import java.math.BigInteger;
 import java.net.URI;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -215,7 +217,8 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
                         properties,
                         classifier,
                         coordinator,
-                        repositories));
+                        repositories,
+                        new TransactionTemplate(transactionManager)));
         var transactions = new TransactionTemplate(transactionManager);
         sync = new GitHubPullRequestSyncService(
                 repositories,
@@ -384,6 +387,78 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
 
         assertThatThrownBy(() -> reviewComments.syncRemainingThreads(workspaceId, deleted, "after-five"))
                 .isInstanceOf(DataAccessException.class);
+    }
+
+    /** A sync reads the rest of a pull request's conversation with no transaction open, then stores it. */
+    @Test
+    void shouldAskGitHubWithNoTransactionOpenWhenAConversationHasMorePages() {
+        stubPage("GetRepositoryPullRequests", pullRequestWithAConversationPage());
+        stubTheSixthThread();
+        stubTheConversation(Mono.just(conversationPage(base + 200, false)));
+
+        sync.syncForRepository(workspaceId, repositoryId, null, null, null);
+
+        assertThat(askedInTransaction)
+                .as("the second thread page, then the second conversation page, each with no transaction open")
+                .containsExactly(false, false);
+        assertThat(issueComments(base + 200)).isEqualTo(1);
+    }
+
+    /** A conversation page that fails after another was read leaves the comments already read stored. */
+    @Test
+    void shouldStoreTheCommentsAlreadyReadWhenALaterConversationPageFails() {
+        stubPage("GetRepositoryPullRequests", pullRequestWithAConversationPage());
+        stubTheSixthThread();
+        stubTheConversation(
+                Mono.just(conversationPage(base + 300, true)),
+                Mono.error(new IllegalStateException("GitHub answered nothing usable")));
+
+        sync.syncForRepository(workspaceId, repositoryId, null, null, null);
+
+        assertThat(issueComments(base + 300)).isEqualTo(1);
+    }
+
+    private long issueComments(long nativeId) {
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT count(*) FROM issue_comment WHERE native_id = ?", Long.class, nativeId));
+    }
+
+    /** The conversation continues past the embedded page; each request answers with the next of the given pages. */
+    private void stubTheConversation(Mono<ClientGraphQlResponse> first, Mono<ClientGraphQlResponse> rest) {
+        var spec = mock(RequestSpec.class);
+        when(client.documentName("GetPullRequestComments")).thenReturn(spec);
+        when(spec.variable(anyString(), any())).thenReturn(spec);
+        var answers = new ArrayDeque<>(List.of(first, rest));
+        when(spec.execute()).thenAnswer(invocation -> {
+            askedInTransaction.add(TransactionSynchronizationManager.isActualTransactionActive());
+            return answers.size() > 1 ? answers.poll() : answers.peek();
+        });
+    }
+
+    private void stubTheConversation(Mono<ClientGraphQlResponse> only) {
+        stubTheConversation(only, only);
+    }
+
+    private ClientGraphQlResponse conversationPage(long nativeId, boolean more) {
+        var comment = new GHIssueComment();
+        comment.setId("IC_" + nativeId);
+        comment.setFullDatabaseId(BigInteger.valueOf(nativeId));
+        comment.setBody("A conversation comment");
+        comment.setUrl(URI.create("https://example.com/repo/pull/42#issuecomment-" + nativeId));
+        comment.setCreatedAt(AT);
+        comment.setUpdatedAt(AT);
+        var connection = new GHIssueCommentConnection();
+        connection.setNodes(List.of(comment));
+        connection.setTotalCount(3);
+        connection.setPageInfo(page(more, "after-" + nativeId));
+        return valid("repository.pullRequest.comments", GHIssueCommentConnection.class, connection);
+    }
+
+    private static GHPullRequest pullRequestWithAConversationPage() {
+        var pr = pullRequest();
+        pr.getComments().setTotalCount(3);
+        pr.getComments().setPageInfo(page(true, "after-embedded"));
+        return pr;
     }
 
     private void assertTheRestWasAskedForOutsideTransactionsAndStored() {
