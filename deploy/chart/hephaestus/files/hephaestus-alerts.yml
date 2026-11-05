@@ -479,6 +479,7 @@ groups:
           severity: warning
         annotations:
           summary: Feedback on the work has waited more than two hours for its first posted copy
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
   # postgres_exporter of postgresql.metrics (docs/admin/observability.mdx, Database metrics). Without the
   # exporter these series do not exist, and the rules stay silent.
   - name: hephaestus-postgresql
