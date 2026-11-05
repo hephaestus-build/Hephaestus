@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
+import { compareVersions, parseVersion } from "./release-version.ts";
 
 const stableVersion = (tag: string): number[] | undefined => {
 	const groups = /^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$/u.exec(tag)?.groups;
@@ -32,6 +33,29 @@ const tags = (...args: string[]): string[] =>
 /** The release that `head` upgrades from, read from the tags of the local repository. */
 export function previousReleaseOf(head: string): string | undefined {
 	return previousRelease(tags("--merged", head, "--list", "v*"), tags("--points-at", head));
+}
+
+/**
+ * The latest published release merged into the head, a release candidate included, but not a tag on the head
+ * itself: what a database can run when the head's changelogs reach it. A break between two release candidates
+ * matters as much as one between two stable releases.
+ */
+export function latestRelease(
+	merged: readonly string[],
+	onHead: readonly string[],
+): string | undefined {
+	return merged
+		.filter((tag) => !onHead.includes(tag))
+		.flatMap((tag) => {
+			const version = tag.startsWith("v") ? parseVersion(tag.slice(1)) : undefined;
+			return version === undefined ? [] : [{ tag, version }];
+		})
+		.toSorted((a, b) => compareVersions(b.version, a.version))[0]?.tag;
+}
+
+/** The latest published release that `head` contains, read from the tags of the local repository. */
+export function latestReleaseOf(head: string): string | undefined {
+	return latestRelease(tags("--merged", head, "--list", "v*"), tags("--points-at", head));
 }
 
 /** The 1.0 baseline refuses a database from before this release. */

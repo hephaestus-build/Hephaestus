@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { pendingContractions, violations } from "./check-changelog-compatibility.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { stopEveryRoleEntries } from "./lib/migration-guide.ts";
-import { previousRelease } from "./lib/previous-release.ts";
+import { latestRelease, previousRelease } from "./lib/previous-release.ts";
 
 const changeSet = (id: string, changes: string): string =>
 	`<changeSet id="${id}" author="hephaestus">${changes}</changeSet>`;
@@ -358,4 +358,77 @@ void test("judges the changelogs added since the latest release tag", (context) 
 		/::warning::Mechanical N-on-N\+1 coverage is off for this release, because it stops every role: #### 🔴 Stop every role for the account name upgrade/u,
 	);
 	assert.match(stopped.stdout, /3_changelog\.xml change set 3-1: dropColumn account\.name/u);
+});
+
+void test("judges a head against the latest published release, a release candidate included", () => {
+	const tags = ["v0.95.1", "v1.0.0-rc.1", "v1.0.0-rc.3", "latest", "v1.0.0-rc.x"];
+	assert.equal(latestRelease(tags, []), "v1.0.0-rc.3");
+	assert.equal(latestRelease(tags, ["v1.0.0-rc.3"]), "v1.0.0-rc.1");
+	assert.equal(latestRelease([...tags, "v1.0.0"], []), "v1.0.0");
+	assert.equal(latestRelease(["latest"], []), undefined);
+});
+
+void test("a contraction between two release candidates fails without its own stop-every-role entry", (context) => {
+	const directory = mkdtempSync(path.join(tmpdir(), "changelog-compatibility-rc-"));
+	context.after(() => rmSync(directory, { recursive: true, force: true }));
+	const env = environmentForGitFixture();
+	const git = (...args: string[]) => {
+		const result = spawnSync("git", args, { cwd: directory, env, encoding: "utf8" });
+		assert.equal(result.status, 0, result.stderr);
+	};
+	const write = (file: string, content: string) => {
+		mkdirSync(path.dirname(path.join(directory, file)), { recursive: true });
+		writeFileSync(path.join(directory, file), content);
+	};
+	const commit = (message: string) => {
+		git("add", "-A");
+		git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", message);
+	};
+	const guard = () =>
+		spawnSync(
+			process.execPath,
+			[path.join(import.meta.dirname, "check-changelog-compatibility.ts")],
+			{
+				cwd: directory,
+				env,
+				encoding: "utf8",
+			},
+		);
+	const changelogs = "server/application/src/main/resources/db/changelog/";
+	git("init", "-q");
+	write(".migration/README.md", "# Migration fragments\n");
+	write("docs/contributor/database-migration.mdx", "### Pending contractions\n\nNone.\n");
+	write("MIGRATION.md", "### Next release\n\n## Automatic vs Manual Migrations\n");
+	write(
+		`${changelogs}1_changelog.xml`,
+		changelog(changeSet("1-1", `<createTable tableName="account"/>`)),
+	);
+	commit("0.95.1");
+	git("tag", "v0.95.1");
+	// rc.1's upgrade from 0.95 stops every role, which waives that whole range.
+	write(
+		"MIGRATION.md",
+		"### Next release\n\n### v1.0.0-rc.1\n\n#### 🔴 Stop every role for the 1.0 baseline\n\nText.\n\n## Automatic vs Manual Migrations\n",
+	);
+	commit("rc.1");
+	git("tag", "v1.0.0-rc.1");
+	// The baseline lands after rc.1; a database on rc.1 records it without running its DDL.
+	write(
+		`${changelogs}1.0.0/baseline.xml`,
+		changelog(changeSet("baseline", `<sqlFile path="baseline.sql"/>`)),
+	);
+	write(
+		`${changelogs}next/2_changelog.xml`,
+		changelog(changeSet("2-1", `<dropColumn tableName="account" columnName="name"/>`)),
+	);
+	commit("rc.2 contraction");
+
+	const result = guard();
+	assert.equal(result.status, 1, result.stdout + result.stderr);
+	assert.match(result.stdout, /New changelogs since v1\.0\.0-rc\.1: \S*next\/2_changelog\.xml\./u);
+	assert.doesNotMatch(result.stdout + result.stderr, /1\.0\.0\/baseline\.xml/u);
+	assert.match(
+		result.stderr,
+		/::error::.*2_changelog\.xml change set 2-1: dropColumn account\.name/u,
+	);
 });

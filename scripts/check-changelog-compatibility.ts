@@ -1,12 +1,13 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
 
 import { isRecord } from "./lib/json.ts";
 import { STOP_EVERY_ROLE_HEADING, stopEveryRoleEntries } from "./lib/migration-guide.ts";
-import { previousReleaseOf } from "./lib/previous-release.ts";
+import { BASELINE_RELEASE, latestReleaseOf } from "./lib/previous-release.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
+import { compareVersions, parseVersion } from "./lib/release-version.ts";
 
 // docs/contributor/database-migration.mdx § Expand and contract owns these rules.
 const directory = "server/application/src/main/resources/db/changelog/";
@@ -413,8 +414,24 @@ const files = (revision: string, path: string): string[] =>
 
 const show = (revision: string, path: string): string => git("show", `${revision}:${path}`);
 
+/** The 1.0 baseline: a database on its release or later records it. Any other file stays checked. */
+const BASELINE_FILES = new Set(
+	["baseline.xml", "baseline.sql", "baseline-audit.sql"].map((file) => `${directory}1.0.0/${file}`),
+);
+
+/**
+ * Whether a database on `release` already records the 1.0 baseline: it does from the baseline's release on, without
+ * running its DDL, so the baseline is not new to it.
+ */
+function recordsBaseline(release: string): boolean {
+	const version = parseVersion(release.replace(/^v/u, ""));
+	const baseline = parseVersion(BASELINE_RELEASE.slice(1));
+	return version !== undefined && baseline !== undefined && compareVersions(version, baseline) >= 0;
+}
+
 if (import.meta.main) {
-	const usage = "Usage: node scripts/check-changelog-compatibility.ts [--base vX.Y.Z] [head]";
+	const usage =
+		"Usage: node scripts/check-changelog-compatibility.ts [--base vX.Y.Z[-rc.N]] [head]";
 	const args = process.argv.slice(2);
 	const baseIndex = args.indexOf("--base");
 	const base = baseIndex === -1 ? undefined : args.splice(baseIndex, 2)[1];
@@ -422,14 +439,22 @@ if (import.meta.main) {
 	if (rest.length > 0 || (baseIndex !== -1 && base === undefined)) {
 		throw new Error(usage);
 	}
-	const release = base ?? previousReleaseOf(head);
+	const release = base ?? latestReleaseOf(head);
 	if (release === undefined) {
-		throw new Error(`No stable release tag is merged into ${head}. ${usage}`);
+		throw new Error(`No release tag is merged into ${head}. ${usage}`);
+	}
+	if (
+		parseVersion(release.replace(/^v/u, "")) === undefined ||
+		spawnSync("git", ["rev-parse", "--verify", "--quiet", `${release}^{commit}`]).status !== 0
+	) {
+		throw new Error(`${release} is not a release tag of this repository. ${usage}`);
 	}
 	const released = new Set(files(release, directory));
 	const changelogs = new Map(
 		files(head, directory)
-			.filter((file) => !released.has(file))
+			.filter(
+				(file) => !released.has(file) && !(recordsBaseline(release) && BASELINE_FILES.has(file)),
+			)
 			.map((file) => [file, show(head, file)]),
 	);
 	const contractions = files(release, policy).length > 0 ? show(release, policy) : "";
