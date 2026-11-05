@@ -32,6 +32,8 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 
 class CommitMetadataEnrichmentServiceTest extends BaseUnitTest {
@@ -60,7 +62,8 @@ class CommitMetadataEnrichmentServiceTest extends BaseUnitTest {
                 contributorRepository,
                 graphQlClientProvider,
                 graphQlSyncCoordinator,
-                exceptionClassifier);
+                exceptionClassifier,
+                new TransactionTemplate(mock(PlatformTransactionManager.class)));
     }
 
     @Nested

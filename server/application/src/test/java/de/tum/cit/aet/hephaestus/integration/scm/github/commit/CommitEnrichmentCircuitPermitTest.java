@@ -51,6 +51,8 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 
 class CommitEnrichmentCircuitPermitTest extends BaseUnitTest {
@@ -355,7 +357,12 @@ class CommitEnrichmentCircuitPermitTest extends BaseUnitTest {
 
     private CommitMetadataEnrichmentService metadataService() {
         return new CommitMetadataEnrichmentService(
-                commitRepository, contributorRepository, provider, coordinator, exceptionClassifier);
+                commitRepository,
+                contributorRepository,
+                provider,
+                coordinator,
+                exceptionClassifier,
+                new TransactionTemplate(mock(PlatformTransactionManager.class)));
     }
 
     private void assertProbingWith(int answeredCalls) {
