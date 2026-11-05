@@ -30,7 +30,6 @@ import org.springframework.stereotype.Repository;
  * instance out.
  */
 @Repository
-@WorkspaceAgnostic("Mentor context queries take workspace ID parameters")
 public interface MentorContextQueryRepository extends JpaRepository<User, Long> {
 
     /**
@@ -367,6 +366,8 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
             @Param("pullRequestId") Long pullRequestId, Pageable page);
 
     /** Which requested reviewers of a pull request still owe it a verdict ({@link RequestedReviewer#AWAITING_REVIEW}). */
+    @WorkspaceAgnostic("Reads one pull request that MergeReadinessContentSource first resolved through the"
+            + " workspace's monitors (findAuthoredPullRequestOnInstance, findOpenAuthoredPullRequestsOnInstance)")
     @Query("""
         SELECT request.user.id
         FROM PullRequest work
@@ -378,6 +379,8 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
     Set<Long> findAwaitingReviewerIds(@Param("pullRequestId") Long pullRequestId);
 
     /** The commits the provider associates with a pull request, oldest first. */
+    @WorkspaceAgnostic("Reads one pull request that MergeReadinessContentSource first resolved through the"
+            + " workspace's monitors (findAuthoredPullRequestOnInstance, findOpenAuthoredPullRequestsOnInstance)")
     @Query("""
         SELECT c
         FROM Commit c
@@ -389,6 +392,8 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
     List<Commit> findCommitsOfPullRequest(@Param("pullRequestId") Long pullRequestId, Pageable page);
 
     /** How many of a pull request's stored commits there are, and how many have their file changes captured. */
+    @WorkspaceAgnostic("Reads one pull request that MergeReadinessContentSource first resolved through the"
+            + " workspace's monitors (findAuthoredPullRequestOnInstance, findOpenAuthoredPullRequestsOnInstance)")
     @Query("""
         SELECT COUNT(c) AS stored, COUNT(c.gitDetailsCapturedAt) AS captured
         FROM Commit c
@@ -405,6 +410,8 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
     }
 
     /** The file changes of a pull request's captured commits, a commit at a time. */
+    @WorkspaceAgnostic("Reads one pull request that MergeReadinessContentSource first resolved through the"
+            + " workspace's monitors (findAuthoredPullRequestOnInstance, findOpenAuthoredPullRequestsOnInstance)")
     @Query("""
         SELECT f
         FROM CommitFileChange f
