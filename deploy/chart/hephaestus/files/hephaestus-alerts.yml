@@ -342,6 +342,7 @@ groups:
           severity: warning
         annotations:
           summary: Conversation turns start their answer later than 10 seconds often enough to spend the monthly budget in two days
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusConversationFirstTokenBudgetBurnSlow
         expr: >-
           (1 - sum(increase(mentor_turn_first_token_seconds_bucket{job="hephaestus",le="10.0"}[6h])) / sum(increase(mentor_turn_first_token_seconds_count{job="hephaestus"}[6h]))) > 6 * 0.05
@@ -352,6 +353,7 @@ groups:
           severity: warning
         annotations:
           summary: Conversation turns start their answer later than 10 seconds often enough to spend the monthly budget in five days
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A failed or lost turn leaves a developer without an answer. A turn that the developer stopped is no failure.
       - alert: HephaestusConversationTurnsFailing
         expr: >-
@@ -363,6 +365,7 @@ groups:
           severity: warning
         annotations:
           summary: More than a fifth of the conversation turns of the last hour failed or lost their worker
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusPageExperiencePoor
         expr: >-
           sum(rate(web_vital_duration_seconds_bucket{job="hephaestus",vital="lcp",le="2.5"}[6h]))

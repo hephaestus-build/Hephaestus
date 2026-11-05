@@ -1723,6 +1723,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: Conversation turns start their answer later than 10 seconds often enough to spend the monthly budget in two days
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 10m
         alertname: HephaestusConversationFirstTokenBudgetBurnSlow
         exp_alerts: []
@@ -1733,6 +1734,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: Conversation turns start their answer later than 10 seconds often enough to spend the monthly budget in five days
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: fast first tokens do not burn the conversation budget
     interval: 1m
@@ -1784,6 +1786,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: More than a fifth of the conversation turns of the last hour failed or lost their worker
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: turns that the developer stopped do not fire
     interval: 1m
