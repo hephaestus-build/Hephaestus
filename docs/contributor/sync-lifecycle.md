@@ -70,7 +70,10 @@ There must be no rate-limit abort, GraphQL error, exception, page-cap truncation
 The node count must equal the server's own `totalCount`.
 
 Any doubt skips the entity class entirely. A partial listing is never merged with a
-previous one. Outline's equivalent: a truncated enumeration throws rather than returning a short
+previous one.
+A repository that switched its issues or its pull requests off is not a doubt.
+Its listing deletes nothing, as in any skip, but the job has no warning for it.
+The sweep's summary counts these repositories, because a nightly warning for a setting that the owner chose teaches the admin to ignore warnings. Outline's equivalent: a truncated enumeration throws rather than returning a short
 list, and a budget-exhausted pass tombstones nothing.
 
 GitLab note reconciliation uses the flat REST notes endpoint for both issues and merge requests,

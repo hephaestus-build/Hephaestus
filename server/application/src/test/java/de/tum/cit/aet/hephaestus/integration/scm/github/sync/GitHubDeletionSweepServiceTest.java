@@ -483,7 +483,9 @@ class GitHubDeletionSweepServiceTest extends BaseUnitTest {
             var outcome = service.sweepRepository(SCOPE_ID, repository(), handle);
 
             verifyNothingTombstoned();
-            assertThat(outcome.skipped()).isTrue();
+            // A feature that the owner switched off is an expected state: counted, not a warning.
+            assertThat(outcome.skipped()).isFalse();
+            assertThat(outcome.featureOff()).isEqualTo(1);
         }
 
         @Test
@@ -537,7 +539,9 @@ class GitHubDeletionSweepServiceTest extends BaseUnitTest {
 
             verifyNothingTombstoned();
             assertThat(outcome.issuesTombstoned()).isZero();
-            assertThat(outcome.skipped()).isTrue();
+            // A feature that the owner switched off is an expected state: counted, not a warning.
+            assertThat(outcome.skipped()).isFalse();
+            assertThat(outcome.featureOff()).isEqualTo(1);
         }
 
         @Test
@@ -707,5 +711,17 @@ class GitHubDeletionSweepServiceTest extends BaseUnitTest {
         pageInfo.setHasNextPage(hasNextPage);
         if (hasNextPage) pageInfo.setEndCursor("cursor");
         return pageInfo;
+    }
+
+    @Test
+    void shouldCountRepositoriesWithASwitchedOffFeatureInTheSummaryWithoutCallingThemUnverified() {
+        assertThat(GitHubDeletionSweepService.sweepSummary(new GitHubDeletionSweepService.SweepOutcome(0, 0, false, 2)))
+                .isEqualTo("Checked for deleted items: none found. Skipped 2 repositories with issues or pull requests"
+                        + " switched off");
+        assertThat(GitHubDeletionSweepService.sweepSummary(new GitHubDeletionSweepService.SweepOutcome(1, 0, false, 1)))
+                .isEqualTo("Retired 1 item deleted upstream. Skipped 1 repository with issues or pull requests switched"
+                        + " off");
+        assertThat(GitHubDeletionSweepService.sweepSummary(new GitHubDeletionSweepService.SweepOutcome(0, 0, false, 0)))
+                .isEqualTo("Checked for deleted items: none found");
     }
 }

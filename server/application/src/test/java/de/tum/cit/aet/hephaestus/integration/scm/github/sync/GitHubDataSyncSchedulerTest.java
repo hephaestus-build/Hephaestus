@@ -252,7 +252,7 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
         @Test
         void shouldSweepForDeletionsWhenReconciliation() {
             when(deletionSweepService.sweepScope(WORKSPACE_ID, handle))
-                    .thenReturn(new GitHubDeletionSweepService.SweepOutcome(2, 1, false));
+                    .thenReturn(new GitHubDeletionSweepService.SweepOutcome(2, 1, false, 0));
 
             scheduler.syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.RECONCILIATION);
 
@@ -273,7 +273,7 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
         @Test
         void shouldReportWarningsWhenSweepCouldNotVerifyEveryRepository() {
             when(deletionSweepService.sweepScope(WORKSPACE_ID, handle))
-                    .thenReturn(new GitHubDeletionSweepService.SweepOutcome(0, 0, true));
+                    .thenReturn(new GitHubDeletionSweepService.SweepOutcome(0, 0, true, 0));
 
             scheduler.syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.RECONCILIATION);
 

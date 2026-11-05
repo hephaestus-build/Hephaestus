@@ -451,7 +451,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 routeCredential,
                 subjectKeyDeriver);
         when(deletionSweepService.sweepScope(anyLong(), any()))
-                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, false));
+                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, false, 0));
     }
 
     @AfterEach
