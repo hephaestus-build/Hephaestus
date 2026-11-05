@@ -55,7 +55,7 @@ jobs:
       agent-images: ${{ steps.filter.outputs.agent-images }}
       postgres-image: ${{ steps.filter.outputs.postgres-image }}
       # Only a merge group runs the seeded upgrade, on the images that it builds.
-      queue-upgrade: ${{ github.event_name == 'merge_group' && steps.filter.outputs.database-upgrade == 'true' }}
+      queue-upgrade: ${{ (github.event_name == 'merge_group' && steps.filter.outputs.database-upgrade == 'true') }}
       kubernetes: ${{ steps.filter.outputs.kubernetes }}
       docs: ${{ steps.filter.outputs.docs }}
       ci-config: ${{ steps.filter.outputs.ci-config }}

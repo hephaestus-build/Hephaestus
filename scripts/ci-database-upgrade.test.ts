@@ -45,7 +45,7 @@ void test("a merge group whose change reaches a migration runs the release's see
 	const outputs = record(record(jobs["detect-changes"], "detect-changes").outputs, "outputs");
 	assert.match(
 		String(outputs["queue-upgrade"]),
-		/github\.event_name == 'merge_group' && steps\.filter\.outputs\.database-upgrade == 'true'/u,
+		/^\$\{\{ \(github\.event_name == 'merge_group' && steps\.filter\.outputs\.database-upgrade == 'true'\) \}\}$/u,
 	);
 
 	const upgrade = record(jobs["Database-upgrade"], "Database-upgrade");
