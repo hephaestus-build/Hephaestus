@@ -837,14 +837,12 @@ public class GitLabTeamSyncService {
 
     private void removeDeletedTeams(String groupFullPath, Set<Long> syncedNativeIds, Long providerId) {
         transactionTemplate.executeWithoutResult(status -> {
-            List<Team> existingTeams = teamRepository.findAllByOrganizationIgnoreCase(groupFullPath);
+            List<Team> existingTeams =
+                    teamRepository.findAllByOrganizationIgnoreCaseAndProviderId(groupFullPath, providerId);
             int removed = 0;
 
             for (Team team : existingTeams) {
-                // Only delete teams from the same provider
-                if (team.getProvider() != null
-                        && Objects.requireNonNull(team.getProvider().getId()).equals(providerId)
-                        && !syncedNativeIds.contains(team.getNativeId())) {
+                if (!syncedNativeIds.contains(team.getNativeId())) {
                     teamProcessor.delete(team.getNativeId(), providerId);
                     removed++;
                 }

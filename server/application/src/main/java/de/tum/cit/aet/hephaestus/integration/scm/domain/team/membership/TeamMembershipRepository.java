@@ -10,11 +10,9 @@ import org.springframework.stereotype.Repository;
 /**
  * Repository for team membership records.
  *
- * <p>Memberships are scoped through their team which carries scope through
- * the Team.organization relationship.
+ * <p>Memberships are shared mirror rows with no {@code workspace_id} (ADR 0077). They are reached through their team.
  */
 @Repository
-@WorkspaceAgnostic("Memberships scoped through team_id -> team.workspace_id")
 public interface TeamMembershipRepository extends JpaRepository<TeamMembership, TeamMembership.Id> {
     /**
      * Delete a membership by team and user IDs.
@@ -52,6 +50,8 @@ public interface TeamMembershipRepository extends JpaRepository<TeamMembership, 
             WHERE LOWER(tm.team.organization) = LOWER(:organization)
             AND tm.team.provider.id = :providerId
         """)
+    @WorkspaceAgnostic(
+            "Reconciles a workspace's members from the shared teams of the organization that the workspace is bound to")
     Set<Long> findDistinctUserIdsOfTeams(
             @Param("organization") String organization, @Param("providerId") Long providerId);
 }

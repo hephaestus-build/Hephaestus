@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.team;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -8,10 +7,11 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+/**
+ * Teams are shared mirror rows with no {@code workspace_id} (ADR 0077). Every finder is keyed by an id or by
+ * {@code provider_id}: an organization string alone matches same-named organizations on other providers.
+ */
 @Repository
-@WorkspaceAgnostic("Team has no workspace_id; the statement inspector cannot scope it. Workspace read/authorization "
-        + "paths MUST scope by (organization, provider_id) via the *AndProviderId finders below — the bare "
-        + "organization-string finders match same-named orgs across providers and leak across tenants.")
 public interface TeamRepository extends JpaRepository<Team, Long> {
     Optional<Team> findByNativeIdAndProviderId(Long nativeId, Long providerId);
 
@@ -22,13 +22,6 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
      * provider (whose {@code organization} string collides) cannot leak into path resolution.
      */
     List<Team> findAllByNameAndProviderId(String name, Long providerId);
-
-    /**
-     * Provider-agnostic organization enumeration. Sync-engine use only ({@code GitHubTeamSyncService} /
-     * {@code GitLabTeamSyncService} stale-team cleanup, where the provider is already fixed in-loop).
-     * Workspace read/auth paths MUST use {@link #findAllByOrganizationIgnoreCaseAndProviderId}.
-     */
-    List<Team> findAllByOrganizationIgnoreCase(String organization);
 
     /** Provider-scoped organization enumeration — matches the {@code (provider_id, organization)} key prefix. */
     List<Team> findAllByOrganizationIgnoreCaseAndProviderId(String organization, Long providerId);
