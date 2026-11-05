@@ -28,6 +28,8 @@ import org.slf4j.LoggerFactory;
  *   <li>Caffeine cache hit on the literal SQL — return cached decision</li>
  *   <li>Word-boundary regex: {@code workspace_id} mentioned anywhere — pass, unless the statement reads a
  *       provider mirror table, which must bind the workspace to a parameter (ADR 0077)</li>
+ *   <li>Load by the table's complete composite primary key: a WHERE clause that is only
+ *       {@code (a.k1, a.k2) IN ((?, ?), …)} over exactly the mapped key columns — pass (ADR 0004 update)</li>
  *   <li>Table-extract regex: pull table names from {@code FROM/JOIN/UPDATE/INTO} clauses,
  *       intersect with {@link WorkspaceScopedTables#scopedTables()}. Any match without
  *       a {@code workspace_id} reference anywhere in the statement is a violation.</li>
@@ -130,6 +132,8 @@ public class WorkspaceStatementInspector implements StatementInspector {
             Pattern.compile("^\\s*\"?[A-Za-z_][A-Za-z0-9_]*\"?\\s*=\\s*\\?(?:::[A-Za-z_][A-Za-z0-9_ ]*)?\\s*$");
 
     private static final Pattern COMMA_SPLIT_PATTERN = Pattern.compile(",");
+    private static final Pattern QUALIFIED_COLUMN_SPLIT_PATTERN = Pattern.compile("\\s*\\.\\s*");
+    private static final Pattern TUPLE_SPLIT_PATTERN = Pattern.compile("\\)\\s*,\\s*\\(");
 
     /** A surrogate key column, for the single-key form: {@code id} or {@code <something>_id}. */
     private static final Pattern SURROGATE_KEY_COLUMN =
@@ -182,6 +186,18 @@ public class WorkspaceStatementInspector implements StatementInspector {
                     // included (ADR 0077).
                     + "\\b\\1\\s*\\.\\s*\"?(?!workspace_id\\b)(?:id|[A-Za-z_][A-Za-z0-9_]*_id)\"?\\s*=\\s*(?:\\?|ANY\\s*\\(\\s*\\?\\s*\\))"
                     + ".*?$",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+    /**
+     * A load by the table's complete composite key, which Hibernate emits for an {@code @EmbeddedId} entity:
+     * {@code SELECT … FROM t a WHERE (a.k1, a.k2) IN ((?, ?), …)}. The whole WHERE clause is the tuple, so nothing else
+     * can widen it; {@link #keyedTupleSelect} then requires the tuple to be exactly the table's primary key. Safe for
+     * the reason the single-key load is: the caller already held each key.
+     */
+    private static final Pattern KEY_TUPLE_SELECT_PATTERN = Pattern.compile(
+            "^\\s*SELECT\\b.+?\\bFROM\\s+\"?([A-Za-z_][A-Za-z0-9_]*)\"?\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+WHERE\\s+"
+                    + "\\(([^()]+)\\)\\s+IN\\s+\\(\\s*(\\(\\s*\\?(?:\\s*,\\s*\\?)*\\s*\\)"
+                    + "(?:\\s*,\\s*\\(\\s*\\?(?:\\s*,\\s*\\?)*\\s*\\))*)\\s*\\)\\s*$",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     /** Identifies INSERTs cheaply without anchoring to whitespace shape. */
@@ -329,6 +345,11 @@ public class WorkspaceStatementInspector implements StatementInspector {
             Set<String> mirrors = mirrorTablesIn(sql);
             return mirrors.isEmpty() || bindsWorkspace(sql) ? Decision.ok() : Decision.violation(mirrors);
         }
+        // After the workspace_id check, so a key that includes the workspace is settled there without a metamodel
+        // lookup.
+        if (keyedTupleSelect(sql)) {
+            return Decision.ok();
+        }
         try {
             Set<String> unguarded = new HashSet<>();
             Matcher matcher = TABLE_REFERENCE_PATTERN.matcher(sql);
@@ -353,7 +374,25 @@ public class WorkspaceStatementInspector implements StatementInspector {
         }
     }
 
-    /** Strip dialect quotes and the schema prefix from an identifier. */
+    /** True iff {@code sql} loads rows by tuples of exactly the table's complete primary key, and by nothing else. */
+    private boolean keyedTupleSelect(String sql) {
+        if (sql.length() > FAST_PATH_SQL_LIMIT) return false;
+        Matcher select = KEY_TUPLE_SELECT_PATTERN.matcher(sql);
+        if (!select.matches() || OR_TOKEN_PATTERN.matcher(sql).find()) return false;
+        String alias = select.group(2);
+        Set<String> columns = new HashSet<>();
+        for (String column : COMMA_SPLIT_PATTERN.split(select.group(3), -1)) {
+            String[] parts = QUALIFIED_COLUMN_SPLIT_PATTERN.split(column.strip(), -1);
+            if (parts.length != 2 || !parts[0].equalsIgnoreCase(alias)) return false;
+            if (!columns.add(parts[1].replace("\"", "").toLowerCase(Locale.ROOT))) return false;
+        }
+        for (String tuple : TUPLE_SPLIT_PATTERN.split(select.group(4), -1)) {
+            if (tuple.chars().filter(c -> c == '?').count() != columns.size()) return false;
+        }
+        Set<String> key = scopedTables.primaryKeyColumns(unqualify(select.group(1)));
+        return !key.isEmpty() && columns.equals(key);
+    }
+
     private static Set<String> mirrorTablesIn(String sql) {
         Set<String> mirrors = new HashSet<>();
         Matcher matcher = TABLE_REFERENCE_PATTERN.matcher(sql);
@@ -416,6 +455,7 @@ public class WorkspaceStatementInspector implements StatementInspector {
         return Character.isLetterOrDigit(c) || c == '_' || c == '.' || c == '"';
     }
 
+    /** Strip dialect quotes and the schema prefix from an identifier. */
     private static String unqualify(String raw) {
         if (raw == null) return "";
         String s = raw.trim();

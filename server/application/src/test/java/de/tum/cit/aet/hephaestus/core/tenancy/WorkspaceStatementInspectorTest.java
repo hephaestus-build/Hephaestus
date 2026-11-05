@@ -211,6 +211,57 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         verify(reporter).report(sql, Set.of(mirror), TenancyEnforcement.LOG);
     }
 
+    // load by the complete composite key (ADR 0004 fast paths)
+
+    private static final String REVIEWERS = "pull_request_requested_reviewers";
+
+    private WorkspaceStatementInspector reviewerKeyInspector() {
+        when(scopedTables.isScoped(REVIEWERS)).thenReturn(true);
+        when(scopedTables.primaryKeyColumns(REVIEWERS)).thenReturn(Set.of("pull_request_id", "user_id"));
+        return newInspector(TenancyEnforcement.LOG);
+    }
+
+    @Test
+    void shouldAcceptALoadByTheCompleteCompositeKey() {
+        WorkspaceStatementInspector inspector = reviewerKeyInspector();
+        inspector.inspect("select rr1_0.pull_request_id,rr1_0.user_id,rr1_0.review_state from " + REVIEWERS
+                + " rr1_0 where (rr1_0.pull_request_id,rr1_0.user_id) in ((?,?))");
+        inspector.inspect("select rr1_0.review_state from " + REVIEWERS
+                + " rr1_0 where (rr1_0.user_id, rr1_0.pull_request_id) in ((?, ?), (?, ?))");
+        verify(reporter, never()).report(any(), any(), any());
+    }
+
+    @Test
+    void shouldReportALoadByPartOfTheCompositeKey() {
+        String sql = "select rr1_0.review_state from " + REVIEWERS + " rr1_0 where (rr1_0.pull_request_id) in ((?))";
+        reviewerKeyInspector().inspect(sql);
+        verify(reporter).report(sql, Set.of(REVIEWERS), TenancyEnforcement.LOG);
+    }
+
+    @Test
+    void shouldReportALoadByTheKeyAndANonKeyColumn() {
+        String sql = "select rr1_0.review_state from " + REVIEWERS
+                + " rr1_0 where (rr1_0.pull_request_id,rr1_0.user_id,rr1_0.review_state) in ((?,?,?))";
+        reviewerKeyInspector().inspect(sql);
+        verify(reporter).report(sql, Set.of(REVIEWERS), TenancyEnforcement.LOG);
+    }
+
+    @Test
+    void shouldReportALoadByTheKeyBesideADisjunction() {
+        String sql = "select rr1_0.review_state from " + REVIEWERS
+                + " rr1_0 where (rr1_0.pull_request_id,rr1_0.user_id) in ((?,?)) or rr1_0.review_state=?";
+        reviewerKeyInspector().inspect(sql);
+        verify(reporter).report(sql, Set.of(REVIEWERS), TenancyEnforcement.LOG);
+    }
+
+    @Test
+    void shouldReportATupleWhoseArityIsNotTheKeys() {
+        String sql = "select rr1_0.review_state from " + REVIEWERS
+                + " rr1_0 where (rr1_0.pull_request_id,rr1_0.user_id) in ((?,?),(?))";
+        reviewerKeyInspector().inspect(sql);
+        verify(reporter).report(sql, Set.of(REVIEWERS), TenancyEnforcement.LOG);
+    }
+
     // table extraction
 
     @Test
