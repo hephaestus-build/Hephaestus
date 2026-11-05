@@ -91,8 +91,9 @@ The saved response describes the intended route. The receipt toast confirms stor
 
 ## Routing gate and consent
 
-One function, `admitPublic(report, revision)`, guards every public write at dispatch.
-It applies to first filing, edits, retries, and promotion.
+`RoutingGate` decides whether a draft is eligible for public filing.
+`FilingService` checks current consent and the destination before dispatch.
+Maintainer promotion calls `RoutingGate.refusePromotion` and then checks repository permissions.
 The ordinary public route requires all these conditions:
 
 - The reporter allows publication for this report under the current consent event.
@@ -104,7 +105,9 @@ The ordinary public route requires all these conditions:
 - Confidence is `HIGH`.
 
 Otherwise, the report goes to the private repository, or to email when no private destination exists.
-`FEEDBACK`, praise, and questions therefore stay private.
+The prompt asks the model to classify praise and support questions as `NOT_AN_ISSUE`.
+Code does not independently identify those semantics.
+A misclassification can therefore become public when permission and the other checks allow it.
 Private issues record the first applicable reason: opted out, security, redaction, about a person, low confidence, abuse, or no draft.
 No-draft private issues use the code-redacted original text.
 
@@ -210,7 +213,9 @@ At dispatch, the commenter needs current `write` or `admin` permission on both r
 An unknown permission denies promotion. `authorAssociation` does not establish authority.
 
 Promotion requires reporter permission and a valid redacted draft.
-It overrides confidence only, never consent, security, the risk latch, or abuse.
+It overrides confidence only. The draft must remain an actionable, coherent `ISSUE`.
+It never overrides consent, security, the risk latch, or abuse.
+
 It creates a public issue with its own durable attempt marker, then closes the private issue with the public link.
 It adds no private backlink to the public issue.
 The no-draft fallback text cannot be promoted.
@@ -279,7 +284,7 @@ The current drafter has no source checkout or execution tools.
 It receives the release name stored with the report, the attached route, and a public issue-title snapshot.
 It must not claim a reproduction, root cause, relevant file, or fixed release from those inputs alone.
 The selected report kind is a hint: an actionable bug reported as General can pass the same public gate as Bug.
-Praise and support questions remain non-issues and take the private route.
+The model classification limits are described under [Routing gate and consent](#routing-gate-and-consent).
 
 A source-aware investigation needs the same capture boundary as practice reviews:
 

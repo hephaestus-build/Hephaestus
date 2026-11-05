@@ -128,10 +128,16 @@ async function axeViolations(page: Page, { overlay = false } = {}): Promise<stri
 async function expectNoNarrowOverflow(page: Page) {
 	for (const width of NARROW_WIDTHS) {
 		await page.setViewportSize({ width, height: 256 });
-		const overflow = await page.evaluate(
-			() => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-		);
-		expect(overflow, `scrolls sideways at ${width}px`).toBeLessThanOrEqual(0);
+		// Media-query subscribers can render after the viewport change returns.
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(
+						() => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+					),
+				{ message: `scrolls sideways at ${width}px` },
+			)
+			.toBeLessThanOrEqual(0);
 	}
 }
 
@@ -443,23 +449,31 @@ base.describe("complete processes, keyboard only", () => {
 		await expect(page.getByRole("heading", { level: 2, name })).toBeHidden();
 	});
 
-	signedInTest("an idea is sent to the instance admins", async ({ page }) => {
+	signedInTest("feedback is saved and reachable from the header", async ({ page }) => {
 		await open(page, "/w/e2e/admin/members");
-		await page.getByRole("banner").getByRole("button", { name: "Product feedback" }).focus();
-		await page.keyboard.press("Enter");
-		await page.getByRole("menuitem", { name: "Share an idea" }).focus();
+		await page
+			.getByRole("banner")
+			.getByRole("button", { name: "Send feedback about Hephaestus" })
+			.focus();
 		await page.keyboard.press("Enter");
 
-		const dialog = page.getByRole("dialog", { name: "Share an idea" });
+		const dialog = page.getByRole("dialog", { name: "Send feedback" });
 		await expect(dialog).toBeVisible();
 		await tabTo(page, dialog.getByRole("textbox"));
-		await page.keyboard.type("Let the keyboard reach every chart tooltip.");
+		const message = `Let the keyboard reach every chart tooltip. ${randomUUID()}`;
+		await page.keyboard.type(message);
 		await tabTo(page, dialog.getByRole("button", { name: /^Send/u }));
 		await page.keyboard.press("Enter");
 
-		await expect(dialog.getByText("The admins of this instance have it.")).toBeVisible();
-		await expect(dialog.getByRole("button", { name: "Done" })).toBeFocused();
-		await page.keyboard.press("Enter");
 		await expect(dialog).toBeHidden();
+		await expect(page.getByText("Report received", { exact: true })).toBeVisible();
+		await expect(page.getByText("Saved for your instance admins.", { exact: true })).toBeVisible();
+
+		await page.getByRole("banner").getByRole("button", { name: "Feedback options" }).focus();
+		await page.keyboard.press("Enter");
+		await page.getByRole("menuitem", { name: "Your reports" }).focus();
+		await page.keyboard.press("Enter");
+		await expect(page.getByRole("heading", { level: 1, name: "Your reports" })).toBeVisible();
+		await expect(page.getByText(message, { exact: true })).toBeVisible();
 	});
 });

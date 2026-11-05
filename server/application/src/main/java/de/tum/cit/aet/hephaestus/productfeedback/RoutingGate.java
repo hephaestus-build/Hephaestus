@@ -52,7 +52,7 @@ final class RoutingGate {
     }
 
     /**
-     * A maintainer's {@code /publish} overrides only the quality conditions: the confidence. It never
+     * A maintainer's {@code /publish} overrides confidence only. The draft must still describe a coherent issue. It never
      * overrides consent, security, the risk latch or abuse, and it needs a draft.
      */
     static @Nullable FilingReason refusePromotion(boolean allowPublic, @Nullable Draft draft, boolean latched) {
@@ -61,6 +61,7 @@ final class RoutingGate {
         if (draft.disposition() == Draft.Disposition.SECURITY) return FilingReason.SECURITY;
         if (latched || draft.aboutNamedPerson()) return FilingReason.REDACTION;
         if (draft.abuse()) return FilingReason.ABUSE;
+        if (draft.disposition() != Draft.Disposition.ISSUE || !draft.coherent()) return FilingReason.LOW_CONFIDENCE;
         return null;
     }
 

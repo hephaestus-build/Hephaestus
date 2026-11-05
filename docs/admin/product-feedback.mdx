@@ -85,7 +85,10 @@ Security, blocking redaction, or a report about a named person sets a persistent
 An edit or retry cannot clear it.
 Without a draft, the private issue uses the original report after code redaction.
 The public route never uses this fallback text.
-Praise, questions, and **Send feedback** reports stay private.
+
+The model is instructed to classify praise and support questions as non-issues.
+A misclassified report can still become public if the reporter allowed it and the other checks pass.
+The selected report kind alone does not keep it private.
 
 The app uses Bug or Feature issue types where available. It adds no labels.
 A possible duplicate becomes a new issue with a reference to the possible match.
