@@ -7,7 +7,7 @@ import path from "node:path";
 import { after, test } from "node:test";
 import { setTimeout } from "node:timers/promises";
 
-import { deadlineReport, descendants, exitStatus } from "./ci-deadline.ts";
+import { annotation, deadlineReport, descendants, exitStatus, innermost } from "./ci-deadline.ts";
 
 const directory = mkdtempSync(path.join(tmpdir(), "ci-deadline-"));
 after(() => rmSync(directory, { recursive: true, force: true }));
@@ -44,7 +44,10 @@ void test("a task that hangs past its deadline is named in the step's output and
 	);
 	assert.equal(result.status, 124, result.stderr);
 	assert.ok(Date.now() - started < 30_000);
-	assert.match(result.stderr, /::error::The step reached its deadline of 2 s/u);
+	assert.match(
+		result.stderr,
+		/::error title=Quality gates hit their deadline::The step reached its deadline of 2 s/u,
+	);
 	assert.ok(result.stderr.includes(marker), result.stderr);
 	const written = readFileSync(summary, "utf8");
 	assert.match(written, /### Quality gates hit their deadline/u);
@@ -74,4 +77,37 @@ void test("a task killed by a signal reports it as a shell does", () => {
 	assert.equal(exitStatus(3, null), 3);
 	assert.equal(exitStatus(null, "SIGKILL"), 137);
 	assert.equal(exitStatus(null, "SIGTERM"), 143);
+});
+
+void test("the report's first line names the commands the task waits on, and is never empty", () => {
+	// What run 41988545096 listed: the vp task runner, the gate, and the promtool container it waited on.
+	const listed = [
+		{
+			pid: 2750,
+			ppid: 2700,
+			elapsed: "15:00",
+			command: "node vite-plus/dist/bin.js run ci:tooling",
+		},
+		{ pid: 9114, ppid: 2750, elapsed: "13:31", command: "node scripts/check-alert-rules.ts" },
+		{
+			pid: 9598,
+			ppid: 9114,
+			elapsed: "13:26",
+			command: "docker run --entrypoint promtool prom/prometheus test rules",
+		},
+	];
+	assert.deepEqual(
+		innermost(listed).map(({ pid }) => pid),
+		[9598],
+	);
+	const [headline = ""] = deadlineReport(900, listed).split("\n");
+	assert.match(
+		headline,
+		/Still running: docker run --entrypoint promtool prom\/prometheus test rules \(13:26\)$/u,
+	);
+	assert.match(deadlineReport(900, []).split("\n")[0] ?? "", /no process of its task was found/u);
+});
+
+void test("an annotation carries the whole multi-line report", () => {
+	assert.equal(annotation("50% done\nnext\r\nline"), "50%25 done%0Anext%0D%0Aline");
 });
