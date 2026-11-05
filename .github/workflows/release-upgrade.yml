@@ -2,6 +2,8 @@ name: Release / Seeded upgrade
 
 on:
   workflow_call:
+    # A release passes all four; the merge group passes none, so the resolver takes the last release
+    # from the tags and the images of this commit.
     inputs:
       previous-version:
         description: >-
@@ -9,16 +11,16 @@ on:
           version from security/release-identities.json — releases published before the
           repository transfer stay in the old GHCR namespace forever (issue #1599).
         type: string
-        required: true
+        required: false
       candidate-application-image:
         type: string
-        required: true
+        required: false
       postgres-image:
         type: string
-        required: true
+        required: false
       candidate-source-sha:
         type: string
-        required: true
+        required: false
   workflow_dispatch:
     inputs:
       previous-tag:

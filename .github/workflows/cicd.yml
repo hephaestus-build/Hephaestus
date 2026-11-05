@@ -54,6 +54,8 @@ jobs:
       api-clients: ${{ steps.filter.outputs.api-clients }}
       agent-images: ${{ steps.filter.outputs.agent-images }}
       postgres-image: ${{ steps.filter.outputs.postgres-image }}
+      # Only a merge group runs the seeded upgrade, on the images that it builds.
+      queue-upgrade: ${{ (github.event_name == 'merge_group' && steps.filter.outputs.database-upgrade == 'true') }}
       kubernetes: ${{ steps.filter.outputs.kubernetes }}
       docs: ${{ steps.filter.outputs.docs }}
       ci-config: ${{ steps.filter.outputs.ci-config }}
@@ -496,6 +498,12 @@ jobs:
               - 'docker/agents/**'
             postgres-image:
               - 'docker/postgres/**'
+            # What changes an upgrade from the last release: a migration and the baseline synchronization.
+            # Both are application-server sources, so the merge group builds the image that the seeded
+            # upgrade tests. A change to the test alone runs at the release and weekly.
+            database-upgrade:
+              - 'server/application/src/main/resources/db/changelog/**'
+              - 'server/application/src/main/java/de/tum/cit/aet/hephaestus/core/database/BaselineSynchronization.java'
             # What a cluster install of the chart exercises: the chart, its script, the worker's sandbox
             # runtime and what it binds, and the agent image that its sandboxes run. A change to the
             # one-host platform files runs it too; the k3s smoke itself runs only at a release or by
@@ -1043,7 +1051,8 @@ jobs:
       webapp_changed: ${{ (needs.detect-changes.outputs.webapp-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       agent_images_changed: ${{ (needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
-      postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
+      # A merge group aliases nothing, so the seeded upgrade needs this group's own PostgreSQL image.
+      postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true' || needs.detect-changes.outputs.queue-upgrade == 'true') && 'true' || 'false' }}
       alias_base: ${{ needs.detect-changes.outputs.alias-base }}
       dockerfile_images: ${{ (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false' }}
       application_server_image: ${{ (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false' }}
@@ -1098,6 +1107,21 @@ jobs:
       arch: ${{ matrix.arch }}
       queue: ${{ needs.Kubernetes-chart.outputs.queue == 'true' }}
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
+
+  # A migration or the baseline synchronization changes what an upgrade from the last release does.
+  # The merge group runs the release's seeded upgrade on the images it builds, so a migration that
+  # breaks the upgrade fails here and not at the next release. Without inputs, the reusable workflow
+  # takes the last release from the tags and this commit's images.
+  Database-upgrade:
+    name: "Seeded upgrade from the last release"
+    needs: [detect-changes, Docker]
+    if: >-
+      !cancelled() && needs.Docker.result == 'success' &&
+      needs.detect-changes.outputs.queue-upgrade == 'true' && needs.detect-changes.outputs.publishable == 'true'
+    uses: ./.github/workflows/release-upgrade.yml
+    permissions:
+      contents: read
+      packages: read
 
   # Validate the built images before release; signatures and attestations are added at publication.
   # Every release candidate needs evidence for its own tree, including a merge group's aggregate.
@@ -1196,6 +1220,7 @@ jobs:
         Kubernetes-chart,
         Kubernetes,
         Release-preflight,
+        Database-upgrade,
       ]
     if: always()
     steps:
@@ -1224,6 +1249,7 @@ jobs:
           echo "Chart:          ${{ needs.Kubernetes-chart.result }}"
           echo "Kubernetes:     ${{ needs.Kubernetes.result }}"
           echo "Preflight:      ${{ needs.Release-preflight.result }}"
+          echo "Upgrade:        ${{ needs.Database-upgrade.result }}"
           echo "Release candidate: ${{ needs.detect-changes.outputs.release-candidate == 'true' }}"
 
           # Reporting uses only native results. A local summary write cannot change their verdict.
@@ -1258,6 +1284,13 @@ jobs:
 
           if [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
             echo "status=cancelled" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # A skipped upgrade is a missing verdict for a merge group that changes a migration.
+          if [[ "${{ needs.detect-changes.outputs.queue-upgrade == 'true' && needs.Database-upgrade.result != 'success' }}" == "true" ]]; then
+            echo "This merge group changes a migration and requires a successful seeded upgrade; it was '${{ needs.Database-upgrade.result }}'."
+            echo "status=failure" >> $GITHUB_OUTPUT
             exit 1
           fi
 
@@ -1448,6 +1481,14 @@ jobs:
     name: "Fail fast: Kubernetes"
     needs: [Kubernetes]
     if: ${{ always() && github.event_name == 'merge_group' && needs.Kubernetes.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+  fail-fast-Database-upgrade:
+    name: "Fail fast: Database-upgrade"
+    needs: [Database-upgrade]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.Database-upgrade.result == 'failure' }}
     uses: ./.github/workflows/fail-fast.yml
     permissions:
       actions: write # cancel this run

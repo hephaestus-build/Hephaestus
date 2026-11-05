@@ -3516,12 +3516,13 @@ void describe("CI contract", () => {
 			onVersionBranch: boolean,
 			needs = JSON.stringify(jobsOf({ ...green, ...results })),
 			summary?: string,
+			queueUpgrade = false,
 		) => {
 			const run = await runStep(
 				render(
 					evaluate,
 					{ ...green, ...results },
-					{ "release-candidate": String(onVersionBranch) },
+					{ "release-candidate": String(onVersionBranch), "queue-upgrade": String(queueUpgrade) },
 				),
 				{
 					NEEDS: needs,
@@ -3533,6 +3534,17 @@ void describe("CI contract", () => {
 		};
 		const passes = { failed: false, outputs: { status: "success" } };
 		const fails = { failed: true, outputs: { status: "failure" } };
+
+		// A merge group that changes a migration needs its seeded upgrade to have run and passed.
+		assert.deepEqual(
+			await verdict({ "Database-upgrade": "skipped" }, false, undefined, undefined, true),
+			fails,
+		);
+		assert.deepEqual(
+			await verdict({ "Database-upgrade": "success" }, false, undefined, undefined, true),
+			passes,
+		);
+		assert.deepEqual(await verdict({ "Database-upgrade": "skipped" }, false), passes);
 
 		// A job abandoned before it concluded is neither a failure nor a cancellation, and it is not a
 		// success or a skip either.
