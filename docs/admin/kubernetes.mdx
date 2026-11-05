@@ -1733,7 +1733,9 @@ Do not use `--rollback-on-failure`: a rollback can restart old roles against a c
 Pause deployment automation that can change the release until this procedure is complete.
 
 Before the first phase, record the current chart, profile, site values and all three replica counts.
-Back up PostgreSQL and JetStream, verify the restore, and keep the matching signed release lock.
+After the first phase, back up PostgreSQL and JetStream, verify the restore, and keep the matching signed release lock.
+With every writer stopped, the backup holds every write before the outage.
+Then change the site values for the new release: the chart of the current release can refuse a value that only the new release knows.
 Verify the new release's chart before you use it.
 Each phase is a separate `helm upgrade` with that phase's chart, profile and site values:
 

@@ -1,61 +1,156 @@
 ---
-id: upgrade-to-1-0
-title: Upgrade from 0.x to 1.0
-description: The path from a 0.x release to 1.0, and the operator actions of the breaking changes after v0.94.7.
+title: Upgrade to 1.0
+description: Move a Helm installation from a 1.0 release candidate or from 0.x to 1.0.0, with every role stopped during the migration.
+page_type: how-to
 ---
 
-1.0 is the first release with the 1.x upgrade guarantee.
-After 1.0, any 1.x release upgrades to any later 1.y release without an intermediate release, as the [compatibility policy](./compatibility-policy#upgrade-guarantee) states.
-Before 1.0, a release can require action.
-This page collects the actions on the way from a 0.x release to 1.0.
-
-[Upgrade](./upgrade) owns the procedure itself: the rehearsal on a copy, the upgrade, failed-migration recovery, and rollback.
-The [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) owns the full instructions of each change.
+Use this page to move an installation to 1.0.0.
+1.0.0 is the first release with the 1.x upgrade guarantee.
+After it, any 1.x release upgrades to any later 1.y release, as the [compatibility policy](./compatibility-policy#upgrade-guarantee) states.
+The upgrade to 1.0.0 stops every role while the migration runs.
+[Upgrade](./upgrade) owns the general procedure, the rehearsal on a copy, and failed-migration recovery.
 
 ## Before you start
 
-1. Find the release that the host runs on **Instance administration → Overview**.
-2. Follow the [database baseline prerequisites](./compatibility-policy#database-baseline-prerequisites). A database on 0.x goes through 1.0.0-rc.1, whose [versioned instructions](https://github.com/hephaestus-build/Hephaestus/blob/v1.0.0-rc.1/docs/admin/upgrade-to-1-0.mdx) describe the cutover.
-3. Read every migration guide entry between your release and 1.0.
-4. Make a database backup and verify that it restores, as [Backup & restore](./backup-restore) describes.
-5. Keep the configuration of your current release with the backup.
-   A Compose installation keeps its `.env` file. After the move to the chart, keep the signed joint lock, `site.yaml` and Secret.
+Find the release that the host runs on **Instance administration → Overview**. Then find your path:
+
+| Installed release | Path to 1.0.0 |
+| --- | --- |
+| 0.x on Docker Compose | Upgrade on Compose to `0.95.0`. Move that release to the chart with [Move from Compose to the Helm chart](./compose-to-kubernetes). Then continue as for 0.95.x on the chart. |
+| 0.95.x on the Helm chart | Install 1.0.0-rc.1 with its [versioned upgrade instructions](https://github.com/hephaestus-build/Hephaestus/blob/v1.0.0-rc.1/docs/admin/upgrade-to-1-0.mdx). Then follow this page. |
+| 1.0.0-rc.1 or a later release candidate | Follow this page. |
+
+1.0.0 does not hold the 0.x migrations.
+A 0.x database goes through 1.0.0-rc.1, and the migration of 1.0.0 refuses it, as [Troubleshooting](#troubleshooting) describes.
+
+You need:
+
+- `helm`, `kubectl` and `cosign`, with access to the release namespace.
+- The verified chart and the signed joint lock of the release that the host runs. Phase 1 and a rollback use them.
+- The chart and the signed joint lock of 1.0.0, verified as [Independent verification](./release-image-lock#independent-verification) describes.
+- An off-host place for a PostgreSQL and JetStream backup.
+- An outage. No role runs from phase 1 until the new roles are ready in phase 3.
+
+Read the [release notes](https://github.com/hephaestus-build/Hephaestus/releases) and the [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) entries of every release after yours, up to 1.0.0.
+Some entries change the site values, for example the NATS memory size and `worker.sandbox.reviewMemory` in 1.0.0-rc.3.
 
 :::caution[CAUTION: Stop every role]
-Several changes on the way to 1.0 need every runtime role stopped before the migration.
-A server, worker, or webhook server of the old release fails when it reads the new schema or the data that the new release writes.
-Stop the server, worker and webhook roles as [Stopped schema upgrades](./kubernetes#stopped-schema-upgrades) phase 1 describes.
+A release candidate cannot run on the 1.0.0 schema.
+From 1.0.0-rc.1, the migration drops a column and replaces a unique constraint that 1.0.0-rc.1 uses.
+From a later candidate, the upgrade skips a release.
+Only the previous release can run beside a new schema.
+Do not use `--rollback-on-failure`, because a rollback can restart old roles on the changed schema.
 :::
 
-## Move to the Helm chart
+## Upgrade
 
-1.0 supports only the Helm chart, as [Supported deployment](./compatibility-policy#supported-deployment) states.
-Change the deployment or the release, never both in one step.
-First, upgrade on Compose to `0.95.0`.
-Then use [Move from Compose to the Helm chart](./compose-to-kubernetes) to move that version.
-Apply release `0.95.1` and install its reconciler tooling before upgrading to the chart-only release.
-The procedure requires a backup and a verified restore before the move.
+The commands use the release and namespace `hephaestus`, the `small` profile and `site.yaml`. Use your own names, profile and values file.
 
-## Breaking changes after v0.94.7
+1. If the host uses [pull-based deployment](./pull-based-deployment#operating-it), stop the reconcile timer and wait until `hephaestus-reconcile.service` is inactive.
+   From a release candidate to 1.0.0, the reconciler stays in one major version. It applies a rolling upgrade and does not stop the roles.
+   Keep the timer stopped until step 10.
+2. Record the current Helm revision with `helm history hephaestus -n hephaestus`.
+   Record the replica counts of the server, the workers and the webhook role.
+   Save a copy of `site.yaml`.
+3. Stop every role with the chart of the current release, as phase 1 of [Stopped schema upgrades](./kubernetes#stopped-schema-upgrades) describes:
 
-The releases after v0.94.7 include these changes.
-Each row names the action and the migration guide entry that owns the procedure.
-The migration guide also has the entries of the releases before v0.94.7.
+   ```bash
+   helm upgrade hephaestus "chart-$CURRENT/hephaestus" -n hephaestus --reuse-values \
+     --set server.replicas=0 --set worker.replicas=0 --set webhook.replicas=0 \
+     --set migration.enabled=false --wait=watcher --timeout 20m
+   ```
 
-| Change | Operator action | Migration guide entry |
-| --- | --- | --- |
-| Hephaestus keeps one conversation for each developer in each workspace. The upgrade deletes the earlier Hephaestus chat history. | Stop every role before the upgrade, then follow the entry. | Stop every role for the conversation upgrade, which deletes Hephaestus chat history |
-| Production instance administration requires passkeys. | Before the upgrade, read [Admin passkeys](./passkeys). After the upgrade, enroll two passkeys and save the recovery codes. Set the passkey origin and RP ID if the webapp uses another origin. | Admin passkey protection |
-| Delayed reviews use the work that was saved when their event was recorded. | Stop every role, back up the database, and deploy matching server, worker, and webhook images. | Deploy matching runtime roles for retained review evidence |
-| Logs use the Elastic Common Schema, and Sentry is removed. | Remove `SENTRY_DSN`. Update log queries, alerts, and dashboards for the new field names. | Update log queries for the new log format and remove `SENTRY_DSN` |
-| The webapp container runs as an unprivileged user on port 8080. | Only if you run the webapp image outside the Helm chart: send traffic to port 8080 and mount a writable `/tmp/hephaestus-webapp`. | Send webapp traffic to port 8080 |
-| The practice comparison API responses change. | Update clients that read `/practices/workspace-overview` or `/practices/tiles`. | Update practice comparison API clients |
-| The 21 API operations that 0.95.0 deprecated are removed. | Before the upgrade, replace each removed operation in your API clients and scripts. | Update API clients that call the removed operations |
-| Sandboxes run only on Kubernetes. The unused internet-access snapshot field and Docker-only sizing settings are removed. | Stop every role, take a verified backup, and use the Helm chart. Remove the retired keys listed in the migration guide. | Stop every role before the Kubernetes-only sandbox cutover |
-| Compose forwards three item event ledger settings and the backfill item limit under their current names. Before, the application ignored the old names. | If you set `SIGNAL_LEDGER_*` or `PRACTICE_REVIEW_BACKFILL_MAX_ARTIFACTS` in `.env`, rename them to `ITEM_EVENT_LEDGER_*` and `PRACTICE_REVIEW_BACKFILL_MAX_ITEMS`. | None. The release notes describe it. |
+   Wait until no server, worker, webhook or migration Pod is left, including Pods that stop.
+   `kubectl get pods,jobs -n hephaestus-sandboxes` must show no Pod and no Job.
+   PostgreSQL and NATS keep running.
+4. Back up PostgreSQL and JetStream, and verify that the backup restores, as [Backup & restore](./backup-restore) describes.
+   With every writer stopped, the backup holds every write up to the outage.
+   Keep the backup with the signed joint lock and the saved `site.yaml` of the current release.
+5. Change `site.yaml` for 1.0.0, as the migration guide entries that you read in [Before you start](#before-you-start) tell you.
+   Do this after phase 1.
+   The chart of the current release can refuse a value that only 1.0.0 knows.
+6. Render the 1.0.0 chart with your profile, `site.yaml` and the 1.0.0 lock.
+   `helm template` must end with exit code 0 and print no error.
+7. Run the migration with the 1.0.0 chart, as phase 2 of [Stopped schema upgrades](./kubernetes#stopped-schema-upgrades) describes:
 
-## After the upgrade
+   ```bash
+   helm upgrade hephaestus "chart-1.0.0/hephaestus" -n hephaestus \
+     -f "chart-1.0.0/hephaestus/profiles/small.yaml" -f site.yaml \
+     --set server.replicas=0 --set worker.replicas=0 --set webhook.replicas=0 \
+     --set migration.enabled=true --wait=watcher --wait-for-jobs --timeout 20m
+   ```
 
-1. Open **Instance administration → Overview** and read **Configuration readiness**.
-2. Resolve each item under **Action required**.
-3. Run one practice review in **Approve first** mode, as [First steps § 7](./first-steps#7-first-practice-review) describes.
+   Save the log of the migration Job, and wait for its `Complete` condition.
+   After this step, the database has the 1.0.0 schema.
+   Only a restore of the backup from step 4 returns to the previous release.
+8. Read the migration log.
+   From 1.0.0-rc.1, it contains `database.migration.baseline_synchronized`.
+   The migration recorded the 1.0 baseline without a change to the schema.
+   Then it ran the later change sets.
+   From a later release candidate, the baseline is already recorded, and the event does not appear.
+   The log must contain no `database.migration.baseline_refused_*` event and no line at level `ERROR`.
+9. Start the roles with the 1.0.0 chart and the replica counts from step 2, as phase 3 describes.
+   Wait until the server, the workers, the webhook role and the webapp are ready.
+10. If the host uses pull-based deployment, promote 1.0.0 to the host's environment. Then start the reconcile timer.
+    The next run applies the same release. Its migration Job has no change set to run.
+
+## Check that it worked
+
+1. **Instance administration → Overview** shows 1.0.0. Resolve each item under **Action required** in **Configuration readiness**.
+2. `kubectl get pods -n hephaestus` shows every Pod ready, with no restart.
+3. The migration Job of step 7 has the condition `Complete`.
+4. A new provider event reaches the server. For example, push a commit to a monitored repository and see its activity in the workspace.
+5. Run one practice review in **Approve first** mode, as [First steps § 7](./first-steps#7-first-practice-review) describes.
+   The review completes and its feedback waits for approval.
+6. Ask Hephaestus one question in a conversation. The answer arrives.
+
+## Undo
+
+Before step 7 completes, the schema has not changed.
+Delete any migration Job of 1.0.0 and wait until its Pod is gone.
+Then run `helm rollback hephaestus <revision>` with the revision from step 2, and start the reconcile timer if you stopped it.
+
+After step 7 completes, there is no in-place downgrade.
+Stop every role, restore the backup from step 4, and start the previous release with its signed joint lock, as [Rollback](./upgrade#rollback) describes.
+With pull-based deployment, promote the previous release with **allow-rollback** before you start the timer.
+A restore loses every write after step 9.
+
+## Troubleshooting
+
+When the migration refuses the database, it changes nothing.
+The Job fails, and the current release can start again: follow [Undo](#undo) for a refusal before step 7 completes.
+
+### `Database prerequisites failed. PostgreSQL 18 is required.`
+
+The database holds no 1.0.0-rc.1 history: a release before 1.0.0-rc.1 created it, or it runs another PostgreSQL major version.
+
+1. Start the current release again, as [Undo](#undo) describes.
+2. Follow the path of your release in [Before you start](#before-you-start).
+
+### `database.migration.baseline_refused_later_build`
+
+A build after 1.0.0-rc.1 ran on this database before the 1.0 baseline existed, for example a commit of `main`.
+The baseline describes only the 1.0.0-rc.1 schema, so the migration cannot judge this schema.
+The log names the change sets of that build.
+
+1. Restore the backup that you took on 1.0.0-rc.1, and start 1.0.0-rc.1.
+2. Upgrade from 1.0.0-rc.1 with this page.
+
+If you have no such backup, contact the maintainers with the log line.
+
+### `database.migration.baseline_refused_schema`
+
+The schema of a database on 1.0.0-rc.1 differs from the schema of a new 1.0.0-rc.1 installation.
+The log lists each difference, up to 200. A minus sign marks what 1.0.0-rc.1 has, and a plus sign marks what this database has.
+An extension that you added, such as `pg_stat_statements`, does not count as a difference.
+
+1. The list can name only the tables of the former intelligence service.
+   Back them up and drop them.
+   The migration guide entry **Install 1.0.0-rc.1 before you upgrade a database from 0.x** gives the commands.
+   Then do steps 7 to 10 again.
+2. For any other difference, start 1.0.0-rc.1 again, as [Undo](#undo) describes.
+   Then contact the maintainers with the list.
+
+### The migration Job fails for another reason
+
+Keep every role stopped, and follow [If migration fails](./upgrade#if-migration-fails).
