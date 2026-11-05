@@ -3,8 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -22,7 +20,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecisi
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
@@ -80,19 +77,9 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             IssueRepository issueRepository,
             UserRepository userRepository,
             LabelRepository labelRepository,
-            RepositoryRepository repositoryRepository,
-            ScopeIdResolver scopeIdResolver,
-            RepositoryScopeFilter repositoryScopeFilter,
             GitLabProperties gitLabProperties,
             ApplicationEventPublisher eventPublisher) {
-        super(
-                gitLabUserService,
-                userRepository,
-                labelRepository,
-                repositoryRepository,
-                scopeIdResolver,
-                repositoryScopeFilter,
-                gitLabProperties);
+        super(gitLabUserService, userRepository, labelRepository, gitLabProperties);
         this.pullRequestRepository = pullRequestRepository;
         this.reviewRepository = reviewRepository;
         this.milestoneRepository = milestoneRepository;

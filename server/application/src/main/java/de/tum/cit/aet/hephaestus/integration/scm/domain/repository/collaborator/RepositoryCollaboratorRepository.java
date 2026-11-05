@@ -10,10 +10,9 @@ import org.springframework.data.repository.query.Param;
 /**
  * Repository for repository collaborator records.
  *
- * <p>All queries filter by repository ID which inherently carries scope
- * through the Repository -> Organization relationship chain.
+ * <p>Collaborators are shared mirror rows of a repository. Reads key on the repository, except
+ * {@code findByOrgLoginAndPermissions}, which names its own reason.
  */
-@WorkspaceAgnostic("Collaborators scoped through repository_id -> repository.workspace_id")
 public interface RepositoryCollaboratorRepository
         extends JpaRepository<RepositoryCollaborator, RepositoryCollaborator.Id> {
     @Query("SELECT c FROM RepositoryCollaborator c WHERE c.repository.id = :repositoryId AND c.user.id = :userId")
@@ -22,6 +21,8 @@ public interface RepositoryCollaboratorRepository
 
     List<RepositoryCollaborator> findByRepository_Id(Long repositoryId);
 
+    @WorkspaceAgnostic(
+            "GitLab team sync reads the collaborators of one organization's shared repositories, taken from the sync")
     @Query("""
             SELECT DISTINCT c FROM RepositoryCollaborator c
             JOIN FETCH c.user

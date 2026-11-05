@@ -1,8 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
@@ -12,7 +10,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.BaseGitLabProcessor;
@@ -65,23 +62,13 @@ public class GitLabDiffNoteWebhookProcessor extends BaseGitLabProcessor {
             GitLabUserService gitLabUserService,
             UserRepository userRepository,
             LabelRepository labelRepository,
-            RepositoryRepository repositoryRepository,
-            ScopeIdResolver scopeIdResolver,
-            RepositoryScopeFilter repositoryScopeFilter,
             GitLabProperties gitLabProperties,
             PullRequestRepository pullRequestRepository,
             GitLabPullRequestReviewThreadProcessor threadProcessor,
             GitLabPullRequestReviewCommentProcessor reviewCommentProcessor,
             PullRequestReviewCommentRepository reviewCommentRepository,
             GitLabReviewReconciler reviewReconciler) {
-        super(
-                gitLabUserService,
-                userRepository,
-                labelRepository,
-                repositoryRepository,
-                scopeIdResolver,
-                repositoryScopeFilter,
-                gitLabProperties);
+        super(gitLabUserService, userRepository, labelRepository, gitLabProperties);
         this.pullRequestRepository = pullRequestRepository;
         this.threadProcessor = threadProcessor;
         this.reviewCommentProcessor = reviewCommentProcessor;

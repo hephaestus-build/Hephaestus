@@ -1,14 +1,11 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.milestone;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
@@ -62,21 +59,11 @@ public class GitLabMilestoneProcessor extends BaseGitLabProcessor {
             GitLabUserService gitLabUserService,
             UserRepository userRepository,
             LabelRepository labelRepository,
-            RepositoryRepository repositoryRepository,
-            ScopeIdResolver scopeIdResolver,
-            RepositoryScopeFilter repositoryScopeFilter,
             GitLabProperties gitLabProperties,
             MilestoneRepository milestoneRepository,
             IssueRepository issueRepository,
             ApplicationEventPublisher eventPublisher) {
-        super(
-                gitLabUserService,
-                userRepository,
-                labelRepository,
-                repositoryRepository,
-                scopeIdResolver,
-                repositoryScopeFilter,
-                gitLabProperties);
+        super(gitLabUserService, userRepository, labelRepository, gitLabProperties);
         this.milestoneRepository = milestoneRepository;
         this.issueRepository = issueRepository;
         this.eventPublisher = eventPublisher;

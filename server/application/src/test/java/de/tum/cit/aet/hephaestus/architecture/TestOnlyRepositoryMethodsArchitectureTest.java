@@ -12,6 +12,8 @@ import com.tngtech.archunit.lang.ArchRule;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -37,7 +39,10 @@ class TestOnlyRepositoryMethodsArchitectureTest extends HephaestusArchitectureTe
             new TestOnlyMethod(RepositoryRepository.class, "count"),
             new TestOnlyMethod(RepositoryRepository.class, "deleteAll"),
             new TestOnlyMethod(RepositoryRepository.class, "findByNameWithOwner", String.class),
-            new TestOnlyMethod(PullRequestReviewRepository.class, "findAll"));
+            new TestOnlyMethod(PullRequestReviewRepository.class, "findAll"),
+            new TestOnlyMethod(LabelRepository.class, "count"),
+            new TestOnlyMethod(MilestoneRepository.class, "count"),
+            new TestOnlyMethod(MilestoneRepository.class, "findAll"));
 
     @Test
     void shouldCallNoTestOnlyRepositoryMethodFromProductionCode() {

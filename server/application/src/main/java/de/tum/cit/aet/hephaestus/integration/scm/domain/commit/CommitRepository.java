@@ -16,14 +16,12 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Workspace-agnostic: commits are scoped through {@code repository_id} (a
- * {@link de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository} belongs to exactly
- * one workspace), not via a direct {@code workspace_id} column. All custom queries take
- * a {@code repositoryId} parameter; Hibernate-emitted entity load/save SQL is allowed by
- * the PK-only DML carve-out in {@code WorkspaceStatementInspector}.
+ * Commits are shared mirror rows: a {@link de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository}
+ * can be monitored by several workspaces, and {@code git_commit} has no {@code workspace_id} column. Reads key on
+ * {@code repository_id}, which the tenancy check accepts. A write that it refuses names its reason with
+ * {@code @WorkspaceAgnostic}.
  */
 @Repository
-@WorkspaceAgnostic("Commits scoped through repository_id -> repository.workspace_id")
 public interface CommitRepository extends JpaRepository<Commit, Long> {
     Optional<Commit> findByShaAndRepositoryId(String sha, Long repositoryId);
 
@@ -39,6 +37,8 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
 
     boolean existsByShaAndRepositoryId(String sha, Long repositoryId);
 
+    @WorkspaceAgnostic(
+            "Commit detail sync replaces the file changes of one shared commit of a repository taken from the sync")
     @Modifying
     @Transactional
     // Hibernate renders joined deletes as correlated EXISTS; resolving the commit once permits the commit_id index.
@@ -69,6 +69,7 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
     List<String> findDistinctUnresolvedCommitterEmailsByRepositoryId(@Param("repositoryId") Long repositoryId);
 
     /** Sets {@code author_id} only where still NULL, so a concurrent resolver's write is never clobbered. */
+    @WorkspaceAgnostic("Author resolution links the commits of one shared repository to the user an email resolves to")
     @Modifying
     @Transactional
     @Query(value = """
@@ -81,6 +82,7 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
             @Param("authorId") @Nullable Long authorId);
 
     /** Sets {@code committer_id} only where still NULL, so a concurrent resolver's write is never clobbered. */
+    @WorkspaceAgnostic("Author resolution links the commits of one shared repository to the user an email resolves to")
     @Modifying
     @Transactional
     @Query(value = """
@@ -127,30 +129,6 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
         WHERE gc.repository_id = :repositoryId AND gc.committer_id IS NULL
         """, nativeQuery = true)
     List<String> findShasWithNullCommitterByRepositoryId(@Param("repositoryId") Long repositoryId);
-
-    /** Sets {@code author_id} only where still NULL, so a concurrent resolver's write is never clobbered. */
-    @Modifying
-    @Transactional
-    @Query(value = """
-        UPDATE git_commit SET author_id = :authorId, updated_at = NOW()
-        WHERE repository_id = :repositoryId AND author_id IS NULL AND sha IN (:shas)
-        """, nativeQuery = true)
-    int bulkUpdateAuthorId(
-            @Param("shas") List<String> shas,
-            @Param("repositoryId") Long repositoryId,
-            @Param("authorId") @Nullable Long authorId);
-
-    /** Sets {@code committer_id} only where still NULL, so a concurrent resolver's write is never clobbered. */
-    @Modifying
-    @Transactional
-    @Query(value = """
-        UPDATE git_commit SET committer_id = :committerId, updated_at = NOW()
-        WHERE repository_id = :repositoryId AND committer_id IS NULL AND sha IN (:shas)
-        """, nativeQuery = true)
-    int bulkUpdateCommitterId(
-            @Param("shas") List<String> shas,
-            @Param("repositoryId") Long repositoryId,
-            @Param("committerId") @Nullable Long committerId);
 
     /**
      * Upsert a commit by SHA and repository_id.
@@ -276,6 +254,7 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
      * This ensures webhook-delivered data is not overwritten with NULLs if the
      * GraphQL response omits a field.
      */
+    @WorkspaceAgnostic("Commit enrichment writes provider metadata to one shared commit found through the sync")
     @Modifying
     @Transactional
     @Query(value = """
@@ -337,6 +316,7 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
      * from a single caller's point of view while keeping {@code upsertCommit}'s
      * parameter surface small.
      */
+    @WorkspaceAgnostic("GitLab commit sync writes parent shas to one shared commit of a repository from the sync")
     @Modifying
     @Transactional
     @Query(value = """

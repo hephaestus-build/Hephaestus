@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
  * Repository for CommitContributor entities.
  */
 @Repository
-@WorkspaceAgnostic("Contributors scoped through commit_id -> repository.workspace_id")
 public interface CommitContributorRepository extends JpaRepository<CommitContributor, Long> {
     /**
      * Find all contributors for a commit, ordered by role and ordinal.
@@ -106,6 +105,7 @@ public interface CommitContributorRepository extends JpaRepository<CommitContrib
      * @param userId       the database user id to attach
      * @return the number of rows updated
      */
+    @WorkspaceAgnostic("Links the contributors of one shared repository to the user that the provider resolved")
     @Modifying
     @Transactional
     @Query(value = """

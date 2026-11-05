@@ -15,12 +15,21 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Repository for milestone entities.
  *
- * <p>All queries filter by repository ID which inherently carries scope
- * through the Repository -> Organization relationship chain.
+ * <p>Milestones are shared mirror rows of a repository. Reads key on the repository or on the
+ * milestone's provider identity.
  */
 @Repository
-@WorkspaceAgnostic("Milestones scoped through repository_id -> repository.workspace_id")
 public interface MilestoneRepository extends JpaRepository<Milestone, Long> {
+    /** Every workspace's mirror rows. Only tests call it, to check what sync stored; production code reads by scope. */
+    @Override
+    @WorkspaceAgnostic("Reads every workspace's mirror rows; only tests call it, to check what sync stored")
+    long count();
+
+    /** Every workspace's mirror rows. Only tests call it, to check what sync stored; production code reads by scope. */
+    @Override
+    @WorkspaceAgnostic("Reads every workspace's mirror rows; only tests call it, to check what sync stored")
+    List<Milestone> findAll();
+
     Optional<Milestone> findByNativeIdAndProviderId(Long nativeId, Long providerId);
 
     List<Milestone> findAllByRepository_Id(Long repositoryId);
