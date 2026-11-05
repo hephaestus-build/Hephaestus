@@ -110,7 +110,7 @@ With no TTY, hand-write `.changeset/<slug>.md`.
 `.changeset/README.md` owns the rules:
 
 - The voice and version bump.
-- Pre-1.0 `minor` with `**Operators:**` and a `.migration/<slug>.md` fragment.
+- Until 1.0.0 is out, `minor` with `**Operators:**` and a `.migration/<slug>.md` fragment. From 1.0.0 on, `major` (`.changeset/README.md`).
 - Never change `MIGRATION.md`.
 
 Changing `db/changelog/` without changing `.changeset/` is always wrong.
@@ -141,7 +141,7 @@ git push -u origin HEAD
 Types and scopes are enumerated in `commitlint.config.ts`, which is what validates the PR title —
 read it there instead of in a copy.
 Do not put `!` in the title.
-The changeset, not the header, carries pre-1.0 breaking changes.
+The changeset, not the header, carries breaking changes.
 
 ## 9. Open the PR
 
