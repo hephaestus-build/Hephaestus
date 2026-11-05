@@ -8,11 +8,14 @@ import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceQuota;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -32,7 +35,7 @@ public class KubernetesSandboxQuota {
     private final String namespace;
     private final String runtimeClassName;
     private final String reviewPriorityClass;
-    private final AtomicBoolean unreadable = new AtomicBoolean();
+    private final AtomicReference<@Nullable Instant> unreadableSince = new AtomicReference<>();
     private final AtomicBoolean unobserved = new AtomicBoolean();
     private final AtomicBoolean full = new AtomicBoolean();
     private final AtomicBoolean tooSmall = new AtomicBoolean();
@@ -58,15 +61,24 @@ public class KubernetesSandboxQuota {
         try {
             quotas = cache.quotas();
         } catch (RuntimeException e) {
-            if (unreadable.compareAndSet(false, true)) {
-                log.warn(
-                        "Sandbox quota unreadable, so reviews wait: namespace={}, error={}",
-                        namespace,
-                        e.getClass().getSimpleName());
+            // The cache cannot answer while its watch reconnects, so this also happens without a fault.
+            if (unreadableSince.compareAndSet(null, Instant.now())) {
+                log.atWarn()
+                        .addKeyValue("event.name", "sandbox.quota.unreadable")
+                        .addKeyValue("error.type", e.getClass().getName())
+                        .log("Sandbox quota unreadable, so reviews wait: namespace={}", namespace);
             }
             return SandboxRoom.UNKNOWN_ROOM;
         }
-        unreadable.set(false);
+        Instant since = unreadableSince.getAndSet(null);
+        if (since != null) {
+            log.atInfo()
+                    .addKeyValue("event.name", "sandbox.quota.readable")
+                    .addKeyValue(
+                            "duration.ms",
+                            Duration.between(since, Instant.now()).toMillis())
+                    .log("Sandbox quota readable again, so reviews can start: namespace={}", namespace);
+        }
         int room = fits(quotas, footprint(limits, overhead()), reviewPriorityClass);
         if (room == SandboxRoom.UNKNOWN_ROOM) {
             if (unobserved.compareAndSet(false, true)) {

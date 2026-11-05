@@ -33,6 +33,7 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
@@ -181,6 +182,9 @@ public class GitHubDeletionSweepService {
             Set<Integer> numbers,
             boolean complete,
             @Nullable String reason) {
+        /** The provider switched the entity's feature off for the repository. */
+        static final String FEATURE_DISABLED = "featureDisabled";
+
         static UpstreamListing complete(Set<Integer> numbers) {
             return new UpstreamListing(numbers, true, null);
         }
@@ -354,12 +358,17 @@ public class GitHubDeletionSweepService {
             }
             if (!listing.complete()) {
                 skipped = true;
-                log.warn(
-                        "Skipped deletion sweep, deleted nothing: reason={}, entity={}, repoName={}, scopeId={}",
-                        listing.reason(),
-                        entity.plural,
-                        safeNameWithOwner,
-                        scopeId);
+                // A repository that switched a feature off is an expected state, not a fault.
+                log.atLevel(UpstreamListing.FEATURE_DISABLED.equals(listing.reason()) ? Level.INFO : Level.WARN)
+                        .addKeyValue("event.name", "integration.deletion_sweep.skipped")
+                        .addKeyValue("integration.kind", "github")
+                        .addKeyValue("reason", listing.reason())
+                        .log(
+                                "Skipped deletion sweep, deleted nothing: reason={}, entity={}, repoName={}, scopeId={}",
+                                listing.reason(),
+                                entity.plural,
+                                safeNameWithOwner,
+                                scopeId);
                 continue;
             }
             int tombstoned = tombstoneMissing(
@@ -512,12 +521,7 @@ public class GitHubDeletionSweepService {
             // decision to the emptiness guard rather than blocking every sweep.
             if (entity.featureFlagPath != null
                     && Boolean.FALSE.equals(readBooleanField(response, entity.featureFlagPath))) {
-                log.warn(
-                        "Deletion sweep listing refused, feature disabled upstream: entity={}, repoName={}, flag={}",
-                        entity.plural,
-                        safeNameWithOwner,
-                        entity.featureFlagPath);
-                return UpstreamListing.incomplete("featureDisabled");
+                return UpstreamListing.incomplete(UpstreamListing.FEATURE_DISABLED);
             }
 
             GHPageInfo pageInfo;

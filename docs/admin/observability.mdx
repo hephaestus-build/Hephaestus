@@ -500,6 +500,19 @@ GitLab webhook registration failures expose the workspace and HTTP status in
 diagnostics use `integration.request.failed` with the API operation, host, exception type, and HTTP
 status when available. They stay at debug level and do not include raw transport/decoding messages.
 
+When GitLab already refused a connection's credential, each initialization logs `integration.credential.refused` as a warning, with `integration.kind` and `workspace.id`.
+Initialization still inspects the token, because that call can see the credential accepted again.
+It does not discover projects until then.
+The admin sees the same state as an attention problem on the connection.
+
+A deletion sweep that cannot prove the provider's listing complete deletes nothing and logs `integration.deletion_sweep.skipped`, with `integration.kind` and `reason`.
+The record is a warning, except for `reason=featureDisabled`.
+That reason means that the repository switched its issues or its pull requests off, which is an expected state, so the record is informational.
+
+When the worker cannot read the quotas of the sandbox namespace, it logs `sandbox.quota.unreadable` as a warning, and reviews wait.
+When it can read them again, it logs `sandbox.quota.readable` with `duration.ms`, the time that reviews waited.
+A short gap also occurs when the watch of the namespace cache reconnects.
+
 When a review sandbox fails, the log records the size of its transcript as `sandbox.transcript.withheld`, not its content.
 The transcript holds what the run was asked, what it read and the provider errors that it saw.
 No log level writes it.

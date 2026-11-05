@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
@@ -238,8 +239,21 @@ public class GitLabWorkspaceInitializationService {
             // Phase 0: Token rotation
             SyncResult result = rotateToken(workspace, handle);
 
-            // Phase 1: Discover group projects via GraphQL
-            GitLabSyncResult discovery = discoverGroupProjects(workspace);
+            // Phase 1: Discover group projects via GraphQL. A credential that GitLab already refused is a known
+            // state that the admin sees as an attention problem, so discovery does not ask GitLab again. The
+            // token inspection above still runs: it is the call that sees the credential accepted again.
+            boolean credentialRefused = connectionService
+                    .findActive(workspace.getId(), IntegrationKind.GITLAB)
+                    .filter(connection -> connection.getAttentionProblem() == Problem.CREDENTIAL_REVOKED)
+                    .isPresent();
+            if (credentialRefused) {
+                log.atWarn()
+                        .addKeyValue("event.name", "integration.credential.refused")
+                        .addKeyValue("integration.kind", "gitlab")
+                        .addKeyValue("workspace.id", workspace.getId())
+                        .log("Skipped GitLab project discovery, the credential is refused until a reconnect");
+            }
+            GitLabSyncResult discovery = credentialRefused ? null : discoverGroupProjects(workspace);
             List<Repository> syncedRepos = discovery == null ? List.of() : discovery.synced();
             SyncResult discoveryResult = discovery == null
                     ? SyncResult.abortedError(0)
@@ -269,12 +283,14 @@ public class GitLabWorkspaceInitializationService {
                             handle, SyncResult.abortedError(0), SyncPhase.CONNECTION, "Event consumer setup", null);
                     result = SyncResult.merge(result, SyncResult.abortedError(0));
                 }
-                if (discovery == null || discovery.status() != GitLabSyncResult.Status.COMPLETED) {
+                boolean discovered = discovery != null && discovery.status() == GitLabSyncResult.Status.COMPLETED;
+                // A refused credential already has its event, so it does not log a second cause.
+                if (!discovered && !credentialRefused) {
                     log.warn(
                             "Skipped GitLab webhook registration: reason=discoveryIncomplete, workspaceId={}, status={}",
                             workspace.getId(),
                             discovery == null ? null : discovery.status());
-                } else if (routed) {
+                } else if (discovered && routed) {
                     SyncResult webhookResult = registerWebhook(workspace);
                     reportIncomplete(handle, webhookResult, SyncPhase.CONNECTION, "Webhook setup", null);
                     result = SyncResult.merge(result, webhookResult);
