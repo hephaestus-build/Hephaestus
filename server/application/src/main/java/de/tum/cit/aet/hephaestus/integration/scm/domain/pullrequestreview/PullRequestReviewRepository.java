@@ -22,6 +22,11 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public interface PullRequestReviewRepository extends JpaRepository<PullRequestReview, Long> {
+    /** Every workspace's reviews. Only tests call it, to check what sync stored; production code reads by scope. */
+    @Override
+    @WorkspaceAgnostic("Reads every workspace's mirror rows; only tests call it, to check what sync stored")
+    List<PullRequestReview> findAll();
+
     boolean existsByIdAndPullRequest_IdAndAuthor_Id(long id, long pullRequestId, long authorId);
 
     Optional<PullRequestReview> findByIdAndPullRequestId(Long id, Long pullRequestId);
