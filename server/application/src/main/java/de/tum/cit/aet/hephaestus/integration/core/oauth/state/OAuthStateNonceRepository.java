@@ -12,13 +12,16 @@ import org.springframework.stereotype.Repository;
 /**
  * Repository for {@link OAuthStateNonce}.
  *
- * <p>Workspace-agnostic — nonces are consumed at the OAuth callback BEFORE
- * any workspace context is established. See {@link OAuthStateNonceStore} for
- * the consume semantics.
+ * <p>Each nonce names the workspace whose OAuth flow issued it, and the callback consumes it only with that workspace
+ * bound ({@link #markConsumedInWorkspace}). See {@link OAuthStateNonceStore} for the consume semantics.
  */
 @Repository
-@WorkspaceAgnostic("Consumed pre-workspace at OAuth callback")
 public interface OAuthStateNonceRepository extends JpaRepository<OAuthStateNonce, String> {
+    /** Issuing a nonce checks that it is unused. The nonce is the key, unique across every workspace. */
+    @Override
+    @WorkspaceAgnostic("Issuing a nonce checks that it is unused; the nonce is the key, unique across every workspace")
+    boolean existsById(String nonce);
+
     /**
      * Atomically claim a nonce. The {@code consumed_at IS NULL} guard ensures
      * exactly one caller wins even under concurrent OAuth callback floods (a
@@ -37,7 +40,7 @@ public interface OAuthStateNonceRepository extends JpaRepository<OAuthStateNonce
               AND (n.actor_account_id IS NULL OR EXISTS (
                   SELECT 1 FROM account a WHERE a.id = n.actor_account_id AND a.status = 'ACTIVE'))
             """, nativeQuery = true)
-    int markConsumed(
+    int markConsumedInWorkspace(
             @Param("nonce") String nonce,
             @Param("now") Instant now,
             @Param("workspace") long workspaceId,
@@ -46,6 +49,7 @@ public interface OAuthStateNonceRepository extends JpaRepository<OAuthStateNonce
             @Param("actor") @Nullable Long actorAccountId);
 
     /** Cleanup helper — drops rows older than the cutoff. */
+    @WorkspaceAgnostic("Retention prunes the expired nonces of every workspace")
     @Modifying
     @Query("DELETE FROM OAuthStateNonce n WHERE n.issuedAt < :cutoff")
     int deleteByIssuedAtBefore(@Param("cutoff") Instant cutoff);

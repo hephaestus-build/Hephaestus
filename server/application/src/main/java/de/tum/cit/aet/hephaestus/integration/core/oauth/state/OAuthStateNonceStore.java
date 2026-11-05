@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.core.oauth.state;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import java.time.Instant;
@@ -23,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @ConditionalOnServerRole
 @Component
-@WorkspaceAgnostic("Operates on a global pre-workspace nonce table")
 public class OAuthStateNonceStore {
 
     private final OAuthStateNonceRepository repository;
@@ -81,7 +79,7 @@ public class OAuthStateNonceStore {
         if (nonce == null || nonce.isEmpty()) {
             return false;
         }
-        int updated = repository.markConsumed(
+        int updated = repository.markConsumedInWorkspace(
                 nonce,
                 Instant.now(),
                 binding.workspaceId(),
