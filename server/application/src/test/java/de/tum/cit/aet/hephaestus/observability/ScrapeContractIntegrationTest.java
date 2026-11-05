@@ -33,12 +33,17 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
     private static final Set<String> LIBRARY = Set.of("http_server_requests", "hikaricp_connections");
 
     /**
-     * Rule metrics that this context does not export at start, each with the reason. A new name belongs here only
-     * when the meter cannot exist before its first event, or only another role registers it.
+     * Rule metrics that this context does not export at start, by the exact name that the rule selects, each with the
+     * reason. A new name belongs here only when the meter cannot exist before its first event, or only another role
+     * registers it.
      */
     private static final Map<String, String> ABSENT_AT_START = Map.ofEntries(
-            Map.entry("http_server_requests_seconds", "a request creates its route's timer; checked after one below"),
-            Map.entry("web_vital_duration_seconds", "a browser report creates it"),
+            Map.entry(
+                    "http_server_requests_seconds_bucket",
+                    "a request creates its route's timer; checked after one below"),
+            Map.entry("http_server_requests_seconds_count", "a request creates its route's timer"),
+            Map.entry("web_vital_duration_seconds_bucket", "a browser report creates it"),
+            Map.entry("web_vital_duration_seconds_count", "a browser report creates it"),
             Map.entry("agent_job_infra_retry_requeued_total", "worker role"),
             Map.entry("agent_job_server_error_total", "worker role"),
             Map.entry("agent_queue_oldest_age_seconds", "worker role"),
@@ -61,12 +66,6 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
             Map.entry("webhook_stream_consumer_pending", "webhook role"),
             Map.entry("webhook_stream_oldest_message_age_seconds", "webhook role"),
             Map.entry("webhook_stream_poll_age_seconds", "webhook role"));
-
-    /** The bucket bounds that the objective rules divide by, with the family that must offer each. */
-    private static final Map<String, List<String>> OBJECTIVE_BUCKETS = Map.of(
-            "http_server_requests_seconds_bucket", List.of("1.0", "2.0"),
-            "mentor_turn_first_token_seconds_bucket", List.of("10.0"),
-            "practice_review_first_delivery_seconds_bucket", List.of("1800.0"));
 
     /** The series of this context's scrape. A meter with an unbounded label grows past it. */
     private static final int SERIES_BUDGET = 3000;
@@ -113,31 +112,40 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
         Set<String> rules = ruleMetrics();
         Set<String> missing = new TreeSet<>();
         for (String metric : rules) {
-            if (exported.contains(metric)) continue;
-            if (families(metric).stream().anyMatch(ABSENT_AT_START::containsKey)) continue;
-            missing.add(metric);
+            if (!exported.contains(metric) && !ABSENT_AT_START.containsKey(metric)) missing.add(metric);
         }
         assertThat(missing)
                 .as("rule metrics that the server does not export at start")
                 .isEmpty();
-        assertThat(ABSENT_AT_START.keySet())
+        assertThat(rules)
                 .as("every exception still names a metric that a rule reads")
-                .allMatch(name ->
-                        rules.stream().anyMatch(metric -> families(metric).contains(name)));
+                .containsAll(ABSENT_AT_START.keySet());
     }
 
     @Test
-    void shouldOfferTheBucketsThatTheObjectivesDivideByAndStayWithinTheSeriesBudget() {
-        webTestClient.get().uri("/actuator/health/liveness").exchange();
-        webTestClient.get().uri("/public/version").exchange();
+    void shouldOfferTheBucketsThatTheRulesDivideByAndStayWithinTheSeriesBudget() throws IOException {
+        webTestClient
+                .get()
+                .uri("/livez")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo("UP");
         String scrape = prometheus.scrape();
+        Set<String> exported = exportedNames(scrape);
 
-        OBJECTIVE_BUCKETS.forEach((family, bounds) -> {
-            for (String bound : bounds) {
+        Map<String, Set<String>> bounds = ruleBucketBounds();
+        assertThat(bounds).as("the rules divide by buckets").containsKeys("http_server_requests_seconds_bucket");
+        bounds.forEach((family, les) -> {
+            // A family that no event created yet has no buckets to check; the export test names why it is absent.
+            if (!exported.contains(family) && ABSENT_AT_START.containsKey(family)) return;
+            for (String le : les) {
                 assertThat(scrape)
-                        .as("%s offers le=%s", family, bound)
+                        .as("%s offers le=%s, which a rule reads", family, le)
                         .containsPattern(
-                                Pattern.compile("(?m)^" + family + "\\{[^}]*le=\"" + Pattern.quote(bound) + "\""));
+                                Pattern.compile("(?m)^" + family + "\\{[^}]*le=\"" + Pattern.quote(le) + "\""));
             }
         });
         long series = scrape.lines()
@@ -159,6 +167,26 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
         }
         assertThat(metrics).as("the rules select role metrics").hasSizeGreaterThan(30);
         return metrics;
+    }
+
+    /**
+     * The {@code le} values that the rules select on each bucket family, without {@code +Inf}. PromQL matches a label
+     * by its text, so the scrape must offer the same text, not only the same number.
+     */
+    private static Map<String, Set<String>> ruleBucketBounds() throws IOException {
+        Map<String, Set<String>> bounds = new TreeMap<>();
+        var selector = Pattern.compile("([a-zA-Z_:][a-zA-Z0-9_:]*_bucket)\\{([^}]*)\\}")
+                .matcher(Files.readString(RULES));
+        var le = Pattern.compile("\\ble=\"([^\"]+)\"");
+        while (selector.find()) {
+            if (!selector.group(2).contains("job=\"hephaestus\"")) continue;
+            var bound = le.matcher(selector.group(2));
+            if (bound.find() && !bound.group(1).equals("+Inf")) {
+                bounds.computeIfAbsent(selector.group(1), ignored -> new TreeSet<>())
+                        .add(bound.group(1));
+            }
+        }
+        return bounds;
     }
 
     /** The exposition name and the meter names it can come from: without the histogram and unit suffixes. */

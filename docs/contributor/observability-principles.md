@@ -58,7 +58,7 @@ The operator's tools collect all of it.
 | Name in the contract | [Observability](/admin/observability) | Review |
 | Alert | `deploy/chart/hephaestus/files/hephaestus-alerts.yml` | `vp run test:alerts`: each alert has a `promtool` case in which it fires and one in which it stays silent, a runbook row, and a `runbook_url` annotation |
 | Runbook row | [Alert response](/admin/production-operations-runbook#alert-response) | `vp run test:alerts`: each alert has a row in that table |
-| Metric that a rule reads | The meter in the code | `ScrapeContractIntegrationTest`. Each name that a rule selects with `job="hephaestus"` has a meter name in the code. The server exports it at start, or the test lists it as lazy or as a meter of another role, with the reason. The objective histograms offer the bucket that their rule divides by. One scrape stays within the series budget |
+| Metric that a rule reads | The meter in the code | `ScrapeContractIntegrationTest`. Each name that a rule selects with `job="hephaestus"` has a meter name in the code. The server exports it at start, or the test lists it as lazy or as a meter of another role, with the reason. Each histogram on the scrape offers every `le` bound that a rule reads, with the same text. One scrape stays within the series budget |
 
 ## The project's own instances
 
