@@ -64,7 +64,7 @@ class ReviewStageTelemetryTest extends BaseUnitTest {
     @Test
     void shouldExportEveryStageAndOutcomeAtZeroBeforeTheFirstAttempt() {
         assertThat(registry.get(AgentMetrics.AGENT_JOB_STAGE_DURATION).timers())
-                .hasSize(4 * 3)
+                .hasSize(4 * 4)
                 .allSatisfy(timer -> assertThat(timer.count()).isZero());
     }
 

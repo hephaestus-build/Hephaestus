@@ -8,10 +8,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
 import io.fabric8.kubernetes.api.model.ContainerStatusBuilder;
@@ -186,6 +188,63 @@ class SandboxExitsTest extends BaseUnitTest {
                             .contains("tool.failed")
                             .contains("review.partial");
                 });
+    }
+
+    @Test
+    void shouldLogAReviewThatLeftPracticesWithoutAResultAsPartialAtInfoAndNameThem() {
+        var meters = new SimpleMeterRegistry();
+        var pods = mock(KubernetesPods.class);
+        when(pods.get("hephaestus-review-3"))
+                .thenReturn(pod(null, ended(KubernetesPods.RUNTIME, SandboxLayout.EXIT_PARTIAL_REVIEW, "Error")));
+        when(pods.tail(anyString(), anyString(), anyInt(), anyInt()))
+                .thenReturn(String.join(
+                        "\n",
+                        "[pi-runner] coverage.measured evaluated=16 eligible=17 ratio=0.941",
+                        "[pi-runner] review.partial without_result=2 practices=17",
+                        "[pi-runner] practice.without_result practice=9 program_stop=deadline",
+                        "[pi-runner] practice.without_result practice=12 program_stop=unavailable"));
+        Logger logger = (Logger) LoggerFactory.getLogger(SandboxExits.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            new SandboxExits(pods, meters).record(SandboxExits.Kind.REVIEW, "hephaestus-review-3");
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        ILoggingEvent event = appender.list.getFirst();
+        assertThat(event.getLevel()).isEqualTo(Level.INFO);
+        assertThat(event.getFormattedMessage()).isEqualTo("A sandbox ended: partial, practices without a result: 2");
+        assertThat(event.getKeyValuePairs())
+                .anySatisfy(pair -> {
+                    assertThat(pair.key).isEqualTo("sandbox.exit.reason");
+                    assertThat(pair.value).isEqualTo("partial");
+                })
+                .anySatisfy(pair -> {
+                    assertThat(pair.key).isEqualTo("sandbox.review.without_result");
+                    assertThat(pair.value)
+                            .isEqualTo("practice=9 program_stop=deadline; practice=12 program_stop=unavailable");
+                });
+        assertThat(meters.get(AgentMetrics.SANDBOX_EXITS)
+                        .tag("kind", "review")
+                        .tag("reason", "partial")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void shouldKeepTheOtherExitsOfAReviewAndThePartialCodeOfAnotherSandboxAnError() {
+        var partialHost = pod(null, ended(KubernetesPods.RUNTIME, SandboxLayout.EXIT_PARTIAL_REVIEW, "Error"));
+        var failedReview = pod(null, ended(KubernetesPods.RUNTIME, 1, "Error"));
+
+        assertThat(SandboxExits.exit(SandboxExits.Kind.REVIEW, partialHost).reason())
+                .isEqualTo(SandboxExits.Reason.PARTIAL);
+        assertThat(SandboxExits.exit(SandboxExits.Kind.HOST, partialHost).reason())
+                .isEqualTo(SandboxExits.Reason.ERROR);
+        assertThat(SandboxExits.exit(SandboxExits.Kind.REVIEW, failedReview).reason())
+                .isEqualTo(SandboxExits.Reason.ERROR);
     }
 
     @Test

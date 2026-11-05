@@ -682,6 +682,15 @@ The worker keeps a line only when its event, fields and values are in the runtim
 This rule also applies to a line from an older runtime image.
 It counts every other line in `sandbox.stderr.dropped`.
 
+A practice review can stop with some practices still without a result, for example when a practice reaches its deadline.
+The runtime then keeps the results that it staged and exits with code 78.
+The worker logs this end at `INFO` as `partial`, not as an error.
+The field `sandbox.review.without_result` names each practice without a result by its position and stop code.
+An example is `practice=9 program_stop=deadline`.
+
+If the attempt staged a practice that no earlier attempt had, the next attempt continues the review.
+It runs only the open practices and spends no retry.
+
 When a host cannot start, the worker logs the cause that it knows.
 For example, it logs an API refusal or the exit code of the host's workspace setup.
 

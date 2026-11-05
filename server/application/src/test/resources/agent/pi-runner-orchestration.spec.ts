@@ -2979,7 +2979,7 @@ if (scenario !== undefined && scenario !== "") {
 							break;
 						}
 						case "stall": {
-							assert.equal(child.status, 1, child.stderr);
+							assert.equal(child.status, 78, child.stderr);
 							assert.equal(existsSync(admissionPath), false);
 							const order = events.filter((event) =>
 								["prompt:1", "steer", "abort-compaction", "abort", "prompt:2"].includes(event),

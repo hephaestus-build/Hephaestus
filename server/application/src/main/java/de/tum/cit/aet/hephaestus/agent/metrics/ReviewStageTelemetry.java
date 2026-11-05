@@ -55,6 +55,8 @@ public final class ReviewStageTelemetry {
     public enum Outcome {
         OK,
         FAILED,
+        /** The sandbox left a practice without a result and staged the rest; another attempt may continue it. */
+        PARTIAL,
         /** The composition stopped for a passing cause, and another attempt continues it. */
         HANDED_ON;
 
