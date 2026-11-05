@@ -29,13 +29,16 @@ const values: ChartValues = {
 	release: { version: release, commit: "c".repeat(40) },
 	images: {
 		"agent-pi": image("agent-pi", "1"),
+		alertmanager: image("alertmanager", "6"),
 		"application-server": image("application-server", "2"),
 		nats: image("nats", "3"),
 		postgres: image("postgres", "4"),
+		"victoria-metrics": image("victoria-metrics", "7"),
+		vmalert: image("vmalert", "8"),
 		webapp: image("webapp", "5"),
 	},
 };
-/** The release image inventory of these tests: the five images the chart runs, all first-party. */
+/** The release image inventory of these tests: the images the chart runs, all first-party. */
 const inventory = { images: [...chartImages], upstream: [] };
 /** A pushed package: one line of package bytes, then the values.yaml it was packaged with. */
 const chartBytes = (pinned = values) => `chart bytes\n${releaseValuesLines(pinned)}`;

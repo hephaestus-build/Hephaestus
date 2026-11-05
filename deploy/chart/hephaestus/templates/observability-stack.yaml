@@ -1,0 +1,423 @@
+{{- /*
+The monitoring stack of the release, in its namespace: VictoriaMetrics scrapes the roles, vmalert evaluates
+files/hephaestus-alerts.yml, and Alertmanager notifies. Node, kubelet and kube-state-metrics exporters need
+host paths or cluster-wide access, which the restricted posture of the chart excludes.
+docs/admin/observability.mdx § Monitoring stack.
+*/}}
+{{- $stack := .Values.observability.stack }}
+{{- if $stack.enabled }}
+{{- $_ := required "observability.stack.alertmanager.configSecret is required: name the Secret that holds alertmanager.yml" $stack.alertmanager.configSecret }}
+{{- $api := .Values.networkPolicy.kubernetesApi }}
+{{- $_ := required "networkPolicy.kubernetesApi.cidr is required: VictoriaMetrics discovers the Pods through the API" $api.cidr }}
+{{- $metrics := include "hephaestus.name" (dict "root" . "component" "victoria-metrics") }}
+{{- $vmalert := include "hephaestus.name" (dict "root" . "component" "vmalert") }}
+{{- $alertmanager := include "hephaestus.name" (dict "root" . "component" "alertmanager") }}
+{{- /*
+The release's rules without the groups that read host and cluster exporters, which the stack does not run. Their
+series never exist here, and an absent() rule among them, such as HephaestusDeployMetricsMissing, would fire for ever.
+*/}}
+{{- $groups := list }}
+{{- range (fromYaml (.Files.Get "files/hephaestus-alerts.yml")).groups }}
+{{- if not (has .name (list "hephaestus-kubernetes" "hephaestus-pull-deploy")) }}
+{{- $groups = append $groups . }}
+{{- end }}
+{{- end }}
+{{- $stackRules := toYaml (dict "groups" $groups) }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $metrics }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "victoria-metrics") | nindent 4 }}
+automountServiceAccountToken: false
+---
+# Pod discovery in the release's namespace only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $metrics }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "victoria-metrics") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $metrics }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "victoria-metrics") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $metrics }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $metrics }}
+    namespace: {{ .Release.Namespace }}
+---
+# The scrape of docs/admin/observability.mdx § Scrape metrics, for this release's Pods only.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $metrics }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "victoria-metrics") | nindent 4 }}
+data:
+  scrape.yml: |
+    global:
+      scrape_interval: 30s
+      scrape_timeout: 10s
+    scrape_configs:
+      - job_name: hephaestus
+        metrics_path: /actuator/prometheus
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [{{ .Release.Namespace | quote }}]
+        relabel_configs:
+          - source_labels:
+              - __meta_kubernetes_pod_label_app_kubernetes_io_name
+              - __meta_kubernetes_pod_label_app_kubernetes_io_instance
+              - __meta_kubernetes_pod_container_port_name
+            regex: {{ printf "hephaestus;%s;management" .Release.Name | quote }}
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+            target_label: runtime_role
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $metrics }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "victoria-metrics") | nindent 4 }}
+spec:
+  selector:
+    {{- include "hephaestus.selectorLabels" (dict "root" . "component" "victoria-metrics") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8428
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $metrics }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "victoria-metrics") | nindent 4 }}
+spec:
+  replicas: 1
+  serviceName: {{ $metrics }}
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "victoria-metrics") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "victoria-metrics") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $metrics }}
+      # Pod discovery calls the API.
+      automountServiceAccountToken: true
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
+      enableServiceLinks: false
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 65534 "group" 65534) | nindent 8 }}
+      containers:
+        - name: victoria-metrics
+          image: {{ include "hephaestus.image" (dict "root" . "name" "victoria-metrics") | quote }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - -storageDataPath=/data
+            - -retentionPeriod={{ $stack.retention }}
+            - -promscrape.config=/config/scrape.yml
+            # A changed ConfigMap reaches the mounted file without a restart.
+            - -promscrape.configCheckInterval=1m
+            - -memory.allowedPercent=60
+          ports:
+            - name: http
+              containerPort: 8428
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+          # The test instance's largest working set was 470 MiB while it also scraped the kubelets.
+          resources:
+            requests: { cpu: 50m, memory: 192Mi, ephemeral-storage: 16Mi }
+            limits: { cpu: 500m, memory: 512Mi, ephemeral-storage: 64Mi }
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $metrics }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "hephaestus.selectorLabels" (dict "root" . "component" "victoria-metrics") | nindent 10 }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with $stack.persistence.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $stack.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $vmalert }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "vmalert") | nindent 4 }}
+spec:
+  selector:
+    {{- include "hephaestus.selectorLabels" (dict "root" . "component" "vmalert") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8880
+      targetPort: http
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $vmalert }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "vmalert") | nindent 4 }}
+data:
+  hephaestus-alerts.yml: |
+{{ $stackRules | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $vmalert }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "vmalert") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "vmalert") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "vmalert") | nindent 8 }}
+      annotations:
+        # A new rule file restarts vmalert, so it evaluates the release's rules.
+        checksum/rules: {{ $stackRules | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
+      enableServiceLinks: false
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 65534 "group" 65534) | nindent 8 }}
+      containers:
+        - name: vmalert
+          image: {{ include "hephaestus.image" (dict "root" . "name" "vmalert") | quote }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - -rule=/rules/hephaestus-alerts.yml
+            - -datasource.url=http://{{ $metrics }}:8428
+            - -remoteWrite.url=http://{{ $metrics }}:8428
+            - -remoteRead.url=http://{{ $metrics }}:8428
+            - -notifier.url=http://{{ $alertmanager }}:9093
+            - -evaluationInterval=30s
+          ports:
+            - name: http
+              containerPort: 8880
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+          resources:
+            requests: { cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi }
+            limits: { cpu: 100m, memory: 96Mi, ephemeral-storage: 64Mi }
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: rules
+              mountPath: /rules
+              readOnly: true
+      volumes:
+        - name: rules
+          configMap:
+            name: {{ $vmalert }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $alertmanager }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "alertmanager") | nindent 4 }}
+spec:
+  selector:
+    {{- include "hephaestus.selectorLabels" (dict "root" . "component" "alertmanager") | nindent 4 }}
+  ports:
+    - name: http
+      port: 9093
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $alertmanager }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "alertmanager") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "alertmanager") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "alertmanager") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
+      enableServiceLinks: false
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 65534 "group" 65534) | nindent 8 }}
+      containers:
+        - name: alertmanager
+          image: {{ include "hephaestus.image" (dict "root" . "name" "alertmanager") | quote }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+            # Silences and the notification log; a restart loses them.
+            - --storage.path=/alertmanager
+            # One replica: no gossip.
+            - --cluster.listen-address=
+          ports:
+            - name: http
+              containerPort: 9093
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+          resources:
+            requests: { cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi }
+            limits: { cpu: 100m, memory: 128Mi, ephemeral-storage: 128Mi }
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+              readOnly: true
+            - name: data
+              mountPath: /alertmanager
+      volumes:
+        - name: config
+          secret:
+            secretName: {{ $stack.alertmanager.configSecret }}
+        - name: data
+          emptyDir:
+            sizeLimit: 64Mi
+---
+# The default-deny policy of the release also selects these Pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $metrics }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "victoria-metrics") | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        {{- include "hephaestus.componentPeer" (dict "root" . "component" "vmalert") | nindent 8 }}
+      ports:
+        - port: http
+          protocol: TCP
+  egress:
+    # The roles admit this Pod on their management port (hephaestus.policy.metricsIngress).
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: hephaestus
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - port: management
+          protocol: TCP
+    # Pod discovery.
+    - to:
+        - ipBlock:
+            cidr: {{ $api.cidr }}
+      ports:
+        - port: {{ $api.port }}
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $vmalert }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "vmalert") | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  egress:
+    - to:
+        {{- include "hephaestus.componentPeer" (dict "root" . "component" "victoria-metrics") | nindent 8 }}
+      ports:
+        - port: http
+          protocol: TCP
+    - to:
+        {{- include "hephaestus.componentPeer" (dict "root" . "component" "alertmanager") | nindent 8 }}
+      ports:
+        - port: http
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $alertmanager }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "alertmanager") | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        {{- include "hephaestus.componentPeer" (dict "root" . "component" "vmalert") | nindent 8 }}
+      ports:
+        - port: http
+          protocol: TCP
+  egress:
+    # Receivers on the internet: webhooks over HTTPS, and mail over SMTP submission.
+    - to:
+        - ipBlock:
+            cidr: {{ .Values.networkPolicy.externalEgress.cidr }}
+            {{- with .Values.networkPolicy.externalEgress.except }}
+            except:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 465
+          protocol: TCP
+        - port: 587
+          protocol: TCP
+{{- end }}

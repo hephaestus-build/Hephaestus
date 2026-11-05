@@ -621,6 +621,119 @@ await test("the alert rules render as the tested file, and only when asked", () 
 	);
 });
 
+const stackOn = {
+	observability: { stack: { enabled: true, alertmanager: { configSecret: "alertmanager" } } },
+};
+const stackComponents = ["victoria-metrics", "vmalert", "alertmanager"] as const;
+const inStack = (resource: Resource) =>
+	stackComponents.some((component) => component === componentOf(resource));
+
+await test("the monitoring stack scrapes this release, evaluates its rules and notifies, all in its namespace", () => {
+	const resources = rendered([...layersFor("small"), stackOn]);
+	const stack = resources.filter((resource) => inStack(resource));
+	for (const component of stackComponents) {
+		const entry = container(workload(resources, component));
+		assert.equal(get(entry, "image"), prepared.images[component], component);
+	}
+	// Pod discovery in the release's namespace only; nothing cluster-wide.
+	assert.deepEqual(
+		resources.filter((resource) => String(kindOf(resource)).startsWith("Cluster")).map(nameOf),
+		[],
+	);
+	const role = stack.find((resource) => kindOf(resource) === "Role");
+	assert.deepEqual(get(role, "rules"), [
+		{ apiGroups: [""], resources: ["pods"], verbs: ["get", "list", "watch"] },
+	]);
+	const scrape = String(
+		get(
+			stack.find(
+				(resource) =>
+					kindOf(resource) === "ConfigMap" && componentOf(resource) === "victoria-metrics",
+			),
+			"data",
+			"scrape.yml",
+		),
+	);
+	assert.match(scrape, /names: \["hephaestus"\]/u);
+	assert.match(scrape, /regex: "hephaestus;heph;management"/u);
+	// vmalert evaluates the release's rules, except the groups whose exporters the stack does not run: their series
+	// never exist here, and HephaestusDeployMetricsMissing, an absent() rule, would fire for ever.
+	assert.deepEqual(ruleResources(resources), []);
+	const vmalert = workload(resources, "vmalert");
+	const ruleMap = stack.find(
+		(resource) => kindOf(resource) === "ConfigMap" && componentOf(resource) === "vmalert",
+	);
+	assert.ok(ruleMap);
+	assert.equal(get(podSpec(vmalert), "volumes", 0, "configMap", "name"), nameOf(ruleMap));
+	const tested = list(get(parseAllDocuments(alertRules)[0]?.toJS(), "groups"));
+	const loaded = list(
+		get(
+			parseAllDocuments(String(get(ruleMap, "data", "hephaestus-alerts.yml")))[0]?.toJS(),
+			"groups",
+		),
+	);
+	assert.deepEqual(
+		loaded,
+		tested.filter(
+			(group) =>
+				!["hephaestus-kubernetes", "hephaestus-pull-deploy"].includes(String(get(group, "name"))),
+		),
+	);
+	assert.ok(!JSON.stringify(loaded).includes("HephaestusDeployMetricsMissing"));
+	// Only VictoriaMetrics calls the API, so only it mounts a token; every stack Pod stays restricted.
+	for (const component of stackComponents) {
+		const spec = podSpec(workload(resources, component));
+		assert.equal(get(spec, "automountServiceAccountToken"), component === "victoria-metrics");
+		assert.equal(get(spec, "securityContext", "runAsNonRoot"), true, component);
+		for (const volume of list(get(spec, "volumes"))) {
+			assert.equal(get(volume, "hostPath"), undefined, component);
+		}
+		const security = get(container(workload(resources, component)), "securityContext");
+		assert.equal(get(security, "readOnlyRootFilesystem"), true, component);
+		assert.deepEqual(get(security, "capabilities", "drop"), ["ALL"], component);
+	}
+	// Each role admits the scraper on its management port, and nothing else of the stack.
+	const metricsPeer = {
+		podSelector: {
+			matchLabels: {
+				"app.kubernetes.io/name": "hephaestus",
+				"app.kubernetes.io/instance": "heph",
+				"app.kubernetes.io/component": "victoria-metrics",
+			},
+		},
+	};
+	for (const component of ["server", "worker", "webhook"]) {
+		const policy = resources.find(
+			(resource) =>
+				kindOf(resource) === "NetworkPolicy" &&
+				isDeepStrictEqual(
+					get(resource, "spec", "podSelector", "matchLabels", "app.kubernetes.io/component"),
+					component,
+				),
+		);
+		assert.ok(
+			list(get(policy, "spec", "ingress")).some(
+				(rule) =>
+					isDeepStrictEqual(get(rule, "from"), [metricsPeer]) &&
+					isDeepStrictEqual(get(rule, "ports"), [{ port: "management", protocol: "TCP" }]),
+			),
+			component,
+		);
+	}
+});
+
+await test("the monitoring stack is off by default and needs its Alertmanager configuration", () => {
+	const resources = rendered(layersFor("small"));
+	assert.deepEqual(
+		resources.filter((resource) => inStack(resource)),
+		[],
+	);
+	assert.match(
+		render([...layersFor("small"), { observability: { stack: { enabled: true } } }]).stderr,
+		/observability\.stack\.alertmanager\.configSecret is required/u,
+	);
+});
+
 await test("a release package ships the alert rules without their promtool cases", async (t) => {
 	const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-release-chart-"));
 	t.after(async () => rm(directory, { recursive: true, force: true }));

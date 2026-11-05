@@ -13,6 +13,14 @@ groups:
           severity: warning
         annotations:
           summary: A Hephaestus metrics target cannot be scraped
+      # Fires for as long as a role is scraped and the rules run. An outside dead-man check that stops
+      # receiving it shows that the monitoring itself stopped: the scrape, the rules or the notifications.
+      - alert: HephaestusWatchdog
+        expr: count(up{job="hephaestus"} == 1) > 0
+        labels:
+          severity: none
+        annotations:
+          summary: The monitoring of Hephaestus scrapes, evaluates and notifies
       - alert: HephaestusProductFeedbackStuck
         expr: max(product_feedback_oldest_waiting_seconds{job="hephaestus"}) > 1800
         for: 5m

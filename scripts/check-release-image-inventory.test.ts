@@ -8,6 +8,7 @@ import {
 	deployedImageConsumers,
 	validateChartConsumers,
 } from "./check-release-image-inventory.ts";
+import { chartImages } from "./kubernetes-chart.ts";
 import { topologyImage } from "./lib/deploy-topology.ts";
 
 await test("repository release builds are covered by the evidence inventory", () => {
@@ -83,7 +84,7 @@ await test("rendered chart consumers reject unlocked images and include the sand
 	);
 });
 await test("every chart image needs a schema key, a consumer and release evidence", () => {
-	const names = ["agent-pi", "application-server", "nats", "postgres", "webapp"];
+	const names = [...chartImages];
 	const inventory = new Set(names);
 	assert.doesNotThrow(() => validateChartConsumers(names, names, inventory));
 	for (const field of ["consumer", "schema", "evidence"]) {

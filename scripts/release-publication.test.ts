@@ -20,7 +20,7 @@ import { isMap, isSeq, parseDocument } from "yaml";
 
 import { parseInventory } from "./commit-image-lock.ts";
 import { githubReleaseBody } from "./github-release-notes.ts";
-import { chartValues, releaseValuesLines } from "./kubernetes-chart.ts";
+import { chartImages, chartValues, releaseValuesLines } from "./kubernetes-chart.ts";
 import { asRecord, parseJson } from "./lib/json.ts";
 import { lockFromEvidence } from "./release-image-lock.ts";
 import { SOURCE_CATALOGERS } from "./release-source-sbom.ts";
@@ -40,11 +40,19 @@ const defaultChart = chart;
  * The other images that the chart runs, as upstream pins: their evidence needs no attestation and
  * no alias, so webapp stays the one first-party image that this suite promotes.
  */
-const upstream = ["agent-pi", "application-server", "nats", "postgres"].map((name, index) => ({
+const upstream = [
+	"agent-pi",
+	"alertmanager",
+	"application-server",
+	"nats",
+	"postgres",
+	"victoria-metrics",
+	"vmalert",
+].map((name, index) => ({
 	name,
 	repository: `docker.io/library/${name}`,
 	tag: "1",
-	digest: `sha256:${"de34".charAt(index).repeat(64)}`,
+	digest: `sha256:${"de34567".charAt(index).repeat(64)}`,
 }));
 /** The release image inventory of the fixture checkout and its evidence. */
 const inventory = { schemaVersion: 1, images: ["webapp"], upstream };
@@ -1335,9 +1343,7 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 		).toString("utf8");
 		assert.match(packaged, /^release:\n {2}version: "v0\.93\.0"\n {2}commit: "c{40}"\nimages:\n/mu);
 		for (const subject of manifest.subjects) {
-			if (
-				["agent-pi", "application-server", "nats", "postgres", "webapp"].includes(subject.image)
-			) {
+			if (chartImages.some((name) => name === subject.image)) {
 				assert.ok(
 					packaged.includes(`  ${subject.image}: "${subject.repository}@${subject.indexDigest}"\n`),
 					subject.image,
