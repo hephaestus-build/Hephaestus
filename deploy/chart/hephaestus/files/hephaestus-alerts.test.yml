@@ -886,32 +886,34 @@ tests:
               summary: A webhook receiver replica stayed unavailable for 15 minutes while another serves
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  # 31 hours of one sample each minute. time() starts at 0, so a value is seconds since the start.
+  # time() starts at 0, so a value is a time in seconds from the start of the test, and a negative value is before it.
+  # The backup CronJobs are created 28 hours before the start, at -100800. Thus the backup tests evaluate hours 29 to 32
+  # of their life, and not the 28 hours that come before. The rule has no `for`, so the shift changes no result.
   - name: a release whose newest backup is 31 hours old fires, a release with a daily backup does not
     interval: 1m
     input_series:
       - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-full"}'
-        values: "0x1860"
+        values: "-100800x180"
       - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
-        values: "0x1860"
+        values: "-100800x180"
       # The weekly full backup is old; the daily differential backup of hour 24 is recent.
       - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-full"}'
-        values: "0x1860"
+        values: "-100800x180"
       - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
-        values: "0x1440 86400x420"
+        values: "-14400x180"
       # A second release in the same namespace: its last backup is from the start.
       - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="staging-postgresql-backup-diff"}'
-        values: "0x1860"
+        values: "-100800x180"
       - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="staging-postgresql-backup-diff"}'
-        values: "0x1860"
+        values: "-100800x180"
       # Another CronJob of the namespace is not a backup.
       - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="report"}'
-        values: "0x1860"
+        values: "-100800x180"
     alert_rule_test:
-      - eval_time: 29h
+      - eval_time: 1h
         alertname: HephaestusBackupStale
         exp_alerts: []
-      - eval_time: 31h
+      - eval_time: 3h
         alertname: HephaestusBackupStale
         exp_alerts:
           - exp_labels:
@@ -926,14 +928,14 @@ tests:
     interval: 1m
     input_series:
       - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-full"}'
-        values: "0x1860"
+        values: "-100800x180"
       - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
-        values: "0x1860"
+        values: "-100800x180"
     alert_rule_test:
-      - eval_time: 29h
+      - eval_time: 1h
         alertname: HephaestusBackupStale
         exp_alerts: []
-      - eval_time: 31h
+      - eval_time: 3h
         alertname: HephaestusBackupStale
         exp_alerts:
           - exp_labels:
@@ -950,21 +952,21 @@ tests:
     interval: 1m
     input_series:
       - series: 'kube_cronjob_labels{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-full",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup",label_app_kubernetes_io_instance="hephaestus-production-for-the-whole-faculty"}'
-        values: "1x1860"
+        values: "1x240"
       - series: 'kube_cronjob_labels{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-diff",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup",label_app_kubernetes_io_instance="hephaestus-production-for-the-whole-faculty"}'
-        values: "1x1860"
+        values: "1x240"
       - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-full"}'
-        values: "0x1860"
+        values: "-100800x240"
       - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-diff"}'
-        values: "0x1500 90000x360"
+        values: "-10800x240"
     alert_rule_test:
-      - eval_time: 29h
+      - eval_time: 1h
         alertname: HephaestusBackupStale
         exp_alerts: []
-      - eval_time: 31h
+      - eval_time: 3h
         alertname: HephaestusBackupStale
         exp_alerts: []
-      - eval_time: 32h
+      - eval_time: 4h
         alertname: HephaestusBackupStale
         exp_alerts: []
 
@@ -972,16 +974,16 @@ tests:
     interval: 1m
     input_series:
       - series: 'kube_cronjob_labels{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-full",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup",label_app_kubernetes_io_instance="hephaestus-production-for-the-whole-faculty"}'
-        values: "1x1860"
+        values: "1x180"
       - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-production-for-the-whole-facul-1a2b3c4d-full"}'
-        values: "0x1860"
+        values: "-100800x180"
       # A name match and a label match of one ordinary CronJob count once.
       - series: 'kube_cronjob_labels{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff",label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="postgresql-backup",label_app_kubernetes_io_instance="hephaestus"}'
-        values: "1x1860"
+        values: "1x180"
       - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
-        values: "0x1860"
+        values: "-100800x180"
     alert_rule_test:
-      - eval_time: 31h
+      - eval_time: 3h
         alertname: HephaestusBackupStale
         exp_alerts:
           - exp_labels:
