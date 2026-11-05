@@ -143,6 +143,17 @@ postgresql:
     resources:
       requests: { cpu: 100m, memory: 512Mi, ephemeral-storage: 64Mi }
       limits: { cpu: "1", memory: 512Mi, ephemeral-storage: 1Gi }
+  # Optional: a postgres_exporter Deployment that reads PostgreSQL through the Service, with TLS, as the
+  # role hephaestus_monitor, a member of pg_monitor only. Needs DATABASE_MONITOR_PASSWORD in secret.name.
+  # With the bundled PostgreSQL, a Job of each release creates the role and sets its password.
+  # docs/admin/observability.mdx § Database metrics.
+  metrics:
+    enabled: false
+    # The statements with the most total execution time that it reports, by query id only.
+    statementLimit: 20
+    resources:
+      requests: { cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi }
+      limits: { cpu: 200m, memory: 96Mi, ephemeral-storage: 64Mi }
   external:
     # The name that the server certificate holds: verify-full checks it.
     host: ""

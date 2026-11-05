@@ -33,6 +33,7 @@ const values: ChartValues = {
 		"application-server": image("application-server", "2"),
 		nats: image("nats", "3"),
 		postgres: image("postgres", "4"),
+		"postgres-exporter": image("postgres-exporter", "9"),
 		"victoria-metrics": image("victoria-metrics", "7"),
 		vmalert: image("vmalert", "8"),
 		webapp: image("webapp", "5"),

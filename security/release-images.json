@@ -25,6 +25,13 @@
 			"repository": "docker.io/prom/alertmanager",
 			"tag": "v0.34.2",
 			"digest": "sha256:39d8bb3966c694a124428a3a88fbcffd40bd069129ecd47c059f8a3f17c55f3b"
+		},
+		{
+			"name": "postgres-exporter",
+			"repository": "docker.io/prometheuscommunity/postgres-exporter",
+			"tag": "master",
+			"digest": "sha256:c90657083f5d8ccbf9be16049d1174e221a55c3760121174a2c657a44e323ec6",
+			"note": "2026-11-05: an unreleased upstream build of master, revision 39c258dc14, built with go1.26.10. The v0.20.1 release image is built with go1.26.4 and older golang.org/x modules, and fails the vulnerability policy with 18 findings; no newer release exists. Renovate tracks only this tag's digest and does not propose a release: move to v0.21.0 when it ships."
 		}
 	]
 }

@@ -27,6 +27,14 @@
 | `postgresql.external.cidr` | string | `""` | yes | `pattern: "^(?:\|[0-9]{1,3}(?:\\.[0-9]{1,3}){3}/[0-9]{1,2}\|[0-9a-fA-F:]+/[0-9]{1,3})$"` |
 | `postgresql.external.host` | string | `""` | yes | `pattern: "^[A-Za-z0-9.-]{0,253}$"` |
 | `postgresql.external.port` | integer | `5432` | yes | `minimum: 1. maximum: 65535` |
+| `postgresql.metrics.enabled` | boolean | `false` | yes | — |
+| `postgresql.metrics.resources.limits.cpu` | string | `"200m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.metrics.resources.limits.ephemeral-storage` | string | `"64Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.metrics.resources.limits.memory` | string | `"96Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.metrics.resources.requests.cpu` | string | `"10m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.metrics.resources.requests.ephemeral-storage` | string | `"16Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.metrics.resources.requests.memory` | string | `"32Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.metrics.statementLimit` | integer | `20` | yes | The statements with the most total execution time that the exporter reports, by query id only. |
 | `postgresql.parameters.autovacuum_max_workers` | integer | `supplied by release or operator` |  | `minimum: 1. maximum: 16` |
 | `postgresql.parameters.autovacuum_work_mem` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
 | `postgresql.parameters.effective_cache_size` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |

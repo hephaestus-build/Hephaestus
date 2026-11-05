@@ -90,6 +90,7 @@ function renderOneHost(extra: Record<string, unknown> = {}, siteValues?: unknown
 				"application-server": `ghcr.io/hephaestus-build/application-server${digest("2")}`,
 				nats: `docker.io/library/nats${digest("3")}`,
 				postgres: `ghcr.io/hephaestus-build/postgres${digest("4")}`,
+				"postgres-exporter": `docker.io/prometheuscommunity/postgres-exporter${digest("9")}`,
 				"victoria-metrics": `docker.io/victoriametrics/victoria-metrics${digest("7")}`,
 				vmalert: `docker.io/victoriametrics/vmalert${digest("8")}`,
 				webapp: `ghcr.io/hephaestus-build/webapp${digest("5")}`,

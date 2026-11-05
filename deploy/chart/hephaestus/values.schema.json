@@ -151,6 +151,7 @@
 				"application-server",
 				"nats",
 				"postgres",
+				"postgres-exporter",
 				"victoria-metrics",
 				"vmalert",
 				"webapp"
@@ -161,6 +162,7 @@
 				"application-server": { "$ref": "#/definitions/image" },
 				"nats": { "$ref": "#/definitions/image" },
 				"postgres": { "$ref": "#/definitions/image" },
+				"postgres-exporter": { "$ref": "#/definitions/image" },
 				"victoria-metrics": { "$ref": "#/definitions/image" },
 				"vmalert": { "$ref": "#/definitions/image" },
 				"webapp": { "$ref": "#/definitions/image" }
@@ -305,6 +307,7 @@
 				"persistence",
 				"resources",
 				"backup",
+				"metrics",
 				"external",
 				"parameters"
 			],
@@ -430,6 +433,22 @@
 								"full": { "type": "string", "maxLength": 128 },
 								"differential": { "type": "string", "maxLength": 128 }
 							}
+						},
+						"resources": { "$ref": "#/definitions/resources" }
+					}
+				},
+				"metrics": {
+					"description": "A postgres_exporter Deployment that reads PostgreSQL through the role hephaestus_monitor. Needs DATABASE_MONITOR_PASSWORD in secret.name.",
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["enabled", "statementLimit", "resources"],
+					"properties": {
+						"enabled": { "type": "boolean" },
+						"statementLimit": {
+							"description": "The statements with the most total execution time that the exporter reports, by query id only.",
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100
 						},
 						"resources": { "$ref": "#/definitions/resources" }
 					}

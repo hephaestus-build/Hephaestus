@@ -215,6 +215,7 @@ await test("a commit lock names the chart images by digest, its upstream images 
 		HEPHAESTUS_IMAGE_VICTORIA_METRICS: pin("victoria-metrics"),
 		HEPHAESTUS_IMAGE_VMALERT: pin("vmalert"),
 		HEPHAESTUS_IMAGE_POSTGRES: `ghcr.io/hephaestus-build/postgres@${digest("4")}`,
+		HEPHAESTUS_IMAGE_POSTGRES_EXPORTER: pin("postgres-exporter"),
 		HEPHAESTUS_IMAGE_WEBAPP: `ghcr.io/hephaestus-build/webapp@${digest("5")}`,
 		// The Compose edge, which the chart does not run.
 		HEPHAESTUS_IMAGE_TRAEFIK: `docker.io/library/traefik@${digest("6")}`,
@@ -405,9 +406,9 @@ await test("no template grants host or Docker access, or adds a migration owner"
 		]) {
 			assert.doesNotMatch(text, forbidden, `${name} matches ${String(forbidden)}`);
 		}
-		// The backup Jobs run pgBackRest of the PostgreSQL image, and the migration Job the server image
-		// in its migrate run mode; no template runs another Job.
-		if (name !== "postgresql-backup.yaml" && name !== "migration.yaml") {
+		// The backup Jobs run pgBackRest of the PostgreSQL image, the migration Job the server image in
+		// its migrate run mode, and the monitor Job psql of the PostgreSQL image; no template runs another Job.
+		if (!["postgresql-backup.yaml", "migration.yaml", "postgresql-metrics.yaml"].includes(name)) {
 			assert.doesNotMatch(text, /^kind:\s*(?:Job|CronJob)\s*$/mu, name);
 		}
 		// A secret reaches a container only as a reference to the operator's Secret.

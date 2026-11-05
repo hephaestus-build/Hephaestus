@@ -263,6 +263,10 @@ const chartChannelImages = (omit?: string): Record<string, string> =>
 				["HEPHAESTUS_IMAGE_VMALERT", `docker.io/victoriametrics/vmalert@sha256:${"7".repeat(64)}`],
 				["HEPHAESTUS_IMAGE_ALERTMANAGER", `docker.io/prom/alertmanager@sha256:${"8".repeat(64)}`],
 				["HEPHAESTUS_IMAGE_POSTGRES", `ghcr.io/hephaestus-build/postgres@sha256:${"4".repeat(64)}`],
+				[
+					"HEPHAESTUS_IMAGE_POSTGRES_EXPORTER",
+					`docker.io/prometheuscommunity/postgres-exporter@sha256:${"9".repeat(64)}`,
+				],
 				["HEPHAESTUS_IMAGE_WEBAPP", `ghcr.io/hephaestus-build/webapp@sha256:${"5".repeat(64)}`],
 			] satisfies [string, string][]
 		).filter(([key]) => key !== omit),
@@ -897,6 +901,11 @@ async function reconcilerFixture(directory: string, targetRelease = "v1.0.0") {
 					name: "alertmanager",
 					repository: "docker.io/prom/alertmanager",
 					digest: `sha256:${"8".repeat(64)}`,
+				},
+				{
+					name: "postgres-exporter",
+					repository: "docker.io/prometheuscommunity/postgres-exporter",
+					digest: `sha256:${"9".repeat(64)}`,
 				},
 			],
 		}),

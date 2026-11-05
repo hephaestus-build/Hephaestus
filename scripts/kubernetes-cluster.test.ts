@@ -48,6 +48,11 @@ const upstream = [
 	},
 	{ name: "vmalert", repository: "docker.io/victoriametrics/vmalert", digest: digest("9") },
 	{ name: "alertmanager", repository: "docker.io/prom/alertmanager", digest: digest("8") },
+	{
+		name: "postgres-exporter",
+		repository: "docker.io/prometheuscommunity/postgres-exporter",
+		digest: digest("7"),
+	},
 	{ name: "alpine", repository: "docker.io/library/alpine", digest: digest("a") },
 ];
 const images = chartImagesFrom(resolved, upstream);
@@ -59,6 +64,7 @@ await test("the chart's images come from the resolved first-party images and the
 		"application-server": `ghcr.io/hephaestus-build/application-server@${digest("1")}`,
 		nats: `docker.io/synadia/nats-server@${digest("e")}`,
 		postgres: `ghcr.io/hephaestus-build/postgres@${digest("3")}`,
+		"postgres-exporter": `docker.io/prometheuscommunity/postgres-exporter@${digest("7")}`,
 		"victoria-metrics": `docker.io/victoriametrics/victoria-metrics@${digest("f")}`,
 		vmalert: `docker.io/victoriametrics/vmalert@${digest("9")}`,
 		webapp: `ghcr.io/hephaestus-build/webapp@${digest("0")}`,

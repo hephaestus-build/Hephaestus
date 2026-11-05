@@ -3773,3 +3773,95 @@ await test("an install warns when the bundled PostgreSQL has no backup, and only
 	// An external database is backed up where it runs, which the chart cannot see.
 	assert.ok(!installNotes(layersFor("external")).includes(warning));
 });
+
+const metricsOn = { postgresql: { metrics: { enabled: true } } };
+const monitorJobs = (resources: Resource[]) =>
+	resources.filter(
+		(resource) => kindOf(resource) === "Job" && componentOf(resource) === "postgresql-monitor",
+	);
+const exporterParts = (resources: Resource[]) =>
+	resources.filter((resource) =>
+		[componentOf(resource), nameOf(resource)].some((value) =>
+			String(value).includes("postgresql-exporter"),
+		),
+	);
+/** The components that the bundled PostgreSQL admits on its port. */
+const postgresqlPeers = (resources: Resource[]) =>
+	list(
+		get(
+			resources.find(
+				(resource) =>
+					kindOf(resource) === "NetworkPolicy" && nameOf(resource) === "heph-postgresql",
+			),
+			"spec",
+			"ingress",
+			0,
+			"from",
+		),
+	).map((peer) => get(peer, "podSelector", "matchLabels", "app.kubernetes.io/component"));
+
+await test("the PostgreSQL exporter runs apart from the database, and its role Job only beside the bundled server", () => {
+	// Off by default: no exporter, no Job, and PostgreSQL admits no monitoring client.
+	const off = rendered(layersFor("small"));
+	assert.deepEqual(exporterParts(off).map(nameOf), []);
+	assert.deepEqual(monitorJobs(off).map(nameOf), []);
+	assert.ok(!postgresqlPeers(off).includes("postgresql-exporter"));
+
+	const on = rendered([...layersFor("small"), metricsOn]);
+	// Turning the exporter on does not touch the database's Pod, so PostgreSQL does not restart.
+	assert.deepEqual(workload(on, "postgresql"), workload(off, "postgresql"));
+	const exporter = container(workload(on, "postgresql-exporter"));
+	assert.equal(get(exporter, "image"), prepared.images["postgres-exporter"]);
+	const args = list(get(exporter, "args"));
+	assert.ok(args.includes("--collector.stat_statements.limit=20"), String(args));
+	assert.ok(args.includes("--no-collector.stat_statements.include_query"), String(args));
+	const exporterEnv = list(get(exporter, "env"));
+	const entry = (name: string) => exporterEnv.find((candidate) => get(candidate, "name") === name);
+	assert.match(
+		String(get(entry("DATA_SOURCE_URI"), "value")),
+		/^heph-postgresql\.hephaestus\.svc:5432\/hephaestus\?sslmode=verify-full&/u,
+	);
+	assert.equal(get(entry("DATA_SOURCE_USER"), "value"), "hephaestus_monitor");
+	assert.equal(
+		get(entry("DATA_SOURCE_PASS"), "valueFrom", "secretKeyRef", "key"),
+		"DATABASE_MONITOR_PASSWORD",
+	);
+	const [job] = monitorJobs(on);
+	assert.ok(job, "one monitor Job");
+	assert.equal(nameOf(job), "heph-postgresql-monitor-1");
+	const script = String(
+		list(get(job, "spec", "template", "spec", "containers", 0, "command")).at(-1),
+	);
+	// Idempotent, and the password is set on every revision, so a rotated key takes effect.
+	assert.match(
+		script,
+		/WHERE NOT EXISTS \(SELECT FROM pg_roles WHERE rolname = 'hephaestus_monitor'\) \\gexec/u,
+	);
+	assert.match(
+		script,
+		/ALTER ROLE hephaestus_monitor WITH LOGIN NOSUPERUSER .* PASSWORD :'password';/u,
+	);
+	assert.match(script, /CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring;/u);
+	assert.deepEqual(postgresqlPeers(on).slice(-2), ["postgresql-exporter", "postgresql-monitor"]);
+
+	// An external PostgreSQL is the operator's to prepare: the exporter reads it, and no Job runs.
+	const externalDatabase = rendered([...layersFor("external"), metricsOn]);
+	assert.notEqual(container(workload(externalDatabase, "postgresql-exporter")), undefined);
+	assert.deepEqual(monitorJobs(externalDatabase).map(nameOf), []);
+
+	// The stack scrapes the exporter under a job of its own, on the port that its policy opens.
+	const stacked = rendered([...layersFor("small"), stackOn, metricsOn]);
+	const scrape = stacked
+		.filter((resource) => kindOf(resource) === "ConfigMap")
+		.map((resource) => JSON.stringify(get(resource, "data")))
+		.find((data) => data.includes("scrape_configs"));
+	assert.ok(scrape !== undefined && scrape.includes("job_name: postgresql"), scrape);
+	const exporterPolicy = stacked.find(
+		(resource) =>
+			kindOf(resource) === "NetworkPolicy" && nameOf(resource) === "heph-postgresql-exporter",
+	);
+	assert.deepEqual(
+		list(get(exporterPolicy, "spec", "ingress")).map((rule) => get(rule, "ports", 0, "port")),
+		["metrics"],
+	);
+});
