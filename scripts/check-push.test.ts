@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { readdirSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -177,6 +177,8 @@ async function fixture() {
 		"lib/json.ts",
 		"lib/process.ts",
 		"lib/push-gates.ts",
+		"release-note-rules.ts",
+		"verify-revert.ts",
 	]) {
 		await cp(path.join(repository, "scripts", file), path.join(directory, "scripts", file));
 	}
@@ -391,4 +393,36 @@ void test("a frontend run that keeps printing may run longer than the stall limi
 	const steady = `let n = 0; const t = setInterval(() => { console.log(n); if (++n === 6) clearInterval(t); }, 400);`;
 	assert.equal(watched(steady, 1500).status, 0);
 	assert.equal(watched("process.exit(3)", 1500).status, 3);
+});
+
+void test("a push of shipped code without a changeset stops before any check runs", async () => {
+	const f = await fixture();
+	try {
+		const base = execFileSync("git", ["rev-parse", "HEAD"], {
+			cwd: f.directory,
+			encoding: "utf8",
+		}).trim();
+		await mkdir(path.join(f.directory, "webapp/src"), { recursive: true });
+		await writeFile(path.join(f.directory, "webapp/src/feature.ts"), "export const feature = 1;\n");
+		f.git("add", ".");
+		f.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "shipped change");
+		const missing = f.run(f.directory, base);
+		assert.equal(missing.status, 1, missing.stdout + missing.stderr);
+		assert.match(
+			missing.stderr,
+			/changes shipped code but carries no changeset: webapp\/src\/feature\.ts/u,
+		);
+		assert.ok(!existsSync(f.calls), "no gate ran");
+
+		await mkdir(path.join(f.directory, ".changeset"));
+		await writeFile(
+			path.join(f.directory, ".changeset/feature.md"),
+			'---\n"hephaestus": patch\n---\n\nA feature.\n',
+		);
+		f.git("add", ".");
+		f.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "release note");
+		assert.doesNotMatch(f.run(f.directory, base).stderr, /carries no changeset/u);
+	} finally {
+		await rm(f.directory, { recursive: true, force: true });
+	}
 });

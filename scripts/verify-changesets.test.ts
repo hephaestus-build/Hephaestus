@@ -7,6 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { environmentForGitFixture } from "./lib/git-environment.ts";
+import { localReleaseNoteProblems } from "./release-note-rules.ts";
 import {
 	removedChartValues,
 	verifyChangesets,
@@ -329,4 +330,58 @@ void test("the pull request check compares the chart's schema with the merge bas
 	assert.throws(() => check(), /no longer accepts config\.gitlab\.gone/u);
 	await writeFile(note, "Remove `config.gitlab.gone`.\n");
 	check(note);
+});
+
+void test("the release-note rules hold a branch to what CI requires, against origin/main", async (t) => {
+	const root = await mkdtemp(path.join(tmpdir(), "release-note-rules-"));
+	t.after(async () => rm(root, { recursive: true, force: true }));
+	const env = environmentForGitFixture();
+	const git = (...args: string[]) =>
+		execFileSync("git", args, { cwd: root, env, encoding: "utf8" }).trim();
+	const write = async (file: string, content: string) => {
+		await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+		await writeFile(path.join(root, file), content);
+	};
+	const problems = () => localReleaseNoteProblems(root).join("\n");
+	git("init", "--quiet", "--initial-branch=main");
+	git("config", "user.name", "Test");
+	git("config", "user.email", "test@example.invalid");
+	await write("MIGRATION.md", "# Migration\n");
+	await write(".changeset/pending.md", "---\n---\n\nCI only. No shipped application changes.\n");
+	await write(".migration/pending.md", "#### Pending\n");
+	await write("webapp/src/a.ts", "export const a = 1;\n");
+	git("add", ".");
+	git("commit", "--quiet", "-m", "base");
+	git("update-ref", "refs/remotes/origin/main", "HEAD");
+	git("checkout", "--quiet", "-b", "feature");
+	const attempt = async (change: () => Promise<void> | void, expected: RegExp) => {
+		await change();
+		git("add", "--all");
+		git("commit", "--quiet", "-m", "attempt");
+		assert.match(problems(), expected);
+		git("reset", "--quiet", "--hard", "origin/main");
+	};
+
+	// What #3787 hit in CI after its local checks passed: a deleted pending changeset ...
+	await attempt(() => {
+		git("rm", "--quiet", ".changeset/pending.md");
+	}, /not deleted or renamed: \.changeset\/pending\.md\. Restore them with `git checkout [0-9a-f]{40} -- \.changeset\/pending\.md`/u);
+	// ... and shipped code whose pull request only edits a changeset that main already has.
+	await attempt(async () => {
+		await write("webapp/src/a.ts", "export const a = 2;\n");
+		await write(
+			".changeset/pending.md",
+			"---\n---\n\nCI only. No shipped application changes, rewritten.\n",
+		);
+	}, /changes shipped code but carries no changeset: webapp\/src\/a\.ts\nCreate \.changeset\/feature\.md with this content, commit it, and push again:\n\n---\n"hephaestus": patch\n---/u);
+	await attempt(async () => write("MIGRATION.md", "# Edited\n"), /Do not edit MIGRATION\.md/u);
+	await attempt(() => {
+		git("rm", "--quiet", ".migration/pending.md");
+	}, /Pending migration fragments may be edited, but not deleted or renamed/u);
+
+	await write("webapp/src/a.ts", "export const a = 2;\n");
+	await write(".changeset/feature.md", '---\n"hephaestus": patch\n---\n\nThe value is two.\n');
+	git("add", ".");
+	git("commit", "--quiet", "-m", "with its note");
+	assert.equal(problems(), "");
 });
