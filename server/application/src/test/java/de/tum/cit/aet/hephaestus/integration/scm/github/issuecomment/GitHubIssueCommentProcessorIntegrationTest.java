@@ -834,7 +834,8 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
                 applicationContext.getBean(GitHubSyncProperties.class),
                 applicationContext.getBean(GitHubExceptionClassifier.class),
                 applicationContext.getBean(GitHubGraphQlSyncCoordinator.class),
-                repositoryRepository);
+                repositoryRepository,
+                transactionTemplate);
 
         Integer count = transactionTemplate.execute(
                 status -> service.syncRemainingComments(testWorkspace.getId(), detachedIssue, "embedded-page")

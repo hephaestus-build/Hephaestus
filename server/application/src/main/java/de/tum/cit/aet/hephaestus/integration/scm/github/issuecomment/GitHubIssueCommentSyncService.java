@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -29,9 +28,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryN
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryNameParser.RepositoryOwnerAndName;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GraphQlConnectionOverflowDetector;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueCommentConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.dto.GitHubIssueCommentEventDTO.GitHubCommentDTO;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -40,7 +42,7 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.FieldAccessException;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
@@ -81,6 +83,7 @@ public class GitHubIssueCommentSyncService {
     private final GitHubSyncProperties syncProperties;
     private final GitHubExceptionClassifier exceptionClassifier;
     private final GitHubGraphQlSyncCoordinator graphQlSyncHelper;
+    private final TransactionTemplate transactionTemplate;
     private static final int MAX_RETRY_ATTEMPTS = 3;
     private static final int PARENT_REPAIR_CHUNK = 1000;
 
@@ -90,13 +93,15 @@ public class GitHubIssueCommentSyncService {
             GitHubSyncProperties syncProperties,
             GitHubExceptionClassifier exceptionClassifier,
             GitHubGraphQlSyncCoordinator graphQlSyncHelper,
-            RepositoryRepository repositoryRepository) {
+            RepositoryRepository repositoryRepository,
+            TransactionTemplate transactionTemplate) {
         this.graphQlClientProvider = graphQlClientProvider;
         this.commentProcessor = commentProcessor;
         this.syncProperties = syncProperties;
         this.exceptionClassifier = exceptionClassifier;
         this.graphQlSyncHelper = graphQlSyncHelper;
         this.repositoryRepository = repositoryRepository;
+        this.transactionTemplate = transactionTemplate;
     }
 
     /**
@@ -134,13 +139,15 @@ public class GitHubIssueCommentSyncService {
      * The parent's concrete type selects the GraphQL root: a {@link PullRequest} is fetched via
      * {@code repository.pullRequest} (GetPullRequestComments) because {@code repository.issue} does not
      * resolve pull requests. Both roots yield the same IssueComment nodes and share the persistence path.
+     * <p>
+     * GitHub is asked with no transaction open. The comments it returned before any stop are then stored in one short
+     * transaction, whose database errors reach the caller's retry.
      *
      * @param scopeId the scope ID for authentication
      * @param issue the issue or pull request to fetch remaining comments for
      * @param startCursor the pagination cursor to start from (from embedded comments)
      * @return number of additional comments synced
      */
-    @Transactional
     public SyncResult syncRemainingComments(Long scopeId, Issue issue, String startCursor) {
         if (issue == null || issue.getRepository() == null) {
             log.warn(
@@ -149,13 +156,13 @@ public class GitHubIssueCommentSyncService {
             return SyncResult.completed(0);
         }
 
-        // A caller can carry the issue across page transactions. Its provider proxy
-        // belongs to the old session, so build this transaction's context from the stored repository.
-        Repository repository = repositoryRepository
-                .findByIdWithOrganization(
-                        Objects.requireNonNull(issue.getRepository().getId()))
-                .orElseThrow(() -> new IllegalStateException("Repository no longer exists during comment sync"));
-        String nameWithOwner = repository.getNameWithOwner();
+        // A caller can carry the issue across page transactions. Its provider proxy belongs to the old session, so
+        // the name comes from the stored repository, and the write builds its context from it again.
+        Long repositoryId = Objects.requireNonNull(issue.getRepository().getId());
+        String nameWithOwner = repositoryRepository
+                .findByIdWithOrganization(repositoryId)
+                .orElseThrow(() -> new IllegalStateException("Repository no longer exists during comment sync"))
+                .getNameWithOwner();
         String safeNameWithOwner = sanitizeForLog(nameWithOwner);
         Optional<RepositoryOwnerAndName> parsedName = GitHubRepositoryNameParser.parse(nameWithOwner);
         if (parsedName.isEmpty()) {
@@ -171,9 +178,9 @@ public class GitHubIssueCommentSyncService {
         String commentsPath = parentPath + ".comments";
 
         HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
-        ProcessingContext context = ProcessingContext.forSync(scopeId, repository);
 
-        int totalSynced = 0;
+        List<GHIssueComment> fetched = new ArrayList<>();
+        boolean deletedFromGitHub = false;
         int commentsReceived = 0;
         String cursor = startCursor;
         boolean hasMore = true;
@@ -233,7 +240,8 @@ public class GitHubIssueCommentSyncService {
                                 "Skipped remaining comment sync: reason=issueDeletedFromGitHub, repoName={}, issueNumber={}",
                                 safeNameWithOwner,
                                 issue.getNumber());
-                        return SyncResult.completed(0);
+                        deletedFromGitHub = true;
+                        break;
                     }
                     ClassificationResult classification = graphQlSyncHelper.classifyGraphQlErrors(response);
                     if (classification != null) {
@@ -284,15 +292,7 @@ public class GitHubIssueCommentSyncService {
                 }
                 commentsReceived += connection.getNodes().size();
 
-                for (var graphQlComment : connection.getNodes()) {
-                    GitHubCommentDTO dto = GitHubCommentDTO.fromIssueComment(graphQlComment);
-                    if (dto != null) {
-                        IssueComment entity = commentProcessor.process(dto, issue.getNumber(), context);
-                        if (entity != null) {
-                            totalSynced++;
-                        }
-                    }
-                }
+                fetched.addAll(connection.getNodes());
 
                 GHPageInfo pageInfo = connection.getPageInfo();
                 hasMore = pageInfo != null && Boolean.TRUE.equals(pageInfo.getHasNextPage());
@@ -306,7 +306,8 @@ public class GitHubIssueCommentSyncService {
                             "Skipped remaining comment sync: reason=issueDeletedFromGitHub, repoName={}, issueNumber={}",
                             safeNameWithOwner,
                             issue.getNumber());
-                    return SyncResult.completed(0);
+                    deletedFromGitHub = true;
+                    break;
                 }
                 log.error(
                         "Failed to sync remaining comments: repoName={}, issueNumber={}",
@@ -337,11 +338,34 @@ public class GitHubIssueCommentSyncService {
                     "issueComments", commentsReceived, reportedTotalCount, hasMore, "issueNumber=" + issue.getNumber());
         }
 
+        int totalSynced = fetched.isEmpty()
+                ? 0
+                : Objects.requireNonNull(transactionTemplate.execute(
+                        status -> storeComments(fetched, repositoryId, issue.getNumber(), scopeId)));
         log.debug(
                 "Completed remaining comment sync: repoName={}, issueNumber={}, additionalComments={}",
                 safeNameWithOwner,
                 issue.getNumber(),
                 totalSynced);
+        if (deletedFromGitHub) {
+            return SyncResult.completed(totalSynced);
+        }
         return SyncResult.ofListRead(hasMore, rateLimited, totalSynced);
+    }
+
+    /** Stores the comments GitHub returned for one issue or pull request; the caller runs it in one transaction. */
+    private int storeComments(List<GHIssueComment> comments, Long repositoryId, int issueNumber, Long scopeId) {
+        Repository repository = repositoryRepository
+                .findByIdWithOrganization(repositoryId)
+                .orElseThrow(() -> new IllegalStateException("Repository no longer exists during comment sync"));
+        ProcessingContext context = ProcessingContext.forSync(scopeId, repository);
+        int stored = 0;
+        for (var graphQlComment : comments) {
+            GitHubCommentDTO dto = GitHubCommentDTO.fromIssueComment(graphQlComment);
+            if (dto != null && commentProcessor.process(dto, issueNumber, context) != null) {
+                stored++;
+            }
+        }
+        return stored;
     }
 }

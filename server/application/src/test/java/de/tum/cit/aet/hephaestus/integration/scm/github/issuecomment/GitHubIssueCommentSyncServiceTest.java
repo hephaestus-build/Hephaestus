@@ -42,6 +42,8 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.GraphQlClient.RequestSpec;
 import org.springframework.graphql.client.HttpGraphQlClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 
 /**
@@ -107,7 +109,8 @@ class GitHubIssueCommentSyncServiceTest extends BaseUnitTest {
                 syncProperties,
                 exceptionClassifier,
                 graphQlSyncHelper,
-                repositoryRepository);
+                repositoryRepository,
+                new TransactionTemplate(mock(PlatformTransactionManager.class)));
     }
 
     // Helper methods
