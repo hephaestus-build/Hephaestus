@@ -1,68 +1,194 @@
 ---
-id: sizing
 title: Sizing and scaling
-description: The memory, CPU, process, storage and database budget of the Kubernetes deployment.
+description: The work that the chart runs at once, the resource budget of each part, and which of these figures a load test measured.
+page_type: reference
 ---
 
-The [Kubernetes guide](./kubernetes#profiles) owns the deployment profiles and their resource budgets.
-Use measured requests to plan capacity, and keep room for the operating system, the cluster and a rolling update.
-A resource limit is a ceiling, not evidence that every workload fits.
+This page lists the work that the Helm chart runs at once, the resource budget of each part, and the evidence for each figure.
+The [Kubernetes guide](./kubernetes#profiles) owns the chart profiles and the requests and limits of each role.
+Each figure on this page comes from one of the sources in this table:
 
-## Measured conversation baseline
+| Source | What it shows | What it does not show |
+| --- | --- | --- |
+| Chart derivation | The value that the chart renders from its values and its declaration files | That the work fits the node or meets a latency target |
+| Chart test arithmetic | The requests and limits that a chart test adds up against a node | The memory and CPU that running work uses. It is not a load measurement |
+| Load measurement | Use and latency under one stated workload, model, release and node | Any other workload, model, release or node |
+
+## Reviews at once
+
+`worker.sandbox.reviewMemory` sets the memory that the sandbox nodes give review Pods.
+The chart derives the reviews at once from it. No value sets a review count.
+The chart derives three counts:
+
+| Count | Derivation |
+| --- | --- |
+| Reviews of the sandbox nodes | `reviewMemory` divided by the memory request of one review Pod, rounded down. That request is 384 MiB plus `worker.runtime.podOverhead.memoryMi` |
+| Reviews of one worker, `SANDBOX_MAX_CONCURRENT` | The smaller of the reviews of the sandbox nodes and (worker memory limit − 1005 MiB) / 18 MiB, rounded down |
+| Reviews of all workers, which the reviews quota holds | The smaller of the reviews of the sandbox nodes and `worker.replicas` times the reviews of one worker |
+
+The 1005 MiB is the worker JVM at rest.
+It has 501 MiB of code cache and metaspace, 128 MiB of direct memory, 120 MiB of thread stacks, and 256 MiB of heap.
+Each review adds 8 threads and 10 MiB of heap.
+The render stops if `reviewMemory` holds no review Pod, or if the worker memory limit is less than 1023 MiB.
+A chart test checks these counts for `small.yaml` and for other values of `reviewMemory`.
+
+| Profile | `reviewMemory` | Worker replicas | Worker memory limit | Reviews of one worker | Reviews of all workers |
+| --- | --- | --- | --- | --- | --- |
+| Chart default, with the worker on | 3840Mi | 2 | 2 GiB | 10 | 10 |
+| `dev.yaml`, `preview.yaml` | — | No worker | — | — | — |
+| `small.yaml` | 1920Mi | 1 | 2 GiB | 5 | 5 |
+| `small-16gib.yaml`, on top of `small.yaml` | 1920Mi | 1 | 2 GiB | 5 | 5 |
+
+The time that a review takes with a real model at these counts is [not yet measured](#not-yet-measured).
+
+## Conversation turn admission
+
+`worker.conversationTurns` sets the resident conversation turns of one worker, `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`.
+The chart default is 8. `small.yaml` sets `auto`, and `small-16gib.yaml` keeps it.
+The server's turn capacity is `worker.replicas` times the turns of one worker.
+
+`auto` reads the CPU budget in the chart's `turn-admission.json`: 3500m of allocatable CPU, 50m for each turn, and 32 turns in total at most.
+It subtracts these CPU requests from the 3500m:
+
+- The server, the webhook role, the webapp and the worker, each times its replicas. The bundled PostgreSQL and NATS. The pgBackRest sidecar, when backups are on.
+- For each running worker: the conversation host at 50m and 10 tools Pods at 25m each, plus the Pod overhead. With `RollingUpdate`, the chart counts two running workers for each replica.
+- The review tier: 50m for each review, and 100m for the isolation probe of each running worker.
+
+The remaining CPU divided by 50m, at most 32, is the total.
+The total divided by `worker.replicas`, rounded down, is the count of one worker.
+The render stops if that count is less than 1.
+`auto` uses the 3500m budget on every node, so a node with more CPU does not get more turns.
+
+For `small.yaml`, a chart test renders 32 turns. `small-16gib.yaml` changes none of these terms:
+
+| Term | Millicores |
+| --- | ---: |
+| Allocatable CPU | 3,500 |
+| Server 250, webhook role 250, webapp 50, worker 250, PostgreSQL 250, NATS 100 | −1,150 |
+| Conversation host 50, and 10 tools Pods at 25 | −300 |
+| 5 reviews at 50, and the isolation probe at 100 | −350 |
+| pgBackRest, when backups are on | −100 |
+| Remaining CPU | 1,700, or 1,600 with backups |
+| Turns: the remaining CPU divided by 50, at most 32 | 32 |
+
+Tools memory is a separate resource.
+The conversations quota holds ten tools Pods for each worker, including a warm pool of up to two.
+A turn requests a tools Pod only when it calls a tool. When the quota is full, that turn waits with visible progress.
+The resident-turn count does not change this quota or the request of a Pod.
+The provider pool admits each model call independently.
+
+The 50m for each turn and the ceiling of 32 come from an admission sweep on release 0.95.0 with a scripted fake model.
+[ADR 0068 G](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md#g-review-pod-admission-checks-quota-and-provider-demand) owns that evidence and the qualification that a higher ceiling needs.
+The [CSV results](/data/capacity-s3-0950.csv) give the measured commit, cohort and fake-model timings.
+The [capacity procedure](/contributor/capacity-benchmark) describes the fixture.
+
+## Measured conversation latency
 
 The web conversation target is first answer text within 10 seconds for at least 95% of turns.
-Time starts when the client sends the question and includes queue, startup, provider and tool time.
+Time starts when the client sends the question, and includes queue, startup, model and tool time.
 A stream snapshot or heartbeat is not answer text.
 
-The table gives a controlled Kubernetes measurement on release 0.95.0, with 4 vCPUs and 15.61 GiB of memory.
-Each case had 40 synthetic users, three turns each and 30 seconds between turns.
-The users arrived over one second.
-All 120 turns completed in each case, with no missing first-text samples.
+The latest first-text measurement ran for two hours on 2026-10-31, on commit `624a5836`.
+Release 1.0.0-rc.1 contains that commit. No later release has a first-text measurement.
+The model was a scripted fake model, not a real model. Its setup:
 
-The deterministic provider used assumed timings: first token at 3 seconds, 500 declared output tokens and 13 seconds per call.
-Each turn made one call, with no tools, reviews or provider throttles.
-These conditions do not represent the full course workload.
+| Part | Setup |
+| --- | --- |
+| Node | One Kubernetes node with 4 vCPU and 15.61 GiB of allocatable memory, and no swap |
+| Profile | `small.yaml` with `small-16gib.yaml`: one worker and 32 resident turns from `auto`. The run had one review slot, not the five that the profile now derives |
+| Model | A scripted fake model. Each call gave its first token after 3 seconds and ended after 13 seconds, with 500 declared output tokens. It used no tools and refused no call |
+| Call pool | 32 calls in flight, with a reserve of 8 for conversations |
+| Load | 80 users with 3 turns each at 0, 30, 60 and 90 minutes. Between these bursts, cohorts of 40 users with 3 turns each started 60 seconds apart |
+| Reviews | No review ran. One Pod in the review tier held 1,152 MiB for the whole run, in place of the memory of one review |
+| Other workloads | PostgreSQL, NATS and monitoring of another release used about 1.4 GiB on the same node |
 
-| Turn admission | First text p50 / p95 | Turn duration p50 / p95 | First text within 10 s | Cohort drain, turns/h |
-| -------------- | -------------------- | ----------------------- | ---------------------- | --------------------- |
-| 8              | 25.78 / 55.97 s      | 35.56 / 65.76 s         | 8/120 (6.67%)          | 2,164                 |
-| 16             | 3.46 / 31.27 s       | 13.24 / 41.05 s         | 96/120 (80.00%)        | 3,332                 |
-| 32             | 3.57 / 17.88 s       | 13.37 / 27.66 s         | 112/120 (93.33%)       | 3,721                 |
+| Result | Value |
+| --- | --- |
+| Turns that ended with an answer | 5,880 of 5,880. No turn failed or was refused |
+| First text p50 / p95 / p99 | 3.416 / 17.521 / 34.807 s |
+| First text within 10 seconds | 4,679 of 5,880 turns (79.6%) |
+| Lowest available node memory | 8,390.31 MiB |
+| Highest memory charge of the server / worker / PostgreSQL | 1,437.24 / 1,375.60 / 442.30 MiB |
+| OOM kills, evictions and swap use | 0 |
 
-Each case misses the 95% target, which requires at least 114 of 120 turns within 10 seconds.
-The drain rate divides completed turns by the whole case duration.
-It is not a sustained arrival rate or a review-throughput measurement.
-Admission 32 is a tested point, not a qualified default.
-The [CSV results](/data/capacity-s3-0950.csv) include the measured commit, cohort and provider assumptions.
-The [capacity procedure](/contributor/capacity-benchmark) describes the fixture and required evidence.
+The run misses the 95% target.
+In the 80-user bursts, turns wait for one of the 32 resident turns.
+The values apply only to this fake model, workload and node.
+A real model has other first-token and output times.
 
-The following effects still need measurement with the same workload:
+## Not yet measured
 
-| Condition                   | Required comparison                                                                                               | Current result |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------- |
-| PostgreSQL and NATS backups | Throughput, first text, completion latency and resource pressure during a backup versus an idle control           | Unmeasured     |
-| Cold starts and image pulls | Startup delay, first text and memory peak with an empty image cache versus a warm cache                           | Unmeasured     |
-| Server deployments          | Failed or slow authenticated reads, user-visible outage and error-budget use during Recreate                      | Unmeasured     |
-| Provider throttles          | First text, call-grant waits and review throughput with deterministic 429 responses versus an unthrottled control | Unmeasured     |
+No load measurement exists yet for these conditions:
 
-### Deployment availability budget
+| Condition | Comparison that the measurement needs | Result |
+| --- | --- | --- |
+| Backups of PostgreSQL and NATS | Throughput, first text, completion latency and resource pressure during a backup, against an idle control | Not yet measured |
+| Cold starts and image pulls | Startup delay, first text and memory peak with an empty image cache, against a warm cache | Not yet measured |
+| Conversation first text with a real model | First text at the profile's turn count with a real model endpoint | Not yet measured |
+| Model throughput knee | The four facts in [Model capacity](#model-capacity) | Not yet measured |
+| PostgreSQL process limit of 1536 MiB | The gates in [PostgreSQL memory](#postgresql-memory) | Not yet measured |
+| Provider throttles | First text, call-grant waits and review throughput with deterministic 429 responses, against an unthrottled control | Not yet measured |
+| Reviews and conversations together | Review time and conversation first text, with reviews that run beside the conversation load | Not yet measured |
+| Reviews at once with a real model | Review time, call-grant waits, and node memory and CPU at the profile's review count with a real model endpoint | Not yet measured |
+| Server deployments | Failed or slow authenticated reads, the outage that a user sees, and error-budget use during `Recreate` | Not yet measured |
 
-The app target is 99.5% of eligible authenticated reads succeeding within 2 seconds.
+## Model capacity
+
+Each model has a call pool with a learned limit of calls in flight.
+[Runtime roles § The learned limit](./runtime-roles#the-learned-limit) gives each event that changes it.
+The limit falls when the provider refuses a call, and when even the fastest first token of a window of calls waits too long.
+The pool does not read the output rate of a stream.
+
+A model server that batches calls, such as vLLM or Logos, starts a new call at once while its batch has room.
+The first token of that call is not late, but each stream in the batch gets slower.
+Thus, the pool can learn a limit past the throughput knee: the calls in flight at which the total output rate stops rising.
+The `maxConcurrentCalls` ceiling caps the learned limit ([AI providers § Set a ceiling or a rate](./ai-providers#set-a-ceiling-or-a-rate)).
+
+For Qwen3.8-27B served through Logos, one stream gives about 40 tokens per second.
+[ADR 0074](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0074-a-reviews-width-and-count-follow-the-provider.md#context) records 40.5 tokens per second for each stream, in five reviews.
+The knee of this model is not yet measured:
+
+| Fact at the knee | Result |
+| --- | --- |
+| Calls in flight at which the total output rate stops rising | Not yet measured |
+| Output rate of each stream at that point | Not yet measured |
+| Time to the first chunk at that point | Not yet measured |
+| Ceiling that the defaults use | Not yet measured |
+
+## Deployment availability budget
+
+The app target is 99.5% of eligible authenticated reads that succeed within 2 seconds.
 Deployments consume this error budget.
 For a window with `N` eligible reads, the budget permits at most `floor(N / 200)` failed or slow reads.
-Measure deployment failures with an authenticated probe outside the server Pod that is replaced.
-Pod readiness alone does not measure the outage that a user sees.
+An authenticated probe outside the replaced server Pod measures deployment failures.
+Pod readiness alone does not show the outage that a user sees.
 
-At a constant probe rate of one request per second, a 30-day window permits 12,960 bad probe results, equivalent to 216 minutes.
-This time conversion applies to that probe schedule.
-The app's request-based budget uses its actual eligible request count.
-No deploy-outage measurement or error-budget qualification is available from the conversation cases above.
+At a constant probe rate of one request each second, a 30-day window permits 12,960 bad probe results, or 216 minutes.
+This time conversion applies only to that probe schedule.
+The app's budget uses its actual count of eligible requests.
 
-## Initial budget
+Both single-node profiles update the worker and the server with `Recreate`.
+Reviews and conversation turns stop while the old worker drains and the new worker starts.
+This outage counts against the budget. A measurement of it is [not yet available](#not-yet-measured).
 
-Select a [chart profile](./kubernetes#profiles) for the host.
-Check the rendered requests against the node's allocatable resources before installation.
-A sandbox quota bounds the installation's sandbox requests independently of the worker JVM.
+## CPU and processes
+
+CPU requests decide scheduling, and CPU limits bound use.
+A kubelet `podPidsLimit` on the sandbox nodes is optional.
+The isolation probe records the process limit that a sandbox Pod meets ([Kubernetes § Sandbox prerequisites](./kubernetes#sandbox-prerequisites)).
+A worker whose isolation probe fails starts no sandbox.
+
+## Memory headroom
+
+When the JVM starts, the buildpack's memory calculator sizes Java memory from the container's memory limit.
+`BPL_JVM_HEAD_ROOM` is a percentage of that limit that the calculator keeps out of Java memory.
+The chart does not set it, so the headroom is 0%.
+Thus, a larger container memory limit gives a larger heap at the next start.
+The worker's file cache and other memory outside the JVM use the rest of the limit.
+
+The chart sets `BPL_JVM_THREAD_COUNT` for the worker: 120 threads, plus 8 for each review of one worker.
+A changed value applies at the next start of the JVM, after a [graceful drain](./runtime-roles#graceful-drain).
+The [Paketo memory calculator](https://paketo.io/docs/reference/java-reference/#memory-calculator) gives the calculation.
 
 ## PostgreSQL memory
 
@@ -85,50 +211,34 @@ The small profile uses these shared-node values:
 
 `work_mem` applies to each sort or hash operation and can multiply across concurrent queries.
 `effective_cache_size` is a planner estimate. It allocates no memory.
-These settings retain autovacuum, statement statistics, fsync, and WAL durability.
+These settings keep autovacuum, statement statistics, fsync and WAL durability.
 See [PostgreSQL resource consumption](https://www.postgresql.org/docs/18/runtime-config-resource.html).
 
-The small profile requests the PostgreSQL process's full 2 GiB memory limit.
+The small profile requests the full 2 GiB memory limit of the PostgreSQL process.
 Its resident pgBackRest sidecar also requests its full 512 MiB memory limit.
-CPU can still burst. These Pods retain Burstable QoS.
+CPU can still burst, so these Pods keep the Burstable quality-of-service class.
 
-A lower 1536 MiB limit is a qualification target, not an enabled setting.
-Count the pgBackRest server sidecar separately, and count a backup or stanza Job in addition.
-Do not add individual-container p95 values to claim a synchronized node peak.
+A limit of 1536 MiB is a qualification target, not a setting.
+The qualification counts the pgBackRest sidecar separately, and a backup or stanza Job in addition.
+The p95 values of separate containers do not add up to a node peak at one time.
+The qualification runs the reference load with a representative database, vacuum work, WAL archiving and the permitted worker surge.
+`pg_settings` shows the effective values and their command-line source.
 
-Before lowering the process limit, run the reference load with the representative database, vacuum work, WAL archiving, and the permitted worker surge.
-Read `pg_settings` to verify the effective values and their command-line source.
-Require process charge within 1536 MiB, no OOM, no Hikari timeouts, and connection-acquire p95 below 50 ms.
-For the initial trial, require WAL archive lag below 60 seconds during steady load and below five minutes during recovery.
+The qualification passes when all of these are true:
 
-Require autovacuum to reduce dead tuples after the peak, and investigate idle transactions older than one minute.
-Record vacuum duration and archive catch-up with the workload. A successful startup does not prove these gates.
-Keep the larger limit and lower concurrency if the trial fails.
+- The process charge stays within 1536 MiB, with no OOM kill and no Hikari timeout.
+- The connection-acquire p95 is less than 50 ms.
+- WAL archive lag is less than 60 seconds in steady load, and less than five minutes in recovery.
+- Autovacuum reduces dead tuples after the peak.
 
-## Review sandbox limits
-
-The [Pod-kind table](./kubernetes#sandbox-sizes) owns each sandbox's memory, CPU request and disk sizes.
-`SANDBOX_CPUS` sets the review's CPU ceiling.
-The retired `SANDBOX_MEMORY_BYTES` and `SANDBOX_PIDS_LIMIT` settings do not configure Kubernetes.
-The kubelet enforces the per-Pod process limit, which the worker's isolation probe verifies.
-
-## CPU and processes
-
-CPU requests determine scheduling and CPU limits bound use.
-Keep the node's process limit configured as the [Kubernetes installation](./kubernetes#worker) requires.
-A worker that cannot prove isolation starts no sandbox work.
-
-## What you can scale
-
-The chart controls worker replicas, review capacity and conversation capacity.
-Each replica also needs its JVM, database connections and conversation host budget.
-Before raising capacity, qualify the workload on the target host shape.
-Keep the workload, logs and before/after measurements with the qualification result.
+The qualification also records vacuum duration, archive catch-up and each idle transaction older than one minute.
+A successful start does not prove these gates. Until the qualification passes, the profile keeps the 2 GiB limit.
 
 ## Database connections
 
-Each chart role has a typed `databasePool.maximumPoolSize` and `databasePool.minimumIdle`.
-They set native Spring datasource properties for that role and override its profile defaults.
+Each chart role has `databasePool.maximumPoolSize` and `databasePool.minimumIdle`.
+They set the Spring datasource pool of that role and override its profile defaults.
+The chart default is 20 / 5 for the server, 32 / 5 for each worker and 2 / 1 for the migration Job.
 The small profile uses:
 
 | Client | Maximum / minimum idle |
@@ -136,71 +246,40 @@ The small profile uses:
 | Server | 16 / 2 |
 | Each worker | 24 / 2 |
 | Migration Job | 2 / 1 |
-| Webhook receiver | 0 / 0: no DataSource |
-| Sandboxes | 0 / 0: use their gateway |
+| Webhook role | 0 / 0: no DataSource |
+| Sandboxes | 0 / 0: they use the worker's gateway |
 
-Preparing code evidence can hold two connections.
-Bound capture concurrency separately. A larger pool does not authorize more simultaneous captures.
-The server's four scheduled workspace syncs can hold eight connections, leaving eight for foreground and control work.
-Do not hold a database transaction while waiting for a model grant or provider response.
+The preparation of code evidence can hold two connections for each running review.
+A larger pool does not admit more captures at once.
+The server's four scheduled workspace syncs can hold eight connections, which leaves eight for foreground and control work.
+No worker holds a database connection while its call waits for a model grant or for the provider.
 
-With one replacement worker beside one old worker, pooled sessions use `16 + 24 + 24 = 64` connections.
-During that worker surge, budget three dedicated listeners outside Hikari, four migration/backup sessions, four operator/monitor sessions, and three superuser-reserved slots.
-The total is 78 of 80.
-The server retains `Recreate`. Do not double the whole release or overlap another worker rollout.
+The chart adds up the connections that PostgreSQL must hold.
+With `RollingUpdate`, it counts each worker replica twice. `small.yaml` uses `Recreate`:
 
-Without an explicit `max_connections`, the chart sets what the role pools, worker surge, listeners, and maintenance reserves need on a bundled database.
-It rejects an explicit value that cannot hold them.
-Inventory dedicated listeners after runtime changes and recompute this budget if more exist.
+| Part | `small.yaml`, `Recreate` | `small.yaml` with `RollingUpdate` |
+| --- | ---: | ---: |
+| Server pool | 16 | 16 |
+| Worker pools | 24 | 48 |
+| Listeners, one for each server and worker replica | 2 | 3 |
+| Migration pool | 2 | 2 |
+| Backup sessions | 2 | 2 |
+| Operator sessions | 4 | 4 |
+| Superuser slots | 3 | 3 |
+| Total, against `max_connections` of 80 | 53 | 78 |
 
-The independent mentor loop and tool Pods must use the gateway without a database pool.
+The render stops if an explicit `max_connections` is less than the total.
+Without an explicit value, the chart sets the total on a bundled database, and at least 100.
+A rendered connection count does not show pool waits, query latency or memory use.
 
-The chart defaults outside the small profile keep server/worker pools of 20/32 with minimum idle five.
-For more replicas, change the role pools and PostgreSQL budget together.
-Measure pool waits at the actual workload. A rendered connection count does not prove query latency or memory use.
+## Review sandbox limits
 
-## Memory headroom
-
-When the JVM starts, the buildpack's memory calculator sets the Java memory from the container's memory limit.
-`BPL_JVM_HEAD_ROOM` is an optional percentage of that limit.
-The calculator keeps this percentage out of the Java memory that it calculates.
-The heap must also leave room for the worker's file cache and for other memory that the container uses outside the JVM.
-
-The default headroom is 0 %.
-Thus, if you increase the container memory limit, the heap can also increase at the next start.
-Select the headroom for the actual workload of your worker.
-
-Set the worker's headroom through the chart worker settings.
-If you do not set it, the buildpack's default behavior applies.
-The value applies only when the JVM starts.
-To apply a change, drain and restart the worker, as [Graceful drain](./runtime-roles#graceful-drain) describes.
-For the calculation, see the [Paketo memory calculator](https://paketo.io/docs/reference/java-reference/#memory-calculator).
+The [Pod-kind table](./kubernetes#sandbox-sizes) owns the memory, CPU request and disk sizes of each sandbox.
+The reviews quota and the conversations quota bound sandbox requests separately from the worker JVM.
 
 ## Disk
 
-Budget the node's images, logs and sandbox scratch space separately from persistent database and Git-cache storage.
-The chart bounds sandbox ephemeral-storage requests, limits and volumes.
+The node's images, logs and sandbox scratch space are a budget separate from the persistent database and Git-cache volumes.
+The chart bounds the ephemeral-storage requests, limits and volumes of sandboxes.
 The [Kubernetes guide](./kubernetes#sandbox-sizes) owns these bounds.
-Back up persistent state as [Backup and restore](./backup-restore) describes.
-
-## Conversation turn admission
-
-Both single-node Kubernetes profiles admit 32 resident conversation turns from the declared CPU budget.
-The formula subtracts resident role and fixed tools-tier requests, plus the review-tier CPU reservation, then divides the remaining millicores by 50.
-It caps the total at 32 and divides it across workers. An explicit `worker.conversationTurns` overrides the automatic count.
-The chart and its fit gate read the same `turn-admission.json` declaration.
-The provider pool admits each physical model call independently.
-
-Tools memory is a separate resource.
-The unchanged conversation quota holds ten tools Pods per worker, including a warm pool of up to two.
-A turn requests tools only when it calls a tool. A full quota makes that turn wait with visible progress.
-The resident-turn count does not enlarge this quota or reduce any Pod's request.
-
-The approved model-only sweep supports the 50m planning coefficient and the 32-turn ceiling.
-Tool-heavy and 80-user qualification precede any increase to 48.
-[ADR 0068 G](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md#g-review-pod-admission-checks-quota-and-provider-demand) owns the evidence and its limits.
-
-The single-node workers use `Recreate`: the old worker drains before its replacement starts.
-Reviews and conversation turns pause during that drain and start.
-The server remains one replica with `Recreate`. Measure this deployment outage against the 99.5% availability budget.
-A 32-turn admission is not a zero-downtime upgrade claim.
+[Backup and restore](./backup-restore) owns persistent state.
