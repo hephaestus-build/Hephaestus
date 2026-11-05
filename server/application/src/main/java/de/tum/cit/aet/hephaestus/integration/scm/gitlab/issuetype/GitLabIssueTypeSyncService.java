@@ -22,10 +22,12 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.DataAccessException;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Synchronizes GitLab work item types as IssueType entities.
@@ -46,18 +48,21 @@ public class GitLabIssueTypeSyncService {
     private final GitLabGraphQlClientProvider graphQlClientProvider;
     private final GitLabGraphQlResponseHandler responseHandler;
     private final GitLabProperties gitLabProperties;
+    private final TransactionTemplate transactionTemplate;
 
     public GitLabIssueTypeSyncService(
             IssueTypeRepository issueTypeRepository,
             OrganizationRepository organizationRepository,
             GitLabGraphQlClientProvider graphQlClientProvider,
             GitLabGraphQlResponseHandler responseHandler,
-            GitLabProperties gitLabProperties) {
+            GitLabProperties gitLabProperties,
+            TransactionTemplate transactionTemplate) {
         this.issueTypeRepository = issueTypeRepository;
         this.organizationRepository = organizationRepository;
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
         this.gitLabProperties = gitLabProperties;
+        this.transactionTemplate = transactionTemplate;
     }
 
     /**
@@ -67,14 +72,14 @@ public class GitLabIssueTypeSyncService {
      * @param groupPath  the full path of the GitLab group
      * @return number of issue types synced
      */
-    @Transactional
     public int syncIssueTypesForGroup(Long scopeId, String groupPath) {
         String safeGroupPath = sanitizeForLog(groupPath);
 
-        Organization org = organizationRepository
+        Long organizationId = organizationRepository
                 .findByLoginIgnoreCaseAndProvider_Type(groupPath, IdentityProviderType.GITLAB)
+                .map(Organization::getId)
                 .orElse(null);
-        if (org == null) {
+        if (organizationId == null) {
             log.debug("Organization not found, skipping issue type sync: groupPath={}", safeGroupPath);
             return 0;
         }
@@ -106,19 +111,8 @@ public class GitLabIssueTypeSyncService {
                 return 0;
             }
 
-            Set<String> syncedIds = new HashSet<>();
-            int synced = 0;
-
-            for (Map<String, Object> node : nodes) {
-                IssueType issueType = processWorkItemType(node, org);
-                if (issueType != null) {
-                    syncedIds.add(issueType.getId());
-                    synced++;
-                }
-            }
-
-            // Disable stale issue types
-            disableStaleIssueTypes(org.getId(), syncedIds);
+            // GitLab has answered: the write is its own short transaction, so no connection waits on GitLab.
+            int synced = Objects.requireNonNull(transactionTemplate.execute(status -> store(organizationId, nodes)));
 
             log.info("Synced GitLab issue types: groupPath={}, count={}", safeGroupPath, synced);
             return synced;
@@ -126,10 +120,32 @@ public class GitLabIssueTypeSyncService {
             Thread.currentThread().interrupt();
             log.info("Issue type sync interrupted: groupPath={}", safeGroupPath);
             return 0;
+        } catch (DataAccessException | TransactionException e) {
+            // A failed write is not a GitLab error: the caller sees it, as it did when the sync ran in one transaction.
+            throw e;
         } catch (Exception e) {
             log.warn("Issue type sync failed: groupPath={}", safeGroupPath, e);
             return 0;
         }
+    }
+
+    /** Stores the work item types that GitLab listed and disables the ones it no longer lists. */
+    private int store(Long organizationId, List<Map<String, Object>> nodes) {
+        Organization org = organizationRepository.findById(organizationId).orElse(null);
+        if (org == null) {
+            return 0;
+        }
+        Set<String> syncedIds = new HashSet<>();
+        int synced = 0;
+        for (Map<String, Object> node : nodes) {
+            IssueType issueType = processWorkItemType(node, org);
+            if (issueType != null) {
+                syncedIds.add(issueType.getId());
+                synced++;
+            }
+        }
+        disableStaleIssueTypes(organizationId, syncedIds);
+        return synced;
     }
 
     @Nullable
