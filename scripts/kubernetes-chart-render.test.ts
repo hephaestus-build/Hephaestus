@@ -3755,7 +3755,7 @@ function installNotes(layers: readonly Layer[]): string {
 
 await test("an install warns when the bundled PostgreSQL has no backup, and only then", () => {
 	const warning = "WARNING: the bundled PostgreSQL has no backup.";
-	const backupDocs = "https://docs.hephaestus.build/admin/kubernetes#backup-and-restore";
+	const backupDocs = "https://docs.hephaestus.build/admin/backup-restore#turn-on-the-chart-backup";
 	const unprotected = installNotes(layersFor("small"));
 	assert.ok(unprotected.includes(warning), unprotected);
 	assert.ok(unprotected.includes(backupDocs), unprotected);

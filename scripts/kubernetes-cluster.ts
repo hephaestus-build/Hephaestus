@@ -1212,7 +1212,7 @@ async function s3Storage(work: string): Promise<{ key: string; secret: string }>
 }
 
 /**
- * The backup and restore drill of docs/admin/kubernetes.mdx § Backup and restore, on the bundled
+ * The backup and restore drill of docs/admin/backup-restore.mdx § Restore, on the bundled
  * PostgreSQL: a full backup, a row that only the WAL archive holds, a dropped table, and then a
  * point-in-time restore through the chart's restore setting that brings both rows back.
  */

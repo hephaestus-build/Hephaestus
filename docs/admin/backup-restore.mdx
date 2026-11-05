@@ -1,11 +1,30 @@
 ---
-id: backup-restore
-title: Backup & Restore
-description: Keep the data, keys and release identity needed to recover a Helm installation.
+title: Back up and restore
+description: Back up the bundled PostgreSQL of a Helm installation, restore it in a drill or a live recovery, and check that a backup is usable.
+page_type: how-to
 ---
 
-The [Kubernetes guide](./kubernetes#backup-and-restore) owns the backup and restore commands.
-The [operations runbook](./production-operations-runbook#backup-restore-and-postgresql--jetstream) owns the recovery gates and broker procedure.
+This page tells you how to back up a Helm installation and how to restore it.
+Turn on the chart backup before the instance admits work.
+Use the restore procedures to rehearse a recovery, and to recover after a data loss.
+The [operations runbook](./production-operations-runbook#backup-restore-and-postgresql--jetstream) owns the recovery gates and the broker procedure.
+
+## Before you start
+
+- You can run `helm` and `kubectl` in the release namespace, and you can change the release Secret.
+- You have an S3-compatible bucket outside the cluster for this instance alone.
+- You keep the keys and the required Secret values outside the cluster, as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
+
+The commands on this page use the release `hephaestus` in the namespace `hephaestus`.
+If your names are different, change them in each command.
+
+The upgrade that turns on the backup changes the PostgreSQL Pod, so PostgreSQL restarts.
+A restore stops the server, the webhook role, the workers and PostgreSQL until it completes.
+
+### Unsupported PostgreSQL versions
+
+Use the PostgreSQL version and image of the verified release.
+The [compatibility policy](./compatibility-policy) owns the supported versions and upgrade prerequisites.
 
 ## What to back up
 
@@ -17,32 +36,179 @@ The [operations runbook](./production-operations-runbook#backup-restore-and-post
 | Signed release lock and site values | Restore the release and configuration that match the database. Verify its chart and image digests.                                                                                                           |
 | Platform recovery material          | Keep the k3s token and state, required certificates and storage configuration as the operations runbook describes.                                                                                           |
 
+Preserve these items as one recovery set.
+Keep the originals until the recovery is verified.
+
 Repository mirrors and inputs for active attempts are disposable.
 The roles rebuild them from PostgreSQL and the upstream provider.
 Do not use copied attempt folders to resume an in-flight review.
 
-## Automated off-host backup
+## Turn on the chart backup
 
-Enable the chart's pgBackRest backup after you configure an off-host S3-compatible repository and its credentials.
-[Backup and restore](./kubernetes#backup-and-restore) owns the chart values, backup Jobs and TLS client identity.
-Keep the repository passphrase outside the cluster.
+The chart backup is off by default.
+While the bundled PostgreSQL runs without `postgresql.backup.enabled`, each `helm install` and `helm upgrade` prints this warning:
 
-A configured schedule is not proof of a usable recovery point.
-Check WAL archival, completed backups and repository access.
-Rehearse an [isolated restore](./kubernetes#isolated-restore-drill), including clone lockdown, before relying on the backup.
-The operations runbook defines the recovery-time and recovery-point acceptance criteria.
+```text
+WARNING: the bundled PostgreSQL has no backup. postgresql.backup.enabled is false, so the chart does
+not archive the WAL and takes no backup. If the PostgreSQL volume is lost, all data of every
+workspace is lost. Enable the chart's pgBackRest backup, or back up the volume yourself:
 
-## Backup
+  https://docs.hephaestus.build/admin/backup-restore#turn-on-the-chart-backup
+```
 
-Use the [chart backup procedure](./kubernetes#backup-and-restore).
-Preserve the database, broker recovery material, keys and signed release identity as one recovery set.
-Keep the originals until the recovery is verified.
+The chart does not back up an external PostgreSQL, and it prints no warning for it.
+It refuses `postgresql.backup.enabled` together with an external PostgreSQL.
+
+### What the chart backup does
+
+With `postgresql.backup.enabled=true`, the bundled PostgreSQL archives its WAL to one S3-compatible bucket with pgBackRest.
+pgBackRest encrypts the repository with `BACKUP_CIPHER_PASS`.
+A CronJob takes a full backup each Sunday at 02:15 UTC.
+Another CronJob takes a differential backup on the other days at the same time.
+`postgresql.backup.schedule.full` and `postgresql.backup.schedule.differential` set these times.
+If you change them, change the age of `HephaestusBackupStale` too, as [Alert rules](./observability.mdx#alert-rules) describes.
+
+`postgresql.backup.retentionFull` sets the number of full backup chains that stay, 2 by default.
+Each chain keeps its differential backups and its WAL.
+A Job of each release revision creates the repository's stanza and checks the WAL archive.
+Thus, the WAL archive works from the install, not from the first scheduled backup.
+
+The backup Jobs do not mount the PostgreSQL volume.
+They read the data directory through the pgBackRest TLS server in the PostgreSQL Pod, on port 8432.
+That server admits only a client certificate for the common name `hephaestus-backup` that `ca.crt` signed.
+The chart mounts the certificate and key of the backup client Secret into the backup Jobs as `backup.crt` and `backup.key`.
+
+A failed WAL archive keeps the WAL on the PostgreSQL volume until the volume is full.
+The [alert rules](./observability.mdx#alert-rules) watch the WAL archive, the age of the latest backup and the free space of the volume.
+
+### A backup that you take yourself
+
+The chart cannot see a backup that you take yourself, for example a volume snapshot.
+Thus, the chart cannot verify that backup.
+The warning stays at each `helm install` and `helm upgrade`.
+`HephaestusBackupStale` reads only the backup CronJobs of the chart.
+Without `postgresql.backup.enabled`, the bundled PostgreSQL does not archive its WAL, so `HephaestusWalArchiveFailing` has no archive to watch.
+The restore Job of the chart restores only from the pgBackRest repository of the chart.
+
+### Prepare the backup
+
+1. Create the bucket for this instance alone.
+2. Create an identity with read, write and delete rights in the bucket.
+3. Add `BACKUP_S3_KEY` and `BACKUP_S3_KEY_SECRET` of that identity to the release Secret.
+4. Run `sh hephaestus-keys.sh --backups` to generate `BACKUP_CIPHER_PASS`, as [Create the Secret](./kubernetes#create-the-secret) describes.
+5. Keep a copy of the passphrase outside the cluster, as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
+6. Set `postgresql.backup.clientTlsSecret` to a TLS Secret for the common name `hephaestus-backup`.
+   The Secret needs `ca.crt`, `tls.crt` and `tls.key`, signed by the PostgreSQL CA.
+   Do not put the private key of the CA in this Secret.
+   The one-host platform issues `hephaestus-postgresql-backup-tls` and sets this value.
+7. Set `postgresql.backup.enabled` and `postgresql.backup.s3` in your values file. Give the bucket, the endpoint host name and the region:
+
+   ```yaml title="values.yaml"
+   postgresql:
+     backup:
+       enabled: true
+       clientTlsSecret: hephaestus-postgresql-backup-tls
+       s3:
+         bucket: hephaestus-backups
+         endpoint: s3.example.com
+         region: eu-central-1
+   ```
+
+8. Optional: if the endpoint is in a private address range, set `postgresql.backup.s3.cidr` and `postgresql.backup.s3.port`.
+9. Optional: if a private CA signs the certificate of the endpoint, add the CA to the PostgreSQL TLS Secret as `s3-ca.crt`.
+   Then set `postgresql.backup.s3.privateCa` to `true`.
+10. Upgrade the release.
+11. Wait for the stanza Job to complete:
+
+    ```bash
+    kubectl --namespace hephaestus wait --for=condition=complete \
+      job/hephaestus-postgresql-backup-stanza-<revision> --timeout=10m
+    ```
+
+    `<revision>` is the release revision that `helm status hephaestus --namespace hephaestus` shows.
+
+[Backup bucket credentials](./secret-custody#backup-bucket-credentials) and [Backup cipher passphrase](./secret-custody#backup-cipher-passphrase) give the rotation of these values.
 
 ## Restore
 
-Choose the [isolated restore drill](./kubernetes#isolated-restore-drill) or [live recovery](./kubernetes#recover-the-live-installation) procedure for the intended destination.
-An isolated clone must complete lockdown before migrations or application roles start.
-Do not apply clone lockdown to the live recovery database.
+A restore replaces the bundled database with a backup.
+It loses every change after the backup or the time that you select.
+The restored database is readable only with the keys that sealed its values.
+Keep them as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
+Restore the NATS JetStream data separately, as the [broker recovery procedure](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers) describes.
+
+Choose the procedure for the destination of the restore:
+
+- [Isolated restore drill](#isolated-restore-drill): a disposable, isolated clone. An isolated clone must complete lockdown before migrations or application roles start.
+- [Recover the live installation](#recover-the-live-installation): the live installation. Do not apply clone lockdown to the live recovery database.
+
+### Isolated restore drill
+
+Run the following procedure only on a disposable, isolated clone.
+It changes control settings with clone lockdown SQL.
+[Pre-boot isolation](./production-operations-runbook#pre-boot-isolation--mandatory-for-every-restore) gives the isolation that the clone needs.
+
+1. Upgrade the release with `postgresql.backup.restore.enabled=true`.
+   Set `postgresql.backup.restore.time` to restore the database as it was at that time, for example `2026-10-24 18:00:00+00`.
+   Leave it empty to restore the latest backup and every archived WAL segment.
+   While the setting is on, the server, the webhook role, the workers and PostgreSQL stop, and the backups pause.
+2. Wait for the Job `<release>-postgresql-backup-restore-<revision>` to complete:
+
+   ```bash
+   kubectl --namespace hephaestus wait --for=condition=complete \
+     job/hephaestus-postgresql-backup-restore-<revision> --timeout=30m
+   ```
+
+   The Job retries while PostgreSQL still shuts down.
+3. Keep the clone isolated before any application code starts. Deny provider and model egress independently of silent mode.
+4. Upgrade with `postgresql.backup.restore.enabled=false`, `migration.enabled=false`, and server, webhook and worker replica counts of zero.
+   PostgreSQL alone replays the WAL up to the target.
+   Readiness does not prove that replay finished. Wait until this command prints `f`:
+
+   ```bash
+   kubectl -n hephaestus exec hephaestus-postgresql-0 -c postgresql -- \
+     sh -c 'exec psql -Atc "SELECT pg_is_in_recovery()" -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+   ```
+
+5. Apply the lockdown SQL from the verified chart, before starting migrations or application roles:
+
+   ```bash
+   kubectl -n hephaestus exec -i hephaestus-postgresql-0 -c postgresql -- \
+     sh -c 'exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+     < "chart-$VERSION/hephaestus/files/restore-clone-lockdown.sql"
+   ```
+
+6. Read back silent mode, paused feedback and disabled conversation bindings. Keep external egress denied.
+7. Restore JetStream with a recovery point consistent with PostgreSQL. Resolve provider write receipts before consumers start.
+8. Set `migration.enabled=true` and start the server alone. Verify migrations, readiness and authenticated reads.
+9. Restore the other replica counts only after the isolated checks pass.
+   Follow [Prove silence](./production-operations-runbook#silent-deployment-checklist) before opening any external destination.
+
+The restored database has the database password that it had at the backup.
+If `DATABASE_PASSWORD` changed since then, put the old value back in the Secret before step 3.
+Rehearse a restore on a copy of the instance before you need one.
+
+### Recover the live installation
+
+1. Close traffic and provider reception. Stop application roles and sandboxes, and pause reconciliation.
+2. Keep a copy of the failed data and record the chosen recovery point and expected lost writes.
+3. Check whether `DATABASE_PASSWORD` changed after the recovery point. If it changed, restore the matching value in the Secret before startup.
+   Complete steps 1, 2 and 4 of the isolated drill with application replicas at zero.
+   Keep provider and model egress denied. Wait for `pg_is_in_recovery()` to return `f`.
+4. Do not apply `restore-clone-lockdown.sql` to the live recovery database.
+   Verify silent mode, delivery status, review triggers and conversation bindings against the intended live settings.
+5. Complete [Choose the broker recovery strategy](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers) before consumers start.
+   The default is to quarantine and recreate the instance's broker state, with recorded event loss.
+   Snapshot replay needs a separate drill. A matching timestamp or recovery fence alone does not make it safe.
+6. Enable migrations and start the server alone. Verify readiness, authenticated reads and encrypted values.
+7. Before access or delivery resumes, reapply post-backup security and privacy decisions from the restricted incident record.
+   [Before restarting services](#before-restarting-services) gives the required suspension, session, consent and deletion checks.
+8. Start the worker and require its isolation probe.
+   Permit only the approved model endpoint for the controlled test while provider writes remain blocked.
+   Test an approved practice review and conversation with delivery paused.
+9. Complete **Prove silence**, **Inspect and decide**, and **Turn off silent mode deliberately** in the [silent checklist](./production-operations-runbook#silent-deployment-checklist).
+   Restore the intended live control settings, provider reception and egress. Start the remaining roles and reopen traffic after the checks pass.
+10. Verify every connected provider and feedback destination. Resume reconciliation only after its release and apply mode match the recovered deployment.
 
 ### Before restarting services
 
@@ -59,7 +225,49 @@ Scheduled sync cannot recover all events in the gap.
 
 Do not restore into an older application version.
 
-## Unsupported PostgreSQL versions
+## Check that it worked
 
-Use the PostgreSQL version and image of the verified release.
-The [compatibility policy](./compatibility-policy) owns the supported versions and upgrade prerequisites.
+A configured schedule is not proof of a usable recovery point.
+Check the WAL archive, the latest backup, the repository access and a restored copy.
+The operations runbook defines the recovery-time and recovery-point acceptance criteria.
+
+1. Check that PostgreSQL archives its WAL and reaches the repository:
+
+   ```bash
+   kubectl --namespace hephaestus exec hephaestus-postgresql-0 -c pgbackrest -- \
+     pgbackrest --stanza=hephaestus check
+   ```
+
+   The command switches the WAL segment and waits until the archive holds it.
+   It must exit without an error.
+2. Optional: to get a backup before the next scheduled run, start a full backup now:
+
+   ```bash
+   kubectl --namespace hephaestus create job hephaestus-backup-now \
+     --from=cronjob/hephaestus-postgresql-backup-full
+   ```
+
+3. List the backups in the repository:
+
+   ```bash
+   kubectl --namespace hephaestus exec hephaestus-postgresql-0 -c pgbackrest -- \
+     pgbackrest --stanza=hephaestus info
+   ```
+
+   The newest backup must be from the last scheduled run.
+   `HephaestusBackupStale` fires when no backup completed in the last 30 hours.
+4. Restore the backup into a clone on a separate host with the [isolated restore drill](#isolated-restore-drill).
+   The server of the clone must become ready and answer authenticated reads.
+
+## Troubleshooting
+
+### A backup Job fails with `unable to find primary cluster`
+
+The Job cannot reach the pgBackRest TLS server on port 8432 of the PostgreSQL Service.
+Another cause is a client certificate that is not for `hephaestus-backup`, or that `ca.crt` did not sign.
+
+### The PostgreSQL volume fills
+
+A failed WAL archive keeps the WAL on the volume.
+Read the log of the latest backup Job, and check the credentials of the bucket.
+[Alert response](./production-operations-runbook#alert-response) gives the steps for `HephaestusWalArchiveFailing` and `HephaestusPostgresVolumeFilling`.
