@@ -3,7 +3,46 @@
 // same vendored SDK in the same image at the same working directory, so each trust and discovery
 // option must be set the same way in both.
 
-import type { SettingsManagerCreateOptions } from "@earendil-works/pi-coding-agent";
+import {
+	type BashToolOptions,
+	createBashToolDefinition,
+	type SettingsManagerCreateOptions,
+} from "@earendil-works/pi-coding-agent";
+
+/**
+ * What a review's shell commands may see of the runner's environment: the search path, the home and scratch
+ * directories, the locale, and the git hardening that the sandbox sets (`GIT_CONFIG_*`, `GIT_ATTR_NOSYSTEM`, ...).
+ * Nothing else: the runner's own variables stay with the runner.
+ */
+const SHELL_VARIABLES = new Set([
+	"PATH",
+	"HOME",
+	"XDG_CONFIG_HOME",
+	"TMPDIR",
+	"LANG",
+	"TZ",
+	"TERM",
+]);
+
+function shellVariable(name: string): boolean {
+	return SHELL_VARIABLES.has(name) || name.startsWith("LC_") || name.startsWith("GIT_");
+}
+
+/** The environment of one shell command: only the allowed variables of `env`. */
+export function shellEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+	return Object.fromEntries(Object.entries(env).filter(([name]) => shellVariable(name)));
+}
+
+/** How a review's shell tool runs each command: with a minimal environment and no session metadata. */
+export const REVIEW_SHELL_OPTIONS = {
+	exposeSessionEnvironment: false,
+	spawnHook: (context) => ({ ...context, env: shellEnvironment(context.env) }),
+} satisfies BashToolOptions;
+
+/** A review's shell tool. */
+export function reviewShellTool(cwd: string): ReturnType<typeof createBashToolDefinition> {
+	return createBashToolDefinition(cwd, REVIEW_SHELL_OPTIONS);
+}
 
 /**
  * Untrusted on purpose: a trusted project makes the SDK look for `.agents/skills` in every ancestor

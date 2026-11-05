@@ -19,7 +19,6 @@ import {
 	type AgentSessionEvent,
 	type AgentToolResult,
 	createAgentSession,
-	createBashToolDefinition,
 	createCodemodeExtension,
 	DefaultResourceLoader,
 	defineTool,
@@ -29,6 +28,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import {
+	reviewShellTool,
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
 } from "./pi-agent-sandbox.ts";
@@ -702,6 +702,8 @@ export async function runReviewJob(): Promise<void> {
 	const AGENT_DIR = requiredEnv("PI_CODING_AGENT_DIR");
 	const LLM_PROXY_URL = requiredEnv("LLM_PROXY_URL");
 	const LLM_PROXY_TOKEN = requiredEnv("LLM_PROXY_TOKEN");
+	// The runner passes its credential where it is used. No process that it starts inherits it.
+	delete process.env.LLM_PROXY_TOKEN;
 	const DIRECT_MODEL_TOKENS = positiveIntegerEnv("PI_DIRECT_MODEL_TOKENS");
 	// Refusal exhaustion leaves the practice NOT_REACHED.
 	const MAX_REFUSALS_PER_PRACTICE = 8;
@@ -2344,7 +2346,14 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		});
 
 		const providerConfig = loadProviderConfig(CWD);
-		if (!registerHephaestusProvider(modelRuntime, providerConfig)) {
+		if (
+			!registerHephaestusProvider(
+				modelRuntime,
+				providerConfig,
+				{ ...process.env, LLM_PROXY_TOKEN },
+				LLM_PROXY_TOKEN,
+			)
+		) {
 			throw new Error(
 				"Hephaestus provider is not configured — pi-provider.json and proxy credentials are required",
 			);
@@ -2607,7 +2616,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		const registeredTools = new Set<string>();
 		const toolOf = (name: string) => (registeredTools.has(name) ? name : "other");
 		async function openSession(tools: string[], customTools: SessionOptions["customTools"]) {
-			const bash = createBashToolDefinition(CWD);
+			const bash = reviewShellTool(CWD);
 			const sessionTools: SessionOptions["customTools"] = tools.includes("bash")
 				? [
 						defineTool({

@@ -99,6 +99,8 @@ The runner retains completed results for admission.
 The debug report and logs include the most sessions that ran at once, and the time for each practice.
 
 `PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` (default 36) and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` (default 48000) set what each practice can spend.
+The model proxy also holds each review attempt to twice that budget for all its practices together.
+Past it, the proxy refuses the attempt's next model call with `403`.
 
 A practice script that calls `ctx.review()` opens review sessions, and their calls count against the budget of that practice.
 The direct model calls of practice scripts have their own limits for each review attempt: a token limit and a search unit limit.

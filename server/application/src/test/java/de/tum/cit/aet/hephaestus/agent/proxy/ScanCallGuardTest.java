@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
 import de.tum.cit.aet.hephaestus.practices.spi.FrozenModel;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
@@ -62,8 +63,11 @@ class ScanCallGuardTest extends BaseUnitTest {
     private final ScanBudget budget = mock(ScanBudget.class);
     private final JsonMapper mapper = new JsonMapper();
     private final ReviewJob job = RuntimeReviewTestData.job();
-    private final ScanCallGuard guard =
-            new ScanCallGuard(jobs, reviews, budget, new SandboxGatewayProperties(8081, 10000, 120), mapper);
+    private ReviewSnapshot scan;
+    private static final PracticeReviewProperties PRACTICE_REVIEW =
+            new PracticeReviewProperties(false, 15, 5, null, 36, 48_000, 200_000, 1000, Duration.ofMinutes(10));
+    private final ScanCallGuard guard = new ScanCallGuard(
+            jobs, reviews, budget, new SandboxGatewayProperties(8081, 10000, 120), mapper, PRACTICE_REVIEW);
 
     private ProxyRouting route() {
         return route(Instant.now().plusSeconds(60));
@@ -197,16 +201,16 @@ class ScanCallGuardTest extends BaseUnitTest {
                 old.definition(),
                 old.reviewDigest(),
                 new ReviewMethod(1, "b".repeat(64), List.of(new BoundModelSlot("review", ModelKind.CHAT, model))));
-        when(reviews.find(1, job.getReviewId()))
-                .thenReturn(Optional.of(new ReviewSnapshot(
-                        job.getReviewId(),
-                        1,
-                        RuntimeReviewTestData.ITEM,
-                        ReviewKind.SCAN,
-                        new ItemVersion("test:1", null),
-                        ReviewOrigin.REQUEST,
-                        1,
-                        List.of(pinned))));
+        scan = new ReviewSnapshot(
+                job.getReviewId(),
+                1,
+                RuntimeReviewTestData.ITEM,
+                ReviewKind.SCAN,
+                new ItemVersion("test:1", null),
+                ReviewOrigin.REQUEST,
+                1,
+                List.of(pinned));
+        when(reviews.find(1, job.getReviewId())).thenReturn(Optional.of(scan));
         lenient().when(reviews.budgetUsd(1, job.getReviewId())).thenReturn(Optional.of(BigDecimal.ONE));
         lenient()
                 .when(budget.spent(1, job.getReviewId()))
@@ -275,5 +279,78 @@ class ScanCallGuardTest extends BaseUnitTest {
     void refusesAReplacedAttempt() {
         job.setAttempt(1);
         refused("{}");
+    }
+
+    /** The same review, on one item instead of a scan: no scan budget, only the attempt's work bound. */
+    private void ordinaryReview() {
+        when(reviews.find(1, job.getReviewId()))
+                .thenReturn(Optional.of(new ReviewSnapshot(
+                        scan.id(),
+                        scan.workspaceId(),
+                        scan.item(),
+                        ReviewKind.ITEM,
+                        scan.version(),
+                        scan.origin(),
+                        scan.rolloutRevision(),
+                        scan.practices(),
+                        scan.eventId(),
+                        scan.evidenceExpiresAt())));
+    }
+
+    private long loopCalls() {
+        return (long) job.getInput().assignments().size() * PRACTICE_REVIEW.practiceModelCalls();
+    }
+
+    private long loopOutputTokens() {
+        return (long) job.getInput().assignments().size() * PRACTICE_REVIEW.practiceOutputTokens();
+    }
+
+    private void refusedForWork(ProxyRouting route) {
+        assertThatThrownBy(() -> guard.acquire(route, "{}".getBytes(StandardCharsets.UTF_8)))
+                .isInstanceOfSatisfying(ResponseStatusException.class, failure -> {
+                    assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+                    assertThat(failure.getReason()).isEqualTo(ScanCallGuard.ATTEMPT_WORK_SPENT);
+                });
+    }
+
+    @Test
+    void shouldServeAReviewThatStaysWithinTwiceWhatItsLoopMaySpend() {
+        ordinaryReview();
+        job.setLlmCalls((int) (ScanCallGuard.WORK_MARGIN * loopCalls() - 1));
+        job.setLlmOutputTokens(ScanCallGuard.WORK_MARGIN * loopOutputTokens() - 1);
+
+        assertThat(guard.acquire(route(), "{}".getBytes(StandardCharsets.UTF_8)))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldRefuseADirectCallPastTwiceTheCallsOrTokensThatTheLoopMaySpend() {
+        ordinaryReview();
+        job.setLlmCalls((int) (ScanCallGuard.WORK_MARGIN * loopCalls()));
+        refusedForWork(route());
+
+        job.setLlmCalls(0);
+        job.setLlmOutputTokens(ScanCallGuard.WORK_MARGIN * loopOutputTokens());
+        refusedForWork(route());
+    }
+
+    @Test
+    void shouldLeaveAPracticeScriptsDirectCallsToTheirOwnTokenBound() {
+        ordinaryReview();
+        job.setLlmCalls((int) (ScanCallGuard.WORK_MARGIN * loopCalls()));
+        var script = new ProxyRouting(
+                "job",
+                "openai-completions",
+                "https://model.example",
+                UsageFundingSource.INSTANCE,
+                1L,
+                1L,
+                1L,
+                new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, job.getId(), 0, BigDecimal.ZERO, LEASE),
+                ModelKind.CHAT,
+                null,
+                Instant.now().plusSeconds(60));
+
+        assertThat(guard.acquire(script, "{}".getBytes(StandardCharsets.UTF_8))).isEmpty();
     }
 }

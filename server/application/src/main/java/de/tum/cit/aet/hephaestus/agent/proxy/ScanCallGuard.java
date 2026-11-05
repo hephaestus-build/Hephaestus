@@ -4,12 +4,14 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.scan.ScanBudget;
 import de.tum.cit.aet.hephaestus.agent.scan.ScanModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
@@ -41,6 +43,13 @@ public class ScanCallGuard {
     private final ScanBudget budget;
     private final SandboxGatewayProperties gateway;
     private final ObjectMapper mapper;
+    private final PracticeReviewProperties practiceReview;
+
+    /** How many times the loop's own budget an attempt's review calls may take before the proxy refuses them. */
+    static final int WORK_MARGIN = 2;
+
+    static final String ATTEMPT_WORK_SPENT =
+            "This review attempt has used the most model work that its practices may take; it makes no more model calls.";
     // Active leases and their waiters hold strong references; idle locks can be reclaimed without evicting a live
     // fence.
     private final Cache<Attempt, ReentrantLock> locks =
@@ -52,7 +61,10 @@ public class ScanCallGuard {
         if (workspace == null || attempt.sourceType() == UsageSourceType.MENTOR_TURN) return Optional.empty();
         var job = jobs.findByIdAndWorkspaceId(attempt.sourceId(), workspace).orElseThrow(ScanCallGuard::refused);
         var review = reviews.find(workspace, job.getReviewId()).orElseThrow(ScanCallGuard::refused);
-        if (review.kind() != ReviewKind.SCAN) return Optional.empty();
+        if (review.kind() != ReviewKind.SCAN) {
+            requireWithinAttemptWork(job, route);
+            return Optional.empty();
+        }
         var lock = locks.get(new Attempt(job.getId(), attempt.number()), key -> new ReentrantLock());
         // The attempt's previous call holds the lease; waiting for it counts against the same work deadline.
         Duration remaining = ProxyStreamingUtils.remainingUntil(Objects.requireNonNull(route.workDeadline()));
@@ -146,6 +158,22 @@ public class ScanCallGuard {
                     || value.has("fileData")) throw refused();
         }
         if ((value.isObject() || value.isArray())) for (var child : value) requireTextOnly(child);
+    }
+
+    /**
+     * An ordinary review's own calls take at most {@link #WORK_MARGIN} times the work that its loop may spend: the model
+     * calls and output tokens of each assigned practice. The loop holds itself to its budget; this bound holds a caller
+     * that does not, so an attempt's cost never rests on its runner alone. Each call already in flight may pass it
+     * once. A practice script's direct calls have their own bound on tokens.
+     */
+    private void requireWithinAttemptWork(ReviewJob job, ProxyRouting route) {
+        // A row that moved to another attempt counts that attempt's calls; the lease refuses this one's.
+        if (route.practiceScriptSlot() != null
+                || job.getAttempt() != route.attempt().number()) return;
+        long practices = job.getInput().assignments().size();
+        if (job.getLlmCalls() >= WORK_MARGIN * practices * practiceReview.practiceModelCalls()
+                || job.getLlmOutputTokens() >= WORK_MARGIN * practices * practiceReview.practiceOutputTokens())
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, ATTEMPT_WORK_SPENT);
     }
 
     private static ResponseStatusException workTimeOver(@Nullable Throwable cause) {
