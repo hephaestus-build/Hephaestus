@@ -206,6 +206,7 @@ Without the chart, load the file as it is from the release that you run: `https:
 
 The rules of the group `hephaestus` read the `job` and `runtime_role` labels that your scrape configuration sets, not labels that the chart controls.
 [Alert response](./production-operations-runbook.mdx#alert-response) gives the response to each alert.
+Each alert carries that section's address in its `runbook_url` annotation, so a notification can link the reader to it.
 
 The rule file is the home of each threshold, window, and summary.
 This section gives the reason for each threshold.
@@ -821,7 +822,7 @@ Claim reservations do not add a second wait observation when the model call uses
 | `completed` | The model finished its answer |
 | `length` | The answer stopped at its token or context limit |
 | `refused` | The model declined to answer: Anthropic's `refusal`, or OpenAI's `content_filter` or a refusal part |
-| `unanswered` | A served stream sent no content and no usage |
+| `unanswered` | A served stream sent no content and no usage, and the provider stated no refusal, length or error. A stated one wins |
 | `error` | The provider answered with an error status, failed the stream, or could not be reached |
 | `stalled` | The provider sent nothing for the proxy's silence bound |
 | `cancelled` | The caller or the attempt ended the call first |

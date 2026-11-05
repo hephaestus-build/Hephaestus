@@ -13,6 +13,7 @@ groups:
           severity: warning
         annotations:
           summary: A Hephaestus metrics target cannot be scraped
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # Fires for as long as a role is scraped and the rules run. An outside dead-man check that stops
       # receiving it shows that the monitoring itself stopped: the scrape, the rules or the notifications.
       - alert: HephaestusWatchdog
@@ -21,6 +22,7 @@ groups:
           severity: none
         annotations:
           summary: The monitoring of Hephaestus scrapes, evaluates and notifies
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusProductFeedbackStuck
         expr: max(product_feedback_oldest_waiting_seconds{job="hephaestus"}) > 1800
         for: 5m
@@ -28,18 +30,21 @@ groups:
           severity: warning
         annotations:
           summary: A product feedback report has waited more than 30 minutes to reach GitHub or the admin email
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusProductFeedbackFilingFailing
         expr: sum(increase(product_feedback_steps_total{job="hephaestus",step="file",outcome="stopped"}[1h])) > 0
         labels:
           severity: warning
         annotations:
           summary: Product feedback stopped filing to GitHub; the reports wait in Needs action
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusConsumerPoison
         expr: sum by (kind) (increase(integration_consumer_poison_total{job="hephaestus"}[10m])) > 0
         labels:
           severity: warning
         annotations:
           summary: An integration event was stored for administrator replay
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusConsumerRetryStalled
         expr: sum by (kind) (increase(integration_consumer_nak_total{job="hephaestus"}[10m])) > 0
         for: 15m
@@ -47,6 +52,7 @@ groups:
           severity: warning
         annotations:
           summary: Integration events kept retrying for 15 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusStreamPollStale
         expr: >-
           webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"} > 180
@@ -57,6 +63,7 @@ groups:
           severity: warning
         annotations:
           summary: Webhook stream gauges are stale or have never been refreshed
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusStreamPollMissing
         expr: >-
           up{job="hephaestus",runtime_role="webhook"} == 1
@@ -67,6 +74,7 @@ groups:
           severity: warning
         annotations:
           summary: A scraped webhook receiver exports no stream poll age
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusStreamBacklog
         expr: max by (stream) (webhook_stream_consumer_pending{job="hephaestus",runtime_role="webhook"}) > 50
         for: 15m
@@ -74,6 +82,7 @@ groups:
           severity: warning
         annotations:
           summary: More than 50 events of a stream stayed undelivered to the consumers for 15 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookStreamPastAgeBound
         expr: >-
           max by (stream) (webhook_stream_oldest_message_age_seconds{job="hephaestus",runtime_role="webhook"})
@@ -83,6 +92,7 @@ groups:
           severity: warning
         annotations:
           summary: A webhook stream holds deliveries past its age bound; a shorter bound has not taken effect
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusStreamConsumerStopped
         expr: max by (stream) (webhook_stream_consumer_pending{job="hephaestus",runtime_role="webhook"}) > 0
         for: 6h
@@ -90,6 +100,7 @@ groups:
           severity: warning
         annotations:
           summary: A stream kept undelivered events for 6 hours; a consumer that stays stopped past its retention loses them
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookRetentionBelowAgeBound
         expr: >-
           max by (stream) (webhook_stream_oldest_message_age_seconds{job="hephaestus",runtime_role="webhook"})
@@ -100,6 +111,7 @@ groups:
           severity: warning
         annotations:
           summary: A webhook stream sheds deliveries at its byte bound before its age bound; it keeps less than it promises
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookPublishFailing
         expr: sum(increase(webhook_publish_total{job="hephaestus",outcome="failure"}[10m])) > 0
         for: 10m
@@ -107,6 +119,7 @@ groups:
           severity: warning
         annotations:
           summary: The webhook receiver cannot store deliveries on the broker
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookReceiverBusy
         expr: sum(increase(webhook_rejected_total{job="hephaestus",reason="busy"}[10m])) > 0
         for: 10m
@@ -114,6 +127,7 @@ groups:
           severity: warning
         annotations:
           summary: The webhook receiver refuses deliveries because large ones fill its memory
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookRedeliveryNotRunning
         expr: >-
           sum(increase(github_webhook_redelivery_total{job="hephaestus",outcome=~"unavailable|refused"}[30m])) > 2
@@ -121,6 +135,7 @@ groups:
           severity: warning
         annotations:
           summary: GitHub refuses redeliveries, or the deliveries of the GitHub App cannot be read
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookRedeliveriesRequested
         expr: >-
           sum by (namespace) (increase(github_webhook_redelivery_total{job="hephaestus",outcome="requested"}[1h])) >= 3
@@ -133,18 +148,21 @@ groups:
           severity: warning
         annotations:
           summary: The server asked GitHub to redeliver more than 5 % of the received GitHub deliveries in one hour
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookEventsUnrecovered
         expr: max(github_webhook_unrecovered{job="hephaestus"}) > 0
         labels:
           severity: warning
         annotations:
           summary: GitHub events failed every delivery attempt and were not received
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusBudgetExhausted
         expr: sum(increase(llm_budget_exhausted_total{job="hephaestus"}[10m])) > 0
         labels:
           severity: warning
         annotations:
           summary: A workspace crossed the instance-funded monthly budget cap
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusBudgetBlocked
         expr: sum by (surface, cap) (increase(llm_budget_blocked_total{job="hephaestus"}[10m])) > 0
         for: 15m
@@ -152,6 +170,7 @@ groups:
           severity: warning
         annotations:
           summary: LLM budget admission kept refusing work for 15 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusModelRefusalsReachCallers
         expr: >-
           sum by (pool) (increase(llm_pool_upstream_throttled_total{job="hephaestus"}[10m]))
@@ -161,6 +180,7 @@ groups:
           severity: warning
         annotations:
           summary: A model provider's refusals kept reaching callers for 15 minutes instead of only slowing them
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusModelLimitAtFloor
         expr: >-
           max by (pool) (llm_pool_limit{job="hephaestus"}) <= 2
@@ -173,24 +193,28 @@ groups:
           severity: warning
         annotations:
           summary: A model's call limit stayed at its floor of two calls for 30 minutes while its provider refused, queued or did not answer
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusAgentJobsFailing
         expr: sum(increase(agent_job_total{job="hephaestus",outcome=~"failed|timed_out"}[1h])) >= 3
         labels:
           severity: warning
         annotations:
           summary: At least three agent jobs failed or timed out in one hour
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusFeedbackDeliveriesFailing
         expr: sum by (destination) (increase(practice_feedback_settled_total{job="hephaestus",state="failed"}[1h])) >= 3
         labels:
           severity: warning
         annotations:
           summary: At least three feedback deliveries to one destination failed in one hour
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewSandboxFailing
         expr: sum(increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause="sandbox"}[1h])) >= 3
         labels:
           severity: warning
         annotations:
           summary: Review sandboxes failed to start, initialize or finish at least three times in one hour
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewUnreachable
         expr: >-
           sum by (cause) (increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause=~"server_unreachable|provider_unreachable"}[1h])) >= 3
@@ -198,12 +222,14 @@ groups:
           severity: warning
         annotations:
           summary: Review sandboxes failed to reach the server or the model provider at least three times in one hour
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewServerError
         expr: sum(increase(agent_job_server_error_total{job="hephaestus"}[1h])) > 0
         labels:
           severity: warning
         annotations:
           summary: The server answered a review's results with its own error, so the review ended without them
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewPreparationFailing
         expr: sum(increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause="preparation"}[30m])) >= 5
         for: 15m
@@ -211,12 +237,14 @@ groups:
           severity: warning
         annotations:
           summary: Review attempts kept failing before their sandbox started, so they run again
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewWorkerLost
         expr: sum(increase(agent_job_orphan_failed_total{job="hephaestus"}[1h])) > 0
         labels:
           severity: warning
         annotations:
           summary: A review failed because its workers stopped during every attempt
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusAgentQueueStalled
         expr: max(agent_queue_oldest_age_seconds{job="hephaestus"}) > 3600
         for: 5m
@@ -224,6 +252,7 @@ groups:
           severity: warning
         annotations:
           summary: An agent job that can run has waited for a worker for more than one hour
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusSandboxIsolationFailed
         expr: sandbox_isolation_passed{job="hephaestus",runtime_role="worker"} == 0
         for: 5m
@@ -231,6 +260,7 @@ groups:
           severity: warning
         annotations:
           summary: A worker's sandbox isolation probe failed, so the worker starts no sandbox
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWalArchiveFailing
         expr: >-
           max(database_wal_archive_failing{job="hephaestus"}) == 1
@@ -240,6 +270,7 @@ groups:
           severity: critical
         annotations:
           summary: PostgreSQL cannot archive its WAL, or the server cannot read whether it can
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A connection that the pool cannot give within its timeout fails the request or the job that asked for it.
       - alert: HephaestusDatabaseConnectionTimeouts
         expr: sum by (runtime_role) (increase(hikaricp_connections_timeout_total{job="hephaestus"}[15m])) > 0
@@ -247,6 +278,7 @@ groups:
           severity: warning
         annotations:
           summary: The {{ $labels.runtime_role }} role could not get a database connection in time, so requests or jobs failed
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # The sizing target is an acquire p95 below 50 ms (docs/admin/sizing.mdx). The floor keeps a quiet process from
       # firing on a few acquires during a database restart.
       - alert: HephaestusDatabasePoolSlow
@@ -259,12 +291,14 @@ groups:
           severity: warning
         annotations:
           summary: More than 5 % of the {{ $labels.runtime_role }} role's database connections took longer than 50 ms to get
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusBrowserFaultsRising
         expr: sum by (kind) (increase(browser_faults_total{job="hephaestus"}[1h])) >= 20
         labels:
           severity: warning
         annotations:
           summary: Readers' browsers reported at least twenty failures of one kind in one hour
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # Kubernetes and cluster metrics: kube-state-metrics, the kubelet, node-exporter and cert-manager.
   # The PVC and CronJob names are those that the chart gives a release. The webhook rules select the
@@ -287,6 +321,7 @@ groups:
           severity: critical
         annotations:
           summary: The API answers with server errors fast enough to spend its monthly error budget in two days
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusApiErrorBudgetBurnSlow
         expr: >-
           (sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*",status=~"5.."}[6h])) / sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*"}[6h]))) > 6 * 0.005
@@ -297,6 +332,7 @@ groups:
           severity: warning
         annotations:
           summary: The API answers with server errors fast enough to spend its monthly error budget in five days
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusApiLatencyBudgetBurnFast
         expr: >-
           (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download|.*/export|.*/sarif",le="2.0"}[1h])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download|.*/export|.*/sarif",le="+Inf"}[1h]))) > 14.4 * 0.005
@@ -307,6 +343,7 @@ groups:
           severity: critical
         annotations:
           summary: API reads take longer than 2 seconds often enough to spend the monthly budget in two days
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusApiLatencyBudgetBurnSlow
         expr: >-
           (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download|.*/export|.*/sarif",le="2.0"}[6h])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download|.*/export|.*/sarif",le="+Inf"}[6h]))) > 6 * 0.005
@@ -317,6 +354,7 @@ groups:
           severity: warning
         annotations:
           summary: API reads take longer than 2 seconds often enough to spend the monthly budget in five days
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # Activity reads: 95 % within 1 s. The Activity route templates are the workspace and public activity routes.
       - alert: HephaestusActivityLatencyBudgetBurnFast
         expr: >-
@@ -328,6 +366,7 @@ groups:
           severity: warning
         annotations:
           summary: Activity reads take longer than 1 second often enough to spend the monthly budget in two days
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusActivityLatencyBudgetBurnSlow
         expr: >-
           (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?",le="1.0"}[6h])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?",le="+Inf"}[6h]))) > 6 * 0.05
@@ -338,6 +377,7 @@ groups:
           severity: warning
         annotations:
           summary: Activity reads take longer than 1 second often enough to spend the monthly budget in five days
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # Conversation turns: 95 % get the first part of their answer within 10 s. A small instance has few turns an hour,
       # so the floors keep one slow turn in a quiet hour from firing.
       - alert: HephaestusConversationFirstTokenBudgetBurnFast
@@ -384,6 +424,7 @@ groups:
           severity: warning
         annotations:
           summary: Fewer than 75 % of page loads showed their main content within 2.5 seconds over six hours
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # An item review that does not end complete leaves a developer without feedback for part of its practices.
       # Readiness waits and budget stops are decisions of policy with their own signals, so they count on neither side.
       - alert: HephaestusReviewsIncomplete
@@ -407,6 +448,7 @@ groups:
           severity: warning
         annotations:
           summary: More than a quarter of the item reviews of the last six hours did not end complete
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # Readback that cannot tell whether a copy reached the work leaves the feedback Unconfirmed: the copy may be
       # missing, and a retry could post it twice. A proved absence is the case where a resend is safe, so it does not fire.
       - alert: HephaestusFeedbackReadbackUnknown
@@ -416,6 +458,7 @@ groups:
           severity: warning
         annotations:
           summary: Readback could not tell whether feedback reached the work on {{ $labels.provider }}
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A review that a push or a request started, and whose feedback no person approves first. The objective is 90 %
       # within 30 minutes; more than 30 % late spends its budget three times as fast.
       - alert: HephaestusFeedbackDeliverySlow
@@ -428,6 +471,7 @@ groups:
           severity: warning
         annotations:
           summary: More than 30 % of the reviews of the last six hours posted their first feedback later than 30 minutes after their occasion
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusFeedbackDeliveryStalled
         expr: max(practice_feedback_oldest_waiting_seconds{job="hephaestus"}) > 7200
         for: 10m
@@ -435,6 +479,7 @@ groups:
           severity: warning
         annotations:
           summary: Feedback on the work has waited more than two hours for its first posted copy
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
   - name: hephaestus-kubernetes
     rules:
       - alert: HephaestusWebhookReceiverDown
@@ -448,6 +493,7 @@ groups:
           severity: critical
         annotations:
           summary: No webhook receiver of the release is available, so provider deliveries fail
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookReceiverUnready
         expr: >-
           kube_deployment_status_replicas_unavailable > 0
@@ -459,6 +505,7 @@ groups:
           severity: warning
         annotations:
           summary: A webhook receiver replica stayed unavailable for 15 minutes while another serves
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A release name longer than 34 characters truncates and hashes the CronJob names, which the name match then
       # misses. The label match finds those CronJobs when kube-state-metrics exports their labels.
       - alert: HephaestusBackupStale
@@ -512,6 +559,7 @@ groups:
           severity: critical
         annotations:
           summary: No PostgreSQL backup completed in the last 30 hours
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusPostgresVolumeFilling
         expr: >-
           kubelet_volume_stats_available_bytes{persistentvolumeclaim=~"data-.+-postgresql-0"}
@@ -526,6 +574,7 @@ groups:
           severity: warning
         annotations:
           summary: The PostgreSQL volume has between 5 % and 15 % free space
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusPostgresVolumeFilling
         expr: >-
           kubelet_volume_stats_available_bytes{persistentvolumeclaim=~"data-.+-postgresql-0"}
@@ -536,6 +585,7 @@ groups:
           severity: critical
         annotations:
           summary: The PostgreSQL volume has less than 5 % free space
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusJetStreamVolumeFilling
         expr: >-
           kubelet_volume_stats_available_bytes{persistentvolumeclaim=~"data-.+-nats-0"}
@@ -546,6 +596,7 @@ groups:
           severity: warning
         annotations:
           summary: The NATS JetStream volume has less than 10 % free space
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusNodeDiskFilling
         expr: >-
           node_filesystem_avail_bytes{fstype!~"tmpfs|ramfs|squashfs|overlay",mountpoint!~"/var/lib/kubelet/pods/.+"}
@@ -557,6 +608,7 @@ groups:
           severity: warning
         annotations:
           summary: A node file system has less than 15 % free space
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusCertificateExpiring
         expr: certmanager_certificate_expiration_timestamp_seconds - time() < 7 * 24 * 3600
         for: 1h
@@ -564,6 +616,7 @@ groups:
           severity: warning
         annotations:
           summary: A certificate that cert-manager manages expires in less than seven days, or has no issued certificate
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
   # The pull reconciler's metrics, from node-exporter's textfile collector on each host that runs
   # hephaestus-reconcile.timer (docs/admin/pull-based-deployment.mdx § Watching it). Load this
   # group only where such a host is scraped: HephaestusDeployMetricsMissing fires where none reports.
@@ -576,6 +629,7 @@ groups:
           severity: warning
         annotations:
           summary: Every reconcile run of a host failed for 15 minutes, so the host does not follow its release channel
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusDeployReconcileStale
         expr: time() - hephaestus_deploy_reconcile_timestamp_seconds > 2400
         for: 5m
@@ -583,6 +637,7 @@ groups:
           severity: warning
         annotations:
           summary: A host's reconciler has finished no run for 40 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusDeployMetricsMissing
         expr: absent(hephaestus_deploy_reconcile_timestamp_seconds)
         for: 15m
@@ -590,6 +645,7 @@ groups:
           severity: warning
         annotations:
           summary: No host reports the reconciler's metrics
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusDeployToolingPending
         expr: hephaestus_deploy_tooling_pending == 1
         for: 1h
@@ -597,3 +653,4 @@ groups:
           severity: warning
         annotations:
           summary: A host runs reconciler tooling that no apply has recorded
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response

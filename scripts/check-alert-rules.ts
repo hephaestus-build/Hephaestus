@@ -10,17 +10,25 @@ const rulesFile = "hephaestus-alerts.yml";
 const testsFile = "hephaestus-alerts.test.yml";
 const runbookFile = "docs/admin/production-operations-runbook.mdx";
 
+/** Where a notification sends its reader: the runbook section whose rows answer each alert. */
+export const RUNBOOK_URL =
+	"https://docs.hephaestus.build/admin/production-operations-runbook#alert-response";
+
 /**
  * The alerts that are not complete: each alert needs a promtool case in which it fires, one in which
- * it stays silent, and a row in the runbook's alert response section. promtool itself passes a rule
- * without any test.
+ * it stays silent, a row in the runbook's alert response section, and a `runbook_url` annotation that
+ * links that section. promtool itself passes a rule without any test.
  */
 export function incompleteAlerts(rules: string, tests: string, runbook: string): string[] {
-	const alerts = new Set(
-		asArray(asRecord(parse(rules), rulesFile).groups, "groups")
-			.flatMap((group) => asArray(asRecord(group, "group").rules, "rules"))
-			.map((rule) => asRecord(rule, "rule").alert)
-			.filter((alert) => typeof alert === "string"),
+	const alertRules = asArray(asRecord(parse(rules), rulesFile).groups, "groups")
+		.flatMap((group) => asArray(asRecord(group, "group").rules, "rules"))
+		.map((rule) => asRecord(rule, "rule"))
+		.filter((rule) => typeof rule.alert === "string");
+	const alerts = new Set(alertRules.map((rule) => String(rule.alert)));
+	const linked = new Set(
+		alertRules
+			.filter((rule) => asRecord(rule.annotations ?? {}, "annotations").runbook_url === RUNBOOK_URL)
+			.map((rule) => String(rule.alert)),
 	);
 	const cases = asArray(asRecord(parse(tests), testsFile).tests, "tests")
 		.flatMap((test) => asArray(asRecord(test, "test").alert_rule_test ?? [], "alert_rule_test"))
@@ -47,6 +55,7 @@ export function incompleteAlerts(rules: string, tests: string, runbook: string):
 		...(firing.has(alert) ? [] : [`${alert}: no promtool case in ${testsFile} fires it`]),
 		...(silent.has(alert) ? [] : [`${alert}: no promtool case in ${testsFile} keeps it silent`]),
 		...(answered.has(alert) ? [] : [`${alert}: no row in ${runbookFile} § Alert response`]),
+		...(linked.has(alert) ? [] : [`${alert}: no runbook_url annotation ${RUNBOOK_URL}`]),
 	]);
 }
 

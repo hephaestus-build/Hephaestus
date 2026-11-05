@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
-import { incompleteAlerts } from "./check-alert-rules.ts";
+import { incompleteAlerts, RUNBOOK_URL } from "./check-alert-rules.ts";
 
 const read = async (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -14,8 +14,12 @@ groups:
         expr: up
       - alert: HephaestusAnswered
         expr: up == 0
+        annotations:
+          runbook_url: ${RUNBOOK_URL}
       - alert: HephaestusUntested
         expr: up == 0
+        annotations:
+          runbook_url: ${RUNBOOK_URL}
 `;
 const tests = `
 tests:
@@ -73,6 +77,14 @@ Check \`HephaestusUntested\` later.
 	const firingTests = `${tests}      - alertname: HephaestusUntested\n        exp_alerts:\n          - exp_labels: {}\n`;
 	assert.deepEqual(incompleteAlerts(rules, firingTests, mentioned), [
 		"HephaestusUntested: no row in docs/admin/production-operations-runbook.mdx § Alert response",
+	]);
+});
+
+await test("an alert without the runbook link sends no reader to its row", () => {
+	const unlinked = rules.replace(`          runbook_url: ${RUNBOOK_URL}\n`, "");
+	const firingTests = `${tests}      - alertname: HephaestusUntested\n        exp_alerts:\n          - exp_labels: {}\n`;
+	assert.deepEqual(incompleteAlerts(unlinked, firingTests, runbook), [
+		`HephaestusAnswered: no runbook_url annotation ${RUNBOOK_URL}`,
 	]);
 });
 
