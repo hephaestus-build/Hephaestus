@@ -31,6 +31,7 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.graphql.client.ClientGraphQlResponse;
@@ -224,6 +225,9 @@ public class GitLabDeletionSweepService {
             Set<Integer> numbers,
             boolean complete,
             @Nullable String reason) {
+        /** The provider switched the entity's feature off for the repository. */
+        static final String FEATURE_DISABLED = "featureDisabled";
+
         static UpstreamListing complete(Set<Integer> numbers) {
             return new UpstreamListing(numbers, true, null);
         }
@@ -422,12 +426,18 @@ public class GitLabDeletionSweepService {
             }
             if (!listing.complete()) {
                 skipped = true;
-                log.warn(
-                        "Skipped GitLab deletion sweep, deleted nothing: reason={}, entity={}, projectPath={}, scopeId={}",
-                        listing.reason(),
-                        entity.plural,
-                        safeProjectPath,
-                        scopeId);
+                // A project that switched a feature off is an expected state, not a fault.
+                log.atLevel(UpstreamListing.FEATURE_DISABLED.equals(listing.reason()) ? Level.INFO : Level.WARN)
+                        .addKeyValue("event.name", "integration.deletion_sweep.skipped")
+                        .addKeyValue("integration.kind", "gitlab")
+                        .addKeyValue("reason", listing.reason())
+                        .log(
+                                "Skipped GitLab deletion sweep, deleted nothing: reason={}, entity={}, projectPath={},"
+                                        + " scopeId={}",
+                                listing.reason(),
+                                entity.plural,
+                                safeProjectPath,
+                                scopeId);
                 continue;
             }
             // The listing can outlast the monitor, the connection or the group link it was started under, so the
@@ -601,11 +611,7 @@ public class GitLabDeletionSweepService {
             // the entire mirrored set. Only an explicit `false` aborts: a null (older GitLab, restricted
             // field) leaves the decision to the emptiness guard rather than blocking every sweep.
             if (Boolean.FALSE.equals(readBooleanField(Objects.requireNonNull(response), entity.featureFlagPath))) {
-                log.warn(
-                        "GitLab deletion sweep listing refused, feature disabled upstream: context={}, flag={}",
-                        context,
-                        entity.featureFlagPath);
-                return UpstreamListing.incomplete("featureDisabled");
+                return UpstreamListing.incomplete(UpstreamListing.FEATURE_DISABLED);
             }
 
             int pageCount;

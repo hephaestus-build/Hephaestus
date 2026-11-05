@@ -15,11 +15,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -352,6 +354,20 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             assertThat(initService.initialize(workspace)).isEqualTo(expected);
 
             verify(repositoryMonitors).monitorAll(workspace, List.of(found));
+            verify(natsConsumerService).establishScopeConsumer(1L, "gitlab");
+            verify(gitLabWebhookService, never()).registerWebhook(any());
+        }
+
+        @Test
+        void shouldInspectTheTokenButNotDiscoverProjectsWhileTheCredentialIsRefused() throws Exception {
+            Connection refused = mock(Connection.class);
+            when(refused.getAttentionProblem()).thenReturn(Problem.CREDENTIAL_REVOKED);
+            when(connectionService.findActive(1L, IntegrationKind.GITLAB)).thenReturn(Optional.of(refused));
+
+            assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
+
+            verify(gitLabWebhookService).rotateTokenIfNeeded(workspace);
+            verifyNoInteractions(gitLabGroupSyncService);
             verify(natsConsumerService).establishScopeConsumer(1L, "gitlab");
             verify(gitLabWebhookService, never()).registerWebhook(any());
         }

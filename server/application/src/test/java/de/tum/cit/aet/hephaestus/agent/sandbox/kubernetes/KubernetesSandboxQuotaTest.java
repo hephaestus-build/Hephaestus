@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.fabric8.kubernetes.api.model.Quantity;
@@ -16,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 class KubernetesSandboxQuotaTest extends BaseUnitTest {
 
@@ -202,16 +207,41 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldWaitUntilTheQuotasCanBeRead() {
+    void shouldWaitUntilTheQuotasCanBeReadAndLogOneEventForEachTransition() {
         KubernetesSandboxCache cache = mock(KubernetesSandboxCache.class);
         when(cache.quotas())
+                .thenThrow(new KubernetesClientException("not listed yet"))
                 .thenThrow(new KubernetesClientException("not listed yet"))
                 .thenReturn(List.of());
         var quota = new KubernetesSandboxQuota(cache, "sandboxes", "", REVIEWS);
         var limits = new ResourceLimits(1.0, Duration.ofMinutes(30));
+        Logger logger = (Logger) LoggerFactory.getLogger(KubernetesSandboxQuota.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            assertThat(quota.roomFor(limits)).isEqualTo(-1);
+            assertThat(quota.roomFor(limits)).isEqualTo(-1);
+            assertThat(quota.roomFor(limits)).isEqualTo(Integer.MAX_VALUE);
+            assertThat(quota.roomFor(limits)).isEqualTo(Integer.MAX_VALUE);
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
 
-        assertThat(quota.roomFor(limits)).isEqualTo(-1);
-        assertThat(quota.roomFor(limits)).isEqualTo(Integer.MAX_VALUE);
+        assertThat(appender.list).hasSize(2);
+        assertThat(appender.list.get(0).getLevel()).isEqualTo(Level.WARN);
+        assertThat(pairs(appender.list.get(0)))
+                .containsEntry("event.name", "sandbox.quota.unreadable")
+                .containsEntry("error.type", KubernetesClientException.class.getName());
+        assertThat(appender.list.get(1).getLevel()).isEqualTo(Level.INFO);
+        assertThat(pairs(appender.list.get(1)))
+                .containsEntry("event.name", "sandbox.quota.readable")
+                .containsKey("duration.ms");
+    }
+
+    private static Map<String, Object> pairs(ILoggingEvent event) {
+        return event.getKeyValuePairs().stream().collect(Collectors.toMap(pair -> pair.key, pair -> pair.value));
     }
 
     private static ResourceQuota tierQuota(String priorityClass, Map<String, String> hard, Map<String, String> used) {

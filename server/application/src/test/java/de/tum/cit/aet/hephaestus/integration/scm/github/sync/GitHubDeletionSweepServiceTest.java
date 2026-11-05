@@ -15,6 +15,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -44,6 +48,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
+import org.slf4j.LoggerFactory;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.GraphQlClient;
@@ -479,6 +484,45 @@ class GitHubDeletionSweepServiceTest extends BaseUnitTest {
 
             verifyNothingTombstoned();
             assertThat(outcome.skipped()).isTrue();
+        }
+
+        @Test
+        void shouldLogADisabledFeatureAsAnExpectedSkipAndADoubtfulListingAsAWarning() {
+            Logger logger = (Logger) LoggerFactory.getLogger(GitHubDeletionSweepService.class);
+            ListAppender<ILoggingEvent> appender = new ListAppender<>();
+            appender.start();
+            logger.addAppender(appender);
+            try {
+                scriptedResponses.add(Mono.just(issuePage(List.of(), false, 0, false)));
+                scriptedResponses.add(Mono.just(pullRequestPage(List.of(), false, 0)));
+                stubLocalNumbers(List.of(), List.of());
+                service.sweepRepository(SCOPE_ID, repository(), handle);
+
+                scriptedResponses.add(Mono.just(issuePage(List.of(), false, 0, true)));
+                scriptedResponses.add(Mono.just(pullRequestPage(List.of(), false, 0)));
+                stubLocalNumbers(List.of(1, 2, 3), List.of());
+                service.sweepRepository(SCOPE_ID, repository(), handle);
+            } finally {
+                logger.detachAppender(appender);
+                appender.stop();
+            }
+
+            assertThat(appender.list.stream()
+                            .filter(event -> event.getKeyValuePairs() != null
+                                    && event.getKeyValuePairs().stream()
+                                            .anyMatch(pair -> pair.key.equals("event.name")
+                                                    && "integration.deletion_sweep.skipped".equals(pair.value)))
+                            .map(event -> event.getLevel() + " "
+                                    + event.getKeyValuePairs().stream()
+                                            .filter(pair -> pair.key.equals("reason"))
+                                            .findFirst()
+                                            .orElseThrow()
+                                            .value))
+                    .containsExactly("INFO featureDisabled", "WARN emptyUpstreamWithLiveMirror");
+            assertThat(appender.list)
+                    .as("the skip is the one record of a disabled feature")
+                    .filteredOn(event -> event.getLevel() == Level.WARN)
+                    .hasSize(1);
         }
 
         @Test
