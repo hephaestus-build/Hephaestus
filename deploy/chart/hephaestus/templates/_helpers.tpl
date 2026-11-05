@@ -485,22 +485,24 @@ matchExpressions:
     values: ["review", "host"]
 {{- end -}}
 
+{{/* The scraper's way in, on the named port of the metrics: management for the roles, metrics for the exporter. */}}
 {{- define "hephaestus.policy.metricsIngress" -}}
-{{- if and .Values.networkPolicy.metrics.namespace (not .Values.networkPolicy.metrics.podLabels) -}}
+{{- $root := .root -}}
+{{- if and $root.Values.networkPolicy.metrics.namespace (not $root.Values.networkPolicy.metrics.podLabels) -}}
 {{- fail "networkPolicy.metrics.podLabels needs at least one label: a namespace alone would admit every pod in it." -}}
 {{- end -}}
-{{- if .Values.networkPolicy.metrics.namespace }}
+{{- if $root.Values.networkPolicy.metrics.namespace }}
 - from:
-    {{- include "hephaestus.peer" .Values.networkPolicy.metrics | nindent 4 }}
+    {{- include "hephaestus.peer" $root.Values.networkPolicy.metrics | nindent 4 }}
   ports:
-    - port: management
+    - port: {{ .port }}
       protocol: TCP
 {{- end }}
-{{- if .Values.observability.stack.enabled }}
+{{- if $root.Values.observability.stack.enabled }}
 - from:
-    {{- include "hephaestus.componentPeer" (dict "root" . "component" "victoria-metrics") | nindent 4 }}
+    {{- include "hephaestus.componentPeer" (dict "root" $root "component" "victoria-metrics") | nindent 4 }}
   ports:
-    - port: management
+    - port: {{ .port }}
       protocol: TCP
 {{- end -}}
 {{- end -}}

@@ -1,6 +1,11 @@
 {
 	"schemaVersion": 1,
-	"images": ["webapp", "application-server", "agent-pi", "postgres"],
+	"images": [
+		"webapp",
+		"application-server",
+		"agent-pi",
+		"postgres"
+	],
 	"upstream": [
 		{
 			"name": "nats",
@@ -25,6 +30,12 @@
 			"repository": "docker.io/prom/alertmanager",
 			"tag": "v0.34.2",
 			"digest": "sha256:39d8bb3966c694a124428a3a88fbcffd40bd069129ecd47c059f8a3f17c55f3b"
+		},
+		{
+			"name": "postgres-exporter",
+			"repository": "docker.io/prometheuscommunity/postgres-exporter",
+			"tag": "v0.20.1",
+			"digest": "sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e"
 		}
 	]
 }

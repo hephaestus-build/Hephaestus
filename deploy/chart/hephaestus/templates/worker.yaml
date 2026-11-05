@@ -219,7 +219,7 @@ spec:
       ports:
         - port: {{ $port }}
           protocol: TCP
-    {{- include "hephaestus.policy.metricsIngress" . | nindent 4 }}
+    {{- include "hephaestus.policy.metricsIngress" (dict "root" . "port" "management") | nindent 4 }}
   egress:
     {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.externalEgress" . | nindent 4 }}

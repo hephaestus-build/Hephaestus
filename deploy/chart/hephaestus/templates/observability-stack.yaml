@@ -90,6 +90,23 @@ data:
             target_label: namespace
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: pod
+      {{- if .Values.postgresql.metrics.enabled }}
+      # postgres_exporter, apart from the roles: its own job name keeps its up series out of the role alerts.
+      - job_name: postgresql
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [{{ .Release.Namespace | quote }}]
+        relabel_configs:
+          - source_labels:
+              - __meta_kubernetes_pod_label_app_kubernetes_io_instance
+              - __meta_kubernetes_pod_label_app_kubernetes_io_component
+              - __meta_kubernetes_pod_container_port_name
+            regex: {{ printf "%s;postgresql-exporter;metrics" .Release.Name | quote }}
+            action: keep
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -356,6 +373,10 @@ spec:
       ports:
         - port: management
           protocol: TCP
+        {{- if .Values.postgresql.metrics.enabled }}
+        - port: metrics
+          protocol: TCP
+        {{- end }}
     # Pod discovery.
     - to:
         - ipBlock:

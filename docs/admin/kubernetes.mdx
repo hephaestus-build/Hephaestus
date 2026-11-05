@@ -181,6 +181,7 @@ It needs `kubectl` with access to the release namespace, `openssl` and `jq`.
    - `--new-keys`: with `--external-database`, for a database without Hephaestus data only. The script cannot see whether the database holds data. For a database with data, restore both keys from your backup first.
    - `--external-nats`: you use your own NATS broker. The script takes `NATS_USERNAME` and `NATS_PASSWORD` from the environment.
    - `--backups`: you turn on backups with a new, empty backup repository. The script generates `BACKUP_CIPHER_PASS`. For an existing repository, restore its passphrase into the Secret instead.
+   - `--metrics`: you turn on the [database metrics](./observability#database-metrics). The script generates `DATABASE_MONITOR_PASSWORD`.
 
 4. Set `secret.name` to `hephaestus-app`.
 5. Copy the keys off the cluster, as [Copy the keys from the Secret](./secret-custody#copy-the-keys-from-the-secret) describes.

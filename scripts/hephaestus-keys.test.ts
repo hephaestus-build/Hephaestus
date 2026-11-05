@@ -269,6 +269,14 @@ await test("--backups adds the backup passphrase only", { skip }, () => {
 	assert.match(result.secret.BACKUP_CIPHER_PASS ?? "", /^[A-Za-z0-9+/=]{64}$/u);
 });
 
+await test("--metrics adds the monitor password only", { skip }, () => {
+	const first = run();
+	const result = run({ cluster: { secret: encoded(first.secret) }, args: ["--metrics"] });
+	assert.equal(result.status, 0, result.output);
+	assert.equal(result.stdout.trim(), "Added DATABASE_MONITOR_PASSWORD");
+	assert.match(result.secret.DATABASE_MONITOR_PASSWORD ?? "", /^[0-9a-f]{48}$/u);
+});
+
 await test(
 	"an external database gives its own login, and new encryption keys need --new-keys",
 	{ skip },

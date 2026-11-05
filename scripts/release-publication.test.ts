@@ -46,13 +46,14 @@ const upstream = [
 	"application-server",
 	"nats",
 	"postgres",
+	"postgres-exporter",
 	"victoria-metrics",
 	"vmalert",
 ].map((name, index) => ({
 	name,
 	repository: `docker.io/library/${name}`,
 	tag: "1",
-	digest: `sha256:${"de34567".charAt(index).repeat(64)}`,
+	digest: `sha256:${"de345678".charAt(index).repeat(64)}`,
 }));
 /** The release image inventory of the fixture checkout and its evidence. */
 const inventory = { schemaVersion: 1, images: ["webapp"], upstream };

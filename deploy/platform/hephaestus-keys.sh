@@ -1,7 +1,7 @@
 #!/bin/sh
 # Keep the release Secret of Hephaestus: docs/admin/kubernetes.mdx § Create the Secret.
 #
-#   sh hephaestus-keys.sh [--namespace hephaestus] [--secret hephaestus-app] [--backups]
+#   sh hephaestus-keys.sh [--namespace hephaestus] [--secret hephaestus-app] [--backups] [--metrics]
 #                         [--external-database [--new-keys]] [--external-nats]
 #   sh hephaestus-keys.sh [--namespace …] [--secret …] --export-keys FILE
 #   sh hephaestus-keys.sh [--namespace …] [--secret …] --check-keys FILE
@@ -27,6 +27,7 @@ set -eu
 NAMESPACE=hephaestus
 SECRET=hephaestus-app
 BACKUPS=false
+METRICS=false
 EXTERNAL_DATABASE=false
 EXTERNAL_NATS=false
 NEW_KEYS=false
@@ -45,6 +46,7 @@ while [ $# -gt 0 ]; do
 	--namespace) [ $# -ge 2 ] || die "--namespace needs a value"; NAMESPACE=$2; shift 2 ;;
 	--secret) [ $# -ge 2 ] || die "--secret needs a value"; SECRET=$2; shift 2 ;;
 	--backups) BACKUPS=true; shift ;;
+	--metrics) METRICS=true; shift ;;
 	--external-database) EXTERNAL_DATABASE=true; shift ;;
 	--external-nats) EXTERNAL_NATS=true; shift ;;
 	--new-keys) NEW_KEYS=true; shift ;;
@@ -56,7 +58,7 @@ while [ $# -gt 0 ]; do
 done
 modes=0
 for mode in "$EXPORT" "$CHECK" "$ROTATE"; do [ -z "$mode" ] || modes=$((modes + 1)); done
-if [ "$modes" -gt 0 ] && { [ "$modes" -gt 1 ] || [ "$BACKUPS$EXTERNAL_DATABASE$EXTERNAL_NATS$NEW_KEYS" != falsefalsefalsefalse ]; }; then
+if [ "$modes" -gt 0 ] && { [ "$modes" -gt 1 ] || [ "$BACKUPS$METRICS$EXTERNAL_DATABASE$EXTERNAL_NATS$NEW_KEYS" != falsefalsefalsefalsefalse ]; }; then
 	die "--export-keys, --check-keys and --rotate each run alone, with at most --namespace and --secret"
 fi
 [ "$NEW_KEYS" = false ] || [ "$EXTERNAL_DATABASE" = true ] || die "--new-keys needs --external-database: for the bundled PostgreSQL, the script decides from its volume"
@@ -245,6 +247,10 @@ has WEBHOOK_SECRET || add WEBHOOK_SECRET "$(random -hex 32)"
 has WEBHOOK_ROUTING_SECRET || add WEBHOOK_ROUTING_SECRET "$(random -hex 32)"
 if [ "$BACKUPS" = true ]; then
 	has BACKUP_CIPHER_PASS || add BACKUP_CIPHER_PASS "$(random -base64 48)"
+fi
+# The login of hephaestus_monitor, for postgresql.metrics.enabled.
+if [ "$METRICS" = true ]; then
+	has DATABASE_MONITOR_PASSWORD || add DATABASE_MONITOR_PASSWORD "$(random -hex 24)"
 fi
 
 changed=

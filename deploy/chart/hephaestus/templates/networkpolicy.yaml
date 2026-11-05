@@ -61,7 +61,7 @@ spec:
       ports:
         - port: http
           protocol: TCP
-    {{- include "hephaestus.policy.metricsIngress" . | nindent 4 }}
+    {{- include "hephaestus.policy.metricsIngress" (dict "root" . "port" "management") | nindent 4 }}
   egress:
     {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.natsEgress" . | nindent 4 }}
@@ -99,7 +99,7 @@ spec:
       ports:
         - port: http
           protocol: TCP
-    {{- include "hephaestus.policy.metricsIngress" . | nindent 4 }}
+    {{- include "hephaestus.policy.metricsIngress" (dict "root" . "port" "management") | nindent 4 }}
   # The receiver verifies, reads connection rows and publishes. It calls no provider.
   egress:
     {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
@@ -120,6 +120,42 @@ spec:
   # The migration reads and writes the database alone.
   egress:
     {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
+{{- if .Values.postgresql.metrics.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "postgresql-exporter") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "postgresql-exporter") | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  {{- with include "hephaestus.policy.metricsIngress" (dict "root" . "port" "metrics") }}
+  ingress:
+    {{- . | nindent 4 }}
+  {{- end }}
+  egress:
+    {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
+{{- if and .Values.postgresql.bundled (ne (include "hephaestus.restoring" .) "true") }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "postgresql-monitor") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "postgresql-monitor") | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  egress:
+    {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
+{{- end }}
+{{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -159,6 +195,11 @@ spec:
     - from:
         {{- range $component := list "server" "webhook" "worker" "migration" }}
         {{- include "hephaestus.componentPeer" (dict "root" $root "component" $component) | nindent 8 }}
+        {{- end }}
+        {{- if .Values.postgresql.metrics.enabled }}
+        {{- range $component := list "postgresql-exporter" "postgresql-monitor" }}
+        {{- include "hephaestus.componentPeer" (dict "root" $root "component" $component) | nindent 8 }}
+        {{- end }}
         {{- end }}
       ports:
         - port: 5432

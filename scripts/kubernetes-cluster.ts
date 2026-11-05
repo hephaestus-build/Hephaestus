@@ -110,6 +110,7 @@ export function mapImages(reference: (name: ChartImage) => string): ChartImages 
 		"application-server": reference("application-server"),
 		nats: reference("nats"),
 		postgres: reference("postgres"),
+		"postgres-exporter": reference("postgres-exporter"),
 		"victoria-metrics": reference("victoria-metrics"),
 		vmalert: reference("vmalert"),
 		webapp: reference("webapp"),

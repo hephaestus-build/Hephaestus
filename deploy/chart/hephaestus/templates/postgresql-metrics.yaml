@@ -1,0 +1,141 @@
+{{- if .Values.postgresql.metrics.enabled }}
+{{- $name := include "hephaestus.name" (dict "root" . "component" "postgresql-exporter") }}
+{{- $secret := lookup "v1" "Secret" .Release.Namespace .Values.secret.name }}
+{{- if and $secret (not (hasKey ($secret.data | default dict) "DATABASE_MONITOR_PASSWORD")) }}
+{{- fail (printf "postgresql.metrics.enabled needs the key DATABASE_MONITOR_PASSWORD in the Secret %s: the password of the role hephaestus_monitor" .Values.secret.name) }}
+{{- end }}
+# postgres_exporter for the release's PostgreSQL. A Deployment of its own, not a container in the
+# PostgreSQL Pod: turning it on or off, or a new exporter image, must not restart the database. It
+# connects through the Service with TLS as hephaestus_monitor, a member of pg_monitor only.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "postgresql-exporter") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "postgresql-exporter") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "postgresql-exporter") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
+      enableServiceLinks: false
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 65534 "group" 65534) | nindent 8 }}
+      containers:
+        - name: postgresql-exporter
+          image: {{ include "hephaestus.image" (dict "root" . "name" "postgres-exporter") | quote }}
+          imagePullPolicy: IfNotPresent
+          args:
+            # The default collectors, the statement statistics and the oldest open transaction.
+            # The statements are the top ones by total time, labelled by query id: the query text
+            # stays in PostgreSQL.
+            - --collector.stat_statements
+            - {{ printf "--collector.stat_statements.limit=%d" (int .Values.postgresql.metrics.statementLimit) | quote }}
+            - --no-collector.stat_statements.include_query
+            - --collector.long_running_transactions
+          env:
+            - name: DATA_SOURCE_URI
+              value: {{ printf "%s:%s/%s?sslmode=verify-full&sslrootcert=%s/ca.crt" (include "hephaestus.databaseHost" .) (include "hephaestus.databasePort" .) .Values.postgresql.database (include "hephaestus.postgresqlCaDirectory" .) | quote }}
+            - name: DATA_SOURCE_USER
+              value: hephaestus_monitor
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATA_SOURCE_PASS" "key" "DATABASE_MONITOR_PASSWORD") | nindent 12 }}
+          ports:
+            - name: metrics
+              containerPort: 9187
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            {{- toYaml .Values.postgresql.metrics.resources | nindent 12 }}
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
+      volumes:
+        {{- include "hephaestus.postgresqlCaVolume" . | nindent 8 }}
+{{- if and .Values.postgresql.bundled (ne (include "hephaestus.restoring" .) "true") }}
+---
+# The role and the statement statistics, once per revision, as the migration Job: a plain Job that waits
+# for the server, not a Helm hook. Each statement is idempotent, and the password is set every time, so
+# a changed DATABASE_MONITOR_PASSWORD takes effect with the next upgrade. The extension goes in a schema
+# of its own, so the application's schema stays unchanged. An external PostgreSQL gets no Job: its
+# operator runs the statements of docs/admin/observability.mdx § Database metrics.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-%d" (include "hephaestus.name" (dict "root" . "component" "postgresql-monitor")) .Release.Revision }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "postgresql-monitor") | nindent 4 }}
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "postgresql-monitor") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
+      enableServiceLinks: false
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 999 "group" 999) | nindent 8 }}
+      containers:
+        - name: postgresql-monitor
+          image: {{ include "hephaestus.image" (dict "root" . "name" "postgres") | quote }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -ec
+            # psql substitutes :'password' as a quoted literal only in a script, not in -c.
+            - |
+              until pg_isready --quiet; do sleep 2; done
+              psql --no-psqlrc -v ON_ERROR_STOP=1 -v password="$DATABASE_MONITOR_PASSWORD" <<'SQL'
+              SELECT 'CREATE ROLE hephaestus_monitor' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hephaestus_monitor') \gexec
+              ALTER ROLE hephaestus_monitor WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION CONNECTION LIMIT 2 PASSWORD :'password';
+              GRANT pg_monitor TO hephaestus_monitor;
+              CREATE SCHEMA IF NOT EXISTS monitoring;
+              GRANT USAGE ON SCHEMA monitoring TO hephaestus_monitor;
+              CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring;
+              ALTER ROLE hephaestus_monitor SET search_path = monitoring, public;
+              SQL
+          env:
+            - name: PGHOST
+              value: {{ include "hephaestus.databaseHost" . | quote }}
+            - name: PGPORT
+              value: {{ include "hephaestus.databasePort" . | quote }}
+            - name: PGDATABASE
+              value: {{ .Values.postgresql.database | quote }}
+            - name: PGSSLMODE
+              value: verify-full
+            - name: PGSSLROOTCERT
+              value: {{ printf "%s/ca.crt" (include "hephaestus.postgresqlCaDirectory" .) | quote }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGUSER" "key" "DATABASE_USERNAME") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGPASSWORD" "key" "DATABASE_PASSWORD") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_MONITOR_PASSWORD") | nindent 12 }}
+          resources:
+            requests: { cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi }
+            limits: { cpu: 200m, memory: 64Mi, ephemeral-storage: 64Mi }
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+        {{- include "hephaestus.postgresqlCaVolume" . | nindent 8 }}
+{{- end }}
+{{- end }}
