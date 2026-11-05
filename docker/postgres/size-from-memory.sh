@@ -14,6 +14,12 @@
 # during a rolling update (docs/admin/sizing.mdx).
 # Without a limit, PostgreSQL keeps its defaults: the host's memory is not PostgreSQL's to take. These
 # flags come before the ones the container is started with, so a flag in a Compose `command` wins.
+#
+# The log settings record a lock wait longer than deadlock_timeout, a temporary file of 10 MB or more
+# and an autovacuum or autoanalyze of a second or more. log_checkpoints is already on. The server log
+# ranks LOG above ERROR, so at the default log_min_error_statement each of these lines would also quote
+# its statement, literal values included. PANIC keeps every statement out of the log, also from ERROR
+# lines: statement text is personal data (docs/admin/observability.mdx, Reading log records).
 set -eu
 
 case "${1:-}" in
@@ -46,8 +52,9 @@ if [ "${1:-}" = postgres ]; then
 			fi
 			;;
 	esac
-	# $sizing holds only flags and numbers, so word splitting is safe here.
-	set -- postgres -c shared_preload_libraries=pg_stat_statements -c wal_compression=lz4 $sizing "$@"
+	logging="-c log_lock_waits=on -c log_temp_files=10MB -c log_autovacuum_min_duration=1s -c log_min_error_statement=panic"
+	# $logging and $sizing hold only flags and numbers, so word splitting is safe here.
+	set -- postgres -c shared_preload_libraries=pg_stat_statements -c wal_compression=lz4 $logging $sizing "$@"
 fi
 
 exec docker-entrypoint.sh "$@"

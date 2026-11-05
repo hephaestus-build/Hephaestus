@@ -421,6 +421,27 @@ kubectl -n hephaestus exec hephaestus-postgresql-0 -c postgresql -- \
 For most statements, the statistics replace constants with placeholders.
 A clean restart keeps them, and `SELECT pg_stat_statements_reset()` clears them.
 
+## Database logs
+
+The bundled PostgreSQL image logs four kinds of events that show contention and maintenance:
+
+| Event | Setting | Line |
+| --- | --- | --- |
+| A statement waits for a lock for longer than `deadlock_timeout`, 1 second | `log_lock_waits=on` | `still waiting for ShareLock`, then `acquired`, with the holding process and the relation |
+| A query writes a temporary file of 10 MB or more | `log_temp_files=10MB` | `temporary file`, with its size |
+| An autovacuum or autoanalyze takes 1 second or more | `log_autovacuum_min_duration=1s` | `automatic vacuum` or `automatic analyze`, with the table |
+| A checkpoint | `log_checkpoints=on`, the PostgreSQL default | `checkpoint complete`, with its duration |
+
+No line quotes a statement.
+`log_min_error_statement=panic` keeps the statement text out of these lines and out of error lines, because the text can hold values from a person's work.
+The image never sets `log_statement` or `log_min_duration_statement`.
+To find slow statements, read [the statement statistics](#database-statement-statistics), which hold no parameter values.
+An error line can still quote a value in its `DETAIL`, for example the key of a unique constraint violation.
+
+To change a setting, set it in `postgresql.parameters` of the chart, or as a `-c` flag in the Compose `command`.
+Each overrides the image's value.
+The log collector of the chart does not read the PostgreSQL container.
+
 ## Reading log records
 
 | Field                                             | Meaning                                                                                          |
