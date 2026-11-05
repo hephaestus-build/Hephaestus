@@ -74,13 +74,16 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           # The bundle budget compares with the entry ahead in the queue; a pull request uses its merge base.
           BUNDLE_BASE: ${{ github.event.merge_group.base_sha }}
+        # 15 minutes, under the job's 20: a hung task is named in the log and the summary before the
+        # job limit cancels the run, which can lose its log. The step takes 5 to 11 minutes.
         run: |
+          deadline() { node scripts/ci-deadline.ts 900 "$@"; }
           case "$LEG" in
-            server) vp run ci:server ;;
-            tooling) vp run ci:tooling ;;
-            webapp) vp run ci:webapp ;;
-            extension) vp run ci:extension ;;
-            windows) vp run --no-cache ci:windows ;;
+            server) deadline vp run ci:server ;;
+            tooling) deadline vp run ci:tooling ;;
+            webapp) deadline vp run ci:webapp ;;
+            extension) deadline vp run ci:extension ;;
+            windows) deadline vp run --no-cache ci:windows ;;
             *) echo "::error::Unknown quality leg: $LEG"; exit 1 ;;
           esac
 

@@ -60,6 +60,11 @@ The local pre-push hook runs the focused checks in `check:push`.
 It does not replace the full quality gate or any CI check.
 [Local verification](./local-verification.mdx#pre-push-hook) defines its scope and exclusions.
 
+Each quality leg runs its task under `scripts/ci-deadline.ts`, with a deadline of 15 minutes, under the job's 20.
+A task that hangs past it is listed with its processes and their command lines, in the log and in the job summary.
+Then the step stops the task and fails with exit code 124.
+The job's own limit cancels the run and can lose its log, so the list is the evidence of which task hung.
+
 | Job                                                                     | Checks                                                                                                                                                                                                    | Local command                                                            |
 | ------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Quality → App Server | Spotless and PMD, NullAway policy, the test analysis (`gate:server-test-analysis`), the PMD canary when PMD inputs changed, source-use contracts, setting delivery per runtime role. On a pull request that changes Gradle inputs, the verification metadata check | `vp run gate:server`, `gate:java-nullness`, `gate:contracts`, `gate:env`, `node scripts/check-gradle-verification-metadata.ts` |
