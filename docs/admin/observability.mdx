@@ -25,7 +25,7 @@ The alert or the objective tells the operator when the answer needs work.
 | Does feedback wait and never arrive? | `practice_feedback_oldest_waiting_seconds` | `HephaestusFeedbackDeliveryStalled` |
 | Do review attempts fail, and where? | `agent_job_total`, `agent_job_infra_retry_requeued_total`, `agent_job_orphan_failed_total` | `HephaestusAgentJobsFailing` and the other review alerts |
 | How long does each stage of a review take? | `agent_job_stage_duration_seconds`, by `stage` and `outcome`. Admission: `http_server_requests_seconds` on the two [admission routes](#agent-job-metrics) | None |
-| Which statements take the most database time, and do tables collect dead rows? | `pg_stat_statements_seconds_total` by `queryid`, `pg_stat_user_tables_n_dead_tup`, `pg_long_running_transactions_oldest_timestamp_seconds`, with the [database metrics](#database-metrics) on | None yet |
+| Which statements take the most database time, and do tables collect dead rows? | `pg_stat_statements_seconds_total` by `queryid`, `pg_stat_user_tables_n_dead_tup`, `pg_long_running_transactions_oldest_timestamp_seconds`, with the [database metrics](#database-metrics) on | `HephaestusDatabaseDeadlocks`, `HephaestusDatabaseTransactionOpenLong`, `HephaestusDatabaseDeadRowsHigh`, `HephaestusDatabaseTransactionIdAgeHigh` |
 | Does work wait for a worker? | `agent_queue_oldest_age_seconds`, `agent_job_duration_seconds` with `phase="queue"` | `HephaestusAgentQueueStalled` |
 | Do model calls wait for their pool? | `llm_pool_permit_wait_seconds`, `llm_pool_upstream_throttled_total` | None |
 | How long does a model call take, how many tokens does it use, and how does it end? | `gen_ai_client_operation_duration_seconds`, `gen_ai_client_tokens_total`, `gen_ai_client_calls_total` by `outcome` | None |
@@ -432,11 +432,23 @@ To turn it on:
    The [monitoring stack](#monitoring-stack) does this as the job `postgresql`.
    Another scraper needs the namespace and labels of `networkPolicy.metrics`.
 
-The exporter reports the default collectors, the oldest open transaction, and the statement statistics.
+The exporter reports the default collectors, the oldest open transaction, the transaction ID age of each database, and the statement statistics.
 The statement statistics hold the `postgresql.metrics.statementLimit` statements with the most total execution time, 20 by default.
 Their only labels are `user`, `datname` and `queryid`.
 The query text stays in PostgreSQL.
 To read the text of a `queryid`, run `SELECT query FROM monitoring.pg_stat_statements WHERE queryid = <id>` in the application's database.
+
+The rule group `hephaestus-postgresql` alerts on these metrics:
+
+| Alert | Fires when |
+| --- | --- |
+| `HephaestusDatabaseDeadlocks` | PostgreSQL broke a deadlock in the last 15 minutes |
+| `HephaestusDatabaseTransactionOpenLong` | A transaction has been open for more than 5 minutes, for 5 minutes |
+| `HephaestusDatabaseDeadRowsHigh` | A table has more than 10,000 dead rows and more than 20 % of its live rows, for an hour |
+| `HephaestusDatabaseTransactionIdAgeHigh` | The oldest unfrozen transaction ID of a database is more than 1 billion old, for 15 minutes. It is critical. |
+
+Without the exporter, these rules have no series and stay silent.
+The [runbook](./production-operations-runbook#alert-response) gives the response to each.
 
 To change the password, set a new `DATABASE_MONITOR_PASSWORD` and upgrade.
 The Job sets the new password.

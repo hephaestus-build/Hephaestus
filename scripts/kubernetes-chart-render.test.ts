@@ -3815,6 +3815,8 @@ await test("the PostgreSQL exporter runs apart from the database, and its role J
 	const args = list(get(exporter, "args"));
 	assert.ok(args.includes("--collector.stat_statements.limit=20"), String(args));
 	assert.ok(args.includes("--no-collector.stat_statements.include_query"), String(args));
+	// The transaction ID age that HephaestusDatabaseTransactionIdAgeHigh reads.
+	assert.ok(args.includes("--collector.database_wraparound"), String(args));
 	const exporterEnv = list(get(exporter, "env"));
 	const entry = (name: string) => exporterEnv.find((candidate) => get(candidate, "name") === name);
 	assert.match(

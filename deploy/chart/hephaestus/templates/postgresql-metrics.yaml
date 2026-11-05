@@ -33,13 +33,14 @@ spec:
           image: {{ include "hephaestus.image" (dict "root" . "name" "postgres-exporter") | quote }}
           imagePullPolicy: IfNotPresent
           args:
-            # The default collectors, the statement statistics and the oldest open transaction.
-            # The statements are the top ones by total time, labelled by query id: the query text
-            # stays in PostgreSQL.
+            # The default collectors, the statement statistics, the oldest open transaction and the
+            # transaction ID age of each database. The statements are the top ones by total time,
+            # labelled by query id: the query text stays in PostgreSQL.
             - --collector.stat_statements
             - {{ printf "--collector.stat_statements.limit=%d" (int .Values.postgresql.metrics.statementLimit) | quote }}
             - --no-collector.stat_statements.include_query
             - --collector.long_running_transactions
+            - --collector.database_wraparound
           env:
             - name: DATA_SOURCE_URI
               value: {{ printf "%s:%s/%s?sslmode=verify-full&sslrootcert=%s/ca.crt" (include "hephaestus.databaseHost" .) (include "hephaestus.databasePort" .) .Values.postgresql.database (include "hephaestus.postgresqlCaDirectory" .) | quote }}
