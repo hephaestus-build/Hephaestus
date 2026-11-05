@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionCapacity;
 import de.tum.cit.aet.hephaestus.agent.composer.WorkerFeedbackComposer;
@@ -29,6 +30,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRecovery;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobZombieSweeper;
 import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
@@ -42,6 +44,8 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.WorkerGraphWithoutCluster;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -107,6 +111,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGitHub;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -116,14 +121,22 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -132,10 +145,16 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.convert.ApplicationConversionService;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
+import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.BootstrapUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
@@ -148,6 +167,7 @@ import tools.jackson.databind.node.ObjectNode;
  */
 class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private static final UUID WORKER_LEASE = UUID.fromString("3e9b7c41-58d2-4a6f-b0e1-7c2d9a4f6b18");
+    private static final Duration KILLED_WORKER_LEASE = Duration.ofSeconds(5);
     private static final String RECORD = "context/pull-request.md";
     private static final String QUOTE = "The export handler now catches the failure and returns without its cause.";
     private static final String SUMMARY = "Keep the failure cause when the export handler gives up.";
@@ -273,6 +293,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewJobRecovery attemptRecovery;
+
+    @Autowired
+    private ReviewJobZombieSweeper sweeper;
 
     @Autowired
     private ReviewJobCompletionService completion;
@@ -794,6 +817,220 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .containsEntry("proxy_cache_read_tokens", 1200L)
                     .containsEntry("proxy_cache_write_tokens", 300L);
             assertThat(resultIds(review)).isEmpty();
+        }
+    }
+
+    /**
+     * A worker process that holds an attempt with a staged practice, killed with no chance to clean up. While it renews
+     * its lease, the server's lease check leaves the attempt alone; once it is dead, the lease runs out and the same
+     * check gives the review a new attempt, with the staged practice kept. The in-process test above calls the
+     * recovery itself; this one leaves it to the production sweep, on a lease that really expires.
+     *
+     * <p>The worker leases for {@link #KILLED_WORKER_LEASE} instead of the production five minutes, so the lease ends
+     * within the test; the sweep and its renewal interval are the production ones.
+     */
+    @Test
+    @Timeout(value = 8, unit = TimeUnit.MINUTES)
+    void shouldKeepStagedPracticesAndReclaimTheLeaseWhenTheWorkerProcessIsKilled() throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            UUID jobId = review.identity().jobId();
+            Path request = Files.createTempFile("lost-worker-request", ".json");
+            Files.write(request, mapper.writeValueAsBytes(request(review)));
+            var postgres = PostgreSQLTestContainer.getInstance();
+            var builder = new ProcessBuilder(
+                            Path.of(System.getProperty("java.home"), "bin", "java")
+                                    .toString(),
+                            // A second application context on a CI runner beside the test's own: bound its heap.
+                            "-Xmx768m",
+                            "-cp",
+                            System.getProperty("java.class.path"),
+                            LostWorker.class.getName(),
+                            jobId.toString(),
+                            Long.toString(review.workspaceId()),
+                            WORKER_LEASE.toString(),
+                            request.toString(),
+                            Long.toString(KILLED_WORKER_LEASE.toSeconds()))
+                    .redirectErrorStream(true);
+            builder.environment().put("LOST_WORKER_JDBC_URL", postgres.getJdbcUrl());
+            builder.environment().put("LOST_WORKER_JDBC_USER", postgres.getUsername());
+            builder.environment().put("LOST_WORKER_JDBC_PASSWORD", postgres.getPassword());
+            Process worker = builder.start();
+            Duration renewEvery = agentProperties.heartbeatInterval();
+            try {
+                // A reader thread drains the output, so the worker never blocks on a full pipe and a stalled worker
+                // fails the wait instead of hanging it.
+                var lines = new LinkedBlockingQueue<String>();
+                Thread.ofVirtual().start(() -> {
+                    try (var output = new BufferedReader(
+                            new InputStreamReader(worker.getInputStream(), StandardCharsets.UTF_8))) {
+                        for (String line; (line = output.readLine()) != null; ) lines.add(line);
+                    } catch (IOException ended) {
+                        // The worker was killed.
+                    }
+                });
+                awaitLine(lines, LostWorker.STAGED, Duration.ofMinutes(3));
+                awaitLine(lines, LostWorker.RENEWED, Duration.ofSeconds(30));
+                Instant renewedOnce = leasedUntil(jobId);
+                awaitLine(lines, LostWorker.RENEWED, Duration.ofSeconds(30));
+                assertThat(leasedUntil(jobId))
+                        .as("the worker process renews its lease with the heartbeat's statement")
+                        .isAfter(renewedOnce);
+
+                // Without its renewals the lease would run out and be taken within the sweep's quiet time after a
+                // start plus its one-interval cutoff; the attempt stays the worker's for longer than both.
+                Instant alive = Instant.now().plus(renewEvery.multipliedBy(2)).plusSeconds(5);
+                while (Instant.now().isBefore(alive)) {
+                    sweeper.recoverOrphanedJobs();
+                    assertThat(worker.isAlive()).isTrue();
+                    assertThat(jobs.findById(jobId).orElseThrow().getStatus())
+                            .as("the attempt of a worker that renews its lease")
+                            .isEqualTo(ReviewJobStatus.RUNNING);
+                    Thread.sleep(1000);
+                }
+            } finally {
+                worker.destroyForcibly();
+                assertThat(worker.waitFor(30, TimeUnit.SECONDS)).isTrue();
+                Files.deleteIfExists(request);
+            }
+
+            var orphan = jobs.findById(jobId).orElseThrow();
+            assertThat(orphan.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+            assertThat(orphan.getLeaseId())
+                    .as("nothing in the killed process released its lease")
+                    .isEqualTo(WORKER_LEASE);
+            assertThat(stagingStore.staged(review.workspaceId(), review.reviewId(), jobId))
+                    .as("the practice the worker staged before it died")
+                    .singleElement()
+                    .satisfies(staged -> assertThat(staged.attempt()).isZero());
+
+            Instant deadline = Instant.now()
+                    .plus(KILLED_WORKER_LEASE)
+                    .plus(renewEvery.multipliedBy(2))
+                    .plusSeconds(30);
+            while (jobs.findById(jobId).orElseThrow().getStatus() == ReviewJobStatus.RUNNING
+                    && Instant.now().isBefore(deadline)) {
+                sweeper.recoverOrphanedJobs();
+                Thread.sleep(1000);
+            }
+
+            var retry = jobs.findById(jobId).orElseThrow();
+            assertThat(retry.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+            assertThat(retry.getAttempt()).isEqualTo(1);
+            assertThat(retry.getLeaseId()).isNull();
+            assertThat(stagingStore.staged(review.workspaceId(), review.reviewId(), jobId))
+                    .as("the next attempt starts with the practice already staged")
+                    .singleElement()
+                    .satisfies(staged -> assertThat(staged.attempt()).isZero());
+            assertThat(resultIds(review)).isEmpty();
+        }
+    }
+
+    private Instant leasedUntil(UUID jobId) {
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT leased_until FROM review_job WHERE id = ?", Instant.class, jobId));
+    }
+
+    /** Takes the worker's output lines until one holds {@code marker}; fails on its failure line or the deadline. */
+    private static void awaitLine(BlockingQueue<String> lines, String marker, Duration within)
+            throws InterruptedException {
+        Instant deadline = Instant.now().plus(within);
+        while (Instant.now().isBefore(deadline)) {
+            String line = lines.poll(1, TimeUnit.SECONDS);
+            if (line == null) continue;
+            if (line.contains(marker)) return;
+            if (line.startsWith(LostWorker.FAILED)) throw new AssertionError(line);
+        }
+        throw new AssertionError("The worker process did not print " + marker + " within " + within);
+    }
+
+    /**
+     * A worker process: the application with only the worker role, on the test's database, without a cluster. It
+     * stages one practice for the claimed attempt through the worker's admission service, then renews the attempt's
+     * lease with the heartbeat's statement until it is killed. It does not run the review: no sandbox starts.
+     */
+    public static final class LostWorker {
+        static final String STAGED = "LOST-WORKER STAGED";
+        static final String RENEWED = "LOST-WORKER RENEWED";
+        static final String FAILED = "LOST-WORKER FAILED";
+
+        public static void main(String[] args) throws Exception {
+            UUID jobId = UUID.fromString(args[0]);
+            long workspaceId = Long.parseLong(args[1]);
+            UUID leaseId = UUID.fromString(args[2]);
+            byte[] request = Files.readAllBytes(Path.of(args[3]));
+            long leaseSeconds = Long.parseLong(args[4]);
+            var configuration = BootstrapUtils.resolveTestContextBootstrapper(WorkerGraphWithoutCluster.class)
+                    .buildMergedContextConfiguration();
+            new WebApplicationContextRunner()
+                    .withInitializer(application -> {
+                        var conversion = new ApplicationConversionService();
+                        application.getEnvironment().setConversionService(conversion);
+                        application.getBeanFactory().setConversionService(conversion);
+                    })
+                    .withInitializer(new ConfigDataApplicationContextInitializer())
+                    .withInitializer(application -> configuration
+                            .getContextCustomizers()
+                            .forEach(customizer -> customizer.customizeContext(application, configuration)))
+                    .withUserConfiguration(Application.class)
+                    .withPropertyValues(
+                            "spring.profiles.active=worker",
+                            "spring.config.import=classpath:application-test.yml",
+                            "spring.main.lazy-initialization=false",
+                            "spring.sql.init.mode=never",
+                            "spring.liquibase.enabled=false",
+                            "spring.datasource.url=" + System.getenv("LOST_WORKER_JDBC_URL"),
+                            "spring.datasource.username=" + System.getenv("LOST_WORKER_JDBC_USER"),
+                            "spring.datasource.password=" + System.getenv("LOST_WORKER_JDBC_PASSWORD"),
+                            "spring.datasource.hikari.maximum-pool-size=4",
+                            "hephaestus.runtime.server.enabled=false",
+                            "hephaestus.runtime.worker.enabled=true",
+                            "hephaestus.runtime.webhook.enabled=false",
+                            "hephaestus.agent.enabled=true",
+                            "hephaestus.worker.capacity.mentor-max=1",
+                            "hephaestus.sync.nats.enabled=false",
+                            "hephaestus.sandbox.kubernetes.namespace=lost-worker-sandboxes",
+                            "hephaestus.sandbox.kubernetes.pod-name=lost-worker",
+                            "hephaestus.sandbox.kubernetes.pod-ip=127.0.0.1",
+                            "server.port=0",
+                            "management.server.port=0")
+                    .run(application -> {
+                        try {
+                            var roles = RuntimeRole.enabled(application.getEnvironment());
+                            if (!roles.equals(List.of(RuntimeRole.WORKER))
+                                    || !application
+                                            .getBeansOfType(ReviewJobZombieSweeper.class)
+                                            .isEmpty()) {
+                                System.out.println(FAILED + " not a worker-only process: " + roles);
+                                return;
+                            }
+                            var identity = new ResultAdmissionService.AdmissionIdentity(jobId, workspaceId, 0, leaseId);
+                            application
+                                    .getBean(ResultAdmissionService.class)
+                                    .stage(
+                                            identity,
+                                            application
+                                                    .getBean(JsonMapper.class)
+                                                    .readValue(request, AdmissionRequestDTO.class));
+                            System.out.println(STAGED);
+                            var transactions =
+                                    new TransactionTemplate(application.getBean(PlatformTransactionManager.class));
+                            var repository = application.getBean(ReviewJobRepository.class);
+                            while (true) {
+                                Integer renewed = transactions.execute(
+                                        status -> repository.renewLease(jobId, workspaceId, 0, leaseId, leaseSeconds));
+                                if (renewed == null || renewed != 1) {
+                                    System.out.println(FAILED + " lease lost");
+                                    return;
+                                }
+                                System.out.println(RENEWED);
+                                Thread.sleep(500);
+                            }
+                        } catch (Exception failed) {
+                            System.out.println(FAILED + " " + failed);
+                        } finally {
+                            System.out.flush();
+                        }
+                    });
         }
     }
 
