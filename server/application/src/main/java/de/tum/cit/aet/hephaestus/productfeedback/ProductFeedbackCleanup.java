@@ -70,6 +70,10 @@ public class ProductFeedbackCleanup {
     @Column(name = "manual_since")
     private @Nullable Instant manualSince;
 
+    /** When the admin email announced the manual step; null until a sweep sends it. */
+    @Column(name = "notified_at")
+    private @Nullable Instant notifiedAt;
+
     /** What is left for a maintainer, because the app cannot delete an issue or its edit history. */
     enum ManualStep {
         /** The issue is scrubbed and closed in the private repository; its edit history still holds the erased text. */

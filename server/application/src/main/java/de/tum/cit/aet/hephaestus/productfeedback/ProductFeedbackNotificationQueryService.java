@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackNotificationQuery;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,7 +25,12 @@ class ProductFeedbackNotificationQueryService implements ProductFeedbackNotifica
 
     @Override
     @Transactional(readOnly = true)
-    public boolean cleanupNeedsAction(UUID cleanupId) {
-        return cleanups.findByIdAndManualSinceNotNull(cleanupId).isPresent();
+    public List<String> waitingCleanupIssues(List<UUID> cleanupIds) {
+        return cleanups.findAllByIdInAndManualSinceNotNullOrderByRepositoryAscIssueNumberAsc(cleanupIds).stream()
+                .map(row -> row.getIssueNumber() == null
+                        ? row.getRepository() + ": the issue whose body contains "
+                                + IssueRenderer.markerText(row.getMarker())
+                        : "https://github.com/" + row.getRepository() + "/issues/" + row.getIssueNumber())
+                .toList();
     }
 }

@@ -34,6 +34,7 @@ class FeedbackService {
     private final String appVersion;
     private final MyReportsService reports;
     private final DestinationSettings destinations;
+    private final ProductFeedbackFilingRepository filings;
 
     FeedbackService(
             ProductFeedbackRepository feedback,
@@ -42,7 +43,8 @@ class FeedbackService {
             ApplicationEventPublisher events,
             @Value("${spring.application.version}") String appVersion,
             MyReportsService reports,
-            DestinationSettings destinations) {
+            DestinationSettings destinations,
+            ProductFeedbackFilingRepository filings) {
         this.feedback = feedback;
         this.refs = refs;
         this.clock = clock;
@@ -50,6 +52,7 @@ class FeedbackService {
         this.appVersion = appVersion;
         this.reports = reports;
         this.destinations = destinations;
+        this.filings = filings;
     }
 
     @Transactional
@@ -104,6 +107,14 @@ class FeedbackService {
     public FeedbackItemDTO triage(UUID id, boolean resolved, Long accountId) {
         ProductFeedback item =
                 feedback.findById(id).orElseThrow(() -> new EntityNotFoundException("Product feedback", id.toString()));
+        // The console lists only reports that GitHub will not get; one that is filed, or on its way, is worked on
+        // there.
+        boolean onGitHub = filings.findById(id)
+                .map(filing -> filing.getState() != FilingState.EMAILED && filing.getState() != FilingState.STOPPED)
+                .orElse(false);
+        if (onGitHub)
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "This report goes to GitHub. Work on it there, not in this list.");
         if (resolved) item.resolve(accountId, clock.instant());
         else item.reopen();
         return dtos(List.of(item)).getFirst();

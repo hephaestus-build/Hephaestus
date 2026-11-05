@@ -91,6 +91,8 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
 
     long countByState(FilingState state);
 
+    long countByStateAndRoute(FilingState state, FilingRoute route);
+
     @Query(
             value = "SELECT max(first_attempt_at) FROM product_feedback_filing WHERE state = 'FILED'",
             nativeQuery = true)

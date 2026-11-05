@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +36,8 @@ class CleanupService {
     private static final Logger log = LoggerFactory.getLogger(CleanupService.class);
     static final String ERASED = "Erased at the reporter's request";
     static final Duration MANUAL_AFTER = Duration.ofDays(30);
+    /** Bounds one sweep; an erasure has one record per filed report, and a later sweep takes the rest. */
+    static final int SWEEP_LIMIT = 50;
 
     private final ProductFeedbackCleanupRepository cleanups;
     private final DestinationSettings destinations;
@@ -76,21 +79,47 @@ class CleanupService {
             boolean publicIssue,
             Instant since) {}
 
+    /** A claimed record: work on its job, or nothing left to do when it went to a maintainer at the claim. */
+    private record Claimed(@Nullable Job job) {}
+
+    /**
+     * Works through every due record, up to {@link #SWEEP_LIMIT}, then announces every step that now waits for a
+     * maintainer in one email. One erasure's records fall due together, so they arrive in one list. A step handed over
+     * by a sweep that stopped early is announced by the next sweep.
+     */
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT2M")
+    @SchedulerLock(name = "product-feedback-cleanup", lockAtMostFor = "PT15M", lockAtLeastFor = "PT30S")
     void cleanDue() {
-        Job job = transactions.execute(status -> {
+        int worked = 0;
+        while (worked < SWEEP_LIMIT && cleanOne()) worked++;
+        announce();
+    }
+
+    private void announce() {
+        transactions.executeWithoutResult(status -> {
+            List<UUID> waiting = cleanups.unannounced();
+            if (waiting.isEmpty()) return;
+            Instant now = clock.instant();
+            cleanups.markAnnounced(waiting, now);
+            events.publishEvent(new ProductFeedbackCleanupNeedsActionEvent(waiting, now));
+        });
+    }
+
+    /** @return false when no record is due */
+    private boolean cleanOne() {
+        Claimed claimed = transactions.execute(status -> {
             Instant now = clock.instant();
             ProductFeedbackCleanup row =
                     cleanups.claimable(now).flatMap(cleanups::findById).orElse(null);
             if (row == null) return null;
             if (!row.getCreatedAt().plus(MANUAL_AFTER).isAfter(now)) {
                 needsMaintainer(row, ProductFeedbackCleanup.ManualStep.UNFINISHED, now);
-                return null;
+                return new Claimed(null);
             }
             // Pushes the next attempt out first, so a crash mid-way retries later instead of at once.
             row.setAttempts(row.getAttempts() + 1);
             row.setNextAttemptAt(now.plus(Duration.ofMinutes(Math.min(60, 5L * row.getAttempts()))));
-            return new Job(
+            return new Claimed(new Job(
                     row.getId(),
                     new ProductFeedbackIssues.Repository(
                             row.getRepositoryId(),
@@ -102,9 +131,11 @@ class CleanupService {
                     row.getIssueNumber(),
                     row.getIssueNodeId(),
                     row.isPublicIssue(),
-                    row.getSince());
+                    row.getSince()));
         });
-        if (job == null) return;
+        if (claimed == null) return false;
+        Job job = claimed.job();
+        if (job == null) return true;
         try {
             Long number = job.number();
             String nodeId = job.nodeId();
@@ -113,7 +144,7 @@ class CleanupService {
                 if (found == null && number == null) {
                     // A complete read found no issue: the create never reached GitHub, so nothing is left to scrub.
                     done(job.id());
-                    return;
+                    return true;
                 }
                 if (found != null) {
                     // Kept before the scrub removes the marker, so a later pass can still move the issue.
@@ -157,6 +188,7 @@ class CleanupService {
                     job.id(),
                     failed.getClass().getSimpleName());
         }
+        return true;
     }
 
     private ProductFeedbackIssues.@Nullable Issue findIssue(
@@ -195,7 +227,6 @@ class CleanupService {
     private void needsMaintainer(ProductFeedbackCleanup row, ProductFeedbackCleanup.ManualStep step, Instant now) {
         row.setManualStep(step);
         row.setManualSince(now);
-        events.publishEvent(new ProductFeedbackCleanupNeedsActionEvent(row.getId(), now));
         meters.step("cleanup", "manual");
         log.info("Product feedback cleanup needs a maintainer: cleanupId={}, step={}", row.getId(), step);
     }

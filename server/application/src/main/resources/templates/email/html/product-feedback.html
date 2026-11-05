@@ -11,6 +11,7 @@
                     <td style="padding: 24px; font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px; color: #111827;">
                         <h1 style="margin: 0 0 16px 0; font-size: 20px; line-height: 28px;" th:text="${subject}">New product feedback in Hephaestus</h1>
                         <p style="margin: 0 0 16px 0;"><span th:text="#{${'email.product-feedback.' + feedbackKind}}">New product feedback.</span></p>
+                        <ul th:if="${cleanupIssues != null and !cleanupIssues.isEmpty()}" style="margin: 0 0 16px 0; padding-left: 20px;"><li th:each="issue : ${cleanupIssues}" th:text="${issue}" style="word-break: break-all;">acme/feedback#12</li></ul>
                         <p style="margin: 0;"><a th:href="${webappUrl + '/admin/feedback'}" style="color: #2563eb;">Open product feedback</a></p>
                     </td>
                 </tr>

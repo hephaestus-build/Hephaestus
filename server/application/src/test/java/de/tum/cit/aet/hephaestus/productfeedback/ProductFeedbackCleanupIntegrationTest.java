@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfigurati
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import de.tum.cit.aet.hephaestus.notification.preferences.UpdateNotificationPreferencesDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
+import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbackDestinationsDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
@@ -44,10 +46,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * An erased report's GitHub issue: the app scrubs what it can, then hands the rest to a maintainer with an email and a
@@ -98,6 +103,15 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private DestinationService destinationService;
+
+    @Autowired
+    private ProductFeedbackDestinationRepository destinationRows;
+
+    @Autowired
+    private ProductFeedbackRepository reports;
+
     private final List<UUID> createdCleanups = new ArrayList<>();
     private Account admin;
 
@@ -116,11 +130,19 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
         mail.sent().clear();
     }
 
+    /**
+     * Runs one sweep on the bean behind its lock proxy. The lock's 30-second floor would skip every sweep after the
+     * first; the replica test covers the lock itself.
+     */
+    private void sweep() {
+        AopTestUtils.<CleanupService>getUltimateTargetObject(cleanup).cleanDue();
+    }
+
     @Test
     void shouldLeaveTheEditHistoryToAMaintainerWhenAPrivateIssueIsScrubbed() throws Exception {
         ProductFeedbackCleanup record = record(false, 12L, "I_12", Instant.now());
 
-        cleanup.cleanDue();
+        sweep();
 
         verify(updates).edit(eq(PRIVATE_REPOSITORY), eq(12L), eq(CleanupService.ERASED), anyString());
         verify(updates).close(PRIVATE_REPOSITORY, 12L, "not_planned");
@@ -128,12 +150,12 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
         assertThat(stored.getManualStep()).isEqualTo(ProductFeedbackCleanup.ManualStep.EDIT_HISTORY);
         assertThat(stored.getManualSince()).isNotNull();
         assertThat(sentTo(admin)).singleElement().satisfies(message -> {
-            assertThat(message.getSubject()).isEqualTo("An erased report needs a manual step on GitHub");
+            assertThat(message.getSubject()).isEqualTo("Erased product feedback needs manual steps on GitHub");
             assertThat(body(message)).contains("/admin/feedback").contains("Needs action");
         });
 
         // A step that waits for a maintainer is never claimed again.
-        cleanup.cleanDue();
+        sweep();
         verify(updates).close(PRIVATE_REPOSITORY, 12L, "not_planned");
 
         webTestClient
@@ -151,10 +173,109 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldListEveryWaitingIssueInOneEmailWhenAnErasureHandsSeveralOver() throws Exception {
+        ProductFeedbackCleanup first = record(false, 21L, "I_21", Instant.now());
+        ProductFeedbackCleanup second = record(false, 22L, "I_22", Instant.now());
+
+        sweep();
+
+        assertThat(cleanups.findAllById(List.of(first.getId(), second.getId())))
+                .extracting(ProductFeedbackCleanup::getManualStep)
+                .containsOnly(ProductFeedbackCleanup.ManualStep.EDIT_HISTORY);
+        MimeMessage message = sentTo(admin).getFirst();
+        assertThat(sentTo(admin)).hasSize(1);
+        assertThat(message.getSubject()).isEqualTo("Erased product feedback needs manual steps on GitHub");
+        assertThat(body(message))
+                .contains("https://github.com/acme/feedback-private/issues/21")
+                .contains("https://github.com/acme/feedback-private/issues/22");
+
+        // Announced once: the next sweep finds nothing new to tell.
+        sweep();
+        assertThat(sentTo(admin)).hasSize(1);
+        assertThat(cleanups.findAllById(List.of(first.getId(), second.getId())))
+                .extracting(ProductFeedbackCleanup::getNotifiedAt)
+                .doesNotContainNull();
+    }
+
+    @Test
+    void shouldKeepThePrivateRepositoryWhenAPublicIssueCanStillMoveThere() {
+        ProductFeedbackDestination before =
+                destinationRows.findById(ProductFeedbackDestination.SINGLETON).orElse(null);
+        @Nullable String previousPrivate = before == null ? null : before.getPrivateRepository();
+        ProductFeedbackDestination destination = before == null ? new ProductFeedbackDestination() : before;
+        destination.setPrivateRepository(PRIVATE_REPOSITORY.fullName());
+        destinationRows.save(destination);
+        record(true, 40L, "I_40", Instant.now());
+        try {
+            assertThatThrownBy(() -> destinationService.update(
+                            new UpdateProductFeedbackDestinationsDTO(null, null, null, 50, false, false),
+                            Objects.requireNonNull(admin.getId())))
+                    .isInstanceOfSatisfying(ResponseStatusException.class, refused -> {
+                        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+                        assertThat(refused.getReason()).startsWith("Keep a private repository");
+                    });
+            assertThat(destinationRows.findById(ProductFeedbackDestination.SINGLETON))
+                    .get()
+                    .extracting(ProductFeedbackDestination::getPrivateRepository)
+                    .isEqualTo(PRIVATE_REPOSITORY.fullName());
+        } finally {
+            if (before == null) {
+                destinationRows.deleteById(ProductFeedbackDestination.SINGLETON);
+            } else {
+                destination.setPrivateRepository(previousPrivate);
+                destinationRows.save(destination);
+            }
+        }
+    }
+
+    @Test
+    void shouldKeepThePrivateRepositoryWhenAFiledPublicIssueCanStillBeMadePrivate() {
+        Account reporter = account(Account.AppRole.USER);
+        UUID report = filedPublicReport(reporter);
+        var other = new ProductFeedbackIssues.Repository(42, "", "acme/feedback-private-2", 7, true);
+        when(issues.repository(other.fullName())).thenReturn(Optional.of(other));
+        ProductFeedbackDestination before =
+                destinationRows.findById(ProductFeedbackDestination.SINGLETON).orElse(null);
+        @Nullable String previousPrivate = before == null ? null : before.getPrivateRepository();
+        ProductFeedbackDestination destination = before == null ? new ProductFeedbackDestination() : before;
+        destination.setPrivateRepository(PRIVATE_REPOSITORY.fullName());
+        destinationRows.save(destination);
+        long adminId = Objects.requireNonNull(admin.getId());
+        try {
+            assertThatThrownBy(() -> destinationService.update(
+                            new UpdateProductFeedbackDestinationsDTO(null, null, null, 50, false, false), adminId))
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            refused -> assertThat(refused.getReason())
+                                    .contains("1 public issue can still be made private"));
+
+            // Replacing it is allowed: Make private moves the issue into whichever private repository is set.
+            destinationService.update(
+                    new UpdateProductFeedbackDestinationsDTO(null, other.fullName(), null, 50, false, false), adminId);
+            assertThat(destinationRows.findById(ProductFeedbackDestination.SINGLETON))
+                    .get()
+                    .extracting(ProductFeedbackDestination::getPrivateRepository)
+                    .isEqualTo(other.fullName());
+        } finally {
+            ProductFeedbackDestination row = destinationRows
+                    .findById(ProductFeedbackDestination.SINGLETON)
+                    .orElseThrow();
+            if (before == null) {
+                destinationRows.delete(row);
+            } else {
+                row.setPrivateRepository(previousPrivate);
+                destinationRows.save(row);
+            }
+            reports.deleteById(report);
+            subscribed(reporter, false);
+        }
+    }
+
+    @Test
     void shouldHandTheCleanupToAMaintainerWhenItIsUnfinishedAfterThirtyDays() {
         ProductFeedbackCleanup record = record(true, null, null, Instant.now().minus(Duration.ofDays(31)));
 
-        cleanup.cleanDue();
+        sweep();
 
         verifyNoInteractions(issues, updates);
         ProductFeedbackCleanup stored = cleanups.findById(record.getId()).orElseThrow();
@@ -179,7 +300,7 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
         ProductFeedbackCleanup record = record(false, null, null, Instant.now());
         when(issues.findByMarker(any(), anyString(), any())).thenReturn(Optional.empty());
 
-        cleanup.cleanDue();
+        sweep();
 
         assertThat(cleanups.findById(record.getId())).isEmpty();
         verify(updates, never()).edit(any(), anyLong(), anyString(), anyString());
@@ -190,7 +311,7 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
     void shouldHandThePublicHistoryToAMaintainerWhenNoPrivateRepositoryCanTakeTheIssue() {
         ProductFeedbackCleanup record = record(true, 30L, "I_30", Instant.now());
 
-        cleanup.cleanDue();
+        sweep();
 
         // Scrubbed at once; its edit history stays public, so a maintainer gets it now, not after 30 days.
         verify(updates).edit(any(), eq(30L), eq(CleanupService.ERASED), anyString());
@@ -230,9 +351,28 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
     void shouldKeepTheIssueLocatorWhenTheReporterIsErased() {
         Account reporter = account(Account.AppRole.USER);
         long reporterId = Objects.requireNonNull(reporter.getId());
+        UUID reportId = filedPublicReport(reporter);
+
+        erasure.eraseAccount(reporterId);
+
+        assertThat(filings.findById(reportId)).isEmpty();
+        ProductFeedbackCleanup kept = cleanups.findAll().stream()
+                .filter(row -> row.getMarker().equals(reportId))
+                .findFirst()
+                .orElseThrow();
+        createdCleanups.add(kept.getId());
+        assertThat(kept.getRepository()).isEqualTo("acme/feedback");
+        assertThat(kept.getIssueNumber()).isEqualTo(77L);
+        assertThat(kept.isPublicIssue()).isTrue();
+        assertThat(kept.getManualStep()).isNull();
+        subscribed(reporter, false);
+    }
+
+    /** A report filed as a public issue in acme/feedback, as GitHub filing leaves it. */
+    private UUID filedPublicReport(Account reporter) {
         var receipt = feedbackService.add(
-                new FeedbackRequestDTO(ProductFeedback.Kind.BUG, "erased-report-content", null, null, null),
-                reporterId,
+                new FeedbackRequestDTO(ProductFeedback.Kind.BUG, "public-report-content", null, null, null),
+                Objects.requireNonNull(reporter.getId()),
                 null);
         ProductFeedbackFiling filing = filings.findById(receipt.id()).orElseThrow();
         filing.setState(FilingState.FILED);
@@ -244,20 +384,7 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
         filing.setIssueNodeId("I_77");
         filing.setFirstAttemptAt(Instant.now().minusSeconds(600));
         filings.save(filing);
-
-        erasure.eraseAccount(reporterId);
-
-        assertThat(filings.findById(receipt.id())).isEmpty();
-        ProductFeedbackCleanup kept = cleanups.findAll().stream()
-                .filter(row -> row.getMarker().equals(receipt.id()))
-                .findFirst()
-                .orElseThrow();
-        createdCleanups.add(kept.getId());
-        assertThat(kept.getRepository()).isEqualTo("acme/feedback");
-        assertThat(kept.getIssueNumber()).isEqualTo(77L);
-        assertThat(kept.isPublicIssue()).isTrue();
-        assertThat(kept.getManualStep()).isNull();
-        subscribed(reporter, false);
+        return receipt.id();
     }
 
     private WebTestClient.ResponseSpec confirm(UUID id, Account actor) {
