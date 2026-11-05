@@ -125,24 +125,26 @@ interface Rendered {
 	resources: Resource[];
 }
 
-/**
- * One `helm template` run of the chart source, or of `source`. A string layer is a values file
- * path; an object is written to one.
- */
+/** The values files of `layers`: a string layer is a path, and an object is written to `directory`. */
+function valuesFiles(directory: string, layers: readonly Layer[]): string[] {
+	return layers.map((layer, index) => {
+		if (typeof layer === "string") {
+			return layer;
+		}
+		const file = path.join(directory, `values-${index}.yaml`);
+		writeFileSync(file, stringify(layer));
+		return file;
+	});
+}
+
+/** One `helm template` run of the chart source, or of `source`. */
 function render(
 	layers: readonly Layer[],
 	{ release = "heph", namespace = "hephaestus", source = chart } = {},
 ): Rendered {
 	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-chart-"));
 	try {
-		const files = layers.map((layer, index) => {
-			if (typeof layer === "string") {
-				return layer;
-			}
-			const file = path.join(directory, `values-${index}.yaml`);
-			writeFileSync(file, stringify(layer));
-			return file;
-		});
+		const files = valuesFiles(directory, layers);
 		const result = spawnSync(
 			"helm",
 			[
@@ -3717,4 +3719,57 @@ await test("external services and disabled workers have no disruption budget", (
 		resources.filter((resource) => kindOf(resource) === "PodDisruptionBudget").map(componentOf),
 		["server"],
 	);
+});
+
+/**
+ * The NOTES.txt that an install prints. `helm template` leaves NOTES.txt out, so this runs a
+ * client-side dry-run install, which needs no cluster.
+ */
+function installNotes(layers: readonly Layer[]): string {
+	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-chart-"));
+	try {
+		const result = spawnSync(
+			"helm",
+			[
+				"install",
+				"heph",
+				chart,
+				"--dry-run=client",
+				"--namespace",
+				"hephaestus",
+				...valuesFiles(directory, layers).flatMap((file) => ["--values", file]),
+			],
+			{ encoding: "utf8", timeout: RENDER_TIMEOUT_MS },
+		);
+		if (result.error !== undefined) {
+			throw result.error;
+		}
+		assert.equal(result.status, 0, result.stderr);
+		const at = result.stdout.indexOf("\nNOTES:\n");
+		assert.notEqual(at, -1, "the install printed no NOTES");
+		return result.stdout.slice(at);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+}
+
+await test("an install warns when the bundled PostgreSQL has no backup, and only then", () => {
+	const warning = "WARNING: the bundled PostgreSQL has no backup.";
+	const backupDocs = "https://docs.hephaestus.build/admin/kubernetes#backup-and-restore";
+	const unprotected = installNotes(layersFor("small"));
+	assert.ok(unprotected.includes(warning), unprotected);
+	assert.ok(unprotected.includes(backupDocs), unprotected);
+
+	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
+	const backedUp = installNotes([
+		...layersFor("small"),
+		{
+			postgresql: {
+				backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
+			},
+		},
+	]);
+	assert.ok(!backedUp.includes(warning), backedUp);
+	// An external database is backed up where it runs, which the chart cannot see.
+	assert.ok(!installNotes(layersFor("external")).includes(warning));
 });

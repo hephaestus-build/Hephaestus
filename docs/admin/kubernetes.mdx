@@ -1522,6 +1522,10 @@ A sandbox process cannot raise them.
 
 ## Backup and restore
 
+Backup is off by default.
+While the bundled PostgreSQL runs without it, each `helm install` and `helm upgrade` prints a warning that links to this section.
+The chart cannot see a backup that you take yourself, for example a volume snapshot. In that case, the warning stays.
+
 With `postgresql.backup.enabled=true`, the bundled PostgreSQL archives its WAL to one S3-compatible bucket with pgBackRest, as [Backup and restore](./backup-restore#automated-off-host-backup) describes.
 The repository is encrypted with `BACKUP_CIPHER_PASS`.
 A CronJob takes a full backup each Sunday at 02:15 UTC.
