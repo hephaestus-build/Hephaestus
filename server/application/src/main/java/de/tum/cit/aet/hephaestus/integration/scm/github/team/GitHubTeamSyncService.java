@@ -9,7 +9,6 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.TRANSPORT_MAX_RETRIES;
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.adaptPageSize;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
@@ -59,7 +58,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
@@ -91,6 +90,7 @@ public class GitHubTeamSyncService {
     private final GitHubSyncProperties syncProperties;
     private final GitHubExceptionClassifier exceptionClassifier;
     private final GitHubGraphQlSyncCoordinator graphQlSyncHelper;
+    private final TransactionTemplate transactionTemplate;
     private static final int MAX_RETRY_ATTEMPTS = 3;
 
     public GitHubTeamSyncService(
@@ -103,7 +103,8 @@ public class GitHubTeamSyncService {
             GitHubUserProcessor userProcessor,
             GitHubSyncProperties syncProperties,
             GitHubExceptionClassifier exceptionClassifier,
-            GitHubGraphQlSyncCoordinator graphQlSyncHelper) {
+            GitHubGraphQlSyncCoordinator graphQlSyncHelper,
+            TransactionTemplate transactionTemplate) {
         this.teamRepository = teamRepository;
         this.teamMembershipRepository = teamMembershipRepository;
         this.repositoryRepository = repositoryRepository;
@@ -114,6 +115,7 @@ public class GitHubTeamSyncService {
         this.syncProperties = syncProperties;
         this.exceptionClassifier = exceptionClassifier;
         this.graphQlSyncHelper = graphQlSyncHelper;
+        this.transactionTemplate = transactionTemplate;
     }
 
     /**
@@ -126,7 +128,6 @@ public class GitHubTeamSyncService {
      * @param organizationLogin the GitHub organization login to sync teams for
      * @return number of teams synced
      */
-    @Transactional
     public int syncTeamsForOrganization(Long scopeId, String organizationLogin) {
         if (organizationLogin == null || organizationLogin.isBlank()) {
             log.warn("Skipped team sync: reason=missingOrgLogin, scopeId={}", scopeId);
@@ -134,30 +135,23 @@ public class GitHubTeamSyncService {
         }
         String safeOrgLogin = Objects.requireNonNull(sanitizeForLog(organizationLogin));
 
-        // Resolve the organization's provider for ProcessingContext (within @Transactional).
         // Provider-type-scoped so a same-login GitLab org cannot collide (ADR-0012).
-        Organization organization = organizationRepository
+        Long organizationId = organizationRepository
                 .findByLoginIgnoreCaseAndProvider_Type(organizationLogin, IdentityProviderType.GITHUB)
+                .map(Organization::getId)
                 .orElse(null);
-        if (organization == null) {
+        if (organizationId == null) {
             log.warn("Skipped team sync: reason=organizationNotFound, orgLogin={}", safeOrgLogin);
             return 0;
         }
-        IdentityProvider provider = organization.getProvider();
 
         HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
-        // Create processing context for sync operations (no repository for org-level teams)
-        ProcessingContext context = ProcessingContext.forSync(scopeId, provider);
 
+        List<FetchedTeam> fetched = new ArrayList<>();
+        boolean complete;
+        int pagesProcessed;
         try {
-            Set<Long> syncedTeamIds = new HashSet<>();
-            // Maps GitHub native ID → persisted Team for parent resolution after all teams are saved
-            Map<Long, Team> syncedTeamsByNativeId = new HashMap<>();
-            // Maps child team's native ID → parent team's native ID (from GraphQL)
-            Map<Long, Long> parentNativeIdByChildNativeId = new HashMap<>();
-            int totalSynced = 0;
             int teamsReceived = 0;
-            int totalPermissions = 0;
             String cursor = null;
             boolean hasNextPage = true;
             int pageCount = 0;
@@ -245,24 +239,10 @@ public class GitHubTeamSyncService {
                 teamsReceived += response.getNodes().size();
 
                 for (var graphQlTeam : response.getNodes()) {
-                    Team team = processTeam(graphQlTeam, organizationLogin, context);
-                    if (team != null) {
-                        syncedTeamIds.add(team.getNativeId());
-                        syncedTeamsByNativeId.put(team.getNativeId(), team);
-
-                        // Collect parent mapping for deferred resolution
-                        if (graphQlTeam.getParentTeam() != null
-                                && graphQlTeam.getParentTeam().getDatabaseId() != null) {
-                            parentNativeIdByChildNativeId.put(
-                                    team.getNativeId(),
-                                    graphQlTeam.getParentTeam().getDatabaseId().longValue());
-                        }
-
-                        syncTeamMemberships(client, team, graphQlTeam, organizationLogin, scopeId);
-                        totalPermissions +=
-                                syncTeamRepoPermissions(client, team, graphQlTeam, organizationLogin, scopeId);
-                        totalSynced++;
-                    }
+                    fetched.add(new FetchedTeam(
+                            graphQlTeam,
+                            memberEdges(client, graphQlTeam, organizationLogin, scopeId),
+                            repositoryEdges(client, graphQlTeam, organizationLogin, scopeId)));
                 }
 
                 var pageInfo = response.getPageInfo();
@@ -277,34 +257,8 @@ public class GitHubTeamSyncService {
                         "teams", teamsReceived, reportedTotalCount, hasNextPage, "orgLogin=" + safeOrgLogin);
             }
 
-            // Mark sync as completed normally if we exhausted all pages
-            boolean syncCompletedNormally = !hasNextPage;
-
-            // Resolve parent references now that all teams are persisted.
-            // This two-pass approach ensures correct parentId even when a child
-            // team appears before its parent in the GraphQL response.
-            resolveParentReferences(syncedTeamsByNativeId, parentNativeIdByChildNativeId, safeOrgLogin);
-
-            // CRITICAL: Only remove stale teams if sync completed fully.
-            // If sync was aborted (rate limit, error, pagination limit), we don't have
-            // the complete list and would incorrectly delete valid teams.
-            if (syncCompletedNormally) {
-                removeDeletedTeams(organizationLogin, syncedTeamIds, context);
-            } else {
-                log.warn(
-                        "Skipped stale team removal: reason=incompleteSync, orgLogin={}, pagesProcessed={}",
-                        safeOrgLogin,
-                        pageCount);
-            }
-
-            log.info(
-                    "Completed team sync: orgLogin={}, teamCount={}, permissionCount={}, complete={}, scopeId={}",
-                    safeOrgLogin,
-                    totalSynced,
-                    totalPermissions,
-                    syncCompletedNormally,
-                    scopeId);
-            return totalSynced;
+            complete = !hasNextPage;
+            pagesProcessed = pageCount;
         } catch (InstallationNotFoundException e) {
             // Re-throw to abort the entire sync operation
             throw e;
@@ -316,6 +270,92 @@ public class GitHubTeamSyncService {
             }
             return 0;
         }
+
+        if (!complete) {
+            log.warn(
+                    "Skipped stale team removal: reason=incompleteSync, orgLogin={}, pagesProcessed={}",
+                    safeOrgLogin,
+                    pagesProcessed);
+        }
+        // GitHub has answered for every team. A database failure propagates, so the caller's transient-failure retry
+        // gets a fresh transaction.
+        TeamWrite written = Objects.requireNonNull(transactionTemplate.execute(
+                status -> store(organizationId, organizationLogin, scopeId, fetched, complete, safeOrgLogin)));
+        log.info(
+                "Completed team sync: orgLogin={}, teamCount={}, permissionCount={}, complete={}, scopeId={}",
+                safeOrgLogin,
+                written.teams(),
+                written.permissions(),
+                complete,
+                scopeId);
+        return written.teams();
+    }
+
+    /** One team as GitHub listed it, with all its member and repository edges; null where GitHub sent none. */
+    private record FetchedTeam(
+            GHTeam team,
+            @Nullable List<GHTeamMemberEdge> members,
+            @Nullable List<GHTeamRepositoryEdge> repositories) {}
+
+    private record TeamWrite(int teams, int permissions) {}
+
+    /**
+     * Stores the teams that GitHub listed with their memberships and repository permissions, resolves parent teams, and
+     * removes deleted teams if the listing is complete.
+     */
+    private TeamWrite store(
+            Long organizationId,
+            String organizationLogin,
+            Long scopeId,
+            List<FetchedTeam> fetched,
+            boolean complete,
+            String safeOrgLogin) {
+        Organization organization =
+                organizationRepository.findById(organizationId).orElse(null);
+        if (organization == null) {
+            return new TeamWrite(0, 0);
+        }
+        // No repository for org-level teams.
+        ProcessingContext context = ProcessingContext.forSync(scopeId, organization.getProvider());
+        Set<Long> syncedTeamIds = new HashSet<>();
+        // GitHub native ID -> persisted Team, for parent resolution after all teams are saved.
+        Map<Long, Team> syncedTeamsByNativeId = new HashMap<>();
+        // Child team's native ID -> parent team's native ID, from GraphQL.
+        Map<Long, Long> parentNativeIdByChildNativeId = new HashMap<>();
+        int teams = 0;
+        int permissions = 0;
+        for (FetchedTeam entry : fetched) {
+            GHTeam graphQlTeam = entry.team();
+            Team team = processTeam(graphQlTeam, organizationLogin, context);
+            if (team == null) {
+                continue;
+            }
+            syncedTeamIds.add(team.getNativeId());
+            syncedTeamsByNativeId.put(team.getNativeId(), team);
+            if (graphQlTeam.getParentTeam() != null
+                    && graphQlTeam.getParentTeam().getDatabaseId() != null) {
+                parentNativeIdByChildNativeId.put(
+                        team.getNativeId(),
+                        graphQlTeam.getParentTeam().getDatabaseId().longValue());
+            }
+            if (entry.members() != null) {
+                syncTeamMemberships(team, entry.members());
+            }
+            if (entry.repositories() != null) {
+                permissions += syncTeamRepoPermissions(team, entry.repositories());
+            }
+            teams++;
+        }
+
+        // Parents resolve after every team is persisted, so a child listed before its parent still finds it.
+        resolveParentReferences(syncedTeamsByNativeId, parentNativeIdByChildNativeId, safeOrgLogin);
+
+        // Only a complete listing removes stale teams: an aborted one (rate limit, error, pagination limit) would
+        // delete teams that still exist.
+        if (complete) {
+            removeDeletedTeams(organizationLogin, syncedTeamIds, context);
+        }
+        return new TeamWrite(teams, permissions);
     }
 
     /**
@@ -394,37 +434,13 @@ public class GitHubTeamSyncService {
     /**
      * Synchronizes team memberships from the GraphQL response.
      * <p>
-     * For each member in the team's members connection, this method ensures the
-     * user exists and creates or updates a TeamMembership record with the correct role.
-     * If the team has more than 100 members, this method paginates through all members
-     * using the GetTeamMembers query.
+     * For each member edge, this method ensures the user exists and creates or updates a
+     * TeamMembership record with the correct role, then removes members GitHub no longer lists.
      *
-     * @param client          the GraphQL client for additional queries
-     * @param team            the Team entity
-     * @param graphQlTeam     the GraphQL team object containing members
-     * @param organizationLogin the organization login for pagination queries
+     * @param team           the Team entity
+     * @param allMemberEdges every member edge of the team, fetched before the write transaction
      */
-    private void syncTeamMemberships(
-            HttpGraphQlClient client, Team team, GHTeam graphQlTeam, String organizationLogin, Long scopeId) {
-        var membersConnection = graphQlTeam.getMembers();
-        if (membersConnection == null || membersConnection.getEdges() == null) {
-            return;
-        }
-
-        // Collect all member edges (with roles) - paginate if needed
-        List<GHTeamMemberEdge> allMemberEdges = new ArrayList<>(membersConnection.getEdges());
-        var membersPageInfo = membersConnection.getPageInfo();
-
-        if (membersPageInfo != null && Boolean.TRUE.equals(membersPageInfo.getHasNextPage())) {
-            log.debug(
-                    "Fetching additional team members: teamSlug={}, totalCount={}",
-                    sanitizeForLog(graphQlTeam.getSlug()),
-                    membersConnection.getTotalCount());
-            List<GHTeamMemberEdge> additionalMemberEdges = fetchAllTeamMemberEdges(
-                    client, organizationLogin, graphQlTeam.getSlug(), membersPageInfo.getEndCursor(), scopeId);
-            allMemberEdges.addAll(additionalMemberEdges);
-        }
-
+    private void syncTeamMemberships(Team team, List<GHTeamMemberEdge> allMemberEdges) {
         // Build existing memberships map for efficient lookup and role update
         Map<Long, TeamMembership> existingMemberships = team.getMemberships().stream()
                 .collect(Collectors.toMap(tm -> tm.getUser().getId(), tm -> tm));
@@ -487,46 +503,14 @@ public class GitHubTeamSyncService {
     /**
      * Synchronizes team repository permissions from the GraphQL response.
      * <p>
-     * For each repository in the team's repositories connection, this method creates
-     * or updates TeamRepositoryPermission records with the correct permission level.
+     * For each repository edge, this method creates or updates TeamRepositoryPermission
+     * records with the correct permission level.
      *
-     * @param client          the GraphQL client for additional queries
-     * @param team            the Team entity
-     * @param graphQlTeam     the GraphQL team object containing repositories
-     * @param organizationLogin the organization login for pagination queries
+     * @param team         the Team entity
+     * @param allRepoEdges every repository edge of the team, fetched before the write transaction
      * @return number of permissions synced for monitored repositories
      */
-    private int syncTeamRepoPermissions(
-            HttpGraphQlClient client, Team team, GHTeam graphQlTeam, String organizationLogin, Long scopeId) {
-        var reposConnection = graphQlTeam.getRepositories();
-        if (reposConnection == null || reposConnection.getEdges() == null) {
-            log.debug(
-                    "No repositories connection for team: teamName={}, connection={}",
-                    sanitizeForLog(team.getName()),
-                    reposConnection == null ? "null" : "edges=null");
-            return 0;
-        }
-
-        log.debug(
-                "Processing team repositories: teamName={}, totalCount={}, edgesCount={}",
-                sanitizeForLog(team.getName()),
-                reposConnection.getTotalCount(),
-                reposConnection.getEdges().size());
-
-        // Collect all repository edges - paginate if needed
-        List<GHTeamRepositoryEdge> allRepoEdges = new ArrayList<>(reposConnection.getEdges());
-        var reposPageInfo = reposConnection.getPageInfo();
-
-        if (reposPageInfo != null && Boolean.TRUE.equals(reposPageInfo.getHasNextPage())) {
-            log.debug(
-                    "Fetching additional team repositories: teamSlug={}, totalCount={}",
-                    sanitizeForLog(graphQlTeam.getSlug()),
-                    reposConnection.getTotalCount());
-            List<GHTeamRepositoryEdge> additionalRepoEdges = fetchAllTeamRepositoryEdges(
-                    client, organizationLogin, graphQlTeam.getSlug(), reposPageInfo.getEndCursor(), scopeId);
-            allRepoEdges.addAll(additionalRepoEdges);
-        }
-
+    private int syncTeamRepoPermissions(Team team, List<GHTeamRepositoryEdge> allRepoEdges) {
         Set<TeamRepositoryPermission> freshPermissions = new HashSet<>();
         Long providerId = Objects.requireNonNull(team.getProvider().getId());
 
@@ -602,6 +586,50 @@ public class GitHubTeamSyncService {
             case TRIAGE -> TeamRepositoryPermission.PermissionLevel.TRIAGE;
             case READ -> TeamRepositoryPermission.PermissionLevel.READ;
         };
+    }
+
+    /** All member edges of a team, paginating past the first page; null if GitHub sent no members connection. */
+    private @Nullable List<GHTeamMemberEdge> memberEdges(
+            HttpGraphQlClient client, GHTeam graphQlTeam, String organizationLogin, Long scopeId) {
+        var membersConnection = graphQlTeam.getMembers();
+        if (membersConnection == null || membersConnection.getEdges() == null) {
+            return null;
+        }
+        List<GHTeamMemberEdge> allMemberEdges = new ArrayList<>(membersConnection.getEdges());
+        var membersPageInfo = membersConnection.getPageInfo();
+        if (membersPageInfo != null && Boolean.TRUE.equals(membersPageInfo.getHasNextPage())) {
+            log.debug(
+                    "Fetching additional team members: teamSlug={}, totalCount={}",
+                    sanitizeForLog(graphQlTeam.getSlug()),
+                    membersConnection.getTotalCount());
+            allMemberEdges.addAll(fetchAllTeamMemberEdges(
+                    client, organizationLogin, graphQlTeam.getSlug(), membersPageInfo.getEndCursor(), scopeId));
+        }
+        return allMemberEdges;
+    }
+
+    /** All repository edges of a team, paginating past the first page; null if GitHub sent no repositories connection. */
+    private @Nullable List<GHTeamRepositoryEdge> repositoryEdges(
+            HttpGraphQlClient client, GHTeam graphQlTeam, String organizationLogin, Long scopeId) {
+        var reposConnection = graphQlTeam.getRepositories();
+        if (reposConnection == null || reposConnection.getEdges() == null) {
+            log.debug(
+                    "No repositories connection for team: teamSlug={}, connection={}",
+                    sanitizeForLog(graphQlTeam.getSlug()),
+                    reposConnection == null ? "null" : "edges=null");
+            return null;
+        }
+        List<GHTeamRepositoryEdge> allRepoEdges = new ArrayList<>(reposConnection.getEdges());
+        var reposPageInfo = reposConnection.getPageInfo();
+        if (reposPageInfo != null && Boolean.TRUE.equals(reposPageInfo.getHasNextPage())) {
+            log.debug(
+                    "Fetching additional team repositories: teamSlug={}, totalCount={}",
+                    sanitizeForLog(graphQlTeam.getSlug()),
+                    reposConnection.getTotalCount());
+            allRepoEdges.addAll(fetchAllTeamRepositoryEdges(
+                    client, organizationLogin, graphQlTeam.getSlug(), reposPageInfo.getEndCursor(), scopeId));
+        }
+        return allRepoEdges;
     }
 
     /**

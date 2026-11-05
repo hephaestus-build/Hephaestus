@@ -732,8 +732,8 @@ public class GitHubDataSyncService {
      */
     private void syncIssueTypes(Long scopeId) {
         try {
-            // Wrapped with retry because the method is @Transactional and a deadlock would poison
-            // the transaction, requiring a fresh invocation.
+            // Wrapped with retry: a deadlock rolls back the sync's write transaction, and only a fresh
+            // invocation can write again.
             int issueTypesCount = retryOnTransientFailure(
                     () -> issueTypeSyncService.syncIssueTypesForScope(scopeId),
                     "issue type sync for scopeId=" + scopeId);
@@ -1038,13 +1038,12 @@ public class GitHubDataSyncService {
     private static final int TRANSIENT_RETRY_MAX_ATTEMPTS = 3;
 
     /**
-     * Retries a transactional sync operation on transient failures such as database deadlocks.
+     * Retries a sync operation on transient database failures such as deadlocks.
      * <p>
-     * When a deadlock occurs inside a {@code @Transactional} service method, PostgreSQL kills
-     * the deadlock victim and Spring marks the transaction rollback-only. The transaction cannot
-     * be salvaged from within the transactional boundary. This method retries from the
-     * <em>caller</em> level (outside the {@code @Transactional} proxy), so each retry attempt
-     * starts a fresh transaction.
+     * The wrapped syncs ask GitHub with no transaction open and write in a transaction of their
+     * own. When a deadlock hits that write, PostgreSQL kills the deadlock victim and the
+     * transaction rolls back; it cannot be salvaged from inside. This method retries the whole
+     * sync from the <em>caller</em> level, so each attempt writes in a fresh transaction.
      * <p>
      * Non-transient exceptions (auth errors, not-found, etc.) are NOT retried and propagate
      * immediately.
@@ -1066,12 +1065,12 @@ public class GitHubDataSyncService {
             } catch (Exception e) {
                 // Determine if this failure is retryable.
                 // UnexpectedRollbackException deserves special treatment: when a deadlock
-                // (or any other transient DB error) occurs inside a @Transactional method,
-                // PostgreSQL aborts the victim and Spring marks the transaction rollback-only.
-                // The original cause is consumed by the transaction manager, so the classifier
-                // cannot find the deadlock in the cause chain. Since this wrapper ONLY calls
-                // @Transactional service methods, an UnexpectedRollbackException always means
-                // a poisoned transaction that should be retried with a fresh one.
+                // (or any other transient DB error) occurs inside a nested @Transactional call,
+                // Spring marks the sync's write transaction rollback-only and its commit throws
+                // this exception. The original cause is consumed by the transaction manager, so
+                // the classifier cannot find the deadlock in the cause chain. The wrapped syncs
+                // write only to the database, so it always means a poisoned write transaction
+                // that should be retried with a fresh one.
                 boolean retryable;
                 String errorDetail;
                 if (e instanceof UnexpectedRollbackException) {
