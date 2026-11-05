@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { localReleaseNoteProblems } from "./release-note-rules.ts";
 import {
+	beforeFirstStable,
 	removedChartValues,
 	verifyChangesets,
 	verifyLocalChangesets,
@@ -69,7 +70,7 @@ void test("rejects blank notes, non-root releases, and pre-1.0 majors", () => {
 	);
 	assert.throws(
 		() => verifyChangesets(status(rootRelease("major"), "Breaks API."), [".changeset/note.md"]),
-		/pre-1.0 major/u,
+		/until 1\.0\.0 is out, a major changeset is reserved/u,
 	);
 	assert.throws(
 		() =>
@@ -179,7 +180,10 @@ void test("local files retain the existing release and migration refusals", asyn
 	for (const [source, expected] of [
 		["No frontmatter.", /missing or invalid frontmatter/u],
 		['---\n"webapp": patch\n---\n\nFix.\n', /must release only/u],
-		['---\n"hephaestus": major\n---\n\nBreaks API.\n', /pre-1.0 major/u],
+		[
+			'---\n"hephaestus": major\n---\n\nBreaks API.\n',
+			/until 1\.0\.0 is out, a major changeset is reserved/u,
+		],
 		[
 			'---\n"hephaestus": minor\n---\n\n**Operators:** change the setting.\n',
 			/requires \.migration/u,
@@ -193,6 +197,32 @@ void test("local files retain the existing release and migration refusals", asyn
 		path.join(root, ".migration", "note.md"),
 		"#### 🔴 Update the setting\n\nSet the new value before upgrading.\n",
 	);
+	await verifyLocalChangesets(root);
+});
+
+void test("a major changeset waits for 1.0.0 itself, through every release candidate", async (t) => {
+	assert.equal(beforeFirstStable("0.95.1"), true);
+	assert.equal(beforeFirstStable("1.0.0-rc.3"), true);
+	assert.equal(beforeFirstStable("1.0.0"), false);
+	assert.equal(beforeFirstStable("1.1.0-rc.1"), false);
+	assert.equal(beforeFirstStable("not a version"), true);
+	// What main accepted at 1.0.0-rc.3: a major that could outlive prerelease mode and cut 2.0.0.
+	const root = await mkdtemp(path.join(tmpdir(), "major-before-stable-"));
+	t.after(async () => rm(root, { recursive: true, force: true }));
+	await mkdir(path.join(root, ".changeset"));
+	await mkdir(path.join(root, ".migration"));
+	const major = '---\n"hephaestus": major\n---\n\nBreaks API. **Operators:** change the setting.\n';
+	await writeFile(path.join(root, ".changeset", "note.md"), major);
+	await writeFile(
+		path.join(root, ".migration", "note.md"),
+		"#### 🔴 Change the setting\n\nDo it first.\n",
+	);
+	await writeFile(path.join(root, "package.json"), JSON.stringify({ version: "1.0.0-rc.3" }));
+	await assert.rejects(
+		verifyLocalChangesets(root),
+		/until 1\.0\.0 is out, a major changeset is reserved/u,
+	);
+	await writeFile(path.join(root, "package.json"), JSON.stringify({ version: "1.0.0" }));
 	await verifyLocalChangesets(root);
 });
 

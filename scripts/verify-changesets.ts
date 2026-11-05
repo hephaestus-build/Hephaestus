@@ -57,6 +57,20 @@ export const verifyChangesetMigration = (
  */
 const FIRST_STABLE_CHANGESET = "release-1-0-0";
 
+/**
+ * Whether a `major` changeset would still cut 1.0.0: the version is 0.x or a 1.0.0 release candidate. A major
+ * merged then could outlive prerelease mode and make the first release after 1.0.0 a 2.0.0, so only
+ * `release-1-0-0` may carry one. An unreadable version counts as before.
+ */
+export function beforeFirstStable(version: string): boolean {
+	const parsed = parseVersion(version);
+	return (
+		parsed === undefined ||
+		parsed.major === 0 ||
+		(parsed.major === 1 && parsed.minor === 0 && parsed.patch === 0 && parsed.rc !== undefined)
+	);
+}
+
 const changesetId = (file: string): string =>
 	path.posix.relative(".changeset", file).replace(/\.md$/u, "");
 
@@ -103,9 +117,10 @@ export const verifyChangesets = (
 		if (name !== "hephaestus") {
 			throw new Error(`${file}: must release only the root hephaestus package`);
 		}
-		if (preOne && bump === "major" && changesetId(file) !== FIRST_STABLE_CHANGESET) {
+		// The Version PR keeps a consumed changeset under .changeset/pre/, under the same name.
+		if (preOne && bump === "major" && path.posix.basename(file, ".md") !== FIRST_STABLE_CHANGESET) {
 			throw new Error(
-				`${file}: pre-1.0 major changesets are reserved for the deliberate 1.0 release, the changeset ${FIRST_STABLE_CHANGESET}; use minor`,
+				`${file}: until 1.0.0 is out, a major changeset is reserved for the 1.0 release, the changeset ${FIRST_STABLE_CHANGESET}; use minor (.changeset/README.md)`,
 			);
 		}
 		if (bump === "major" && !summary.includes("**Operators:**")) {
@@ -120,7 +135,11 @@ async function verifyParsedChangesets(
 	rootDir: string,
 ): Promise<void> {
 	const root = asRecord(await readJsonFile(path.join(rootDir, "package.json")), "package.json");
-	verifyChangesets(status, files, asString(root.version, "package.json version").startsWith("0."));
+	verifyChangesets(
+		status,
+		files,
+		beforeFirstStable(asString(root.version, "package.json version")),
+	);
 	const entries = changesetEntries(status);
 	const consumed: string[] = [];
 	for (const file of files) {

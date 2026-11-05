@@ -33,10 +33,18 @@ Never change `CHANGELOG.md` directly.
 | `minor` | no action | New capability. Note any new *optional* env var / flag in the summary. |
 | `major` | must act first | required new chart value, removed or renamed chart value, destructive/manual migration, dropped API — state the action + add a `.migration` fragment |
 
-**Pre-1.0 (now): never pick `major`.**
-It would produce 1.0.0. CI accepts that only from the changeset `release-1-0-0`, which the [release management guide](https://docs.hephaestus.build/contributor/release-management#cut-100) plans.
-Use `minor` for breaking changes instead.
-Thus, a pre-1.0 `minor` does *not* guarantee that no operator action is necessary.
+**Until 1.0.0 is out, never pick `major`**.
+While the version is 0.x or a 1.0.0 release candidate, a `major` still means the 1.0 release.
+A late one could make 2.0.0 the first release after 1.0.0 by mistake.
+
+CI refuses it, except the changeset `release-1-0-0`.
+The [release management guide](https://docs.hephaestus.build/contributor/release-management#cut-100) plans that changeset.
+Use `minor` for a breaking change instead.
+Thus, a `minor` before 1.0.0 does *not* guarantee that no operator action is necessary.
+
+**From 1.0.0 on, a breaking change picks `major`**.
+CI accepts it from the first stable 1.0.0 version, with **Operators:** and a `.migration` fragment.
+The API compatibility gate then lets the break land.
 
 If the operator must act, state the action (`**Operators:** …`).
 Add `.migration/<changeset-slug>.md` exactly as a `major` would.

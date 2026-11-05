@@ -456,14 +456,10 @@ The waiver covers the whole release: the changelog guard and the seeded-upgrade 
 Add it only for a release that an ADR or the maintainer allows to stop every role.
 [Expand and contract](./database-migration#expand-and-contract) owns the rule.
 
-:::caution[Pre-1.0]
-Never pick a `major` bump while the version is `0.x`.
-It would cut 1.0.0, and CI accepts that only from the planned changeset in [Cut 1.0.0](#cut-100).
-Breaking changes use `minor` instead.
-
-Thus, a pre-1.0 `minor` does **not** guarantee zero-action upgrades.
-If operator action is required, state it in the summary.
-Add a migration fragment exactly as for a `major`.
+:::caution[Before 1.0.0]
+The [changeset README](https://github.com/hephaestus-build/Hephaestus/blob/main/.changeset/README.md) owns the rule for `major`.
+Until 1.0.0 is out, a breaking change uses `minor` and states the operator action.
+It adds a migration fragment exactly as for a `major`.
 :::
 
 ### Release candidate policy
@@ -532,9 +528,9 @@ A stable Version PR cannot bypass candidate promotion and rebuild the images.
 ### Cut 1.0.0
 
 1.0.0 is the one release that a `major` changeset cuts from `0.x`.
-`verify-changesets` accepts a `major` changeset before 1.0 only under the slug `release-1-0-0`.
+Before 1.0.0, in 0.x and in its release candidates, `verify-changesets` accepts a `major` changeset only under the slug `release-1-0-0`.
 The usual rules still apply: the summary needs `**Operators:**`, and a migration fragment of the same slug must exist.
-After 1.0.0, a `major` changeset is ordinary.
+From the first stable 1.0.0 version on, a `major` changeset is ordinary, without a code change.
 Only review stops an early `release-1-0-0`: it decides when 1.0 ships.
 
 1. Make sure that every action before the first candidate in the 1.0 tracking issue is done.
@@ -552,7 +548,8 @@ Only review stops an early `release-1-0-0`: it decides when 1.0 ships.
    The docs publish from `main`, so the 1.x statements are live from this merge.
 7. Publish and qualify `1.0.0-rc.1`, then further candidates as required.
    Promote the last qualified candidate's exact artifacts to `1.0.0` as described above.
-8. After `v1.0.0` is published, exit prerelease mode and remove the 1.0 exception from `scripts/verify-changesets.ts` and its test.
+8. After `v1.0.0` is published, exit prerelease mode. The 1.0 exception in `scripts/verify-changesets.ts` then no longer applies.
+   Remove it and its test in the same pull request.
 
 We version the whole app as one product. Changesets target only the root `hephaestus` package.
 We never version `webapp` and `docs` individually.

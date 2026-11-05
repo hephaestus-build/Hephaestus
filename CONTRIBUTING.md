@@ -158,7 +158,7 @@ This includes `server/`, `webapp/`, `docker/`, and `extension/`, except tests an
 `Verify changesets` enforces this.
 Commit types never affect version changes.
 
-`.changeset/README.md` has the format and the pre-1.0 rule.
+`.changeset/README.md` has the format and the rule for `major` before and after 1.0.0.
 The [release management guide](https://docs.hephaestus.build/contributor/release-management) has the procedure.
 The [compatibility policy](https://docs.hephaestus.build/admin/compatibility-policy) defines what a version number promises.
 
