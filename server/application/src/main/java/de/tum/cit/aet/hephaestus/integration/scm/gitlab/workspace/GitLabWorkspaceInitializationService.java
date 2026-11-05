@@ -494,6 +494,13 @@ public class GitLabWorkspaceInitializationService {
             reportIncomplete(handle, SyncResult.abortedError(0), SyncPhase.CONNECTION, "Connected group check", null);
             return SyncResult.abortedError(0);
         }
+        // Initialization runs first and can find the credential refused. Every phase below would repeat the refusal.
+        if (!syncTargetProvider.isScopeActiveForSync(workspace.getId())) {
+            log.info("Skipped GitLab full data sync: reason=scopeNotEligible, workspaceId={}", workspace.getId());
+            reportIncomplete(
+                    handle, SyncResult.abortedError(0), SyncPhase.CONNECTION, "Sync eligibility check", accountLogin);
+            return SyncResult.abortedError(0);
+        }
 
         SyncResult result = SyncResult.completed(0);
         var memberSyncService = gitLabServices.getGroupMemberSyncService();
@@ -590,6 +597,10 @@ public class GitLabWorkspaceInitializationService {
                     result,
                     syncGitLabRepositories(
                             workspace, gitLabServices, repos, commitLinkTargets, cancelled, reads, handle));
+            if (!syncTargetProvider.isScopeActiveForSync(workspace.getId())) {
+                log.info("Stopped GitLab full data sync: reason=scopeNotEligible, workspaceId={}", workspace.getId());
+                return SyncResult.merge(result, SyncResult.abortedError(0));
+            }
 
             // Second pass: link commits to MRs now that every repo has populated its commits
             // and every MR-targeted repo has populated its MRs.
@@ -729,6 +740,25 @@ public class GitLabWorkspaceInitializationService {
                         workspace.getId(),
                         commitLinkTargets.size(),
                         repos.size());
+                break;
+            }
+            // A credential refused during this run ends it: every remaining repository would repeat the refusal.
+            if (!syncTargetProvider.isScopeActiveForSync(workspace.getId())) {
+                log.info(
+                        "GitLab sync stopped between repositories: reason=scopeNotEligible, workspaceId={}, reposDone={},"
+                                + " reposTotal={}",
+                        workspace.getId(),
+                        commitLinkTargets.size(),
+                        repos.size());
+                if (handle != null) {
+                    handle.reportWarnings(SyncProgress.ofResource(
+                            SyncPhase.REPOSITORIES,
+                            "Repository sync stopped because the workspace can no longer sync.",
+                            repo.getNameWithOwner(),
+                            null,
+                            null));
+                }
+                result = SyncResult.merge(result, SyncResult.abortedError(0));
                 break;
             }
 

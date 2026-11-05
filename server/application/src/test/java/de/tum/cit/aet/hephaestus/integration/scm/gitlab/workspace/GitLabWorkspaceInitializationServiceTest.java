@@ -52,6 +52,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
@@ -146,6 +147,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
         lenient().when(natsConsumerServiceProvider.getIfAvailable()).thenReturn(natsConsumerService);
         lenient().when(dataSyncTriggerProvider.getObject()).thenReturn(dataSyncTrigger);
+        lenient().when(syncTargetProvider.isScopeActiveForSync(anyLong())).thenReturn(true);
 
         initService = new GitLabWorkspaceInitializationService(
                 workspaceRepository,
@@ -711,6 +713,49 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
     @Nested
     class SyncFullData {
+
+        @Test
+        void shouldNotCallTheProviderWhenInitializationLeftTheScopeUnableToSync() {
+            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
+            when(syncTargetProvider.isScopeActiveForSync(1L)).thenReturn(false);
+
+            assertThat(initService.syncFullData(workspace)).isEqualTo(SyncResult.abortedError(0));
+
+            verify(gitLabSyncServiceHolder, never()).getGroupMemberSyncService();
+            verify(gitLabSyncServiceHolder, never()).getTeamSyncService();
+            verify(gitLabSyncServiceHolder, never()).getIssueTypeSyncService();
+            verify(repositoryRepository, never()).findAllByWorkspaceMonitors(anyLong());
+        }
+
+        @Test
+        void shouldStopBeforeTheNextRepositoryWhenTheCredentialIsRefusedDuringTheRun() {
+            var issueSync = mock(GitLabIssueSyncService.class);
+            when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
+            when(gitLabSyncServiceHolder.getIssueSyncService()).thenReturn(issueSync);
+            Repository first = createRepo("my-group/subgroup/project-a");
+            Repository second = createRepo("my-group/subgroup/project-b");
+            var firstMonitor = new RepositoryToMonitor();
+            firstMonitor.setId(10L);
+            firstMonitor.setNameWithOwner(first.getNameWithOwner());
+            var secondMonitor = new RepositoryToMonitor();
+            secondMonitor.setId(20L);
+            secondMonitor.setNameWithOwner(second.getNameWithOwner());
+            when(repositoryRepository.findAllByWorkspaceMonitors(1L)).thenReturn(List.of(first, second));
+            when(repositoryToMonitorRepository.findByWorkspaceId(1L)).thenReturn(List.of(firstMonitor, secondMonitor));
+            // The provider refuses the credential while the first repository syncs.
+            var refused = new AtomicBoolean();
+            when(syncTargetProvider.isScopeActiveForSync(1L)).thenAnswer(invocation -> !refused.get());
+            when(issueSync.syncIssues(eq(1L), eq(first), any(), any())).thenAnswer(invocation -> {
+                refused.set(true);
+                return SyncResult.abortedError(0);
+            });
+
+            assertThat(initService.syncFullData(workspace).status()).isEqualTo(SyncResult.Status.ABORTED_ERROR);
+
+            verify(issueSync, never()).syncIssues(eq(1L), eq(second), any(), any());
+            verify(gitLabSyncServiceHolder, never()).getCommitMergeRequestLinker();
+            verify(gitLabSyncServiceHolder, never()).getTeamSyncService();
+        }
 
         @Test
         void shouldNotAdvanceRepositoryCooldownAfterAuthorityIsWithdrawnAtTheIssueWatermark() {
