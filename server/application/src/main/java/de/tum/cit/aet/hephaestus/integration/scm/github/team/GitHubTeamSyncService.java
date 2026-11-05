@@ -291,11 +291,18 @@ public class GitHubTeamSyncService {
         return written.teams();
     }
 
-    /** One team as GitHub listed it, with all its member and repository edges; null where GitHub sent none. */
+    /** One team as GitHub listed it, with its member and repository edges; null where GitHub sent none. */
     private record FetchedTeam(
             GHTeam team,
-            @Nullable List<GHTeamMemberEdge> members,
-            @Nullable List<GHTeamRepositoryEdge> repositories) {}
+            @Nullable Edges<GHTeamMemberEdge> members,
+            @Nullable Edges<GHTeamRepositoryEdge> repositories) {}
+
+    /**
+     * The edges of one team connection, and whether the read reached its last page. Only a complete list removes
+     * what it does not hold: a list cut short by a rate limit, an error or the page limit would remove members and
+     * permissions that still exist.
+     */
+    private record Edges<T>(List<T> edges, boolean complete) {}
 
     private record TeamWrite(int teams, int permissions) {}
 
@@ -435,19 +442,20 @@ public class GitHubTeamSyncService {
      * Synchronizes team memberships from the GraphQL response.
      * <p>
      * For each member edge, this method ensures the user exists and creates or updates a
-     * TeamMembership record with the correct role, then removes members GitHub no longer lists.
+     * TeamMembership record with the correct role. If the list is complete, it then removes members GitHub no longer
+     * lists.
      *
-     * @param team           the Team entity
-     * @param allMemberEdges every member edge of the team, fetched before the write transaction
+     * @param team        the Team entity
+     * @param memberEdges the member edges of the team, fetched before the write transaction
      */
-    private void syncTeamMemberships(Team team, List<GHTeamMemberEdge> allMemberEdges) {
+    private void syncTeamMemberships(Team team, Edges<GHTeamMemberEdge> memberEdges) {
         // Build existing memberships map for efficient lookup and role update
         Map<Long, TeamMembership> existingMemberships = team.getMemberships().stream()
                 .collect(Collectors.toMap(tm -> tm.getUser().getId(), tm -> tm));
 
         Set<Long> syncedMemberIds = new HashSet<>();
 
-        for (var memberEdge : allMemberEdges) {
+        for (var memberEdge : memberEdges.edges()) {
             if (memberEdge == null
                     || memberEdge.getNode() == null
                     || memberEdge.getNode().getDatabaseId() == null) {
@@ -496,25 +504,31 @@ public class GitHubTeamSyncService {
             }
         }
 
-        // Remove memberships for users no longer in the team
-        removeStaleTeamMemberships(team, syncedMemberIds);
+        if (memberEdges.complete()) {
+            removeStaleTeamMemberships(team, syncedMemberIds);
+        } else {
+            log.warn(
+                    "Skipped stale team membership removal: reason=incompleteMemberList, teamName={}",
+                    sanitizeForLog(team.getName()));
+        }
     }
 
     /**
      * Synchronizes team repository permissions from the GraphQL response.
      * <p>
      * For each repository edge, this method creates or updates TeamRepositoryPermission
-     * records with the correct permission level.
+     * records with the correct permission level. If the list is complete, the team's permissions are replaced by it;
+     * otherwise the permissions it does not hold stay.
      *
-     * @param team         the Team entity
-     * @param allRepoEdges every repository edge of the team, fetched before the write transaction
+     * @param team      the Team entity
+     * @param repoEdges the repository edges of the team, fetched before the write transaction
      * @return number of permissions synced for monitored repositories
      */
-    private int syncTeamRepoPermissions(Team team, List<GHTeamRepositoryEdge> allRepoEdges) {
+    private int syncTeamRepoPermissions(Team team, Edges<GHTeamRepositoryEdge> repoEdges) {
         Set<TeamRepositoryPermission> freshPermissions = new HashSet<>();
         Long providerId = Objects.requireNonNull(team.getProvider().getId());
 
-        for (var repoEdge : allRepoEdges) {
+        for (var repoEdge : repoEdges.edges()) {
             if (repoEdge == null
                     || repoEdge.getNode() == null
                     || repoEdge.getNode().getDatabaseId() == null) {
@@ -560,7 +574,14 @@ public class GitHubTeamSyncService {
 
         // Save permissions via cascade
         int existingCount = team.getRepoPermissions().size();
-        team.clearAndAddRepoPermissions(freshPermissions);
+        if (repoEdges.complete()) {
+            team.clearAndAddRepoPermissions(freshPermissions);
+        } else {
+            log.warn(
+                    "Skipped stale team permission removal: reason=incompleteRepositoryList, teamName={}",
+                    sanitizeForLog(team.getName()));
+            freshPermissions.forEach(team::addRepoPermission);
+        }
         log.debug(
                 "Synced team repository permissions: teamName={}, existingCount={}, newCount={}",
                 sanitizeForLog(team.getName()),
@@ -588,8 +609,8 @@ public class GitHubTeamSyncService {
         };
     }
 
-    /** All member edges of a team, paginating past the first page; null if GitHub sent no members connection. */
-    private @Nullable List<GHTeamMemberEdge> memberEdges(
+    /** The member edges of a team, paginating past the first page; null if GitHub sent no members connection. */
+    private @Nullable Edges<GHTeamMemberEdge> memberEdges(
             HttpGraphQlClient client, GHTeam graphQlTeam, String organizationLogin, Long scopeId) {
         var membersConnection = graphQlTeam.getMembers();
         if (membersConnection == null || membersConnection.getEdges() == null) {
@@ -597,19 +618,21 @@ public class GitHubTeamSyncService {
         }
         List<GHTeamMemberEdge> allMemberEdges = new ArrayList<>(membersConnection.getEdges());
         var membersPageInfo = membersConnection.getPageInfo();
-        if (membersPageInfo != null && Boolean.TRUE.equals(membersPageInfo.getHasNextPage())) {
-            log.debug(
-                    "Fetching additional team members: teamSlug={}, totalCount={}",
-                    sanitizeForLog(graphQlTeam.getSlug()),
-                    membersConnection.getTotalCount());
-            allMemberEdges.addAll(fetchAllTeamMemberEdges(
-                    client, organizationLogin, graphQlTeam.getSlug(), membersPageInfo.getEndCursor(), scopeId));
+        if (membersPageInfo == null || !Boolean.TRUE.equals(membersPageInfo.getHasNextPage())) {
+            return new Edges<>(allMemberEdges, true);
         }
-        return allMemberEdges;
+        log.debug(
+                "Fetching additional team members: teamSlug={}, totalCount={}",
+                sanitizeForLog(graphQlTeam.getSlug()),
+                membersConnection.getTotalCount());
+        Edges<GHTeamMemberEdge> rest = fetchAllTeamMemberEdges(
+                client, organizationLogin, graphQlTeam.getSlug(), membersPageInfo.getEndCursor(), scopeId);
+        allMemberEdges.addAll(rest.edges());
+        return new Edges<>(allMemberEdges, rest.complete());
     }
 
-    /** All repository edges of a team, paginating past the first page; null if GitHub sent no repositories connection. */
-    private @Nullable List<GHTeamRepositoryEdge> repositoryEdges(
+    /** The repository edges of a team, paginating past the first page; null if GitHub sent no repositories connection. */
+    private @Nullable Edges<GHTeamRepositoryEdge> repositoryEdges(
             HttpGraphQlClient client, GHTeam graphQlTeam, String organizationLogin, Long scopeId) {
         var reposConnection = graphQlTeam.getRepositories();
         if (reposConnection == null || reposConnection.getEdges() == null) {
@@ -621,15 +644,17 @@ public class GitHubTeamSyncService {
         }
         List<GHTeamRepositoryEdge> allRepoEdges = new ArrayList<>(reposConnection.getEdges());
         var reposPageInfo = reposConnection.getPageInfo();
-        if (reposPageInfo != null && Boolean.TRUE.equals(reposPageInfo.getHasNextPage())) {
-            log.debug(
-                    "Fetching additional team repositories: teamSlug={}, totalCount={}",
-                    sanitizeForLog(graphQlTeam.getSlug()),
-                    reposConnection.getTotalCount());
-            allRepoEdges.addAll(fetchAllTeamRepositoryEdges(
-                    client, organizationLogin, graphQlTeam.getSlug(), reposPageInfo.getEndCursor(), scopeId));
+        if (reposPageInfo == null || !Boolean.TRUE.equals(reposPageInfo.getHasNextPage())) {
+            return new Edges<>(allRepoEdges, true);
         }
-        return allRepoEdges;
+        log.debug(
+                "Fetching additional team repositories: teamSlug={}, totalCount={}",
+                sanitizeForLog(graphQlTeam.getSlug()),
+                reposConnection.getTotalCount());
+        Edges<GHTeamRepositoryEdge> rest = fetchAllTeamRepositoryEdges(
+                client, organizationLogin, graphQlTeam.getSlug(), reposPageInfo.getEndCursor(), scopeId);
+        allRepoEdges.addAll(rest.edges());
+        return new Edges<>(allRepoEdges, rest.complete());
     }
 
     /**
@@ -639,9 +664,9 @@ public class GitHubTeamSyncService {
      * @param organizationLogin the organization login
      * @param teamSlug          the team slug
      * @param startCursor       the cursor to start from
-     * @return list of all remaining member edges with roles
+     * @return the remaining member edges with roles, and whether the read reached the last page
      */
-    private List<GHTeamMemberEdge> fetchAllTeamMemberEdges(
+    private Edges<GHTeamMemberEdge> fetchAllTeamMemberEdges(
             HttpGraphQlClient client, String organizationLogin, String teamSlug, String startCursor, Long scopeId) {
         List<GHTeamMemberEdge> allMemberEdges = new ArrayList<>();
         String cursor = startCursor;
@@ -744,7 +769,7 @@ public class GitHubTeamSyncService {
                     "teamMembers", allMemberEdges.size(), reportedTotalCount, hasNextPage, "teamSlug=" + teamSlug);
         }
 
-        return allMemberEdges;
+        return new Edges<>(allMemberEdges, !hasNextPage);
     }
 
     /**
@@ -754,9 +779,9 @@ public class GitHubTeamSyncService {
      * @param organizationLogin the organization login
      * @param teamSlug          the team slug
      * @param startCursor       the cursor to start from
-     * @return list of all remaining repository edges with permissions
+     * @return the remaining repository edges with permissions, and whether the read reached the last page
      */
-    private List<GHTeamRepositoryEdge> fetchAllTeamRepositoryEdges(
+    private Edges<GHTeamRepositoryEdge> fetchAllTeamRepositoryEdges(
             HttpGraphQlClient client, String organizationLogin, String teamSlug, String startCursor, Long scopeId) {
         List<GHTeamRepositoryEdge> allEdges = new ArrayList<>();
         String cursor = startCursor;
@@ -857,7 +882,7 @@ public class GitHubTeamSyncService {
                     "teamRepositories", allEdges.size(), reportedTotalCount, hasNextPage, "teamSlug=" + teamSlug);
         }
 
-        return allEdges;
+        return new Edges<>(allEdges, !hasNextPage);
     }
 
     /**

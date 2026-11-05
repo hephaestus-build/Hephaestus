@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -42,12 +43,14 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -245,6 +248,96 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
                         team,
                         repositoryId))
                 .isEqualTo("WRITE");
+    }
+
+    /**
+     * A member or repository list cut short by a failed page removes nothing it did not reach: the members and
+     * permissions on the unread pages stay until a complete list says they are gone.
+     */
+    @Test
+    void shouldKeepTheMembersAndPermissionsThatAnAbortedTeamListDidNotReach() {
+        Organization organization = organization();
+        String slug = "partial-team-" + repositoryId;
+        long first = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT native_id FROM repository WHERE id = ?", Long.class, repositoryId));
+        long second = first + 1;
+        long secondRepositoryId = Objects.requireNonNull(jdbc.queryForObject("""
+                INSERT INTO repository(native_id,provider_id,name,name_with_owner,is_private,is_archived,is_disabled,html_url,pushed_at,visibility)
+                SELECT ?,provider_id,'repo2',name_with_owner || '-2',false,false,false,'https://example.com/repo2',now(),'PUBLIC'
+                FROM repository WHERE id = ? RETURNING id
+                """, Long.class, second, repositoryId));
+        String kept = "kept-member-" + repositoryId;
+        String unreached = "unreached-member-" + repositoryId;
+        var members = Map.of(kept, 8_100_000L + repositoryId, unreached, 8_200_000L + repositoryId);
+        serve(teamListing(organization, slug, members, false, List.of(first, second), false));
+        teams().syncTeamsForOrganization(workspaceId, organization.getLogin());
+
+        // The next listing carries the first page of each list; the page after it fails.
+        serve(teamListing(organization, slug, Map.of(kept, members.get(kept)), true, List.of(first), true));
+        serve("{\"errors\":[{\"message\":\"Something went wrong\"}],\"data\":null}");
+        serve("{\"errors\":[{\"message\":\"Something went wrong\"}],\"data\":null}");
+        int synced = teams().syncTeamsForOrganization(workspaceId, organization.getLogin());
+
+        assertThat(synced).isEqualTo(1);
+        long team = Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT id FROM team WHERE organization = ? AND slug = ?", Long.class, organization.getLogin(), slug));
+        assertSoftly(softly -> {
+            softly.assertThat(jdbc.queryForList("""
+                            SELECT u.login FROM team_membership tm JOIN "user" u ON u.id = tm.user_id
+                            WHERE tm.team_id = ?
+                            """, String.class, team))
+                    .as("members")
+                    .containsExactlyInAnyOrder(kept, unreached);
+            softly.assertThat(jdbc.queryForList(
+                            "SELECT repository_id FROM team_repository_permission WHERE team_id = ?", Long.class, team))
+                    .as("repository permissions")
+                    .containsExactlyInAnyOrder(repositoryId, secondRepositoryId);
+        });
+    }
+
+    /**
+     * One team listing page with the given members (login to GitHub id) and repositories, and whether each list has a
+     * next page.
+     */
+    private String teamListing(
+            Organization organization,
+            String slug,
+            Map<String, Long> members,
+            boolean moreMembers,
+            List<Long> repositoryNativeIds,
+            boolean moreRepositories) {
+        String memberEdges = members.entrySet().stream()
+                .map(member -> """
+                        {"role":"MEMBER","node":{"id":"U_%s","databaseId":%d,"login":"%s",
+                        "avatarUrl":"https://avatars.example.com/u","name":"A member","email":null,
+                        "createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-02T00:00:00Z"}}""".formatted(member.getKey(), member.getValue(), member.getKey()))
+                .collect(Collectors.joining(","));
+        String repositoryEdges = repositoryNativeIds.stream()
+                .map(nativeId -> """
+                        {"permission":"WRITE","node":{"__typename":"Repository","id":"R_%d","databaseId":%d,
+                        "name":"repo","nameWithOwner":"outside/repo"}}""".formatted(nativeId, nativeId))
+                .collect(Collectors.joining(","));
+        return """
+                {"data":{%s,"organization":{"teams":{"pageInfo":{"hasNextPage":false,"endCursor":null},"totalCount":1,
+                "nodes":[{"__typename":"Team","id":"T_%s","databaseId":%d,"slug":"%s","name":"Partial team",
+                "description":null,"privacy":"VISIBLE","url":"https://github.com/orgs/%s/teams/%s",
+                "createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-02T00:00:00Z",
+                "members":{"totalCount":%d,"pageInfo":{"hasNextPage":%s,"endCursor":"m1"},"edges":[%s]},
+                "parentTeam":null,
+                "repositories":{"totalCount":%d,"pageInfo":{"hasNextPage":%s,"endCursor":"r1"},"edges":[%s]}}]}}}}
+                """.formatted(
+                        RATE_LIMIT,
+                        slug,
+                        7_500_000L + repositoryId,
+                        slug,
+                        organization.getLogin(),
+                        slug,
+                        members.size() + (moreMembers ? 1 : 0),
+                        moreMembers,
+                        memberEdges,
+                        repositoryNativeIds.size() + (moreRepositories ? 1 : 0),
+                        moreRepositories,
+                        repositoryEdges);
     }
 
     @Test
