@@ -1723,6 +1723,112 @@ tests:
             exp_annotations:
               summary: Activity reads take longer than 1 second often enough to spend the monthly budget in five days
 
+  # One turn a minute, each with its first token after 10 s.
+  - name: slow first tokens of conversation turns burn the budget fast and slow
+    interval: 1m
+    input_series:
+      - series: 'mentor_turn_first_token_seconds_bucket{job="hephaestus",instance="worker:9090",runtime_role="worker",le="10.0"}'
+        values: "0x420"
+      - series: 'mentor_turn_first_token_seconds_count{job="hephaestus",instance="worker:9090",runtime_role="worker"}'
+        values: "0+1x420"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HephaestusConversationFirstTokenBudgetBurnFast
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HephaestusConversationFirstTokenBudgetBurnFast
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Conversation turns start their answer later than 10 seconds often enough to spend the monthly budget in two days
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 10m
+        alertname: HephaestusConversationFirstTokenBudgetBurnSlow
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: HephaestusConversationFirstTokenBudgetBurnSlow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Conversation turns start their answer later than 10 seconds often enough to spend the monthly budget in five days
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: fast first tokens do not burn the conversation budget
+    interval: 1m
+    input_series:
+      - series: 'mentor_turn_first_token_seconds_bucket{job="hephaestus",instance="worker:9090",runtime_role="worker",le="10.0"}'
+        values: "0+1x420"
+      - series: 'mentor_turn_first_token_seconds_count{job="hephaestus",instance="worker:9090",runtime_role="worker"}'
+        values: "0+1x420"
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: HephaestusConversationFirstTokenBudgetBurnFast
+        exp_alerts: []
+      - eval_time: 400m
+        alertname: HephaestusConversationFirstTokenBudgetBurnSlow
+        exp_alerts: []
+
+  # A quiet instance: its one turn of the hour starts late, which stays under both floors.
+  - name: one slow turn in a quiet hour does not burn the conversation budget
+    interval: 1m
+    input_series:
+      - series: 'mentor_turn_first_token_seconds_bucket{job="hephaestus",instance="worker:9090",runtime_role="worker",le="10.0"}'
+        values: "0x420"
+      - series: 'mentor_turn_first_token_seconds_count{job="hephaestus",instance="worker:9090",runtime_role="worker"}'
+        values: "0x30 1x390"
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: HephaestusConversationFirstTokenBudgetBurnFast
+        exp_alerts: []
+      - eval_time: 400m
+        alertname: HephaestusConversationFirstTokenBudgetBurnSlow
+        exp_alerts: []
+
+  # One failed and one successful turn a minute: half of the turns fail.
+  - name: failing conversation turns fire, stopped turns do not
+    interval: 1m
+    input_series:
+      - series: 'mentor_turn_completed_total{job="hephaestus",instance="worker:9090",runtime_role="worker",outcome="failed"}'
+        values: "0+1x60"
+      - series: 'mentor_turn_completed_total{job="hephaestus",instance="worker:9090",runtime_role="worker",outcome="success"}'
+        values: "0+1x60"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusConversationTurnsFailing
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HephaestusConversationTurnsFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: More than a fifth of the conversation turns of the last hour failed or lost their worker
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: turns that the developer stopped do not fire
+    interval: 1m
+    input_series:
+      - series: 'mentor_turn_completed_total{job="hephaestus",instance="worker:9090",runtime_role="worker",outcome="stopped"}'
+        values: "0+1x60"
+      - series: 'mentor_turn_completed_total{job="hephaestus",instance="worker:9090",runtime_role="worker",outcome="success"}'
+        values: "0+1x60"
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: HephaestusConversationTurnsFailing
+        exp_alerts: []
+
+  - name: one failed turn in a quiet hour does not fire
+    interval: 1m
+    input_series:
+      - series: 'mentor_turn_completed_total{job="hephaestus",instance="worker:9090",runtime_role="worker",outcome="failed"}'
+        values: "0x30 1x30"
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: HephaestusConversationTurnsFailing
+        exp_alerts: []
+
   - name: fast Activity reads and slow other routes do not burn the Activity budget
     interval: 1m
     input_series:
