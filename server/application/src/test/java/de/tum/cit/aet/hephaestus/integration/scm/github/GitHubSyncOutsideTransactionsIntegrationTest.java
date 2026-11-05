@@ -19,6 +19,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaboratorRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
@@ -33,6 +35,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.GitHubMileston
 import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.GitHubMilestoneSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.team.GitHubTeamProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.team.GitHubTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -195,6 +199,55 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldAskGitHubWithNoTransactionOpenAndStoreTheTeams() {
+        Organization organization = organization();
+        long repositoryNativeId = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT native_id FROM repository WHERE id = ?", Long.class, repositoryId));
+        String slug = "outside-team-" + repositoryId;
+        String member = "team-member-" + repositoryId;
+        serve("""
+                {"data":{%s,"organization":{"teams":{"pageInfo":{"hasNextPage":false,"endCursor":null},"totalCount":1,
+                "nodes":[{"__typename":"Team","id":"T_%d","databaseId":%d,"slug":"%s","name":"Outside team",
+                "description":null,"privacy":"VISIBLE","url":"https://github.com/orgs/%s/teams/%s",
+                "createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-02T00:00:00Z",
+                "members":{"totalCount":1,"pageInfo":{"hasNextPage":false,"endCursor":null},"edges":[{"role":"MAINTAINER",
+                "node":{"id":"U_%d","databaseId":%d,"login":"%s","avatarUrl":"https://avatars.example.com/u",
+                "name":"A member","email":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-02T00:00:00Z"}}]},
+                "parentTeam":null,
+                "repositories":{"totalCount":1,"pageInfo":{"hasNextPage":false,"endCursor":null},"edges":[{"permission":"WRITE",
+                "node":{"__typename":"Repository","id":"R_%d","databaseId":%d,"name":"repo","nameWithOwner":"outside/repo"}}]}}]}}}}
+                """.formatted(
+                        RATE_LIMIT,
+                        repositoryId,
+                        7_000_000L + repositoryId,
+                        slug,
+                        organization.getLogin(),
+                        slug,
+                        repositoryId,
+                        8_000_000L + repositoryId,
+                        member,
+                        repositoryId,
+                        repositoryNativeId));
+
+        int synced = teams().syncTeamsForOrganization(workspaceId, organization.getLogin());
+
+        assertThat(synced).isEqualTo(1);
+        assertThat(requests).containsExactly(new Request(Thread.currentThread().getName(), false));
+        long team = Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT id FROM team WHERE organization = ? AND slug = ?", Long.class, organization.getLogin(), slug));
+        assertThat(jdbc.queryForObject("""
+                        SELECT tm.role FROM team_membership tm JOIN "user" u ON u.id = tm.user_id
+                        WHERE tm.team_id = ? AND u.login = ?
+                        """, String.class, team, member)).isEqualTo("MAINTAINER");
+        assertThat(jdbc.queryForObject(
+                        "SELECT permission FROM team_repository_permission WHERE team_id = ? AND repository_id = ?",
+                        String.class,
+                        team,
+                        repositoryId))
+                .isEqualTo("WRITE");
+    }
+
+    @Test
     void shouldAskGitHubWithNoTransactionOpenAndStoreTheMilestones() {
         serve("""
                 {"data":{%s,"repository":{"milestones":{"pageInfo":{"hasNextPage":false,"endCursor":null},"totalCount":1,
@@ -318,6 +371,23 @@ class GitHubSyncOutsideTransactionsIntegrationTest extends BaseIntegrationTest {
                         context.getBean(GitHubExceptionClassifier.class),
                         context.getBean(GitHubGraphQlSyncCoordinator.class),
                         context.getBean("gitHubGraphQlWebClient", WebClient.class),
+                        context.getBean(TransactionTemplate.class)));
+    }
+
+    private GitHubTeamSyncService teams() {
+        return transactional(
+                GitHubTeamSyncService.class,
+                new GitHubTeamSyncService(
+                        context.getBean(TeamRepository.class),
+                        context.getBean(TeamMembershipRepository.class),
+                        context.getBean(RepositoryRepository.class),
+                        context.getBean(OrganizationRepository.class),
+                        clients,
+                        context.getBean(GitHubTeamProcessor.class),
+                        context.getBean(GitHubUserProcessor.class),
+                        context.getBean(GitHubSyncProperties.class),
+                        context.getBean(GitHubExceptionClassifier.class),
+                        context.getBean(GitHubGraphQlSyncCoordinator.class),
                         context.getBean(TransactionTemplate.class)));
     }
 
