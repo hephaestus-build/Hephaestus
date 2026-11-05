@@ -12,6 +12,17 @@ docs/admin/observability.mdx § Monitoring stack.
 {{- $metrics := include "hephaestus.name" (dict "root" . "component" "victoria-metrics") }}
 {{- $vmalert := include "hephaestus.name" (dict "root" . "component" "vmalert") }}
 {{- $alertmanager := include "hephaestus.name" (dict "root" . "component" "alertmanager") }}
+{{- /*
+The release's rules without the groups that read host and cluster exporters, which the stack does not run. Their
+series never exist here, and an absent() rule among them, such as HephaestusDeployMetricsMissing, would fire for ever.
+*/}}
+{{- $groups := list }}
+{{- range (fromYaml (.Files.Get "files/hephaestus-alerts.yml")).groups }}
+{{- if not (has .name (list "hephaestus-kubernetes" "hephaestus-pull-deploy")) }}
+{{- $groups = append $groups . }}
+{{- end }}
+{{- end }}
+{{- $stackRules := toYaml (dict "groups" $groups) }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -180,6 +191,16 @@ spec:
       port: 8880
       targetPort: http
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $vmalert }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "vmalert") | nindent 4 }}
+data:
+  hephaestus-alerts.yml: |
+{{ $stackRules | indent 4 }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -197,7 +218,7 @@ spec:
         {{- include "hephaestus.podLabels" (dict "root" . "component" "vmalert") | nindent 8 }}
       annotations:
         # A new rule file restarts vmalert, so it evaluates the release's rules.
-        checksum/rules: {{ .Files.Get "files/hephaestus-alerts.yml" | sha256sum }}
+        checksum/rules: {{ $stackRules | sha256sum }}
     spec:
       automountServiceAccountToken: false
       priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
@@ -234,7 +255,7 @@ spec:
       volumes:
         - name: rules
           configMap:
-            name: {{ include "hephaestus.name" (dict "root" . "component" "alert-rules") }}
+            name: {{ $vmalert }}
 ---
 apiVersion: v1
 kind: Service

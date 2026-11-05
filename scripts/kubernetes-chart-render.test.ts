@@ -646,21 +646,40 @@ await test("the monitoring stack scrapes this release, evaluates its rules and n
 	]);
 	const scrape = String(
 		get(
-			stack.find((resource) => kindOf(resource) === "ConfigMap"),
+			stack.find(
+				(resource) =>
+					kindOf(resource) === "ConfigMap" && componentOf(resource) === "victoria-metrics",
+			),
 			"data",
 			"scrape.yml",
 		),
 	);
 	assert.match(scrape, /names: \["hephaestus"\]/u);
 	assert.match(scrape, /regex: "hephaestus;heph;management"/u);
-	// vmalert evaluates the release's rule file, which the chart renders for it.
-	const rules = ruleResources(resources);
-	assert.deepEqual(rules.map(kindOf), ["ConfigMap"]);
+	// vmalert evaluates the release's rules, except the groups whose exporters the stack does not run: their series
+	// never exist here, and HephaestusDeployMetricsMissing, an absent() rule, would fire for ever.
+	assert.deepEqual(ruleResources(resources), []);
 	const vmalert = workload(resources, "vmalert");
-	const [ruleMap] = rules;
+	const ruleMap = stack.find(
+		(resource) => kindOf(resource) === "ConfigMap" && componentOf(resource) === "vmalert",
+	);
 	assert.ok(ruleMap);
 	assert.equal(get(podSpec(vmalert), "volumes", 0, "configMap", "name"), nameOf(ruleMap));
-	assert.equal(get(ruleMap, "data", "hephaestus-alerts.yml"), alertRules);
+	const tested = list(get(parseAllDocuments(alertRules)[0]?.toJS(), "groups"));
+	const loaded = list(
+		get(
+			parseAllDocuments(String(get(ruleMap, "data", "hephaestus-alerts.yml")))[0]?.toJS(),
+			"groups",
+		),
+	);
+	assert.deepEqual(
+		loaded,
+		tested.filter(
+			(group) =>
+				!["hephaestus-kubernetes", "hephaestus-pull-deploy"].includes(String(get(group, "name"))),
+		),
+	);
+	assert.ok(!JSON.stringify(loaded).includes("HephaestusDeployMetricsMissing"));
 	// Only VictoriaMetrics calls the API, so only it mounts a token; every stack Pod stays restricted.
 	for (const component of stackComponents) {
 		const spec = podSpec(workload(resources, component));
