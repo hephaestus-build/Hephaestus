@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.identity.SlackRosterIdentityR
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -17,6 +18,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 // Ingest only after active source consent and the announcement boundary; person opt-outs still apply.
 @Service
@@ -43,6 +45,8 @@ public class SlackIngestService {
      */
     private final boolean conversationIngestEnabled;
 
+    private final TransactionTemplate transactionTemplate;
+
     public SlackIngestService(
             SlackWorkspaceResolver workspaceResolver,
             SlackMonitoredChannelRepository monitoredChannelRepository,
@@ -53,7 +57,8 @@ public class SlackIngestService {
             SlackRosterIdentityResolver identityResolver,
             ConversationFeedbackErasure conversationFeedbackErasure,
             @Value("${hephaestus.integration.slack.conversation-ingest.enabled:true}")
-                    boolean conversationIngestEnabled) {
+                    boolean conversationIngestEnabled,
+            TransactionTemplate transactionTemplate) {
         this.workspaceResolver = workspaceResolver;
         this.monitoredChannelRepository = monitoredChannelRepository;
         this.consentGate = consentGate;
@@ -63,20 +68,15 @@ public class SlackIngestService {
         this.identityResolver = identityResolver;
         this.conversationFeedbackErasure = conversationFeedbackErasure;
         this.conversationIngestEnabled = conversationIngestEnabled;
+        this.transactionTemplate = transactionTemplate;
     }
 
-    @Transactional
+    /**
+     * Stores a channel message in three steps: the consent gates, then the author's name from Slack with no transaction
+     * open, then one short write that checks the gates again, because consent can change while Slack answers. Slack
+     * is asked only for a message that passes the gates.
+     */
     public void ingestChannelMessage(
-            String teamId,
-            String channelId,
-            String ts,
-            @Nullable String threadTs,
-            @Nullable String authorSlackUserId,
-            @Nullable String text) {
-        ingestChannelMessageInternal(teamId, channelId, ts, threadTs, authorSlackUserId, text);
-    }
-
-    private void ingestChannelMessageInternal(
             String teamId,
             String channelId,
             String ts,
@@ -89,9 +89,63 @@ public class SlackIngestService {
         if (channelId.isEmpty() || ts.isEmpty()) {
             return;
         }
+        Long workspaceId = admittedWorkspace(teamId, channelId, ts, authorSlackUserId);
+        if (workspaceId == null) {
+            return;
+        }
+        // Firewall stamp: an account in this workspace. Native human lookup failure refuses the message.
+        String authorName = null;
+        if (authorSlackUserId != null && !authorSlackUserId.isBlank()) {
+            authorName = identityResolver
+                    .displayName(workspaceId, teamId, authorSlackUserId)
+                    .orElse(null);
+            if (authorName == null) {
+                return;
+            }
+        }
+        String name = authorName;
+        transactionTemplate.executeWithoutResult(
+                status -> store(teamId, channelId, ts, threadTs, authorSlackUserId, name, text));
+    }
+
+    private void store(
+            String teamId,
+            String channelId,
+            String ts,
+            @Nullable String threadTs,
+            @Nullable String authorSlackUserId,
+            @Nullable String authorName,
+            @Nullable String text) {
+        Long workspaceId = admittedWorkspace(teamId, channelId, ts, authorSlackUserId);
+        if (workspaceId == null) {
+            return;
+        }
+        Long authorAccountId = null;
+        if (authorSlackUserId != null && !authorSlackUserId.isBlank()) {
+            authorAccountId = identityResolver
+                    .humanAccountId(workspaceId, teamId, authorSlackUserId, Objects.requireNonNull(authorName))
+                    .orElse(null);
+            if (authorAccountId == null) {
+                return;
+            }
+        }
+
+        int inserted = messageRepository.insertIfAbsent(
+                workspaceId, teamId, channelId, ts, threadTs, authorSlackUserId, authorAccountId, text);
+        if (inserted > 0) {
+            // thread_ts := the reply's parent, or the message's own ts for a thread root.
+            String aggregateThreadTs = (threadTs == null || threadTs.isBlank()) ? ts : threadTs;
+            threadRepository.upsertOnMessage(workspaceId, channelId, aggregateThreadTs, ts, authorAccountId);
+            log.debug("Ingested Slack message workspace={} channel={} ts={}", workspaceId, channelId, ts);
+        }
+    }
+
+    /** The workspace the message belongs to, if every consent gate lets it in; null otherwise. */
+    private @Nullable Long admittedWorkspace(
+            String teamId, String channelId, String ts, @Nullable String authorSlackUserId) {
         Optional<Long> workspaceOpt = workspaceResolver.resolveWorkspaceId(teamId);
         if (workspaceOpt.isEmpty()) {
-            return;
+            return null;
         }
         long workspaceId = workspaceOpt.get();
 
@@ -99,7 +153,7 @@ public class SlackIngestService {
         // Channels enter the allow-list via bot member_joined_channel registration or the admin directory —
         // never as a side effect of message traffic.
         if (!consentGate.ingestAllowed(workspaceId, channelId)) {
-            return;
+            return null;
         }
 
         // Forward-only invariant: on an ACTIVE channel, ingestion is bounded to messages that arrived strictly after
@@ -110,7 +164,7 @@ public class SlackIngestService {
                 .findConsentAnnouncedAt(workspaceId, channelId)
                 .orElse(null);
         if (announcedAt == null || !isAfterAnnouncement(ts, announcedAt)) {
-            return;
+            return null;
         }
 
         // Person firewall: an opted-out individual is never stored, even on an ACTIVE channel with the capability on.
@@ -119,26 +173,9 @@ public class SlackIngestService {
         if (authorSlackUserId != null
                 && !authorSlackUserId.isBlank()
                 && !participantConsentGate.ingestionAllowed(workspaceId, authorSlackUserId)) {
-            return;
+            return null;
         }
-
-        // Firewall stamp: an account in this workspace. Native human lookup failure refuses the message.
-        Long authorAccountId = (authorSlackUserId == null || authorSlackUserId.isBlank())
-                ? null
-                : identityResolver
-                        .humanAccountId(workspaceId, teamId, authorSlackUserId)
-                        .orElse(null);
-
-        if (authorSlackUserId != null && !authorSlackUserId.isBlank() && authorAccountId == null) return;
-
-        int inserted = messageRepository.insertIfAbsent(
-                workspaceId, teamId, channelId, ts, threadTs, authorSlackUserId, authorAccountId, text);
-        if (inserted > 0) {
-            // thread_ts := the reply's parent, or the message's own ts for a thread root.
-            String aggregateThreadTs = (threadTs == null || threadTs.isBlank()) ? ts : threadTs;
-            threadRepository.upsertOnMessage(workspaceId, channelId, aggregateThreadTs, ts, authorAccountId);
-            log.debug("Ingested Slack message workspace={} channel={} ts={}", workspaceId, channelId, ts);
-        }
+        return workspaceId;
     }
 
     /** Forward-only comparison: only a message strictly after the announcement enters. Unparseable fails closed. */
@@ -191,7 +228,6 @@ public class SlackIngestService {
      * participant firewall + identity stamp), rather than lost. A no-op when the row is tombstoned (never
      * resurrected) or holds a later edit. Honors the channel-ingest kill switch, like ingest and tombstone.
      */
-    @Transactional
     public void editMessage(String teamId, String channelId, Edit edit) {
         String ts = edit.ts();
         String threadTs = edit.threadTs();
@@ -212,20 +248,22 @@ public class SlackIngestService {
 
         // Normal case: the base row exists -> scoped UPDATE swaps in the edited text. The deleted_at IS NULL guard in
         // applyEdit means a delete-then-edit reorder no-ops (updated == 0, row present) and never resurrects a
-        // tombstone.
-        int updated = messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt);
-        if (updated > 0) {
+        // tombstone. existsBy then distinguishes a TOMBSTONED row (updated == 0 but present -> skip) from a
+        // genuinely-absent one (re-ingest).
+        boolean absent = Boolean.TRUE.equals(transactionTemplate.execute(
+                status -> messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt) == 0
+                        && !messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(
+                                workspaceId, channelId, ts)));
+        if (!absent) {
             return;
         }
-        // Edit raced ahead of a NAK-redelivered base insert (row absent). existsBy distinguishes a TOMBSTONED row
-        // (updated == 0 but present -> skip, no resurrection) from a genuinely-absent one (re-ingest).
-        if (!messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, channelId, ts)) {
-            ingestChannelMessageInternal(teamId, channelId, ts, threadTs, authorSlackUserId, text);
-            // Stamp edited_at (insertIfAbsent does not): a row born from message_changed genuinely is an edited
-            // message,
-            // so the projector's `edited` flag reads true. Idempotent second write on the now-present row.
-            messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt);
-        }
+        // Edit raced ahead of a NAK-redelivered base insert. The full ingest asks Slack for the author's name with no
+        // transaction open, then writes.
+        ingestChannelMessage(teamId, channelId, ts, threadTs, authorSlackUserId, text);
+        // Stamp edited_at (insertIfAbsent does not): a row born from message_changed genuinely is an edited message,
+        // so the projector's `edited` flag reads true. Idempotent second write on the now-present row.
+        transactionTemplate.executeWithoutResult(
+                status -> messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt));
     }
 
     /**

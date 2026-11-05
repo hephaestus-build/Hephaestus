@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -21,6 +22,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Ingest write-path unit tests. Deterministic: the repositories and the identity resolver are mocked, so
@@ -69,7 +72,8 @@ class SlackIngestServiceTest extends BaseUnitTest {
                 threadRepository,
                 identityResolver,
                 conversationFeedbackErasure,
-                conversationIngestEnabled);
+                conversationIngestEnabled,
+                new TransactionTemplate(mock(PlatformTransactionManager.class)));
     }
 
     @BeforeEach
@@ -189,7 +193,8 @@ class SlackIngestServiceTest extends BaseUnitTest {
         when(consentGate.ingestAllowed(7L, "C1")).thenReturn(true);
         when(monitoredChannelRepository.findConsentAnnouncedAt(7L, "C1")).thenReturn(Optional.of(ANNOUNCED_BEFORE));
         when(participantConsentGate.ingestionAllowed(7L, "U1")).thenReturn(true);
-        when(identityResolver.humanAccountId(7L, "T1", "U1")).thenReturn(Optional.of(42L));
+        when(identityResolver.displayName(7L, "T1", "U1")).thenReturn(Optional.of("A person"));
+        when(identityResolver.humanAccountId(7L, "T1", "U1", "A person")).thenReturn(Optional.of(42L));
         when(messageRepository.insertIfAbsent(7L, "T1", "C1", "100.1", "99.0", "U1", 42L, "hi"))
                 .thenReturn(1);
 
@@ -206,7 +211,8 @@ class SlackIngestServiceTest extends BaseUnitTest {
         when(consentGate.ingestAllowed(7L, "C1")).thenReturn(true);
         when(monitoredChannelRepository.findConsentAnnouncedAt(7L, "C1")).thenReturn(Optional.of(ANNOUNCED_BEFORE));
         when(participantConsentGate.ingestionAllowed(7L, "U1")).thenReturn(true);
-        when(identityResolver.humanAccountId(7L, "T1", "U1")).thenReturn(Optional.of(42L));
+        when(identityResolver.displayName(7L, "T1", "U1")).thenReturn(Optional.of("A person"));
+        when(identityResolver.humanAccountId(7L, "T1", "U1", "A person")).thenReturn(Optional.of(42L));
         when(messageRepository.insertIfAbsent(
                         eq(7L), eq("T1"), eq("C1"), eq("100.1"), isNull(), eq("U1"), eq(42L), eq("hi")))
                 .thenReturn(1);
@@ -240,7 +246,8 @@ class SlackIngestServiceTest extends BaseUnitTest {
         when(consentGate.ingestAllowed(7L, "C1")).thenReturn(true);
         when(monitoredChannelRepository.findConsentAnnouncedAt(7L, "C1")).thenReturn(Optional.of(ANNOUNCED_BEFORE));
         when(participantConsentGate.ingestionAllowed(7L, "U1")).thenReturn(true);
-        when(identityResolver.humanAccountId(7L, "T1", "U1")).thenReturn(Optional.of(42L));
+        when(identityResolver.displayName(7L, "T1", "U1")).thenReturn(Optional.of("A person"));
+        when(identityResolver.humanAccountId(7L, "T1", "U1", "A person")).thenReturn(Optional.of(42L));
         when(messageRepository.insertIfAbsent(7L, "T1", "C1", "100.1", null, "U1", 42L, "hi"))
                 .thenReturn(0);
 

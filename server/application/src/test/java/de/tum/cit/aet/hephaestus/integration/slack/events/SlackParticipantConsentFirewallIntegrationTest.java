@@ -39,6 +39,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Real-Postgres proof of the person-level ingestion firewall (the #1-defect fix). With the capability on and the
@@ -54,6 +56,9 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
     private static final String CHANNEL = "C1";
     private static final String OPTED_OUT_USER = "UOUT";
     private static final String ALLOWED_USER = "UOK";
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private SlackMessageRepository messageRepository;
@@ -117,7 +122,8 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
         long human = Objects.requireNonNull(
                 accounts.save(new Account("Allowed human")).getId());
         memberships.createMembership(workspace, human, Membership.WorkspaceRole.MEMBER);
-        when(identityResolver.humanAccountId(anyLong(), any(), any())).thenReturn(Optional.of(human));
+        when(identityResolver.displayName(anyLong(), any(), any())).thenReturn(Optional.of("A person"));
+        when(identityResolver.humanAccountId(anyLong(), any(), any(), any())).thenReturn(Optional.of(human));
 
         ingestService = new SlackIngestService(
                 workspaceResolver,
@@ -128,7 +134,8 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
                 threadRepository,
                 identityResolver,
                 conversationFeedbackErasure,
-                /* conversationIngestEnabled */ true);
+                /* conversationIngestEnabled */ true,
+                new TransactionTemplate(transactionManager));
     }
 
     @Test

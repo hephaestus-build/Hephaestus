@@ -35,6 +35,15 @@ public class SlackChannelMessageHandler extends AbstractIntegrationMessageHandle
         this.ingestService = ingestService;
     }
 
+    /**
+     * Runs the handling with no outer transaction: the ingest asks Slack for the author's name before its own short
+     * write, and the deletion and edit paths each run in their own transaction.
+     */
+    @Override
+    protected void dispatchEvent(JsonNode root) {
+        handleEvent(root);
+    }
+
     @Override
     protected void handleEvent(JsonNode root) {
         String teamId = AbstractSlackEnvelopeHandler.teamId(root);

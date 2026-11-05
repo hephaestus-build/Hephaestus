@@ -30,6 +30,7 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
@@ -83,8 +84,8 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                 threadRepository,
                 identityResolver,
                 conversationFeedbackErasure,
-                true // conversation-ingest capability on
-                );
+                true, // conversation-ingest capability on
+                new TransactionTemplate(mock(PlatformTransactionManager.class)));
         NatsMessageDeserializer deserializer =
                 new NatsMessageDeserializer(JsonMapper.builder().build());
         TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
@@ -111,8 +112,8 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                 threadRepository,
                 identityResolver,
                 conversationFeedbackErasure,
-                false // conversation-ingest capability OFF
-                );
+                false, // conversation-ingest capability OFF
+                new TransactionTemplate(mock(PlatformTransactionManager.class)));
         NatsMessageDeserializer deserializer =
                 new NatsMessageDeserializer(JsonMapper.builder().build());
         TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
@@ -146,7 +147,8 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         when(monitoredChannelRepository.findConsentAnnouncedAt(WORKSPACE, "C1"))
                 .thenReturn(Optional.of(ANNOUNCED_BEFORE));
         when(participantConsentGate.ingestionAllowed(WORKSPACE, "U1")).thenReturn(true);
-        when(identityResolver.humanAccountId(WORKSPACE, "T1", "U1")).thenReturn(Optional.of(7L));
+        when(identityResolver.displayName(WORKSPACE, "T1", "U1")).thenReturn(Optional.of("A person"));
+        when(identityResolver.humanAccountId(WORKSPACE, "T1", "U1", "A person")).thenReturn(Optional.of(7L));
     }
 
     @Test

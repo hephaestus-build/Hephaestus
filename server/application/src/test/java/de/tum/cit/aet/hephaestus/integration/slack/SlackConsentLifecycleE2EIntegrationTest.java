@@ -186,8 +186,10 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(workspaceId));
         SlackMentorIdentityResolver identityResolver = mock(SlackMentorIdentityResolver.class);
         SlackRosterIdentityResolver roster = mock(SlackRosterIdentityResolver.class);
-        when(roster.humanAccountId(workspaceId, TEAM, "U1")).thenReturn(Optional.of(u1MemberId));
-        when(roster.humanAccountId(workspaceId, TEAM, "U2")).thenReturn(Optional.of(u2MemberId));
+        when(roster.displayName(workspaceId, TEAM, "U1")).thenReturn(Optional.of("A person"));
+        when(roster.humanAccountId(workspaceId, TEAM, "U1", "A person")).thenReturn(Optional.of(u1MemberId));
+        when(roster.displayName(workspaceId, TEAM, "U2")).thenReturn(Optional.of("A person"));
+        when(roster.humanAccountId(workspaceId, TEAM, "U2", "A person")).thenReturn(Optional.of(u2MemberId));
         when(identityResolver.resolveAccountId(workspaceId, TEAM, "U1")).thenReturn(Optional.of(u1MemberId));
         when(identityResolver.resolveAccountId(workspaceId, TEAM, "U2")).thenReturn(Optional.of(u2MemberId));
         when(identityResolver.resolveActiveAccountId(any(Long.class), any(), any()))
@@ -207,7 +209,8 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                 threadRepository,
                 roster,
                 conversationFeedbackErasure,
-                /* conversationIngestEnabled */ true);
+                /* conversationIngestEnabled */ true,
+                new TransactionTemplate(transactionManager));
         consentService = new SlackChannelConsentService(
                 monitoredChannelRepository,
                 consentEventRepository,
