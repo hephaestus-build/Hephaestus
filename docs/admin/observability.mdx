@@ -207,6 +207,7 @@ Without the chart, load the file as it is from the release that you run: `https:
 
 The rules of the group `hephaestus` read the `job` and `runtime_role` labels that your scrape configuration sets, not labels that the chart controls.
 [Alert response](./production-operations-runbook.mdx#alert-response) gives the response to each alert.
+Each alert carries that section's address in its `runbook_url` annotation, so a notification can link the reader to it.
 
 The rule file is the home of each threshold, window, and summary.
 This section gives the reason for each threshold.

@@ -25,6 +25,7 @@ tests:
               runtime_role: server
             exp_annotations:
               summary: A Hephaestus metrics target cannot be scraped
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: the watchdog fires while a role is scraped, and stops when none is
     interval: 1m
@@ -41,6 +42,7 @@ tests:
               severity: none
             exp_annotations:
               summary: The monitoring of Hephaestus scrapes, evaluates and notifies
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 8m
         alertname: HephaestusWatchdog
         exp_alerts: []
@@ -61,6 +63,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: A product feedback report has waited more than 30 minutes to reach GitHub or the admin email
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a stopped product feedback filing fires, successful filings do not
     interval: 1m
@@ -80,6 +83,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: Product feedback stopped filing to GitHub; the reports wait in Needs action
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a poison event fires, an unchanged poison count does not
     interval: 1m
@@ -100,6 +104,7 @@ tests:
               kind: github
             exp_annotations:
               summary: An integration event was stored for administrator replay
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: sustained retries fire while a brief failure stays quiet
     interval: 1m
@@ -120,6 +125,7 @@ tests:
               kind: github
             exp_annotations:
               summary: Integration events kept retrying for 15 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a stale or never refreshed poll age fires, a fresh one does not
     interval: 1m
@@ -145,6 +151,7 @@ tests:
               stream: github
             exp_annotations:
               summary: Webhook stream gauges are stale or have never been refreshed
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
           - exp_labels:
               severity: warning
               job: hephaestus
@@ -153,6 +160,7 @@ tests:
               stream: gitlab
             exp_annotations:
               summary: Webhook stream gauges are stale or have never been refreshed
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a receiver without poll age fires, a receiver with poll age does not
     interval: 1m
@@ -177,6 +185,7 @@ tests:
               runtime_role: webhook
             exp_annotations:
               summary: A scraped webhook receiver exports no stream poll age
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a backlog above 50 for 15 minutes fires, a small or emptied backlog does not
     interval: 1m
@@ -199,6 +208,7 @@ tests:
               stream: github
             exp_annotations:
               summary: More than 50 events of a stream stayed undelivered to the consumers for 15 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a stream that sheds before its age bound fires; one at its bound that keeps the promise, and a young one, do not
     interval: 1m
@@ -233,6 +243,7 @@ tests:
               stream: github
             exp_annotations:
               summary: A webhook stream sheds deliveries at its byte bound before its age bound; it keeps less than it promises
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a stream older than its age bound fires; one inside its bound does not
     interval: 1m
@@ -257,6 +268,7 @@ tests:
               stream: slack
             exp_annotations:
               summary: A webhook stream holds deliveries past its age bound; a shorter bound has not taken effect
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a quiet stream that keeps undelivered events fires, a stream that drains does not
     interval: 1m
@@ -277,6 +289,7 @@ tests:
               stream: slack
             exp_annotations:
               summary: A stream kept undelivered events for 6 hours; a consumer that stays stopped past its retention loses them
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a receiver that keeps refusing deliveries for memory fires, one that stops does not
     interval: 1m
@@ -296,6 +309,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: The webhook receiver refuses deliveries because large ones fill its memory
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: continued publish failures fire, successful publishes do not
     interval: 1m
@@ -315,6 +329,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: The webhook receiver cannot store deliveries on the broker
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: successful publishes alone do not fire
     interval: 1m
@@ -344,6 +359,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: GitHub events failed every delivery attempt and were not received
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a crossed budget cap fires, an unchanged count does not
     interval: 1m
@@ -361,6 +377,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: A workspace crossed the instance-funded monthly budget cap
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: refusals that continue for 15 minutes fire, a single refusal does not
     interval: 1m
@@ -382,6 +399,7 @@ tests:
               cap: instance
             exp_annotations:
               summary: LLM budget admission kept refusing work for 15 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: three failed or timed-out jobs in one hour fire, fewer do not
     interval: 1m
@@ -401,6 +419,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: At least three agent jobs failed or timed out in one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: cancelled jobs and two failures do not fire
     interval: 1m
@@ -432,6 +451,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: Review sandboxes failed to start, initialize or finish at least three times in one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: an unreachable provider fires with its cause, a reachable server does not
     interval: 1m
@@ -452,6 +472,7 @@ tests:
               cause: provider_unreachable
             exp_annotations:
               summary: Review sandboxes failed to reach the server or the model provider at least three times in one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: one server error on a review's results fires
     interval: 1m
@@ -469,6 +490,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: The server answered a review's results with its own error, so the review ended without them
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: preparation retries that continue fire, a few retries do not
     interval: 1m
@@ -488,6 +510,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: Review attempts kept failing before their sandbox started, so they run again
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: three preparation retries do not fire
     interval: 1m
@@ -517,6 +540,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: A review failed because its workers stopped during every attempt
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a job that waits more than an hour fires, a shorter wait does not
     interval: 1m
@@ -534,6 +558,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: An agent job that can run has waited for a worker for more than one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: an empty queue does not fire
     interval: 1m
@@ -566,6 +591,7 @@ tests:
               runtime_role: worker
             exp_annotations:
               summary: A worker's sandbox isolation probe failed, so the worker starts no sandbox
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: an archive that keeps failing fires, a recovered or unread archive does not
     interval: 1m
@@ -585,6 +611,7 @@ tests:
               severity: critical
             exp_annotations:
               summary: PostgreSQL cannot archive its WAL, or the server cannot read whether it can
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a connection timeout fires for its role, a role without timeouts does not
     interval: 1m
@@ -605,6 +632,7 @@ tests:
               runtime_role: server
             exp_annotations:
               summary: The server role could not get a database connection in time, so requests or jobs failed
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 25m
         alertname: HephaestusDatabaseConnectionTimeouts
         exp_alerts: []
@@ -639,6 +667,7 @@ tests:
               runtime_role: server
             exp_annotations:
               summary: More than 5 % of the server role's database connections took longer than 50 ms to get
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # A failed read makes the gauge NaN, and the read-failure counter increases on each read, every 30 seconds.
   - name: a failing archive alert stays firing through a long read outage
@@ -656,6 +685,7 @@ tests:
               severity: critical
             exp_annotations:
               summary: PostgreSQL cannot archive its WAL, or the server cannot read whether it can
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 40m
         alertname: HephaestusWalArchiveFailing
         exp_alerts:
@@ -663,6 +693,7 @@ tests:
               severity: critical
             exp_annotations:
               summary: PostgreSQL cannot archive its WAL, or the server cannot read whether it can
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a read outage alone fires after ten minutes
     interval: 1m
@@ -682,6 +713,7 @@ tests:
               severity: critical
             exp_annotations:
               summary: PostgreSQL cannot archive its WAL, or the server cannot read whether it can
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # Ten redelivery requests in one hour on both instances: 60 and 6,000 received GitHub deliveries.
   - name: a quiet instance with a high redelivery ratio fires, a busy one with the same count does not
@@ -703,6 +735,7 @@ tests:
               namespace: quiet
             exp_annotations:
               summary: The server asked GitHub to redeliver more than 5 % of the received GitHub deliveries in one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: each release has its own ratio, so a busy release does not hide a quiet one
     interval: 1m
@@ -724,6 +757,7 @@ tests:
               namespace: quiet
             exp_annotations:
               summary: The server asked GitHub to redeliver more than 5 % of the received GitHub deliveries in one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a busy instance with the same count of redelivery requests does not fire
     interval: 1m
@@ -769,6 +803,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: GitHub refuses redeliveries, or the deliveries of the GitHub App cannot be read
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 40m
         alertname: HephaestusWebhookRedeliveryNotRunning
         exp_alerts: []
@@ -836,6 +871,7 @@ tests:
               deployment: hephaestus-webhook
             exp_annotations:
               summary: No webhook receiver of the release is available, so provider deliveries fail
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 10m
         alertname: HephaestusWebhookReceiverUnready
         exp_alerts: []
@@ -848,6 +884,7 @@ tests:
               deployment: staging-webhook
             exp_annotations:
               summary: A webhook receiver replica stayed unavailable for 15 minutes while another serves
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # 31 hours of one sample each minute. time() starts at 0, so a value is seconds since the start.
   - name: a release whose newest backup is 31 hours old fires, a release with a daily backup does not
@@ -883,6 +920,7 @@ tests:
               release: staging
             exp_annotations:
               summary: No PostgreSQL backup completed in the last 30 hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: backup CronJobs with no successful run for 30 hours fire
     interval: 1m
@@ -904,6 +942,7 @@ tests:
               release: hephaestus
             exp_annotations:
               summary: No PostgreSQL backup completed in the last 30 hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # A release name of more than 34 characters: the chart truncates and hashes the CronJob names, so only their labels
   # tell the release. The full backup is old, the differential one is recent: the newest backup counts.
@@ -951,12 +990,14 @@ tests:
               release: hephaestus
             exp_annotations:
               summary: No PostgreSQL backup completed in the last 30 hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
           - exp_labels:
               severity: critical
               namespace: hephaestus
               release: hephaestus-production-for-the-whole-faculty
             exp_annotations:
               summary: No PostgreSQL backup completed in the last 30 hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a PostgreSQL volume below 15 % free warns, below 5 % only the critical alert fires, more space is quiet
     interval: 1m
@@ -986,12 +1027,14 @@ tests:
               persistentvolumeclaim: data-hephaestus-postgresql-0
             exp_annotations:
               summary: The PostgreSQL volume has between 5 % and 15 % free space
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
           - exp_labels:
               severity: warning
               namespace: prod
               persistentvolumeclaim: data-prod-postgresql-0
             exp_annotations:
               summary: The PostgreSQL volume has between 5 % and 15 % free space
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 14m
         alertname: HephaestusPostgresVolumeFilling
         exp_alerts:
@@ -1001,12 +1044,14 @@ tests:
               persistentvolumeclaim: data-hephaestus-postgresql-0
             exp_annotations:
               summary: The PostgreSQL volume has between 5 % and 15 % free space
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
           - exp_labels:
               severity: critical
               namespace: prod
               persistentvolumeclaim: data-prod-postgresql-0
             exp_annotations:
               summary: The PostgreSQL volume has less than 5 % free space
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # JetStream's max_file is 80 % of the volume, so a broker at its budget leaves 20 % free.
   - name: a JetStream volume below 10 % free fires, one at its storage budget does not
@@ -1033,6 +1078,7 @@ tests:
               persistentvolumeclaim: data-hephaestus-nats-0
             exp_annotations:
               summary: The NATS JetStream volume has less than 10 % free space
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a full node disk fires, memory, read-only, pod volume and free file systems do not
     interval: 1m
@@ -1082,6 +1128,7 @@ tests:
               mountpoint: /
             exp_annotations:
               summary: A node file system has less than 15 % free space
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # 6 days and 30 days after the start.
   - name: a certificate that expires within seven days fires after one hour, a later one does not
@@ -1107,6 +1154,7 @@ tests:
               issuer_group: cert-manager.io
             exp_annotations:
               summary: A certificate that cert-manager manages expires in less than seven days, or has no issued certificate
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # cert-manager exports 0 for a certificate that has no notAfter yet, as during its first issuance.
   - name: a certificate in its first issuance is quiet for an hour, then fires as not issued
@@ -1130,6 +1178,7 @@ tests:
               issuer_group: cert-manager.io
             exp_annotations:
               summary: A certificate that cert-manager manages expires in less than seven days, or has no issued certificate
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a host whose every reconcile fails for 15 minutes fires, a host that recovers does not
     interval: 1m
@@ -1150,6 +1199,7 @@ tests:
               instance: staging:9100
             exp_annotations:
               summary: Every reconcile run of a host failed for 15 minutes, so the host does not follow its release channel
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # One apply may take up to the unit's 30-minute start timeout, and the reconciler writes its timestamp when a run ends.
   - name: a host with no finished run for 40 minutes fires, a host that runs each minute does not
@@ -1171,6 +1221,7 @@ tests:
               instance: staging:9100
             exp_annotations:
               summary: A host's reconciler has finished no run for 40 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: no host that reports the reconciler's metrics fires after 15 minutes
     interval: 1m
@@ -1188,6 +1239,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: No host reports the reconciler's metrics
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: tooling that no apply records for an hour fires, recorded tooling does not
     interval: 1m
@@ -1208,6 +1260,7 @@ tests:
               instance: staging:9100
             exp_annotations:
               summary: A host runs reconciler tooling that no apply has recorded
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: server errors at 8 % of API requests burn the error budget fast
     interval: 1m
@@ -1224,6 +1277,7 @@ tests:
               severity: critical
             exp_annotations:
               summary: The API answers with server errors fast enough to spend its monthly error budget in two days
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: server errors at 7 % of API requests stay under the fast burn
     interval: 1m
@@ -1279,6 +1333,7 @@ tests:
               severity: critical
             exp_annotations:
               summary: The API answers with server errors fast enough to spend its monthly error budget in two days
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 75m
         alertname: HephaestusApiErrorBudgetBurnFast
         exp_alerts: []
@@ -1298,6 +1353,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: The API answers with server errors fast enough to spend its monthly error budget in five days
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 7h
         alertname: HephaestusApiErrorBudgetBurnFast
         exp_alerts: []
@@ -1329,6 +1385,7 @@ tests:
               severity: critical
             exp_annotations:
               summary: API reads take longer than 2 seconds often enough to spend the monthly budget in two days
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: reads over 2 seconds at 6 % stay under the fast latency burn
     interval: 1m
@@ -1422,6 +1479,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: API reads take longer than 2 seconds often enough to spend the monthly budget in five days
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 7h
         alertname: HephaestusApiLatencyBudgetBurnFast
         exp_alerts: []
@@ -1453,6 +1511,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: Fewer than 75 % of page loads showed their main content within 2.5 seconds over six hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: main content within 2.5 seconds for 80 % of page loads is not poor
     interval: 5m
@@ -1497,6 +1556,7 @@ tests:
               kind: uncaught_error
             exp_annotations:
               summary: Readers' browsers reported at least twenty failures of one kind in one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: item reviews that end incomplete in more than a quarter of six hours fire
     interval: 1m
@@ -1521,6 +1581,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: More than a quarter of the item reviews of the last six hours did not end complete
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: policy stops, cancellations, scans and too few reviews do not fire
     interval: 1m
@@ -1561,6 +1622,7 @@ tests:
               provider: github
             exp_annotations:
               summary: Readback could not tell whether feedback reached the work on github
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: readback that finds a copy or proves it absent does not fire
     interval: 1m
@@ -1609,6 +1671,7 @@ tests:
               pool: own-model-1
             exp_annotations:
               summary: A model provider's refusals kept reaching callers for 15 minutes instead of only slowing them
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a limit held at the floor by a queue fires, a ceiling of two or a recovered limit does not
     interval: 1m
@@ -1643,6 +1706,7 @@ tests:
               pool: own-model-1
             exp_annotations:
               summary: A model's call limit stayed at its floor of two calls for 30 minutes while its provider refused, queued or did not answer
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: three failed deliveries to one destination in one hour fire, two do not
     interval: 1m
@@ -1665,6 +1729,7 @@ tests:
               destination: on_work
             exp_annotations:
               summary: At least three feedback deliveries to one destination failed in one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: reviews whose first feedback mostly came after 30 minutes fire
     interval: 1m
@@ -1684,6 +1749,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: More than 30 % of the reviews of the last six hours posted their first feedback later than 30 minutes after their occasion
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: approved, scheduled, timely and too few reviews do not fire
     interval: 1m
@@ -1733,6 +1799,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: Feedback on the work has waited more than two hours for its first posted copy
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a short wait above two hours that ends does not fire
     interval: 1m
@@ -1765,6 +1832,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: Activity reads take longer than 1 second often enough to spend the monthly budget in two days
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 10m
         alertname: HephaestusActivityLatencyBudgetBurnSlow
         exp_alerts: []
@@ -1775,6 +1843,7 @@ tests:
               severity: warning
             exp_annotations:
               summary: Activity reads take longer than 1 second often enough to spend the monthly budget in five days
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # One turn a minute, each with its first token after 10 s.
   - name: slow first tokens of conversation turns burn the budget fast and slow
