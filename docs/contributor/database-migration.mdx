@@ -162,6 +162,9 @@ A later release drops the object.
 To rename a table or column, add the new one, copy the data, and drop the old one later.
 
 The changelog compatibility guard checks each changelog that the latest release tag does not have.
+That tag is the latest published release merged into the head, a release candidate such as `v1.0.0-rc.1` included, but not a tag on the head itself.
+The guard does not count the baseline files under `1.0.0/` as new against `v1.0.0-rc.1` or later.
+A database on such a release records the baseline without running its DDL.
 It rejects these change sets and files:
 
 - A `dropTable` or `dropColumn`, unless the latest release lists the object in its pending contractions.
