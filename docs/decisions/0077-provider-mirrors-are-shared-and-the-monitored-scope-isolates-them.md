@@ -53,3 +53,12 @@ The guard does **not** cover mirror reads in general. Read these limits with the
 ## Revisit trigger
 
 A mirror table needs data that differs per workspace. Or the type-level markers are gone, and the inspector can check every mirror read.
+
+## Update — 2026-11-05 (a type-level marker opens no bypass)
+
+Only a method-level `@WorkspaceAgnostic` opens a bypass now. `WorkspaceAgnosticAspect` no longer advises the methods of a marked type, or the inherited Spring Data methods of a marked repository. Decision 5 is fully in force.
+
+- The first limit no longer holds. The inspector checks every statement that no method-level marker encloses.
+- Before this change, the conversion brought the statements that type-level markers let through on the integration tier to 0. That counter and the report-only path are removed.
+- A statement that the counter would have counted is now refused. `tenancy.violation.total{table, mode}` counts it, the server logs `Tenancy violation (throw)`, and `HephaestusTenancyViolations` fires.
+- Some types keep a type-level marker. It opens no bypass. `MultiTenancyArchitectureTest` still reads it on repositories whose tables belong to no workspace.
