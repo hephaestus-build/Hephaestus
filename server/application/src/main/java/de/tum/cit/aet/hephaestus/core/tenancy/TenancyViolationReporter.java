@@ -12,11 +12,4 @@ import java.util.Set;
 @FunctionalInterface
 public interface TenancyViolationReporter {
     void report(String sql, Set<String> unguardedTables, TenancyEnforcement mode);
-
-    /**
-     * A statement that the inspector would refuse, but that runs inside a bypass that only type-level
-     * {@code @WorkspaceAgnostic} markers opened. Never throws: it only counts, so that those markers can be replaced
-     * by method-level ones (ADR 0077).
-     */
-    default void reportBypassed(String sql, Set<String> unguardedTables, Set<String> silencingTypes) {}
 }

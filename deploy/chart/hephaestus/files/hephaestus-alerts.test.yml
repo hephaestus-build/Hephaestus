@@ -1810,6 +1810,31 @@ tests:
         alertname: HephaestusPageExperiencePoor
         exp_alerts: []
 
+  - name: a refused tenancy statement fires for its table, a table with no refusal stays silent
+    interval: 1m
+    input_series:
+      - series: 'tenancy_violation_total{job="hephaestus",instance="server:9090",runtime_role="server",module="tenancy",table="repository",mode="throw"}'
+        values: "1x10 2x30"
+      - series: 'tenancy_violation_total{job="hephaestus",instance="server:9090",runtime_role="server",module="tenancy",table="issue",mode="throw"}'
+        values: "1x40"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusTenancyViolations
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: HephaestusTenancyViolations
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              table: repository
+              mode: throw
+            exp_annotations:
+              summary: A database statement on repository did not stay in one workspace (throw mode)
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 40m
+        alertname: HephaestusTenancyViolations
+        exp_alerts: []
+
   - name: twenty browser faults of one kind in an hour fire, a few of another kind do not
     interval: 1m
     input_series:
