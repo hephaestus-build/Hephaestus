@@ -781,7 +781,7 @@ Claim reservations do not add a second wait observation when the model call uses
 | `completed` | The model finished its answer |
 | `length` | The answer stopped at its token or context limit |
 | `refused` | The model declined to answer: Anthropic's `refusal`, or OpenAI's `content_filter` or a refusal part |
-| `unanswered` | A served stream sent no content and no usage |
+| `unanswered` | A served stream sent no content and no usage, and the provider stated no refusal, length or error. A stated one wins |
 | `error` | The provider answered with an error status, failed the stream, or could not be reached |
 | `stalled` | The provider sent nothing for the proxy's silence bound |
 | `cancelled` | The caller or the attempt ended the call first |
