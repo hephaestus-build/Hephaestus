@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.sync;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -23,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewThreadContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCaptureFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -76,6 +78,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
@@ -86,6 +89,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionManager;
 import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
 import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.json.JsonMapper;
@@ -132,8 +136,11 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
     private final GitHubGraphQlClientProvider clients = mock(GitHubGraphQlClientProvider.class);
     private final HttpGraphQlClient client = mock(HttpGraphQlClient.class);
     private GitHubPullRequestSyncService sync;
+    private GitHubPullRequestReviewCommentSyncService reviewComments;
     private GitHubHistoricalBackfillService backfill;
     private final AtomicBoolean critical = new AtomicBoolean();
+    // Whether a transaction was open each time GitHub was asked for the rest of a list.
+    private final List<Boolean> askedInTransaction = new ArrayList<>();
     private long workspaceId;
     private long repositoryId;
     private long monitorId;
@@ -189,7 +196,7 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
                         classifier,
                         coordinator,
                         transactionManager));
-        var reviewComments = transactional(
+        reviewComments = transactional(
                 GitHubPullRequestReviewCommentSyncService.class,
                 new GitHubPullRequestReviewCommentSyncService(
                         threads,
@@ -198,7 +205,8 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
                         context.getBean(GitHubUserProcessor.class),
                         properties,
                         classifier,
-                        coordinator));
+                        coordinator,
+                        new TransactionTemplate(transactionManager)));
         var issueComments = transactional(
                 GitHubIssueCommentSyncService.class,
                 new GitHubIssueCommentSyncService(
@@ -280,7 +288,8 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
     /** A backfill reads the lists past their first page too, instead of leaving them to a sync that may never come. */
     @Test
     void shouldReadEveryThreadAndCaptureThemWholeWhenABackfilledListHasMorePages() {
-        stubPage("GetRepositoryPullRequestsHistorical", pullRequest());
+        stubPage("GetRepositoryPullRequestsHistorical", pullRequestWithAThreadCommentPage());
+        stubTheRestOfTheFirstThread();
         var noIssues = new GHIssueConnection();
         noIssues.setNodes(List.of());
         noIssues.setTotalCount(0);
@@ -290,15 +299,7 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
         when(issueSpec.variable(anyString(), any())).thenReturn(issueSpec);
         var issues = valid("repository.issues", GHIssueConnection.class, noIssues);
         when(issueSpec.execute()).thenReturn(Mono.just(issues));
-        var pagerSpec = mock(RequestSpec.class);
-        when(client.documentName("GetPullRequestReviewComments")).thenReturn(pagerSpec);
-        when(pagerSpec.variable(anyString(), any())).thenReturn(pagerSpec);
-        var sixth = new GHPullRequestReviewThreadConnection();
-        sixth.setNodes(List.of(thread(6, false)));
-        sixth.setTotalCount(6);
-        sixth.setPageInfo(page(false, null));
-        var pager = valid("repository.pullRequest.reviewThreads", GHPullRequestReviewThreadConnection.class, sixth);
-        when(pagerSpec.execute()).thenReturn(Mono.just(pager));
+        stubTheSixthThread();
 
         backfill.runBackfillBatch(
                 SyncTargetTestBuilder.syncTarget()
@@ -319,6 +320,115 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
                 .hasSize(6);
         assertThat(threadCapture(pullRequestId).completeness().get(ReviewThreadContentSource.KIND))
                 .isEqualTo(SourceCompleteness.COMPLETE);
+        assertTheRestWasAskedForOutsideTransactionsAndStored();
+    }
+
+    /** A sync reads the rest of a thread list and of a thread's comments with no transaction open, then stores both. */
+    @Test
+    void shouldAskGitHubWithNoTransactionOpenWhenAThreadListAndItsCommentsHaveMorePages() {
+        stubPage("GetRepositoryPullRequests", pullRequestWithAThreadCommentPage());
+        stubTheRestOfTheFirstThread();
+        stubTheSixthThread();
+
+        sync.syncForRepository(workspaceId, repositoryId, null, null, null);
+
+        long pullRequestId = pullRequests
+                .findByRepositoryIdAndNumber(repositoryId, NUMBER)
+                .orElseThrow()
+                .getId();
+        assertThat(threads.findRecentIdsByPullRequestId(pullRequestId, Pageable.unpaged()))
+                .hasSize(6);
+        assertTheRestWasAskedForOutsideTransactionsAndStored();
+    }
+
+    /** A thread page that fails after another was read leaves the threads already read stored, and says it stopped. */
+    @Test
+    void shouldStoreTheThreadsAlreadyReadWhenALaterThreadPageFails() {
+        stubPullRequestPage();
+        var sixth = new GHPullRequestReviewThreadConnection();
+        sixth.setNodes(List.of(thread(6, false)));
+        sixth.setTotalCount(7);
+        sixth.setPageInfo(page(true, "after-six"));
+        var spec = mock(RequestSpec.class);
+        when(client.documentName("GetPullRequestReviewComments")).thenReturn(spec);
+        when(spec.variable(anyString(), any())).thenReturn(spec);
+        var pager = valid("repository.pullRequest.reviewThreads", GHPullRequestReviewThreadConnection.class, sixth);
+        when(spec.execute())
+                .thenReturn(Mono.just(pager))
+                .thenReturn(Mono.error(new IllegalStateException("GitHub answered nothing usable")));
+
+        sync.syncForRepository(workspaceId, repositoryId, null, null, null);
+
+        long pullRequestId = pullRequests
+                .findByRepositoryIdAndNumber(repositoryId, NUMBER)
+                .orElseThrow()
+                .getId();
+        assertThat(threads.findRecentIdsByPullRequestId(pullRequestId, Pageable.unpaged()))
+                .as("the five embedded threads and the sixth from the page that arrived")
+                .hasSize(6);
+        assertThat(threadCapture(pullRequestId).completeness().get(ReviewThreadContentSource.KIND))
+                .isEqualTo(SourceCompleteness.PARTIAL);
+    }
+
+    /** A database error in the write reaches the caller, whose retry decides what a deadlock or a lost row means. */
+    @Test
+    void shouldReachTheCallerWhenStoringTheRemainingThreadsFails() {
+        stubTheSixthThread();
+        // A pull request deleted while GitHub answered: its threads cannot be stored.
+        var deleted = new PullRequest();
+        deleted.setId(Long.MAX_VALUE);
+        deleted.setNumber(NUMBER);
+        deleted.setRepository(context.getBean(RepositoryRepository.class)
+                .findByIdWithOrganization(repositoryId)
+                .orElseThrow());
+
+        assertThatThrownBy(() -> reviewComments.syncRemainingThreads(workspaceId, deleted, "after-five"))
+                .isInstanceOf(DataAccessException.class);
+    }
+
+    private void assertTheRestWasAskedForOutsideTransactionsAndStored() {
+        assertThat(askedInTransaction)
+                .as(
+                        "the first thread's second comment page, then the second thread page, each with no transaction open")
+                .containsExactly(false, false);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM pull_request_review_comment WHERE native_id = ?", Long.class, base + 100))
+                .as("the comment from the second page is stored")
+                .isEqualTo(1L);
+    }
+
+    /** The first thread's comments continue on a second page, which holds one reply. */
+    private void stubTheRestOfTheFirstThread() {
+        var reply = comment("C_1_reply", base + 100, "src/file1.ts");
+        reply.setReplyTo(comment("C_1", base + 1, "src/file1.ts"));
+        var rest = new GHPullRequestReviewCommentConnection();
+        rest.setNodes(List.of(reply));
+        rest.setTotalCount(2);
+        rest.setPageInfo(page(false, null));
+        var spec = mock(RequestSpec.class);
+        when(client.documentName("GetThreadComments")).thenReturn(spec);
+        when(spec.variable(anyString(), any())).thenReturn(spec);
+        answerRecordingTheTransaction(spec, valid("node.comments", GHPullRequestReviewCommentConnection.class, rest));
+    }
+
+    /** The thread list continues on a second page, which holds the sixth thread. */
+    private void stubTheSixthThread() {
+        var sixth = new GHPullRequestReviewThreadConnection();
+        sixth.setNodes(List.of(thread(6, false)));
+        sixth.setTotalCount(6);
+        sixth.setPageInfo(page(false, null));
+        var spec = mock(RequestSpec.class);
+        when(client.documentName("GetPullRequestReviewComments")).thenReturn(spec);
+        when(spec.variable(anyString(), any())).thenReturn(spec);
+        answerRecordingTheTransaction(
+                spec, valid("repository.pullRequest.reviewThreads", GHPullRequestReviewThreadConnection.class, sixth));
+    }
+
+    private void answerRecordingTheTransaction(RequestSpec spec, ClientGraphQlResponse response) {
+        when(spec.execute()).thenAnswer(invocation -> {
+            askedInTransaction.add(TransactionSynchronizationManager.isActualTransactionActive());
+            return Mono.just(response);
+        });
     }
 
     private void stubPullRequestPage() {
@@ -411,6 +521,16 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
         return pr;
     }
 
+    private static GHPullRequest pullRequestWithAThreadCommentPage() {
+        var pr = pullRequest();
+        var first = Objects.requireNonNull(pr.getReviewThreads().getNodes())
+                .getFirst()
+                .getComments();
+        first.setTotalCount(2);
+        first.setPageInfo(page(true, "after-first-comment"));
+        return pr;
+    }
+
     private static GHPullRequestReviewThread thread(int index, boolean resolved) {
         var thread = new GHPullRequestReviewThread();
         thread.setId("T_" + index);
@@ -419,19 +539,23 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
         thread.setIsResolved(resolved);
         thread.setIsOutdated(false);
         thread.setIsCollapsed(false);
-        var comment = new GHPullRequestReviewComment();
-        comment.setId("C_" + index);
-        comment.setFullDatabaseId(BigInteger.valueOf(base + index));
-        comment.setBody("Please change this " + index);
-        comment.setPath("src/file" + index + ".ts");
-        comment.setDiffHunk("@@ -1 +1 @@");
-        comment.setCreatedAt(AT);
-        comment.setUpdatedAt(AT);
         var comments = new GHPullRequestReviewCommentConnection();
-        comments.setNodes(List.of(comment));
+        comments.setNodes(List.of(comment("C_" + index, base + index, "src/file" + index + ".ts")));
         comments.setTotalCount(1);
         comments.setPageInfo(page(false, null));
         thread.setComments(comments);
         return thread;
+    }
+
+    private static GHPullRequestReviewComment comment(String id, long databaseId, String path) {
+        var comment = new GHPullRequestReviewComment();
+        comment.setId(id);
+        comment.setFullDatabaseId(BigInteger.valueOf(databaseId));
+        comment.setBody("Please change this " + id);
+        comment.setPath(path);
+        comment.setDiffHunk("@@ -1 +1 @@");
+        comment.setCreatedAt(AT);
+        comment.setUpdatedAt(AT);
+        return comment;
     }
 }

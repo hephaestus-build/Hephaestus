@@ -52,6 +52,7 @@ import java.io.Serial;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1189,6 +1190,20 @@ public class GitHubHistoricalBackfillService {
             @Nullable String nextCursor,
             Instant fetchedAt,
             DiscussionReads discussionReads) {
+        // The remaining comments of every embedded thread are read from GitHub before the page's transaction opens,
+        // so that transaction only writes the page and its cursor.
+        List<PullRequestWithReviewThreads> pullRequests = new ArrayList<>();
+        Map<String, SyncResult.Status> threadReads = new HashMap<>();
+        for (var node : connection.getNodes()) {
+            PullRequestWithReviewThreads prData = PullRequestWithReviewThreads.fromPullRequest(node);
+            if (prData == null || prData.pullRequest() == null) {
+                continue;
+            }
+            pullRequests.add(prData);
+            for (var thread : prData.embeddedReviewThreads().threads()) {
+                threadReads.put(thread.nodeId(), reviewCommentSyncService.completeThreadComments(thread, scopeId));
+            }
+        }
         PullRequestPageResult result = transactionTemplate.execute(status -> {
             // Fetch repository INSIDE the transaction with organization eagerly loaded.
             // This ensures the entity is attached and lazy associations can be accessed.
@@ -1208,9 +1223,8 @@ public class GitHubHistoricalBackfillService {
             List<PullRequestWithReviewCursor> prsNeedingReviewPagination = new ArrayList<>();
             List<ListToFinish> listsToFinish = new ArrayList<>();
 
-            for (var node : connection.getNodes()) {
-                PullRequestWithReviewThreads prData = PullRequestWithReviewThreads.fromPullRequest(node);
-                if (prData != null && prData.pullRequest() != null) {
+            for (PullRequestWithReviewThreads prData : pullRequests) {
+                {
                     PullRequest processed = prProcessor.process(prData.pullRequest(), context);
                     if (processed != null) {
                         prCount++;
@@ -1255,7 +1269,11 @@ public class GitHubHistoricalBackfillService {
                         EmbeddedReviewThreadsDTO embeddedThreads = prData.embeddedReviewThreads();
                         boolean threadsWhole = true;
                         for (var thread : embeddedThreads.threads()) {
-                            var read = reviewCommentSyncService.processThread(thread, processed, scopeId);
+                            var read = reviewCommentSyncService.processThread(
+                                    thread,
+                                    processed,
+                                    scopeId,
+                                    threadReads.getOrDefault(thread.nodeId(), SyncResult.Status.COMPLETED));
                             reviewCommentCount += read.comments();
                             threadsWhole &= read.whole();
                             if (!read.whole()) discussionReads.stop(processed.getId(), read.read());
