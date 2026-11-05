@@ -23,8 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
  * (activity, practices, ...) to keep architecture boundaries clean.
  */
 @Repository
-@WorkspaceAgnostic("Pull requests scoped through repository_id -> repository.workspace_id")
 public interface PullRequestRepository extends JpaRepository<PullRequest, Long> {
+    /** Every workspace's pull requests. Only tests call it, to check what sync stored; production code reads by scope. */
+    @Override
+    @WorkspaceAgnostic("Reads every workspace's mirror rows; only tests call it, to check what sync stored")
+    long count();
+
     /** Provider coverage includes tombstones and erased attribution: those source rows are not missing. */
     @Query(
             value = "SELECT count(*) FROM issue WHERE repository_id=:repositoryId AND issue_type='PULL_REQUEST'",
@@ -66,6 +70,8 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     List<Integer> findNumbersByRepositoryIdAndState(
             @Param("repositoryId") long repositoryId, @Param("state") Issue.State state, Limit limit);
 
+    @WorkspaceAgnostic("Sync and review context load one shared mirror row of a repository they already hold: the"
+            + " provider event's, or the reviewed work's, which the review reached through its workspace")
     @Query("""
         SELECT p
         FROM PullRequest p
@@ -95,7 +101,7 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
      * Takes the lock {@link #findForUpdateByRepositoryIdAndNumber} and {@link #upsertCore} take, without loading the
      * entity, so the transaction's next read of the pull request sees what the last writer committed.
      */
-    @Query(value = "SELECT id FROM issue WHERE id = :id FOR NO KEY UPDATE", nativeQuery = true)
+    @Query(value = "SELECT i.id FROM issue i WHERE i.id = :id FOR NO KEY UPDATE", nativeQuery = true)
     Optional<Long> lockById(@Param("id") long id);
 
     /** Pull request by id with assignees eagerly fetched, for access after the Hibernate session closes. */

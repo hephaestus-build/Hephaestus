@@ -11,6 +11,7 @@ import com.tngtech.archunit.lang.ArchRule;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import java.lang.reflect.Method;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,8 @@ class TestOnlyRepositoryMethodsArchitectureTest extends HephaestusArchitectureTe
             new TestOnlyMethod(IssueRepository.class, "deleteAll"),
             new TestOnlyMethod(IssueCommentRepository.class, "count"),
             new TestOnlyMethod(IssueCommentRepository.class, "findAll"),
-            new TestOnlyMethod(IssueCommentRepository.class, "deleteAll"));
+            new TestOnlyMethod(IssueCommentRepository.class, "deleteAll"),
+            new TestOnlyMethod(PullRequestRepository.class, "count"));
 
     @Test
     void shouldCallNoTestOnlyRepositoryMethodFromProductionCode() {
