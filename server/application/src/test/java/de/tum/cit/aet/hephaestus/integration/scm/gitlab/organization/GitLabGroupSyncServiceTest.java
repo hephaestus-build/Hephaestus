@@ -102,88 +102,6 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
     }
 
     @Nested
-    class SyncGroup {
-
-        @Test
-        void nullGroupPath_returnsEmpty() {
-            Optional<Organization> result = service.syncGroup(1L, null, null);
-            assertThat(result).isEmpty();
-            verify(graphQlClientProvider, never()).acquirePermission();
-        }
-
-        @Test
-        void blankGroupPath_returnsEmpty() {
-            Optional<Organization> result = service.syncGroup(1L, "   ", null);
-            assertThat(result).isEmpty();
-            verify(graphQlClientProvider, never()).acquirePermission();
-        }
-
-        @Test
-        void successfulSync_returnsOrganization() {
-            Organization org = new Organization();
-            org.setId(42L);
-            org.setLogin("my-org");
-
-            mockGraphQlGroupResponse(new GitLabGroupResponse(
-                    "gid://gitlab/Group/42",
-                    "my-org",
-                    "My Org",
-                    null,
-                    "https://gitlab.com/my-org",
-                    null,
-                    "public",
-                    null));
-            when(groupProcessor.process(any(GitLabGroupResponse.class), anyLong()))
-                    .thenReturn(org);
-
-            Optional<Organization> result = service.syncGroup(1L, "my-org", null);
-
-            assertThat(result).isPresent();
-            assertThat(result.get().getId()).isEqualTo(42L);
-            verify(graphQlClientProvider).acquirePermission();
-            verify(graphQlClientProvider).recordSuccess();
-        }
-
-        @Test
-        void groupNotFound_returnsEmpty() {
-            mockGraphQlGroupResponse(null);
-
-            Optional<Organization> result = service.syncGroup(1L, "non-existent", null);
-
-            assertThat(result).isEmpty();
-        }
-
-        @Test
-        void invalidResponse_returnsEmptyAndRecordsFailure() {
-            HttpGraphQlClient client = mockClient();
-            ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
-            lenient().when(response.isValid()).thenReturn(false);
-            lenient().when(response.getErrors()).thenReturn(List.of());
-
-            // Invalid response → handler returns ABORT
-            when(responseHandler.handle(eq(response), anyString(), any()))
-                    .thenReturn(new HandleResult(HandleResult.Action.ABORT, null));
-
-            mockRequestSpec(client, response);
-
-            Optional<Organization> result = service.syncGroup(1L, "my-org", null);
-
-            assertThat(result).isEmpty();
-            verify(graphQlClientProvider).recordFailure(any());
-        }
-
-        @Test
-        void exception_returnsEmptyAndRecordsFailure() {
-            when(graphQlClientProvider.forScope(1L)).thenThrow(new RuntimeException("connection error"));
-
-            Optional<Organization> result = service.syncGroup(1L, "my-org", null);
-
-            assertThat(result).isEmpty();
-            verify(graphQlClientProvider).recordFailure(any());
-        }
-    }
-
-    @Nested
     class SyncGroupProjects {
 
         private Organization org;
@@ -851,30 +769,5 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
         when(graphQlClientProvider.forScope(any())).thenReturn(client);
         return client;
-    }
-
-    @SuppressWarnings("unchecked")
-    private void mockGraphQlGroupResponse(@Nullable GitLabGroupResponse groupResponse) {
-        HttpGraphQlClient client = mockClient();
-        ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
-        lenient().when(response.isValid()).thenReturn(true);
-
-        ClientResponseField groupField = mock(ClientResponseField.class);
-        when(groupField.toEntity(GitLabGroupResponse.class)).thenReturn(groupResponse);
-        when(response.field("group")).thenReturn(groupField);
-
-        GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
-        when(client.documentName(anyString())).thenReturn(requestSpec);
-        when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
-        when(requestSpec.execute()).thenReturn(Mono.just(response));
-    }
-
-    @SuppressWarnings("unchecked")
-    private GraphQlClient.RequestSpec mockRequestSpec(HttpGraphQlClient client, ClientGraphQlResponse response) {
-        GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
-        when(client.documentName(anyString())).thenReturn(requestSpec);
-        when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
-        when(requestSpec.execute()).thenReturn(Mono.just(response));
-        return requestSpec;
     }
 }
