@@ -14,17 +14,20 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-@WorkspaceAgnostic("Comments scoped through review_id -> repository.workspace_id")
 public interface PullRequestReviewCommentRepository extends JpaRepository<PullRequestReviewComment, Long> {
     @Query(
             "SELECT c.id AS id, c.nativeId AS nativeId FROM PullRequestReviewComment c WHERE c.pullRequest.id = :parentId")
     List<NoteIdProjection> findNoteIdsByParentId(@Param("parentId") long parentId);
 
+    @WorkspaceAgnostic(
+            "GitLab note reconciliation clears or deletes what the provider no longer lists, under one shared parent it syncs")
     @Modifying
     @Query(
             "UPDATE PullRequestReviewComment c SET c.inReplyTo = NULL WHERE c.pullRequest.id = :parentId AND c.inReplyTo.id IN :ids")
     int clearDeletedReplies(@Param("parentId") long parentId, @Param("ids") Collection<Long> ids);
 
+    @WorkspaceAgnostic(
+            "GitLab note reconciliation clears or deletes what the provider no longer lists, under one shared parent it syncs")
     @Modifying
     @Query("DELETE FROM PullRequestReviewComment c WHERE c.pullRequest.id = :parentId AND c.id IN :ids")
     int deleteReconciled(@Param("parentId") long parentId, @Param("ids") Collection<Long> ids);
@@ -50,6 +53,8 @@ public interface PullRequestReviewCommentRepository extends JpaRepository<PullRe
      * only signal, and counting orphans of a deleted PR would leave this row permanently inflated. The
      * predicate rides the {@code c.pullRequest} join the grouping already needs.
      */
+    @WorkspaceAgnostic(
+            "Counts the shared mirror rows of repositories that the caller resolved through the workspace's monitors")
     @Query("SELECT c.pullRequest.repository.id AS repositoryId, COUNT(c) AS itemCount "
             + "FROM PullRequestReviewComment c "
             + "WHERE c.pullRequest.repository.id IN :repositoryIds AND c.pullRequest.deletedAt IS NULL "

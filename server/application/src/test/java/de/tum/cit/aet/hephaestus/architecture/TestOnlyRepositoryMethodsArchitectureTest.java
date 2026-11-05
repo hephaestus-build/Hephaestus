@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -35,7 +36,8 @@ class TestOnlyRepositoryMethodsArchitectureTest extends HephaestusArchitectureTe
             new TestOnlyMethod(PullRequestRepository.class, "count"),
             new TestOnlyMethod(RepositoryRepository.class, "count"),
             new TestOnlyMethod(RepositoryRepository.class, "deleteAll"),
-            new TestOnlyMethod(RepositoryRepository.class, "findByNameWithOwner", String.class));
+            new TestOnlyMethod(RepositoryRepository.class, "findByNameWithOwner", String.class),
+            new TestOnlyMethod(PullRequestReviewRepository.class, "findAll"));
 
     @Test
     void shouldCallNoTestOnlyRepositoryMethodFromProductionCode() {

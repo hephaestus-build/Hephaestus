@@ -21,8 +21,12 @@ import org.springframework.stereotype.Repository;
  * sync flows; workspace context is established by the caller.
  */
 @Repository
-@WorkspaceAgnostic("Reviews scoped through pull_request_id -> repository.workspace_id")
 public interface PullRequestReviewRepository extends JpaRepository<PullRequestReview, Long> {
+    /** Every workspace's reviews. Only tests call it, to check what sync stored; production code reads by scope. */
+    @Override
+    @WorkspaceAgnostic("Reads every workspace's mirror rows; only tests call it, to check what sync stored")
+    List<PullRequestReview> findAll();
+
     boolean existsByIdAndPullRequest_IdAndAuthor_Id(long id, long pullRequestId, long authorId);
 
     Optional<PullRequestReview> findByIdAndPullRequestId(Long id, Long pullRequestId);
@@ -42,6 +46,8 @@ public interface PullRequestReviewRepository extends JpaRepository<PullRequestRe
      * signal, and counting orphans of a deleted PR would leave this row permanently inflated. The
      * predicate rides the {@code r.pullRequest} join the grouping already needs.
      */
+    @WorkspaceAgnostic(
+            "Counts the shared mirror rows of repositories that the caller resolved through the workspace's monitors")
     @Query("SELECT r.pullRequest.repository.id AS repositoryId, COUNT(r) AS itemCount FROM PullRequestReview r "
             + "WHERE r.pullRequest.repository.id IN :repositoryIds AND r.pullRequest.deletedAt IS NULL "
             + "GROUP BY r.pullRequest.repository.id")

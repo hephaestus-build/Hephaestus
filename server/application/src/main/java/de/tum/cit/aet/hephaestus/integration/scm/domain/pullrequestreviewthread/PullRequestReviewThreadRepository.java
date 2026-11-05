@@ -9,17 +9,17 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-/**
- * Threads are scoped through their pull request via the
- * pull_request -> repository -> workspace chain.
- */
-@WorkspaceAgnostic("Threads scoped through pull_request_id -> repository.workspace_id")
+/** Review threads are shared mirror rows: a workspace reaches them through its monitored scope (ADR 0077). */
 public interface PullRequestReviewThreadRepository extends JpaRepository<PullRequestReviewThread, Long> {
+    @WorkspaceAgnostic(
+            "GitLab note reconciliation clears or deletes what the provider no longer lists, under one shared parent it syncs")
     @Modifying
     @Query(
             "UPDATE PullRequestReviewThread t SET t.rootComment = NULL WHERE t.pullRequest.id = :parentId AND t.rootComment.id IN :ids")
     int clearDeletedRoots(@Param("parentId") long parentId, @Param("ids") List<Long> ids);
 
+    @WorkspaceAgnostic(
+            "GitLab note reconciliation clears or deletes what the provider no longer lists, under one shared parent it syncs")
     @Modifying
     @Query(
             "DELETE FROM PullRequestReviewThread t WHERE t.pullRequest.id = :parentId AND t.id IN :ids AND NOT EXISTS (SELECT c.id FROM PullRequestReviewComment c WHERE c.thread = t)")
