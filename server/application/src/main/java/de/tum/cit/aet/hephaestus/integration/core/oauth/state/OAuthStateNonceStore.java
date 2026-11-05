@@ -81,7 +81,7 @@ public class OAuthStateNonceStore {
         if (nonce == null || nonce.isEmpty()) {
             return false;
         }
-        int updated = repository.markConsumed(
+        int updated = repository.markConsumedInWorkspace(
                 nonce,
                 Instant.now(),
                 binding.workspaceId(),

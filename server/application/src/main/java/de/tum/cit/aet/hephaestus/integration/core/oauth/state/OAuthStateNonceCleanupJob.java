@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Daily sweeper for {@link OAuthStateNonce} rows older than the configured retention
  * window (default 7 days, {@code hephaestus.integration.oauth-state.nonce-retention}).
  * With a 10-minute HMAC TTL, anything past a few hours is guaranteed unrecoverable —
- * pruning bounds storage and keeps the {@link OAuthStateNonceRepository#markConsumed}
+ * pruning bounds storage and keeps the {@link OAuthStateNonceRepository#markConsumedInWorkspace}
  * hot path cheap. {@link SchedulerLock @SchedulerLock} keeps concurrent server pods
  * from racing the DELETE.
  */
