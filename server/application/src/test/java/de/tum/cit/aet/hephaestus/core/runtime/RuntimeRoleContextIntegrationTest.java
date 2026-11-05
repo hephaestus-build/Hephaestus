@@ -12,8 +12,6 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobZombieSweeper;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
-import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesIsolationProbe;
-import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxCache;
 import de.tum.cit.aet.hephaestus.core.auth.AccountReferenceService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -58,7 +56,6 @@ import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
-import io.fabric8.kubernetes.client.KubernetesClient;
 import io.nats.client.Nats;
 import jakarta.servlet.Filter;
 import java.net.URLEncoder;
@@ -93,7 +90,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.BootstrapUtils;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -131,7 +127,7 @@ class RuntimeRoleContextIntegrationTest {
         // A valid positive pool setting must not make the database-free receiver create a DataSource.
         int maximum = role == RuntimeRole.SERVER ? 16 : 24;
         var configuration = BootstrapUtils.resolveTestContextBootstrapper(
-                        role == RuntimeRole.WORKER ? WorkerGraph.class : getClass())
+                        role == RuntimeRole.WORKER ? WorkerGraphWithoutCluster.class : getClass())
                 .buildMergedContextConfiguration();
         var runner = new WebApplicationContextRunner()
                 .withInitializer(application -> {
@@ -288,13 +284,6 @@ class RuntimeRoleContextIntegrationTest {
             }
         }
     }
-
-    @ContextConfiguration(classes = Application.class)
-    @MockitoBean(name = "sandboxKubernetesClient", types = KubernetesClient.class, enforceOverride = true)
-    @MockitoBean(
-            types = {KubernetesSandboxCache.class, KubernetesIsolationProbe.class},
-            enforceOverride = true)
-    private static class WorkerGraph {}
 
     /**
      * Slack Events stay with the webhook role, which publishes them. Interactivity belongs to the server role, which
