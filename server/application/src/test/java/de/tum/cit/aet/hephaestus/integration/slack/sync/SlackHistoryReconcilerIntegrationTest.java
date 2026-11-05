@@ -40,6 +40,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** The deletion check against real rows: what a lost deletion leaves behind, and what it must keep. */
 class SlackHistoryReconcilerIntegrationTest extends BaseIntegrationTest {
@@ -56,6 +58,9 @@ class SlackHistoryReconcilerIntegrationTest extends BaseIntegrationTest {
             SlackTs.ofInstant(NOW.minus(Duration.ofDays(90).minusHours(1)));
     private static final String WATERMARK = SlackTs.ofInstant(NOW.minus(Duration.ofDays(1)));
     private static final String RETENTION_FLOOR = SlackTs.ofInstant(NOW.minus(Duration.ofDays(180)));
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private SlackMessageRepository messages;
@@ -107,7 +112,8 @@ class SlackHistoryReconcilerIntegrationTest extends BaseIntegrationTest {
                 threads,
                 mock(SlackRosterIdentityResolver.class),
                 feedbackErasure,
-                true);
+                true,
+                new TransactionTemplate(transactionManager));
         var properties = new SlackSyncProperties("0 0 4 * * *", 10, 15, Duration.ZERO, true, 5, true, 10);
         reconciler = new SlackHistoryReconciler(
                 messages, channels, slack, ingest, properties, Clock.fixed(NOW, ZoneOffset.UTC));
