@@ -35,6 +35,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
@@ -67,6 +68,9 @@ import reactor.util.retry.Retry;
  * {@code graphql/github/fragments/CommitEnrichmentFields.graphql} and is appended verbatim, which is
  * what keeps every field name under the schema validation a checked-in document gets. SHA values are
  * validated against {@link #SHA_PATTERN} before interpolation to prevent injection.
+ * <p>
+ * <b>Transactions:</b> GitHub is asked with no transaction open. Each commit's rows are written in one short
+ * transaction: a commit whose write fails keeps no contributor row, so the next run enriches it again.
  */
 @Service
 @Slf4j
@@ -121,6 +125,7 @@ public class CommitMetadataEnrichmentService {
     private final GitHubGraphQlClientProvider graphQlClientProvider;
     private final GitHubGraphQlSyncCoordinator graphQlSyncCoordinator;
     private final GitHubExceptionClassifier exceptionClassifier;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * Tracks a commit whose {@code authors} connection overflowed the initial page.
@@ -142,6 +147,11 @@ public class CommitMetadataEnrichmentService {
      */
     private record BatchProcessingResult(
             int processedCount, List<CommitWithAuthorCursor> authorOverflows, List<CommitWithPrCursor> prOverflows) {}
+
+    /** The overflow records of one stored commit, for follow-up pagination. */
+    private record StoredCommit(
+            @Nullable CommitWithAuthorCursor authorOverflow,
+            @Nullable CommitWithPrCursor prOverflow) {}
 
     /**
      * Enriches commits with contributor data and PR links for a repository.
@@ -419,45 +429,50 @@ public class CommitMetadataEnrichmentService {
                     continue;
                 }
 
-                // Look up commit ID from database
-                var commitOpt = commitRepository.findByShaAndRepositoryId(sha, repositoryId);
-                if (commitOpt.isEmpty()) {
-                    log.debug("Commit not found in database: sha={}, repoId={}", sha, repositoryId);
+                StoredCommit stored = transactionTemplate.execute(
+                        status -> storeCommit(commitData, sha, repositoryId, nameWithOwner));
+                if (stored == null) {
                     continue;
                 }
-                Long commitId = commitOpt.get().getId();
-
-                String context = "commit " + sha.substring(0, 7) + " in " + nameWithOwner;
-
-                // Process authors and detect overflow
-                CommitWithAuthorCursor authorOverflow = processAuthors(commitData, commitId, sha, context);
-                if (authorOverflow != null) {
-                    authorOverflows.add(authorOverflow);
+                if (stored.authorOverflow() != null) {
+                    authorOverflows.add(stored.authorOverflow());
                 }
-
-                // Process committer
-                processCommitter(commitData, commitId);
-
-                // Process associated PRs and detect overflow
-                CommitWithPrCursor prOverflow =
-                        processAssociatedPullRequests(commitData, commitId, sha, repositoryId, context);
-                if (prOverflow != null) {
-                    prOverflows.add(prOverflow);
+                if (stored.prOverflow() != null) {
+                    prOverflows.add(stored.prOverflow());
                 }
-
-                // Update enrichment metadata (free data fields)
-                updateEnrichmentMetadata(commitData, commitId);
-
                 processed++;
             } catch (Exception e) {
-                log.debug(
-                        "Failed to process metadata for commit: sha={}, error={}",
+                // The commit keeps no contributor row and is enriched again next run; warn so a repeat is visible.
+                log.warn(
+                        "Failed to store metadata for commit, retrying next run: sha={}, error={}",
                         sha,
                         e.getClass().getSimpleName());
             }
         }
 
         return new BatchProcessingResult(processed, authorOverflows, prOverflows);
+    }
+
+    /**
+     * Stores one commit's contributors, pull request links and metadata. The caller runs it in one transaction.
+     *
+     * @return the commit's overflow records, or {@code null} if the commit is not in the database
+     */
+    private @Nullable StoredCommit storeCommit(
+            Map<String, Object> commitData, String sha, Long repositoryId, String nameWithOwner) {
+        var commitOpt = commitRepository.findByShaAndRepositoryId(sha, repositoryId);
+        if (commitOpt.isEmpty()) {
+            log.debug("Commit not found in database: sha={}, repoId={}", sha, repositoryId);
+            return null;
+        }
+        Long commitId = commitOpt.get().getId();
+        String context = "commit " + sha.substring(0, 7) + " in " + nameWithOwner;
+
+        CommitWithAuthorCursor authorOverflow = processAuthors(commitData, commitId, sha, context);
+        processCommitter(commitData, commitId);
+        CommitWithPrCursor prOverflow = processAssociatedPullRequests(commitData, commitId, sha, repositoryId, context);
+        updateEnrichmentMetadata(commitData, commitId);
+        return new StoredCommit(authorOverflow, prOverflow);
     }
 
     /**

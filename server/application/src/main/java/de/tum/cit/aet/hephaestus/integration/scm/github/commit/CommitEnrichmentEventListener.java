@@ -21,6 +21,10 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * <p>Only fires for <em>webhook</em>-originated events. Sync-originated commits
  * are already enriched by {@code GitHubDataSyncService} at the end of each sync
  * cycle, so triggering enrichment again would be redundant.
+ *
+ * <p>It runs with no transaction, because enrichment asks GitHub. The service writes each commit in its own
+ * short transaction. A lost enrichment is repaired by the next sync, which enriches every commit without
+ * contributor rows.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -30,7 +34,7 @@ public class CommitEnrichmentEventListener {
     private final CommitMetadataEnrichmentService commitMetadataEnrichmentService;
 
     @Async
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCommitCreated(ScmDomainEvent.CommitCreated event) {
         var context = event.context();
