@@ -1969,3 +1969,103 @@ tests:
       - eval_time: 400m
         alertname: HephaestusActivityLatencyBudgetBurnSlow
         exp_alerts: []
+
+  - name: a deadlock fires for 15 minutes, a database without one stays quiet
+    interval: 1m
+    input_series:
+      - series: 'pg_stat_database_deadlocks{job="postgresql",instance="postgresql-exporter:9187",namespace="hephaestus",datid="16384",datname="hephaestus"}'
+        values: "0x10 1x30"
+      - series: 'pg_stat_database_deadlocks{job="postgresql",instance="postgresql-exporter:9187",namespace="hephaestus",datid="5",datname="postgres"}'
+        values: "0x40"
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: HephaestusDatabaseDeadlocks
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: HephaestusDatabaseDeadlocks
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: hephaestus
+              datname: hephaestus
+            exp_annotations:
+              summary: PostgreSQL broke a deadlock in the last 15 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 40m
+        alertname: HephaestusDatabaseDeadlocks
+        exp_alerts: []
+
+  - name: a transaction open for 10 minutes fires, one open for 4 minutes does not
+    interval: 1m
+    input_series:
+      - series: 'pg_long_running_transactions_oldest_timestamp_seconds{job="postgresql",instance="postgresql-exporter:9187",namespace="hephaestus"}'
+        values: "0 60 120 180 240 0 0 0 0 0 60+60x15"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusDatabaseTransactionOpenLong
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: HephaestusDatabaseTransactionOpenLong
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: hephaestus
+            exp_annotations:
+              summary: A database transaction has been open for more than 5 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a large table with a quarter dead rows fires, a small one and a vacuumed one do not
+    interval: 5m
+    input_series:
+      - series: 'pg_stat_user_tables_n_dead_tup{job="postgresql",instance="postgresql-exporter:9187",namespace="hephaestus",datname="hephaestus",schemaname="public",relname="issue"}'
+        values: "50000x20"
+      - series: 'pg_stat_user_tables_n_live_tup{job="postgresql",instance="postgresql-exporter:9187",namespace="hephaestus",datname="hephaestus",schemaname="public",relname="issue"}'
+        values: "200000x20"
+      - series: 'pg_stat_user_tables_n_dead_tup{job="postgresql",instance="postgresql-exporter:9187",namespace="hephaestus",datname="hephaestus",schemaname="public",relname="label"}'
+        values: "900x20"
+      - series: 'pg_stat_user_tables_n_live_tup{job="postgresql",instance="postgresql-exporter:9187",namespace="hephaestus",datname="hephaestus",schemaname="public",relname="label"}'
+        values: "100x20"
+      - series: 'pg_stat_user_tables_n_dead_tup{job="postgresql",instance="postgresql-exporter:9187",namespace="hephaestus",datname="hephaestus",schemaname="public",relname="commit"}'
+        values: "20000x20"
+      - series: 'pg_stat_user_tables_n_live_tup{job="postgresql",instance="postgresql-exporter:9187",namespace="hephaestus",datname="hephaestus",schemaname="public",relname="commit"}'
+        values: "1000000x20"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HephaestusDatabaseDeadRowsHigh
+        exp_alerts: []
+      - eval_time: 90m
+        alertname: HephaestusDatabaseDeadRowsHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: postgresql
+              instance: postgresql-exporter:9187
+              namespace: hephaestus
+              datname: hephaestus
+              schemaname: public
+              relname: issue
+            exp_annotations:
+              summary: A table has held more than 20 % dead rows for an hour, so autovacuum does not keep up
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a transaction ID age past 1 billion is critical, a frozen database is quiet
+    interval: 5m
+    input_series:
+      - series: 'pg_database_wraparound_age_datfrozenxid_seconds{job="postgresql",instance="postgresql-exporter:9187",namespace="hephaestus",datname="hephaestus"}'
+        values: "1100000000x10"
+      - series: 'pg_database_wraparound_age_datfrozenxid_seconds{job="postgresql",instance="postgresql-exporter:9187",namespace="hephaestus",datname="postgres"}'
+        values: "200000000x10"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusDatabaseTransactionIdAgeHigh
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: HephaestusDatabaseTransactionIdAgeHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: hephaestus
+              datname: hephaestus
+            exp_annotations:
+              summary: A database's oldest unfrozen transaction ID is more than 1 billion old
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response

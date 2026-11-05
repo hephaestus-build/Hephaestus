@@ -480,6 +480,47 @@ groups:
         annotations:
           summary: Feedback on the work has waited more than two hours for its first posted copy
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+  # postgres_exporter of postgresql.metrics (docs/admin/observability.mdx, Database metrics). Without the
+  # exporter these series do not exist, and the rules stay silent.
+  - name: hephaestus-postgresql
+    rules:
+      # PostgreSQL broke a deadlock by cancelling one of the transactions, which the role then retried or failed.
+      - alert: HephaestusDatabaseDeadlocks
+        expr: sum by (namespace, datname) (increase(pg_stat_database_deadlocks{job="postgresql"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: PostgreSQL broke a deadlock in the last 15 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # An open transaction holds back autovacuum for every table and can hold locks that others wait for.
+      - alert: HephaestusDatabaseTransactionOpenLong
+        expr: max by (namespace) (pg_long_running_transactions_oldest_timestamp_seconds{job="postgresql"}) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A database transaction has been open for more than 5 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # The floor keeps a small table, where a few deleted rows are a large share, quiet.
+      - alert: HephaestusDatabaseDeadRowsHigh
+        expr: >-
+          pg_stat_user_tables_n_dead_tup{job="postgresql"} > 10000
+          and pg_stat_user_tables_n_dead_tup{job="postgresql"} > 0.2 * pg_stat_user_tables_n_live_tup{job="postgresql"}
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: A table has held more than 20 % dead rows for an hour, so autovacuum does not keep up
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # PostgreSQL stops writes at about 2 billion. Autovacuum freezes old rows long before 1 billion.
+      - alert: HephaestusDatabaseTransactionIdAgeHigh
+        expr: max by (namespace, datname) (pg_database_wraparound_age_datfrozenxid_seconds{job="postgresql"}) > 1e9
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: A database's oldest unfrozen transaction ID is more than 1 billion old
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
   - name: hephaestus-kubernetes
     rules:
       - alert: HephaestusWebhookReceiverDown
