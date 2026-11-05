@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.metrics.ReviewStageTelemetry;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -81,10 +82,12 @@ final class ReviewJobTelemetry {
     private final Tracer tracer;
     private final MeterRegistry registry;
     private final Timer claimLatency;
+    private final ReviewStageTelemetry stages;
 
     ReviewJobTelemetry(MeterRegistry registry, Tracer tracer) {
         this.tracer = tracer;
         this.registry = registry;
+        stages = new ReviewStageTelemetry(registry, tracer);
         claimLatency = Timer.builder(AgentMetrics.AGENT_JOB_CLAIM_LATENCY)
                 .description("Time between job submission and its claim")
                 .register(registry);
@@ -107,6 +110,11 @@ final class ReviewJobTelemetry {
                             .tag("outcome", outcome.tag)
                             .register(registry));
         }
+    }
+
+    /** Starts a stage of the attempt on this thread, as a child span of the execution. */
+    ReviewStageTelemetry.Running stage(ReviewStageTelemetry.Stage stage) {
+        return stages.start(stage);
     }
 
     void claimWait(Duration duration) {

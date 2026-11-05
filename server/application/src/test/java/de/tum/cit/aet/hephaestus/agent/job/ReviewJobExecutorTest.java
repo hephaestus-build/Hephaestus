@@ -284,6 +284,14 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         assertThat(meters.get("agent.job.server.error").counter().count()).isEqualTo(1);
         assertThat(requeued("sandbox")).isZero();
         assertThat(requeued("server_unreachable")).isZero();
+        assertThat(stageCount("sandbox", "failed")).isEqualTo(1);
+    }
+
+    private long stageCount(String stage, String outcome) {
+        return meters.get("agent.job.stage.duration")
+                .tags("stage", stage, "outcome", outcome)
+                .timer()
+                .count();
     }
 
     private double requeuedAfterExit(int exitCode, String cause) {
@@ -551,6 +559,9 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         order.verify(kept).forget(job);
         verify(usageRecorder).project(eq(job.getWorkspaceId()), any());
         verify(practiceScriptRuns).record(eq(job), aryEq(scriptReport()), any(), any());
+        // This run exits 1 although it admitted results, so its sandbox stage reads as failed.
+        assertThat(stageCount("sandbox", "failed")).isEqualTo(1);
+        assertThat(stageCount("composition", "ok")).isEqualTo(1);
     }
 
     @Test
@@ -928,6 +939,9 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
         verify(recovery).recover(job.getId(), Objects.requireNonNull(job.getLeaseId()), 1, null);
         verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
+        // A resumed attempt composes without a capture or a sandbox of its own.
+        assertThat(stageCount("composition", "handed_on")).isEqualTo(1);
+        assertThat(stageCount("sandbox", "ok") + stageCount("capture", "ok")).isZero();
     }
 
     @Test

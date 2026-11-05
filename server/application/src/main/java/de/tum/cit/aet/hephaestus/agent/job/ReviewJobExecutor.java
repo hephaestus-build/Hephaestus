@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.metrics.ReviewStageTelemetry;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
@@ -951,11 +952,20 @@ public class ReviewJobExecutor {
     ReviewJobStatus executePrepared(UUID jobId, ReviewJob job, SandboxSpec sandboxSpec) {
         int endedBefore = handler.endedPractices(job);
         SandboxResult result;
+        var sandbox = jobTelemetry.stage(ReviewStageTelemetry.Stage.SANDBOX);
         try {
             result = sandboxManager.execute(sandboxSpec);
         } catch (SandboxCapacityException e) {
+            sandbox.discard();
             return withoutRoom(jobId, job, e);
+        } catch (RuntimeException failed) {
+            sandbox.end(ReviewStageTelemetry.Outcome.FAILED);
+            throw failed;
         }
+        sandbox.end(
+                result.exitCode() == 0 && !result.timedOut()
+                        ? ReviewStageTelemetry.Outcome.OK
+                        : ReviewStageTelemetry.Outcome.FAILED);
         AgentResult agentResult = practiceAgent.parseResult(result);
 
         ReviewJob retained;
@@ -1057,13 +1067,16 @@ public class ReviewJobExecutor {
         Instant notAfter = Objects.requireNonNullElseGet(anchor, Instant::now)
                 .plusSeconds(snapshot.timeoutSeconds())
                 .plus(ReviewJobZombieSweeper.RUNNING_BUFFER);
+        var composition = jobTelemetry.stage(ReviewStageTelemetry.Stage.COMPOSITION);
         try {
             if (withholdOnly != null) composer.withholdResumed(current, lease, withholdOnly);
             else if (resumed) composer.composeResumed(current, lease, notAfter);
             else composer.composeAfterMeasurement(current, lease, notAfter);
         } catch (ResultAdmissionService.StaleAttemptException lost) {
+            composition.end(ReviewStageTelemetry.Outcome.FAILED);
             log.info("Feedback composition stopped: the attempt no longer holds its lease: jobId={}", jobId);
         } catch (CompositionHandedOnException handedOn) {
+            composition.end(ReviewStageTelemetry.Outcome.HANDED_ON);
             log.warn(
                     "Feedback composition is handed on to another attempt: jobId={}, cause={}",
                     jobId,
@@ -1071,10 +1084,12 @@ public class ReviewJobExecutor {
             handOn(current, snapshot, scriptReport);
             return false;
         } catch (RuntimeException failed) {
+            composition.end(ReviewStageTelemetry.Outcome.FAILED);
             log.warn("Feedback composition failed, so the attempt is handed on: jobId={}", jobId, failed);
             handOn(current, snapshot, scriptReport);
             return false;
         }
+        composition.end(ReviewStageTelemetry.Outcome.OK);
         return true;
     }
 
@@ -1160,7 +1175,19 @@ public class ReviewJobExecutor {
             handler.completeWithoutExecution(ownRow(jobId));
             return new PreparedSandbox(null, new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
         }
-        PreparedJobInputs preparedInputs = handler.prepareInputs(ownRow(jobId));
+        var capture = jobTelemetry.stage(ReviewStageTelemetry.Stage.CAPTURE);
+        PreparedJobInputs preparedInputs;
+        try {
+            preparedInputs = handler.prepareInputs(ownRow(jobId));
+        } catch (InsufficientEvidenceException refused) {
+            // The capture ran and found too little evidence; the attempt ends with that, not with a fault.
+            capture.end(ReviewStageTelemetry.Outcome.OK);
+            throw refused;
+        } catch (RuntimeException failed) {
+            capture.end(ReviewStageTelemetry.Outcome.FAILED);
+            throw failed;
+        }
+        capture.end(ReviewStageTelemetry.Outcome.OK);
 
         try {
             var report = preparedInputs.automatedReviewReadinessReport();
