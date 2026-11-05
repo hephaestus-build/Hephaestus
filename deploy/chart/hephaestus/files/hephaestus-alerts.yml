@@ -333,6 +333,19 @@ groups:
         annotations:
           summary: The API answers with server errors fast enough to spend its monthly error budget in five days
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # The ticket window: a burn rate of 1 over three days spends 10 % of the budget. It finds a slow leak that
+      # neither page window sees, and is work for the next working day.
+      - alert: HephaestusApiErrorBudgetBurnTicket
+        expr: >-
+          (sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*",status=~"5.."}[3d])) / sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*"}[3d]))) > 0.005
+          and (sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*",status=~"5.."}[6h])) / sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*"}[6h]))) > 0.005
+          and sum(increase(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*"}[3d])) >= 1000
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: The API answered with server errors for three days at a rate that spends its monthly error budget
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusApiLatencyBudgetBurnFast
         expr: >-
           (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download|.*/export|.*/sarif",le="2.0"}[1h])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download|.*/export|.*/sarif",le="+Inf"}[1h]))) > 14.4 * 0.005
@@ -354,6 +367,17 @@ groups:
           severity: warning
         annotations:
           summary: API reads take longer than 2 seconds often enough to spend the monthly budget in five days
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusApiLatencyBudgetBurnTicket
+        expr: >-
+          (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download|.*/export|.*/sarif",le="2.0"}[3d])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download|.*/export|.*/sarif",le="+Inf"}[3d]))) > 0.005
+          and (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download|.*/export|.*/sarif",le="2.0"}[6h])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download|.*/export|.*/sarif",le="+Inf"}[6h]))) > 0.005
+          and sum(increase(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download|.*/export|.*/sarif",le="+Inf"}[3d])) >= 1000
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: API reads took longer than 2 seconds for three days often enough to spend the monthly budget
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # Activity reads: 95 % within 1 s. The Activity route templates are the workspace and public activity routes.
       - alert: HephaestusActivityLatencyBudgetBurnFast
@@ -424,6 +448,18 @@ groups:
           severity: warning
         annotations:
           summary: Fewer than 75 % of page loads showed their main content within 2.5 seconds over six hours
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # The weekly ticket: a small instance seldom has 50 loads in six hours, so the six-hour alert stays silent.
+      - alert: HephaestusPageExperiencePoorWeekly
+        expr: >-
+          sum(rate(web_vital_duration_seconds_bucket{job="hephaestus",vital="lcp",le="2.5"}[7d]))
+          / sum(rate(web_vital_duration_seconds_count{job="hephaestus",vital="lcp"}[7d])) < 0.75
+          and sum(increase(web_vital_duration_seconds_count{job="hephaestus",vital="lcp"}[7d])) >= 50
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: Fewer than 75 % of page loads showed their main content within 2.5 seconds over seven days
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # An item review that does not end complete leaves a developer without feedback for part of its practices.
       # Readiness waits and budget stops are decisions of policy with their own signals, so they count on neither side.

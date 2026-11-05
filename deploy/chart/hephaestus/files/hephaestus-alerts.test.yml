@@ -2071,3 +2071,117 @@ tests:
             exp_annotations:
               summary: A database's oldest unfrozen transaction ID is more than 1 billion old
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  # Each long-window case evaluates soon after its rule can fire. rate() divides the errors and the requests by the
+  # same window, so a ratio over three or seven days needs only the hours that the series covers. A series of days
+  # would cost promtool an evaluation of every rule at each minute of them.
+  - name: server errors at 0.6 % open a ticket, 0.4 % does not
+    interval: 10m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team"}'
+        values: "0+994x15"
+      - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="500",uri="/workspaces/{workspaceSlug}/team"}'
+        values: "0+6x15"
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: HephaestusApiErrorBudgetBurnTicket
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The API answered with server errors for three days at a rate that spends its monthly error budget
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # The page windows stay silent: 0.6 % is far below a fast or a slow burn.
+      - eval_time: 2h
+        alertname: HephaestusApiErrorBudgetBurnSlow
+        exp_alerts: []
+
+  - name: an error rate within the budget, or an idle instance, opens no ticket
+    interval: 10m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team"}'
+        values: "0+996x15"
+      - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="500",uri="/workspaces/{workspaceSlug}/team"}'
+        values: "0+4x15"
+      - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server-b:9090",runtime_role="server",method="GET",status="500",uri="/idle"}'
+        values: "0x15"
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: HephaestusApiErrorBudgetBurnTicket
+        exp_alerts: []
+
+  - name: slow reads at 0.6 % open a ticket, 0.3 % does not
+    interval: 10m
+    input_series:
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="2.0"}'
+        values: "0+994x15"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="+Inf"}'
+        values: "0+1000x15"
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: HephaestusApiLatencyBudgetBurnTicket
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: API reads took longer than 2 seconds for three days often enough to spend the monthly budget
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: slow reads within the budget open no ticket
+    interval: 10m
+    input_series:
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="2.0"}'
+        values: "0+997x15"
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="+Inf"}'
+        values: "0+1000x15"
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: HephaestusApiLatencyBudgetBurnTicket
+        exp_alerts: []
+
+  - name: slow page loads on a quiet instance open a weekly ticket that the six-hour alert misses
+    interval: 30m
+    input_series:
+      # Seven loads an hour: 63 by the evaluation, so the weekly floor of 50 holds, but 42 in six hours, under the
+      # six-hour alert's floor.
+      - series: 'web_vital_duration_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",vital="lcp",page="activity",region="eu",le="2.5"}'
+        values: "0+2.1x20"
+      - series: 'web_vital_duration_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",vital="lcp",page="activity",region="eu"}'
+        values: "0+3.5x20"
+    alert_rule_test:
+      - eval_time: 9h
+        alertname: HephaestusPageExperiencePoorWeekly
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Fewer than 75 % of page loads showed their main content within 2.5 seconds over seven days
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 9h
+        alertname: HephaestusPageExperiencePoor
+        exp_alerts: []
+
+  - name: fast page loads open no ticket
+    interval: 30m
+    input_series:
+      - series: 'web_vital_duration_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",vital="lcp",page="activity",region="eu",le="2.5"}'
+        values: "0+3.15x20"
+      - series: 'web_vital_duration_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",vital="lcp",page="activity",region="eu"}'
+        values: "0+3.5x20"
+    alert_rule_test:
+      - eval_time: 9h
+        alertname: HephaestusPageExperiencePoorWeekly
+        exp_alerts: []
+
+  - name: slow page loads below 50 in a week open no ticket
+    interval: 30m
+    input_series:
+      # One load each five hours: 2 by the evaluation, all slow.
+      - series: 'web_vital_duration_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",vital="lcp",page="team",region="eu",le="2.5"}'
+        values: "0x20"
+      - series: 'web_vital_duration_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",vital="lcp",page="team",region="eu"}'
+        values: "0+0.1x20"
+    alert_rule_test:
+      - eval_time: 9h
+        alertname: HephaestusPageExperiencePoorWeekly
+        exp_alerts: []
