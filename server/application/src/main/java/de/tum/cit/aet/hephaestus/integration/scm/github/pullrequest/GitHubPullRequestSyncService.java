@@ -51,6 +51,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -390,6 +391,24 @@ public class GitHubPullRequestSyncService {
                     reportedTotalCount = connection.getTotalCount();
                 }
 
+                // The remaining comments of every embedded thread are read from GitHub before the page's
+                // transaction opens, so that transaction only writes.
+                List<PullRequestWithReviewThreads> pullRequests = new ArrayList<>();
+                Map<String, SyncResult.Status> threadReads = new HashMap<>();
+                for (var graphQlPullRequest : connection.getNodes()) {
+                    PullRequestWithReviewThreads prWithReviews =
+                            PullRequestWithReviewThreads.fromPullRequest(graphQlPullRequest);
+                    if (prWithReviews == null || prWithReviews.pullRequest() == null) {
+                        continue;
+                    }
+                    pullRequests.add(prWithReviews);
+                    for (GitHubReviewThreadDTO thread :
+                            prWithReviews.embeddedReviewThreads().threads()) {
+                        threadReads.put(
+                                thread.nodeId(), reviewCommentSyncService.completeThreadComments(thread, scopeId));
+                    }
+                }
+
                 // Process the page within its own transaction to keep transactions short.
                 final Long repoId = repositoryId;
                 PageSyncResult pageResult = transactionTemplate.execute(status -> {
@@ -404,7 +423,8 @@ public class GitHubPullRequestSyncService {
                     ProcessingContext context =
                             ProcessingContext.forSync(scopeId, repo).withObservedAt(fetchedAt);
                     return processPullRequestPage(
-                            connection,
+                            pullRequests,
+                            threadReads,
                             context,
                             scopeId,
                             prsNeedingReviewPagination,
@@ -800,7 +820,8 @@ public class GitHubPullRequestSyncService {
      * and review threads.
      */
     private PageSyncResult processPullRequestPage(
-            GHPullRequestConnection connection,
+            List<PullRequestWithReviewThreads> pullRequests,
+            Map<String, SyncResult.Status> threadReads,
             ProcessingContext context,
             Long scopeId,
             List<PullRequestWithReviewCursor> prsNeedingReviewPagination,
@@ -812,13 +833,7 @@ public class GitHubPullRequestSyncService {
         int reviewCommentsSynced = 0;
         int commentsSynced = 0;
 
-        for (var graphQlPullRequest : connection.getNodes()) {
-            PullRequestWithReviewThreads prWithReviews =
-                    PullRequestWithReviewThreads.fromPullRequest(graphQlPullRequest);
-            if (prWithReviews == null || prWithReviews.pullRequest() == null) {
-                continue;
-            }
-
+        for (PullRequestWithReviewThreads prWithReviews : pullRequests) {
             PullRequest entity = pullRequestProcessor.process(prWithReviews.pullRequest(), context);
             if (entity == null) {
                 continue;
@@ -858,7 +873,11 @@ public class GitHubPullRequestSyncService {
             EmbeddedReviewThreadsDTO embeddedThreads = prWithReviews.embeddedReviewThreads();
             boolean threadsWhole = true;
             for (GitHubReviewThreadDTO thread : embeddedThreads.threads()) {
-                var read = reviewCommentSyncService.processThread(thread, entity, scopeId);
+                var read = reviewCommentSyncService.processThread(
+                        thread,
+                        entity,
+                        scopeId,
+                        threadReads.getOrDefault(thread.nodeId(), SyncResult.Status.COMPLETED));
                 reviewCommentsSynced += read.comments();
                 threadsWhole &= read.whole();
                 if (!read.whole()) discussionReads.stop(entity.getId(), read.read());
