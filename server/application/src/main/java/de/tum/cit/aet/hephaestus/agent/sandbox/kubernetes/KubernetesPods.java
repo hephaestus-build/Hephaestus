@@ -79,10 +79,16 @@ public class KubernetesPods {
     public static final String ISOLATION = "isolation";
 
     /** The workspace initializer of a review or host Pod: an init container on the attempt volumes. */
-    public static final String INITIALIZER = "initialize";
+    public static final String INITIALIZER = "workspace";
 
-    /** The review's or host's process. */
-    public static final String RUNTIME = "runtime";
+    /** The review's or host's trusted process. It alone holds the attempt's credential. */
+    public static final String LOOP = "loop";
+
+    /** A review's native sidecar: it runs every untrusted command, with no credential. */
+    public static final String TOOLS = "tools";
+
+    /** A review's native sidecar for custom practice programs: out of reach of the commands in {@link #TOOLS}. */
+    public static final String PROGRAMS = "programs";
 
     /** A turn sandbox's container, which runs every untrusted command. */
     public static final String SANDBOX = "sandbox";
@@ -95,7 +101,22 @@ public class KubernetesPods {
     /** Not the sandbox user: no untrusted process can signal or trace the stager's processes. */
     static final long STAGER_UID = 1001;
 
+    /** Not the loop's user: a tools command cannot signal, trace or read the loop. */
+    static final long TOOLS_UID = 1001;
+
+    /** Not the tools user: a tools command cannot trace or rewrite a program, whose result the loop trusts. */
+    static final long PROGRAMS_UID = 1002;
+
     static final String WORKSPACE = "/workspace";
+
+    /** Where the tools side listens: a volume of the loop and the tools alone. */
+    static final String TOOLS_SOCKET = "/run/tools/tools.sock";
+
+    /** Where the program side listens. Only the loop and the programs mount it: the boundary is the missing mount. */
+    static final String PROGRAMS_SOCKET = "/run/programs/programs.sock";
+
+    /** Starts the tools program under its system call filter, on either side. */
+    static final List<String> TOOLS_COMMAND = List.of("sh", "/opt/pi-sdk/tools-launch.sh");
 
     /**
      * The attempt workspace, one volume per path: the initializer writes all of them,
@@ -160,6 +181,21 @@ public class KubernetesPods {
     private static final long LOG_BYTES = 64 * MIB;
 
     private static final long SIDE_LOG_BYTES = 16 * MIB;
+
+    /** A socket file and nothing else: the smallest memory volume. */
+    private static final long SOCKET_BYTES = MIB;
+
+    /** One side beyond the loop. Its own limit: a memory kill of the tools never takes the loop. */
+    private static final ResourceRequirements SIDECAR_RESOURCES = new ResourceRequirementsBuilder()
+            .withLimits(Map.of(
+                    "cpu", new Quantity("1"),
+                    "memory", bytes(768 * MIB),
+                    "ephemeral-storage", bytes(SandboxLayout.SCRATCH_BYTES + SIDE_LOG_BYTES)))
+            .withRequests(Map.of(
+                    "cpu", new Quantity("25m"),
+                    "memory", bytes(128 * MIB),
+                    "ephemeral-storage", bytes(SIDE_LOG_BYTES)))
+            .build();
 
     /**
      * The memory that one kind of sandbox Pod requests and may use, and its local disk. Kubernetes sizes its sandbox
@@ -234,6 +270,9 @@ public class KubernetesPods {
      */
     static final List<String> RLIMITS = List.of("/usr/bin/prlimit", "--nofile=1024:1024", "--core=0:0", "--");
 
+    /** A review's two sides beyond the loop: the nonce that binds them to this Pod, and whether it runs programs. */
+    public record Sidecars(String nonce, boolean programs) {}
+
     /** Waiting reasons from which a container does not start on its own. */
     private static final Set<String> FATAL_WAITING = Set.of(
             "ErrImageNeverPull",
@@ -291,7 +330,8 @@ public class KubernetesPods {
             Map<String, String> environment,
             List<String> command,
             ResourceLimits limits,
-            Size size) {
+            Size size,
+            @Nullable Sidecars sidecars) {
         List<EnvVar> env = new TreeMap<>(environment)
                 .entrySet().stream()
                         .map(entry -> new EnvVarBuilder()
@@ -309,19 +349,60 @@ public class KubernetesPods {
                 .withVolumeMounts(attemptMounts(false))
                 .withResources(resources)
                 .build();
-        Container runtime = base(RUNTIME, workload.image(), SANDBOX_UID)
+        List<EnvVar> loopEnv = new ArrayList<>(env);
+        List<VolumeMount> loopMounts = attemptMounts(true);
+        List<Container> inits = new ArrayList<>(List.of(isolation(workload.image()), initializer));
+        if (sidecars != null) {
+            loopEnv.add(variable("TOOLS_SOCKET", TOOLS_SOCKET));
+            loopEnv.add(variable("TOOLS_NONCE", sidecars.nonce()));
+            volumes.add(memoryVolume("tools-socket", SOCKET_BYTES));
+            volumes.add(diskVolume("tools-tmp", size.volumeBytes()));
+            loopMounts.add(mount("tools-socket", "/run/tools", false));
+            inits.add(sidecar(workload, TOOLS, TOOLS_UID, TOOLS_SOCKET, sidecars.nonce(), "tools"));
+            if (sidecars.programs()) {
+                loopEnv.add(variable("PROGRAMS_SOCKET", PROGRAMS_SOCKET));
+                volumes.add(memoryVolume("programs-socket", SOCKET_BYTES));
+                volumes.add(diskVolume("programs-tmp", size.volumeBytes()));
+                loopMounts.add(mount("programs-socket", "/run/programs", false));
+                inits.add(sidecar(workload, PROGRAMS, PROGRAMS_UID, PROGRAMS_SOCKET, sidecars.nonce(), "programs"));
+            }
+        }
+        Container loop = base(LOOP, workload.image(), SANDBOX_UID)
                 .withCommand(limited(command))
-                .withEnv(env)
-                .withVolumeMounts(attemptMounts(true))
+                .withEnv(loopEnv)
+                .withVolumeMounts(loopMounts)
                 .withResources(resources)
                 .build();
         return pod(workload, SANDBOX_UID, null)
                 .editSpec()
-                .withInitContainers(isolation(workload.image()), initializer)
-                .withContainers(runtime)
+                .withInitContainers(inits)
+                .withContainers(loop)
                 .withVolumes(volumes)
                 .endSpec()
                 .build();
+    }
+
+    /**
+     * A native sidecar: an init container that stays up beside the loop. It gets the nonce and its socket and no other
+     * variable, so the attempt's credential never reaches it. It mounts the workspace read-only and has its own {@code
+     * /tmp}; the loop's {@code out}, {@code .pi} and {@code .sessions} are not mounted at all.
+     */
+    private Container sidecar(Workload workload, String name, long uid, String socket, String nonce, String role) {
+        return base(name, workload.image(), uid)
+                .withRestartPolicy("Always")
+                .withCommand(limited(TOOLS_COMMAND))
+                .withEnv(variable("TOOLS_NONCE", nonce), variable("TOOLS_SOCKET", socket), variable("TOOLS_ROLE", role))
+                .withVolumeMounts(
+                        mount("workspace", WORKSPACE, true),
+                        mount("work", "/workspace/work", true),
+                        mount(name + "-socket", socket.substring(0, socket.lastIndexOf('/')), false),
+                        mount(name + "-tmp", "/tmp", false))
+                .withResources(SIDECAR_RESOURCES)
+                .build();
+    }
+
+    private static EnvVar variable(String name, String value) {
+        return new EnvVarBuilder().withName(name).withValue(value).build();
     }
 
     /**
@@ -378,7 +459,7 @@ public class KubernetesPods {
             long memoryBytes,
             long activeDeadlineSeconds) {
         Size size = probeSize(limits, memoryBytes);
-        Container probe = base(RUNTIME, workload.image(), SANDBOX_UID)
+        Container probe = base(LOOP, workload.image(), SANDBOX_UID)
                 .withCommand(command)
                 .withVolumeMounts(scratchMounts())
                 .withResources(resources(limits, size))
@@ -852,7 +933,7 @@ public class KubernetesPods {
     }
 
     static boolean runtimeEnded(Pod pod) {
-        return terminal(pod) || exitCode(pod, RUNTIME) != null || fatalWaiting(pod) != null;
+        return terminal(pod) || exitCode(pod, LOOP) != null || fatalWaiting(pod) != null;
     }
 
     private static @Nullable ContainerStatus status(Pod pod, String container) {

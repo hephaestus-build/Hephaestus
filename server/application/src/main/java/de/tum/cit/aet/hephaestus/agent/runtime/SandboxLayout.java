@@ -103,6 +103,11 @@ public final class SandboxLayout {
      */
     public static final String PRACTICE_SCRIPT_PRACTICES_PREFIX = PRACTICE_SCRIPT_PREFIX + "practices/";
 
+    /** Whether a staged path is a practice's program. A built-in practice stages its inputs and no program. */
+    public static boolean isPracticeProgram(String path) {
+        return path.startsWith(PRACTICE_SCRIPT_PRACTICES_PREFIX) && path.endsWith(".ts");
+    }
+
     public static final String PRACTICE_SCRIPT_LIBRARY_LINK = PRACTICE_SCRIPT_PREFIX + "lib";
 
     public static final String PRACTICE_SCRIPT_INPUTS_SUFFIX = ".inputs.json";

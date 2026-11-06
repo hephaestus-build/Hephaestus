@@ -590,12 +590,12 @@ class KubernetesSandboxLiveTest {
             String jobUid = job.getMetadata().getUid();
             Pod pod = awaitPodOf(
                     job,
-                    candidate -> KubernetesPods.running(candidate, KubernetesPods.RUNTIME)
+                    candidate -> KubernetesPods.running(candidate, KubernetesPods.LOOP)
                             || KubernetesPods.terminal(candidate),
                     running);
             log.info("TIMING review Job created to its Pod's runtime running: {} ms", millis(started));
             requireControlledBy(pod, job);
-            assertThat(KubernetesPods.running(pod, KubernetesPods.RUNTIME))
+            assertThat(KubernetesPods.running(pod, KubernetesPods.LOOP))
                     .as("the runtime runs")
                     .isTrue();
             requireCustody(pod, KubernetesWorker.KIND_REVIEW);
@@ -603,9 +603,8 @@ class KubernetesSandboxLiveTest {
                     .containsEntry(KubernetesWorker.JOB_ID, jobId.toString())
                     .containsEntry(KubernetesWorker.JOB_ATTEMPT, "0");
             requireHardened(pod);
-            requireBounds(
-                    container(pod.getSpec().getContainers(), KubernetesPods.RUNTIME), limits, KubernetesPods.REVIEW);
-            requirePinnedImageRan(pod, KubernetesPods.RUNTIME);
+            requireBounds(container(pod.getSpec().getContainers(), KubernetesPods.LOOP), limits, KubernetesPods.REVIEW);
+            requirePinnedImageRan(pod, KubernetesPods.LOOP);
             assertThat(pod.getStatus().getQosClass())
                     .as("its whole memory requested, a share of CPU")
                     .isEqualTo("Burstable");
@@ -646,7 +645,7 @@ class KubernetesSandboxLiveTest {
             Future<SandboxResult> running =
                     executor.submit(() -> reviews.execute(review(jobId, "sleep 600", Map.of(), limits)));
             Job job = awaitJob(name, running);
-            Pod pod = awaitPodOf(job, candidate -> KubernetesPods.running(candidate, KubernetesPods.RUNTIME), running);
+            Pod pod = awaitPodOf(job, candidate -> KubernetesPods.running(candidate, KubernetesPods.LOOP), running);
 
             new KubernetesSandboxBackend(
                             pods,
@@ -818,8 +817,7 @@ class KubernetesSandboxLiveTest {
             assertThat(pod.getMetadata().getLabels())
                     .containsEntry(KubernetesWorker.SESSION_ID, host.id().toString());
             requireHardened(pod);
-            requireBounds(
-                    container(pod.getSpec().getContainers(), KubernetesPods.RUNTIME), limits, KubernetesPods.HOST);
+            requireBounds(container(pod.getSpec().getContainers(), KubernetesPods.LOOP), limits, KubernetesPods.HOST);
             assertThat(hosts.isRunning(host)).isTrue();
             // The host API returns no output: the Pod's log is where its process reports.
             assertThat(awaitLog(name, expected, Duration.ofMinutes(1)))
@@ -1295,7 +1293,8 @@ class KubernetesSandboxLiveTest {
                 Map.of(),
                 List.of("sh", "-c", script),
                 limits(Duration.ofMinutes(5)),
-                KubernetesPods.REVIEW);
+                KubernetesPods.REVIEW,
+                null);
         // The initializer stays, so that it makes the runtime's mount points, but fills nothing.
         Pod runtimeOnly = new PodBuilder(reviewPod)
                 .editSpec()
@@ -1357,10 +1356,10 @@ class KubernetesSandboxLiveTest {
     /** The container's log once it holds {@code expected}, or as it is at the timeout. */
     private String awaitLog(String name, String expected, Duration timeout) throws InterruptedException {
         long deadline = System.nanoTime() + timeout.toNanos();
-        String text = pods.logs(name, KubernetesPods.RUNTIME);
+        String text = pods.logs(name, KubernetesPods.LOOP);
         while (!text.contains(expected) && System.nanoTime() < deadline) {
             Thread.sleep(200);
-            text = pods.logs(name, KubernetesPods.RUNTIME);
+            text = pods.logs(name, KubernetesPods.LOOP);
         }
         return text;
     }

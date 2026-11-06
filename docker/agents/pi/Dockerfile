@@ -17,9 +17,9 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 FROM dependencies AS gateway
 WORKDIR /opt/pi-sdk
 RUN pnpm install --frozen-lockfile --ignore-scripts
-COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts ./
+COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts pi/tools-seccomp.ts ./
 COPY --from=agent-runtime tool-protocol.ts tool-client.ts tools-server.ts ./
-RUN pnpm exec tsc -p tsconfig.build.json
+RUN pnpm exec tsc -p tsconfig.build.json && pnpm exec node dist/tools-seccomp.js dist
 
 # Debian 13: its fd (>= 8.7) takes the `--no-require-git` Pi's find tool passes outside a repository.
 FROM node:${NODE_VERSION}-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a AS os-packages
@@ -164,7 +164,9 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
     fi
 
 COPY --from=gateway /opt/pi-sdk/dist/ /opt/pi-sdk/
+COPY pi/tools-launch.sh /opt/pi-sdk/tools-launch.sh
 # The tools program starts with no privilege on each transport, and its client gets the Pod's nonce from `hello`.
+# A review's sides start through their filter, and a command there can open no network socket.
 RUN install -d -m 1777 /tmp/tools-check && node --input-type=module <<'CHECK' && rm -rf /tmp/tools /tmp/tools-check
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -172,11 +174,11 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { ToolClient } from "/opt/pi-sdk/tool-client.js";
 
 const nonce = "image-check";
-async function hello(address, env) {
+const privilege = ["--reuid=1001", "--regid=1001", "--clear-groups", "--no-new-privs", "--bounding-set=-all", "--inh-caps=-all"];
+async function hello(address, env, program) {
   const tools = spawn(
     "setpriv",
-    ["--reuid=1001", "--regid=1001", "--clear-groups", "--no-new-privs", "--bounding-set=-all", "--inh-caps=-all",
-      "node", "/opt/pi-sdk/tools-server.js"],
+    [...privilege, ...program],
     { env: { PATH: process.env.PATH, TOOLS_NONCE: nonce, ...env }, stdio: "inherit" },
   );
   for (let attempt = 1; ; attempt += 1) {
@@ -193,8 +195,8 @@ async function hello(address, env) {
   tools.kill();
   await once(tools, "exit");
 }
-await hello({ host: "127.0.0.1", port: 7100 }, { TOOLS_PORT: "7100" });
-await hello({ path: "/tmp/tools-check/tools.sock" }, { TOOLS_SOCKET: "/tmp/tools-check/tools.sock" });
+await hello({ host: "127.0.0.1", port: 7100 }, { TOOLS_PORT: "7100" }, ["node", "/opt/pi-sdk/tools-server.js"]);
+await hello({ path: "/tmp/tools-check/tools.sock" }, { TOOLS_SOCKET: "/tmp/tools-check/tools.sock" }, ["sh", "/opt/pi-sdk/tools-launch.sh"]);
 CHECK
 RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \

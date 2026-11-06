@@ -176,7 +176,8 @@ public class SandboxAttemptRunner implements SandboxManager {
                     command,
                     spec.resourceLimits(),
                     uploadDeadline,
-                    gateway -> environment(spec, gateway, sessionId, work, uploadDeadline)));
+                    gateway -> environment(spec, gateway, sessionId, work, uploadDeadline),
+                    spec.inputFiles().keySet().stream().anyMatch(SandboxLayout::isPracticeProgram)));
             activeSandboxes.put(jobId, handle);
             MDC.put(MDC_SANDBOX, handle.id());
             // Cancellation during the launch could not kill the sandbox until it was registered.

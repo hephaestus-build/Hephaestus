@@ -140,7 +140,7 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
 
     /** As {@code KubernetesSandboxBackend.launch} builds it: a review's or a host's size by its kind. */
     private Pod workspacePod(String kind, ResourceLimits limits, KubernetesPods.Size size) {
-        return pods.workspacePod(workload(kind), Map.of(), List.of("node"), limits, size);
+        return pods.workspacePod(workload(kind), Map.of(), List.of("node"), limits, size, null);
     }
 
     private static KubernetesPods.Workload workload(String kind) {

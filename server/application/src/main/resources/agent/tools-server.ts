@@ -10,6 +10,7 @@ import { type ChildProcess, fork, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import {
+	chmodSync,
 	createWriteStream,
 	readdirSync,
 	readFileSync,
@@ -62,8 +63,10 @@ export interface ToolsServerOptions {
 	scratch: string;
 	/** The roots that `put` may create a directory in. */
 	putRoots: string[];
-	/** The practice program's process entry point, where this side runs `script.run`; a tools Pod has none. */
+	/** The practice program's process entry point, where this side runs `script.run`; the tools side has none. */
 	scriptEntry?: string;
+	/** Whether this side only runs practice programs: it then refuses `exec`, `read`, `put` and `reset`. */
+	programsOnly?: boolean;
 	/**
 	 * Whether this user runs nothing but the tools: then `reset` also ends processes that left their call's group.
 	 * Only the sidecar's own user does; a test shares its user with the test runner.
@@ -73,6 +76,8 @@ export interface ToolsServerOptions {
 
 /** Every process of a call carries this variable, with the call's id: it finds a process that left the call's group. */
 const CALL_MARKER = "HEPHAESTUS_TOOL_CALL";
+
+const ALL_OPERATIONS = ["exec", "script.run", "read", "put", "reset"];
 
 /** Only these variables reach a program: no credential ever does. */
 const ENV = {
@@ -1256,7 +1261,11 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			if (inFlight.has(id)) {
 				throw new ToolProtocolError("protocol", "a request id that is already in flight");
 			}
-			if (!["exec", "script.run", "read", "put", "reset"].includes(header.type)) {
+			const operations = options.programsOnly === true ? ["script.run"] : ALL_OPERATIONS;
+			if (!operations.includes(header.type)) {
+				if (header.type === "put") {
+					rememberRefusedPut(id);
+				}
 				refuse(id, "unknown", `The tools side has no operation ${header.type}.`);
 				return;
 			}
@@ -1319,7 +1328,12 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		socket.on("error", () => {
 			socket.destroy();
 		});
-	}).listen(options.address);
+	}).listen(options.address, () => {
+		// The loop runs as another user of the Pod's group, and a Unix connect needs write access to the socket.
+		if ("path" in options.address) {
+			chmodSync(options.address.path, 0o660);
+		}
+	});
 }
 
 function toolsPort(value: string): number {
@@ -1358,7 +1372,9 @@ if (import.meta.main) {
 		roots: ["/workspace", workspace],
 		scratch,
 		putRoots: [repos],
-		scriptEntry: "/opt/practice-scripts/child.ts",
+		...(process.env.TOOLS_ROLE === "programs"
+			? { scriptEntry: "/opt/practice-scripts/child.ts", programsOnly: true }
+			: {}),
 		soleUser: true,
 	});
 }

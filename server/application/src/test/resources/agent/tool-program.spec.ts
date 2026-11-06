@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { Server } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -148,6 +148,67 @@ async function attempt(slug: string) {
 	);
 	return { outcome, reviews, received: readFileSync(seen, "utf8") };
 }
+
+void test("the socket admits the Pod's group and nobody else", () => {
+	assert.equal(statSync(socketPath).mode % 0o1000, 0o660);
+});
+
+void test("the program side refuses everything but a program", async () => {
+	const home = mkdtempSync(path.join(tmpdir(), "programs-only-"));
+	const mutable = path.join(home, "workspace");
+	mkdirSync(path.join(mutable, ".scratch"), { recursive: true });
+	const address = { path: path.join(home, "programs.sock") };
+	const programs = startToolsServer({
+		address,
+		nonce,
+		workspace: mutable,
+		roots: [mutable],
+		scratch: path.join(mutable, ".scratch"),
+		putRoots: [path.join(mutable, ".scratch")],
+		scriptEntry: hostile,
+		programsOnly: true,
+		soleUser: false,
+	});
+	await once(programs, "listening");
+	const side = await ToolClient.open(address, nonce);
+	const refused = { name: "ToolProtocolError", code: "unknown" };
+	try {
+		await assert.rejects(
+			side.exec({ command: "id", cwd: mutable, timeoutMs: 1000 }, () => undefined),
+			refused,
+		);
+		await assert.rejects(side.read(path.join(mutable, "x"), 1, 1), refused);
+		await assert.rejects(side.reset(), refused);
+	} finally {
+		side.close();
+		programs.close();
+	}
+});
+
+void test("the tools side, which has no program entry, refuses a program", async () => {
+	const home = mkdtempSync(path.join(tmpdir(), "tools-only-"));
+	const mutable = path.join(home, "workspace");
+	mkdirSync(path.join(mutable, ".scratch"), { recursive: true });
+	const address = { path: path.join(home, "tools.sock") };
+	const tools = startToolsServer({
+		address,
+		nonce,
+		workspace: mutable,
+		roots: [mutable],
+		scratch: path.join(mutable, ".scratch"),
+		putRoots: [path.join(mutable, ".scratch")],
+		soleUser: false,
+	});
+	await once(tools, "listening");
+	const side = await ToolClient.open(address, nonce);
+	try {
+		const channel = side.script({ execArgv: [], timeoutMs: 1000 }, () => undefined, () => undefined);
+		await assert.rejects(channel.exit, { name: "ToolProtocolError", code: "unknown" });
+	} finally {
+		side.close();
+		tools.close();
+	}
+});
 
 void test("a program gets one session, however many it asks for", async () => {
 	const { reviews, outcome } = await attempt("second-review");

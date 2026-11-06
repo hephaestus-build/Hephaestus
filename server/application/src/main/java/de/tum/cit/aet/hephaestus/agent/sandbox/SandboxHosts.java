@@ -60,13 +60,21 @@ public class SandboxHosts implements HostSandbox {
             session = openSession(id, token, spec);
             UUID sessionId = session.id();
             handle = backend.launch(new SandboxBackend.Launch(
-                    SandboxBackend.Kind.HOST, id, null, image, spec.command(), spec.limits(), null, gateway -> {
+                    SandboxBackend.Kind.HOST,
+                    id,
+                    null,
+                    image,
+                    spec.command(),
+                    spec.limits(),
+                    null,
+                    gateway -> {
                         Map<String, String> environment = new LinkedHashMap<>(spec.environment());
                         environment.put("LLM_PROXY_URL", gateway + "/internal/llm");
                         environment.put("SANDBOX_RUNTIME_URL", gateway + "/internal/llm/runtime/" + sessionId);
                         environment.put("LLM_PROXY_TOKEN", token);
                         return environment;
-                    }));
+                    },
+                    false));
             // The limits' maxRuntime bounds only the workspace's filling and the start of the host's process.
             Instant deadline = Instant.now().plus(spec.limits().maxRuntime());
             SandboxBackend.Observation initialized =

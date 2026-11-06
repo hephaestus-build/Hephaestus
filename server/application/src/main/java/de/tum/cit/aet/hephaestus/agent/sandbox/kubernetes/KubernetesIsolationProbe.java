@@ -455,7 +455,7 @@ public class KubernetesIsolationProbe {
                         null,
                         true);
             }
-            if (ended.timedOut() || last == null || KubernetesPods.exitCode(last, KubernetesPods.RUNTIME) == null) {
+            if (ended.timedOut() || last == null || KubernetesPods.exitCode(last, KubernetesPods.LOOP) == null) {
                 String waiting = last == null ? null : KubernetesPods.fatalWaiting(last);
                 boolean sandboxFailed = last != null
                         && last.getSpec() != null
@@ -471,7 +471,7 @@ public class KubernetesIsolationProbe {
                         null,
                         sandboxFailed);
             }
-            JsonNode result = parse(pods.logs(created, KubernetesPods.RUNTIME));
+            JsonNode result = parse(pods.logs(created, KubernetesPods.LOOP));
             if (result == null) {
                 return new Outcome(List.of(probe + " printed no result"), null, true);
             }

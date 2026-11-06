@@ -114,6 +114,7 @@ public interface SandboxBackend {
      * @param id the review job, or the Heph host, the sandbox serves
      * @param attempt the claimed job's attempt; null for a host, or a caller that holds no claim
      * @param command the runtime's command; the initializer's is {@code SandboxLayout.INITIALIZER_COMMAND}
+     * @param programs whether the attempt runs a practice program, which needs a side of its own
      * @param deadline when a review attempt's upload window closes. A backend whose runtime enforces a deadline itself
      *     ends the sandbox then, also when its worker is gone: a Kubernetes Job enforces that deadline. Null for a
      *     Heph host, which runs until it is removed
@@ -127,7 +128,8 @@ public interface SandboxBackend {
             List<String> command,
             ResourceLimits limits,
             @Nullable Instant deadline,
-            Environment environment) {
+            Environment environment,
+            boolean programs) {
         public Launch {
             command = List.copyOf(command);
         }

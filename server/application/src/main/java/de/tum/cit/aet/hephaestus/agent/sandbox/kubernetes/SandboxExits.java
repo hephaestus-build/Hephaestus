@@ -65,6 +65,8 @@ public class SandboxExits {
         }
     }
 
+    private static final Set<String> SIDECARS = Set.of(KubernetesPods.TOOLS, KubernetesPods.PROGRAMS);
+
     /** A container waits for one of these and does not start on its own. */
     private static final Set<String> START_FAILURES = Set.of(
             "ErrImagePull",
@@ -204,6 +206,8 @@ public class SandboxExits {
                 : Stream.concat(
                                 listOf(status.getInitContainerStatuses()).stream(),
                                 listOf(status.getContainerStatuses()).stream())
+                        // A sidecar ends by a signal when the loop ends, so its code says nothing about the review.
+                        .filter(container -> !SIDECARS.contains(container.getName()))
                         .toList();
         for (ContainerStatus container : containers) {
             var state = container.getState();

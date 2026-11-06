@@ -265,7 +265,7 @@ class KubernetesIsolationProbeJobsTest {
                 .withNewStatus()
                 .withPhase("Pending")
                 .withContainerStatuses(new ContainerStatusBuilder()
-                        .withName(KubernetesPods.RUNTIME)
+                        .withName(KubernetesPods.LOOP)
                         .withNewState()
                         .withNewWaiting()
                         .withReason("CreateContainerError")
