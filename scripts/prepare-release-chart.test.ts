@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { readInventory } from "./commit-image-lock.ts";
-import { chartImages, chartValues, releaseValuesLines } from "./kubernetes-chart.ts";
+import { chartImages, chartValues } from "./kubernetes-chart.ts";
 import { prepareReleaseChart } from "./prepare-release-chart.ts";
 import { jointLockAsset, parseReleaseImageLock } from "./release-image-lock.ts";
 
@@ -136,7 +136,7 @@ for (const failure of [
 				}
 				return args[1] === "chart"
 					? "apiVersion: v2\nname: hephaestus\nversion: 1.0.0\nappVersion: 1.0.0\n"
-					: releaseValuesLines(chartValues(targetLock, targetInventory));
+					: JSON.stringify(chartValues(targetLock, targetInventory));
 			},
 		);
 		if (failure === "none" || failure === "next inventory") {
