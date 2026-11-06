@@ -250,18 +250,11 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                                 || runtime.unsettledJobIds(workspaceId, id.reviewId())
                                         .contains(failedBy))))
             throw new IllegalStateException("Only the bound invocation can record an execution failure.");
-        member.setState(ReviewItemState.WITHHELD);
-        member.setReason(reason);
-        member.setAttemptedAt(clock.instant());
+        member.withhold(reason, message, clock.instant());
         if (member.getStagedAttempt() != null) {
             member.setStagedAttempt(null);
             payloads.write(workspaceId, id.reviewId(), id.practiceId(), id.itemId(), null);
         }
-        var detail = member.getDetail() == null
-                ? JsonNodeFactory.instance.objectNode()
-                : (ObjectNode) member.getDetail().deepCopy();
-        detail.put("withholdingMessage", message);
-        member.setDetail(detail);
         if (review.getKind() == ReviewKind.ITEM) {
             assignment.setStatus(ReviewPracticeStatus.WITHHELD);
             assignment.setReason(reason);
