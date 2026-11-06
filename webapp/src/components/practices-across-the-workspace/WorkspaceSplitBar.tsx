@@ -5,7 +5,7 @@ import type { ComponentType } from "react";
 
 import { cn } from "cn";
 import type { WorkspaceSplit } from "@/api/types.gen";
-import { type BadgeVariant, statusValues } from "@/components/common/status-def";
+import { statusValues } from "@/components/common/status-def";
 import {
 	isSettledStanding,
 	PRACTICE_GROUP_STANDING_DEFS,
@@ -16,11 +16,11 @@ import { NEUTRAL_GREY, standingColorClass } from "@/components/practice-vocabula
 import { SUMMARY_FRAME } from "@/components/practice-vocabulary/StandingSummaryBox";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { type InfoLine, InfoLines, InfoTip } from "@/components/common/InfoTip";
+import { InfoLines, InfoTip } from "@/components/common/InfoTip";
 import {
-	barsHint,
+	BARS_LINES,
+	barsLead,
 	NOBODY_YET,
-	NONE_YET_PLAIN,
 	NONE_YET_SEGMENT,
 	splitDescription,
 	splitTotalText,
@@ -52,13 +52,6 @@ function standingPart(standing: PracticeGroupStandingValue): PartDef {
 		colorClass: standingColorClass(standing),
 	};
 }
-
-/** The colour each verdict wears, in words, so the legend's (i) does not rest on colour alone. */
-const COLOUR_WORD: Partial<Record<BadgeVariant, string>> = {
-	destructive: "Red, ",
-	warning: "Orange, ",
-	success: "Green, ",
-};
 
 const NONE_YET_PART: PartDef = { key: "none", ...NONE_YET_SEGMENT };
 
@@ -208,35 +201,16 @@ export function LevelSplit({
 }
 
 /**
- * A verdict's colour and words, as the legend's (i) reads them out: "Red, Needs attention: …", after
- * a sample of the colour, then grey and how the bars count.
- */
-const verdictLines = (scope: StandingScope): readonly InfoLine[] => [
-	...statusValues(PRACTICE_GROUP_STANDING_DEFS)
-		.filter(isSettledStanding)
-		.map((standing) => {
-			const def = PRACTICE_GROUP_STANDING_DEFS[standing];
-			return {
-				term: `${COLOUR_WORD[def.badgeVariant] ?? ""}${def.label}:`,
-				text: def.description,
-				swatchClass: standingColorClass(standing),
-			};
-		}),
-	{ ...NONE_YET_PLAIN, swatchClass: NONE_YET_SEGMENT.colorClass },
-	{ term: "How the bars count:", text: barsHint(scope) },
-];
-
-/**
- * Once above each table of bars, with an (i) at its end that says what each colour means, grey
- * included, and how the bars count. An empty track says what it is under itself, so the legend
- * leaves it out.
+ * Once above each table of bars, with an (i) at its end that says how the bars count, what each
+ * color means, gray included, and what the You bracket spans. An empty track says what it is under
+ * itself, so the legend leaves it out.
  */
 export function SplitLegend({ scope }: { scope: StandingScope }) {
 	return (
 		<div className="flex items-start gap-2">
 			<SplitLegendItems />
-			<InfoTip label="About the bars" className="my-0 -mt-1">
-				<InfoLines lines={verdictLines(scope)} />
+			<InfoTip label="About the bars" lead={barsLead(scope)} className="my-0 -mt-1">
+				<InfoLines lines={BARS_LINES} />
 			</InfoTip>
 		</div>
 	);

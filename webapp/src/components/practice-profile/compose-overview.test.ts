@@ -283,8 +283,8 @@ describe("group sentences", () => {
 			],
 		});
 		expect(sentences).toStrictEqual([
-			"A and C now show More positive recently.",
-			"B now shows More difficulties recently.",
+			"A and C now show an increasing baseline.",
+			"B now shows a decreasing baseline.",
 		]);
 	});
 
@@ -388,7 +388,7 @@ describe("practice sentences", () => {
 		// A first sighting names the work it was seen on, never the standing it landed at: that is
 		// the badge on the same row.
 		expect(plainBullets(sentences.first)).toBe("Seen for the first time on !1.");
-		expect(plainBullets(sentences.trend)).toBe("Now shows More difficulties recently.");
+		expect(plainBullets(sentences.trend)).toBe("Now shows a decreasing baseline.");
 	});
 
 	it("say a practice was seen for the first time even when the wire names no work", () => {

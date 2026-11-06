@@ -9,14 +9,17 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { hasText } from "@/lib/text";
 
 import {
-	COLOR_KEYS,
-	DEFAULT_GROUP_COLOR,
 	DEFAULT_GROUP_ICON,
-	getGroupVisual,
 	ICON_NAMES,
 	iconComponent,
 	iconLabel,
 	iconSearchText,
+	pickedGroupIcon,
+} from "@/components/practice-vocabulary/group-icons";
+import {
+	COLOR_KEYS,
+	DEFAULT_GROUP_COLOR,
+	getGroupVisual,
 	PILL,
 } from "@/components/practice-vocabulary/group-visuals";
 
@@ -41,7 +44,9 @@ export function GroupVisualPicker({
 }: GroupVisualPickerProps) {
 	const activeIcon = icon ?? DEFAULT_GROUP_ICON;
 	const activeColor = color ?? DEFAULT_GROUP_COLOR;
-	const { Icon: EffectiveIcon, pill } = getGroupVisual(icon, color);
+	const { pill } = getGroupVisual(icon, color);
+	// The picker previews the icon an admin picks; the developer surfaces draw one icon for every group.
+	const EffectiveIcon = pickedGroupIcon(icon);
 	const [query, setQuery] = useState("");
 	const [open, setOpen] = useState(false);
 	const colorLabelId = useId();

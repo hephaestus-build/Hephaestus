@@ -31,16 +31,15 @@ export const Uncertain: Story = { args: { direction: "UNCERTAIN", support: wellS
 export const InsufficientEvidence: Story = {
 	args: { direction: "INSUFFICIENT_EVIDENCE", support: none },
 };
-/** No evidence at all, so no provenance to give: the tooltip is the registry's sentence instead. */
+/** No evidence at all: only the sentence on what a trend needs. */
 export const WithoutSupport: Story = {
 	args: { direction: "INSUFFICIENT_EVIDENCE", support: undefined },
 	play: async ({ canvas }) => {
 		await userEvent.hover(canvas.getByRole("button"));
 		const tooltip = await settledPopup();
 		await expect(tooltip).toHaveTextContent(
-			"There is not enough reviewed work yet to compare recent and earlier work.",
+			"A trend needs eight reviewed pieces of work. So far there are fewer.",
 		);
-		await expect(tooltip).not.toHaveTextContent("Based on");
 	},
 };
 export const GroupScope: Story = {
@@ -51,11 +50,13 @@ export const GroupScope: Story = {
 	},
 	play: async ({ canvas }) => {
 		// The tooltip is the only reason this chip is focusable, and it is the one place that says a
-		// group trend pools its practices rather than comparing two stretches. It portals, so it is
-		// read off the document and only once the popup has settled.
+		// group trend goes practice by practice, without a bundle size. It portals, so it is read off
+		// the document and only once the popup has settled.
 		await userEvent.hover(canvas.getByRole("button"));
 		const tooltip = await settledPopup();
-		await expect(tooltip).toHaveTextContent("Across eight pieces of reviewed work in this group.");
-		await expect(tooltip).not.toHaveTextContent("Compared");
+		await expect(tooltip).toHaveTextContent(
+			"Your recent work meets this group's practices more often than before. Compares, practice by practice,",
+		);
+		await expect(tooltip).not.toHaveTextContent(/four|eight/u);
 	},
 };

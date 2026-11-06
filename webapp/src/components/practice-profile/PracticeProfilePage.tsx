@@ -164,12 +164,7 @@ export function PracticeProfilePage({
 				isLoading={isLoading}
 				tourAction={tourAction}
 			/>
-			<Section
-				data-tour-slot="feedback"
-				size="lg"
-				title="Your feedback"
-				description="Each card is one pattern seen more than once across your work, with the one thing to try next."
-			>
+			<Section data-tour-slot="feedback" size="lg" title="Your recurring feedback patterns">
 				<Tabs
 					value={feedbackTab}
 					onValueChange={(next) => {

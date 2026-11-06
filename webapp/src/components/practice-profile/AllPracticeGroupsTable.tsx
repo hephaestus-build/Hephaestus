@@ -167,11 +167,12 @@ const NO_GROUPS: GroupRef[] = [];
  * a keyboard's focus out of sight.
  */
 const PRACTICE_GROUP_INFO = (
-	<InfoTip label="About practice groups" className="font-normal @max-[38rem]:hidden">
-		<p>
-			A practice group is a named set of related practices. Its row sums up your standing on the
-			practices in it.
-		</p>
+	<InfoTip
+		label="About practice groups"
+		lead="A practice group is a named set of related practices."
+		className="font-normal @max-[38rem]:hidden"
+	>
+		<p>Its row sums up your standing on them.</p>
 	</InfoTip>
 );
 

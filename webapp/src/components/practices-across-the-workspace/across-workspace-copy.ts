@@ -16,7 +16,7 @@ import {
 } from "@/components/practice-vocabulary/practice-group-standing-defs";
 import { NEUTRAL_GREY } from "@/components/practice-vocabulary/standing-counts";
 
-import type { InfoGroup, InfoLine } from "@/components/common/InfoTip";
+import type { InfoLine } from "@/components/common/InfoTip";
 
 export type AcrossWorkspaceWindow = PracticesAcrossWorkspaceTiles["window"];
 
@@ -65,12 +65,12 @@ export const OPEN_IN_YOUR_PROFILE = "Open in your Practice profile";
 /** The page's one visible line under its title; {@link PAGE_INTRO} says the rest behind an (i). */
 export const PAGE_INTRO_SHORT = "Where the developers in this workspace stand. Not a grade.";
 
-/** Behind the (i) beside {@link PAGE_INTRO_SHORT}. */
+/** The answer the page's (i) leads with; {@link PAGE_INTRO} adds the rest. */
+export const PAGE_INTRO_LEAD =
+	"Where the developers in this workspace stand in each practice group.";
+
+/** Behind the (i) beside {@link PAGE_INTRO_SHORT}, after {@link PAGE_INTRO_LEAD}. */
 export const PAGE_INTRO: readonly InfoLine[] = [
-	{
-		term: "What it shows:",
-		text: "where the developers in this workspace stand in each practice group, each counted once.",
-	},
 	{
 		term: "Not a grade:",
 		text: "each standing comes from AI review of their work and can be wrong.",
@@ -93,47 +93,16 @@ const developers = (n: number) => count(n, "developer", "developers", true);
 export const tileCohortText = (tiles: PracticesAcrossWorkspaceTiles) =>
 	`${developers(tiles.developersWithAStandingInWindow)} with a standing`;
 
-/**
- * The tiles' (i), in four groups that do not overlap: what the tile draws, how to read it, when the
- * band is missing, and what the open feedback counts. The same for every window and every
- * workspace, so it never carries a count or a window of its own.
- */
-export const FIGURES_PLAIN: readonly InfoGroup[] = [
-	{
-		heading: "What you see",
-		lines: [
-			{
-				term: "Grey band:",
-				text: "the typical range here, the middle half of the developers with a standing.",
-				swatchClass: NEUTRAL_GREY,
-			},
-			{ term: "Blue marker:", text: "your own value.", swatchClass: "text-highlight" },
-		],
-	},
-	{
-		heading: "How to read it",
-		lines: [
-			{
-				term: "Left of the band:",
-				text: "lower than for most developers.",
-				second: { term: "Right:", text: "higher." },
-			},
-			{
-				term: "Better or worse:",
-				text: "depends on the figure. Fewer practices needing attention is better; fewer going well is not.",
-			},
-		],
-	},
-	{
-		heading: "When the band is missing",
-		lines: [{ term: "No band:", text: "no developer has a standing yet." }],
-	},
-	{
-		heading: "What counts",
-		lines: [
-			{ term: "Open feedback:", text: "what is open now, for every developer counted here." },
-		],
-	},
+/** The answer the figures' (i) leads with; {@link FIGURES_PLAIN} adds how to read a tile. */
+export const FIGURES_LEAD =
+	"The gray band is the typical range, the middle half of developers, and blue is you.";
+
+/** Behind the (i) beside the figures' line, after {@link FIGURES_LEAD}: four short lines at most. */
+export const FIGURES_PLAIN: readonly InfoLine[] = [
+	{ term: "Left:", text: "lower than most.", second: { term: "Right:", text: "higher." } },
+	{ term: "Better:", text: "fewer needing attention, more going well." },
+	{ term: "Open feedback:", text: "open now, not in the period." },
+	{ term: "No band:", text: "nobody has a standing yet." },
 ];
 
 /**
@@ -148,24 +117,22 @@ export const NONE_YET_SEGMENT = {
 	colorClass: NEUTRAL_GREY,
 } as const;
 
-/**
- * The plain reading of a bar's colours, first in the legend's (i). Grey is no standing, never "okay".
- */
-export const NONE_YET_PLAIN: InfoLine = {
-	term: "Grey, No standing yet:",
-	text: "no review has judged this in their work, or there was nothing to judge. Grey does not mean okay.",
-};
-
-/** The lines in the legend's (i) after the colours, in the words of `docs/user/practice-profile.mdx` § The bars. */
-export function barsHint(scope: StandingScope): string {
-	return [
-		`Each bar counts developers by their current standing in the ${scope}, as their Practice profile shows it.`,
-		"Each developer counts once, however much of their work was reviewed.",
-		"The You bracket spans your part: you are somewhere in it, not at one point.",
-		"Every bar shows all its counts, however small.",
-		"So a small count can let others tell where you stand.",
-	].join(" ");
+/** The answer the legend's (i) leads with, in the words of `docs/user/practice-profile.mdx` § The bars. */
+export function barsLead(scope: StandingScope): string {
+	return `Each bar counts developers by current standing in the ${scope}, each once.`;
 }
+
+/** The legend's (i) after {@link barsLead}: each color once, the You bracket, and small counts. */
+export const BARS_LINES: readonly InfoLine[] = [
+	{ term: "Red:", text: "needs attention.", second: { term: "Orange:", text: "mixed." } },
+	{
+		term: "Green:",
+		text: "going well.",
+		second: { term: "Gray:", text: "no standing, not okay." },
+	},
+	{ term: "You:", text: "somewhere in your part." },
+	{ term: "Small counts:", text: "others may tell where you are." },
+];
 
 /** Under the empty track of a split that counts nobody: no developer has a standing yet. */
 export const NOBODY_YET = "No developer has a standing yet";

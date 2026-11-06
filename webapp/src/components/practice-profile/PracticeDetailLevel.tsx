@@ -34,6 +34,7 @@ import {
 	type PracticeGuidanceState,
 	PracticeIntro,
 } from "@/components/practice-guidance/PracticeIntro";
+import { countWords, guideWords, readTime } from "@/components/practice-guidance/read-time";
 import { REVIEW_FILTER_MAX_LENGTH } from "@/components/practice-trace/trace-format";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
 import { getGroupVisual, groupMark } from "@/components/practice-vocabulary/group-visuals";
@@ -94,18 +95,6 @@ import {
 	reviewRangeStart,
 } from "./practice-profile-search";
 import { requestedReviewNote } from "./requested-review-note";
-
-/**
- * What each tab holds, said in a line under the tab bar for the open tab, so a panel starts with
- * its content rather than a heading that repeats the tab's name.
- */
-const TAB_DESCRIPTIONS: Record<PracticeTab, string> = {
-	feedback:
-		"Feedback about patterns in your work: the open card, then the ones that resolved, newest first.",
-	results:
-		"Observations about your work on this practice, newest first. Open one to see its outcome and any problems, each with its next step.",
-	guide: "Why this practice matters, what good looks like, and how to do it.",
-};
 
 const TAB_LABELS: Record<PracticeTab, string> = {
 	feedback: "Feedback",
@@ -323,8 +312,9 @@ export function PracticeDetailLevel({
 						))}
 					</PracticeTabsList>
 					{/* Right of the tabs, the span the level shows: it narrows the Feedback tab's cards and the
-					    Observations tab alike, as the reviews list's timeframe narrows its list. */}
-					{onObservationFilterChange !== undefined && (
+					    Observations tab alike, as the reviews list's timeframe narrows its list. The Guide tab
+					    does not change over time, so it shows no timeframe. */}
+					{onObservationFilterChange !== undefined && shownTab !== "guide" && (
 						<div className="pb-1.5">
 							<FilterToggle
 								label="Timeframe"
@@ -341,9 +331,6 @@ export function PracticeDetailLevel({
 						</div>
 					)}
 				</PracticeTabsRail>
-				{/* What the open tab holds, as a line anyone can read, touch included: the panel has no
-				    heading repeating the tab's name. */}
-				<p className="max-w-2xl text-sm text-muted-foreground">{TAB_DESCRIPTIONS[shownTab]}</p>
 				<TabsContent value="feedback" className="min-w-0">
 					<PracticeFeedbackSection
 						feedback={feedback}
@@ -487,17 +474,48 @@ function PracticeGuidance({
 	guide?: PracticeGuidanceDto["guide"];
 	neverApplied: boolean;
 }) {
+	// "At a glance" heads the lead and the picture with its caption; without both a lead and a
+	// picture it is left out, and the caption alone keeps its own label.
+	const visual = guidance.status === "ready" ? (guidance.visual ?? undefined) : undefined;
+	const glance = hasText(words.whyItMatters) || visual !== undefined;
+	// Only the words shown: the lead and the caption, never the picture's own labels.
+	const glanceWords =
+		countWords(words.whyItMatters ?? "") + countWords(words.whatGoodLooksLike ?? "");
+	const intro = <PracticeIntro practice={words} guidance={guidance} />;
 	return (
 		<div className="flex min-w-0 flex-col gap-6">
 			{neverApplied && <p className="max-w-2xl text-sm">{NEVER_APPLIED.description}</p>}
-			<PracticeIntro practice={words} guidance={guidance} />
+			{glance ? (
+				<Section
+					size="lg"
+					level={3}
+					title={<TitleWithReadTime title="At a glance" words={glanceWords} />}
+				>
+					{intro}
+				</Section>
+			) : (
+				intro
+			)}
 			{guide && (
 				// `h3`: the guide's own headings are `h4`, and the outline may not skip a level.
-				<Section size="lg" level={3} title="Practice guide">
+				<Section
+					size="lg"
+					level={3}
+					title={<TitleWithReadTime title="Practice guide" words={guideWords(guide.markdown)} />}
+				>
 					<PracticeGuideMarkdown guide={guide} />
 				</Section>
 			)}
 		</div>
+	);
+}
+
+/** A Guide tab heading with its read time as a muted suffix: "Practice guide · 4 min read". */
+function TitleWithReadTime({ title, words }: { title: string; words: number }) {
+	return (
+		<>
+			{title} <span className="text-sm font-normal text-muted-foreground">· {readTime(words)}</span>
+		</>
 	);
 }
 

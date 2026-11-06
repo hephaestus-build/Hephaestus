@@ -182,7 +182,8 @@ export const Default: Story = {
 		const [first, second, third] = screen.getAllByRole("tab");
 		// The header's trend says in its sentence what a trend compares; no "Trend:" before it.
 		const trend = screen.getByRole("button", {
-			description: /^The trend compares your latest reviewed work/u,
+			description:
+				/Compares your last .+ reviewed pieces? of work with the .+ before (?:it|them)\.$/u,
 		});
 		await expect(trend.textContent).not.toMatch(/Trend:/u);
 		await expect(screen.queryByText("Standing:")).toBeNull();
@@ -191,17 +192,13 @@ export const Default: Story = {
 		await expect(third).toHaveAccessibleName("Guide");
 		// The feedback leads its tab; the introduction and its picture wait in the Guide tab.
 		await expect(screen.queryByRole("region", { name: "Introduction" })).not.toBeInTheDocument();
-		// No heading repeats the tab's name: a line under the tabs says what the open one holds.
+		// No heading repeats the tab's name, and no line under the tabs: the tab names say what each holds.
 		await expect(
 			within(screen.getByRole("tabpanel", { name: "Feedback 1" })).queryByRole("heading", {
 				level: 2,
 			}),
 		).toBeNull();
-		await expect(
-			screen.getByText(
-				"Feedback about patterns in your work: the open card, then the ones that resolved, newest first.",
-			),
-		).toBeVisible();
+		await expect(screen.queryByText(/^Feedback about patterns in your work/u)).toBeNull();
 		await expect(screen.getByRole("tab", { name: "Feedback 1" })).toHaveAttribute(
 			"aria-selected",
 			"true",
@@ -228,11 +225,8 @@ export const ObservationsTab: Story = {
 		);
 		// Below the top, dismissing returns to the group behind, so the control says Back.
 		await expect(screen.getByRole("button", { name: "Back" })).toBeVisible();
-		// The line under the tabs follows the open tab.
-		await expect(
-			screen.getByText(/^Observations about your work on this practice, newest first\./u),
-		).toBeVisible();
-		await expect(screen.queryByText(/^Feedback about patterns in your work/u)).toBeNull();
+		// The tab row has no line under it: the open tab's panel starts with its content.
+		await expect(screen.queryByText(/^Observations about your work on this practice/u)).toBeNull();
 		await expect(screen.getByRole("tab", { name: "Observations 3" })).toHaveAttribute(
 			"aria-selected",
 			"true",
@@ -297,7 +291,7 @@ export const SelectedObservation: Story = {
 			within(intro).getByRole("figure", { name: focusedChanges.whatGoodLooksLike ?? "" }),
 		).toBeVisible();
 		await expect(
-			within(guide).getByRole("heading", { level: 3, name: "Practice guide" }),
+			within(guide).getByRole("heading", { level: 3, name: /^Practice guide · \d+ min read$/u }),
 		).toBeVisible();
 
 		await userEvent.click(screen.getByRole("tab", { name: /^Observations/u }));
@@ -764,7 +758,7 @@ export const GuideTab: Story = {
 	args: { tab: "guide" },
 	play: async () => {
 		await expectSettledVisible(
-			await screen.findByRole("heading", { level: 3, name: "Practice guide" }),
+			await screen.findByRole("heading", { level: 3, name: /^Practice guide · \d+ min read$/u }),
 		);
 		await expect(screen.getByRole("tab", { name: "Guide" })).toHaveAttribute(
 			"aria-selected",
@@ -788,9 +782,14 @@ export const GuideTab: Story = {
 			within(intro).getByRole("figure", { name: focusedChanges.whatGoodLooksLike ?? "" }),
 		).toBeVisible();
 		await expect(
-			precedes(intro, within(panel).getByRole("heading", { level: 3, name: "Practice guide" })),
+			precedes(
+				intro,
+				within(panel).getByRole("heading", { level: 3, name: /^Practice guide · \d+ min read$/u }),
+			),
 		).toBe(true);
 		await expect(screen.queryByText("Read more")).not.toBeInTheDocument();
+		// A guide does not change over time, so the tab row shows no timeframe here.
+		await expect(screen.queryByRole("toolbar", { name: "Timeframe" })).toBeNull();
 	},
 };
 
@@ -810,7 +809,7 @@ export const WithoutLongGuide: Story = {
 			within(intro).getByRole("img", { name: bundledGuidance.visual.alt }),
 		).toBeVisible();
 		await expect(
-			within(panel).queryByRole("heading", { name: "Practice guide" }),
+			within(panel).queryByRole("heading", { name: /^Practice guide · \d+ min read$/u }),
 		).not.toBeInTheDocument();
 	},
 };
@@ -881,9 +880,11 @@ export const NotReviewed: Story = {
 		await expect(screen.queryByText(/No practice in this group/u)).not.toBeInTheDocument();
 		await expect(screen.queryByText(/Read from|counts most/u)).not.toBeInTheDocument();
 		await expect(screen.queryByText(/pieces? of work$/u)).not.toBeInTheDocument();
-		// The trend chip says there is nothing to compare yet, with the sentence on what a trend compares.
-		const trend = screen.getByRole("button", { name: /Not enough to compare yet/u });
-		await expect(trend).toHaveAccessibleDescription(/The trend compares/u);
+		// The trend chip says what a trend needs, in plain words.
+		const trend = screen.getByRole("button", { name: /No baseline yet/u });
+		await expect(trend).toHaveAccessibleDescription(
+			/^A trend needs eight reviewed pieces of work\. So far there are fewer\./u,
+		);
 	},
 };
 
@@ -927,7 +928,9 @@ export const GuidanceOnly: Story = {
 		);
 		await expect(screen.getByRole("heading", { name: "Pair on schema changes" })).toBeVisible();
 		await expect(screen.getByText(bundledPractice.whyItMatters)).toBeVisible();
-		await expect(screen.getByRole("heading", { level: 3, name: "Practice guide" })).toBeVisible();
+		await expect(
+			screen.getByRole("heading", { level: 3, name: /^Practice guide · \d+ min read$/u }),
+		).toBeVisible();
 		await expect(screen.queryByRole("tab")).toBeNull();
 		await expect(screen.queryByRole("heading", { name: "Observations" })).toBeNull();
 		await expect(screen.queryByText("Not reviewed")).toBeNull();

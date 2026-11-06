@@ -4,6 +4,7 @@ import { Fragment, type ReactNode, useState } from "react";
 import { cn } from "cn";
 
 import type { GroupRef, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
+import { InfoTip } from "@/components/common/InfoTip";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
@@ -296,7 +297,14 @@ export function PracticeGroupDetailLevel({
 			<Section
 				size="lg"
 				title="Practices in this group"
-				description="Each practice with its standing and trend. Open one for the work behind it."
+				info={
+					<InfoTip
+						label="About this list"
+						lead="Each practice of this group, with your standing and trend."
+					>
+						<p>Open one for the work behind it.</p>
+					</InfoTip>
+				}
 			>
 				{practicesTable}
 			</Section>

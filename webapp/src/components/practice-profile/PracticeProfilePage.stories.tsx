@@ -96,7 +96,9 @@ export const Default: Story = {
 		// The table of every practice is a level over the page, not a section of it.
 		await expect(canvas.queryByRole("table", { name: "All practice groups" })).toBeNull();
 		// The cards sit under their own sub-heading and a tab row that opens on the open ones.
-		await expect(canvas.getByRole("heading", { level: 2, name: "Your feedback" })).toBeVisible();
+		await expect(
+			canvas.getByRole("heading", { level: 2, name: "Your recurring feedback patterns" }),
+		).toBeVisible();
 		const tabs = within(canvas.getByRole("tablist", { name: "Feedback" })).getAllByRole("tab");
 		await expect(tabs.map((tab) => tab.textContent)).toStrictEqual([
 			"Open 6",
@@ -124,7 +126,10 @@ export const Default: Story = {
 		// the feedback is the first section under the header.
 		await expect(practiceStandings.some((practice) => practice.standing === "STRENGTH")).toBe(true);
 		await expect(canvas.queryByRole("heading", { name: "Going well" })).toBeNull();
-		const firstSection = canvas.getByRole("heading", { level: 2, name: "Your feedback" });
+		const firstSection = canvas.getByRole("heading", {
+			level: 2,
+			name: "Your recurring feedback patterns",
+		});
 		await expect(canvas.getAllByRole("heading", { level: 2 })[0]).toBe(firstSection);
 		await expect(
 			precedes(canvas.getByRole("heading", { level: 1, name: "Practice profile" }), firstSection),

@@ -7,6 +7,7 @@ import { rendersContent } from "@/lib/react-node";
 
 import { DetailDrawerHeader, LevelPathRow } from "./DetailDrawerHeader";
 import type { LevelPath } from "./DetailPath";
+import type { LevelInfo } from "./level-info";
 
 export interface LevelHeaderProps {
 	/** True below the top level, where dismissing returns to the drawer behind. */
@@ -30,6 +31,12 @@ export interface LevelHeaderProps {
 	 */
 	description?: ReactNode;
 	/**
+	 * What the level is for, behind an (i) beside the title rather than as a line under it, so the
+	 * level starts with its content. A screen reader still hears it as the drawer's description.
+	 * Built with `levelInfo`.
+	 */
+	info?: LevelInfo;
+	/**
 	 * A summary that is a picture rather than text, beside the title from `sm` and under it below —
 	 * the one second column a header allows.
 	 */
@@ -51,6 +58,7 @@ export function LevelHeader({
 	mark,
 	chips,
 	description,
+	info,
 	aside,
 	loading = false,
 }: LevelHeaderProps) {
@@ -76,6 +84,7 @@ export function LevelHeader({
 						{loading ? `Loading ${current.toLowerCase()}` : title}
 					</DrawerTitle>
 					{loading && <Skeleton aria-hidden className="h-7 w-full max-w-md" />}
+					{info && !loading && info.tip}
 				</div>
 				{/* `empty:hidden`: a badge that renders nothing for its value leaves no gap behind. */}
 				{rendersContent(chips) && (
@@ -84,6 +93,12 @@ export function LevelHeader({
 				{rendersContent(description) && (
 					<DrawerDescription render={<div />}>
 						<div className="flex flex-col gap-1">{description}</div>
+					</DrawerDescription>
+				)}
+				{info && !rendersContent(description) && (
+					<DrawerDescription render={<div />} className="sr-only">
+						<p>{info.lead}</p>
+						{info.content}
 					</DrawerDescription>
 				)}
 			</div>

@@ -24,12 +24,15 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * Where the surface does not know the group: the gray pill holds the name alone, with no stand-in
- * mark. Somewhere to open the practice: the name is the control, and a keyboard reaches it.
+ * Where the surface does not know the group: the gray pill keeps the practice icon, in the muted
+ * ink, so every practice carries the same level mark. Somewhere to open the practice: the name is the control, and a keyboard reaches it.
  */
 export const Default: Story = {
 	play: async ({ args, canvas, canvasElement }) => {
-		await expect(canvasElement.querySelector("[data-practice-pill] svg")).toBeNull();
+		// Without its group the pill keeps the practice icon, in the muted ink.
+		await expect(canvasElement.querySelector("[data-practice-pill] svg")).toHaveClass(
+			"text-muted-foreground",
+		);
 		const pill = canvas.getByRole("button", { name: "Explain significant decisions" });
 		await expectTouchTarget(pill);
 		await userEvent.click(pill);
@@ -104,8 +107,9 @@ export const LongestNameInItsGroup: Story = {
 };
 
 /**
- * In a line of running text and the weekly digest, `PracticeTextPill`: the plain gray pill with no
- * group's icon, the button itself when there is somewhere to open it.
+ * In a line of running text and the weekly digest, `PracticeTextPill`: the plain gray pill with the
+ * practice icon in the muted ink, as no group is known there, the button itself when there is
+ * somewhere to open it.
  */
 export const InRunningText: Story = {
 	render: (args) => (
@@ -115,7 +119,7 @@ export const InRunningText: Story = {
 	),
 	play: async ({ args, canvas }) => {
 		const pill = canvas.getByRole("button", { name: args.name });
-		await expect(pill.querySelector("svg")).toBeNull();
+		await expect(pill.querySelector("svg")).toHaveClass("text-muted-foreground");
 		await userEvent.click(pill);
 		await expect(args.onOpen).toHaveBeenCalledOnce();
 	},

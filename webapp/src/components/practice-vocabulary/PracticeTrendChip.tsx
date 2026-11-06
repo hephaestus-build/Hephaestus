@@ -5,8 +5,12 @@ import { FOCUS_RING } from "@/components/common/focus";
 import { type StatusDef, statusToneClass } from "@/components/common/status-def";
 
 import type { StandingScope } from "./practice-group-standing-defs";
-import { PRACTICE_TREND_DEFS, type TrendDirection } from "./practice-trend-defs";
-import { formatTrendProvenance, TREND_EXPLAINED } from "./practice-trend-presentation";
+import {
+	GROUP_TREND_DESCRIPTIONS,
+	PRACTICE_TREND_DEFS,
+	type TrendDirection,
+} from "./practice-trend-defs";
+import { trendComparison } from "./practice-trend-presentation";
 import { StatusTooltip } from "./StatusTooltip";
 
 const TREND_CLASS = "flex w-fit flex-wrap items-center gap-x-1 rounded-sm text-sm";
@@ -22,11 +26,18 @@ export function TrendWords({ def }: { def: StatusDef }) {
 	);
 }
 
+/** The direction in plain words; a group's says it in its own. */
+function directionSentence(direction: TrendDirection, scope: StandingScope): string {
+	return scope === "group"
+		? GROUP_TREND_DESCRIPTIONS[direction]
+		: PRACTICE_TREND_DEFS[direction].description;
+}
+
 export interface PracticeTrendChipProps {
 	direction: TrendDirection;
 	/**
-	 * The evidence behind the direction. Without it there is no provenance to give, so the tooltip
-	 * says the registry's sentence for the direction instead.
+	 * The evidence behind the direction: its counts name the compared work and, without a
+	 * direction yet, how much is still missing. Without it the tooltip says the default comparison.
 	 */
 	support?: TrendSupport;
 	scope: StandingScope;
@@ -46,9 +57,10 @@ export function PracticeTrendChip({
 	className,
 }: PracticeTrendChipProps) {
 	const def = PRACTICE_TREND_DEFS[direction];
-	const evidence = support ? formatTrendProvenance(support, direction, scope) : def.description;
-	// What a trend compares comes first, then this one's evidence.
-	const sentence = `${TREND_EXPLAINED} ${evidence}`;
+	// The direction in plain words first, then one sentence on what it compares.
+	const sentence = [directionSentence(direction, scope), trendComparison(direction, scope, support)]
+		.filter(Boolean)
+		.join(" ");
 	return (
 		<StatusTooltip
 			openOnTap

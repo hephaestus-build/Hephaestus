@@ -27,6 +27,8 @@ export interface SectionProps
 	extends Omit<ComponentProps<"section">, "title">, VariantProps<typeof sectionTitleVariants> {
 	title: ReactNode;
 	description?: ReactNode;
+	/** An (i) beside the title, outside the heading, for what the section is for (an `InfoTip`). */
+	info?: ReactNode;
 	actions?: ReactElement | undefined;
 	/** `h3` when the section sits inside another one, `h4` one step further, so the outline stays truthful. */
 	level?: 2 | 3 | 4;
@@ -52,6 +54,7 @@ const HEADINGS = { 2: "h2", 3: "h3", 4: "h4" } as const;
 export function Section({
 	title,
 	description,
+	info,
 	actions,
 	level = 2,
 	size,
@@ -75,32 +78,38 @@ export function Section({
 		>
 			<div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
 				<div className="min-w-0 space-y-1">
-					<Heading
-						id={`${base}-title`}
-						className={cn(sectionTitleVariants({ size }), "break-words")}
-					>
-						{foldKey === undefined ? (
-							title
-						) : (
-							// The heading keeps its level; the button inside it folds what the section holds.
-							<button
-								type="button"
-								aria-expanded={open}
-								aria-controls={`${base}-content`}
-								onClick={() => setOpen(!open)}
-								className={cn("inline-flex items-center gap-1.5 rounded-sm text-left", FOCUS_RING)}
-							>
-								{title}
-								<ChevronRight
-									aria-hidden
+					<div className="flex items-center gap-1">
+						<Heading
+							id={`${base}-title`}
+							className={cn(sectionTitleVariants({ size }), "break-words")}
+						>
+							{foldKey === undefined ? (
+								title
+							) : (
+								// The heading keeps its level; the button inside it folds what the section holds.
+								<button
+									type="button"
+									aria-expanded={open}
+									aria-controls={`${base}-content`}
+									onClick={() => setOpen(!open)}
 									className={cn(
-										"size-4 shrink-0 text-muted-foreground transition-transform",
-										open && "rotate-90",
+										"inline-flex items-center gap-1.5 rounded-sm text-left",
+										FOCUS_RING,
 									)}
-								/>
-							</button>
-						)}
-					</Heading>
+								>
+									{title}
+									<ChevronRight
+										aria-hidden
+										className={cn(
+											"size-4 shrink-0 text-muted-foreground transition-transform",
+											open && "rotate-90",
+										)}
+									/>
+								</button>
+							)}
+						</Heading>
+						{info}
+					</div>
 					{rendersContent(description) && (
 						<p id={`${base}-description`} className="max-w-2xl text-sm text-muted-foreground">
 							{description}

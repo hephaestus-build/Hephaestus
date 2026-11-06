@@ -1,110 +1,10 @@
 import type { ComponentType } from "react";
 
-import {
-	Activity,
-	AlertTriangle,
-	Archive,
-	Award,
-	Bell,
-	Bookmark,
-	BookOpen,
-	BookText,
-	Box,
-	Boxes,
-	Braces,
-	Bug,
-	Calendar,
-	CheckCheck,
-	CircleAlert,
-	CircleCheck,
-	CircleDashed,
-	Clipboard,
-	ClipboardCheck,
-	ClipboardList,
-	Clock,
-	Cloud,
-	Code,
-	Code2,
-	Cog,
-	Compass,
-	Cpu,
-	Database,
-	Eye,
-	FileCheck,
-	FileCode,
-	FileText,
-	Filter,
-	Flag,
-	FlaskConical,
-	Folder,
-	FolderGit2,
-	GitBranch,
-	GitCommitHorizontal,
-	GitCommitVertical,
-	GitMerge,
-	GitPullRequest,
-	Globe,
-	Hammer,
-	Heart,
-	Inbox,
-	Key,
-	KeyRound,
-	Layers,
-	LayoutDashboard,
-	Lightbulb,
-	ListChecks,
-	ListTodo,
-	Lock,
-	type LucideIcon,
-	Mail,
-	MapPin,
-	Megaphone,
-	MessageCircle,
-	MessageSquare,
-	MessageSquareReply,
-	Microscope,
-	Milestone,
-	Monitor,
-	Network,
-	Package,
-	Pencil,
-	PenTool,
-	PieChart,
-	Pin,
-	Puzzle,
-	Radar,
-	Rocket,
-	Ruler,
-	Scale,
-	Search,
-	Server,
-	Settings,
-	Shield,
-	ShieldAlert,
-	ShieldCheck,
-	ShieldX,
-	Signpost,
-	Siren,
-	Sparkles,
-	Star,
-	Tag,
-	Target,
-	Terminal,
-	TestTube,
-	TestTubeDiagonal,
-	ThumbsUp,
-	Timer,
-	TrendingUp,
-	Trophy,
-	Users,
-	Wand2,
-	Workflow,
-	Wrench,
-	Zap,
-} from "lucide-react";
+import { CircleDashed, type LucideIcon } from "lucide-react";
 
-import { humanizeToken } from "@/lib/humanize";
 import { hasText } from "@/lib/text";
+
+import { PracticeGroupIcon } from "./level-icons";
 
 /**
  * Said under a table of colored group names: the color names the group and carries no rating. The
@@ -153,125 +53,6 @@ export const PILL: Record<string, string> = {
 
 export const COLOR_KEYS = Object.keys(PILL);
 
-export const ICON_COMPONENTS: Record<string, LucideIcon> = {
-	ShieldAlert,
-	ShieldCheck,
-	ShieldX,
-	Shield,
-	Lock,
-	Key,
-	KeyRound,
-	Siren,
-	AlertTriangle,
-	CircleAlert,
-	Bug,
-	TestTube,
-	TestTubeDiagonal,
-	FlaskConical,
-	Microscope,
-	CheckCheck,
-	CircleCheck,
-	FileCheck,
-	ClipboardCheck,
-	ClipboardList,
-	Clipboard,
-	ListChecks,
-	ListTodo,
-	Flag,
-	Milestone,
-	Target,
-	Signpost,
-	Compass,
-	Radar,
-	Search,
-	GitPullRequest,
-	GitBranch,
-	GitMerge,
-	GitCommitHorizontal,
-	GitCommitVertical,
-	FolderGit2,
-	MessageSquareReply,
-	MessageSquare,
-	MessageCircle,
-	Megaphone,
-	Mail,
-	Inbox,
-	Bell,
-	Eye,
-	Users,
-	ThumbsUp,
-	Heart,
-	Award,
-	Trophy,
-	Star,
-	Sparkles,
-	Wand2,
-	Lightbulb,
-	Wrench,
-	Hammer,
-	Cog,
-	Settings,
-	Workflow,
-	Puzzle,
-	Layers,
-	Boxes,
-	Box,
-	Package,
-	Archive,
-	Code,
-	Code2,
-	Braces,
-	Terminal,
-	FileCode,
-	PenTool,
-	Pencil,
-	FileText,
-	BookText,
-	BookOpen,
-	Bookmark,
-	Ruler,
-	Scale,
-	Filter,
-	Tag,
-	Pin,
-	MapPin,
-	Calendar,
-	Clock,
-	Timer,
-	Activity,
-	TrendingUp,
-	PieChart,
-	LayoutDashboard,
-	Database,
-	Server,
-	Cpu,
-	Cloud,
-	Network,
-	Globe,
-	Monitor,
-	Rocket,
-	Zap,
-	Folder,
-};
-
-export const ICON_NAMES = Object.keys(ICON_COMPONENTS);
-
-export function iconLabel(name: string): string {
-	return humanizeToken(name);
-}
-
-export function iconSearchText(name: string): string {
-	return iconLabel(name).toLowerCase();
-}
-
-function resolveIcon(name?: string | null): LucideIcon | undefined {
-	return hasText(name) ? ICON_COMPONENTS[name] : undefined;
-}
-
-export function iconComponent(name: string): LucideIcon {
-	return ICON_COMPONENTS[name] ?? Folder;
-}
-
 function pillFor(color?: string | null): string | undefined {
 	return hasText(color) ? PILL[color] : undefined;
 }
@@ -280,7 +61,6 @@ export function pillClasses(color?: string | null): string {
 	return pillFor(color) ?? SLATE_PILL;
 }
 
-export const DEFAULT_GROUP_ICON = "Folder";
 export const DEFAULT_GROUP_COLOR = "slate";
 
 /**
@@ -310,8 +90,8 @@ export function groupMark({
 	return { Icon, ink: groupInk(pill) };
 }
 
-export function getGroupVisual(icon?: string | null, color?: string | null): GroupVisual {
-	const Icon = resolveIcon(icon) ?? Folder;
+/** A group as the developer surfaces draw it: the one group icon, in the group's color. */
+export function getGroupVisual(_icon?: string | null, color?: string | null): GroupVisual {
 	const pill = pillFor(color) ?? SLATE_PILL;
-	return { Icon, pill };
+	return { Icon: PracticeGroupIcon, pill };
 }

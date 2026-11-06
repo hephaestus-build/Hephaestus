@@ -63,7 +63,7 @@ A ring counts your practices by standing:
   It did not apply to your work, could not be judged, or no review has looked at it.
 
 **See all practice groups** opens the table of practice groups.
-[Your feedback](#your-feedback) follows the header.
+[Your recurring feedback patterns](#your-recurring-feedback-patterns) follows the header.
 
 A practice that your workspace no longer reviews leaves the page, with its standing and its feedback.
 
@@ -107,7 +107,7 @@ Your Practice profile is yours.
 Feedback on a pull request is visible to everyone who can see that pull request.
 Workspace admins can see all practice reviews, and instance admins can open a read-only view.
 
-## Your feedback
+## Your recurring feedback patterns
 
 1. Select **Open** to see feedback that still needs a response or more reviewed work.
 2. Read the evidence and next step on a card.
@@ -354,6 +354,7 @@ An observation or card that you arrive at by a link shows even when it lies outs
 When the timeframe hides every card, the **Feedback** tab says so and offers **Show all time**.
 
 The number beside **Feedback** and **Observations** counts what each tab shows, with the timeframe and the tab's filters applied.
+The **Guide** tab has no timeframe, as a guide does not change over time.
 
 The **Guide** tab starts with an introduction:
 
@@ -361,7 +362,9 @@ The **Guide** tab starts with an introduction:
 - A picture of the idea, if the practice has one. A screen reader reads its description.
 - What work that meets the practice looks like. If the practice has a picture, this text is its caption.
 
-If the practice has a longer guide, it follows the introduction with more pictures and links.
+If the practice has a longer guide, it follows the introduction under **Practice guide**, with more pictures and links.
+When the introduction says why the practice matters or shows a picture, it sits under **At a glance**.
+**At a glance** and **Practice guide** each show their read time in minutes, such as *4 min read*.
 If the practice never applied to your work, the tab also says so.
 
 To open a practice from a feedback card, select **Learn more about this practice**.
@@ -408,9 +411,14 @@ When you change reviewed work, its last review keeps counting until a newer revi
 For example, a practice that reviews a pull request only when it opens keeps counting that review after you push.
 
 To see how much work a standing rests on, point at its badge, move to it with the keyboard, or tap it.
-The trend beside the badge, such as *More positive recently*, opens its own sentence in the same way.
-That sentence says what a trend compares: your latest reviewed work with the work before it, in the last 90 days.
-A practice or group with no standing yet shows **Not enough to compare yet** as its trend.
+The trend beside the badge, such as *Increasing baseline*, opens its own sentence in the same way.
+That sentence says in plain words whether your recent work meets the practice more or less often than before.
+For a practice, it then says what a trend compares: your last four reviewed pieces of work with the four before them.
+For a group, it says that the trend compares your recent work with the work before it, practice by practice.
+
+The trend reads **Increasing baseline**, **Decreasing baseline** or **No clear baseline change**.
+A practice or group with no standing yet shows **No baseline yet** as its trend.
+Its sentence then says what a trend needs: for a practice, eight reviewed pieces of work.
 A tap opens the sentence, not the row.
 To close the sentence, press Escape or select a different part of the page.
 
@@ -513,7 +521,7 @@ At the end of the page, **See your own standing** opens **All practice groups** 
 
 Before the first review, each practice counts as **No standing yet**.
 The chip reads **No review yet**.
-Under **Your feedback**, the page lists what can start a review in your workspace, such as opening a pull request.
+Under **Your recurring feedback patterns**, the page lists what can start a review in your workspace, such as opening a pull request.
 Whether a review runs also depends on the repository and on each practice.
 **See what this workspace reviews** opens the practice groups.
 If a workspace admin approves feedback before it is posted on your work, the page says so.

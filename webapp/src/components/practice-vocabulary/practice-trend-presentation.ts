@@ -1,6 +1,5 @@
 import type { TrendSupport } from "@/api/types.gen";
 import { itemKindNoun, type ItemProvider } from "@/lib/item-kinds";
-import { capitalise } from "@/lib/text";
 
 import { count as counted, spell } from "./feedback-text";
 import {
@@ -9,12 +8,7 @@ import {
 	standingDefs,
 	type StandingScope,
 } from "./practice-group-standing-defs";
-import type { TrendDirection } from "./practice-trend-defs";
-
-/** "four pieces of reviewed work", under the number rule of `feedback-text`. */
-function reviewedWork(count: number, digits?: boolean): string {
-	return `${counted(count, "piece", "pieces", digits)} of reviewed work`;
-}
+import { TREND_BUNDLE, type TrendDirection } from "./practice-trend-defs";
 
 /**
  * The direction a surface shows: one with no evidence behind it, or none at all, is "not enough to
@@ -34,10 +28,50 @@ export function shownTrendDirection(
 export const LOOKBACK_DAYS = 90;
 
 /**
- * What every trend is, said before its own evidence: the latest reviewed work against the work
- * before it. A chip's words alone ("Not enough to compare yet") do not say they are a trend.
+ * How a practice's trend compares, in one plain sentence after its direction: the last bundle of
+ * reviewed work against the same amount just before it, the baseline, which moves with the work
+ * (`TrendProperties` `bundleSize`). A chip's words alone ("No baseline yet") do not say they are a
+ * trend.
  */
-export const TREND_EXPLAINED = `The trend compares your latest reviewed work with the work before it, in the last ${LOOKBACK_DAYS} days.`;
+export const TREND_EXPLAINED = `Compares your last ${TREND_BUNDLE} reviewed pieces of work with the ${TREND_BUNDLE} before them.`;
+
+/**
+ * The same for a group, without a number: the server pools the group's practices, each over its own
+ * work (`GroupTrendAggregator`).
+ */
+export const GROUP_TREND_EXPLAINED =
+	"Compares, practice by practice, your recent reviewed work in this group with the work before it.";
+
+/**
+ * The comparison sentence a trend's tooltip ends with: the practice's own counts where the trend has
+ * them and they differ from the default bundle, and what is still missing where there is no
+ * direction yet (nothing where that is unknown). No day spans and no practice coverage: the tooltip stays two short sentences.
+ */
+export function trendComparison(
+	direction: TrendDirection,
+	scope: StandingScope,
+	support: TrendSupport | undefined,
+): string {
+	const missing = support?.opportunitiesUntilComparable ?? 0;
+	if (direction === "INSUFFICIENT_EVIDENCE") {
+		// The direction sentence already says what a trend needs; only a known gap adds to it.
+		return missing > 0
+			? `Needs ${spell(missing)} more reviewed ${missing === 1 ? "piece" : "pieces"} of work.`
+			: "";
+	}
+	if (scope === "group") {
+		return GROUP_TREND_EXPLAINED;
+	}
+	const current = support?.currentOpportunities ?? 0;
+	const previous = support?.previousOpportunities ?? 0;
+	if (current === 0 || previous === 0) {
+		return TREND_EXPLAINED;
+	}
+	const digits = Math.max(current, previous) >= 10;
+	return `Compares your last ${counted(current, "reviewed piece", "reviewed pieces", digits)} of work with the ${spell(previous, digits)} before ${
+		previous === 1 ? "it" : "them"
+	}.`;
+}
 
 /** Below this many decided pieces of work, a settled standing is an early read (product vocabulary). */
 export const EARLY_READ_BELOW = 3;
@@ -104,52 +138,4 @@ export function explainStanding(
 	return work < EARLY_READ_BELOW
 		? `An early read from ${latest}. ${total}`
 		: `${description} Read from ${latest}. ${total}`;
-}
-
-export function formatTrendProvenance(
-	support: TrendSupport,
-	direction: TrendDirection,
-	scope: StandingScope,
-): string {
-	const current = support.currentOpportunities;
-	const previous = support.previousOpportunities;
-	// Not the sum of the bundles: a group's practices can bundle one piece of work two ways, and the
-	// wire already counts it once.
-	const { opportunities } = support;
-	if (opportunities === 0) {
-		return "No new work has been reviewed yet.";
-	}
-
-	const span = support.calendarSpanDays;
-	const spanSentence =
-		span !== null && span > 0 ? ` Evidence spans ${counted(span, "day", "days")}.` : "";
-
-	if (direction === "INSUFFICIENT_EVIDENCE") {
-		const missing = support.opportunitiesUntilComparable;
-		const needed =
-			missing > 0
-				? ` A direction needs ${spell(missing)} more ${missing === 1 ? "piece" : "pieces"} of reviewed work with something to judge.`
-				: "";
-		return `Based on ${reviewedWork(opportunities)}.${needed}${spanSentence}`;
-	}
-
-	if (scope === "group") {
-		const comparable = support.comparablePractices;
-		const eligible = support.eligiblePractices;
-		// One clause with two counts: both digits as soon as either reaches ten.
-		const digits = comparable !== null && eligible !== null && Math.max(comparable, eligible) >= 10;
-		const coverage =
-			comparable !== null && eligible !== null
-				? ` ${capitalise(spell(comparable, digits))} of ${counted(eligible, "practice", "practices", digits)} here had enough evidence to compare.`
-				: "";
-		return `Across ${reviewedWork(opportunities)} in this group.${coverage}${spanSentence}`;
-	}
-
-	if (previous === 0) {
-		return `Based on ${reviewedWork(current)}.${spanSentence}`;
-	}
-	const digits = Math.max(current, previous) >= 10;
-	return `Compared your latest ${reviewedWork(current, digits)} with the ${spell(previous, digits)} before ${
-		previous === 1 ? "it" : "them"
-	}.${spanSentence}`;
 }

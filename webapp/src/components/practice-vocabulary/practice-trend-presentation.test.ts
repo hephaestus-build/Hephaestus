@@ -5,9 +5,10 @@ import { wellSupported } from "@/stories/practice-profile-story-mock-data";
 
 import {
 	explainStanding,
-	formatTrendProvenance,
 	shownTrendDirection,
 	standingWork,
+	TREND_EXPLAINED,
+	trendComparison,
 } from "./practice-trend-presentation";
 
 const support = (overrides: Partial<TrendSupport> = {}): TrendSupport => ({
@@ -15,43 +16,53 @@ const support = (overrides: Partial<TrendSupport> = {}): TrendSupport => ({
 	...overrides,
 });
 
-describe("practice trend copy", () => {
-	it("describes a practice comparison the server actually made", () => {
-		expect(formatTrendProvenance(support({ calendarSpanDays: 9 }), "IMPROVING", "practice")).toBe(
-			"Compared your latest four pieces of reviewed work with the four before them. Evidence spans nine days.",
+describe("trend comparison sentence", () => {
+	it("says the default comparison in one plain sentence", () => {
+		expect(TREND_EXPLAINED).toBe(
+			"Compares your last four reviewed pieces of work with the four before them.",
 		);
+		expect(trendComparison("IMPROVING", "practice", undefined)).toBe(TREND_EXPLAINED);
+		expect(trendComparison("IMPROVING", "practice", support())).toBe(TREND_EXPLAINED);
 	});
 
-	it("handles singular provenance and a zero-evidence state", () => {
+	it("names the practice's own counts when they differ from the default", () => {
 		expect(
-			formatTrendProvenance(
-				support({ currentOpportunities: 1, previousOpportunities: 0, calendarSpanDays: 1 }),
-				"IMPROVING",
+			trendComparison(
+				"DECLINING",
 				"practice",
+				support({ currentOpportunities: 12, previousOpportunities: 4 }),
 			),
-		).toBe("Based on one piece of reviewed work. Evidence spans one day.");
+		).toBe("Compares your last 12 reviewed pieces of work with the 4 before them.");
+	});
+
+	it("says what is missing where there is no direction yet", () => {
 		expect(
-			formatTrendProvenance(
-				support({ currentOpportunities: 0, previousOpportunities: 0, opportunities: 0 }),
+			trendComparison(
 				"INSUFFICIENT_EVIDENCE",
 				"practice",
+				support({ opportunitiesUntilComparable: 1 }),
 			),
-		).toBe("No new work has been reviewed yet.");
+		).toBe("Needs one more reviewed piece of work.");
+		expect(
+			trendComparison(
+				"INSUFFICIENT_EVIDENCE",
+				"group",
+				support({ opportunitiesUntilComparable: 3 }),
+			),
+		).toBe("Needs three more reviewed pieces of work.");
 	});
 
-	it("claims no comparison when the server formed none", () => {
-		const sentence = formatTrendProvenance(
-			support({ previousOpportunities: 3, opportunities: 7, opportunitiesUntilComparable: 1 }),
-			"INSUFFICIENT_EVIDENCE",
-			"practice",
-		);
-
-		expect(sentence).not.toContain("Compared");
-		expect(sentence).toBe(
-			"Based on seven pieces of reviewed work. A direction needs one more piece of reviewed work with something to judge. Evidence spans 12 days.",
-		);
+	it("adds nothing where no direction is at hand and the gap is unknown", () => {
+		expect(trendComparison("INSUFFICIENT_EVIDENCE", "practice", undefined)).toBe("");
+		expect(trendComparison("INSUFFICIENT_EVIDENCE", "group", undefined)).toBe("");
 	});
 
+	it("gives a group no number", () => {
+		expect(trendComparison("UNCERTAIN", "group", support())).not.toMatch(/four|eight|\d/u);
+	});
+});
+
+describe("practice trend copy", () => {
 	it("calls a settled standing from fewer than three pieces of work an early read", () => {
 		expect(
 			explainStanding(
@@ -146,63 +157,6 @@ describe("practice trend copy", () => {
 		expect(standingWork(support({ standingWork: 0 }))).toBeUndefined();
 		expect(standingWork(undefined)).toBeUndefined();
 		expect(standingWork(support())).toBe(4);
-	});
-
-	it("writes both counts of one clause as digits once either reaches ten", () => {
-		expect(
-			formatTrendProvenance(
-				support({ currentOpportunities: 12, previousOpportunities: 4, calendarSpanDays: 30 }),
-				"IMPROVING",
-				"practice",
-			),
-		).toBe(
-			"Compared your latest 12 pieces of reviewed work with the 4 before them. Evidence spans 30 days.",
-		);
-	});
-
-	it("does not describe a group trend as a comparison of bundles", () => {
-		const sentence = formatTrendProvenance(
-			support({
-				currentOpportunities: 7,
-				previousOpportunities: 5,
-				opportunities: 12,
-				comparablePractices: 3,
-				eligiblePractices: 5,
-			}),
-			"IMPROVING",
-			"group",
-		);
-
-		expect(sentence).not.toContain("Compared");
-		expect(sentence).toBe(
-			"Across 12 pieces of reviewed work in this group. Three of five practices here had enough evidence to compare. Evidence spans 12 days.",
-		);
-	});
-
-	it("counts a piece of work both bundles claim once", () => {
-		// A group bundles per practice, so one pull request can be current evidence for one practice and
-		// previous evidence for another. The reader is told what the group saw, not what the bundles add up
-		// to.
-		const shared = {
-			currentOpportunities: 7,
-			previousOpportunities: 5,
-			opportunities: 10,
-			comparablePractices: 3,
-			eligiblePractices: 5,
-		};
-
-		expect(formatTrendProvenance(support(shared), "IMPROVING", "group")).toBe(
-			"Across 10 pieces of reviewed work in this group. Three of five practices here had enough evidence to compare. Evidence spans 12 days.",
-		);
-		expect(
-			formatTrendProvenance(
-				support({ ...shared, opportunitiesUntilComparable: 2 }),
-				"INSUFFICIENT_EVIDENCE",
-				"group",
-			),
-		).toBe(
-			"Based on 10 pieces of reviewed work. A direction needs two more pieces of reviewed work with something to judge. Evidence spans 12 days.",
-		);
 	});
 });
 

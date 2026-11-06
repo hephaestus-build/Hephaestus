@@ -77,14 +77,16 @@ async function closeTip() {
 export const Default: Story = {
 	play: async ({ canvas, args }) => {
 		await expect(canvas.getByText(/21 developers with a standing/u)).toBeVisible();
-		// A standing is an AI reading of the work, never a grade: the page says so before any count.
+		// A standing is an AI reading of the work, never a grade: the page says so before any count,
+		// and its (i) says why.
 		await expect(canvas.getByText(/Not a grade\.$/u)).toBeVisible();
+		const about = within(await openTip(canvas, "About this page"));
+		await expect(about.getByText(/can be wrong/u)).toBeVisible();
+		await closeTip();
 		// The legend's (i) says each developer counts once, and that small counts show too.
 		const bars = within(await openTip(canvas, "About the bars"));
-		await expect(
-			bars.getByText(/Each developer counts once, however much of their work was reviewed\./u),
-		).toBeVisible();
-		await expect(bars.getByText(/Every bar shows all its counts, however small\./u)).toBeVisible();
+		await expect(bars.getByText(/each once\./u)).toBeVisible();
+		await expect(bars.getByText(/others may tell where you are/u)).toBeVisible();
 		await closeTip();
 		const table = groupsTable(canvas);
 		await expect(

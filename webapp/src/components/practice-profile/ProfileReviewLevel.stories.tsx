@@ -244,11 +244,51 @@ export const ScheduledReview: Story = {
 	},
 };
 
+/** As GitHub heads a pull request: the title, then its number, muted, as the link to the original. */
+export const TitleWithNumber: Story = {
+	args: {
+		state: readyWith({
+			review: {
+				...review,
+				item: { ...review.item, provider: "GITHUB", label: "#19", title: "Add rate limiting" },
+			},
+		}),
+	},
+	play: async () => {
+		await settledReviewPanel();
+		const heading = screen.getByRole("heading", {
+			name: "Add rate limiting, pull request #19",
+		});
+		await expect(
+			within(heading).getByRole("link", { name: /opens in a new tab/u }),
+		).toHaveTextContent("#19");
+	},
+};
+
+/** A GitLab merge request keeps the provider's own sign, "!", in its number. */
+export const MergeRequestNumber: Story = {
+	args: {
+		state: readyWith({
+			review: { ...review, item: { ...review.item, title: "Add rate limiting" } },
+		}),
+	},
+	play: async () => {
+		await settledReviewPanel();
+		await expect(
+			screen.getByRole("heading", {
+				name: `Add rate limiting, merge request ${review.item.label}`,
+			}),
+		).toBeVisible();
+	},
+};
+
 export const UntitledItem: Story = {
 	args: { state: readyWith({ review: { ...review, item: { ...review.item, title: null } } }) },
 	play: async () => {
 		await settledReviewPanel();
-		await expect(screen.getByRole("heading", { name: review.item.label })).toBeVisible();
+		await expect(
+			screen.getByRole("heading", { name: new RegExp(`^Merge request ${review.item.label}`, "u") }),
+		).toBeVisible();
 	},
 };
 
