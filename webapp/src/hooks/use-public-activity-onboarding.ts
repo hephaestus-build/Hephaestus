@@ -37,8 +37,6 @@ export function usePublicActivityOnboarding({
 	const [deferredFor, setDeferredFor] = useState<string>();
 	const answer = useMutation({
 		...answerPublicActivityOnboardingMutation(),
-		// Offline, a paused save would hold both answers forever; a failed one lets the person go on.
-		networkMode: "always",
 		onSuccess: async (data, { body }) => {
 			queryClient.setQueryData(getPublicActivityOnboardingQueryKey({ path }), data);
 			// One answer for the account: User settings reads the same choice.

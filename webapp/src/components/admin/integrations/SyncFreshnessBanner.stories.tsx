@@ -9,18 +9,15 @@ import { SyncFreshnessBanner } from "./SyncFreshnessBanner";
 /**
  * The section-wide freshness note.
  *
- * This surface exists to tell the truth about how fresh sync data is, which makes silence about its
- * own staleness its worst possible failure — and offline was exactly that silence. Query v5 defaults
- * to `networkMode: "online"`, so a dropped connection *pauses* queries instead of failing them:
- * nothing throws, no `QueryErrorAlert` fires, and a live progress bar simply freezes mid-run looking
- * exactly like a healthy one. The SSE banner doesn't cover it either — `EventSource` re-enters
- * CONNECTING rather than CLOSED on a network drop.
+ * Cached progress can remain on screen after the connection drops. This note makes its age clear
+ * even before another read fails. The SSE banner cannot identify an offline browser because
+ * `EventSource` re-enters CONNECTING rather than CLOSED on a network drop.
  *
  * Offline strictly outranks live-push-lost (a dead network makes the polling fallback moot), so it
  * replaces the note rather than stacking a second bar.
  *
  * Online state is read from `onlineManager` rather than `navigator.onLine` so the banner and the data
- * can never disagree — it's the same signal that decides whether queries run.
+ * can never disagree — it's the same signal that decides whether queries retry.
  */
 const meta = {
 	component: SyncFreshnessBanner,
@@ -69,9 +66,7 @@ export const LivePushUnavailable: Story = {
 };
 
 /**
- * The browser went offline. Queries are paused, not failing, so nothing else on the page will ever
- * say so — this banner is the only thing standing between the admin and a frozen progress bar they'd
- * read as live.
+ * The browser went offline. The note identifies cached progress as stale before another read fails.
  */
 export const Offline: Story = {
 	beforeEach: () => {
