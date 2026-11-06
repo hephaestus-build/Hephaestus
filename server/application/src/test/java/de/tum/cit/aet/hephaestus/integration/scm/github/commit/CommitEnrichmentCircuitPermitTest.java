@@ -135,7 +135,8 @@ class CommitEnrichmentCircuitPermitTest extends BaseUnitTest {
         assertThat(service.enrichCommitMetadata(REPO_ID, "owner/repo", SCOPE_ID))
                 .isZero();
         assertProbingWith(0);
-        verify(contributorRepository, never()).upsertContributor(anyLong(), any(), any(), any(), any(), anyInt());
+        verify(contributorRepository, never())
+                .upsertContributorByNativeUserId(anyLong(), any(), any(), any(), any(), anyInt());
 
         assertThat(service.enrichCommitMetadata(REPO_ID, "owner/repo", SCOPE_ID))
                 .isEqualTo(1);
@@ -147,7 +148,7 @@ class CommitEnrichmentCircuitPermitTest extends BaseUnitTest {
 
         assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
         verify(contributorRepository, times(3))
-                .upsertContributor(eq(42L), any(), eq("AUTHOR"), any(), eq("one@example.com"), eq(0));
+                .upsertContributorByNativeUserId(eq(42L), any(), eq("AUTHOR"), any(), eq("one@example.com"), eq(0));
     }
 
     @Test
@@ -174,11 +175,11 @@ class CommitEnrichmentCircuitPermitTest extends BaseUnitTest {
         assertThat(service.enrichCommitMetadata(REPO_ID, "owner/repo", SCOPE_ID))
                 .isEqualTo(1);
         verify(contributorRepository)
-                .upsertContributor(eq(42L), any(), eq("AUTHOR"), any(), eq("author1@example.com"), eq(0));
+                .upsertContributorByNativeUserId(eq(42L), any(), eq("AUTHOR"), any(), eq("author1@example.com"), eq(0));
         verify(contributorRepository, times(CommitMetadataEnrichmentService.AUTHORS_PAGE_SIZE - 1))
-                .upsertContributor(eq(42L), any(), eq("CO_AUTHOR"), any(), any(), anyInt());
+                .upsertContributorByNativeUserId(eq(42L), any(), eq("CO_AUTHOR"), any(), any(), anyInt());
         verify(contributorRepository, never())
-                .upsertContributor(anyLong(), any(), any(), any(), eq("author11@example.com"), anyInt());
+                .upsertContributorByNativeUserId(anyLong(), any(), any(), any(), eq("author11@example.com"), anyInt());
         assertThat(service.enrichCommitMetadata(REPO_ID, "owner/repo", SCOPE_ID))
                 .isZero();
         assertProbingWith(1);
@@ -257,7 +258,8 @@ class CommitEnrichmentCircuitPermitTest extends BaseUnitTest {
 
         assertProbingWith(0);
         verify(requestSpec, never()).execute();
-        verify(contributorRepository, never()).upsertContributor(anyLong(), any(), any(), any(), any(), anyInt());
+        verify(contributorRepository, never())
+                .upsertContributorByNativeUserId(anyLong(), any(), any(), any(), any(), anyInt());
         verify(commitRepository, never()).bulkUpdateAuthorIdByEmail(any(), any(), any());
     }
 
@@ -336,11 +338,11 @@ class CommitEnrichmentCircuitPermitTest extends BaseUnitTest {
 
     private void assertOnlyFirstAuthorPageStored() {
         verify(contributorRepository)
-                .upsertContributor(eq(42L), any(), eq("AUTHOR"), any(), eq("author1@example.com"), eq(0));
+                .upsertContributorByNativeUserId(eq(42L), any(), eq("AUTHOR"), any(), eq("author1@example.com"), eq(0));
         verify(contributorRepository, times(CommitMetadataEnrichmentService.AUTHORS_PAGE_SIZE - 1))
-                .upsertContributor(eq(42L), any(), eq("CO_AUTHOR"), any(), any(), anyInt());
+                .upsertContributorByNativeUserId(eq(42L), any(), eq("CO_AUTHOR"), any(), any(), anyInt());
         verify(contributorRepository, never())
-                .upsertContributor(anyLong(), any(), any(), any(), eq("author11@example.com"), anyInt());
+                .upsertContributorByNativeUserId(anyLong(), any(), any(), any(), eq("author11@example.com"), anyInt());
     }
 
     private static ClientGraphQlResponse overflowed() {

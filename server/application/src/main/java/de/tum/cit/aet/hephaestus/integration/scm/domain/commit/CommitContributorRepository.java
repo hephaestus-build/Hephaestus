@@ -31,8 +31,9 @@ public interface CommitContributorRepository extends JpaRepository<CommitContrib
      * Upsert a commit contributor. On conflict (same commit, email, role),
      * updates the name, ordinal, and user_id if a better resolution is available.
      * <p>
-     * The user_id is validated against the "user" table via a subquery to avoid FK violations
-     * when the GitHub user hasn't been synced into our database yet.
+     * {@code userId} is a local user id, never a provider's id: for that, use
+     * {@link #upsertContributorByNativeUserId}. It is validated against the "user" table via a
+     * subquery to avoid FK violations.
      */
     @Modifying
     @Transactional
@@ -47,6 +48,35 @@ public interface CommitContributorRepository extends JpaRepository<CommitContrib
     void upsertContributor(
             @Param("commitId") Long commitId,
             @Param("userId") @Nullable Long userId,
+            @Param("role") String role,
+            @Param("name") @Nullable String name,
+            @Param("email") String email,
+            @Param("ordinal") int ordinal);
+
+    /**
+     * Upsert a commit contributor that a provider names by its own user id. The id is resolved to a local user
+     * on the provider of the commit's repository, in this statement: a provider's ids and local ids share a range,
+     * so the provider id must never be stored as a local id. A user who is not synced yet stores {@code NULL}.
+     */
+    @Modifying
+    @Transactional
+    @Query(value = """
+        INSERT INTO commit_contributor (commit_id, user_id, role, name, email, ordinal)
+        VALUES (
+            :commitId,
+            (SELECT u.id FROM "user" u
+             JOIN repository r ON r.provider_id = u.provider_id
+             JOIN git_commit c ON c.repository_id = r.id
+             WHERE c.id = :commitId AND u.native_id = :nativeUserId),
+            :role, :name, :email, :ordinal)
+        ON CONFLICT ON CONSTRAINT uq_commit_contributor_commit_email_role DO UPDATE SET
+            name = COALESCE(EXCLUDED.name, commit_contributor.name),
+            ordinal = EXCLUDED.ordinal,
+            user_id = COALESCE(EXCLUDED.user_id, commit_contributor.user_id)
+        """, nativeQuery = true)
+    void upsertContributorByNativeUserId(
+            @Param("commitId") Long commitId,
+            @Param("nativeUserId") @Nullable Long nativeUserId,
             @Param("role") String role,
             @Param("name") @Nullable String name,
             @Param("email") String email,
