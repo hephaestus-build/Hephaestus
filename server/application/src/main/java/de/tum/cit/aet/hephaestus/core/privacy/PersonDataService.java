@@ -25,11 +25,13 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
@@ -288,26 +290,47 @@ public class PersonDataService {
                 requests.saveAndFlush(r);
             });
         } catch (RuntimeException exception) {
-            boolean retry = exception instanceof TransientDataAccessException
-                    || exception instanceof RecoverableDataAccessException;
-            log.atError()
-                    .addKeyValue("event.name", "person_data.erasure.failed")
-                    .addKeyValue("person_data.request.id", id)
-                    .addKeyValue("person_data.store", activeStore)
-                    .addKeyValue("error.type", exception.getClass().getName())
-                    .log(
-                            retry
-                                    ? "Person data erasure will retry after a temporary store failure"
-                                    : "Person data erasure stopped; an instance admin must resume it");
-            tx.executeWithoutResult(status -> {
-                var r = requests.lock(id).orElseThrow(() -> notFound());
-                if (r.getState() == PersonDataRequest.State.ERASING) {
-                    if (!retry) r.setState(PersonDataRequest.State.FAILED);
-                    r.setFailureCode(retry ? "STORE_ERASURE_RETRY_PENDING" : "STORE_ERASURE_FAILED");
+            boolean temporary = isTemporaryFailure(exception);
+            @Nullable Boolean retry = null;
+            try {
+                retry = tx.execute(status -> {
+                    var r = requests.lock(id).orElseThrow(() -> notFound());
+                    if (r.getState() != PersonDataRequest.State.ERASING) return false;
+                    boolean retryPending = temporary && !"STORE_ERASURE_RETRY_PENDING".equals(r.getFailureCode());
+                    if (!retryPending) r.setState(PersonDataRequest.State.FAILED);
+                    r.setFailureCode(retryPending ? "STORE_ERASURE_RETRY_PENDING" : "STORE_ERASURE_FAILED");
                     requests.saveAndFlush(r);
-                }
-            });
+                    return retryPending;
+                });
+            } finally {
+                var event = Boolean.TRUE.equals(retry) ? log.atWarn() : log.atError();
+                event.addKeyValue("event.name", "person_data.erasure.failed")
+                        .addKeyValue("person_data.request.id", id)
+                        .addKeyValue("person_data.store", activeStore)
+                        .addKeyValue("error.type", exception.getClass().getName())
+                        .addKeyValue("person_data.failure_recorded", retry != null)
+                        .log(
+                                retry == null
+                                        ? "Person data erasure status could not be recorded; check database availability"
+                                        : Boolean.TRUE.equals(retry)
+                                                ? "Person data erasure will retry once after a temporary store failure"
+                                                : "Person data erasure stopped; an instance admin must resume it");
+            }
         }
+    }
+
+    private static boolean isTemporaryFailure(RuntimeException failure) {
+        @Nullable Throwable cause = failure;
+        while (cause != null) {
+            if (cause instanceof TransientDataAccessException
+                    || cause instanceof RecoverableDataAccessException
+                    || cause instanceof DataAccessResourceFailureException
+                    || cause instanceof CannotCreateTransactionException) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     @Transactional

@@ -45,13 +45,18 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -230,6 +235,8 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                         List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Alex merges.")),
                         null,
                         null));
+        assertThat(turns.require(running.getWorkspaceId(), running.getId()).getStatus())
+                .isEqualTo(MentorTurn.Status.FAILED);
         assertThat(MentorLedgerFixtures.turnEntries(
                         entityManager, erasure.workspace().getId(), running.getId()))
                 .filteredOn(entry -> entry.getKind() == MentorEntry.Kind.HEPH)
@@ -338,9 +345,11 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 new MentorTurnService.Ending(MentorTurn.Status.DONE, appended, null, null));
     }
 
-    @Test
-    void shouldRetryATemporaryStoreFailureFromTheScheduledBacklogWithoutAnotherAdminConfirmation() {
-        Erasure erasure = requestErasure(sourceThatFailsOnce(new TransientDataAccessResourceException("temporary")));
+    @ParameterizedTest
+    @MethodSource("temporaryFailures")
+    void shouldRetryATemporaryStoreFailureFromTheScheduledBacklogWithoutAnotherAdminConfirmation(
+            RuntimeException failure) {
+        Erasure erasure = requestErasure(sourceThatFailsOnce(failure));
         var failed = erasure.service().get(erasure.requestId()).request();
         assertThat(failed.getState()).isEqualTo(PersonDataRequest.State.ERASING);
         assertThat(failed.getFailureCode()).isEqualTo("STORE_ERASURE_RETRY_PENDING");
@@ -352,19 +361,46 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(completed.getScopeJson()).isNull();
     }
 
+    static Stream<RuntimeException> temporaryFailures() {
+        return Stream.of(
+                new TransientDataAccessResourceException("temporary"),
+                new IllegalStateException("wrapper", new TransientDataAccessResourceException("temporary")),
+                new DataAccessResourceFailureException("connection unavailable"),
+                new CannotCreateTransactionException("pool unavailable"));
+    }
+
+    @Test
+    void shouldStopRepeatedStoreFailuresAndKeepTheRequestVisibleForAnAdmin() {
+        Erasure erasure =
+                requestErasure(sourceThatFails(2, new DataAccessResourceFailureException("connection unavailable")));
+        var runner = new PersonDataJobRunner(jdbc, erasure.service());
+        runner.run();
+        var stopped = erasure.service().get(erasure.requestId()).request();
+        assertThat(stopped.getState()).isEqualTo(PersonDataRequest.State.FAILED);
+        assertThat(stopped.getFailureCode()).isEqualTo("STORE_ERASURE_FAILED");
+        assertThat(stopped.getScopeJson()).isNotNull();
+        runner.run();
+        assertThat(erasure.service().get(erasure.requestId()).request().getState())
+                .isEqualTo(PersonDataRequest.State.FAILED);
+    }
+
     /** A source step that fails on its first run, before the last step, so the erasure fails and resumes. */
     private PersonDataContributor sourceThatFailsOnce() {
         return sourceThatFailsOnce(new IllegalStateException("source step failed"));
     }
 
     private PersonDataContributor sourceThatFailsOnce(RuntimeException failure) {
-        var failOnce = new AtomicBoolean(true);
+        return sourceThatFails(1, failure);
+    }
+
+    private PersonDataContributor sourceThatFails(int failures, RuntimeException failure) {
+        var remaining = new AtomicInteger(failures);
         return new JdbcPersonDataStore(
                 namedJdbc, mapper, "source_step", "user", "t.id = ANY(:users)", "id,name", "id", "name=NULL", 0) {
             @Override
             public long erase(PersonDataSelection selection, PersonScope frozenScope) {
                 long count = super.erase(selection, frozenScope);
-                if (failOnce.getAndSet(false)) {
+                if (remaining.getAndDecrement() > 0) {
                     throw failure;
                 }
                 return count;

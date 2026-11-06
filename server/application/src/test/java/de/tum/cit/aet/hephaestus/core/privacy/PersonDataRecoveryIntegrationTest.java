@@ -5,25 +5,48 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
+@ExtendWith(OutputCaptureExtension.class)
 class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     @TempDir
     Path directory;
@@ -42,6 +65,9 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private ApplicationContext beans;
 
     @Test
     void shouldKeepProcessingStoppedWhenTheRecoveryManifestIsMissing() {
@@ -94,8 +120,9 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    @Test
-    void shouldResumeAnInterruptedErasureBeforeProcessingStarts() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"FAILED", "ERASING"})
+    void shouldResumeAnInterruptedErasureBeforeProcessingStarts(String state) throws Exception {
         var administrator = new Account("Recovery administrator");
         administrator.setAppRole(Account.AppRole.APP_ADMIN);
         long administratorId =
@@ -105,7 +132,8 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
         var request = service.preview(administratorId, personId, List.of()).request();
         service.requestErasure(request.getId(), administratorId, false);
         jdbc.update(
-                "UPDATE person_data_request SET state='FAILED',failure_code='STORE_ERASURE_FAILED' WHERE id=?",
+                "UPDATE person_data_request SET state=?,failure_code='STORE_ERASURE_FAILED' WHERE id=?",
+                state,
                 request.getId());
         Path manifest = manifest("""
                 {"version":1,"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
@@ -141,6 +169,106 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 """));
     }
 
+    @Test
+    void shouldReapplyNativeIdentitySuppressionForAllAdaptersBeforeProcessingStarts() throws Exception {
+        var administrator = new Account("Recovery administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        var inventory = beans.getBean(IdentityProviderRepository.class);
+        List<PersonDataRecovery.NativeIdentity> identities = List.of(
+                new PersonDataRecovery.NativeIdentity("GITHUB", "https://github.com", "424242", null),
+                new PersonDataRecovery.NativeIdentity("GITLAB", "https://recovery-gitlab.example.test", "434343", null),
+                new PersonDataRecovery.NativeIdentity("SLACK", "https://slack.com", "URECOVERY", "TRECOVERY"),
+                new PersonDataRecovery.NativeIdentity(
+                        "OUTLINE",
+                        "https://recovery-outline.example.test",
+                        "00000000-0000-4000-8000-000000000042",
+                        null));
+        for (var identity : identities) {
+            var type = IdentityProviderType.valueOf(identity.providerType());
+            if (inventory.findByTypeAndServerUrl(type, identity.serverUrl()).isEmpty()) {
+                inventory.saveAndFlush(new IdentityProvider(type, identity.serverUrl()));
+            }
+        }
+        Path manifest = manifest(mapper.writeValueAsString(new PersonDataRecovery.Manifest(
+                1,
+                Instant.parse("2026-01-01T00:00:00Z"),
+                false,
+                administratorId,
+                List.of(new PersonDataRecovery.Person(null, identities, false)))));
+        var processing = new AtomicBoolean();
+        try (var context = context(manifest, processing)) {
+            context.refresh();
+            assertThat(processing).isTrue();
+        }
+        var suppression = beans.getBean(PersonProcessingSuppression.class);
+        for (var identity : identities) {
+            long providerId = Objects.requireNonNull(inventory
+                    .findByTypeAndServerUrl(IdentityProviderType.valueOf(identity.providerType()), identity.serverUrl())
+                    .orElseThrow()
+                    .getId());
+            assertThat(suppression.isSuppressed(providerId, identity.subject(), identity.teamId()))
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void shouldKeepProcessingStoppedAndHidePrivateInputWhenAStoreFails(CapturedOutput output) throws Exception {
+        var administrator = new Account("Recovery administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        long personId = Objects.requireNonNull(
+                accounts.saveAndFlush(new Account("Store failure person")).getId());
+        var failing =
+                new JdbcPersonDataStore(
+                        beans.getBean(NamedParameterJdbcTemplate.class),
+                        mapper,
+                        "recovery_failing_store",
+                        "account",
+                        "t.id=:account",
+                        "id",
+                        "id",
+                        "display_name='erased'",
+                        0) {
+                    @Override
+                    public long erase(PersonDataSelection selection, PersonScope person) {
+                        throw new IllegalStateException("private-display-name-canary");
+                    }
+                };
+        var recoveryService = new PersonDataService(
+                resolver,
+                new PersonDataRegistry(List.of(new RecoveryStores(List.of(failing)))),
+                List.of(),
+                beans.getBean(PersonDataRequestRepository.class),
+                beans.getBean(IdentityRestrictionService.class),
+                beans.getBean(PersonDataWriteFence.class),
+                beans.getBean(PersonDataCopyFence.class),
+                beans.getBean(IssuedJwtRepository.class),
+                beans.getBean(PlatformTransactionManager.class),
+                mapper,
+                jdbc);
+        Path manifest = manifest("""
+                {"version":1,"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
+                 "people":[{"accountId":%d,"identities":[]}]}
+                """.formatted(administratorId, personId));
+        var processing = new AtomicBoolean();
+        try (var context = context(manifest, processing, recoveryService)) {
+            assertThatThrownBy(context::refresh).hasStackTraceContaining("ERASURE_INCOMPLETE");
+            assertThat(processing).isFalse();
+        }
+        assertThat(jdbc.queryForObject(
+                        "SELECT state FROM person_data_request WHERE scope_json::jsonb->>'accountId'=?",
+                        String.class,
+                        Long.toString(personId)))
+                .isEqualTo("FAILED");
+        assertThat(output).contains("ERASURE_INCOMPLETE").doesNotContain("private-display-name-canary");
+    }
+
+    @PersonDataStores({"recovery_failing_store"})
+    private record RecoveryStores(List<PersonDataContributor> contributors) implements PersonDataCatalog {}
+
     private Path manifest(String content) throws Exception {
         return Files.writeString(directory.resolve("recovery.json"), content);
     }
@@ -160,6 +288,11 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     private GenericApplicationContext context(Path manifest, AtomicBoolean processing) {
+        return context(manifest, processing, service);
+    }
+
+    private GenericApplicationContext context(
+            Path manifest, AtomicBoolean processing, PersonDataService recoveryService) {
         var context = new GenericApplicationContext();
         var environment = new MockEnvironment()
                 .withProperty(RuntimeRole.SERVER_PROPERTY, "true")
@@ -168,11 +301,11 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
         context.registerBean(
                 PersonDataRecovery.class,
                 () -> new PersonDataRecovery(
-                        service,
+                        recoveryService,
                         resolver,
                         mapper,
                         environment,
-                        jdbc,
+                        beans.getBean(PersonDataRequestRepository.class),
                         new PersonDataRecoveryProperties(manifest.toString())));
         context.registerBean("processing", SmartLifecycle.class, () -> new SmartLifecycle() {
             @Override

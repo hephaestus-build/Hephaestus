@@ -20,6 +20,7 @@ final class PersonErasureAllStoresFixture {
     static final String CANARY = "person-all-stores-canary";
     private final JdbcTemplate jdbc;
     private final SchemaRowSeeder rows;
+    private final long generatedIdBase;
     private final List<SeededRow> seeded = new ArrayList<>();
 
     record Subject(
@@ -35,7 +36,12 @@ final class PersonErasureAllStoresFixture {
     private record SeededRow(String table, Map<String, Object> keys) {}
 
     PersonErasureAllStoresFixture(JdbcTemplate jdbc) {
+        this(jdbc, 996100L);
+    }
+
+    PersonErasureAllStoresFixture(JdbcTemplate jdbc, long generatedIdBase) {
         this.jdbc = jdbc;
+        this.generatedIdBase = generatedIdBase;
         rows = new SchemaRowSeeder(jdbc);
     }
 
@@ -405,8 +411,17 @@ final class PersonErasureAllStoresFixture {
     }
 
     void seedScm(long user, long provider, long base) {
-        row("organization", "id", base, "native_id", base, "provider_id", provider, "login", "shared-organization");
-        row("team", "id", base + 1, "native_id", base + 1, "provider_id", provider, "slug", "shared-team");
+        row(
+                "organization",
+                "id",
+                base,
+                "native_id",
+                base,
+                "provider_id",
+                provider,
+                "login",
+                "shared-organization-" + base);
+        row("team", "id", base + 1, "native_id", base + 1, "provider_id", provider, "slug", "shared-team-" + base);
         row(
                 "repository",
                 "id",
@@ -418,7 +433,7 @@ final class PersonErasureAllStoresFixture {
                 "organization_id",
                 base,
                 "name_with_owner",
-                "shared/repository");
+                "shared/repository-" + base);
         row("organization_membership", "organization_id", base, "user_id", user, "role", "MEMBER");
         row("team_membership", "team_id", base + 1, "user_id", user, "role", "MEMBER");
         row("team_repository_permission", "team_id", base + 1, "repository_id", base + 2, "permission", "READ");
@@ -571,10 +586,14 @@ final class PersonErasureAllStoresFixture {
     }
 
     void seedOutline(long workspace, long connection, String subject) {
+        seedOutline(workspace, connection, subject, 999000L);
+    }
+
+    void seedOutline(long workspace, long connection, String subject, long collectionId) {
         row(
                 "outline_collection",
                 "id",
-                999000L,
+                collectionId,
                 "workspace_id",
                 workspace,
                 "connection_id",
@@ -639,7 +658,7 @@ final class PersonErasureAllStoresFixture {
                     .map(column -> String.valueOf(column.get("data_type")))
                     .findFirst()
                     .orElseThrow();
-            values.put("id", type.equals("uuid") ? UUID.randomUUID() : 996100L + seeded.size());
+            values.put("id", type.equals("uuid") ? UUID.randomUUID() : generatedIdBase + seeded.size());
         }
         List<String> keyNames = strings(
                 "SELECT a.attname FROM pg_index i JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=ANY(i.indkey) WHERE i.indrelid=CAST(? AS regclass) AND i.indisprimary ORDER BY a.attnum",
@@ -664,17 +683,25 @@ final class PersonErasureAllStoresFixture {
         return jdbc.query(sql, (result, index) -> Objects.requireNonNull(result.getString(1)), arguments);
     }
 
+    List<List<String>> snapshot() {
+        return seeded.stream().map(this::read).toList();
+    }
+
+    private List<String> read(SeededRow row) {
+        List<Object> arguments = new ArrayList<>();
+        List<String> predicates = new ArrayList<>();
+        row.keys().forEach((key, value) -> {
+            predicates.add("t.\"" + key + "\"=?");
+            arguments.add(value);
+        });
+        return strings(
+                "SELECT to_jsonb(t)::text FROM \"" + row.table() + "\" t WHERE " + String.join(" AND ", predicates),
+                arguments.toArray());
+    }
+
     void assertNoPersonalContentOrReferences(Subject person, ObjectMapper mapper) {
         for (var row : seeded) {
-            List<Object> arguments = new ArrayList<>();
-            List<String> predicates = new ArrayList<>();
-            row.keys().forEach((key, value) -> {
-                predicates.add("t.\"" + key + "\"=?");
-                arguments.add(value);
-            });
-            var remaining = strings(
-                    "SELECT to_jsonb(t)::text FROM \"" + row.table() + "\" t WHERE " + String.join(" AND ", predicates),
-                    arguments.toArray());
+            var remaining = read(row);
             for (String json : remaining) {
                 assertThat(json)
                         .as("personal content in seeded %s", row.table())

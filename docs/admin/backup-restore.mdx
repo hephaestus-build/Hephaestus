@@ -54,7 +54,7 @@ Do not apply clone lockdown to the live recovery database.
 
 ### Reapply erasure decisions before processing resumes
 
-Keep the server, worker and webhook Deployments stopped while PostgreSQL and JetStream are restored.
+Keep the normal server, worker and webhook Deployments stopped while PostgreSQL and JetStream are restored.
 Keep public access and provider egress closed.
 Before replay or normal processing, the server must pass the `erasure-recovery` startup profile.
 This profile runs the existing person-erasure service before lifecycle workers, scheduled tasks or broker consumers start.
@@ -72,6 +72,7 @@ A missing or invalid manifest, an unknown provider instance, or an incomplete er
    Do not put it in Helm values, a ConfigMap, a command-line argument or shared logs.
    Only its mounted path goes in configuration.
 3. If restored receipts name mounted evidence stores, make their original volumes available for cleanup.
+   Use one isolated maintenance worker only for evidence deletion.
    A maintenance worker can run with `HEPHAESTUS_AGENT_ENABLED=false`, `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX=0`, `HEPHAESTUS_RUNTIME_SERVER_ENABLED=false` and `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false`.
    This permits its deletion poll without claiming reviews or conversation turns.
    Keep provider egress denied.
@@ -84,7 +85,9 @@ A missing or invalid manifest, an unknown provider instance, or an incomplete er
 6. Wait for server startup to complete.
    If it stops, keep the other Deployments stopped, correct the private input or unfinished erasure, and retry.
    Do not remove the recovery profile to bypass the failure.
-7. After startup completes, open access and provider egress.
+7. Remove the recovery profile and temporary manifest mount before you resume normal operation.
+   The Kubernetes procedure below restores the original Deployment.
+8. After normal server startup completes, open access and provider egress.
    Start the other roles.
    An old broker message remains subject to the reapplied native-identity suppression controls.
 
@@ -132,6 +135,60 @@ The file itself is never stored in the database or logged.
 The existing erasure workflow temporarily keeps its frozen subject scope while a request is active.
 After completion, only its normal suppression controls and erasure receipts remain.
 Keep the manifest under the [backup retention rule](#backup-retention).
+
+### Mount the manifest for a Kubernetes recovery
+
+The chart uses the `prod` profile and a startup probe.
+A large erasure manifest can take longer than that probe permits.
+Use this temporary Deployment patch while normal workloads and public access remain stopped.
+It preserves the readiness probe and removes the startup and liveness probes until recovery completes.
+The mounted Secret contains private identities.
+Restrict its namespace access to recovery operators.
+
+Set `NAMESPACE`, `SERVER_DEPLOYMENT` and `ERASURE_MANIFEST` to the namespace, server Deployment and private manifest file.
+
+```bash
+umask 077
+server_recovery_dir=$(mktemp -d)
+erasure_secret="${SERVER_DEPLOYMENT}-erasure-recovery"
+kubectl -n "$NAMESPACE" get deployment "$SERVER_DEPLOYMENT" -o json > "$server_recovery_dir/before.json"
+kubectl -n "$NAMESPACE" create secret generic "$erasure_secret" --from-file="manifest.json=$ERASURE_MANIFEST"
+server_container=$(jq -r '.spec.template.spec.containers[0].name' "$server_recovery_dir/before.json")
+jq -n --arg container "$server_container" --arg secret "$erasure_secret" '
+  {spec: {replicas: 1, template: {spec: {
+    containers: [{name: $container, startupProbe: null, livenessProbe: null,
+      env: [
+        {name: "SPRING_PROFILES_ACTIVE", value: "prod,erasure-recovery"},
+        {name: "HEPHAESTUS_PRIVACY_RECOVERY_MANIFEST", value: "/var/run/hephaestus/erasure-recovery/manifest.json"},
+        {name: "HEPHAESTUS_RUNTIME_WORKER_ENABLED", value: "false"},
+        {name: "HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED", value: "false"}],
+      volumeMounts: [{name: "erasure-recovery", mountPath: "/var/run/hephaestus/erasure-recovery", readOnly: true}]}],
+    volumes: [{name: "erasure-recovery", secret: {secretName: $secret, defaultMode: 288}}]
+  }}}}' > "$server_recovery_dir/recovery-patch.json"
+kubectl -n "$NAMESPACE" patch deployment "$SERVER_DEPLOYMENT" --type=strategic --patch-file="$server_recovery_dir/recovery-patch.json"
+kubectl -n "$NAMESPACE" rollout status deployment "$SERVER_DEPLOYMENT" --timeout=60m
+```
+
+A command timeout does not stop the Pod.
+If recovery exceeds one hour, repeat only the wait command.
+A failed startup logs `person_data.recovery.failed` with a closed `person_data.recovery.reason` code.
+It does not log the manifest or an exception that can quote its identities.
+
+After recovery succeeds, restore the original Deployment specification, which has zero replicas from the maintenance stop.
+Wait for its recovery Pod to stop before you remove the Secret.
+Then start the normal server.
+
+```bash
+jq '{spec: .spec}' "$server_recovery_dir/before.json" > "$server_recovery_dir/restore-patch.json"
+kubectl -n "$NAMESPACE" patch deployment "$SERVER_DEPLOYMENT" --type=merge --patch-file="$server_recovery_dir/restore-patch.json"
+server_selector=$(jq -r '.spec.selector.matchLabels | to_entries | map(.key + "=" + .value) | join(",")' "$server_recovery_dir/before.json")
+kubectl -n "$NAMESPACE" wait --for=delete pod -l "$server_selector" --timeout=5m
+kubectl -n "$NAMESPACE" delete secret "$erasure_secret"
+kubectl -n "$NAMESPACE" scale deployment "$SERVER_DEPLOYMENT" --replicas=1
+kubectl -n "$NAMESPACE" rollout status deployment "$SERVER_DEPLOYMENT" --timeout=15m
+```
+
+Keep the original private manifest under the backup retention rule.
 
 ### Before restarting services
 

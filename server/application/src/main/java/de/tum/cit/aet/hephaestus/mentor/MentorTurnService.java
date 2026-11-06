@@ -211,7 +211,7 @@ public class MentorTurnService {
     @Transactional
     public void updatePartial(long workspaceId, UUID turnId, int attempt, UUID leaseId, JsonNode partial) {
         turns.commitWithoutFlushWait();
-        copies.holdForCapture();
+        if (!copies.tryHoldForCapture()) return;
         MentorTurnRepository.RunningAttempt running = turns.findRunningAttempt(workspaceId, turnId, attempt, leaseId)
                 .orElseThrow(() -> new MentorLeaseLostException(turnId, attempt));
         if (redaction.personErasedSince(running.getStartedAt())) throw new MentorLeaseLostException(turnId, attempt);
@@ -251,20 +251,26 @@ public class MentorTurnService {
                                 .filter(piEntry -> MentorPiEntries.kind(piEntry) == MentorEntry.Kind.SUMMARY)
                                 .toList();
         // Answers can copy earlier context without a new tool call in this attempt.
-        boolean copiesData = !stored.isEmpty();
-        if (copiesData) {
+        boolean hasAppendedContext = !stored.isEmpty();
+        if (hasAppendedContext) {
             // Before any row lock: a person erasure holds this fence while it locks ledger rows.
             copies.holdForCapture();
         }
         MentorTurn turn = held(workspaceId, turnId, attempt, leaseId);
         Set<UUID> feedbackCalled = MentorPiEntries.feedbackCalled(appended, ending.lastPartial());
-        append(turn, stored, copiesData);
+        boolean contextErased =
+                hasAppendedContext && redaction.personErasedSince(Objects.requireNonNull(turn.getStartedAt()));
+        append(turn, stored, contextErased);
         Instant endedAt = clock.instant();
-        turn.end(outcome, ending.error(), endedAt);
+        turn.end(
+                contextErased ? MentorTurn.Status.FAILED : outcome,
+                contextErased ? LEASE_EXPIRED : ending.error(),
+                endedAt);
+        if (contextErased) turn.recordFailure("context_changed", null);
         turns.flush();
         events.publishEvent(new MentorLedgerEvents.AttemptEnded(turn.getWorkspaceId(), turnId, attempt, endedAt));
         changed(turn, true);
-        return new EndedTurn(turn, accountId(turn), usage(turn), feedbackCalled);
+        return new EndedTurn(turn, accountId(turn), usage(turn), contextErased ? Set.of() : feedbackCalled);
     }
 
     /**
@@ -463,10 +469,9 @@ public class MentorTurnService {
      * Stores the attempt's entries under the lock of its tree, then erases the copies that read data erased while it
      * ran ({@link MentorRedaction#eraseStaleCopies}).
      *
-     * @param fenced whether the caller holds the person-data copy fence, which it takes when the attempt appended a
-     *     result that copies person data
+     * @param personErased whether an erasure ran since the attempt started, read under the copy fence
      */
-    private void append(MentorTurn turn, List<JsonNode> appended, boolean fenced) {
+    private void append(MentorTurn turn, List<JsonNode> appended, boolean personErased) {
         if (appended.isEmpty()) {
             return;
         }
@@ -499,7 +504,7 @@ public class MentorTurnService {
             inserted.add(entry);
         }
         entryService.appended(conversation, inserted);
-        redaction.eraseStaleCopies(inserted, attemptStart, fenced && redaction.personErasedSince(attemptStart));
+        redaction.eraseStaleCopies(inserted, attemptStart, personErased);
     }
 
     private MentorTurn held(long workspaceId, UUID turnId, int attempt, UUID leaseId) {

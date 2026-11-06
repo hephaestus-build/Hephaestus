@@ -428,15 +428,6 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
             """, nativeQuery = true)
     List<UUID> lockTreesOf(@Param("ids") UUID[] ids);
 
-    /** The messages among these entries that are not redacted yet. */
-    @WorkspaceAgnostic("Person erasure and Slack removal redact entries by id across the workspaces they name")
-    @Query(value = """
-            SELECT id AS "id", workspace_id AS "workspaceId", conversation_id AS "conversationId"
-            FROM mentor_entry
-            WHERE id = ANY(CAST(:ids AS uuid[])) AND redacted_at IS NULL AND kind IN ('USER', 'HEPH', 'DIGEST')
-            """, nativeQuery = true)
-    List<EntryRef> findUnredactedMessagesAmong(@Param("ids") UUID[] ids);
-
     /**
      * Redacts these entries and their copies as {@link MentorRedaction} describes; without {@code withTargets}, only
      * the copies.

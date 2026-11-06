@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
@@ -57,6 +58,7 @@ import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -468,6 +470,46 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
+    void shouldKeepTheTurnRunningWhenAnUnrelatedContextChangeOccurs() throws Exception {
+        MentorTurn asked = ask("Who reviewed the change?");
+        TurnAttempt turn = credential(host.next("start"));
+        dispatcher.contextChanged(new MentorLedgerEvents.ContextChanged(workspace.getId()));
+        dispatcher.tick();
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+        controller.end(
+                asked.getId(),
+                new HephTurnController.EndRequest(
+                        HephTurnController.Outcome.DONE, List.of(answer("The review is ready.")), null, null),
+                HephTurnFixtures.authenticated(turn));
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.DONE);
+    }
+
+    @Test
+    void shouldSkipPartialFramesAndRenewTheLeaseWhileErasureOwnsTheCopyFence() throws Exception {
+        MentorTurn asked = ask("Who reviewed the change?");
+        TurnAttempt turn = credential(host.next("start"));
+        JsonNode partial = mapper.readTree("""
+                {"activity":"writing","tool":null,"messages":[{"content":[{"type":"text","text":"Pending answer"}]}]}
+                """);
+        Instant before = Objects.requireNonNull(row(asked).getLeasedUntil());
+        var fence = beans.getBean(PersonDataCopyFence.class);
+        var erasure = fence.erase();
+        try (erasure;
+                var executor = Executors.newSingleThreadExecutor()) {
+            executor.submit(() -> {
+                        controller.partial(asked.getId(), partial, HephTurnFixtures.authenticated(turn));
+                        clock.advance(LEASE.dividedBy(2));
+                        dispatcher.tick();
+                    })
+                    .get(30, TimeUnit.SECONDS);
+            assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+            assertThat(row(asked).getLeasedUntil()).isAfter(before);
+            assertThat(beans.getBean(MentorTurnProgress.class).snapshot(row(asked)))
+                    .isNull();
+        }
+    }
+
+    @Test
     void shouldDropTheRunningTurnsCopiesAndRefuseLateWritesWhenAnotherPersonsErasureChangesItsContext()
             throws Exception {
         MentorTurn asked = ask("Who reviewed the change?");
@@ -502,6 +544,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         JsonNode stop = host.next("stop");
         assertThat(stop.path("reason").asString()).isEqualTo("lease");
+        dispatcher.tick();
         await().atMost(NOTIFIED).untilAsserted(() -> {
             assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.FAILED);
             assertThat(row(asked).isLeased()).isFalse();

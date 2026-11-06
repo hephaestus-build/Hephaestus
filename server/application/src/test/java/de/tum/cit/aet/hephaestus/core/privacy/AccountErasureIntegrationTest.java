@@ -69,7 +69,6 @@ import de.tum.cit.aet.hephaestus.mentor.MentorEntryDraft;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
-import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
@@ -227,9 +226,6 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private MentorEntryRepository mentorEntryRepository;
-
-    @Autowired
-    private MentorTimeline mentorTimeline;
 
     @Autowired
     private MentorTurnService mentorTurns;
@@ -972,6 +968,16 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 "",
                 new ConnectionConfig.OutlineConfig(outline.getServerUrl(), null, null, Set.of())));
         allStores.seedOutline(firstWorkspace, Objects.requireNonNull(outlineConnection.getId()), outlineSubject);
+        var otherSourceRows = new PersonErasureAllStoresFixture(jdbc, 995100L);
+        otherSourceRows.seedScm(other.getId(), Objects.requireNonNull(scm.getId()), 997100L);
+        var otherGitHub = users.saveAndFlush(TestUserFactory.createUser(8484L, "other-github", github));
+        link(otherAccount, github, "8484", null);
+        otherSourceRows.seedScm(otherGitHub.getId(), Objects.requireNonNull(github.getId()), 998100L);
+        String otherOutlineSubject = "00000000-0000-4000-8000-000000000084";
+        link(otherAccount, outline, otherOutlineSubject, null);
+        otherSourceRows.seedOutline(
+                firstWorkspace, Objects.requireNonNull(outlineConnection.getId()), otherOutlineSubject, 999100L);
+        var preservedSourceRows = otherSourceRows.snapshot();
         authoredVersion(workspaces.findById(firstWorkspace).orElseThrow(), "all-stores-authored", subject.account());
         var ownConversation = mentorConversations.findOrCreateMain(firstWorkspace, subject.account());
         mentorTurns.submit(
@@ -1140,19 +1146,23 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         }
 
         allStores.assertNoPersonalContentOrReferences(subject, mapper);
+        assertThat(otherSourceRows.snapshot())
+                .as("another person's GitHub, GitLab and Outline source rows")
+                .isEqualTo(preservedSourceRows);
         var receipt = personData.get(requestId).request();
         assertThat(receipt.getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
         assertThat(receipt.getScopeJson()).isNull();
         assertThat(receipt.getSelectionsJson()).isNull();
         Map<String, Long> completed = PersonDataStoreReceipt.counts(mapper, receipt.getCompletedJson());
-        Map<String, Long> differentReceipts = new TreeMap<>();
-        completed.forEach((store, count) -> {
-            if (count > Objects.requireNonNull(counts.get(store))) differentReceipts.put(store, count);
-        });
-        assertThat(completed.keySet()).containsExactlyInAnyOrderElementsOf(counts.keySet());
-        assertThat(differentReceipts)
-                .as("Receipt counts that differ from the preview")
-                .isEmpty();
+        Map<String, Long> expectedReceipts = new TreeMap<>(counts);
+        // These projections retain shared resources or suppression controls. The decision row was already deleted.
+        for (String store : List.of(
+                "identity_restriction", "git_repository_history", "installation_account", "feedback_decision_actor")) {
+            expectedReceipts.put(store, 0L);
+        }
+        assertThat(completed)
+                .as("store receipts, including the explicit retained/cascade exceptions")
+                .isEqualTo(expectedReceipts);
         // Both closures may retain only anonymised, tombstone or control rows.
         var resolvedAfter = resolver.resolve(targetAccount.getId(), frozen.identities());
         Map<String, Long> reselected = registry.counts(registry.select(resolvedAfter));
@@ -1490,7 +1500,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbc.queryForList(
                         "SELECT id FROM mentor_entry WHERE workspace_id=? AND turn_id=? AND kind='TOOL_RESULT'"
                                 + " AND payload->'message'->>'toolName'='show_feedback' AND redacted_at IS NULL",
-                        UUID.class, firstAffected.getId(), answer.getTurnId()))
+                        UUID.class,
+                        firstAffected.getId(),
+                        answer.getTurnId()))
                 .hasSize(1);
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM person_evidence_copy WHERE" + " payload<>'{}'::jsonb", Long.class))
@@ -1962,7 +1974,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         return seedDerivedConversation(workspace, threadId, owner, false);
     }
 
-    private DerivedConversation seedDerivedConversation(Workspace workspace, long threadId, User owner, boolean withProblem) {
+    private DerivedConversation seedDerivedConversation(
+            Workspace workspace, long threadId, User owner, boolean withProblem) {
         UUID toolResult = seedToolResult(workspace, owner);
         MentorEntry message = mentorEntries.append(
                 workspace.getId(),
@@ -1984,9 +1997,13 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         job.setOutput(mapper.valueToTree(Map.of("sourceText", "unrelated-profile-canary")));
         agentJobRepository.save(job);
         var first = withProblem
-                ? modelFixtures.resultWithProblem(work, Objects.requireNonNull(accountFor(owner).getId()), "Result title",
+                ? modelFixtures.resultWithProblem(
+                        work,
+                        Objects.requireNonNull(accountFor(owner).getId()),
+                        "Result title",
                         PersonErasureAllStoresFixture.CANARY)
-                : modelFixtures.result(work, Objects.requireNonNull(accountFor(owner).getId()), "Result title");
+                : modelFixtures.result(
+                        work, Objects.requireNonNull(accountFor(owner).getId()), "Result title");
         var second = modelFixtures.result(
                 work, Objects.requireNonNull(accountFor(owner).getId()), "Result title");
         List<UUID> practiceResultIds = List.of(first.getId(), second.getId());

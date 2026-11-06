@@ -128,6 +128,7 @@ public class MentorRedaction {
             }
         }
         if (personErased) {
+            // System prompt snapshots and context edits can hold copied words too.
             appended.stream()
                     .filter(entry -> entry.getKind() != MentorEntry.Kind.USER)
                     .map(MentorEntry::getId)

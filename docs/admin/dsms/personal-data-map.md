@@ -492,7 +492,8 @@ The [restore procedure](../backup-restore.mdx#reapply-erasure-decisions-before-p
 
 ### Running conversation copies
 
-Person erasure clears copying tool results, answers that could have used them, search results that quote those answers, and summaries that cover them.
+Person erasure clears copying tool results, later Hephaestus answers in those conversations, and answers in their child conversations.
+It also clears summaries and search results that could copy those words.
 The ledger reports each changed message to open conversations.
 A running turn drops its partial answer and sandbox when the context changes.
 A reconnected worker checks the durable erasure receipts before keeping an older attempt.

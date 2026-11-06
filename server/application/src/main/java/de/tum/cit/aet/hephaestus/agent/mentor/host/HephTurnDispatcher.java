@@ -168,6 +168,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         volatile @Nullable String stopReason;
         volatile @Nullable Instant stopSent;
         volatile boolean overDeadline;
+        volatile boolean contextErased;
 
         Running(MentorTurn turn, long accountId, Instant now, Instant deadline) {
             this.turnId = turn.getId();
@@ -312,7 +313,10 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     public void contextChanged(MentorLedgerEvents.ContextChanged change) {
         for (Running turn : running.values()) {
             if (turn.workspaceId == change.workspaceId()) {
-                discardContext(turn);
+                MentorTurn stored = turns.require(turn.workspaceId, turn.turnId);
+                if (stored.getStartedAt() != null && redaction.personErasedSince(stored.getStartedAt())) {
+                    discardContext(turn);
+                }
             }
         }
     }
@@ -338,8 +342,10 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     }
 
     private void discardContext(Running turn) {
+        turn.contextErased = true;
+        turn.partial = null;
+        turn.hostPartial = null;
         stop(turn, "lease");
-        finishQuietly(turn, MentorTurn.Status.FAILED, COULD_NOT_FINISH, "context_changed");
     }
 
     /**
@@ -353,7 +359,9 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     /** The attempt, while it {@linkplain #runs runs} here. */
     Optional<TurnAttempt> running(UUID turnId, int attempt) {
         Running turn = running.get(turnId);
-        return turn != null && turn.attempt == attempt ? Optional.of(turn.identity) : Optional.empty();
+        return turn != null && turn.attempt == attempt && !turn.contextErased
+                ? Optional.of(turn.identity)
+                : Optional.empty();
     }
 
     /**
@@ -364,7 +372,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
      */
     Instant deadline(UUID turnId, int attempt) {
         Running turn = running.get(turnId);
-        if (turn == null || turn.attempt != attempt) {
+        if (turn == null || turn.attempt != attempt || turn.contextErased) {
             throw new MentorLeaseLostException(turnId, attempt);
         }
         return turn.deadline;
@@ -378,7 +386,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
      */
     void partial(UUID turnId, int attempt, JsonNode partial) {
         Running turn = running.get(turnId);
-        if (turn == null || turn.attempt != attempt) {
+        if (turn == null || turn.attempt != attempt || turn.contextErased) {
             throw new MentorLeaseLostException(turnId, attempt);
         }
         turn.hostPartial = partial;
@@ -388,6 +396,11 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     private void reportPartial(Running turn) {
         turn.progress.lock();
         try {
+            if (turn.contextErased) {
+                turn.partial = null;
+                turn.hostPartial = null;
+                throw new MentorLeaseLostException(turn.turnId, turn.attempt);
+            }
             JsonNode partial = turn.hostPartial;
             if (partial == null) return;
             if (partial instanceof ObjectNode snapshot
@@ -412,6 +425,10 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                     stored == null ? turn.claimed : null);
             turn.partial = partial;
             turn.partialSentAt = now;
+            if (turn.contextErased) {
+                turn.partial = null;
+                turn.hostPartial = null;
+            }
         } finally {
             turn.progress.unlock();
         }
@@ -591,6 +608,10 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         Instant now = clock.instant();
         for (Running turn : List.copyOf(running.values())) {
             try {
+                if (turn.contextErased) {
+                    finishQuietly(turn, MentorTurn.Status.FAILED, COULD_NOT_FINISH, "context_changed");
+                    continue;
+                }
                 Instant stopSent = turn.stopSent;
                 if (stopSent != null && now.isAfter(stopSent.plus(stopGrace))) {
                     if (turn.overDeadline) {

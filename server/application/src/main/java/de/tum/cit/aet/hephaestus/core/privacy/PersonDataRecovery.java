@@ -18,7 +18,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
@@ -28,12 +27,23 @@ import tools.jackson.databind.ObjectMapper;
 @Profile("erasure-recovery")
 @ConditionalOnServerRole
 final class PersonDataRecovery implements SmartLifecycle {
+    private static final int MAX_MANIFEST_BYTES = 16 * 1024 * 1024;
+
+    enum FailureReason {
+        RUNTIME_ROLE,
+        MANIFEST_PATH,
+        MANIFEST_READ,
+        MANIFEST_INVALID,
+        IDENTITY_INVALID,
+        ERASURE_INCOMPLETE
+    }
+
     private static final Logger log = LoggerFactory.getLogger(PersonDataRecovery.class);
     private final PersonDataService service;
     private final PersonIdentityResolver resolver;
     private final ObjectMapper mapper;
     private final Environment environment;
-    private final JdbcTemplate jdbc;
+    private final PersonDataRequestRepository requests;
     private final String manifestPath;
     private boolean running;
 
@@ -42,13 +52,13 @@ final class PersonDataRecovery implements SmartLifecycle {
             PersonIdentityResolver resolver,
             ObjectMapper mapper,
             Environment environment,
-            JdbcTemplate jdbc,
+            PersonDataRequestRepository requests,
             PersonDataRecoveryProperties properties) {
         this.service = service;
         this.resolver = resolver;
         this.mapper = mapper;
         this.environment = environment;
-        this.jdbc = jdbc;
+        this.requests = requests;
         this.manifestPath = properties.recoveryManifest();
     }
 
@@ -70,12 +80,17 @@ final class PersonDataRecovery implements SmartLifecycle {
     @Override
     @SuppressWarnings("PMD.PreserveStackTrace") // Parser errors can quote identities from the private manifest.
     public void start() {
+        FailureReason reason = FailureReason.RUNTIME_ROLE;
         try {
-            if (!RuntimeRole.enabled(environment).equals(List.of(RuntimeRole.SERVER)) || manifestPath.isBlank()) {
+            if (!RuntimeRole.enabled(environment).equals(List.of(RuntimeRole.SERVER)))
                 throw new IllegalStateException();
-            }
+            reason = FailureReason.MANIFEST_PATH;
+            if (manifestPath.isBlank()) throw new IllegalStateException();
+            reason = FailureReason.MANIFEST_READ;
             Path path = Path.of(manifestPath);
-            if (Files.size(path) > 16 * 1024 * 1024) throw new IllegalStateException();
+            long size = Files.size(path);
+            reason = FailureReason.MANIFEST_INVALID;
+            if (size > MAX_MANIFEST_BYTES) throw new IllegalStateException();
             Manifest manifest = mapper.readerFor(Manifest.class)
                     .with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                     .readValue(Files.readAllBytes(path));
@@ -86,10 +101,12 @@ final class PersonDataRecovery implements SmartLifecycle {
                 throw new IllegalStateException();
             }
             // Resolve and validate the whole input before the first erasure changes a store.
+            reason = FailureReason.IDENTITY_INVALID;
             List<List<PersonIdentity>> identities = manifest.people().stream()
                     .map(person ->
                             person.identities().stream().map(this::resolve).toList())
                     .toList();
+            reason = FailureReason.MANIFEST_INVALID;
             for (int index = 0; index < manifest.people().size(); index++) {
                 Person person = manifest.people().get(index);
                 if ((person.accountId() != null && person.accountId() <= 0)
@@ -100,6 +117,7 @@ final class PersonDataRecovery implements SmartLifecycle {
             if (!manifest.people().isEmpty()) {
                 long administrator = Objects.requireNonNull(manifest.administratorAccountId());
                 if (administrator <= 0) throw new IllegalStateException();
+                reason = FailureReason.ERASURE_INCOMPLETE;
                 for (int index = 0; index < manifest.people().size(); index++) {
                     reapplyErasure(
                             administrator,
@@ -116,9 +134,10 @@ final class PersonDataRecovery implements SmartLifecycle {
             // Parser and provider exceptions can quote identifying input. Never attach their cause.
             log.atError()
                     .addKeyValue("event.name", "person_data.recovery.failed")
-                    .log("Erasure recovery blocked startup");
-            throw new IllegalStateException(
-                    "Erasure recovery is incomplete. Keep all other roles stopped and check the private manifest and erasure receipts.");
+                    .addKeyValue("person_data.recovery.reason", reason)
+                    .log("Erasure recovery blocked startup: {}", reason);
+            throw new IllegalStateException("Erasure recovery is incomplete (" + reason
+                    + "). Keep all other roles stopped and check the private manifest and erasure receipts.");
         }
     }
 
@@ -129,18 +148,8 @@ final class PersonDataRecovery implements SmartLifecycle {
             List<PersonIdentity> identities,
             boolean externalCopiesRemoved) {
         PersonScope person = resolver.resolve(accountId, identities);
-        List<UUID> interrupted = jdbc.query(
-                """
-                SELECT id FROM person_data_request
-                WHERE state IN ('ERASING','FAILED') AND scope_json IS NOT NULL
-                  AND ((scope_json::jsonb)->>'accountId'=?
-                    OR EXISTS (SELECT 1 FROM jsonb_array_elements((scope_json::jsonb)->'identities') stored
-                      JOIN jsonb_array_elements(CAST(? AS jsonb)) chosen ON stored=chosen))
-                ORDER BY created_at
-                """,
-                (rs, row) -> Objects.requireNonNull(rs.getObject(1, UUID.class)),
-                person.accountId() == null ? null : person.accountId().toString(),
-                mapper.writeValueAsString(person.identities()));
+        List<UUID> interrupted =
+                requests.findInterruptedForPerson(person.accountId(), mapper.writeValueAsString(person.identities()));
         for (UUID id : interrupted) {
             service.requestErasure(id, administratorId, externalCopiesRemoved);
             service.run(id);
