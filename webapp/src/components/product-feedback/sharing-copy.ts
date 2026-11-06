@@ -20,7 +20,7 @@ export const SHARING_COPY = {
  * reason gets a sentence the person can read; an unknown one is still shown, never dropped.
  */
 const REASON_SENTENCES: Record<string, string> = {
-	"opted out": "You chose to keep it private.",
+	"opted out": "It is not marked public, so it stays private.",
 	security: "It may be about a security problem, so it stays private.",
 	redaction: "Hephaestus removed details from it, so it stays private.",
 	"about a person": "It is about a person, so it stays private.",

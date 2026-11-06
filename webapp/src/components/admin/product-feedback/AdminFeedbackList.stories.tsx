@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { FeedbackItem } from "@/api/types.gen";
 import { withStandardPage } from "@/stories/decorators";
@@ -11,7 +11,7 @@ const meta = {
 	component: AdminFeedbackList,
 	parameters: { layout: "fullscreen" },
 	decorators: [withStandardPage],
-	args: { pendingIds: new Set<string>(), onTriage: fn() },
+	args: { pendingIds: new Set<string>(), onTriage: fn(), onFile: fn() },
 	argTypes: { pendingIds: { control: false } },
 	tags: ["autodocs"],
 } satisfies Meta<typeof AdminFeedbackList>;
@@ -41,6 +41,38 @@ export const Open: Story = {
 			await userEvent.click(within(firstCard).getByRole("button", { name: "Mark resolved" }));
 		}
 		await expect(args.onTriage).toHaveBeenCalledWith(bugReport, true);
+	},
+};
+
+/** A saved report that a destination can take now. */
+export const CanFile: Story = {
+	args: { state: ready([{ ...bugReport, canFile: true }], "OPEN") },
+	play: async ({ canvas, args }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "File on GitHub" }));
+		await expect(args.onFile).not.toHaveBeenCalled();
+		const confirm = within(await screen.findByRole("alertdialog"));
+		await userEvent.click(confirm.getByRole("button", { name: "File on GitHub" }));
+		await expect(args.onFile).toHaveBeenCalledOnce();
+	},
+};
+
+/** Its author was told only about the admins, so it moves as written and no model reads it. */
+export const SavedBeforeDisclosure: Story = {
+	args: { state: ready([{ ...bugReport, canFile: true, savedBeforeDisclosure: true }], "OPEN") },
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "File on GitHub" }));
+		const confirm = within(await screen.findByRole("alertdialog"));
+		await expect(confirm.getByText(/No AI model reads it/u)).toBeVisible();
+	},
+};
+
+export const Filing: Story = {
+	args: {
+		state: ready([{ ...bugReport, canFile: true }], "OPEN"),
+		filingIds: new Set([bugReport.id]),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Filing…" })).toBeDisabled();
 	},
 };
 

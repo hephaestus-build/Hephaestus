@@ -143,6 +143,8 @@ public class AuthEvent {
         PRODUCT_FEEDBACK_DESTINATIONS_CHANGED,
         // An admin confirmed that a maintainer finished an erased report's manual step on GitHub.
         PRODUCT_FEEDBACK_CLEANUP_CONFIRMED,
+        // An admin sent a saved report into filing. It leaves the instance unless routing keeps it with the admins.
+        PRODUCT_FEEDBACK_FILED_BY_ADMIN,
         // A pseudonymous research dataset left the instance, or its downstream removal was attested.
         // Recorded before the bytes are sent, so it proves the release, not that a client received it.
         RESEARCH_DATASET_RELEASED,

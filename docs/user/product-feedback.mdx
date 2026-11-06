@@ -12,6 +12,7 @@ This is separate from practice feedback about your work.
 
 Your instance admin chooses whether reports become GitHub issues and which repositories receive them.
 Until they set a repository, reports stay on your instance for its admins to read.
+They can send such a report to GitHub later. An AI model then drafts a private issue from it, without your name.
 When GitHub filing is enabled, an AI model from the provider named in your instance’s privacy notice drafts an issue.
 Keeping a report private still sends it to that provider and the private GitHub repository.
 
@@ -24,6 +25,7 @@ If you allow public sharing, a misclassified report can become public when the o
 Choose private sharing when a report must stay private.
 
 If no private repository is available, the report stays saved for your instance admins, who read it in the admin console.
+They can send it to GitHub as a private issue once a private repository is set.
 
 Hephaestus saves your report before it tries GitHub.
 If filing stops, the report stays saved for the instance admins, who can read it and try again.
@@ -188,4 +190,4 @@ If no draft was available, Hephaestus can file a private issue from the report t
 
 Your instance might have no destination or might have paused filing.
 Filing can also stop if GitHub refuses a request.
-Your instance admins can read the saved report in the admin console. They get an email only if your instance can send one.
+Your instance admins can read the saved report in the admin console, and can send it to GitHub later. They get an email only if your instance can send one.

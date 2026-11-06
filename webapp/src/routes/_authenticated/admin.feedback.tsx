@@ -16,6 +16,9 @@ import {
 	listProductFeedbackNeedsActionOptions,
 	listProductFeedbackNeedsActionQueryKey,
 	retryProductFeedbackFilingMutation,
+	fileAllSavedProductFeedbackMutation,
+	fileSavedProductFeedbackMutation,
+	getEmailStatusOptions,
 	updateProductFeedbackDestinationsMutation,
 } from "@/api/@tanstack/react-query.gen";
 import {
@@ -27,6 +30,7 @@ import {
 	AdminProductFeedbackDestinationsCard,
 	type AdminProductFeedbackDestinationsState,
 } from "@/components/admin/product-feedback/AdminProductFeedbackDestinationsCard";
+import { AdminProductFeedbackMoveReports } from "@/components/admin/product-feedback/AdminProductFeedbackMoveReports";
 import {
 	AdminProductFeedbackNeedsActionList,
 	type AdminProductFeedbackNeedsActionState,
@@ -47,6 +51,7 @@ import { pageParam, useSearchState } from "@/lib/search-params";
 const PAGE_SIZE = 20;
 const TRIAGE_KEY = ["adminTriageProductFeedback"];
 const RETRY_KEY = ["retryProductFeedbackFiling"];
+const FILE_KEY = ["fileSavedProductFeedback"];
 const CONFIRM_KEY = ["confirmProductFeedbackCleanup"];
 
 const STATUS_OPTIONS: { value: FeedbackStatusFilter; label: string }[] = [
@@ -81,15 +86,56 @@ function AdminFeedbackInboxPage() {
 		onError: (error) =>
 			toast.error("We could not update the feedback", { description: problemDetailOf(error) }),
 	});
+	const fileAll = useMutation({
+		...fileAllSavedProductFeedbackMutation(),
+		onSuccess: async ({ moved }) => {
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: adminListProductFeedbackQueryKey() }),
+				queryClient.invalidateQueries({ queryKey: getProductFeedbackDestinationsQueryKey() }),
+			]);
+			toast.success(moved === 1 ? "1 report sent to filing" : `${moved} reports sent to filing`);
+		},
+		onError: (error) => {
+			const stepUp = stepUpChallengeOf(error);
+			if (stepUp) {
+				setChallenge(stepUp);
+				return;
+			}
+			toast.error("We could not move the reports", { description: problemDetailOf(error) });
+		},
+	});
 	const pendingIds = usePendingMutationIds(TRIAGE_KEY, (variables) =>
 		pathString(variables, "feedbackId"),
 	);
+	const filingIds = usePendingMutationIds(FILE_KEY, (variables) =>
+		pathString(variables, "feedbackId"),
+	);
+	const emailStatus = useQuery(getEmailStatusOptions());
 
 	const destinationsQuery = useQuery(getProductFeedbackDestinationsOptions());
 	const modelsQuery = useQuery(adminListLlmModelsOptions());
 	// Changing a destination asks for a recent sign-in; the refusal opens that ask instead of a toast.
 	const [challenge, setChallenge] = useState<StepUpChallenge>();
 	const confirmAccess = useConfirmAccess(challenge !== undefined);
+	const fileSaved = useMutation({
+		...filedUnder(FILE_KEY, fileSavedProductFeedbackMutation()),
+		// Awaited, so the button stays busy until the row is gone and a second click cannot follow.
+		onSuccess: async () => {
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: adminListProductFeedbackQueryKey() }),
+				queryClient.invalidateQueries({ queryKey: getProductFeedbackDestinationsQueryKey() }),
+			]);
+			toast.success("Report sent to filing");
+		},
+		onError: (error) => {
+			const stepUp = stepUpChallengeOf(error);
+			if (stepUp) {
+				setChallenge(stepUp);
+				return;
+			}
+			toast.error("We could not file this report", { description: problemDetailOf(error) });
+		},
+	});
 	const saveDestinations = useMutation({
 		...updateProductFeedbackDestinationsMutation(),
 		onSuccess: (saved) => {
@@ -139,6 +185,7 @@ function AdminFeedbackInboxPage() {
 		onSettled: () => {
 			void queryClient.invalidateQueries({ queryKey: listProductFeedbackNeedsActionQueryKey() });
 			void queryClient.invalidateQueries({ queryKey: getProductFeedbackDestinationsQueryKey() });
+			void queryClient.invalidateQueries({ queryKey: adminListProductFeedbackQueryKey() });
 		},
 	});
 	const confirmCleanup = useMutation({
@@ -151,6 +198,7 @@ function AdminFeedbackInboxPage() {
 		onSettled: () => {
 			void queryClient.invalidateQueries({ queryKey: listProductFeedbackNeedsActionQueryKey() });
 			void queryClient.invalidateQueries({ queryKey: getProductFeedbackDestinationsQueryKey() });
+			void queryClient.invalidateQueries({ queryKey: adminListProductFeedbackQueryKey() });
 		},
 	});
 	const retryingIds = usePendingMutationIds(RETRY_KEY, (variables) =>
@@ -228,7 +276,11 @@ function AdminFeedbackInboxPage() {
 
 			<Section
 				title="Reports not on GitHub"
-				description="Marking one resolved does not notify the sender."
+				description={
+					emailStatus.data?.configured === false
+						? "This instance cannot send email, so no one is told about new reports. The sidebar count is the only signal. Marking one resolved does not notify the sender."
+						: "Marking one resolved does not notify the sender."
+				}
 			>
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<FilterToggle
@@ -250,12 +302,20 @@ function AdminFeedbackInboxPage() {
 					/>
 				</div>
 
+				<AdminProductFeedbackMoveReports
+					count={destinationsQuery.data?.reportsToMove ?? 0}
+					moving={fileAll.isPending}
+					onMove={() => fileAll.mutate({})}
+				/>
+
 				<AdminFeedbackList
 					state={state}
 					pendingIds={pendingIds}
+					filingIds={filingIds}
 					onTriage={(item, resolved) =>
 						triage.mutate({ path: { feedbackId: item.id }, body: { resolved } })
 					}
+					onFile={(item) => fileSaved.mutate({ path: { feedbackId: item.id } })}
 				/>
 			</Section>
 

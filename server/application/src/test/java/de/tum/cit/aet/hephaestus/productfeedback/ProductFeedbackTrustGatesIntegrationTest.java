@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
@@ -72,6 +73,9 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private FeedbackService feedbackService;
+
+    @Autowired
+    private MyReportsService reports;
 
     @Autowired
     private ProductFeedbackDrafting drafting;
@@ -284,6 +288,302 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         assertThat(body.getValue())
                 .contains("https://github.com/acme/feedback-public/issues/17")
                 .doesNotContain("acme/feedback-private/issues/17");
+    }
+
+    private UUID send(Account reporter, boolean share) {
+        return feedbackService
+                .add(
+                        new FeedbackRequestDTO(ProductFeedback.Kind.FEEDBACK, "The list jumps", null, null, share),
+                        Objects.requireNonNull(reporter.getId()),
+                        null,
+                        false)
+                .id();
+    }
+
+    /** A report saved for the admins, as it is after a time with no destination. */
+    private UUID savedReport(boolean allowPublic) {
+        UUID id = report();
+        jdbc.update(
+                "UPDATE product_feedback_filing SET state = 'EMAILED', route = 'EMAIL', allow_public = ?,"
+                        + " prompt_input = NULL WHERE feedback_id = ?",
+                allowPublic,
+                id);
+        return id;
+    }
+
+    @Test
+    void shouldStartASavedReportOverAndRecordWhoSentItWhenAnAdminFilesIt() {
+        UUID id = savedReport(false);
+        long admin = Objects.requireNonNull(this.admin.getId());
+
+        assertThat(filing.fileSaved(id, admin)).isTrue();
+
+        ProductFeedbackFiling started = filings.findById(id).orElseThrow();
+        assertThat(started.getState()).isEqualTo(FilingState.DRAFT_QUEUED);
+        assertThat(started.getRoute()).isNull();
+        assertThat(started.getPromptInput()).isNotBlank();
+        assertThat(started.isAllowPublic()).isFalse();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM auth_event WHERE event_type = 'PRODUCT_FEEDBACK_FILED_BY_ADMIN'"
+                                + " AND acting_account_id = ? AND details::text LIKE ?",
+                        Long.class,
+                        admin,
+                        "%" + id + "%"))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldNotMakeAFiledReportPublicWithoutTheReportersChoice() {
+        UUID id = savedReport(false);
+        filing.fileSaved(id, Objects.requireNonNull(admin.getId()));
+        backdate("next_attempt_at", id, DraftingService.EXPIRY.plusMinutes(1));
+
+        routing.routeAnswered();
+
+        assertThat(filings.findById(id).orElseThrow().getRoute()).isEqualTo(FilingRoute.PRIVATE);
+    }
+
+    @Test
+    void shouldRefuseToFileWhenNoRepositoryCanTakeAPrivateReport() {
+        UUID id = savedReport(false);
+        ProductFeedbackDestination destination = destination();
+        destination.setPrivateRepository(null);
+        destinationRows.save(destination);
+        long admin = Objects.requireNonNull(this.admin.getId());
+
+        assertThat(filing.fileSaved(id, admin)).isFalse();
+
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.EMAILED);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM auth_event WHERE event_type = 'PRODUCT_FEEDBACK_FILED_BY_ADMIN'"
+                                + " AND details::text LIKE ?",
+                        Long.class,
+                        "%" + id + "%"))
+                .isZero();
+    }
+
+    @Test
+    void shouldNeverPublishByAnAdminsAction() {
+        UUID id = savedReport(true);
+
+        assertThat(filing.fileSaved(id, Objects.requireNonNull(admin.getId()))).isTrue();
+        backdate("next_attempt_at", id, DraftingService.EXPIRY.plusMinutes(1));
+        routing.routeAnswered();
+
+        ProductFeedbackFiling routed = filings.findById(id).orElseThrow();
+        assertThat(routed.isAllowPublic()).isFalse();
+        assertThat(routed.getRoute()).isEqualTo(FilingRoute.PRIVATE);
+    }
+
+    @Test
+    void shouldKeepTheReportersEditWhenAnAdminFilesTheReport() {
+        UUID id = savedReport(true);
+        jdbc.update("UPDATE product_feedback_filing SET prompt_input = 'The edited text' WHERE feedback_id = ?", id);
+
+        filing.fileSaved(id, Objects.requireNonNull(admin.getId()));
+
+        assertThat(filings.findById(id).orElseThrow().getPromptInput()).isEqualTo("The edited text");
+    }
+
+    @Test
+    void shouldFileAPrivateIssueWhenTheReporterKeepsAHeldReportPrivate() {
+        Account reporter = newReporter();
+        UUID id = send(reporter, true);
+        jdbc.update(
+                "UPDATE product_feedback_filing SET state = 'HELD', route = 'PUBLIC', reason = 'NONE', draft = ?,"
+                        + " repository = ?, repository_id = ?, repository_node_id = ?, installation_id = ?"
+                        + " WHERE feedback_id = ?",
+                routing.write(Fallback.of(ProductFeedback.Kind.BUG, "The list jumps")),
+                PUBLIC_REPOSITORY.fullName(),
+                PUBLIC_REPOSITORY.id(),
+                PUBLIC_REPOSITORY.nodeId(),
+                PUBLIC_REPOSITORY.installationId(),
+                id);
+
+        reports.keepPrivate(Objects.requireNonNull(reporter.getId()), id);
+        when(issues.isPrivate(any())).thenReturn(Optional.of(true));
+        when(issues.issueTypes(any())).thenReturn(List.of());
+        when(issues.create(any(), anyString(), anyString(), any()))
+                .thenReturn(new ProductFeedbackIssues.Issue(
+                        91, "I_91", "https://github.com/acme/feedback-private/issues/91"));
+        jdbc.update(
+                "UPDATE product_feedback_filing SET next_attempt_at = ? WHERE feedback_id = ?",
+                Timestamp.from(Instant.EPOCH),
+                id);
+        FilingService target = AopTestUtils.getUltimateTargetObject(filing);
+        ReflectionTestUtils.setField(target, "lastWrite", Instant.EPOCH);
+        target.fileDue();
+
+        verify(issues).create(eq(PRIVATE_REPOSITORY), anyString(), anyString(), any());
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.FILED);
+    }
+
+    /** A report from before the composer named the model. */
+    private UUID olderReport() {
+        UUID id = savedReport(false);
+        jdbc.update("UPDATE product_feedback_filing SET file_disclosed = false WHERE feedback_id = ?", id);
+        return id;
+    }
+
+    private long filedAudits(UUID id) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM auth_event WHERE event_type = 'PRODUCT_FEEDBACK_FILED_BY_ADMIN'"
+                        + " AND details::text LIKE ?",
+                Long.class,
+                "%" + id + "%"));
+    }
+
+    @Test
+    void shouldMoveAnOlderReportToThePrivateRepositoryWithNoModelCall() {
+        UUID id = olderReport();
+
+        assertThat(filing.fileSaved(id, Objects.requireNonNull(admin.getId()))).isTrue();
+
+        // ANSWERED never reaches a worker: only DRAFT_QUEUED and DRAFTING rows are claimed for a model.
+        ProductFeedbackFiling moved = filings.findById(id).orElseThrow();
+        assertThat(moved.getState()).isEqualTo(FilingState.ANSWERED);
+        assertThat(moved.getPromptInput()).isNull();
+
+        routing.routeAnswered();
+
+        ProductFeedbackFiling routed = filings.findById(id).orElseThrow();
+        assertThat(routed.getRoute()).isEqualTo(FilingRoute.PRIVATE);
+        assertThat(routed.getRepository()).isEqualTo(PRIVATE_REPOSITORY.fullName());
+        assertThat(routed.getDraftedAt()).isNull();
+        assertThat(routed.isAllowPublic()).isFalse();
+    }
+
+    @Test
+    void shouldFileTheReportersEditWhenNoDraftComes() throws Exception {
+        UUID id = olderReport();
+        jdbc.update("UPDATE product_feedback_filing SET prompt_input = 'The edited text' WHERE feedback_id = ?", id);
+        filing.fileSaved(id, Objects.requireNonNull(admin.getId()));
+
+        routing.routeAnswered();
+
+        assertThat(filings.findById(id).orElseThrow().getDraft()).contains("The edited text");
+    }
+
+    @Test
+    void shouldNeverHandAReportToAModelWhenItsAuthorWasNotTold() {
+        UUID id = report();
+        jdbc.update(
+                "UPDATE product_feedback_filing SET file_disclosed = false, next_attempt_at = ? WHERE feedback_id = ?",
+                Timestamp.from(Instant.EPOCH),
+                id);
+
+        drafting.claim("test-worker");
+
+        assertThat(filings.findById(id).orElseThrow().getAttempt()).isZero();
+    }
+
+    @Test
+    void shouldMoveEverythingOnceWhenAMoveRunsTwice() {
+        UUID first = olderReport();
+        UUID second = savedReport(false);
+        long admin = Objects.requireNonNull(this.admin.getId());
+
+        assertThat(filing.fileAllSaved(admin)).isGreaterThanOrEqualTo(2);
+        assertThat(filing.fileAllSaved(admin)).isZero();
+
+        assertThat(filings.findById(first).orElseThrow().getState()).isEqualTo(FilingState.ANSWERED);
+        assertThat(filings.findById(second).orElseThrow().getState()).isEqualTo(FilingState.DRAFT_QUEUED);
+        assertThat(filedAudits(first)).isEqualTo(1);
+    }
+
+    @Test
+    void shouldResumeAnInterruptedMoveWithWhatIsLeft() {
+        UUID done = savedReport(false);
+        UUID left = savedReport(false);
+        long admin = Objects.requireNonNull(this.admin.getId());
+        filing.fileSaved(done, admin);
+
+        filing.fileAllSaved(admin);
+
+        assertThat(filings.findById(left).orElseThrow().getState()).isEqualTo(FilingState.DRAFT_QUEUED);
+        assertThat(filedAudits(done)).isEqualTo(1);
+    }
+
+    @Test
+    void shouldMoveNothingWhilePaused() {
+        savedReport(false);
+        ProductFeedbackDestination destination = destination();
+        destination.setPaused(true);
+        destinationRows.save(destination);
+
+        assertThat(filing.fileAllSaved(Objects.requireNonNull(admin.getId()))).isZero();
+    }
+
+    @Test
+    void shouldMarkANewReportAsDisclosed() {
+        assertThat(filings.findById(report()).orElseThrow().isFileDisclosed()).isTrue();
+    }
+
+    @Test
+    void shouldRefuseToFileAResolvedReport() {
+        UUID id = savedReport(false);
+        jdbc.update("UPDATE product_feedback SET resolved_at = now() WHERE id = ?", id);
+
+        assertThat(filing.fileSaved(id, Objects.requireNonNull(admin.getId()))).isFalse();
+    }
+
+    @Test
+    void shouldFileOnceWhenAnAdminCallsTwice() {
+        UUID id = savedReport(false);
+        long admin = Objects.requireNonNull(this.admin.getId());
+
+        assertThat(filing.fileSaved(id, admin)).isTrue();
+        assertThat(filing.fileSaved(id, admin)).isFalse();
+
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM auth_event WHERE event_type = 'PRODUCT_FEEDBACK_FILED_BY_ADMIN'"
+                                + " AND details::text LIKE ?",
+                        Long.class,
+                        "%" + id + "%"))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldRefuseToFileWhileFilingIsPaused() {
+        UUID id = savedReport(false);
+        ProductFeedbackDestination destination = destination();
+        destination.setPaused(true);
+        destinationRows.save(destination);
+
+        assertThat(filing.fileSaved(id, Objects.requireNonNull(admin.getId()))).isFalse();
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.EMAILED);
+    }
+
+    @Test
+    void shouldRefuseToFileAReportThatIsNotSavedForTheAdmins() {
+        UUID id = report();
+
+        assertThat(filing.fileSaved(id, Objects.requireNonNull(admin.getId()))).isFalse();
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.DRAFT_QUEUED);
+    }
+
+    @Test
+    void shouldOfferFilingOnlyForASavedReportWhileADestinationTakesIt() {
+        UUID saved = savedReport(false);
+        UUID stopped = savedReport(false);
+        jdbc.update("UPDATE product_feedback_filing SET state = 'STOPPED' WHERE feedback_id = ?", stopped);
+
+        var page = feedbackService
+                .list(FeedbackDTOs.FeedbackFilter.OPEN, PageRequest.of(0, 500))
+                .getContent();
+
+        assertThat(page.stream()
+                        .filter(item -> item.id().equals(saved))
+                        .findFirst()
+                        .orElseThrow()
+                        .canFile())
+                .isTrue();
+        assertThat(page.stream()
+                        .filter(item -> item.id().equals(stopped))
+                        .findFirst()
+                        .orElseThrow()
+                        .canFile())
+                .isFalse();
     }
 
     /** A saved report that may go public, waiting for its draft. */

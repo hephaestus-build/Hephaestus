@@ -102,7 +102,7 @@ export const MakingPrivate: Story = {
 export const PrivateIssue: Story = {
 	args: { state: { status: "ready", reports: [privateIssue, securityReport] } },
 	play: async ({ canvas, args }) => {
-		await expect(canvas.getByText("You chose to keep it private.")).toBeVisible();
+		await expect(canvas.getByText("It is not marked public, so it stays private.")).toBeVisible();
 		// A check kept the second one private, so it has no Allow public.
 		await expect(canvas.getAllByRole("switch", { name: "Allow public" })).toHaveLength(1);
 		await userEvent.click(canvas.getByRole("switch", { name: "Allow public" }));
@@ -116,7 +116,7 @@ export const NotOnGitHub: Story = {
 		await expect(canvas.getByText("Not filed")).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"It is saved on this instance. Its admins can read it in the admin console.",
+				"It is saved on this instance. Its admins can read it, and can send it to GitHub as a private issue drafted by an AI model.",
 			),
 		).toBeVisible();
 		// Neither row has a change left to offer: the admins hold both.

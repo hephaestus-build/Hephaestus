@@ -103,6 +103,20 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
                     """, nativeQuery = true)
     long countPublicFiledByAccountSince(@Param("accountId") long accountId, @Param("since") Instant since);
 
+    /** Open reports that wait for the admins, oldest first. */
+    @Query(value = """
+                    SELECT f.feedback_id FROM product_feedback_filing f JOIN product_feedback p ON p.id = f.feedback_id
+                    WHERE f.state = 'EMAILED' AND p.resolved_at IS NULL
+                    ORDER BY p.created_at LIMIT :limit
+                    """, nativeQuery = true)
+    List<UUID> savedForAdmins(@Param("limit") int limit);
+
+    @Query(value = """
+                    SELECT count(*) FROM product_feedback_filing f JOIN product_feedback p ON p.id = f.feedback_id
+                    WHERE f.state = 'EMAILED' AND p.resolved_at IS NULL
+                    """, nativeQuery = true)
+    long countSavedForAdmins();
+
     long countByState(FilingState state);
 
     long countByStateAndRoute(FilingState state, FilingRoute route);

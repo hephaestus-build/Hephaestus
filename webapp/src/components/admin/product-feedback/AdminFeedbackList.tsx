@@ -5,6 +5,17 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { TablePagination } from "@/components/common/TablePagination";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import {
@@ -39,7 +50,11 @@ export interface AdminFeedbackListProps {
 	state: AdminFeedbackListState;
 	/** Items with a triage change in flight. */
 	pendingIds: ReadonlySet<string>;
+	/** Items on their way to GitHub. */
+	filingIds?: ReadonlySet<string>;
 	onTriage: (item: FeedbackItem, resolved: boolean) => void;
+	/** Sends a saved report to GitHub; offered only where the item says it can go. */
+	onFile: (item: FeedbackItem) => void;
 }
 
 const EMPTY_COPY: Record<FeedbackStatusFilter, { title: string; description: string }> = {
@@ -57,7 +72,13 @@ const SKELETON_ROWS = 3;
  * Feedback and bug reports, one card each. Resolving is bookkeeping for the administrators —
  * nobody is notified — so it is one press and reversible.
  */
-export function AdminFeedbackList({ state, pendingIds, onTriage }: AdminFeedbackListProps) {
+export function AdminFeedbackList({
+	state,
+	pendingIds,
+	filingIds,
+	onTriage,
+	onFile,
+}: AdminFeedbackListProps) {
 	if (state.status === "error") {
 		return (
 			<QueryErrorAlert
@@ -105,7 +126,13 @@ export function AdminFeedbackList({ state, pendingIds, onTriage }: AdminFeedback
 			<ul className="flex flex-col gap-3">
 				{state.items.map((item) => (
 					<li key={item.id}>
-						<FeedbackCard item={item} pending={pendingIds.has(item.id)} onTriage={onTriage} />
+						<FeedbackCard
+							item={item}
+							pending={pendingIds.has(item.id)}
+							filing={filingIds?.has(item.id) === true}
+							onTriage={onTriage}
+							onFile={onFile}
+						/>
 					</li>
 				))}
 			</ul>
@@ -121,10 +148,12 @@ export function AdminFeedbackList({ state, pendingIds, onTriage }: AdminFeedback
 interface FeedbackCardProps {
 	item: FeedbackItem;
 	pending: boolean;
+	filing: boolean;
 	onTriage: (item: FeedbackItem, resolved: boolean) => void;
+	onFile: (item: FeedbackItem) => void;
 }
 
-function FeedbackCard({ item, pending, onTriage }: FeedbackCardProps) {
+function FeedbackCard({ item, pending, filing, onTriage, onFile }: FeedbackCardProps) {
 	const resolved = item.resolvedAt !== undefined;
 	let triageLabel = resolved ? "Reopen" : "Mark resolved";
 	if (pending) {
@@ -176,16 +205,46 @@ function FeedbackCard({ item, pending, onTriage }: FeedbackCardProps) {
 				) : (
 					<span className="text-muted-foreground">Open</span>
 				)}
-				<Button
-					type="button"
-					variant="outline"
-					size="sm"
-					disabled={pending}
-					onClick={() => onTriage(item, !resolved)}
-				>
-					{pending && <Spinner className="size-4" />}
-					{triageLabel}
-				</Button>
+				<div className="flex flex-wrap items-center gap-2">
+					{item.canFile && (
+						<AlertDialog>
+							<AlertDialogTrigger
+								render={
+									<Button type="button" variant="outline" size="sm" disabled={pending || filing}>
+										{filing && <Spinner className="size-4" />}
+										{filing ? "Filing…" : "File on GitHub"}
+									</Button>
+								}
+							/>
+							<AlertDialogContent>
+								<AlertDialogHeader>
+									<AlertDialogTitle>File this report on GitHub?</AlertDialogTitle>
+									<AlertDialogDescription>
+										{item.savedBeforeDisclosure
+											? "It becomes a private issue with the sender’s text as written. No AI model reads it."
+											: "An AI model drafts a private issue from it."}{" "}
+										The text leaves this instance, and the sender’s name stays here. You cannot take
+										this back.
+									</AlertDialogDescription>
+								</AlertDialogHeader>
+								<AlertDialogFooter>
+									<AlertDialogCancel>Cancel</AlertDialogCancel>
+									<AlertDialogAction onClick={() => onFile(item)}>File on GitHub</AlertDialogAction>
+								</AlertDialogFooter>
+							</AlertDialogContent>
+						</AlertDialog>
+					)}
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						disabled={pending || filing}
+						onClick={() => onTriage(item, !resolved)}
+					>
+						{pending && <Spinner className="size-4" />}
+						{triageLabel}
+					</Button>
+				</div>
 			</CardFooter>
 		</Card>
 	);

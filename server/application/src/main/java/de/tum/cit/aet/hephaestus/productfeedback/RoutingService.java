@@ -131,9 +131,13 @@ class RoutingService {
         if (decision.latch()) filing.setRiskLatch(true);
         filing.setRoute(decision.route());
         filing.setReason(decision.reason());
+        // The prepared text holds the reporter's latest edit; the stored message holds only the first version.
+        String input = filing.getPromptInput();
         Draft stored = outcome.draft() != null
                 ? outcome.draft()
-                : Fallback.of(report.getKind(), outcome.original().text());
+                : Fallback.of(
+                        report.getKind(),
+                        input != null ? input : outcome.original().text());
         filing.setDraft(write(stored));
         filing.setRemoved(outcome.counts().isEmpty() ? null : Redaction.describe(outcome.counts()));
         if (draft == null) filing.setDraftedAt(null);

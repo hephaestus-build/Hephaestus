@@ -59,5 +59,11 @@ final class FeedbackDTOs {
             @Nullable String appVersion,
             @NonNull Instant createdAt,
             @Nullable Instant resolvedAt,
-            @Nullable FeedbackAccountRefDTO resolvedBy) {}
+            @Nullable FeedbackAccountRefDTO resolvedBy,
+
+            /* The report waits here only, and a private repository can take it now. */
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean canFile,
+
+            /* Its author was not told about the model, so it moves as written and no model reads it. */
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean savedBeforeDisclosure) {}
 }

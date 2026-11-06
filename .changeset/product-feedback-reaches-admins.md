@@ -1,0 +1,5 @@
+---
+"hephaestus": minor
+---
+
+A report that is not on GitHub now reaches someone, also on an instance that cannot send email. The main sidebar shows instance admins how many reports wait, and leads straight to them. Once a private repository is set, **File on GitHub** sends a saved report through drafting as a private issue, so reports saved during a gap or **Pause** are no longer stuck. An admin can never publish a report this way. The action asks for a recent sign-in and a confirmation, the composer and the privacy text tell reporters it can happen, and the audit log records who filed it. The list also says when this instance cannot send email. **Keep private** during the hold now files a private issue. Before, it left the report with the admins and said the destination had changed. You can run with no destination and connect GitHub later: the list then offers **Move to GitHub** for everything that waits, and a move can safely run again. Reports sent before this version move as written, and no AI model reads them, because their senders were told only about the admins.

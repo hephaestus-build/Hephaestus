@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.auth.spi.ProductFeedbackAudit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
 import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent;
@@ -46,6 +47,7 @@ class FilingService {
     static final int PUBLIC_PER_ACCOUNT_DAILY = 5;
     static final int MAX_FAILURES = 5;
     static final Duration WRITE_DEADLINE = Duration.ofSeconds(40);
+    static final int MOVE_BATCH = 500;
 
     private final ProductFeedbackFilingRepository filings;
     private final ProductFeedbackRepository feedback;
@@ -57,6 +59,7 @@ class FilingService {
     private final ApplicationEventPublisher events;
     private final TransactionTemplate transactions;
     private final ProductFeedbackMeters meters;
+    private final ProductFeedbackAudit audit;
     private final Clock clock;
 
     private volatile Instant lastWrite = Instant.EPOCH;
@@ -72,6 +75,7 @@ class FilingService {
             ApplicationEventPublisher events,
             TransactionTemplate transactions,
             ProductFeedbackMeters meters,
+            ProductFeedbackAudit audit,
             Clock clock) {
         this.filings = filings;
         this.feedback = feedback;
@@ -83,6 +87,7 @@ class FilingService {
         this.events = events;
         this.transactions = transactions;
         this.meters = meters;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -367,6 +372,63 @@ class FilingService {
                     case IDEA -> ProductFeedbackSubmittedEvent.Kind.IDEA;
                     case FEEDBACK -> ProductFeedbackSubmittedEvent.Kind.FEEDBACK;
                 }));
+    }
+
+    /**
+     * Sends a report that is saved for the admins to GitHub, as a private issue. An admin's action never publishes: a
+     * public issue needs the reporter's own choice. A report whose author was told about the model starts over from
+     * drafting, from their latest text. An older one skips the model: it routes without a draft, so its issue is the
+     * author's redacted text. Each call changes one row under its lock, so a repeated or interrupted move changes
+     * nothing twice, and the marker keeps a write from making a second issue.
+     *
+     * @return false when this report is resolved, not saved for the admins, or no repository can take it now
+     */
+    boolean fileSaved(UUID feedbackId, long accountId) {
+        return Boolean.TRUE.equals(transactions.execute(status -> {
+            ProductFeedbackDestination destination = destinations.current();
+            ProductFeedbackFiling filing = filings.lock(feedbackId)
+                    .filter(row -> row.canFileAt(destination))
+                    .orElse(null);
+            if (filing == null) return false;
+            ProductFeedback report = feedback.findById(feedbackId).orElseThrow();
+            if (report.isResolved()) return false;
+            if (!audit.recordFiledByAdmin(accountId, feedbackId))
+                throw new IllegalStateException("The filing could not be audited");
+            meters.step("file_saved", "ok");
+            Instant now = clock.instant();
+            boolean drafted = filing.isFileDisclosed();
+            // A held report the reporter edited keeps its edit here; a report saved at submission has none yet.
+            if (drafted && filing.getPromptInput() == null) routing.prepare(filing, report, report.getMessage());
+            filing.setAllowPublic(false);
+            filing.setMentionLogin(null);
+            filing.clearRecipient();
+            filing.setDraft(null);
+            filing.setRoute(null);
+            filing.setReason(null);
+            filing.setFailures(0);
+            filing.setFiledAfter(null);
+            // The wait that the stuck alert measures starts here, not when the report was saved.
+            filing.setCreatedAt(now);
+            filing.setAnswer(null);
+            filing.setState(drafted ? FilingState.DRAFT_QUEUED : FilingState.ANSWERED);
+            filing.setNextAttemptAt(now);
+            filing.setUpdatedAt(now);
+            return true;
+        }));
+    }
+
+    /**
+     * Moves what waits for the admins, up to one batch. A crash leaves the rest waiting, and a second run finds only that
+     * rest. Filing keeps its own pace, so a large batch files over time and never floods the repository.
+     *
+     * @return how many reports started moving
+     */
+    int fileAllSaved(long accountId) {
+        int moved = 0;
+        for (UUID id : filings.savedForAdmins(MOVE_BATCH)) {
+            if (fileSaved(id, accountId)) moved++;
+        }
+        return moved;
     }
 
     /** Sends a stopped report through the pipeline again, from routing. */

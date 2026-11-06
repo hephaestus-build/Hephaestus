@@ -58,6 +58,24 @@ export const InstanceAdmin: Story = {
 	},
 };
 
+/** Reports that wait in the console lead an admin there from anywhere. Without any, the row is gone. */
+export const ReportsWaiting: Story = {
+	args: { isAppAdmin: true, waitingReports: 3, workspaceSlug: "engineering" },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "3 reports waiting" })).toHaveAttribute(
+			"href",
+			"/admin/feedback?chromeWorkspace=engineering",
+		);
+	},
+};
+
+export const OneReportWaiting: Story = {
+	args: { isAppAdmin: true, waitingReports: 1 },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "1 report waiting" })).toBeVisible();
+	},
+};
+
 export const WithWorkspace: Story = {
 	args: { workspaceSlug: "engineering" },
 	play: async ({ canvas }) => {

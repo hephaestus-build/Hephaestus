@@ -224,6 +224,7 @@ paths:
             - PUBLIC_ACTIVITY_CHANGED
             - PRODUCT_FEEDBACK_DESTINATIONS_CHANGED
             - PRODUCT_FEEDBACK_CLEANUP_CONFIRMED
+            - PRODUCT_FEEDBACK_FILED_BY_ADMIN
             - RESEARCH_DATASET_RELEASED
             - RESEARCH_REMOVAL_RECORDED
       - in: query
@@ -319,6 +320,7 @@ paths:
             - PUBLIC_ACTIVITY_CHANGED
             - PRODUCT_FEEDBACK_DESTINATIONS_CHANGED
             - PRODUCT_FEEDBACK_CLEANUP_CONFIRMED
+            - PRODUCT_FEEDBACK_FILED_BY_ADMIN
             - RESEARCH_DATASET_RELEASED
             - RESEARCH_REMOVAL_RECORDED
       - in: query
@@ -414,6 +416,7 @@ paths:
             - PUBLIC_ACTIVITY_CHANGED
             - PRODUCT_FEEDBACK_DESTINATIONS_CHANGED
             - PRODUCT_FEEDBACK_CLEANUP_CONFIRMED
+            - PRODUCT_FEEDBACK_FILED_BY_ADMIN
             - RESEARCH_DATASET_RELEASED
             - RESEARCH_REMOVAL_RECORDED
       - in: query
@@ -666,6 +669,19 @@ paths:
       summary: Get redacted configuration readiness
       tags:
       - Configuration Readiness
+  /admin/email/status:
+    get:
+      operationId: getEmailStatus
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailStatus"
+          description: OK
+      summary: Whether this instance can send email at all
+      tags:
+      - Instance Email
   /admin/email/test:
     post:
       description: "Sends a test email through the configured relay to the given address,\
@@ -1909,6 +1925,19 @@ paths:
       summary: Set where product feedback is filed
       tags:
       - product-feedback-destinations
+  /admin/product-feedback/file-saved:
+    post:
+      operationId: fileAllSavedProductFeedback
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductFeedbackMove"
+          description: OK
+      summary: Send every report that is saved for admins to GitHub as private issues
+      tags:
+      - product-feedback-destinations
   /admin/product-feedback/needs-action:
     get:
       operationId: listProductFeedbackNeedsAction
@@ -1949,6 +1978,22 @@ paths:
       summary: Mark product feedback as resolved or reopen it
       tags:
       - feedback-admin
+  /admin/product-feedback/{feedbackId}/file:
+    post:
+      operationId: fileSavedProductFeedback
+      parameters:
+      - in: path
+        name: feedbackId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: The report goes through drafting and routing
+      summary: Send a report that is saved for admins to GitHub as a private issue
+      tags:
+      - product-feedback-destinations
   /admin/product-feedback/{feedbackId}/retry:
     post:
       operationId: retryProductFeedbackFiling
@@ -14737,6 +14782,15 @@ components:
       required:
       - description
       - title
+    EmailStatus:
+      type: object
+      properties:
+        configured:
+          type: boolean
+          description: "this instance has a relay and a sender, so it can try to send\
+            \ email at all"
+      required:
+      - configured
     EmailTestRequest:
       type: object
       properties:
@@ -15284,6 +15338,8 @@ components:
           $ref: "#/components/schemas/FeedbackAccountRef"
         appVersion:
           type: string
+        canFile:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -15305,15 +15361,19 @@ components:
           format: date-time
         resolvedBy:
           $ref: "#/components/schemas/FeedbackAccountRef"
+        savedBeforeDisclosure:
+          type: boolean
         userAgent:
           type: string
         workspace:
           $ref: "#/components/schemas/FeedbackWorkspaceRef"
       required:
+      - canFile
       - createdAt
       - id
       - kind
       - message
+      - savedBeforeDisclosure
     FeedbackModeAssignment:
       type: object
       properties:
@@ -20283,6 +20343,11 @@ components:
           - DIFFERENT_OWNER
         publicRepository:
           type: string
+        reportsToMove:
+          type: integer
+          format: int64
+          description: saved reports that the private repository can take now; 0 without
+            one or while paused
         snapshotAt:
           type: string
           format: date-time
@@ -20294,6 +20359,17 @@ components:
       - paused
       - privateCheck
       - publicCheck
+      - reportsToMove
+    ProductFeedbackMove:
+      type: object
+      properties:
+        moved:
+          type: integer
+          format: int32
+          description: how many reports started moving; a repeated call finds only
+            what is left
+      required:
+      - moved
     ProductFeedbackNeedsAction:
       type: object
       description: A report that failed to file and waits for an admin.

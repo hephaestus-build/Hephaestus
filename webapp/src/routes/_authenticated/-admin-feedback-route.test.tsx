@@ -26,6 +26,8 @@ const bugReport = {
 	pagePath: "/w/acme/practices/code-review",
 	appVersion: "0.71.0",
 	createdAt: "2026-09-11T09:00:00.000Z",
+	canFile: false,
+	savedBeforeDisclosure: false,
 } satisfies Wire<FeedbackItem>;
 
 const resolvedNote = {
@@ -36,6 +38,8 @@ const resolvedNote = {
 	createdAt: "2026-08-30T09:00:00.000Z",
 	resolvedAt: "2026-09-01T09:00:00.000Z",
 	resolvedBy: { id: 1, displayName: "Ada Lovelace" },
+	canFile: false,
+	savedBeforeDisclosure: false,
 } satisfies Wire<FeedbackItem>;
 
 /** What each status filter lists; a request without one, or with any other, sees the open items. */
@@ -72,6 +76,7 @@ const destinations = {
 	publicCheck: "INSTALLED",
 	privateCheck: "UNSET",
 	draftsToday: 4,
+	reportsToMove: 0,
 	needsAction: 1,
 } satisfies Wire<ProductFeedbackDestinations>;
 
@@ -131,6 +136,38 @@ beforeEach(() => {
 });
 
 describe("instance product feedback destinations", () => {
+	it("files a saved report on GitHub and says when this instance cannot send email", async () => {
+		const filed: string[] = [];
+		mockInbox();
+		server.use(
+			http.get("*/admin/product-feedback", () =>
+				HttpResponse.json({
+					content: [{ ...bugReport, canFile: true }],
+					page: 0,
+					size: 50,
+					totalElements: 1,
+					totalPages: 1,
+				}),
+			),
+			http.get("*/admin/email/status", () => HttpResponse.json({ configured: false })),
+			http.post(`*/admin/product-feedback/${bugReport.id}/file`, () => {
+				filed.push(bugReport.id);
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		renderRouteAt("/admin/feedback");
+		const user = userEvent.setup();
+
+		await screen.findByText(/This instance cannot send email/u, undefined, ROUTE_RENDER_WAIT);
+		await user.click(await screen.findByRole("button", { name: "File on GitHub" }));
+		const confirm = await screen.findByRole("alertdialog");
+		expect(filed).toStrictEqual([]);
+		await user.click(within(confirm).getByRole("button", { name: "File on GitHub" }));
+
+		await waitFor(() => expect(filed).toStrictEqual([bugReport.id]));
+		await screen.findByText("Report sent to filing");
+	});
+
 	it("saves the destinations as the server's update", async () => {
 		const puts: unknown[] = [];
 		mockInbox();

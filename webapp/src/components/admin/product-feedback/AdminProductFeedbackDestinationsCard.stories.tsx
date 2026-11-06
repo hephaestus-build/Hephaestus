@@ -16,6 +16,7 @@ const configured = {
 	publicCheck: "INSTALLED",
 	privateCheck: "INSTALLED",
 	draftsToday: 12,
+	reportsToMove: 0,
 	needsAction: 0,
 	lastFiledAt: minutesBefore(25),
 	oldestWaitingSince: minutesBefore(3),
@@ -29,6 +30,7 @@ const unset = {
 	publicCheck: "UNSET",
 	privateCheck: "UNSET",
 	draftsToday: 0,
+	reportsToMove: 0,
 	needsAction: 0,
 } satisfies ProductFeedbackDestinations;
 

@@ -44,6 +44,7 @@ import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useFeedbackAwaitingApproval } from "@/hooks/use-feedback-awaiting-approval";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
+import { useWaitingProductFeedback } from "@/hooks/use-waiting-product-feedback";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceCreation } from "@/hooks/use-workspace-creation";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
@@ -445,6 +446,7 @@ function sidebarContextOf(pathname: string): SidebarContext {
 function AppSidebarContainer() {
 	const { pathname } = useLocation();
 	const { isAuthenticated, username, isAppAdmin, userView } = useAuth();
+	const waitingReports = useWaitingProductFeedback(isAppAdmin && !userView);
 	const navigate = useNavigate();
 	const switchWorkspace = useWorkspaceSwitcher();
 	const workspaceAccess = useWorkspaceAccess();
@@ -525,6 +527,7 @@ function AppSidebarContainer() {
 			isAdmin={workspaceAccess.isAdmin}
 			isOwner={workspaceAccess.role === "OWNER"}
 			isAppAdmin={isAppAdmin}
+			waitingReports={waitingReports}
 			showConversation={showConversation}
 			readOnly={Boolean(userView)}
 			integrationKinds={integrationKinds}
