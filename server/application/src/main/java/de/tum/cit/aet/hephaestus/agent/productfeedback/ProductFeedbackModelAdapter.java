@@ -172,7 +172,8 @@ class ProductFeedbackModelAdapter {
             return new ModelSession.Answer(200, answer, true, null);
         } catch (WebClientResponseException refused) {
             int status = refused.getStatusCode().value();
-            if (LlmCallPermits.throttles(status)) permits.throttled(permit, status, refused.getHeaders(), true);
+            if (LlmCallPermits.throttles(status) && !LlmCallPermits.spentAccount(refused.getResponseBodyAsByteArray()))
+                permits.throttled(permit, status, refused.getHeaders(), true);
             return new ModelSession.Answer(
                     refused.getStatusCode().value(), refused.getResponseBodyAsByteArray(), true, null);
         }

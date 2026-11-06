@@ -315,7 +315,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .uri("/admin/llm/call-pools/{id}", id)
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new SaveLlmCallPoolRequestDTO(slug, "Own", ceiling, null, null, null))
+                .bodyValue(new SaveLlmCallPoolRequestDTO(slug, "Own", ceiling, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -334,7 +334,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .uri("/admin/llm/call-pools/{id}", pool.id())
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new SaveLlmCallPoolRequestDTO(pool.slug(), "Renamed", null, null, null, null))
+                .bodyValue(new SaveLlmCallPoolRequestDTO(pool.slug(), "Renamed", null, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -350,10 +350,16 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
     @Test
     @WithAdminUser
     void shouldRefuseABadSlugAndATokenRateWithoutABound() {
-        refuseCreate(new SaveLlmCallPoolRequestDTO("Not A Slug", "Bad slug", 2, null, null, null));
-        refuseCreate(new SaveLlmCallPoolRequestDTO(slug("no-bound"), "No bound", 2, null, 100L, null));
-        refuseCreate(new SaveLlmCallPoolRequestDTO(slug("over-rate"), "Over rate", 2, null, 100L, 101L));
-        refuseCreate(new SaveLlmCallPoolRequestDTO("own-" + slug("reserved"), "Reserved prefix", 2, null, null, null));
+        refuseCreate(new SaveLlmCallPoolRequestDTO("Not A Slug", "Bad slug", 2, null, null, null, null, null));
+        refuseCreate(new SaveLlmCallPoolRequestDTO(slug("no-bound"), "No bound", 2, null, 100L, null, null, null));
+        refuseCreate(new SaveLlmCallPoolRequestDTO(slug("over-rate"), "Over rate", 2, null, 100L, 101L, null, null));
+        refuseCreate(
+                new SaveLlmCallPoolRequestDTO(slug("no-input-bound"), "No bound", 2, null, null, null, 100L, null));
+        refuseCreate(new SaveLlmCallPoolRequestDTO(slug("over-input"), "Over rate", 2, null, null, 101L, 100L, 500L));
+        refuseCreate(
+                new SaveLlmCallPoolRequestDTO(slug("output-bound"), "No token rate", 2, null, null, 100L, null, 500L));
+        refuseCreate(new SaveLlmCallPoolRequestDTO(
+                "own-" + slug("reserved"), "Reserved prefix", 2, null, null, null, null, null));
     }
 
     @Test
@@ -367,7 +373,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .uri("/admin/llm/call-pools")
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new SaveLlmCallPoolRequestDTO(slug, "Again", 4, null, null, null))
+                .bodyValue(new SaveLlmCallPoolRequestDTO(slug, "Again", 4, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isEqualTo(409)
@@ -384,7 +390,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .uri("/admin/llm/call-pools")
                 .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new SaveLlmCallPoolRequestDTO(slug("denied"), "Denied", 4, null, null, null))
+                .bodyValue(new SaveLlmCallPoolRequestDTO(slug("denied"), "Denied", 4, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isForbidden()
@@ -492,7 +498,8 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .uri("/admin/llm/call-pools/{id}", pool.id())
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new SaveLlmCallPoolRequestDTO(pool.slug(), "Recovered endpoint", 3, null, null, null))
+                .bodyValue(new SaveLlmCallPoolRequestDTO(
+                        pool.slug(), "Recovered endpoint", 3, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -551,7 +558,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .uri("/admin/llm/call-pools")
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new SaveLlmCallPoolRequestDTO(slug, "Shared GPU", max, null, null, null))
+                .bodyValue(new SaveLlmCallPoolRequestDTO(slug, "Shared GPU", max, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isCreated()

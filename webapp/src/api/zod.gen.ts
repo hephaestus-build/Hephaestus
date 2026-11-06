@@ -1977,9 +1977,11 @@ export const zLlmCallPool = z.object({
     displayName: z.string(),
     effectiveLimit: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     id: z.int(),
+    inputTokensPerMinute: z.int().optional(),
     learnedLimit: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     maxConcurrentCalls: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     noCallBefore: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+    outputTokensPerMinute: z.int().optional(),
     requestsPerMinute: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     slug: z.string(),
     throttledAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
@@ -4653,7 +4655,9 @@ export const zReleaseStatus = z.object({
  */
 export const zSaveLlmCallPoolRequest = z.object({
     displayName: z.string().min(0).max(128),
+    inputTokensPerMinute: z.int().optional(),
     maxConcurrentCalls: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
+    outputTokensPerMinute: z.int().optional(),
     requestsPerMinute: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     slug: z.string().min(0).max(64).regex(/[a-z0-9]+(-[a-z0-9]+)*/),
     tokensPerCall: z.int().optional(),

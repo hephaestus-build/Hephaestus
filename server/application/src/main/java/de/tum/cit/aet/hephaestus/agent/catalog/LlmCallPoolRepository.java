@@ -52,6 +52,12 @@ public interface LlmCallPoolRepository extends JpaRepository<LlmCallPool, Long> 
         @Nullable
         Long getTokensPerCall();
 
+        @Nullable
+        Long getInputTokensPerMinute();
+
+        @Nullable
+        Long getOutputTokensPerMinute();
+
         /** Milliseconds until the pool's cooldown ends; 0 without one. */
         long getCooldownMillis();
     }
@@ -64,6 +70,7 @@ public interface LlmCallPoolRepository extends JpaRepository<LlmCallPool, Long> 
                     + " throttled_at IS NULL OR throttled_at < clock_timestamp() - interval '10 minutes' AS \"probing\","
                     + " CAST(EXTRACT(EPOCH FROM throttled_at) * 1000000 AS BIGINT) AS \"throttleMark\","
                     + " requests_per_minute AS \"requestsPerMinute\", tokens_per_minute AS \"tokensPerMinute\", tokens_per_call AS \"tokensPerCall\","
+                    + " input_tokens_per_minute AS \"inputTokensPerMinute\", output_tokens_per_minute AS \"outputTokensPerMinute\","
                     + " CAST(GREATEST(0, CEIL(EXTRACT(EPOCH FROM (no_call_before - clock_timestamp())) * 1000)) AS BIGINT)"
                     + " AS \"cooldownMillis\""
                     + " FROM llm_call_pool WHERE id = :id FOR UPDATE",
