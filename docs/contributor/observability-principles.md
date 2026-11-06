@@ -59,6 +59,7 @@ The operator's tools collect all of it.
 | Alert | `deploy/chart/hephaestus/files/hephaestus-alerts.yml` | `vp run test:alerts`: each alert has a `promtool` case in which it fires and one in which it stays silent, a runbook row, and a `runbook_url` annotation |
 | Runbook row | [Alert response](/admin/production-operations-runbook#alert-response) | `vp run test:alerts`: each alert has a row in that table |
 | Metric that a rule reads | The meter in the code | `ScrapeContractIntegrationTest`. Each name that a rule selects with `job="hephaestus"` has a meter name in the code. The server exports it at start, or the test lists it as lazy or as a meter of another role, with the reason. Each histogram on the scrape offers every `le` bound that a rule reads, with the same text. A server at start stays within the series budget |
+| Log record | The code that logs it | `PersonalDataLogScan` reads each record of a test run in the shipped encoding. A record must hold no email address, provider token, bearer value or fixture name. A match fails the run and prints only the logger, the `event.name` and the kind. It sees the levels that the test profile logs: `INFO` for this code, `WARN` for libraries. It does not see forked worker JVMs. The names are a fixed list |
 
 ## The project's own instances
 

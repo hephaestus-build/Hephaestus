@@ -281,6 +281,8 @@ tasks.withType<Test>().configureEach {
     // test that runs main from changing the zone for later classes.
     systemProperty("user.timezone", "Europe/Berlin")
     systemProperty("hephaestus.test.postgres-image", testPostgresImage.get())
+    // PersonalDataLogScan: a record with personal data or a credential fails the run.
+    systemProperty("hephaestus.test.personal-data-scan", "fail")
     // The launcher selects Node through PATH. Track it when the test configuration is cached.
     environment("PATH", providers.environmentVariable("PATH").get())
     environment("MANAGEMENT_PORT", "0")
@@ -359,6 +361,8 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
         selectTestTier(tag)
         shouldRunAfter(tasks.test)
         if (tag == "live") {
+            // Real provider records carry real names, which only the report may count.
+            systemProperty("hephaestus.test.personal-data-scan", "report")
             // Live tests call real providers; every other tier resolves no real host
             // (OfflineNetwork).
             systemProperty("hephaestus.test.network.open", "true")

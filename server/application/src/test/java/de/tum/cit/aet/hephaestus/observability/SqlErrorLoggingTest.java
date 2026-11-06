@@ -29,7 +29,7 @@ class SqlErrorLoggingTest {
     void shouldSilenceTheDriverMessageThatHibernateLogsForAFailedStatement() throws IOException {
         SQLException failure = new SQLException(
                 "ERROR: duplicate key value violates unique constraint \"uk_account_email\"\n"
-                        + "  Detail: Key (email)=(ada@example.test) already exists.",
+                        + "  Detail: Key (email)=(rejected-row-value) already exists.",
                 "23505");
         Logger logger = (Logger) LoggerFactory.getLogger(CATEGORY);
         Level previous = logger.getLevel();
@@ -40,7 +40,7 @@ class SqlErrorLoggingTest {
             // Unbounded, the helper writes the address under this category: the category name is the real one.
             logger.setLevel(Level.WARN);
             new SqlExceptionHelper(true).logExceptions(failure, "insert account");
-            assertThat(messages(appender)).anyMatch(message -> message.contains("ada@example.test"));
+            assertThat(messages(appender)).anyMatch(message -> message.contains("rejected-row-value"));
 
             appender.list.clear();
             logger.setLevel(Level.toLevel(shippedLevel()));
