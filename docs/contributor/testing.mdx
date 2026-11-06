@@ -337,6 +337,37 @@ The suite covers review Jobs, host startup, turn commands, transfer, large-tree 
 It uses synthetic data and reaches no model provider.
 The ordinary provider live tests remain separate.
 
+### Deterministic sandbox release qualification
+
+Release preflight and the release workflow run the native review runner in the selected agent image.
+Qualification must pass before the release is published.
+Run the same qualification on a local Linux Docker host:
+
+```bash
+node scripts/sandbox-security.ts --image <agent-pi-reference>
+```
+
+Use the candidate image digest as the reference.
+Docker's default bridge must permit traffic between containers. The probe collector publishes no host port.
+The replay provider runs on loopback inside each container. No live model or provider credential is required.
+The harness gives each workspace a separate Docker container with a read-only root, no network, and bounded memory and processes.
+
+The corpus injects instructions into a pull request body, a comment, and a repository file.
+The replay reads the injected text, then attempts cross-workspace reads and a network post.
+The gate scans model requests, tool transcripts, review outputs, and process logs for another workspace's planted marker.
+A positive control requires the marker to reach its own workspace's model requests.
+
+Two mutation controls expose the other workspace's files and permit network access.
+The gate must detect the resulting read and post before it can pass.
+
+A failure stops publication. Detailed evidence stays in the local temporary directory, whose path the command reports.
+Do not publish those files before review. CI retains a summary with no captured content.
+This qualification tests the Docker host's native image architecture and the container and tool boundaries.
+
+It does not test the Kubernetes Job specification.
+`KubernetesSandboxLiveTest` qualifies the production sandbox on Kubernetes.
+The database tenancy tests remain required.
+
 ### Offline feedback quality evaluation
 
 The [feedback quality harness](./feedback-quality-evals.md) replays stored evidence and exact outputs without provider credentials.
