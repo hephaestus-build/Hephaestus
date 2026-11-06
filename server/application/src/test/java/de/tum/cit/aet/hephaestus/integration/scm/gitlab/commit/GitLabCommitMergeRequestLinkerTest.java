@@ -306,30 +306,31 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
     }
 
     @Test
-    void harvestedAuthorPairs_backfillCommitContributorUserId() {
-        Map<String, Object> commit1 = commitNode("sha-1", "gh78ijk@mytum.de", "00000000014C41E0");
-        Map<String, Object> commit2 = commitNode("sha-2", "gh78ijk@tum.de", null);
-        Map<String, Object> mr = mrNodeWithCommits(42, List.of(commit1, commit2));
-
+    void shouldLinkOnlyTheEmailGitLabResolvedWhenAnotherCommitHasNoAuthor() {
+        Map<String, Object> resolved = commitNode("sha-1", "z.resolved@tum.de", "00000000014C41E0");
+        Map<String, Object> unresolved = commitNode("sha-2", "a.unresolved@tum.de", null);
+        Map<String, Object> mr = mrNodeWithCommits(42, List.of(resolved, unresolved));
         ClientGraphQlResponse page = mockMrsPage(List.of(mr), new GitLabPageInfo(false, null));
         HttpGraphQlClient client = mockClient();
         mockSequentialExecute(client, page);
         when(commitRepository.linkPullRequestToCommits(eq(REPO_ID), eq(42), any()))
                 .thenReturn(2);
-
         User user = new User();
         user.setId(901L);
         when(userRepository.findByLoginAndProviderId(eq("00000000014C41E0"), eq(2L)))
                 .thenReturn(Optional.of(user));
-        when(commitContributorRepository.backfillUserIdByEmail(anyString(), eq(901L)))
+        when(commitContributorRepository.backfillUserIdByEmail(anyString(), anyLong(), eq(901L)))
                 .thenReturn(1);
 
         SyncResult result = linker.linkCommits(SCOPE_ID, repository, UPDATED_AFTER);
 
         assertThat(result.status()).isEqualTo(SyncResult.Status.COMPLETED);
-        // Direct pair (sha-1) plus dominant-login fallback (sha-2) reach the repository.
-        verify(commitContributorRepository).backfillUserIdByEmail(eq("gh78ijk@mytum.de"), eq(901L));
-        verify(commitContributorRepository).backfillUserIdByEmail(eq("gh78ijk@tum.de"), eq(901L));
+        verify(commitContributorRepository).backfillUserIdByEmail(eq("z.resolved@tum.de"), eq(REPO_ID), eq(901L));
+        verify(commitContributorRepository, never())
+                .backfillUserIdByEmail(eq("a.unresolved@tum.de"), anyLong(), anyLong());
+        verify(commitRepository, never()).bulkUpdateAuthorIdByEmail(eq("a.unresolved@tum.de"), anyLong(), anyLong());
+        verify(userRepository).backfillEmailIfNull(901L, "z.resolved@tum.de");
+        verify(userRepository, never()).backfillEmailIfNull(901L, "a.unresolved@tum.de");
     }
 
     @Test
@@ -403,7 +404,7 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
         User user = new User();
         user.setId(901L);
         when(userRepository.findByLoginAndProviderId(eq("devlogin"), eq(2L))).thenReturn(Optional.of(user));
-        when(commitContributorRepository.backfillUserIdByEmail(anyString(), eq(901L)))
+        when(commitContributorRepository.backfillUserIdByEmail(anyString(), anyLong(), eq(901L)))
                 .thenReturn(1);
         when(commitRepository.bulkUpdateAuthorIdByEmail(eq("dev@example.com"), eq(REPO_ID), eq(901L)))
                 .thenReturn(1);
@@ -441,7 +442,7 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
         when(userRepository.findByLoginAndProviderId(eq("devlogin"), eq(2L))).thenReturn(Optional.of(user));
         // Contributor row is backfilled but no commit_author row is actually updated
         // (e.g. git_commit.author_id was already populated). Event must NOT be published.
-        when(commitContributorRepository.backfillUserIdByEmail(anyString(), eq(901L)))
+        when(commitContributorRepository.backfillUserIdByEmail(anyString(), anyLong(), eq(901L)))
                 .thenReturn(1);
         when(commitRepository.bulkUpdateAuthorIdByEmail(anyString(), anyLong(), anyLong()))
                 .thenReturn(0);

@@ -193,7 +193,7 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
             }
             gitRepositoryManager.ensureRepository(key, cloneUrl, token);
 
-            Long providerId = repository.getProvider().getId();
+            Long providerId = Objects.requireNonNull(repository.getProvider().getId());
             var origin = new CommitDetailsPersister.Origin(
                     scopeId,
                     DataSource.WEBHOOK,

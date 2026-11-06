@@ -58,25 +58,22 @@ public interface CommitContributorRepository extends JpaRepository<CommitContrib
     void deleteByCommitId(Long commitId);
 
     /**
-     * Backfill {@code user_id} on every contributor row whose email matches
-     * {@code email} (case-insensitive) and that currently has no user attached.
+     * Backfill {@code user_id} on the contributor rows of one repository whose email matches
+     * {@code email} (case-insensitive) and that currently have no user attached.
      *
      * <p>Used by the GitLab commit→MR linker after it harvests
      * {@code (authorEmail, author.username)} pairs from the MR GraphQL sweep:
      * the raw commit fingerprint captured by the git backfill only records an
      * email, but GitLab's server-side resolver knows the author account for
-     * every email it recognises. Propagating that mapping back to the ledger
-     * closes the gap for authors whose email does not match the
-     * {@link de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver}
-     * TUM/LRZ/noreply heuristics (e.g. {@code firstname.lastname@tum.de}).
+     * every email it recognises. This propagates that mapping back to the ledger.
      *
-     * <p>The scope is intentionally narrow: we never overwrite an existing
-     * {@code user_id}, and repositories other than the one being synced are
-     * updated intentionally because contributor rows in separate repos share
-     * the same email/user identity.
+     * <p>The write stays inside the repository being synced and never overwrites an existing
+     * {@code user_id}. A commit's email is unverified, and {@code user} rows are per provider,
+     * so the same email in another repository may belong to someone else.
      *
-     * @param email  the commit-author email to match (case-insensitive)
-     * @param userId the database user id to attach
+     * @param email        the commit-author email to match (case-insensitive)
+     * @param repositoryId the repository being synced
+     * @param userId       the database user id to attach
      * @return the number of rows updated
      */
     @Modifying
@@ -85,6 +82,10 @@ public interface CommitContributorRepository extends JpaRepository<CommitContrib
         UPDATE commit_contributor
         SET user_id = :userId
         WHERE LOWER(email) = LOWER(:email) AND user_id IS NULL
+          AND commit_id IN (SELECT id FROM git_commit WHERE repository_id = :repositoryId)
         """, nativeQuery = true)
-    int backfillUserIdByEmail(@Param("email") String email, @Param("userId") @Nullable Long userId);
+    int backfillUserIdByEmail(
+            @Param("email") String email,
+            @Param("repositoryId") Long repositoryId,
+            @Param("userId") @Nullable Long userId);
 }

@@ -42,7 +42,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("""
             SELECT u
             FROM User u
-            WHERE u.login ILIKE :login
+            WHERE LOWER(u.login) = LOWER(:login)
             ORDER BY u.id
         """)
     List<User> findAllByLogin(@Param("login") String login);
@@ -66,60 +66,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("""
             SELECT u
             FROM User u
-            WHERE u.email ILIKE :email
-            ORDER BY u.id
-        """)
-    List<User> findAllByEmail(@Param("email") String email);
-
-    /**
-     * Finds a user by email. If multiple providers have the same email, returns the first match.
-     */
-    default Optional<User> findByEmail(String email) {
-        List<User> users = findAllByEmail(email);
-        return users.isEmpty() ? Optional.empty() : Optional.of(users.get(0));
-    }
-
-    @Query("""
-            SELECT u
-            FROM User u
-            WHERE u.email ILIKE :email
+            WHERE LOWER(u.email) = LOWER(:email)
               AND u.provider.id = :providerId
+            ORDER BY u.id
         """)
-    Optional<User> findByEmailAndProviderId(@Param("email") String email, @Param("providerId") Long providerId);
+    List<User> findAllByEmailAndProviderId(@Param("email") String email, @Param("providerId") Long providerId);
 
-    /**
-     * Finds all users whose display name matches (case-insensitive) the given value.
-     * <p>
-     * Used by {@link de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver}
-     * to resolve {@code firstname.lastname@tum.de} style commit author emails against
-     * the GitLab-synced {@code User.name} field ("Firstname Lastname"). The resolver
-     * only acts when exactly one candidate is returned so the match stays deterministic.
-     */
     @Query("""
-            SELECT u
+            SELECT u.id
             FROM User u
-            WHERE LOWER(u.name) = LOWER(:name)
+            WHERE LOWER(u.login) = LOWER(:login)
               AND u.provider.id = :providerId
-              AND u.type = 'USER'
-            ORDER BY u.id
+              AND u.provider.type = de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.GITHUB
         """)
-    List<User> findAllByNameAndProviderId(@Param("name") String name, @Param("providerId") Long providerId);
-
-    /**
-     * Finds all users whose display name matches (case-insensitive) the given value
-     * across every provider. Falls back to this variant when the caller cannot scope
-     * the lookup to a specific provider.
-     *
-     * @see #findAllByNameAndProviderId
-     */
-    @Query("""
-            SELECT u
-            FROM User u
-            WHERE LOWER(u.name) = LOWER(:name)
-              AND u.type = 'USER'
-            ORDER BY u.id
-        """)
-    List<User> findAllByName(@Param("name") String name);
+    Optional<Long> findGitHubUserIdByLogin(@Param("login") String login, @Param("providerId") Long providerId);
 
     @Query("""
             SELECT u

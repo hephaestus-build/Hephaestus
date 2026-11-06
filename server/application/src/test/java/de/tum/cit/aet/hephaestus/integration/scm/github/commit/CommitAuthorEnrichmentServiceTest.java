@@ -3,7 +3,11 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.commit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +26,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -29,6 +35,12 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.graphql.client.ClientGraphQlResponse;
+import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
+import org.springframework.graphql.client.HttpGraphQlClient;
+import reactor.core.publisher.Mono;
 
 class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
 
@@ -175,6 +187,73 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
 
     @Nested
     class ApiBasedEnrichment {
+
+        private static final String SHA = "a".repeat(40);
+        private static final String EMAIL = "someone@example.com";
+        private final HttpGraphQlClient client = mock(HttpGraphQlClient.class);
+
+        private Map<String, Object> actor(String email, @Nullable String login) {
+            return login == null
+                    ? Map.of("email", email)
+                    : Map.of("email", email, "user", Map.of("login", login, "databaseId", 5L));
+        }
+
+        @SuppressWarnings("unchecked")
+        private void gitHubReturns(Map<String, Object> commit) {
+            // No stored email matches, so only the GitHub lookup can link this email.
+            when(authorResolver.resolveByEmail(EMAIL, 2L)).thenReturn(null);
+            when(commitRepository.findRepresentativeShasByUnresolvedEmail(1L))
+                    .thenReturn(List.<Object[]>of(new Object[] {EMAIL, SHA}));
+            ClientResponseField field = mock(ClientResponseField.class);
+            when(field.getValue()).thenReturn(commit);
+            when(field.toEntity(any(ParameterizedTypeReference.class))).thenReturn(commit);
+            ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
+            when(response.isValid()).thenReturn(true);
+            when(response.field("repository.commit0")).thenReturn(field);
+            GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
+            when(client.document(anyString())).thenReturn(requestSpec);
+            when(requestSpec.execute()).thenReturn(Mono.just(response));
+            when(graphQlClientProvider.forScope(1L)).thenReturn(client);
+            lenient().when(authorResolver.resolveByLogin("author", 2L)).thenReturn(7L);
+            lenient().when(authorResolver.resolveByLogin("committer", 2L)).thenReturn(8L);
+        }
+
+        @Test
+        void shouldLinkTheAuthorWhenTheAuthorHasTheUnresolvedEmail() {
+            when(commitRepository.findDistinctUnresolvedAuthorEmailsByRepositoryId(1L))
+                    .thenReturn(List.of(EMAIL));
+            gitHubReturns(
+                    Map.of("author", actor(EMAIL, "author"), "committer", actor("committer@example.com", "committer")));
+
+            service.enrichCommitAuthors(1L, "owner/repo", 1L, 2L, null);
+
+            verify(commitRepository).bulkUpdateAuthorIdByEmail(EMAIL, 1L, 7L);
+            verify(client).document(contains("author { email user"));
+            verify(client).document(contains("committer { email user"));
+        }
+
+        @Test
+        void shouldLinkNobodyWhenOnlyTheOtherActorOfTheCommitIsResolved() {
+            when(commitRepository.findDistinctUnresolvedAuthorEmailsByRepositoryId(1L))
+                    .thenReturn(List.of(EMAIL));
+            gitHubReturns(
+                    Map.of("author", actor(EMAIL, null), "committer", actor("committer@example.com", "committer")));
+
+            service.enrichCommitAuthors(1L, "owner/repo", 1L, 2L, null);
+
+            verify(commitRepository, never()).bulkUpdateAuthorIdByEmail(anyString(), anyLong(), any());
+        }
+
+        @Test
+        void shouldLinkNobodyWhenTheCommittersEmailIsUnresolvedAndOnlyTheAuthorIsResolved() {
+            when(commitRepository.findDistinctUnresolvedCommitterEmailsByRepositoryId(1L))
+                    .thenReturn(List.of(EMAIL));
+            gitHubReturns(Map.of("author", actor("author@example.com", "author"), "committer", actor(EMAIL, null)));
+
+            service.enrichCommitAuthors(1L, "owner/repo", 1L, 2L, null);
+
+            verify(commitRepository, never()).bulkUpdateCommitterIdByEmail(anyString(), anyLong(), any());
+        }
 
         @Test
         void shouldSkipApiEnrichmentWhenScopeIdNull() {

@@ -362,7 +362,7 @@ public class CommitAuthorEnrichmentService {
      * query {
      *   rateLimit { cost limit remaining resetAt }
      *   repository(owner: "owner", name: "repo") {
-     *     commit0: object(oid: "sha1") { ... on Commit { author { user { login } } committer { user { login } } } }
+     *     commit0: object(oid: "sha1") { ... on Commit { author { email user { login } } committer { email user { login } } } }
      *     commit1: object(oid: "sha2") { ... }
      *   }
      * }
@@ -540,8 +540,10 @@ public class CommitAuthorEnrichmentService {
                     .append("\") {\n");
             sb.append("      ... on Commit {\n");
             sb.append("        oid\n");
-            sb.append("        author { user { login databaseId name email avatarUrl url createdAt updatedAt } }\n");
-            sb.append("        committer { user { login databaseId name email avatarUrl url createdAt updatedAt } }\n");
+            sb.append(
+                    "        author { email user { login databaseId name email avatarUrl url createdAt updatedAt } }\n");
+            sb.append(
+                    "        committer { email user { login databaseId name email avatarUrl url createdAt updatedAt } }\n");
             sb.append("      }\n");
             sb.append("    }\n");
         }
@@ -557,7 +559,7 @@ public class CommitAuthorEnrichmentService {
      * Each aliased field ({@code commit0}, {@code commit1}, ...) maps to a commit
      * object with optional {@code author.user.login} and {@code committer.user.login}.
      * The {@code user} field is nullable — null when GitHub can't match the commit
-     * email to a GitHub account.
+     * email to a GitHub account. A login maps only to the email of its own actor.
      */
     private void extractLoginsFromResponse(
             ClientGraphQlResponse response,
@@ -582,19 +584,21 @@ public class CommitAuthorEnrichmentService {
                     continue;
                 }
 
-                UserSnapshot authorSnapshot = extractUserSnapshot(commitData, "author");
-                if (authorSnapshot != null && email != null) {
-                    emailToLogin.putIfAbsent(email, authorSnapshot.login());
-                    if (authorSnapshot.user() != null) {
-                        usersToUpsert.putIfAbsent(authorSnapshot.user().getDatabaseId(), authorSnapshot.user());
-                    }
+                if (email == null) {
+                    continue;
                 }
-
-                UserSnapshot committerSnapshot = extractUserSnapshot(commitData, "committer");
-                if (committerSnapshot != null && email != null) {
-                    emailToLogin.putIfAbsent(email, committerSnapshot.login());
-                    if (committerSnapshot.user() != null) {
-                        usersToUpsert.putIfAbsent(committerSnapshot.user().getDatabaseId(), committerSnapshot.user());
+                // The representative commit was chosen for one email. Its other actor is someone else.
+                for (String role : List.of("author", "committer")) {
+                    if (!actorHasEmail(commitData, role, email)) {
+                        continue;
+                    }
+                    UserSnapshot snapshot = extractUserSnapshot(commitData, role);
+                    if (snapshot != null) {
+                        emailToLogin.putIfAbsent(email, snapshot.login());
+                        if (snapshot.user() != null) {
+                            usersToUpsert.putIfAbsent(snapshot.user().getDatabaseId(), snapshot.user());
+                        }
+                        break;
                     }
                 }
             } catch (Exception e) {
@@ -604,6 +608,12 @@ public class CommitAuthorEnrichmentService {
                         e.getClass().getSimpleName());
             }
         }
+    }
+
+    private static boolean actorHasEmail(Map<String, Object> commitData, String role, String email) {
+        return commitData.get(role) instanceof Map<?, ?> actor
+                && actor.get("email") instanceof String actorEmail
+                && email.equalsIgnoreCase(actorEmail);
     }
 
     /**
