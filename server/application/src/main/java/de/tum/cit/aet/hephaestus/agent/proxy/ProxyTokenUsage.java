@@ -33,6 +33,16 @@ public record ProxyTokenUsage(
     }
 
     /**
+     * The input that counts against the provider's rate limit. Anthropic counts no cache reads there, and every other
+     * provider counts the whole prompt.
+     */
+    long rateInputTokens(LlmApiProtocol protocol) {
+        return protocol == LlmApiProtocol.ANTHROPIC_MESSAGES
+                ? (long) billableInputTokens + cacheWriteTokens
+                : promptTokens();
+    }
+
+    /**
      * Reads the usage block of one non-streamed response in the shape its protocol reports.
      *
      * @return {@code null} when the response reports no token count

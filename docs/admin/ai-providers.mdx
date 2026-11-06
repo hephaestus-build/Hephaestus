@@ -522,7 +522,9 @@ A model server on your own GPUs, such as vLLM, queues calls by default. The pool
 | The limit of calls in flight | A maximum, as a ceiling on that limit |
 | The conversation reserve: a quarter of the limit, rounded up | Nothing. The limit sets it |
 | The pause after a refusal, from the provider's `Retry-After` | The longest pause, `HEPHAESTUS_LLM_CALL_POOLS_MAX_COOLDOWN` |
-| | `requestsPerMinute`, `tokensPerMinute` and `tokensPerCall`, if the provider publishes these rates |
+| A short pause before a refusal, when the provider's rate limit headers show an empty bucket | The same longest pause |
+| What each call used, from the provider's usage report | Nothing. It replaces the call's token bound when the call ends |
+| | `requestsPerMinute`, `tokensPerMinute`, `inputTokensPerMinute`, `outputTokensPerMinute` and `tokensPerCall`, if the provider publishes these rates |
 | | Which models share one pool |
 
 A new pool starts at 4 calls in flight, and the limit rises while the provider serves all of them.
@@ -538,12 +540,30 @@ Use the instance admin API under `/api/admin/llm/call-pools` for all changes in 
 Send `PUT /api/admin/llm/call-pools/{id}` with the pool's slug and display name, and with the values that you want.
 Set `maxConcurrentCalls` to `null` to remove the ceiling.
 
-Set `tokensPerCall` to a conservative maximum input-plus-output charge when you configure a token rate.
+Use the rates that your provider publishes:
+
+- A provider with one bucket for all tokens, such as OpenAI: set `tokensPerMinute`.
+- A provider with separate buckets, such as Anthropic: set `inputTokensPerMinute` and `outputTokensPerMinute`.
+
+Set `tokensPerCall` to a conservative maximum input-plus-output charge when you set `tokensPerMinute` or `inputTokensPerMinute`.
+An output rate alone needs no bound, and it can be lower than the bound.
 Use provider documentation to establish the token bound for every assigned model.
 Include reasoning and server-side tool tokens when the provider bills them.
 An understated bound cannot protect the provider's token quota.
-The pool reserves the full bound for each physical call, including cancelled calls and retries.
-This conservative policy can admit fewer requests than an exact tokenizer would permit.
+
+The pool charges the full bound to `tokensPerMinute` and `inputTokensPerMinute` for each physical call while the call runs.
+It charges nothing to `outputTokensPerMinute` while the call runs, because providers count output as the model writes it.
+When the call ends, the tokens that the provider reported replace these charges.
+A call without a usage report, or one that was cut before its end, keeps those charges.
+Thus, the pool can admit fewer calls than the provider would, but only while calls run.
+Cache reads count by the provider's rule: Anthropic's input bucket omits them, and every other provider's token rate includes them.
+
+Most providers also send rate limit headers, and the pool reads the Anthropic and OpenAI forms without any setting.
+When a served answer shows an empty bucket, all callers pause.
+The pause is one sixtieth of the time until the bucket is full, so one second for a bucket that a minute fills.
+It is at most ten seconds.
+The limit of calls in flight stays.
+A provider that sends no such headers changes nothing.
 
 ### Share one pool between models
 

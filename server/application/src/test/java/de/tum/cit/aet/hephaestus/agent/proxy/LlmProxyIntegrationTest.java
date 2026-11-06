@@ -532,7 +532,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .isEqualTo("CAPACITY");
             assertThat(upstream.getRequestCount()).isEqualTo(3);
             assertThat(callRows.rates(poolId).getRequests()).isEqualTo(3);
-            assertThat(callRows.rates(poolId).getTokens()).isEqualTo(300);
+            // Each call ended on its own, so what the provider reported replaced the bound of 100.
+            assertThat(callRows.rates(poolId).getTokens()).isEqualTo(34);
             assertThat(callRows.countActive(poolId)).isZero();
         }
     }

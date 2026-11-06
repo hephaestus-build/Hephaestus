@@ -2165,6 +2165,7 @@ export type LlmCallPool = {
      * Pool id
      */
     id: number;
+    inputTokensPerMinute?: number;
     /**
      * Calls in flight the provider is thought to serve, learned from its answers
      */
@@ -2177,6 +2178,7 @@ export type LlmCallPool = {
      * The provider asked for no call before this time
      */
     noCallBefore?: Date;
+    outputTokensPerMinute?: number;
     requestsPerMinute?: number;
     /**
      * Unique slug; also the pool label of its metrics
@@ -5383,15 +5385,26 @@ export type SaveLlmCallPoolRequest = {
      */
     displayName: string;
     /**
+     * A bucket of input tokens alone, for a provider that has one
+     */
+    inputTokensPerMinute?: number;
+    /**
      * Ceiling on the limit the pool learns; null leaves it uncapped
      */
     maxConcurrentCalls?: number;
+    /**
+     * A bucket of output tokens alone, for a provider that has one
+     */
+    outputTokensPerMinute?: number;
     requestsPerMinute?: number;
     /**
      * Unique slug, lowercase words joined by hyphens; set at creation only
      */
     slug: string;
     tokensPerCall?: number;
+    /**
+     * A bucket of input and output tokens together
+     */
     tokensPerMinute?: number;
 };
 

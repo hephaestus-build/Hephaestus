@@ -6,6 +6,8 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.util.Objects;
+import java.util.stream.Stream;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -26,14 +28,26 @@ public record SaveLlmCallPoolRequestDTO(
         Integer maxConcurrentCalls,
 
         @Nullable @Min(1) Integer requestsPerMinute,
-        @Nullable @Min(1) Long tokensPerMinute,
-        @Nullable @Min(1) Long tokensPerCall) {
+
+        @Nullable @Min(1) @Schema(description = "A bucket of input and output tokens together")
+        Long tokensPerMinute,
+
+        @Nullable @Min(1) Long tokensPerCall,
+
+        @Nullable @Min(1) @Schema(description = "A bucket of input tokens alone, for a provider that has one")
+        Long inputTokensPerMinute,
+
+        @Nullable @Min(1) @Schema(description = "A bucket of output tokens alone, for a provider that has one")
+        Long outputTokensPerMinute) {
 
     @AssertTrue(message = "A token rate needs a per-call token bound no larger than the rate")
     @Schema(hidden = true)
     public boolean isTokenBoundValid() {
-        return tokensPerMinute == null
-                ? tokensPerCall == null
-                : tokensPerCall != null && tokensPerCall <= tokensPerMinute;
+        // The bound covers input and output together, so an output rate needs none and can be lower.
+        var rates = Stream.of(tokensPerMinute, inputTokensPerMinute)
+                .filter(Objects::nonNull)
+                .toList();
+        if (rates.isEmpty()) return tokensPerCall == null;
+        return tokensPerCall != null && rates.stream().allMatch(rate -> tokensPerCall <= rate);
     }
 }

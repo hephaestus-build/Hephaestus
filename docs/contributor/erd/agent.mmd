@@ -39,6 +39,8 @@ erDiagram
         TIMESTAMPTZ closed_at
         INTEGER requests "NOT NULL"
         BIGINT tokens "NOT NULL"
+        BIGINT input_tokens "NOT NULL"
+        BIGINT output_tokens "NOT NULL"
     }
 
     LlmCallPool {
@@ -59,6 +61,8 @@ erDiagram
         INTEGER baseline_first_token_ms
         INTEGER window_first_token_ms
         INTEGER window_samples "NOT NULL"
+        BIGINT input_tokens_per_minute
+        BIGINT output_tokens_per_minute
     }
 
     LlmConnection {
