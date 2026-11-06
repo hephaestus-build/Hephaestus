@@ -5,8 +5,8 @@
 		{
 			"name": "nats",
 			"repository": "docker.io/synadia/nats-server",
-			"tag": "2.14.8-alpine3.22",
-			"digest": "sha256:e7c229e0f6415993d29a7ada7ef61f5fd380d7c1134b9038f70f6eff2813b0a0"
+			"tag": "2.14.9-alpine3.22",
+			"digest": "sha256:b7d1beaf165653db85ebf4aeefa51298c9634fe88f1af66a3148a8b4f830dbcd"
 		},
 		{
 			"name": "victoria-metrics",
