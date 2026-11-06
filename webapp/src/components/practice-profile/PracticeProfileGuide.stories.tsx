@@ -62,7 +62,7 @@ export const Default: Story = {
 		await expect(within(trends).getAllByRole("term")).toHaveLength(4);
 		await expect(
 			within(trends).getByText(
-				"Recent and earlier work were compared, and the difference is too small to call.",
+				"No clear direction yet between your recent work and the work before it.",
 			),
 		).toBeVisible();
 	},

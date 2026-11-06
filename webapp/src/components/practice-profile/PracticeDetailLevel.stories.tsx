@@ -182,7 +182,8 @@ export const Default: Story = {
 		const [first, second, third] = screen.getAllByRole("tab");
 		// The header's trend says in its sentence what a trend compares; no "Trend:" before it.
 		const trend = screen.getByRole("button", {
-			description: /^The trend compares your latest reviewed work/u,
+			description:
+				/Compares your last .+ reviewed pieces? of work with the .+ before (?:it|them)\.$/u,
 		});
 		await expect(trend.textContent).not.toMatch(/Trend:/u);
 		await expect(screen.queryByText("Standing:")).toBeNull();
@@ -874,9 +875,11 @@ export const NotReviewed: Story = {
 		await expect(screen.queryByText(/No practice in this group/u)).not.toBeInTheDocument();
 		await expect(screen.queryByText(/Read from|counts most/u)).not.toBeInTheDocument();
 		await expect(screen.queryByText(/pieces? of work$/u)).not.toBeInTheDocument();
-		// The trend chip says there is nothing to compare yet, with the sentence on what a trend compares.
-		const trend = screen.getByRole("button", { name: /Not enough to compare yet/u });
-		await expect(trend).toHaveAccessibleDescription(/The trend compares/u);
+		// The trend chip says what a trend needs, in plain words.
+		const trend = screen.getByRole("button", { name: /No baseline yet/u });
+		await expect(trend).toHaveAccessibleDescription(
+			/^A trend needs eight reviewed pieces of work\. So far there are fewer\./u,
+		);
 	},
 };
 

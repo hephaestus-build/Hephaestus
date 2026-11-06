@@ -13,7 +13,7 @@ import {
 	text,
 } from "@/components/practice-vocabulary/feedback-text";
 import { PRACTICE_GROUP_STANDING_DEFS } from "@/components/practice-vocabulary/practice-group-standing-defs";
-import { PRACTICE_TREND_DEFS } from "@/components/practice-vocabulary/practice-trend-defs";
+import type { TrendDirection } from "@/components/practice-vocabulary/practice-trend-defs";
 import { asDate, formatDay } from "@/lib/dates";
 import { capitalise, hasText } from "@/lib/text";
 
@@ -78,9 +78,17 @@ const SENTENCE_ORDER: readonly ChangeKind[] = ["reset", "resolved", "down", "up"
 const STANDING_LABELS: Record<string, string | undefined> = Object.fromEntries(
 	Object.entries(PRACTICE_GROUP_STANDING_DEFS).map(([value, def]) => [value, def.label]),
 );
-const TREND_LABELS: Record<string, string | undefined> = Object.fromEntries(
-	Object.entries(PRACTICE_TREND_DEFS).map(([value, def]) => [value, def.label]),
-);
+/**
+ * A trend as a sentence says it ("A and C now show an increasing baseline"), not as its chip's
+ * capitalized label; each phrase keeps the chip's words, so the two read as one.
+ */
+const TREND_PHRASES: Record<TrendDirection, string> = {
+	IMPROVING: "an increasing baseline",
+	DECLINING: "a decreasing baseline",
+	UNCERTAIN: "no clear baseline change",
+	INSUFFICIENT_EVIDENCE: "no baseline yet",
+};
+const TREND_LABELS: Record<string, string | undefined> = TREND_PHRASES;
 
 /** The registry's word for a standing or a trend, which the wire types as a bare string. */
 const standingLabel = (value: string | null) =>
