@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -56,6 +57,9 @@ public class LlmCallPermits {
     static final Duration POLL = Duration.ofMillis(250);
     static final Duration DEFAULT_COOLDOWN = Duration.ofSeconds(5);
     private static final int ENDED_CHECK_POLLS = 8;
+    /** A call without a work deadline: its exchange and the one retry of it each get their own ceiling. */
+    private static final Duration UNDATED_CALL = LlmProxyService.HEPH_CALL_CEILING.multipliedBy(2);
+
     private final LlmCallPoolRepository pools;
     private final LlmCallPermitRepository rows;
     private final TransactionTemplate transactions;
@@ -67,6 +71,7 @@ public class LlmCallPermits {
     private final Map<UUID, Waiter> waiting = new ConcurrentHashMap<>();
     private final Map<Long, Admissions> admissions = new ConcurrentHashMap<>();
     private @Nullable ScheduledExecutorService scheduler;
+    private @Nullable ScheduledExecutorService fencing;
     private final LlmModelResolver models;
 
     @Autowired
@@ -109,15 +114,20 @@ public class LlmCallPermits {
     public void start() {
         // A pool that models share starts from zero, for its alerts. A model's own pool registers at its first call.
         pools.findAll().stream().filter(pool -> !pool.isDedicated()).forEach(pool -> meters.pool(pool.getSlug()));
-        ScheduledExecutorService started = Executors.newScheduledThreadPool(2, task -> {
+        ThreadFactory daemons = task -> {
             Thread thread = new Thread(task, "llm-call-permits");
             thread.setDaemon(true);
             return thread;
-        });
+        };
+        ScheduledExecutorService started = Executors.newScheduledThreadPool(2, daemons);
         long renewMillis = properties.renewEvery().toMillis();
         var unusedRenewal =
                 started.scheduleWithFixedDelay(this::renew, renewMillis, renewMillis, TimeUnit.MILLISECONDS);
-        var unusedFence = started.scheduleWithFixedDelay(this::fence, 250, 250, TimeUnit.MILLISECONDS);
+        // On a thread of its own: a lost database connection can hang the other tasks for minutes, and this one ends
+        // the worker's calls then. It must never read the database.
+        ScheduledExecutorService fence = Executors.newSingleThreadScheduledExecutor(daemons);
+        var unusedFence = fence.scheduleWithFixedDelay(this::fence, 250, 250, TimeUnit.MILLISECONDS);
+        fencing = fence;
         var unusedGauges =
                 started.scheduleWithFixedDelay(this::observeBacklog, renewMillis, renewMillis, TimeUnit.MILLISECONDS);
         scheduler = started;
@@ -126,9 +136,15 @@ public class LlmCallPermits {
     @PreDestroy
     public void stop() {
         if (scheduler != null) scheduler.shutdownNow();
+        if (fencing != null) fencing.shutdownNow();
     }
 
-    /** No provider call starts without a committed grant, or for a caller that has ended. */
+    /**
+     * No provider call starts without a committed grant, or for a caller that has ended.
+     *
+     * @param deadline when the caller stops waiting, and when the call must have ended; {@code null} for a call that
+     *     its own ceiling ends
+     */
     public @Nullable Permit acquire(
             long poolId, LlmCallClass callClass, Caller caller, BooleanSupplier ended, @Nullable Instant deadline) {
         if ((caller.workspaceId() == null) != (callClass == LlmCallClass.PRODUCT_FEEDBACK))
@@ -146,7 +162,7 @@ public class LlmCallPermits {
                     id, poolId, workerId, callClass.name(), caller.workspaceId(), caller.sourceId(), caller.attempt()));
             return admission.getSlug();
         }));
-        Waiter waiter = new Waiter(poolId, poolSlug, callClass);
+        Waiter waiter = new Waiter(poolId, poolSlug, callClass, deadline);
         waiting.put(id, waiter);
         long began = System.nanoTime();
         boolean handedOff = false;
@@ -372,14 +388,18 @@ public class LlmCallPermits {
             if (!queued.isEmpty())
                 transactions.executeWithoutResult(status ->
                         rows.renew(workerId, queued, properties.permitLease().toSeconds()));
+            Set<UUID> ids = new HashSet<>();
             for (Permit permit : held.values()) {
                 if (permit.ended.getAsBoolean()) permit.revoke("attempt_ended");
+                // A call past its hard end stops renewing, so its grant expires. One that only has yet to close is no
+                // cancelled call.
+                if (!permit.overdue()) ids.add(permit.id);
+                else if (permit.outcome == null) permit.revoke("past_deadline");
             }
             for (UUID id : Set.copyOf(pendingRelease)) {
                 transactions.executeWithoutResult(status -> rows.release(id, workerId));
                 pendingRelease.remove(id);
             }
-            Set<UUID> ids = new HashSet<>(held.keySet());
             if (ids.isEmpty()) return;
             long attempted = System.nanoTime();
             Set<UUID> kept = transactions.execute(status -> {
@@ -578,12 +598,14 @@ public class LlmCallPermits {
         private final long poolId;
         private final String pool;
         private final LlmCallClass callClass;
+        private final @Nullable Instant deadline;
         private final CompletableFuture<Permit> granted = new CompletableFuture<>();
 
-        private Waiter(long poolId, String pool, LlmCallClass callClass) {
+        private Waiter(long poolId, String pool, LlmCallClass callClass, @Nullable Instant deadline) {
             this.poolId = poolId;
             this.pool = pool;
             this.callClass = callClass;
+            this.deadline = deadline;
         }
 
         /** Its grant, or {@code null} after a poll without one or when interrupted. */
@@ -620,6 +642,8 @@ public class LlmCallPermits {
         private volatile @Nullable String outcome;
         /** When the provider's part ended, before the proxy settles the call's usage. */
         private volatile long endedAt;
+        /** The hard end of the call: every exchange ends by then, so a permit past it has nothing left to protect. */
+        private final Instant mustEndBy;
 
         /** The limit's mark when the call started: an answer about an older limit says nothing about this one. */
         private final @Nullable Long throttleMark;
@@ -630,6 +654,13 @@ public class LlmCallPermits {
             this.pool = waiter.pool;
             this.callClass = waiter.callClass;
             this.throttleMark = throttleMark;
+            this.mustEndBy =
+                    waiter.deadline != null ? waiter.deadline : Instant.now().plus(UNDATED_CALL);
+        }
+
+        /** A renewal interval past the hard end, so that a call that just ended can still settle and close. */
+        private boolean overdue() {
+            return Instant.now().isAfter(mustEndBy.plus(properties.renewEvery()));
         }
 
         /** The provider served this call, which is the evidence that the limit can rise. */

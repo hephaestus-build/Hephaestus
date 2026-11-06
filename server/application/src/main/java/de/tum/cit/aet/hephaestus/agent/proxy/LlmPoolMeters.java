@@ -67,8 +67,11 @@ final class LlmPoolMeters {
     /** The token buckets that a provider bills apart. */
     static final List<String> TOKEN_TYPES = List.of("input", "output", "cache_read", "cache_write");
 
-    /** Why a worker cancelled a call: it could not renew the permit, or the database no longer had it. */
-    static final List<String> CANCEL_REASONS = List.of("no_renewal", "lease_lost", "attempt_ended");
+    /**
+     * Why a worker cancelled a call: it could not renew the permit, the database no longer had it, the attempt ended, or
+     * the call outlived its hard end.
+     */
+    static final List<String> CANCEL_REASONS = List.of("no_renewal", "lease_lost", "attempt_ended", "past_deadline");
 
     private final MeterRegistry registry;
     private final Map<String, Pool> pools = new ConcurrentHashMap<>();
