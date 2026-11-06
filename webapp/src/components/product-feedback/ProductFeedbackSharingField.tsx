@@ -1,10 +1,8 @@
-import { Link } from "@tanstack/react-router";
-
-import { InlineLink } from "@/components/common/InlineLink";
 import {
 	Field,
 	FieldContent,
 	FieldDescription,
+	FieldError,
 	FieldLabel,
 	FieldLegend,
 	FieldSet,
@@ -20,7 +18,7 @@ export interface ProductFeedbackSharingFieldProps {
 	status: "ask" | "remembered";
 	share: boolean | undefined;
 	onShareChange: (share: boolean) => void;
-	workspaceSlug?: string;
+	invalid?: boolean;
 }
 
 /** Whether this report may become a public GitHub issue. It loads with the first composer that asks. */
@@ -29,7 +27,7 @@ export function ProductFeedbackSharingField({
 	status,
 	share,
 	onShareChange,
-	workspaceSlug,
+	invalid = false,
 }: ProductFeedbackSharingFieldProps) {
 	if (status === "remembered") {
 		return (
@@ -42,35 +40,21 @@ export function ProductFeedbackSharingField({
 				/>
 				<FieldContent>
 					<FieldLabel htmlFor={`${id}-share`}>{SHARING_COPY.switchLabel}</FieldLabel>
-					<FieldDescription id={`${id}-share-detail`}>
-						{SHARING_COPY.switchDetail} ·{" "}
-						<InlineLink
-							className="underline"
-							render={
-								<Link
-									to="/settings"
-									hash="product-feedback"
-									search={{ chromeWorkspace: workspaceSlug }}
-								/>
-							}
-						>
-							{SHARING_COPY.changeDefault}
-						</InlineLink>
-					</FieldDescription>
+					<FieldDescription id={`${id}-share-detail`}>{SHARING_COPY.switchDetail}</FieldDescription>
 				</FieldContent>
 			</Field>
 		);
 	}
 	const options = [
-		{ value: "share", title: SHARING_COPY.share.title },
 		{ value: "private", title: SHARING_COPY.keepPrivate.title },
+		{ value: "share", title: SHARING_COPY.share.title },
 	] as const;
 	let picked: (typeof options)[number]["value"] | null = null;
 	if (share !== undefined) {
 		picked = share ? "share" : "private";
 	}
 	return (
-		<FieldSet className="gap-2">
+		<FieldSet className="gap-3">
 			<FieldLegend variant="label">{SHARING_COPY.question}</FieldLegend>
 			<FieldDescription id={`${id}-share-detail`}>
 				AI drafts the issue either way. Public issues are visible to anyone. Personal details can be
@@ -78,7 +62,8 @@ export function ProductFeedbackSharingField({
 			</FieldDescription>
 			<RadioGroup
 				aria-label={SHARING_COPY.question}
-				aria-describedby={`${id}-share-detail ${id}-share-footnote`}
+				aria-describedby={`${id}-share-detail ${id}-share-footnote${invalid ? ` ${id}-share-error` : ""}`}
+				aria-invalid={invalid || undefined}
 				value={picked}
 				onValueChange={(value) => onShareChange(value === "share")}
 				className="flex flex-wrap gap-x-5 gap-y-2"
@@ -86,11 +71,18 @@ export function ProductFeedbackSharingField({
 				{options.map(({ value, title }) => (
 					<Field key={value} orientation="horizontal" className="w-auto">
 						<RadioGroupItem id={`${id}-share-${value}`} value={value} />
-						<FieldLabel htmlFor={`${id}-share-${value}`}>{title}</FieldLabel>
+						<FieldLabel htmlFor={`${id}-share-${value}`} className="min-h-8">
+							{title}
+						</FieldLabel>
 					</Field>
 				))}
 			</RadioGroup>
 			<FieldDescription id={`${id}-share-footnote`}>{SHARING_COPY.footnote}</FieldDescription>
+			{invalid && (
+				<FieldError id={`${id}-share-error`}>
+					Choose whether your report can become public.
+				</FieldError>
+			)}
 		</FieldSet>
 	);
 }

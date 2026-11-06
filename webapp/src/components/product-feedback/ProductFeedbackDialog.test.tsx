@@ -14,8 +14,6 @@ function renderDialog(overrides: Partial<React.ComponentProps<typeof ProductFeed
 		onOpenChange: vi.fn(),
 		onRetrySharing: vi.fn(),
 		reportsLink: <a href="/product-feedback">Your reports</a>,
-		kind: "FEEDBACK" as const,
-		onKindChange: vi.fn(),
 		context,
 		sharing: { status: "off" } as const,
 		isSubmitting: false,
@@ -31,7 +29,7 @@ describe("product feedback dialog", () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog({ onSubmit: vi.fn(async () => false) });
 		await user.type(screen.getByRole("textbox", { name: "Your feedback" }), "  An idea  ");
-		await user.click(screen.getByRole("button", { name: "Send" }));
+		await user.click(screen.getByRole("button", { name: "Send feedback" }));
 		expect(props.onOpenChange).not.toHaveBeenCalledWith(false);
 
 		rerender(<ProductFeedbackDialog {...props} open={false} />);
@@ -40,10 +38,9 @@ describe("product feedback dialog", () => {
 			"value",
 			"  An idea  ",
 		);
-		await user.click(
-			screen.getByRole("checkbox", { name: "Attach the page and browser you’re on" }),
-		);
-		await user.click(screen.getByRole("button", { name: "Send" }));
+		await user.click(screen.getByText("Add page details (optional)"));
+		await user.click(screen.getByRole("checkbox", { name: "Include page and browser details" }));
+		await user.click(screen.getByRole("button", { name: "Send feedback" }));
 		expect(props.onSubmit).toHaveBeenLastCalledWith({
 			kind: "FEEDBACK",
 			message: "An idea",
@@ -56,7 +53,7 @@ describe("product feedback dialog", () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog();
 		await user.type(screen.getByRole("textbox", { name: "Your feedback" }), "An idea");
-		await user.click(screen.getByRole("button", { name: "Send" }));
+		await user.click(screen.getByRole("button", { name: "Send feedback" }));
 		await waitFor(() => expect(props.onSubmit).toHaveBeenCalledOnce());
 		await waitFor(() =>
 			expect(screen.getByRole("textbox", { name: "Your feedback" })).toHaveProperty("value", ""),
@@ -69,12 +66,50 @@ describe("product feedback dialog", () => {
 	it("does not change the context choice while sending", async () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog();
+		await user.click(screen.getByText("Add page details (optional)"));
 		const checkbox = screen.getByRole("checkbox", {
-			name: "Attach the page and browser you’re on",
+			name: "Include page and browser details",
 		});
 		await user.click(checkbox);
 		rerender(<ProductFeedbackDialog {...props} isSubmitting />);
 		await user.click(checkbox);
 		expect(checkbox.getAttribute("aria-checked")).toBe("true");
+	});
+	it("explains an empty submission, focuses the message, and clears the error while writing", async () => {
+		const user = userEvent.setup();
+		renderDialog();
+		await user.click(screen.getByRole("button", { name: "Send feedback" }));
+		screen.getByText("Write your feedback before sending.");
+		const field = screen.getByRole("textbox", { name: "Your feedback" });
+		expect(document.activeElement).toBe(field);
+		await user.type(field, "Let me pin a practice.");
+		expect(screen.queryByText("Write your feedback before sending.")).toBeNull();
+	});
+
+	it("keeps the original page details with a draft after the page changes", async () => {
+		const user = userEvent.setup();
+		const { props, rerender } = renderDialog();
+		await user.type(screen.getByRole("textbox", { name: "Your feedback" }), "This page jumps.");
+		rerender(
+			<ProductFeedbackDialog {...props} context={{ ...context, pagePath: "/product-feedback" }} />,
+		);
+		await user.click(screen.getByText("Add page details (optional)"));
+		screen.getByText(context.pagePath);
+		expect(screen.queryByText("/product-feedback")).toBeNull();
+	});
+
+	it("uses the current page for a new draft after the previous text was cleared", async () => {
+		const user = userEvent.setup();
+		const { props, rerender } = renderDialog();
+		const message = screen.getByRole("textbox", { name: "Your feedback" });
+		await user.type(message, "An abandoned draft");
+		await user.clear(message);
+		rerender(
+			<ProductFeedbackDialog {...props} context={{ ...context, pagePath: "/product-feedback" }} />,
+		);
+		await user.type(message, "A new report");
+		await user.click(screen.getByText("Add page details (optional)"));
+		screen.getByText("/product-feedback");
+		expect(screen.queryByText(context.pagePath)).toBeNull();
 	});
 });

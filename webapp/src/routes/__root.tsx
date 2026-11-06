@@ -34,7 +34,6 @@ import { RouteAnnouncer } from "@/components/layout/RouteAnnouncer";
 import { AppSidebar, type SidebarContext } from "@/components/layout/sidebar/AppSidebar";
 import { SkipToContent } from "@/components/layout/SkipToContent";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
-import type { FeedbackKind } from "@/components/product-feedback/feedback-copy";
 import { ProductFeedbackButton } from "@/components/product-feedback/ProductFeedbackButton";
 import { Kbd } from "@/components/ui/kbd";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -222,13 +221,11 @@ function showFeedbackUnavailable() {
 function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) {
 	const route = useMatches({ select: (matches) => routeOf(matches.at(-1)?.fullPath) });
 	const [feedbackOpen, setFeedbackOpen] = useState(false);
-	const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>("FEEDBACK");
 	// Mounted from the first open on, so a closed dialog keeps its state as before.
 	const [composerLoaded, setComposerLoaded] = useState(false);
 	return (
 		<>
 			<ProductFeedbackButton
-				workspaceSlug={workspaceSlug}
 				onSendFeedback={() => {
 					setFeedbackOpen(true);
 					setComposerLoaded(true);
@@ -247,8 +244,6 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 						<ProductFeedbackComposer
 							open={feedbackOpen}
 							onOpenChange={setFeedbackOpen}
-							kind={feedbackKind}
-							onKindChange={setFeedbackKind}
 							route={route}
 							workspaceSlug={workspaceSlug}
 						/>

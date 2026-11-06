@@ -104,7 +104,10 @@ export function MyProductFeedbackList({ state, pending, ...actions }: MyProductF
 						<MessageSquarePlus />
 					</EmptyMedia>
 					<EmptyTitle>No reports yet</EmptyTitle>
-					<EmptyDescription>Reports you send with Send feedback appear here.</EmptyDescription>
+					<EmptyDescription>
+						Your bug reports, ideas, and other product feedback appear here. Use Send feedback in
+						the header to get started.
+					</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
 		);
@@ -146,7 +149,7 @@ function MyProductFeedbackRow({
 	return (
 		<Card>
 			<CardHeader className="flex flex-wrap items-center gap-x-3 gap-y-1">
-				<StatusBadge def={kind} />
+				{report.kind !== "FEEDBACK" && <StatusBadge def={kind} />}
 				<StatusBadge def={REPORT_STATE_DEFS[report.state]} />
 				<RelativeTime value={report.createdAt} className="text-sm text-muted-foreground" />
 			</CardHeader>

@@ -29,7 +29,10 @@ export function useMyProductFeedbackActions() {
 	};
 	const keepPrivate = useMutation({
 		...keepMyProductFeedbackPrivateMutation(),
-		onSuccess: settle,
+		onSuccess: (report) => {
+			settle(report);
+			toast.success("Report kept private");
+		},
 		onError: refused("We could not keep it private"),
 	});
 	const edit = useMutation({

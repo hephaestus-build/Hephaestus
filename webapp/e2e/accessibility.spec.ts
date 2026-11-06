@@ -466,10 +466,12 @@ base.describe("complete processes, keyboard only", () => {
 		await page.keyboard.press("Enter");
 
 		await expect(dialog).toBeHidden();
-		await expect(page.getByText("Report received", { exact: true })).toBeVisible();
-		await expect(page.getByText("Saved for your instance admins.", { exact: true })).toBeVisible();
+		await expect(page.getByText("Feedback saved", { exact: true })).toBeVisible();
 
-		await page.getByRole("banner").getByRole("button", { name: "Feedback options" }).focus();
+		await page
+			.getByRole("banner")
+			.getByRole("button", { name: /^Account/u })
+			.focus();
 		await page.keyboard.press("Enter");
 		await page.getByRole("menuitem", { name: "Your reports" }).focus();
 		await page.keyboard.press("Enter");

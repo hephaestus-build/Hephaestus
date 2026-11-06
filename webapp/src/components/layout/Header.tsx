@@ -1,6 +1,6 @@
 import { TagIcon } from "@primer/octicons-react";
 import { Link } from "@tanstack/react-router";
-import { LogOut, UserRoundCog } from "lucide-react";
+import { History, LogOut, UserRoundCog } from "lucide-react";
 
 import { cn } from "cn";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
@@ -189,6 +189,17 @@ export default function Header({
 												>
 													<UserRoundCog />
 													<span>User settings</span>
+												</DropdownMenuItem>
+												<DropdownMenuItem
+													render={
+														<Link
+															to="/product-feedback"
+															search={{ chromeWorkspace: workspaceSlug }}
+														/>
+													}
+												>
+													<History aria-hidden />
+													<span>Your reports</span>
 												</DropdownMenuItem>
 											</DropdownMenuGroup>
 											<DropdownMenuSeparator />

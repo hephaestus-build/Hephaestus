@@ -5,7 +5,7 @@ page_type: feature
 ---
 
 Use **Send feedback** in the header to report a bug, suggest a change, or tell the maintainers about Hephaestus.
-Select **Send**, and Hephaestus handles the rest.
+The form accepts bug reports, ideas, and general feedback without asking you to choose a category.
 This is separate from practice feedback about your work.
 
 ## Where your report goes
@@ -23,7 +23,6 @@ The AI model is instructed to keep praise and support questions private, but it 
 If you allow public sharing, a misclassified report can become public when the other checks pass.
 Choose private sharing when a report must stay private.
 
-Choosing **General** does not prevent an actionable report from becoming public.
 If no private repository is available, your instance admins receive the report instead.
 
 Hephaestus saves your report before it tries GitHub.
@@ -50,26 +49,26 @@ Private repository access follows the operator’s GitHub permissions.
 
 ## Send a report
 
-1. Select **Send feedback** in the header to open the form. On a phone, open its icon menu first.
-2. Describe what happened or what you would like to improve. You can optionally choose **Bug** or **Idea**.
-3. Choose whether to include page and browser details and whether the report can become public.
-4. Select **Send**.
+1. Select **Send feedback** in the header. On a phone, select the speech-bubble icon.
+2. Describe what happened or what you would like to improve.
+3. If asked, choose whether the report can become public.
+4. Optional: open **Add page details (optional)** to inspect and attach page and browser details.
+5. Select **Send feedback**.
 
 Once your report is saved, the form closes and a short notice confirms receipt.
 **Your reports** in that notice opens its status and any available actions.
-You can also reach **Your reports** through the arrow beside **Send feedback** or the link in the form.
+You can also reach **Your reports** through your account menu in the header.
 Receipt means the report is saved. GitHub filing continues in the background.
 
 There’s no separate publish step or required review of the draft.
 For a bug, describe the action, what happened, and what you expected.
-You can change the kind of report without losing your text.
 
 Wait one minute between reports. Ordinary accounts can send up to five reports per UTC day across all workspaces. Instance admins are exempt from the daily submission limit.
 
 The attached page is the screen’s route, such as `/w/$workspaceSlug/activity`, without your workspace’s name or IDs.
 The browser context helps reproduce the problem.
 The issue uses a short browser summary rather than the full browser identification stored for admins.
-The attachment starts selected for bug reports and cleared otherwise.
+Page details start unselected. A resumed draft keeps the details of the page where you began writing.
 It never includes query parameters, page contents, or logs.
 
 If sending fails, the dialog keeps your text and explains why.
@@ -83,7 +82,7 @@ Neither answer starts selected:
 - **Share publicly** allows a public issue if the checks pass.
 - **Keep private** sends the report privately to the maintainers.
 
-**Send** becomes available after you choose.
+If you send without choosing, the form explains what is missing and focuses the choice.
 Hephaestus remembers your answer.
 Later reports show the **Public GitHub issue** switch with that answer.
 Changing the switch applies to that report only.
@@ -91,7 +90,7 @@ If your instance changes its privacy notice version, you’ll see the question a
 
 ### Use the five-minute hold
 
-A report intended for the public repository waits five minutes after **Send** before filing.
+A report intended for the public repository waits five minutes after **Send feedback** before filing.
 Drafting happens during that time.
 You do not have to stay on the page or approve the draft.
 
@@ -104,7 +103,7 @@ Use **Make private** after filing instead.
 
 ## Follow your reports
 
-1. Open the arrow beside **Send feedback** in the header.
+1. Open your account menu in the header.
 2. Select **Your reports**.
 
 The page lists your reports with their date, an excerpt, destination, and state.

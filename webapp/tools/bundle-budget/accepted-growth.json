@@ -2,8 +2,8 @@
 	"accepted": [
 		{
 			"load": "src/routes/-ProductFeedbackComposer.tsx",
-			"gzipBytes": 24205,
-			"acceptedBy": "branch fix/product-feedback-flow"
+			"gzipBytes": 24485,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/3850"
 		}
 	]
 }

@@ -10,8 +10,7 @@ export const SHARING_COPY = {
 	keepPrivate: { title: "Keep private" },
 	footnote: "We remember your choice. You can change it for each report.",
 	switchLabel: "Public GitHub issue",
-	switchDetail: "Checked before sharing. Public copies can remain.",
-	changeDefault: "Change default",
+	switchDetail: "Checks run before publication. Public copies can remain.",
 	makePrivate:
 		"Move this issue to the private repository? It disappears from public view. Copies made while it was public can remain.",
 } as const;

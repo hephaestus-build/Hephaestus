@@ -25,7 +25,7 @@ function submissionError(error: unknown): string {
 		return `${problemDetailOf(error, "Wait a minute before sending more feedback.")} ${DRAFT_KEPT}`;
 	}
 	if (status === 401) {
-		return "Your session has expired. Sign in again before sending.";
+		return "Your session has expired. Copy your draft before signing in again.";
 	}
 	if (status === 422) {
 		return `Choose whether this can become a public GitHub issue, then send it again. ${DRAFT_KEPT}`;

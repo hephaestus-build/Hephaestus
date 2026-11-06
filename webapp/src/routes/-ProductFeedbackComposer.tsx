@@ -2,7 +2,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 
 import { InlineLink } from "@/components/common/InlineLink";
-import type { FeedbackKind } from "@/components/product-feedback/feedback-copy";
 import {
 	PAGE_PATH_MAX_LENGTH,
 	ProductFeedbackDialog,
@@ -14,19 +13,15 @@ import { toast } from "@/lib/toast";
 interface ProductFeedbackComposerProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	kind: FeedbackKind;
-	onKindChange: (kind: FeedbackKind) => void;
 	/** The screen the report is about, without the ids or search of its address. */
 	route: string;
 	workspaceSlug?: string;
 }
 
-/** The dialog behind the feedback menu; it loads when someone first chooses to send feedback. */
+/** The composer loads on the first send action, then stays mounted to preserve a closed draft. */
 export default function ProductFeedbackComposer({
 	open,
 	onOpenChange,
-	kind,
-	onKindChange,
 	route,
 	workspaceSlug,
 }: ProductFeedbackComposerProps) {
@@ -36,17 +31,9 @@ export default function ProductFeedbackComposer({
 		openRef.current = open;
 	}, [open]);
 	const feedback = useSubmitProductFeedback(workspaceSlug, {
-		onAccepted: (receipt) => {
+		onAccepted: () => {
 			onOpenChange(false);
-			const descriptions = {
-				EMAIL: "Saved for your instance admins.",
-				PUBLIC:
-					"Saved. Checks run before it can become a public GitHub issue. You can still keep it private.",
-				PRIVATE: "Saved. We’ll file it privately on GitHub.",
-			};
-			const description = descriptions[receipt.route];
-			toast.success("Report received", {
-				description,
+			toast.success("Feedback saved", {
 				duration: 10_000,
 				action: {
 					label: "Your reports",
@@ -58,7 +45,7 @@ export default function ProductFeedbackComposer({
 		},
 		onRejected: (message) => {
 			if (!openRef.current) {
-				toast.error("Receipt not confirmed", {
+				toast.error("We could not confirm receipt", {
 					description: message,
 					action: { label: "Open draft", onClick: () => onOpenChange(true) },
 				});
@@ -75,14 +62,11 @@ export default function ProductFeedbackComposer({
 				}
 				onOpenChange(next);
 			}}
-			kind={kind}
-			onKindChange={onKindChange}
 			context={{
 				pagePath: route.slice(0, PAGE_PATH_MAX_LENGTH),
 				userAgent: navigator.userAgent.slice(0, USER_AGENT_MAX_LENGTH),
 			}}
 			sharing={sharing}
-			workspaceSlug={workspaceSlug}
 			isSubmitting={feedback.isPending}
 			error={feedback.error}
 			onSubmit={feedback.submit}

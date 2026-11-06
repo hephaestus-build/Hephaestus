@@ -89,6 +89,10 @@ An edit restarts the five-minute public hold and checks the outgoing revision ag
 Keep private cannot cancel a write that has already started.
 The saved response describes the intended route. The receipt toast confirms storage and links to Your reports, which follows the row until it reaches its actual destination.
 
+The header opens the same composer directly on all screen sizes.
+Report history belongs to the account menu. The form asks for a message and any required sharing choice, with diagnostics behind an optional disclosure.
+The draft retains its original page context across navigation within the same workspace.
+
 ## Routing gate and consent
 
 `RoutingGate` decides whether a draft is eligible for public filing.
@@ -97,7 +101,7 @@ Maintainer promotion calls `RoutingGate.refusePromotion` and then checks reposit
 The ordinary public route requires all these conditions:
 
 - The reporter allows publication for this report under the current consent event.
-- The draft describes an actionable issue, regardless of the kind chosen in the form.
+- The draft describes an actionable issue, regardless of the submitted report kind.
 - A public destination and a valid draft exist for the exact outgoing revision.
 - The disposition is `ISSUE`, rather than `SECURITY` or `NOT_AN_ISSUE`.
 - The report has no risk latch or blocking redaction finding.
@@ -283,7 +287,9 @@ The [personal-data map](/admin/dsms/personal-data-map) owns export and erasure c
 The current drafter has no source checkout or execution tools.
 It receives the release name stored with the report, the attached route, and a public issue-title snapshot.
 It must not claim a reproduction, root cause, relevant file, or fixed release from those inputs alone.
-The selected report kind is a hint: an actionable bug reported as General can pass the same public gate as Bug.
+The composer submits `FEEDBACK` for every report and leaves issue classification to the drafter.
+The API still accepts the stored report kinds. They do not determine eligibility for public filing.
+
 The model classification limits are described under [Routing gate and consent](#routing-gate-and-consent).
 
 A source-aware investigation needs the same capture boundary as practice reviews:
