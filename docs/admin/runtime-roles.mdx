@@ -634,9 +634,19 @@ A late release cannot affect another call.
 An ended attempt cannot start a provider call after a capacity wait.
 
 Admission and administration reclaim grants that the worker has not renewed within `hephaestus.llm.call-pools.permit-lease` (one minute by default).
-When a worker process ends, its sockets close.
-A suspended worker can keep a provider connection open after its grant expires.
-A database connection failure or a cancellation that cannot close the transport can also leave such a connection open.
+This lease is the bound on a provider connection that nobody can see anymore:
+
+- When a worker process ends, its sockets close.
+- A worker that loses its database cancels its calls after three quarters of the lease. Their connections close before the grant expires.
+- A worker cancels a call within two renewal intervals after its hard end and stops renewing it. Its grant then expires.
+
+The hard end is the deadline of the work, such as a review attempt's work deadline.
+A conversation call has no such deadline, so its hard end comes 32 minutes after its grant.
+
+A suspended worker is the one exception.
+It can keep a provider connection open after its grant expires.
+The connection closes when the worker resumes and cancels the call, or when its liveness probe restarts the container.
+A cancellation that cannot close the transport can do the same.
 The pool limit can then be exceeded until those connections close.
 
 The expired grant cannot renew or debit a retry.

@@ -516,7 +516,11 @@ class KubernetesSandboxRuntimeTest {
                 .containsEntry(KubernetesWorker.SANDBOX_ID, sandboxId)
                 .containsEntry(KubernetesWorker.PART_OF, "hephaestus");
         assertThat(sandboxes.workerInstance()).isEqualTo(workerName);
-        assertThat(sandboxes.list()).containsExactly(new ExecSandboxes.Listed(name, sandboxId, workerName, false));
+        assertThat(sandboxes.list())
+                .containsExactly(new ExecSandboxes.Listed(name, sandboxId, workerName, false, false));
+        setStatus(SANDBOXES, name, "Failed", List.of(), List.of());
+        assertThat(sandboxes.list())
+                .containsExactly(new ExecSandboxes.Listed(name, sandboxId, workerName, false, true));
 
         sandboxes.remove(name);
         sandboxes.remove(name);

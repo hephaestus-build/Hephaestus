@@ -1946,8 +1946,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     /**
-     * Pushes to several pull requests of one workspace arrive at once. Every occasion is decided, and each pull request
-     * gets one review: the later pushes wait for it.
+     * Pushes for several pull requests compete for admission in one workspace. Every occasion is decided, and each
+     * pull request gets one measuring review. Its further occasions wait for that review.
      */
     @Test
     void shouldDecideEveryOccasionOfABurstOnSeveralItemsWithOneReviewEach() throws Exception {
@@ -2022,27 +2022,30 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     /**
-     * Delivers {@code rounds} pushes to each item, one thread per item and round. Each thread holds two connections
-     * (the delivery and its synchronous listener), so four threads fit the test pool.
+     * Delivers each item's versions in order, as the serial consumer does, while different items and a manual request
+     * can compete for admission. Each worker holds two connections (delivery and synchronous listener), so four fit
+     * the test pool.
      */
     private void burst(List<Prepared> items, int rounds) throws Exception {
         var pool = Executors.newFixedThreadPool(4, Thread.ofPlatform().daemon().factory());
         try {
             var deliveries = new ArrayList<Future<?>>();
             var go = new CountDownLatch(1);
-            for (int round = 0; round < rounds; round++)
-                for (int index = 0; index < items.size(); index++) {
-                    var item = items.get(index);
-                    var payload = pullRequestPayload(
-                            item,
-                            String.format("%040x", 0xabc000L + round * 100L + index),
-                            Instant.now().plusSeconds(60L + round * 100L + index));
-                    deliveries.add(pool.submit(() -> {
-                        awaitLatch(go);
+            for (int index = 0; index < items.size(); index++) {
+                var item = items.get(index);
+                int itemIndex = index;
+                deliveries.add(pool.submit(() -> {
+                    awaitLatch(go);
+                    for (int round = 0; round < rounds; round++) {
+                        var payload = pullRequestPayload(
+                                item,
+                                String.format("%040x", 0xabc000L + round * 100L + itemIndex),
+                                Instant.now().plusSeconds(60L + round * 100L + itemIndex));
                         deliver(item, "synchronize", payload);
-                        return null;
-                    }));
-                }
+                    }
+                    return null;
+                }));
+            }
             go.countDown();
             for (var delivery : deliveries) delivery.get(60, TimeUnit.SECONDS);
         } finally {

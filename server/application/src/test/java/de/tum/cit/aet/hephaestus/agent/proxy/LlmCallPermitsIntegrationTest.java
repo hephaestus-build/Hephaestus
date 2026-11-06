@@ -18,6 +18,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.netty.channel.Channel;
 import io.netty.channel.DefaultChannelPromise;
 import io.netty.util.concurrent.ImmediateEventExecutor;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -207,6 +208,42 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
             }
         }
         assertThat(rows.countActive(pool)).isZero();
+    }
+
+    @Test
+    void shouldStopRenewingACallPastItsHardEndAndReclaimItsCapacity() {
+        long pool = pool(1);
+        var meters = new SimpleMeterRegistry();
+        var shortLease = new LlmCallPermits(
+                pools,
+                rows,
+                transactions,
+                new LlmCallPoolProperties(Duration.ofSeconds(2), Duration.ofSeconds(30)),
+                "hard-end-" + UUID.randomUUID(),
+                meters,
+                mock(LlmModelResolver.class));
+        var overdue = Objects.requireNonNull(shortLease.acquire(
+                pool, LlmCallClass.EVENT, caller(1), () -> false, Instant.now().plusMillis(200)));
+        String slug = pools.findById(pool).orElseThrow().getSlug();
+        await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+            shortLease.renew();
+            assertThat(meters.get(AgentMetrics.LLM_POOL_SELF_FENCE_CANCELLED)
+                            .tags("pool", slug, "reason", "past_deadline")
+                            .counter()
+                            .count())
+                    .isEqualTo(1);
+        });
+        assertThat(overdue.isRevoked()).isTrue();
+        Timestamp lastRenewal = renewedAt(pool);
+        shortLease.renew();
+        assertThat(renewedAt(pool)).isEqualTo(lastRenewal);
+        jdbc.update(
+                "UPDATE llm_call_permit SET renewed_at=clock_timestamp()-interval '21 seconds' WHERE pool_id=?", pool);
+        try (var replacement = admit(workerB, pool, LlmCallClass.EVENT, 2)) {
+            assertThat(replacement.isRevoked()).isFalse();
+            assertThat(rows.countActive(pool)).isEqualTo(1);
+        }
+        overdue.close();
     }
 
     @Test
@@ -547,6 +584,11 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
             LlmCallPermits worker, long pool, LlmCallClass kind, long workspace) {
         return worker.acquire(
                 pool, kind, caller(workspace), () -> false, Instant.now().plusMillis(25));
+    }
+
+    private Timestamp renewedAt(long pool) {
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT renewed_at FROM llm_call_permit WHERE pool_id=?", Timestamp.class, pool));
     }
 
     private long waiting(long pool) {

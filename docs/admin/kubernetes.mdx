@@ -209,10 +209,10 @@ The chart creates no certificate, no key, and no CA.
 
 | Key | Bundled PostgreSQL | External PostgreSQL | Mounted in |
 | --- | --- | --- | --- |
-| `ca.crt` | Yes | Yes | Server, webhook, worker |
+| `ca.crt` | Yes | Yes | Server, worker, migration Job, PostgreSQL metrics |
 | `tls.crt`, `tls.key` | Yes | No | Bundled PostgreSQL only |
 
-The server, the webhook role, and the worker receive only `ca.crt`, read-only, at `/etc/hephaestus/postgresql-ca`.
+These receive only `ca.crt`, read-only, at `/etc/hephaestus/postgresql-ca`.
 No application role receives a private key.
 
 Backup Jobs use a separate client Secret, `postgresql.backup.clientTlsSecret`.
@@ -421,7 +421,7 @@ The chart then opens only these paths:
 | From | To | Port |
 | --- | --- | --- |
 | `networkPolicy.gateway` pods | `server`, `webhook`, `webapp` | 8080 |
-| `server`, `webhook`, `worker` | PostgreSQL | 5432, or the external port |
+| `server`, `worker` | PostgreSQL | 5432, or the external port |
 | `server`, `webhook` | NATS | 4222, or the external port |
 | `server`, `worker` | `networkPolicy.externalEgress` | 443 |
 | `server`, if `config.email.host` is set | `networkPolicy.externalEgress` | `config.email.port` |

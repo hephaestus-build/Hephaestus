@@ -337,8 +337,8 @@ public class TurnSandboxes implements AutoCloseable {
 
     /**
      * Removes what this worker does not hold: its own sandboxes that it does not know (a start before this one left
-     * them), assigned sandboxes of attempts that no longer run here, and sandboxes of workers that are gone. Then fills
-     * the pool.
+     * them), assigned sandboxes of attempts that no longer run here, pooled sandboxes that ended, and sandboxes of
+     * workers that are gone. Then fills the pool.
      *
      * @param running whether a turn attempt runs on this worker
      */
@@ -378,9 +378,23 @@ public class TurnSandboxes implements AutoCloseable {
             if ((own && !known.containsKey(sandbox.sandboxId())) || (!own && sandbox.workerGone())) {
                 log.info("Removing a turn sandbox that no worker holds: {}", sandbox.sandboxId());
                 sandboxes.remove(sandbox.id());
+            } else if (own && sandbox.ended()) {
+                removeEndedFromPool(sandbox.sandboxId());
             }
         }
         refill();
+    }
+
+    /** A pooled sandbox reaches its deadline with no attempt on it: handed out, its first command would fail. */
+    private void removeEndedFromPool(String sandboxId) {
+        Sandbox ended = known.get(sandboxId);
+        synchronized (lifecycle) {
+            if (ended == null || !pool.remove(ended)) {
+                return;
+            }
+        }
+        log.info("Removing a pooled turn sandbox that ended: {}", sandboxId);
+        removeLater(ended);
     }
 
     /** Fills the pool in the background, one sandbox at a time. */

@@ -203,8 +203,7 @@ public class GitLabCommitSyncService {
                 .block(REQUEST_TIMEOUT);
     }
 
-    private void processCommit(
-            Map<String, Object> commitData, Repository repository, @Nullable Long providerId, Long scopeId) {
+    private void processCommit(Map<String, Object> commitData, Repository repository, Long providerId, Long scopeId) {
         String sha = (String) commitData.get("id");
         String message = (String) commitData.get("message");
         String webUrl = (String) commitData.get("web_url");
@@ -224,9 +223,9 @@ public class GitLabCommitSyncService {
         Instant authoredAt = parseInstant(authoredDateStr);
         Instant committedAt = parseInstant(committedDateStr);
 
-        // Resolve author and committer (backfills user.email when currently NULL)
-        Long authorId = authorResolver.resolveAndBackfillByEmail(authorEmail, providerId);
-        Long committerId = authorResolver.resolveAndBackfillByEmail(committerEmail, providerId);
+        // Resolve author and committer
+        Long authorId = authorResolver.resolveByEmail(authorEmail, providerId);
+        Long committerId = authorResolver.resolveByEmail(committerEmail, providerId);
 
         // Upsert commit (passes null for stats — REST list endpoint doesn't provide them)
         commitRepository.upsertCommit(

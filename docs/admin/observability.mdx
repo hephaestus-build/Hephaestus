@@ -899,7 +899,7 @@ No series names a workspace, a workspace's model, a job or a turn.
 | `llm_pool_upstream_throttled_total`        | Counter   | `pool`, `status`           | Answers of the pool's provider that it serves too many calls |
 | `llm_pool_upstream_absorbed_total`         | Counter   | `pool`                     | Those answers that the caller never saw, because its call waited and asked again |
 | `llm_pool_cooldown_active`                 | Gauge     | `pool`                     | 1 while this worker knows the pool to be paused after a refusal. Take the maximum over the workers |
-| `llm_pool_self_fence_cancelled_total`      | Counter   | `pool`, `reason`           | Calls that a worker cancelled because it no longer held their permit. `reason` is `no_renewal`, `lease_lost`, or `attempt_ended` |
+| `llm_pool_self_fence_cancelled_total`      | Counter   | `pool`, `reason`           | Calls that a worker cancelled because it no longer held their permit. `reason` is `no_renewal`, `lease_lost`, `attempt_ended`, or `past_deadline` |
 | `llm_pool_lease_renewal_failures_total`    | Counter   | none                       | Failed renewals of a worker's permits |
 
 Claim reservations do not add a second wait observation when the model call uses them.

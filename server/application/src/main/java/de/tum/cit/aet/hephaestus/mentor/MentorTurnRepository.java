@@ -25,6 +25,18 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     List<MentorTurn> findByWorkspaceIdAndConversationIdAndStatus(
             Long workspaceId, UUID conversationId, MentorTurn.Status status);
 
+    /** The turns of a workspace that the ledger does not show yet: a stopped turn still holds its lease until it ends. */
+    @Query("""
+            SELECT new de.tum.cit.aet.hephaestus.mentor.RunningTurnUsage(
+              t.admission, t.inputTokens, t.outputTokens, t.cachedTokens, t.cacheWriteTokens)
+            FROM MentorTurn t
+            WHERE t.workspaceId = :workspaceId
+              AND (t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING
+                OR (t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED
+                  AND t.leasedUntil IS NOT NULL))
+            """)
+    List<RunningTurnUsage> findRunningUsage(@Param("workspaceId") long workspaceId);
+
     interface TurnStatus {
         UUID getId();
 

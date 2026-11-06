@@ -48,9 +48,13 @@ public class OutlineMirrorWriter {
      *         race twice (skipped; the next reconcile converges)
      */
     public @Nullable OutlineDocumentSnapshot upsertDocument(
-            long workspaceId, long connectionId, String documentId, Consumer<OutlineDocument> mutator) {
+            long workspaceId,
+            long connectionId,
+            String documentId,
+            @Nullable Instant sourceUpdatedAt,
+            Consumer<OutlineDocument> mutator) {
         return retryOnce(
-                () -> transactions.upsertDocument(workspaceId, connectionId, documentId, mutator),
+                () -> transactions.upsertDocument(workspaceId, connectionId, documentId, sourceUpdatedAt, mutator),
                 "document",
                 documentId);
     }
@@ -66,6 +70,20 @@ public class OutlineMirrorWriter {
             long workspaceId, long connectionId, String documentId, Consumer<OutlineDocument> mutator) {
         return retryOnce(
                 () -> transactions.updateDocument(workspaceId, connectionId, documentId, mutator),
+                "document",
+                documentId);
+    }
+
+    /** Updates lifecycle state only when the provider version still advances the mirror. */
+    public @Nullable OutlineDocumentSnapshot updateDocumentAtVersion(
+            long workspaceId,
+            long connectionId,
+            String documentId,
+            Instant sourceUpdatedAt,
+            Consumer<OutlineDocument> mutator) {
+        return retryOnce(
+                () -> transactions.updateDocumentAtVersion(
+                        workspaceId, connectionId, documentId, sourceUpdatedAt, mutator),
                 "document",
                 documentId);
     }

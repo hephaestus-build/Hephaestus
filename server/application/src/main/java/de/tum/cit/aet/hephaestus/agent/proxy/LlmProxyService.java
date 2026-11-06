@@ -63,7 +63,7 @@ class LlmProxyService {
      * seconds, stops the turn and cancels the call; it gives the host 30 seconds to end the turn. A bound at the ceiling
      * could cut the call first, as a plain timeout that Pi retries, instead of a deadline.
      */
-    private static final Duration HEPH_CALL_CEILING =
+    static final Duration HEPH_CALL_CEILING =
             Duration.ofSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS).plusMinutes(1);
 
     private static final String PROXY_PATH_PREFIX = "/internal/llm";
@@ -482,6 +482,13 @@ class LlmProxyService {
         }
         ProxyTransportClosure transports = new ProxyTransportClosure();
         try {
+            // A wait for capacity can outlast the check above, while other calls of the workspace settle.
+            if (accounting.refuseForBudget(routing)) {
+                return refusal(
+                        spendingRefusal,
+                        ReviewModelGateway.Refusal.BUDGET,
+                        budgetReachedMessage(routing.connectionScope()));
+            }
             LlmConnectionHealth.Permit permit = health.acquire(routing.connectionScope(), routing.connectionId());
             if (permit == null) {
                 accounting.recordError(routing.apiProtocol());

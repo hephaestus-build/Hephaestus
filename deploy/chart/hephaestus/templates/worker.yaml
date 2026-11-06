@@ -316,6 +316,7 @@ spec:
             {{- include "hephaestus.env.pod" . | nindent 12 }}
             {{- include "hephaestus.env.release" . | nindent 12 }}
             {{- include "hephaestus.env.shared" . | nindent 12 }}
+            {{- include "hephaestus.env.storedData" . | nindent 12 }}
             {{- include "hephaestus.env.scm" . | nindent 12 }}
             {{- include "hephaestus.env.modelEgress" . | nindent 12 }}
             {{- include "hephaestus.privateCaEnv" . | nindent 12 }}

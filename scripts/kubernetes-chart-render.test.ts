@@ -16,7 +16,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { appendFile, cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -598,6 +598,19 @@ await test("a release package runs the release's images with the operator's valu
 	assert.match(render([profile("small"), operator, reviews]).stderr, /images|release/u);
 });
 
+await test("a release package refuses a later quoted images key, which Helm would render", async (t) => {
+	const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-release-chart-"));
+	t.after(async () => rm(directory, { recursive: true, force: true }));
+	const source = path.join(directory, "hephaestus");
+	await cp(chart, source, { recursive: true });
+	const other = { ...prepared.images, webapp: `ghcr.io/other/webapp@${digest("d")}` };
+	await appendFile(path.join(source, "values.yaml"), `"images": ${JSON.stringify(other)}\n`);
+	await assert.rejects(
+		packageReleaseChart(prepared.release.version, source, prepared, directory),
+		/does not pin the v1\.2\.3 images/u,
+	);
+});
+
 const alertRules = readFileSync(path.join(chart, "files", "hephaestus-alerts.yml"), "utf8");
 const alertRulesOn = {
 	observability: {
@@ -960,14 +973,14 @@ for (const name of ["small", "external"] as const) {
 		const webhookEgress = list(get(policy("webhook"), "spec", "egress"));
 		const serverEgress = list(get(policy("server"), "spec", "egress"));
 		if (name === "external") {
+			assert.ok(
+				serverEgress.some(
+					(rule) =>
+						get(rule, "to", 0, "ipBlock", "cidr") === "10.0.12.0/24" &&
+						get(rule, "ports", 0, "port") === 5432,
+				),
+			);
 			for (const egress of [serverEgress, webhookEgress]) {
-				assert.ok(
-					egress.some(
-						(rule) =>
-							get(rule, "to", 0, "ipBlock", "cidr") === "10.0.12.0/24" &&
-							get(rule, "ports", 0, "port") === 5432,
-					),
-				);
 				assert.ok(
 					egress.some(
 						(rule) =>
@@ -977,9 +990,9 @@ for (const name of ["small", "external"] as const) {
 				);
 			}
 		}
-		// The receiver reaches the database and the broker only. The server adds internet HTTPS,
-		// which never includes private ranges.
-		assert.equal(webhookEgress.length, 2);
+		// The receiver reaches the broker only (ADR 0066). The server adds the database and internet
+		// HTTPS, which never includes private ranges.
+		assert.equal(webhookEgress.length, 1);
 		const internet = serverEgress.filter(
 			(rule) => get(rule, "to", 0, "ipBlock", "cidr") === "0.0.0.0/0",
 		);
@@ -1046,12 +1059,10 @@ await test("the longest release names render bounded, distinct and consistent ob
 			assertReferencesResolve(resources, podLabels, resource, label);
 		}
 		// The roles reach the bundled services under the names those Services received.
-		for (const role of [workload(resources, "server"), workload(resources, "webhook")]) {
-			const database = /^postgresql:\/\/(?<service>[^.:/]+)\.h\.svc:5432\//u.exec(
-				String(envValue(role, "DATABASE_URL")),
-			)?.groups?.service;
-			assert.ok(named(resources, "Service", database), `database host ${String(database)}`);
-		}
+		const database = /^postgresql:\/\/(?<service>[^.:/]+)\.h\.svc:5432\//u.exec(
+			String(envValue(workload(resources, "server"), "DATABASE_URL")),
+		)?.groups?.service;
+		assert.ok(named(resources, "Service", database), `database host ${String(database)}`);
 		const broker = /^nats:\/\/(?<host>[^:/]+):4222$/u.exec(
 			String(envValue(workload(resources, "server"), "NATS_SERVER")),
 		)?.groups?.host;
@@ -1486,7 +1497,7 @@ await test("every role verifies the bundled PostgreSQL at its Service name with 
 	);
 	assert.ok(service, "the PostgreSQL Service");
 	const url = `postgresql://${nameOf(service)}.hephaestus.svc:5432/hephaestus?${verifyFull}`;
-	for (const component of ["server", "webhook", "worker"]) {
+	for (const component of ["server", "worker"]) {
 		const role = workload(resources, component);
 		assert.ok(role, component);
 		assert.equal(envValue(role, "DATABASE_URL"), url, component);
@@ -2968,12 +2979,47 @@ await test("every role verifies an external PostgreSQL with the CA alone", () =>
 		false,
 	);
 	const url = `postgresql://${external.postgresql.external.host}:5432/hephaestus?${verifyFull}`;
-	for (const component of ["server", "webhook"]) {
-		const role = workload(resources, component);
-		assert.ok(role, component);
-		assert.equal(envValue(role, "DATABASE_URL"), url, component);
-		assertCaOnly(role, component);
-	}
+	const role = workload(resources, "server");
+	assert.ok(role);
+	assert.equal(envValue(role, "DATABASE_URL"), url);
+	assertCaOnly(role, "server");
+});
+
+await test("the internet-facing webhook role holds only the secrets of its own work", () => {
+	const resources = rendered([...layersFor("small"), workerLayer]);
+	const webhook = workload(resources, "webhook");
+	assert.ok(webhook);
+	const secrets = list(get(container(webhook), "env"))
+		.map((variable) => get(variable, "valueFrom", "secretKeyRef", "key"))
+		.filter((key) => key !== undefined);
+	assert.deepEqual(
+		new Set(secrets),
+		new Set([
+			"HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET",
+			"NATS_PASSWORD",
+			"NATS_USERNAME",
+			"WEBHOOK_ROUTING_PREVIOUS_SECRET",
+			"WEBHOOK_ROUTING_SECRET",
+			"WEBHOOK_SECRET",
+		]),
+	);
+	assert.equal(env(webhook, "DATABASE_URL"), undefined);
+	assert.deepEqual(
+		list(get(podSpec(webhook), "volumes")).filter((volume) => get(volume, "secret") !== undefined),
+		[],
+	);
+	// The database admits only the roles that hold its login.
+	const database = resources.find(
+		(resource) => kindOf(resource) === "NetworkPolicy" && nameOf(resource).endsWith("postgresql"),
+	);
+	assert.ok(database, "the PostgreSQL NetworkPolicy");
+	const admitted = new Set(
+		list(get(database, "spec", "ingress", 0, "from")).map((peer) =>
+			get(peer, "podSelector", "matchLabels", "app.kubernetes.io/component"),
+		),
+	);
+	assert.ok(admitted.has("server"));
+	assert.ok(!admitted.has("webhook"));
 });
 
 await test("replica counts stop the database roles, start the server alone, and restore the release", () => {

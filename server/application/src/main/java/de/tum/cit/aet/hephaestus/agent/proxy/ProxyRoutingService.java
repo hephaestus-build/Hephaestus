@@ -12,15 +12,12 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptUsage;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
-import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import jakarta.servlet.http.HttpServletRequest;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -149,9 +146,8 @@ class ProxyRoutingService {
     }
 
     /**
-     * The routing of a conversation turn attempt while this worker holds its lease: the route frozen at admission, and what the
-     * attempt has spent so far, priced at the admitted rates. An attempt that ended or moved on gets {@code 409}, so its
-     * host stops.
+     * The routing of a conversation turn attempt while this worker holds its lease: the route frozen at admission. An
+     * attempt that ended or moved on gets {@code 409}, so its host stops.
      */
     private ProxyRouting turnRouting(AttemptJwt jwt) {
         var turn = mentorTurns
@@ -162,13 +158,6 @@ class ProxyRoutingService {
         var admitted = MentorTurnAdmission.read(turn.getAdmission())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "This turn attempt has no model"));
         var route = admitted.route();
-        BigDecimal spent = admitted.price()
-                .calculateCost(
-                        turn.getInputTokens(),
-                        turn.getOutputTokens(),
-                        turn.getCachedTokens(),
-                        turn.getCacheWriteTokens())
-                .usd();
         return new ProxyRouting(
                 "mentor-turn:" + turn.getId(),
                 route.apiProtocol(),
@@ -178,11 +167,7 @@ class ProxyRoutingService {
                 route.modelId(),
                 turn.getWorkspaceId(),
                 new ProxyRouting.BilledAttempt(
-                        UsageSourceType.MENTOR_TURN,
-                        turn.getId(),
-                        turn.getAttempt(),
-                        spent != null ? spent : BigDecimal.ZERO,
-                        jwt.leaseId()),
+                        UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), jwt.leaseId()),
                 null,
                 null,
                 null);
@@ -195,14 +180,12 @@ class ProxyRoutingService {
                 leaseId,
                 snapshot.model(),
                 UsageSourceType.REVIEW_JOB,
-                spentSoFarUsd(job, snapshot),
                 0L,
                 0L,
                 null,
                 workDeadline);
     }
 
-    // Include all direct models' in-flight spend until their ledger rows exist; only the same funding source counts.
     private Optional<ProxyRouting> practiceScriptRouting(
             ReviewJob job, UUID leaseId, ConfigSnapshot snapshot, ModelKind slot, Instant workDeadline) {
         FrozenModel model = slot == ModelKind.CHAT ? snapshot.model() : snapshot.practiceScriptSlot(slot);
@@ -217,7 +200,6 @@ class ProxyRoutingService {
                 leaseId,
                 model,
                 ScriptUsage.ledgerSourceType(slot),
-                practiceScriptSpentUsd(job, snapshot, used, model.connectionScope()),
                 used.stream().mapToLong(PracticeScriptKindTotal::tokens).sum(),
                 used.stream().mapToLong(PracticeScriptKindTotal::searchUnits).sum(),
                 slot,
@@ -230,7 +212,6 @@ class ProxyRoutingService {
             UUID leaseId,
             FrozenModel model,
             UsageSourceType sourceType,
-            BigDecimal spentUsd,
             long directModelTokens,
             long directModelSearchUnits,
             @Nullable ModelKind slot,
@@ -247,7 +228,6 @@ class ProxyRoutingService {
                         sourceType,
                         job.getId(),
                         job.getAttempt(),
-                        spentUsd,
                         leaseId,
                         directModelTokens,
                         directModelSearchUnits,
@@ -255,33 +235,6 @@ class ProxyRoutingService {
                 slot,
                 slot == null ? null : model.dataHandlingTier(),
                 workDeadline);
-    }
-
-    private static BigDecimal practiceScriptSpentUsd(
-            ReviewJob job,
-            ConfigSnapshot snapshot,
-            List<PracticeScriptKindTotal> used,
-            @Nullable UsageFundingSource purse) {
-        BigDecimal spent = Objects.equals(snapshot.model().connectionScope(), purse)
-                ? spentSoFarUsd(job, snapshot)
-                : BigDecimal.ZERO;
-        for (PracticeScriptKindTotal total : used) {
-            FrozenModel model = snapshot.practiceScriptSlot(total.modelKind());
-            LlmPriceSnapshot price = model == null ? null : model.priceSnapshot();
-            if (model == null || price == null || !Objects.equals(model.connectionScope(), purse)) {
-                continue;
-            }
-            BigDecimal cost = price.calculateCost(
-                            total.inputTokens(),
-                            total.outputTokens(),
-                            total.cacheReadTokens(),
-                            total.cacheWriteTokens())
-                    .usd();
-            if (cost != null) {
-                spent = spent.add(cost);
-            }
-        }
-        return spent;
     }
 
     static @Nullable ModelKind practiceScriptSlot(String path) {
@@ -295,20 +248,5 @@ class ProxyRoutingService {
                 .filter(kind -> kind.name().toLowerCase(Locale.ROOT).equals(slot))
                 .findFirst()
                 .orElse(null);
-    }
-
-    // Budget gates use frozen rates; reasoning tokens are already included in output.
-    private static BigDecimal spentSoFarUsd(ReviewJob job, ConfigSnapshot snapshot) {
-        LlmPriceSnapshot price = snapshot.model().priceSnapshot();
-        if (price == null) {
-            return BigDecimal.ZERO;
-        }
-        BigDecimal cost = price.calculateCost(
-                        job.getLlmInputTokens(),
-                        job.getLlmOutputTokens(),
-                        job.getLlmCacheReadTokens(),
-                        job.getLlmCacheWriteTokens())
-                .usd();
-        return cost != null ? cost : BigDecimal.ZERO;
     }
 }

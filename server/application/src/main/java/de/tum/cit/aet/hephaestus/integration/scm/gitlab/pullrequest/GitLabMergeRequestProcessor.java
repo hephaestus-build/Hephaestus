@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
@@ -570,12 +571,17 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 previousTitle = existing.getTitle();
                 previousBody = existing.getBody();
                 Instant eventUpdatedAt = parseGitLabTimestamp(attrs.updatedAt());
-                if (existing.getUpdatedAt() != null
+                boolean continuesHead = "update".equals(attrs.action())
+                        && attrs.oldrev() != null
+                        && attrs.oldrev().equals(existing.getHeadRefOid())
+                        && attrs.lastCommit() != null
+                        && attrs.lastCommit().id() != null
                         && eventUpdatedAt != null
-                        && !eventUpdatedAt.isAfter(existing.getUpdatedAt())) {
+                        && eventUpdatedAt.equals(existing.getUpdatedAt());
+                if (!continuesHead && ProviderStateVersion.cannotReplace(eventUpdatedAt, existing.getUpdatedAt())) {
                     // The reviewer list still applies unless the payload is older, as
                     // sync-lifecycle.md § Reviewer lists are dated snapshots explains.
-                    if (!eventUpdatedAt.isBefore(existing.getUpdatedAt())
+                    if (!ProviderStateVersion.isOlder(eventUpdatedAt, existing.getUpdatedAt())
                             && updateRequestedReviewers(event.currentReviewers(), existing, context)) {
                         existing = pullRequestRepository.save(existing);
                     }
@@ -970,6 +976,27 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                     fetchedUpdatedAt);
             return stored;
         }
+        Instant lastWriteAt = existingOpt.map(PullRequest::getLastSyncAt).orElse(null);
+        Instant reviewsObservedAt =
+                existingOpt.map(PullRequest::getReviewersObservedAt).orElse(null);
+        if (reviewsObservedAt != null && (lastWriteAt == null || reviewsObservedAt.isAfter(lastWriteAt))) {
+            lastWriteAt = reviewsObservedAt;
+        }
+        boolean freshEqualRead = existingOpt.isPresent()
+                && ProviderStateVersion.acceptsEqualRead(
+                        fetchedUpdatedAt, existingOpt.get().getUpdatedAt(), context.observedAt(), lastWriteAt);
+        boolean sameVersion = existingOpt.isPresent()
+                && !freshEqualRead
+                && ProviderStateVersion.cannotReplace(
+                        fetchedUpdatedAt, existingOpt.get().getUpdatedAt());
+        if (sameVersion
+                && (!Objects.equals(
+                                data.diffHeadSha(), existingOpt.orElseThrow().getHeadRefOid())
+                        || convertState(data.state())
+                                != existingOpt.orElseThrow().getState()
+                        || data.draft() != existingOpt.orElseThrow().isDraft())) {
+            return existingOpt.orElseThrow();
+        }
         // The upsert replaces the prior draft state; retain it for transition detection.
         Boolean wasDraft = existingOpt.map(PullRequest::isDraft).orElse(null);
         Issue.State previousState = existingOpt.map(PullRequest::getState).orElse(null);
@@ -1041,46 +1068,52 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         if (closedAtTimestamp == null && isMerged) {
             closedAtTimestamp = mergedAtTimestamp;
         }
-        pullRequestRepository.upsertCore(
-                nativeId,
-                providerId,
-                mrNumber,
-                Objects.requireNonNullElse(sanitize(data.title()), ""),
-                sanitize(data.description()),
-                mrState.name(),
-                null, // stateReason
-                data.webUrl(),
-                data.discussionLocked(),
-                closedAtTimestamp,
-                data.commentsCount(),
-                now,
-                parseGitLabTimestamp(data.createdAt()),
-                fetchedUpdatedAt,
-                author != null ? author.getId() : null,
-                repository.getId(),
-                milestoneId,
-                mergedAtTimestamp,
-                data.draft(),
-                isMerged,
-                data.commitCount(),
-                data.additions(),
-                data.deletions(),
-                data.fileCount(),
-                null,
-                null,
-                null, // mergeable: likewise
-                data.sourceBranch(),
-                data.targetBranch(),
-                data.diffHeadSha(),
-                null, // baseRefOid: recorded with the review snapshot below, as for mergeable
-                mergeUser != null ? mergeUser.getId() : null,
-                data.mergeCommitSha());
+        int written = 0;
+        if (!sameVersion) {
+            written = pullRequestRepository.upsertCore(
+                    nativeId,
+                    providerId,
+                    mrNumber,
+                    Objects.requireNonNullElse(sanitize(data.title()), ""),
+                    sanitize(data.description()),
+                    mrState.name(),
+                    null, // stateReason
+                    data.webUrl(),
+                    data.discussionLocked(),
+                    closedAtTimestamp,
+                    data.commentsCount(),
+                    now,
+                    parseGitLabTimestamp(data.createdAt()),
+                    fetchedUpdatedAt,
+                    author != null ? author.getId() : null,
+                    repository.getId(),
+                    milestoneId,
+                    mergedAtTimestamp,
+                    data.draft(),
+                    isMerged,
+                    data.commitCount(),
+                    data.additions(),
+                    data.deletions(),
+                    data.fileCount(),
+                    null,
+                    null,
+                    null, // mergeable: likewise
+                    data.sourceBranch(),
+                    data.targetBranch(),
+                    data.diffHeadSha(),
+                    null, // baseRefOid: recorded with the review snapshot below, as for mergeable
+                    mergeUser != null ? mergeUser.getId() : null,
+                    data.mergeCommitSha());
+        }
 
-        PullRequest pr = pullRequestRepository
-                .findByRepositoryIdAndNumber(repository.getId(), mrNumber)
-                .orElseThrow(() -> new IllegalStateException(
-                        "PullRequest not found after upsert: nativeId=" + nativeId + ", iid=" + data.iid()));
+        PullRequest pr = sameVersion
+                ? existingOpt.orElseThrow()
+                : pullRequestRepository
+                        .findByRepositoryIdAndNumber(repository.getId(), mrNumber)
+                        .orElseThrow(() -> new IllegalStateException(
+                                "PullRequest not found after upsert: nativeId=" + nativeId + ", iid=" + data.iid()));
 
+        if (!sameVersion && written == 0) return pr;
         pr.setProvider(repository.getProvider());
 
         // Head-scoped status is stored only when this read captured the head it describes.
@@ -1106,8 +1139,10 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         } else if (headMoved) {
             changed |= forgetReadiness(pr);
         }
-        changed |= updateSyncLabels(data.syncLabels(), pr.getLabels(), repository);
-        changed |= updateSyncAssignees(data.syncAssignees(), pr.getAssignees(), providerId);
+        if (!sameVersion) {
+            changed |= updateSyncLabels(data.syncLabels(), pr.getLabels(), repository);
+            changed |= updateSyncAssignees(data.syncAssignees(), pr.getAssignees(), providerId);
+        }
         changed |= updateSyncReviewers(data.syncReviewers(), pr, providerId, context);
         if (headCaptured || data.headPipeline().kind() == GitLabHeadPipeline.Kind.REPORTED) {
             changed |= data.headPipeline().observeOn(pr, context.observedAt());
@@ -1168,7 +1203,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         }
 
         // Reconciliation must recover draft transitions from missed webhooks.
-        if (wasDraft != null) {
+        if (!sameVersion && wasDraft != null) {
             if (wasDraft && !data.draft()) {
                 eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReady(
                         prData,
@@ -1280,7 +1315,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         if (closedAtTimestamp == null && isMerged) {
             closedAtTimestamp = mergedAtTimestamp;
         }
-        pullRequestRepository.upsertCore(
+        int written = pullRequestRepository.upsertCore(
                 nativeId,
                 providerId,
                 mrNumber,
@@ -1321,6 +1356,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 .orElseThrow(() -> new IllegalStateException(
                         "PullRequest not found after upsert: nativeId=" + nativeId + ", number=" + mrNumber));
 
+        if (written == 0) return null;
         pr.setProvider(repository.getProvider());
 
         if (isNew) {

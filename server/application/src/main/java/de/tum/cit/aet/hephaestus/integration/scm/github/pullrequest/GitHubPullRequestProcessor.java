@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest;
 
+import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
@@ -158,9 +159,6 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                     issueRepository.findByRepositoryIdAndNumber(repository.getId(), dto.number());
             if (existingIssue.isPresent()) {
                 issueRepository.correctDiscriminator(repository.getId(), dto.number(), "ISSUE", "PULL_REQUEST");
-                // Don't re-fetch: the promoted row has NULL PR-specific columns (additions, etc.)
-                // which would crash Hibernate on primitive int fields. The upsert below will
-                // populate all fields correctly.
                 promotedFromIssue = true;
                 isNew = false;
                 log.info(
@@ -187,10 +185,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                     && before.equals(existing.getHeadRefOid())
                     && dto.updatedAt() != null
                     && dto.updatedAt().equals(existing.getUpdatedAt());
-            if (existing.getUpdatedAt() != null
-                    && dto.updatedAt() != null
-                    && !sameSecondPush
-                    && !dto.updatedAt().isAfter(existing.getUpdatedAt())) {
+            if (!sameSecondPush && ProviderStateVersion.cannotReplace(dto.updatedAt(), existing.getUpdatedAt())) {
                 log.debug(
                         "Skipped stale PR update: prId={}, existingUpdatedAt={}, dtoUpdatedAt={}",
                         existing.getId(),
@@ -199,10 +194,10 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                 // The provider's id for the pull request does not age: an older payload still
                 // carries it.
                 boolean identityChanged = adoptCanonicalNativeId(existing, dbId, providerId);
-                boolean changed = !dto.updatedAt().isBefore(existing.getUpdatedAt())
-                        && updateReviewRequests(dto, existing, providerId, context.observedAt());
-                changed |= applySyncOnlyFacts(dto, existing);
-                boolean closingIssuesChanged = replaceClosingIssues(dto, existing, repository, context);
+                boolean sameVersion = !ProviderStateVersion.isOlder(dto.updatedAt(), existing.getUpdatedAt());
+                boolean changed = sameVersion && updateReviewRequests(dto, existing, providerId, context.observedAt());
+                changed |= sameVersion && applySyncOnlyFacts(dto, existing);
+                boolean closingIssuesChanged = sameVersion && replaceClosingIssues(dto, existing, repository, context);
                 PullRequest stored = changed || identityChanged || closingIssuesChanged
                         ? pullRequestRepository.save(existing)
                         : existing;
@@ -228,7 +223,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
 
         // Use atomic upsert to handle concurrent inserts
         Instant now = Instant.now();
-        pullRequestRepository.upsertCore(
+        int written = pullRequestRepository.upsertCore(
                 dbId,
                 providerId,
                 dto.number(),
@@ -276,6 +271,9 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
         // stale row, or a comment stub inserted after the lookup above. This row is the one it
         // locked.
         boolean identityChanged = adoptCanonicalNativeId(pr, dbId, providerId);
+        if (written == 0) {
+            return identityChanged ? pullRequestRepository.save(pr) : pr;
+        }
 
         boolean closingIssuesChanged = replaceClosingIssues(dto, pr, repository, context);
         // Handle ManyToMany relationships (labels, assignees, requestedReviewers)

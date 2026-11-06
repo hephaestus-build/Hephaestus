@@ -70,6 +70,8 @@ target "agent-pi" {
     "hephaestus.component" = "agent-pi"
   }
   context    = "docker/agents"
+  # Tool protocol v1 has one source, beside the loop programs that the server stages.
+  contexts   = { agent-runtime = "server/application/src/main/resources/agent" }
   dockerfile = "pi/Dockerfile"
   cache-from = ["type=registry,ref=${repository("agent-pi")}:cache-main-${PLATFORM_PAIR}"]
   cache-to   = WRITE_CACHE == "true" ? ["type=registry,ref=${repository("agent-pi")}:cache-main-${PLATFORM_PAIR},mode=max"] : []

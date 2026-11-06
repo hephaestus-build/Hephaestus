@@ -55,6 +55,8 @@ const upstream = [
 	tag: "1",
 	digest: `sha256:${"de345678".charAt(index).repeat(64)}`,
 }));
+/** When the fixture bundle was generated. Fixed and in the past, as for any bundle that a later run verifies. */
+const generatedAt = "2026-09-01T00:00:00Z";
 /** The release image inventory of the fixture checkout and its evidence. */
 const inventory = { schemaVersion: 1, images: ["webapp"], upstream };
 const jointLock = `release-${release}.chart.json`;
@@ -227,8 +229,11 @@ if (tool === 'git') {
   } else if (args[0] === 'show' && args[1] === 'chart') {
     process.stdout.write(fs.readFileSync(path.join(store, 'chart-metadata'), 'utf8'));
   } else if (args[0] === 'show' && args[1] === 'values') {
-    // A package holds the values.yaml it was made from, after one line that names the package.
-    process.stdout.write(fs.readFileSync(args[2], 'utf8').split('\n').slice(1).join('\n') + '\n');
+    // A package holds the values.yaml it was made from, after one line that names the package. Helm
+    // prints its parse as JSON; this tree has no YAML parser, and the release lines are flat.
+    const text = fs.readFileSync(args[2], 'utf8');
+    const group = name => Object.fromEntries([...new RegExp('^' + name + ':\n((?:  .*\n)+)', 'm').exec(text)[1].matchAll(/^  (\S+): (".*")$/gm)].map(([, key, value]) => [key, JSON.parse(value)]));
+    console.log(JSON.stringify({release: group('release'), images: group('images')}));
   } else if (args[0] === 'version' || (args[0] === 'registry' && args[1] === 'login')) {
     fs.readFileSync(0);
   } else if (args[0] === 'package') {
@@ -322,6 +327,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 		schemaVersion: 1,
 		release: fixtureRelease,
 		commit: source,
+		generatedAt,
 		bundledNpmSbom: 1,
 		sourceSbom: 1,
 		subjects,
@@ -1405,6 +1411,92 @@ void test(
 		);
 		await json(file, { ...native, files: [] });
 		verify(/no bundled npm/u);
+	},
+);
+
+void test(
+	"a signed bundle is judged by its stored policy as of the time it was signed",
+	{ skip: process.platform === "win32" },
+	async (t) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "release-signed-time-"));
+		t.after(async () => rm(directory, { recursive: true, force: true }));
+		const { archive, json, manifest, environment } = await fixture(directory);
+		const policy = asRecord(
+			parseJson(await readFile(path.join(archive, "vulnerability-policy.json"), "utf8")),
+			"stored policy",
+		);
+		await json("vulnerability-policy.json", {
+			...policy,
+			exceptions: [
+				{
+					image: "webapp",
+					platform: "linux/amd64",
+					vulnerability: "CVE-2026-0001",
+					package: "example",
+					installedVersion: "1.0.0",
+					digest: `sha256:${"1".repeat(64)}`,
+					status: "affected",
+					justification: "Accepted until the next release.",
+					evidence: "https://example.com/advisory",
+					owner: "maintainer",
+					expires: "2026-10-01T00:00:00Z",
+				},
+			],
+		});
+		const signedAt = async (time: string) => {
+			await json("manifest.json", { ...manifest, generatedAt: time });
+			const sums = await readFile(path.join(archive, "SHA256SUMS"), "utf8");
+			const lines = sums.trimEnd().split("\n");
+			const fresh = await Promise.all(
+				lines.map(async (line) => {
+					const file = line.slice(line.indexOf("  ") + 2);
+					return `${hash(await readFile(path.join(archive, file)))}  ${file}\n`;
+				}),
+			);
+			await writeFile(path.join(archive, "SHA256SUMS"), fresh.join(""));
+			await sign(path.join(archive, "SHA256SUMS"));
+		};
+		const verify = (...mode: string[]) =>
+			spawnSync(
+				process.execPath,
+				[path.join(root, "scripts/verify-release-evidence.ts"), archive, ...mode],
+				{ encoding: "utf8", env: environment },
+			);
+
+		// The exception lapsed after signing, so the signed bundle still satisfies its policy.
+		await signedAt(generatedAt);
+		for (const mode of [[], ["--verify-signatures"]]) {
+			const signed = verify(...mode);
+			assert.equal(signed.status, 0, signed.stderr);
+		}
+
+		// A new validation is not an archive: it stays on the current time. The first run stores the failure
+		// that each later step re-derives, so these steps keep their order.
+		for (const mode of ["--write-validation", "--verify-capture"]) {
+			const validation = verify(mode);
+			assert.notEqual(validation.status, 0);
+			assert.match(validation.stderr, /does not satisfy vulnerability policy/u);
+		}
+
+		// Every mode reads the value, so a preflight finds a bad one before a release does.
+		for (const mode of ["--write-validation", "--verify-capture"]) {
+			await json("manifest.json", { ...manifest, generatedAt: undefined });
+			const missing = verify(mode);
+			assert.notEqual(missing.status, 0);
+			assert.match(missing.stderr, /no valid generation time/u);
+		}
+
+		// Generated after the lapse, the same policy no longer holds.
+		await signedAt("2026-10-02T00:00:00Z");
+		const lapsed = verify();
+		assert.notEqual(lapsed.status, 0);
+		assert.match(lapsed.stderr, /does not satisfy vulnerability policy/u);
+
+		// Rewinding the time after signing changes bytes that SHA256SUMS covers.
+		await json("manifest.json", { ...manifest, generatedAt });
+		const tampered = verify();
+		assert.notEqual(tampered.status, 0);
+		assert.match(tampered.stderr, /checksum did NOT match/u);
 	},
 );
 

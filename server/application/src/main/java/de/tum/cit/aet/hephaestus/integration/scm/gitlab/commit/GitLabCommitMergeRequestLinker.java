@@ -163,10 +163,7 @@ public class GitLabCommitMergeRequestLinker {
 
         // Harvested during the sweep: (login -> set of emails) captured from GitLab's
         // server-side author resolution. Any commit whose `author` is non-null teaches
-        // us that `authorEmail` belongs to that login. For commits with `author == null`
-        // we piggyback on the "dominant login" of the same MR — authors frequently
-        // push from two addresses (e.g. {login}@mytum.de AND {login}@tum.de) and GitLab
-        // only registers one as their primary.
+        // us that `authorEmail` belongs to that login.
         Map<String, Set<String>> loginToEmails = new HashMap<>();
 
         try {
@@ -606,51 +603,24 @@ public class GitLabCommitMergeRequestLinker {
     // Author attribution harvest + backfill
 
     /**
-     * Adds harvested (login → email) pairs from a single MR's commit list into
-     * {@code sink}.
-     *
-     * <p>Two sources contribute:
-     * <ol>
-     *   <li><b>Direct</b> — any commit whose GraphQL {@code author} field is non-null
-     *       gives us an authoritative pair.</li>
-     *   <li><b>Dominant-login fallback</b> — when exactly one login is named across
-     *       resolved commits in the MR, we attribute the MR's remaining (unresolved)
-     *       emails to that login. GitLab often fails to resolve
-     *       {@code firstname.lastname@tum.de} even though its sibling
-     *       {@code {login}@mytum.de} is registered on the same account. Within a
-     *       single MR, a uniform dominant author is a strong, low-risk signal.</li>
-     * </ol>
+     * Collects the {@code (login, email)} pairs that GitLab itself resolved: a commit whose GraphQL {@code author}
+     * is non-null. A commit with no author stays unlinked. Its email is whatever its author typed, so sharing a merge
+     * request with a resolved commit says nothing about who wrote it.
      */
     private static void harvestEmailLoginPairs(List<CommitNode> commitNodes, Map<String, Set<String>> sink) {
-        Set<String> mrLogins = new HashSet<>();
-        List<String> unresolvedEmails = new ArrayList<>();
-
         for (CommitNode node : commitNodes) {
             String email = node.authorEmail();
             String login = node.authorUsername();
-            if (email == null || email.isBlank()) continue;
-            String normalisedEmail = email.toLowerCase(Locale.ROOT);
-            if (login != null) {
-                mrLogins.add(login);
-                sink.computeIfAbsent(login, k -> new HashSet<>()).add(normalisedEmail);
-            } else {
-                unresolvedEmails.add(normalisedEmail);
-            }
-        }
-
-        if (mrLogins.size() == 1 && !unresolvedEmails.isEmpty()) {
-            String dominantLogin = mrLogins.iterator().next();
-            Set<String> bucket = sink.computeIfAbsent(dominantLogin, k -> new HashSet<>());
-            bucket.addAll(unresolvedEmails);
+            if (email == null || email.isBlank() || login == null) continue;
+            sink.computeIfAbsent(login, k -> new HashSet<>()).add(email.toLowerCase(Locale.ROOT));
         }
     }
 
     /**
      * Resolves each harvested {@code (login → email)} pair to a local {@code User}
-     * row and backfills {@code commit_contributor.user_id} for every contributor
-     * row carrying that email, as well as the denormalized {@code git_commit.author_id}
-     * and {@code git_commit.committer_id} columns scoped to this repository so that
-     * commit-centric queries (activity feeds) see the attributed user.
+     * row and backfills {@code commit_contributor.user_id} and the denormalized
+     * {@code git_commit.author_id} and {@code git_commit.committer_id} columns, all scoped to
+     * this repository, so that commit-centric queries (activity feeds) see the attributed user.
      */
     private int reconcileCommitContributorUsers(
             Map<String, Set<String>> loginToEmails,
@@ -677,15 +647,15 @@ public class GitLabCommitMergeRequestLinker {
             if (userId == null) continue;
 
             for (String email : emails) {
-                contributorRowsUpdated += commitContributorRepository.backfillUserIdByEmail(email, userId);
+                contributorRowsUpdated +=
+                        commitContributorRepository.backfillUserIdByEmail(email, repositoryId, userId);
                 commitAuthorRowsUpdated += commitRepository.bulkUpdateAuthorIdByEmail(email, repositoryId, userId);
                 commitCommitterRowsUpdated +=
                         commitRepository.bulkUpdateCommitterIdByEmail(email, repositoryId, userId);
             }
 
-            // Enrich user.email when it is currently null. Harvested emails come from a
-            // trusted source (GitLab server-side author resolution) and cost nothing
-            // extra. We only set an email when a single candidate wins the best-email
+            // Enrich user.email when it is currently null, from emails GitLab itself resolved to
+            // this account. We only set an email when a single candidate wins the best-email
             // selection so the column stays deterministic across sync runs.
             if (user.isPresent() && user.get().getEmail() == null) {
                 String bestEmail = selectBestEmail(emails);

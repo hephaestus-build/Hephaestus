@@ -30,6 +30,7 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     long count();
 
     /** Provider coverage includes tombstones and erased attribution: those source rows are not missing. */
+    @WorkspaceAgnostic("Backfill compares a monitored repository's shared pull request rows with the provider's count")
     @Query(
             value = "SELECT count(*) FROM issue WHERE repository_id=:repositoryId AND issue_type='PULL_REQUEST'",
             nativeQuery = true)
@@ -257,7 +258,7 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
      * <b>Note:</b> This only handles scalar fields and FK references. ManyToMany relationships
      * (labels, assignees, requestedReviewers) must be handled separately after calling this method.
      *
-     * @return 1 if inserted, 1 if updated (always 1 on success due to DO UPDATE)
+     * @return 1 if inserted or updated, 0 when a newer stored version prevents the write
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Transactional
@@ -329,6 +330,7 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
             -- a quoted range it never finds the end of, and the whole ApplicationContext fails to
             -- start. NativeQueryCommentArchTest enforces this.
             deleted_at = NULL
+        WHERE issue.updated_at IS NULL OR EXCLUDED.updated_at >= issue.updated_at
         """, nativeQuery = true)
     int upsertCore(
             @Param("nativeId") Long nativeId,

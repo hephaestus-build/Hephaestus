@@ -11,8 +11,10 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -259,8 +261,8 @@ class TurnSandboxesTest extends BaseUnitTest {
     @Test
     void shouldRemoveUnknownOwnAndAbandonedSandboxesButKeepThoseOfALiveWorkerWhenItReconciles() {
         runtime.running.put("left-by-an-earlier-start", "unknown-sandbox");
-        runtime.others.add(new ExecSandboxes.Listed("of-a-live-worker", "s-1", "worker-live", false));
-        runtime.others.add(new ExecSandboxes.Listed("of-a-gone-worker", "s-2", "worker-gone", true));
+        runtime.others.add(new ExecSandboxes.Listed("of-a-live-worker", "s-1", "worker-live", false, false));
+        runtime.others.add(new ExecSandboxes.Listed("of-a-gone-worker", "s-2", "worker-gone", true, false));
 
         sandboxes.reconcile((turnId, number) -> true);
 
@@ -269,6 +271,26 @@ class TurnSandboxesTest extends BaseUnitTest {
         await().atMost(Duration.ofSeconds(5)).until(() -> sandboxes.pooled() == 2);
         sandboxes.reconcile((turnId, number) -> true);
         assertThat(runtime.removed).as("its own pool stays").hasSize(2);
+    }
+
+    @Test
+    void shouldReplaceAPooledSandboxThatEndedButKeepAnAssignedOneWhenItReconciles() {
+        sandboxes.reconcile((turnId, number) -> true);
+        await().atMost(Duration.ofSeconds(5)).until(() -> sandboxes.pooled() == 2);
+        TurnSandboxes.Attempt attempt = attempt();
+        String assigned = sandboxes.acquire(attempt, WORKSPACE, () -> false).containerId();
+        await().atMost(Duration.ofSeconds(5)).until(() -> sandboxes.pooled() == 2);
+        Set<String> pooled = new HashSet<>(runtime.running.keySet());
+        pooled.remove(assigned);
+        runtime.ended.addAll(runtime.running.keySet());
+
+        sandboxes.reconcile((turnId, number) -> true);
+
+        await().atMost(Duration.ofSeconds(5)).until(() -> runtime.removed.containsAll(pooled));
+        await().atMost(Duration.ofSeconds(5)).until(() -> sandboxes.pooled() == 2);
+        assertThat(runtime.removed).doesNotContain(assigned);
+        String next = sandboxes.acquire(attempt(), WORKSPACE, () -> false).containerId();
+        assertThat(pooled).doesNotContain(next);
     }
 
     @Test

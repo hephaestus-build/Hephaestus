@@ -455,6 +455,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     .isEmpty();
 
             GitHubPullRequestDTO dto = createBasicPullRequestDto(entityId, number);
+            assertThat(now).isAfter(Objects.requireNonNull(dto.updatedAt()));
             PullRequest result = processor.process(dto, createContext());
 
             assertNotNull(result);
@@ -747,15 +748,47 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(longs = {0, 60})
+    void shouldKeepStoredPullRequestWhenReplayHasAnEqualOrOlderVersion(long secondsNewer) {
+        Instant replayVersion = Instant.parse("2025-11-01T21:42:45Z");
+        GitHubPullRequestDTO replay = createBasicPullRequestDto(9_801L, 62, "Old body", replayVersion);
+        PullRequest stored = processor.process(replay, createContext());
+        assertNotNull(stored);
+        stored.setTitle("Newer title");
+        stored.setBody("Newer body");
+        stored.setUpdatedAt(replayVersion.plusSeconds(secondsNewer));
+        pullRequestRepository.saveAndFlush(stored);
+        eventListener.clear();
+
+        processor.process(replay, createContext());
+
+        PullRequest actual = pullRequestRepository
+                .findByRepositoryIdAndNumber(testRepository.getId(), 62)
+                .orElseThrow();
+        assertThat(actual.getTitle()).isEqualTo("Newer title");
+        assertThat(actual.getBody()).isEqualTo("Newer body");
+        assertThat(actual.getUpdatedAt()).isEqualTo(replayVersion.plusSeconds(secondsNewer));
+        assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+                .isEmpty();
+    }
+
     @Nested
     class ProcessMethodCreate {
 
-        @Test
-        void shouldAcceptClosingIssuesOnlyFromSyncWhenTheWebhookStoredTheSameUpdatedAt() {
+        @ParameterizedTest
+        @ValueSource(longs = {0, 60})
+        void shouldEnrichOnlyTheSameVersionWhenTheWebhookStoredItFirst(long secondsNewer) {
             // The webhook wrote GitHub's updated_at first ...
             GitHubPullRequestDTO fromWebhook = createBasicPullRequestDto(FIXTURE_PR_ID, 26);
-            processor.process(
+            PullRequest baseline = processor.process(
                     fromWebhook, ProcessingContext.forWebhook(testWorkspace.getId(), testRepository, "edited"));
+            assertNotNull(baseline);
+            baseline.setUpdatedAt(
+                    Objects.requireNonNull(fromWebhook.updatedAt()).plusSeconds(secondsNewer));
+            pullRequestRepository.saveAndFlush(baseline);
+            var initialDecision = baseline.getReviewDecision();
+            var initialStatus = baseline.getMergeStateStatus();
             Issue closed = new Issue();
             closed.setNativeId(9_100L);
             closed.setNumber(3);
@@ -822,6 +855,15 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             assertNotNull(result);
             PullRequest stored =
                     pullRequestRepository.findByIdWithAllForGate(result.getId()).orElseThrow();
+            if (secondsNewer > 0) {
+                assertThat(stored.getReviewDecision()).isEqualTo(initialDecision);
+                assertThat(stored.getMergeStateStatus()).isEqualTo(initialStatus);
+                assertThat(pullRequestRepository.findClosingIssuesById(stored.getId()))
+                        .isEmpty();
+                assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+                        .isEmpty();
+                return;
+            }
             assertThat(stored.getReviewDecision()).isEqualTo(ReviewDecision.APPROVED);
             assertThat(stored.getMergeStateStatus()).isEqualTo(MergeStateStatus.CLEAN);
             assertThat(stored.getHeadCheckState()).isEqualTo(CheckState.SUCCESS);
@@ -933,7 +975,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             });
         }
 
-        /** The team {@code Hephaetus} among the review requests, as the team sync stores it. */
+        /* The team Hephaetus among the review requests, as the team sync stores it. */
         private Long saveSyncedTeam() {
             Team synced = new Team();
             synced.setNativeId(13459148L);

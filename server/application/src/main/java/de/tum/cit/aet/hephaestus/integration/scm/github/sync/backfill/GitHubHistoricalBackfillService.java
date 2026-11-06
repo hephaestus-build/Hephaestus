@@ -643,6 +643,7 @@ public class GitHubHistoricalBackfillService {
                 // just the HTTP exchange: WebClient's ExchangeFilterFunction retries only cover the
                 // exchange, and PrematureCloseException occurs during body consumption.
                 final String currentCursor = cursor;
+                Instant fetchedAt = Instant.now();
                 ClientGraphQlResponse response = Mono.defer(() -> client.documentName(ISSUES_HISTORICAL_QUERY)
                                 .variable("owner", ownerAndName.owner())
                                 .variable("name", ownerAndName.name())
@@ -723,8 +724,8 @@ public class GitHubHistoricalBackfillService {
                 // This ensures that if processing succeeds but cursor save fails (or vice versa),
                 // both are rolled back together, preventing duplicate processing on restart.
                 // Pass repositoryId, not the entity, to avoid LazyInitializationException.
-                IssuePageResult pageResult =
-                        processIssuesPage(connection, scopeId, repositoryId, syncTargetId, hasMore ? nextCursor : null);
+                IssuePageResult pageResult = processIssuesPage(
+                        connection, scopeId, repositoryId, syncTargetId, hasMore ? nextCursor : null, fetchedAt);
                 totalIssuesSynced += pageResult.issueCount();
                 totalCommentsSynced += pageResult.commentCount();
                 // Track min/max across pages (sync goes newest to oldest by CREATED_AT DESC)
@@ -1099,6 +1100,7 @@ public class GitHubHistoricalBackfillService {
      * @param repositoryId the repository ID (NOT the entity, to avoid detached entity issues)
      * @param syncTargetId the sync target ID for cursor persistence
      * @param nextCursor   the cursor to persist (null to clear cursor when page is complete)
+     * @param fetchedAt    when the page was asked for
      * @return result containing counts of issues and comments processed
      */
     private IssuePageResult processIssuesPage(
@@ -1106,7 +1108,8 @@ public class GitHubHistoricalBackfillService {
             Long scopeId,
             Long repositoryId,
             Long syncTargetId,
-            @Nullable String nextCursor) {
+            @Nullable String nextCursor,
+            Instant fetchedAt) {
         IssuePageResult result = transactionTemplate.execute(status -> {
             // Fetch repository INSIDE the transaction with organization eagerly loaded.
             // This ensures the entity is attached and lazy associations can be accessed.
@@ -1115,7 +1118,8 @@ public class GitHubHistoricalBackfillService {
                     .orElseThrow(() -> new IllegalStateException(
                             "Repository not found during backfill processing: id=" + repositoryId));
 
-            ProcessingContext context = ProcessingContext.forSync(scopeId, repository);
+            ProcessingContext context =
+                    ProcessingContext.forSync(scopeId, repository).withObservedAt(fetchedAt);
             int issueCount = 0;
             int commentCount = 0;
             int minNumber = Integer.MAX_VALUE;

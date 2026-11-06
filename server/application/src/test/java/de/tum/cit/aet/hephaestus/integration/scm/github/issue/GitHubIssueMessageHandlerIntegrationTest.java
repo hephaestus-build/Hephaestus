@@ -41,6 +41,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 // REQUIRES_NEW user writes need a free connection; an outer test transaction can deadlock the pool.
 // Use TransactionTemplate only for lazy-loading assertions.
@@ -449,7 +450,7 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             handler.handleEvent(loadPayload("issues.opened"));
             eventListener.clear();
 
-            GitHubIssueEventDTO labeledEvent = loadPayload("issues.labeled");
+            GitHubIssueEventDTO labeledEvent = loadPayload("issues.labeled", FIXTURE_ISSUE_UPDATED_AT.plusSeconds(1));
 
             handler.handleEvent(labeledEvent);
 
@@ -467,6 +468,24 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
             // Verify Labeled event was published
             assertThat(eventListener.ofType(ScmDomainEvent.IssueLabeled.class)).hasSize(1);
+        }
+
+        @Test
+        void shouldKeepTheStoredLabelsWithoutPublishingAnEqualVersionLabelEvent() throws Exception {
+            handler.handleEvent(loadPayload("issues.opened"));
+            eventListener.clear();
+            ObjectNode payload = (ObjectNode) objectMapper.valueToTree(loadPayload("issues.labeled"));
+            payload.withObject("label").put("name", "unaccepted-label");
+            ((ObjectNode) payload.path("issue").path("labels").path(0)).put("name", "unaccepted-label");
+            handler.handleEvent(objectMapper.treeToValue(payload, GitHubIssueEventDTO.class));
+            transactionTemplate.executeWithoutResult(status -> {
+                Issue issue = issueRepository
+                        .findByRepositoryIdAndNumber(testRepository.getId(), 20)
+                        .orElseThrow();
+                assertThat(labelNames(issue)).containsExactly("etl-sample");
+                assertThat(issue.getUpdatedAt()).isEqualTo(FIXTURE_ISSUE_UPDATED_AT);
+            });
+            assertThat(eventListener.ofType(ScmDomainEvent.IssueLabeled.class)).isEmpty();
         }
 
         @Test
@@ -786,6 +805,12 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         ClassPathResource resource = new ClassPathResource("github/" + filename + ".json");
         String json = resource.getContentAsString(StandardCharsets.UTF_8);
         return objectMapper.readValue(json, GitHubIssueEventDTO.class);
+    }
+
+    private GitHubIssueEventDTO loadPayload(String filename, Instant updatedAt) throws IOException {
+        ObjectNode payload = (ObjectNode) objectMapper.valueToTree(loadPayload(filename));
+        payload.withObject("issue").put("updated_at", updatedAt.toString());
+        return objectMapper.treeToValue(payload, GitHubIssueEventDTO.class);
     }
 
     private IdentityProvider gitProvider;

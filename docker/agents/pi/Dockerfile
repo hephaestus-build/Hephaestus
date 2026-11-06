@@ -18,6 +18,7 @@ FROM dependencies AS gateway
 WORKDIR /opt/pi-sdk
 RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts ./
+COPY --from=agent-runtime tool-protocol.ts tool-client.ts tools-server.ts ./
 RUN pnpm exec tsc -p tsconfig.build.json
 
 # Debian 13: its fd (>= 8.7) takes the `--no-require-git` Pi's find tool passes outside a repository.
@@ -163,6 +164,38 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
     fi
 
 COPY --from=gateway /opt/pi-sdk/dist/ /opt/pi-sdk/
+# The tools program starts with no privilege on each transport, and its client gets the Pod's nonce from `hello`.
+RUN install -d -m 1777 /tmp/tools-check && node --input-type=module <<'CHECK' && rm -rf /tmp/tools /tmp/tools-check
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { setTimeout as sleep } from "node:timers/promises";
+import { ToolClient } from "/opt/pi-sdk/tool-client.js";
+
+const nonce = "image-check";
+async function hello(address, env) {
+  const tools = spawn(
+    "setpriv",
+    ["--reuid=1001", "--regid=1001", "--clear-groups", "--no-new-privs", "--bounding-set=-all", "--inh-caps=-all",
+      "node", "/opt/pi-sdk/tools-server.js"],
+    { env: { PATH: process.env.PATH, TOOLS_NONCE: nonce, ...env }, stdio: "inherit" },
+  );
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      (await ToolClient.open(address, nonce)).close();
+      break;
+    } catch (error) {
+      if (attempt === 100 || tools.exitCode !== null) {
+        throw error;
+      }
+      await sleep(100);
+    }
+  }
+  tools.kill();
+  await once(tools, "exit");
+}
+await hello({ host: "127.0.0.1", port: 7100 }, { TOOLS_PORT: "7100" });
+await hello({ path: "/tmp/tools-check/tools.sock" }, { TOOLS_SOCKET: "/tmp/tools-check/tools.sock" });
+CHECK
 RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     ln -s /opt/pi-sdk/node_modules /workspace/node_modules

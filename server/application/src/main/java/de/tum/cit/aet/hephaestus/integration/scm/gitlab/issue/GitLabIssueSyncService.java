@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
@@ -15,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPag
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.GitLabNoteSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.backfill.BackfillBatchResult;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -137,6 +139,7 @@ public class GitLabIssueSyncService {
 
                 HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
 
+                Instant observedAt = Instant.now();
                 ClientGraphQlResponse response = client.documentName(GET_PROJECT_ISSUES_DOCUMENT)
                         .variable("fullPath", projectPath)
                         .variable("first", pageSize)
@@ -187,7 +190,7 @@ public class GitLabIssueSyncService {
 
                 for (Map<String, Object> issueNode : nodes) {
                     try {
-                        if (processIssueNode(issueNode, repository, scopeId, read) != null) {
+                        if (processIssueNode(issueNode, repository, scopeId, read, observedAt) != null) {
                             totalSynced++;
                         } else {
                             totalSkipped++;
@@ -327,6 +330,7 @@ public class GitLabIssueSyncService {
                         remaining);
 
                 HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
+                Instant observedAt = Instant.now();
                 ClientGraphQlResponse response = client.documentName(GET_PROJECT_ISSUES_HISTORICAL_DOCUMENT)
                         .variable("fullPath", projectPath)
                         .variable("first", pageSize)
@@ -362,7 +366,7 @@ public class GitLabIssueSyncService {
                             minIid = Math.min(minIid, iid);
                             maxIid = Math.max(maxIid, iid);
                         }
-                        processIssueNode(issueNode, repository, scopeId, read);
+                        processIssueNode(issueNode, repository, scopeId, read, observedAt);
                         totalProcessed++;
                     } catch (ConcurrencyFailureException conflict) {
                         throw conflict;
@@ -443,7 +447,11 @@ public class GitLabIssueSyncService {
     @SuppressWarnings("unchecked")
     @Nullable
     private Issue processIssueNode(
-            Map<String, Object> node, Repository repository, Long scopeId, GitLabProjectAdmission.ProjectRead read) {
+            Map<String, Object> node,
+            Repository repository,
+            Long scopeId,
+            GitLabProjectAdmission.ProjectRead read,
+            Instant observedAt) {
         String globalId = (String) node.get("id");
         String iid = String.valueOf(node.get("iid"));
         String issueContext = sanitizeForLog(repository.getNameWithOwner()) + "#" + iid;
@@ -557,7 +565,11 @@ public class GitLabIssueSyncService {
                 typeName,
                 closedAsDuplicateOfGid);
         Issue issue = admission
-                .write(read, () -> issueProcessor.processFromSync(syncData, repository, scopeId))
+                .write(
+                        read,
+                        () -> issueProcessor.processFromSync(
+                                syncData,
+                                ProcessingContext.forSync(scopeId, repository).withObservedAt(observedAt)))
                 .orElse(null);
 
         // Sync notes for this issue if it has comments and wasn't skipped

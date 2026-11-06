@@ -224,6 +224,16 @@ jobs:
           fi
           echo "agent-pi implements runtime contract v${expected}"
 
+      - name: Qualify sandbox boundaries on the selected image
+        id: sandbox-security
+        background: true
+        env:
+          IMAGE: ghcr.io/hephaestus-build/agent-pi@${{ steps.retag.outputs.agent-pi-digest }}
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE"
+          node scripts/sandbox-security.ts --image "$IMAGE" --report "$RUNNER_TEMP/sandbox-security.json"
+
       - uses: ./.github/actions/setup-release-security-tools
 
       # The database the whole evidence bundle is scanned against: recorded into the bundle, and
@@ -235,6 +245,16 @@ jobs:
           metadata-path: evidence/trivy-db.json
 
       - wait: sandbox-contract
+      - wait: sandbox-security
+
+      - name: Retain sandbox qualification summary
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sandbox-security-summary
+          path: ${{ runner.temp }}/sandbox-security.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Generate and enforce release evidence
         env:

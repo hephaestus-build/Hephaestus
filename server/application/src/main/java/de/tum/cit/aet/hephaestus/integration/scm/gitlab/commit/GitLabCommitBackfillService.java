@@ -123,7 +123,7 @@ public class GitLabCommitBackfillService {
                     DataSource.GRAPHQL_SYNC,
                     IdentityProviderType.GITLAB,
                     sha -> CommitUtils.buildGitLabCommitUrl(serverUrl, repository.getNameWithOwner(), sha),
-                    email -> authorResolver.resolveAndBackfillByEmail(email, providerId),
+                    email -> authorResolver.resolveByEmail(email, providerId),
                     (commit, details, authorId, committerId) -> {
                         persistParents(repoId, details);
                         upsertContributors(commit.getId(), details, authorId, committerId, providerId);
@@ -189,11 +189,7 @@ public class GitLabCommitBackfillService {
      * </ul>
      */
     private void upsertContributors(
-            Long commitId,
-            CommitDetails info,
-            @Nullable Long authorId,
-            @Nullable Long committerId,
-            @Nullable Long providerId) {
+            Long commitId, CommitDetails info, @Nullable Long authorId, @Nullable Long committerId, Long providerId) {
         if (info.authorEmail() != null && !info.authorEmail().isBlank()) {
             contributorRepository.upsertContributor(
                     commitId, authorId, CommitContributor.Role.AUTHOR.name(), info.authorName(), info.authorEmail(), 0);
@@ -212,7 +208,7 @@ public class GitLabCommitBackfillService {
         List<CoAuthor> coAuthors = parseCoAuthors(info.messageBody(), info.authorEmail());
         for (int i = 0; i < coAuthors.size(); i++) {
             CoAuthor ca = coAuthors.get(i);
-            Long coAuthorUserId = authorResolver.resolveAndBackfillByEmail(ca.email(), providerId);
+            Long coAuthorUserId = authorResolver.resolveByEmail(ca.email(), providerId);
             contributorRepository.upsertContributor(
                     commitId, coAuthorUserId, CommitContributor.Role.CO_AUTHOR.name(), ca.name(), ca.email(), i + 1);
         }

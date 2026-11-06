@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.outline.sync;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -390,28 +391,64 @@ public class OutlineDocumentSyncService {
         }
         Optional<OutlineDocumentSnapshot> mirrored =
                 documentRepository.findSnapshotByDocumentId(workspaceId, ctx.connectionId(), documentId);
+        if (mirrored.isEmpty() && (TOMBSTONE_EVENTS.contains(eventName) || ARCHIVE_EVENT.equals(eventName))) return;
+        // An undated lifecycle event cannot prove deletion or archival of the current document.
+        // Read the provider now instead of applying a replayed event name to newer state.
+        if ((TOMBSTONE_EVENTS.contains(eventName) || ARCHIVE_EVENT.equals(eventName))
+                && (prefetchedMeta == null || prefetchedMeta.getUpdatedAt() == null)) {
+            // A failed confirmation must reach the consumer retry before deletion can be applied.
+            Optional<OutlineDocumentModel> current =
+                    outlineApiClient.getDocumentInfo(ctx.serverUrl(), ctx.token(), documentId);
+            if (current.isEmpty() || current.get().getDeletedAt() != null) {
+                mirrored.filter(d -> !d.isDeleted())
+                        .ifPresent(d -> retention.tombstone(
+                                ctx.workspaceId(),
+                                ctx.connectionId(),
+                                documentId,
+                                Instant.now(),
+                                null,
+                                d.outlineUpdatedAt()));
+                return;
+            }
+            if (current.get().getUpdatedAt() == null) return;
+            refreshDocument(
+                    workspaceId,
+                    current.get().getArchivedAt() == null ? "documents.update" : ARCHIVE_EVENT,
+                    documentId,
+                    current.get());
+            return;
+        }
         // An older payload would restore older words or state (sync-lifecycle.md).
         Instant payloadUpdatedAt = prefetchedMeta == null ? null : prefetchedMeta.getUpdatedAt();
-        if (payloadUpdatedAt != null
-                && mirrored.map(OutlineDocumentSnapshot::outlineUpdatedAt)
-                        .filter(payloadUpdatedAt::isBefore)
-                        .isPresent()) {
+        if (prefetchedMeta != null
+                && mirrored.isPresent()
+                && (ProviderStateVersion.isOlder(
+                                payloadUpdatedAt, mirrored.get().outlineUpdatedAt())
+                        || (ProviderStateVersion.cannotReplace(
+                                        payloadUpdatedAt, mirrored.get().outlineUpdatedAt())
+                                && (mirrored.get().hasBody()
+                                        || TOMBSTONE_EVENTS.contains(eventName)
+                                        || ARCHIVE_EVENT.equals(eventName))))) {
             log.debug("Skipped stale Outline delivery: workspaceId={}, event={}", workspaceId, eventName);
             return;
         }
         if (TOMBSTONE_EVENTS.contains(eventName)) {
             mirrored.filter(d -> !d.isDeleted())
                     .ifPresent(d -> retention.tombstone(
-                            ctx.workspaceId(), ctx.connectionId(), documentId, Instant.now(), null));
+                            ctx.workspaceId(), ctx.connectionId(), documentId, Instant.now(), null, payloadUpdatedAt));
             return;
         }
         if (ARCHIVE_EVENT.equals(eventName)) {
             Instant archivedAt = prefetchedMeta != null && prefetchedMeta.getArchivedAt() != null
                     ? prefetchedMeta.getArchivedAt()
                     : Instant.now();
+            if (payloadUpdatedAt == null) return;
             mirrored.filter(d -> !d.isDeleted()).ifPresent(d -> {
-                var archived = mirrorWriter.updateDocument(
-                        workspaceId, ctx.connectionId(), documentId, doc -> doc.setArchivedAt(archivedAt));
+                var archived = mirrorWriter.updateDocumentAtVersion(
+                        workspaceId, ctx.connectionId(), documentId, payloadUpdatedAt, doc -> {
+                            doc.setArchivedAt(archivedAt);
+                            doc.setOutlineUpdatedAt(payloadUpdatedAt);
+                        });
                 recordAndOffer(workspaceId, archived, eventName, archivedAt, FoundBy.WEBHOOK);
             });
             return;
@@ -694,6 +731,9 @@ public class OutlineDocumentSyncService {
         }
         Instant upstreamUpdatedAt = meta == null ? null : meta.getUpdatedAt();
         OutlineDocumentSnapshot existingRow = existing.get(documentId);
+        if (existingRow != null && ProviderStateVersion.isOlder(upstreamUpdatedAt, existingRow.outlineUpdatedAt())) {
+            return UpsertOutcome.UNCHANGED;
+        }
 
         // Computed once so the skip decision compares against exactly what the mutator would write.
         String desiredCollectionId = collection.getCollectionId();
@@ -732,18 +772,18 @@ public class OutlineDocumentSyncService {
         String body = bodyUnchanged ? null : outlineApiClient.exportDocument(ctx.serverUrl(), ctx.token(), documentId);
         String contentHash = body == null ? null : OutlineSyncMapping.sha256Hex(body);
 
-        OutlineDocumentSnapshot written =
-                mirrorWriter.upsertDocument(ctx.workspaceId(), ctx.connectionId(), documentId, doc -> {
+        OutlineDocumentSnapshot written = mirrorWriter.upsertDocument(
+                ctx.workspaceId(), ctx.connectionId(), documentId, upstreamUpdatedAt, doc -> {
+                    if (existingRow != null
+                            && ProviderStateVersion.cannotReplace(upstreamUpdatedAt, doc.getOutlineUpdatedAt())
+                            && !Objects.equals(existingRow.version(), doc.getVersion())) return;
                     doc.setCollectionId(desiredCollectionId);
                     doc.setCollectionSlug(desiredCollectionSlug);
                     doc.setParentDocumentId(desiredParentDocumentId);
                     doc.setTitle(desiredTitle);
                     doc.setSlug(desiredSlug);
-                    // Listings exclude archived documents, so a document reaching this path is live — clear a
-                    // stale archivedAt. A null meta (tree-only node) leaves it untouched.
-                    if (meta != null) {
-                        doc.setArchivedAt(desiredArchivedAt);
-                    }
+                    // Listings exclude archived documents; a tree-only node leaves the archive stamp untouched.
+                    if (meta != null) doc.setArchivedAt(desiredArchivedAt);
                     if (bodyUnchanged) {
                         // Metadata shifted (renamed/moved) but the body is current — do not re-export.
                         return;
@@ -823,15 +863,19 @@ public class OutlineDocumentSyncService {
         String body = needsExport ? outlineApiClient.exportDocument(ctx.serverUrl(), ctx.token(), documentId) : null;
         String contentHash = body == null ? null : OutlineSyncMapping.sha256Hex(body);
 
-        OutlineDocumentSnapshot written =
-                mirrorWriter.upsertDocument(ctx.workspaceId(), ctx.connectionId(), documentId, doc -> {
+        OutlineDocumentSnapshot written = mirrorWriter.upsertDocument(
+                ctx.workspaceId(), ctx.connectionId(), documentId, meta.getUpdatedAt(), doc -> {
+                    if (snapshot != null
+                            && ProviderStateVersion.cannotReplace(meta.getUpdatedAt(), doc.getOutlineUpdatedAt())
+                            && !Objects.equals(snapshot.version(), doc.getVersion())) return;
+                    doc.setOutlineUpdatedAt(meta.getUpdatedAt());
                     doc.setCollectionId(collection.getCollectionId());
                     doc.setCollectionSlug(OutlineSyncMapping.collectionSlug(collection));
                     doc.setParentDocumentId(meta.getParentDocumentId());
                     doc.setTitle(meta.getTitle());
                     doc.setSlug(OutlineSyncMapping.resolveSlug(null, meta));
                     doc.setArchivedAt(meta.getArchivedAt() != null ? meta.getArchivedAt() : now);
-                    doc.setDeletedAt(null); // archived is not a tombstone — clear any stale marker
+                    doc.setDeletedAt(null);
                     if (!needsExport) {
                         return;
                     }

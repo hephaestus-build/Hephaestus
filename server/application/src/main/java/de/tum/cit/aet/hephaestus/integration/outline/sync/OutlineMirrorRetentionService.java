@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.outline.sync;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
 import de.tum.cit.aet.hephaestus.integration.outline.OutlineProperties;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentSnapshot;
@@ -112,7 +113,21 @@ public class OutlineMirrorRetentionService {
             String documentId,
             Instant now,
             @Nullable Map<String, OutlineDocumentSnapshot> existing) {
+        tombstone(workspaceId, connectionId, documentId, now, existing, null);
+    }
+
+    /** A dated deletion cannot erase a document that advanced while its provider read was in flight. */
+    public void tombstone(
+            long workspaceId,
+            long connectionId,
+            String documentId,
+            Instant now,
+            @Nullable Map<String, OutlineDocumentSnapshot> existing,
+            @Nullable Instant sourceUpdatedAt) {
         OutlineDocumentSnapshot written = mirrorWriter.updateDocument(workspaceId, connectionId, documentId, doc -> {
+            if (sourceUpdatedAt != null && ProviderStateVersion.isOlder(sourceUpdatedAt, doc.getOutlineUpdatedAt()))
+                return;
+            if (sourceUpdatedAt != null) doc.setOutlineUpdatedAt(sourceUpdatedAt);
             doc.setDeletedAt(now);
             doc.setBodyMarkdown(null);
             // unlike an eviction, a tombstone drops the hash too (enforced by ck_outline_document_tombstone)

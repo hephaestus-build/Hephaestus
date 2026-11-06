@@ -570,7 +570,8 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
                             pod.getMetadata().getName(),
                             labels.getOrDefault(KubernetesWorker.SANDBOX_ID, ""),
                             labels.getOrDefault(KubernetesWorker.WORKER_POD, ""),
-                            live.isPresent() && !live.get().contains(process));
+                            live.isPresent() && !live.get().contains(process),
+                            KubernetesPods.terminal(pod));
                 })
                 .toList();
     }

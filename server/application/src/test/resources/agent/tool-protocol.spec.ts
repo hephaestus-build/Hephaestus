@@ -1,5 +1,5 @@
-// Tool protocol v1 end to end: the loop's client against the tools program on a real Unix socket, and against a hostile
-// tools side that breaks the protocol.
+// Tool protocol v1 end to end: the loop's client against the tools program on a real socket, and against a hostile
+// tools side that breaks the protocol. tool-protocol-tcp.spec.ts runs this suite on TCP.
 
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
@@ -34,9 +34,11 @@ import {
 	frameReader,
 	type Header,
 	LIMITS,
+	type ToolAddress,
 	ToolProtocolError,
 } from "../../../main/resources/agent/tool-protocol.ts";
 import { checkAuthority, startToolsServer } from "../../../main/resources/agent/tools-server.ts";
+import { dialAddress, listenAddress, transport } from "./tool-transport.ts";
 
 const base = mkdtempSync(path.join(tmpdir(), "tools-"));
 const workspace = path.join(base, "workspace");
@@ -61,6 +63,8 @@ async function awaitTrashRemoval(): Promise<void> {
 
 let server: Server;
 let client: ToolClient;
+/** The address of the suite's tools side on this run's transport. */
+let served: ToolAddress;
 let openedAt = 0;
 
 before(async () => {
@@ -69,8 +73,9 @@ before(async () => {
 		checkAuthority();
 	}
 	process.env.HEPHAESTUS_SECRET = "must-not-leak";
+	const address = listenAddress(socketPath);
 	server = startToolsServer({
-		socketPath,
+		address,
 		nonce,
 		workspace,
 		roots: [workspace, scratch],
@@ -79,7 +84,8 @@ before(async () => {
 		soleUser,
 	});
 	await once(server, "listening");
-	client = await ToolClient.open(socketPath, nonce);
+	served = dialAddress(server, address);
+	client = await ToolClient.open(served, nonce);
 	openedAt = Date.now();
 });
 
@@ -244,6 +250,30 @@ syncBuiltinESMExports();`;
 	);
 }
 
+/** A TCP port that nothing listens on now. */
+async function freePort(): Promise<number> {
+	const address = { host: "127.0.0.1", port: 0 };
+	const probe = createServer().listen(address);
+	await once(probe, "listening");
+	const bound = dialAddress(probe, address);
+	probe.close();
+	await once(probe, "close");
+	return "port" in bound ? bound.port : 0;
+}
+
+/** Whether something accepts a connection at `target` now. */
+async function reachable(target: ToolAddress): Promise<boolean> {
+	const socket = connect(target);
+	try {
+		await once(socket, "connect");
+		return true;
+	} catch {
+		return false;
+	} finally {
+		socket.destroy();
+	}
+}
+
 function authoritySnapshot() {
 	return {
 		uid: process.getuid?.(),
@@ -265,17 +295,29 @@ void test(
 		const program = fileURLToPath(
 			new URL("../../../main/resources/agent/tools-server.ts", import.meta.url),
 		);
+		// A tools Pod listens on TOOLS_PORT; the review sidecar on TOOLS_SOCKET.
+		const port = transport === "tcp" ? await freePort() : undefined;
+		const target: ToolAddress =
+			port === undefined ? { path: address } : { host: "127.0.0.1", port };
 		const child = spawn(process.execPath, [program], {
-			env: { ...process.env, TOOLS_NONCE: nonce, TOOLS_SOCKET: address },
+			env: {
+				...process.env,
+				TOOLS_NONCE: nonce,
+				...(port === undefined ? { TOOLS_SOCKET: address } : { TOOLS_PORT: String(port) }),
+			},
 			stdio: "ignore",
 		});
 		let tools: ToolClient | undefined;
 		try {
-			for (let i = 0; i < 100 && !existsSync(address) && child.exitCode === null; i += 1) {
-				await sleep(10);
+			let up = false;
+			for (let i = 0; i < 100 && !up && child.exitCode === null; i += 1) {
+				up = await reachable(target);
+				if (!up) {
+					await sleep(10);
+				}
 			}
-			assert.equal(existsSync(address), true);
-			tools = await ToolClient.open(address, nonce);
+			assert.equal(up, true);
+			tools = await ToolClient.open(target, nonce);
 			const chunks: Buffer[] = [];
 			const exit = await tools.exec(
 				{
@@ -360,7 +402,7 @@ void test("startup retries trash left by an earlier tools server", async () => {
 	mkdirSync(oldTrash);
 	writeFileSync(path.join(oldTrash, "kept"), "old");
 	const restarted = startToolsServer({
-		socketPath: path.join(home, "tools.sock"),
+		address: { path: path.join(home, "tools.sock") },
 		nonce,
 		workspace: mutable,
 		roots: [mutable],
@@ -558,7 +600,7 @@ void test("invalid output limits use the server default without closing parallel
 		Number.POSITIVE_INFINITY,
 		Number.MAX_SAFE_INTEGER + 1,
 	]) {
-		const tools = await ToolClient.open(socketPath, nonce);
+		const tools = await ToolClient.open(served, nonce);
 		let bytes = 0;
 		try {
 			const [exit, page] = await Promise.all([
@@ -581,7 +623,7 @@ void test("invalid output limits use the server default without closing parallel
 });
 
 void test("unencodable requests leave their slots free for a later valid request", async () => {
-	const tools = await ToolClient.open(socketPath, nonce);
+	const tools = await ToolClient.open(served, nonce);
 	const refusals: string[] = [];
 	try {
 		for (let call = 0; call < LIMITS.inFlight; call += 1) {
@@ -818,7 +860,7 @@ void test("a read keeps a UTF-8 character split at the page's byte bound whole",
 });
 
 void test("failed archive sources release their slots and stored bytes", async () => {
-	const tools = await ToolClient.open(socketPath, nonce);
+	const tools = await ToolClient.open(served, nonce);
 	const failure = new Error("archive source failed");
 	async function* source(partial: boolean) {
 		if (partial) {
@@ -984,7 +1026,7 @@ for (const phase of ["permissions", "archive cleanup"]) {
 }
 
 void test("reset stops an upload on another connection before replacing the workspace", async (t) => {
-	const other = await ToolClient.open(socketPath, nonce);
+	const other = await ToolClient.open(served, nonce);
 	try {
 		await resetReadOnlyTree(t, "permissions", other);
 	} finally {
@@ -993,8 +1035,8 @@ void test("reset stops an upload on another connection before replacing the work
 });
 
 void test("reset fences an upload still preparing and rejects overlapping resets", async (t) => {
-	const resetting = await ToolClient.open(socketPath, nonce);
-	const probing = await ToolClient.open(socketPath, nonce);
+	const resetting = await ToolClient.open(served, nonce);
+	const probing = await ToolClient.open(served, nonce);
 	const reached = Promise.withResolvers<undefined>();
 	const release = Promise.withResolvers<undefined>();
 	const { mkdir } = fs;
@@ -1134,7 +1176,7 @@ void test("concurrent large puts keep bounded memory while another extraction wa
 	const address = path.join(root, "tools.sock");
 	const module = new URL("../../../main/resources/agent/tools-server.ts", import.meta.url).href;
 	const program = `import { startToolsServer } from ${JSON.stringify(module)};
-const server = startToolsServer(${JSON.stringify({ socketPath: address, nonce, workspace: mutable, roots: [repos, incoming], scratch: incoming, putRoots: [repos], soleUser: false })});
+const server = startToolsServer(${JSON.stringify({ address: { path: address }, nonce, workspace: mutable, roots: [repos, incoming], scratch: incoming, putRoots: [repos], soleUser: false })});
 let peak = 0;
 const sample = () => { global.gc(); peak = Math.max(peak, process.memoryUsage().external); };
 const timer = setInterval(sample, 20);
@@ -1156,7 +1198,7 @@ process.on('message', () => { sample(); process.send({peak}); });
 				"peak" in ready &&
 				typeof ready.peak === "number",
 		);
-		tools = await ToolClient.open(address, nonce);
+		tools = await ToolClient.open({ path: address }, nonce);
 		const extractionStarted = Promise.withResolvers<undefined>();
 		// Poll the persistent gate file: filesystem events can be lost on virtualized filesystems.
 		const extraction = watchFile(started, { interval: 20 }, () => {
@@ -1332,7 +1374,7 @@ async function raw(
 	frames: Buffer[],
 	done: (replies: Header[]) => boolean = () => false,
 ): Promise<{ replies: Header[]; closed: boolean }> {
-	const socket = connect(socketPath);
+	const socket = connect(served);
 	await once(socket, "connect");
 	const reader = frameReader();
 	const replies: Header[] = [];
@@ -1378,7 +1420,7 @@ void test("the tools side answers hello with its own nonce, never the loop's", a
 		(seen) => seen.length > 0,
 	);
 	assert.equal(replies[0]?.nonce, nonce);
-	await assert.rejects(ToolClient.open(socketPath, "another-pod"), refusal("nonce"));
+	await assert.rejects(ToolClient.open(served, "another-pod"), refusal("nonce"));
 });
 
 void test("the tools side refuses another protocol version by name, and the loop does too", async () => {
@@ -1496,7 +1538,9 @@ async function hostile(
 	helloReply?: Partial<Header>,
 	onSocket: (socket: Socket) => void = () => undefined,
 ): Promise<ToolClient> {
-	const hostilePath = path.join(base, `hostile-${Math.random().toString(36).slice(2)}.sock`);
+	const address = listenAddress(
+		path.join(base, `hostile-${Math.random().toString(36).slice(2)}.sock`),
+	);
 	const fake = createServer((socket) => {
 		onSocket(socket);
 		// The loop hangs up on a broken tools side while it still writes.
@@ -1513,10 +1557,10 @@ async function hostile(
 				}
 			}
 		});
-	}).listen(hostilePath);
+	}).listen(address);
 	await once(fake, "listening");
 	after(() => fake.close());
-	return ToolClient.open(hostilePath, nonce);
+	return ToolClient.open(dialAddress(fake, address), nonce);
 }
 
 void test("the loop ends the connection on a frame for no request in flight", async () => {

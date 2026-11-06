@@ -22,7 +22,6 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
@@ -91,7 +90,7 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
 
     private ProxyRouting.BilledAttempt attempt(ReviewJob job, int number) {
         return new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, job.getId(), number, BigDecimal.ZERO, LEASE, 0L, 0L, job.getWorkspaceId());
+                UsageSourceType.REVIEW_JOB, job.getId(), number, LEASE, 0L, 0L, job.getWorkspaceId());
     }
 
     private void accumulate(ProxyUsageAccumulator accumulator, ProxyRouting.BilledAttempt attempt, String body) {
@@ -234,8 +233,8 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
                 .thenThrow(new IllegalStateException("connection reset"));
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ProxyUsageAccumulator accumulator = new ProxyUsageAccumulator(failing, transactionManager, registry);
-        ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 0, BigDecimal.ZERO, LEASE, 0L, 0L, 1L);
+        ProxyRouting.BilledAttempt attempt =
+                new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 0, LEASE, 0L, 0L, 1L);
 
         assertThatCode(() ->
                         accumulate(accumulator, attempt, "{\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":0}}"))

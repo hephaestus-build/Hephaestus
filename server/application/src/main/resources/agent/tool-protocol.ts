@@ -50,6 +50,12 @@ export const FINAL = {
 	reset: "reset",
 } as const;
 
+/**
+ * Where the tools side listens: a Unix socket inside the review agent Pod, or TCP on a tools Pod. The framing, the
+ * operations and the nonce check are the same on both.
+ */
+export type ToolAddress = { path: string } | { host: string; port: number };
+
 /** A request id: it names the spill file, so it carries no path characters. */
 export const ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/u;
 

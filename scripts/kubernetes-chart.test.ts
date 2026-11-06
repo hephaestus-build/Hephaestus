@@ -119,7 +119,8 @@ await test("a released chart's values.yaml pins the release, and changes nothing
 		),
 		false,
 	);
-	// A second `release` or `images` key is refused when release-chart.ts reads the package back.
+	// Moved release lines are refused here. Lines that survive but lose to another key are refused
+	// when release-chart.ts reads Helm's parse of the package back.
 	for (const [label, changed] of [
 		["no release lines", sourceYaml.replace("images: {}\n", "images:\n")],
 		["indented release lines", sourceYaml.replace("\nrelease:\n", "\n release:\n")],

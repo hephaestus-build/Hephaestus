@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +44,7 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
         ProxyRouting.BilledAttempt chat = attempt(UsageSourceType.REVIEW_JOB);
         begin(chat, REVIEW_CALLS - 1);
         ProxyRouting.BilledAttempt script = new ProxyRouting.BilledAttempt(
-                UsageSourceType.PRACTICE_SCRIPT_DECISION, chat.sourceId(), chat.number(), BigDecimal.ZERO, LEASE);
+                UsageSourceType.PRACTICE_SCRIPT_DECISION, chat.sourceId(), chat.number(), LEASE);
 
         assertThat(calls.begin(script).isOverCap()).isFalse();
         assertThat(calls.begin(script).isOverCap()).isTrue();
@@ -89,7 +88,7 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
     void shouldCountEachAttemptApartWhenAnotherAttemptIsFull() {
         ProxyRouting.BilledAttempt first = attempt(UsageSourceType.MENTOR_TURN);
         ProxyRouting.BilledAttempt next = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, first.sourceId(), first.number() + 1, BigDecimal.ZERO, LEASE);
+                UsageSourceType.MENTOR_TURN, first.sourceId(), first.number() + 1, LEASE);
         begin(first, ProxyCallsInFlight.TURN_CALLS);
 
         assertThat(calls.begin(attempt(UsageSourceType.MENTOR_TURN)).isOverCap())
@@ -154,6 +153,6 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
     }
 
     private static ProxyRouting.BilledAttempt attempt(UsageSourceType sourceType) {
-        return new ProxyRouting.BilledAttempt(sourceType, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
+        return new ProxyRouting.BilledAttempt(sourceType, UUID.randomUUID(), 1, LEASE);
     }
 }

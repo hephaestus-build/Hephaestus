@@ -5,6 +5,8 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { parse } from "yaml";
+
 import { chartImages, type ChartValues, releaseValuesLines } from "./kubernetes-chart.ts";
 import { releaseCertificateIdentity } from "./lib/release-identities.ts";
 import {
@@ -45,15 +47,18 @@ const inventory = { images: [...chartImages], upstream: [] };
 const chartBytes = (pinned = values) => `chart bytes\n${releaseValuesLines(pinned)}`;
 
 const option = (args: string[], flag: string) => args[args.indexOf(flag) + 1] ?? "";
-/** What `helm show values` prints for a fake package: the values.yaml it was packaged with. */
-const shown = async (file: string) => {
+/** The values.yaml a fake package was packaged with. */
+const packagedYaml = async (file: string) => {
 	const bytes = await readFile(file, "utf8");
-	return `${bytes.replace(/^chart bytes\n/u, "")}\n`;
+	return bytes.replace(/^chart bytes\n/u, "");
 };
+/** What `helm show values --jsonpath {$}` prints for a values.yaml. As in Helm, a later key wins. */
+const shownByHelm = (valuesYaml: string) =>
+	JSON.stringify(parse(valuesYaml, { uniqueKeys: false }));
 
 /**
  * A fake registry, Helm and Cosign. `registry` maps an OCI reference to the bytes a pull returns.
- * A package holds the values.yaml that it was packaged with, and `helm show values` prints it.
+ * A package holds the values.yaml that it was packaged with, and `helm show values` prints its parse.
  */
 function tools({
 	registry = new Map<string, string>(),
@@ -67,7 +72,7 @@ function tools({
 	/** null: a push that reports no digest. */
 	pushed?: string | null;
 	chartYaml?: string;
-	/** What `helm show values` prints instead of the packaged values.yaml. */
+	/** The values.yaml that `helm show values` parses instead of the packaged one. */
 	shownValues?: string;
 	/** Whether the release identity signed an OCI reference. */
 	signed?: (reference: string) => boolean;
@@ -86,7 +91,9 @@ function tools({
 			return "";
 		},
 		show: async (args) =>
-			args[1] === "chart" ? chartYaml : (shownValues ?? (await shown(args[2] ?? ""))),
+			args[1] === "chart"
+				? chartYaml
+				: shownByHelm(shownValues ?? (await packagedYaml(args[2] ?? ""))),
 		push: async (args) => {
 			registry.set(`${repository}@${pushed ?? ""}`, await readFile(args[1] ?? "", "utf8"));
 			return `Pushed: ${repository}:${version}\n${pushed === null ? "" : `Digest: ${pushed}\n`}`;
@@ -250,9 +257,16 @@ await test("publishing refuses a push without a digest, a different pull, foreig
 	);
 	for (const [label, shownValues] of [
 		["the source values", await readFile(path.join(source, "values.yaml"), "utf8")],
-		["the release values twice", `${releaseValuesLines(values)}${releaseValuesLines(values)}`],
 		["indented release values", `nested:\n  ${releaseValuesLines(values)}`],
 		["a second images key", `${releaseValuesLines(values)}images: {}\n`],
+		[
+			"a later quoted images key",
+			`${releaseValuesLines(values)}"images": ${JSON.stringify({ ...values.images, webapp: image("other", "d") })}\n`,
+		],
+		[
+			"an image more than the release's",
+			`${releaseValuesLines(values)}  extra: ${JSON.stringify(image("extra", "e"))}\n`,
+		],
 	] as const) {
 		const tool = tools({ shownValues });
 		await assert.rejects(

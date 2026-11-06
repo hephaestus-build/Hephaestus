@@ -1,17 +1,52 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import jakarta.persistence.LockModeType;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** The measurement of each review job attempt and the charges the attempt froze. {@link ReviewAttemptUsageService} only. */
 public interface ReviewAttemptUsageRepository extends JpaRepository<ReviewAttemptUsage, ReviewAttemptUsage.Id> {
+
+    /** One purse's share of what running reviews have spent. */
+    record RunningSpendRow(String fundingSource, BigDecimal usd) {}
+
+    /**
+     * What the running attempts of a workspace have spent, per purse, at their frozen rates. A practice script call on
+     * the review's own model is already inside the attempt's proxy total. A model without a price adds nothing.
+     */
+    @NativeQuery("""
+        WITH running AS (
+          SELECT id,attempt FROM review_job WHERE workspace_id=:workspaceId AND status='RUNNING'
+        ), used AS (
+          SELECT u.job_id,u.attempt,'CHAT' AS model_kind,u.proxy_input_tokens AS input_tokens,
+            u.proxy_output_tokens AS output_tokens,u.proxy_cache_read_tokens AS cache_read_tokens,
+            u.proxy_cache_write_tokens AS cache_write_tokens
+          FROM review_job_attempt_usage u JOIN running r ON r.id=u.job_id AND r.attempt=u.attempt
+          WHERE u.workspace_id=:workspaceId
+          UNION ALL
+          SELECT s.job_id,s.attempt,s.model_kind,s.input_tokens,s.output_tokens,s.cache_read_tokens,s.cache_write_tokens
+          FROM review_job_script_usage s JOIN running r ON r.id=s.job_id AND r.attempt=s.attempt
+          WHERE s.workspace_id=:workspaceId AND s.model_kind<>'CHAT'
+        )
+        SELECT c.funding_source,
+          SUM(x.input_tokens*COALESCE(c.applied_per_1m_input_usd,0)
+            +x.output_tokens*COALESCE(c.applied_per_1m_output_usd,0)
+            +x.cache_read_tokens*COALESCE(c.applied_per_1m_cache_read_usd,0)
+            +x.cache_write_tokens*COALESCE(c.applied_per_1m_cache_write_usd,0))/1000000
+        FROM used x JOIN review_job_attempt_charge c
+          ON c.job_id=x.job_id AND c.attempt=x.attempt AND c.model_kind=x.model_kind
+        WHERE c.workspace_id=:workspaceId AND c.pricing_state='PRICED'
+        GROUP BY c.funding_source
+        """)
+    List<RunningSpendRow> sumRunningSpend(@Param("workspaceId") long workspaceId);
 
     /** Taken after the job row, never before it. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

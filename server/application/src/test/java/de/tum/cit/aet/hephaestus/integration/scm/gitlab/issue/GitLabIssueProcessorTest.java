@@ -10,6 +10,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -40,6 +41,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.dto.GitLabIssueEve
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -208,7 +210,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null);
-            Issue result = processor.processFromSync(syncData, testRepo, 1L);
+            Issue result = processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             assertThat(result).isNull();
             verify(issueRepository, never())
@@ -328,6 +330,24 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                             any(),
                             any());
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0", "60"})
+    void shouldKeepStoredIssueWhenHookHasAnEqualOrOlderVersion(long secondsNewer) {
+        GitLabIssueEventDTO replay = createEvent("update", "opened", false);
+        Instant version = Instant.parse("2026-01-31T18:03:35Z");
+        Issue stored = createIssueEntity();
+        stored.setTitle("Newer title");
+        stored.setBody("Newer body");
+        stored.setUpdatedAt(version.plusSeconds(secondsNewer));
+        when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, ISSUE_IID)).thenReturn(Optional.of(stored));
+
+        assertThat(processor.process(replay, createContext())).isSameAs(stored);
+
+        assertThat(stored.getTitle()).isEqualTo("Newer title");
+        assertThat(stored.getBody()).isEqualTo("Newer body");
+        verifyNoInteractions(gitLabUserService);
     }
 
     @Nested
@@ -626,7 +646,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null);
-            Issue result = processor.processFromSync(syncData, testRepo, 1L);
+            Issue result = processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             assertThat(result).isNotNull();
             assertThat(result.getProvider()).isEqualTo(gitLabProvider);
@@ -683,7 +703,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null);
-            Issue result = processor.processFromSync(syncData, testRepo, 1L);
+            Issue result = processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             assertThat(result).isNull();
         }
@@ -718,7 +738,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null);
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             ArgumentCaptor<ScmDomainEvent.IssueCreated> eventCaptor =
                     ArgumentCaptor.forClass(ScmDomainEvent.IssueCreated.class);
@@ -760,7 +780,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     3,
                     null,
                     null);
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             verify(issueRepository)
                     .upsertCore(
@@ -820,7 +840,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     99,
                     null,
                     null);
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             verify(issueRepository)
                     .upsertCore(
@@ -878,7 +898,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null);
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             verify(milestoneRepository, never()).findByNumberAndRepositoryId(anyInt(), anyLong());
         }
@@ -918,7 +938,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null);
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.IssueUpdated.class));
         }
@@ -961,7 +981,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     null,
                     null);
 
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             var event = ArgumentCaptor.forClass(ScmDomainEvent.IssueUpdated.class);
             verify(eventPublisher).publishEvent(event.capture());
@@ -996,7 +1016,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     null,
                     null);
 
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             verify(issueRepository)
                     .upsertCore(
@@ -1050,7 +1070,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     null,
                     "gid://gitlab/Issue/999");
 
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             verify(issueRepository)
                     .upsertCore(
@@ -1114,7 +1134,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     "TASK",
                     null);
 
-            processor.processFromSync(syncData, testRepo, 1L);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             verify(issueRepository)
                     .upsertCore(
@@ -1154,7 +1174,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
             when(issueTypeRepository.findByOrganizationIdAndNameIgnoreCase(42L, "Test Case"))
                     .thenReturn(Optional.of(testCaseType));
 
-            processor.processFromSync(syncDataWithType("TEST_CASE"), testRepo, 1L);
+            processor.processFromSync(syncDataWithType("TEST_CASE"), ProcessingContext.forSync(1L, testRepo));
 
             verify(issueTypeRepository).findByOrganizationIdAndNameIgnoreCase(42L, "Test Case");
             verify(issueRepository)
@@ -1198,7 +1218,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
             when(issueTypeRepository.findFirstByOrganizationProviderAndNameIgnoreCase(99L, "Task"))
                     .thenReturn(Optional.of(providerScoped));
 
-            processor.processFromSync(syncDataWithType("TASK"), testRepo, 1L);
+            processor.processFromSync(syncDataWithType("TASK"), ProcessingContext.forSync(1L, testRepo));
 
             verify(issueTypeRepository).findFirstByOrganizationProviderAndNameIgnoreCase(99L, "Task");
             verify(issueRepository)
@@ -1231,7 +1251,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
         void shouldResolveNullIssueTypeWhenOrganizationMissing() {
             testRepo.setOrganization(null);
 
-            processor.processFromSync(syncDataWithType("TASK"), testRepo, 1L);
+            processor.processFromSync(syncDataWithType("TASK"), ProcessingContext.forSync(1L, testRepo));
 
             verify(issueRepository)
                     .upsertCore(

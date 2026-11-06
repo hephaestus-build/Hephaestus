@@ -496,6 +496,10 @@ jobs:
               - 'scripts/api-generator/**'
             agent-images:
               - 'docker/agents/**'
+              # Tool protocol v1, which the agent image compiles from its one source.
+              - 'server/application/src/main/resources/agent/tool-protocol.ts'
+              - 'server/application/src/main/resources/agent/tool-client.ts'
+              - 'server/application/src/main/resources/agent/tools-server.ts'
             postgres-image:
               - 'docker/postgres/**'
             # What changes an upgrade from the last release: a migration and the baseline synchronization.
@@ -1161,6 +1165,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate and verify this ref's release evidence
+        id: release-evidence
         env:
           # The version this ref would release under. On the Version PR branch that is the release
           # being prepared; on any other ref it is the version already published, and either way it
@@ -1180,6 +1185,23 @@ jobs:
           # Again without --write-validation, which re-derives the validation documents and fails if
           # they changed: the release runs the verifier twice for the same reason.
           node scripts/verify-release-evidence.ts evidence --verify-capture
+
+      - name: Qualify sandbox boundaries on this ref's image
+        env:
+          IMAGE: ghcr.io/hephaestus-build/agent-pi@${{ steps.release-evidence.outputs.agent-pi-digest }}
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE"
+          node scripts/sandbox-security.ts --image "$IMAGE" --report "$RUNNER_TEMP/sandbox-security.json"
+
+      - name: Retain sandbox qualification summary
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sandbox-security-preflight-summary
+          path: ${{ runner.temp }}/sandbox-security.json
+          if-no-files-found: warn
+          retention-days: 7
 
       # An exit status cannot say which subject carries which finding.
       - name: Upload the evidence bundle

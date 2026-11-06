@@ -5,6 +5,7 @@ import { once } from "node:events";
 import { connect, type Socket } from "node:net";
 
 import {
+	type ToolAddress,
 	encode,
 	type ExecExit,
 	type ExecRequest,
@@ -84,8 +85,8 @@ export class ToolClient {
 	 * Connects and says hello, within {@link LIMITS.silenceMs}. `nonce` is the one that the worker wrote into the tools
 	 * Pod's spec: the loop never sends it, so only that Pod's tools side can answer with it.
 	 */
-	static async open(socketPath: string, nonce: string): Promise<ToolClient> {
-		const client = new ToolClient(connect(socketPath));
+	static async open(address: ToolAddress, nonce: string): Promise<ToolClient> {
+		const client = new ToolClient(connect({ ...address, noDelay: true }));
 		const timer = setTimeout(() => {
 			client.#close(broken("the tools side did not answer hello"));
 		}, LIMITS.silenceMs);

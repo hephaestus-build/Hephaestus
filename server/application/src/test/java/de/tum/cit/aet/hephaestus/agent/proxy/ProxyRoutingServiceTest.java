@@ -116,11 +116,10 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void reviewRoutingPricesOnlyItsOwnModelWithoutScriptUsageQueries() {
+    void reviewRoutingNeedsNoScriptUsageQueries() {
         var route = routing.resolve(identity, request("/internal/llm/responses"));
         assertThat(route.apiProtocol()).isEqualTo("openai-responses");
         assertThat(route.sourceId()).isEqualTo(job.getId());
-        assertThat(route.inFlightSpendUsd()).isEqualByComparingTo("0.000100");
         verify(jobs).findById(job.getId());
         verify(jobs)
                 .hasLiveLease(
@@ -132,7 +131,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void scriptRoutingPricesItsPurseWithoutChargingTheReviewPurseAndCountsAllSlotTokens() {
+    void scriptRoutingCountsTheTokensOfAllSlots() {
         when(jobs.sumPracticeScriptUsageByKind(7L, job.getId(), 2))
                 .thenReturn(List.of(
                         new PracticeScriptKindTotal(ModelKind.EMBEDDING, 1, 200, 0, 0, 0, 0, 1),
@@ -142,7 +141,6 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         assertThat(route.connectionScope()).isEqualTo(UsageFundingSource.WORKSPACE);
         var attempt = Objects.requireNonNull(route.attempt());
         assertThat(attempt.sourceType()).isEqualTo(UsageSourceType.PRACTICE_SCRIPT_EMBEDDING);
-        assertThat(attempt.spentUsd()).isEqualByComparingTo("0.000200");
         assertThat(attempt.directModelTokens()).isEqualTo(1100);
     }
 
@@ -199,10 +197,9 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void turnRoutingBillsTheLeasedAttemptAtTheRatesItWasAdmittedWith() {
+    void turnRoutingBillsTheLeasedAttempt() {
         var jwt = turnJwt(3);
-        var row = leasedTurn(jwt, true);
-        when(row.getInputTokens()).thenReturn(2_000_000L);
+        leasedTurn(jwt, true);
 
         var route = routing.resolve(ProxyIdentity.of(jwt), request("/internal/llm/responses"));
 
@@ -213,7 +210,6 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         assertThat(route.attempt().sourceId()).isEqualTo(jwt.id());
         assertThat(route.attempt().number()).isEqualTo(3);
         assertThat(route.attempt().leaseId()).isEqualTo(jwt.leaseId());
-        assertThat(route.attempt().spentUsd()).isEqualByComparingTo("2");
         verifyNoInteractions(jobs, attemptUsage);
     }
 

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.issue;
 
+import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
@@ -168,10 +169,17 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         boolean isNew = existingOpt.isEmpty();
 
         // An older payload would restore older work and record it as new (sync-lifecycle.md).
+        boolean freshEqualRead = !isNew
+                && context.isSync()
+                && ProviderStateVersion.acceptsEqualRead(
+                        dto.updatedAt(),
+                        existingOpt.get().getUpdatedAt(),
+                        context.observedAt(),
+                        existingOpt.get().getLastSyncAt());
         if (!isNew
-                && dto.updatedAt() != null
-                && existingOpt.get().getUpdatedAt() != null
-                && dto.updatedAt().isBefore(existingOpt.get().getUpdatedAt())) {
+                && !freshEqualRead
+                && ProviderStateVersion.cannotReplace(
+                        dto.updatedAt(), existingOpt.get().getUpdatedAt())) {
             log.debug(
                     "Skipped stale issue update: issueId={}, existingUpdatedAt={}, dtoUpdatedAt={}",
                     existingOpt.get().getId(),
@@ -192,7 +200,7 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         // Atomic upsert prevents races between concurrent inserts; ON CONFLICT
         // (repository_id, issue_type, number) DO UPDATE.
         Instant now = Instant.now();
-        issueRepository.upsertCore(
+        int written = issueRepository.upsertCore(
                 dbId,
                 providerId,
                 dto.number(),
@@ -225,6 +233,10 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
                         + repository.getId()
                         + ", number="
                         + dto.number()));
+
+        if (written == 0) {
+            return new Processed(issue, true);
+        }
 
         // ManyToMany relationships (labels, assignees) can't be handled by the native upsert.
         boolean relationshipsChanged = updateRelationships(dto, issue, repository, providerId);
