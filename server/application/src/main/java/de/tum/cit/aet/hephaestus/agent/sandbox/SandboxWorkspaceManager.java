@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,6 +28,16 @@ import org.jspecify.annotations.Nullable;
 public class SandboxWorkspaceManager {
     private static final int COPY_BUFFER_SIZE = 64 * 1024;
 
+    private final Path spool;
+
+    /**
+     * @param spool where archives wait for their sandbox: the volume that holds the evidence they are made from, whose
+     *     size follows the worker's work. The name of an archive lets a later process remove what this one left.
+     */
+    public SandboxWorkspaceManager(Path spool) {
+        this.spool = spool;
+    }
+
     private static long copyFilePrefix(Path source, OutputStream out, long limit) throws IOException {
         try (InputStream in = Files.newInputStream(source, LinkOption.NOFOLLOW_LINKS)) {
             return IOUtils.copyLarge(in, out, 0, limit);
@@ -41,7 +52,8 @@ public class SandboxWorkspaceManager {
             Map<String, byte[]> files, Map<String, Path> filesOnDisk, List<EvidenceDirectory> directories)
             throws IOException {
         validateDirectories(directories);
-        Path path = Files.createTempFile("sandbox-inputs-", ".tar");
+        Files.createDirectories(spool);
+        Path path = Files.createTempFile(spool, EvidenceSpool.currentPrefix() + "inputs-", ".tar");
         try {
             writeInputTar(path, files, filesOnDisk, directories);
             return path;

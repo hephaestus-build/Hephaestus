@@ -224,7 +224,7 @@ class GitLabCommitBackfillServiceTest extends BaseUnitTest {
 
     private GitRepositoryManager localGit() {
         return new GitRepositoryManager(
-                new GitRepositoryProperties(true, 2, 8L * 1024 * 1024 * 1024),
+                new GitRepositoryProperties(true, 2, 8L * 1024 * 1024 * 1024, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded());

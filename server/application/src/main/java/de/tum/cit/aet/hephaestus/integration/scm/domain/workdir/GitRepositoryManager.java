@@ -11,11 +11,17 @@ import java.io.IOException;
 import java.io.Serial;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -23,6 +29,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -82,6 +89,9 @@ public class GitRepositoryManager {
     private static final Pattern MIRROR_ID = Pattern.compile("[1-9][0-9]{0,17}");
     private static final Logger log = LoggerFactory.getLogger(GitRepositoryManager.class);
     private static final int PAGE_SIZE = 256;
+
+    /** The block size of the file systems a node's volumes use. */
+    private static final long DISK_BLOCK = 4096;
 
     /** A walk stops after this many pages that needed capture; the next sync cycle resumes from the captured set. */
     private static final int MAX_DETAIL_PAGES_PER_WALK = 32;
@@ -146,6 +156,71 @@ public class GitRepositoryManager {
             throw new GitOperationException("Cannot list repository mirrors", e);
         }
         return List.copyOf(keys);
+    }
+
+    /** The mirrors under this process's root, the one that a capture used longest ago first. */
+    public List<RepositoryKey> localRepositoriesLeastRecentlyUsedFirst() {
+        return localRepositories().stream()
+                .sorted(Comparator.comparing(this::lastUsed))
+                .toList();
+    }
+
+    /**
+     * When a capture last fetched this mirror; the epoch for a mirror that is already gone. A read does not count: it
+     * holds the read lock, which keeps the mirror while it runs.
+     */
+    public Instant lastUsed(RepositoryKey repository) {
+        try {
+            return Files.getLastModifiedTime(mirror(repository), NOFOLLOW_LINKS).toInstant();
+        } catch (IOException removed) {
+            return Instant.EPOCH;
+        }
+    }
+
+    /** What this process keeps on its volume: mirrors, attempt folders, snapshot spools and staged archives. */
+    public long cacheBytes() {
+        return bytesUnder(layout.root());
+    }
+
+    public long mirrorBytes(RepositoryKey repository) {
+        return bytesUnder(mirror(repository));
+    }
+
+    /**
+     * What these files take on disk, in whole blocks with their directories, as the kubelet counts a volume. Counts what
+     * it can read: a fetch or an attempt may remove a file under the walk.
+     */
+    private static long bytesUnder(Path root) {
+        if (!Files.isDirectory(root, NOFOLLOW_LINKS)) return 0;
+        var bytes = new AtomicLong();
+        try {
+            Files.walkFileTree(root, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+                    bytes.addAndGet(DISK_BLOCK);
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
+                    bytes.addAndGet((attributes.size() + DISK_BLOCK - 1) / DISK_BLOCK * DISK_BLOCK);
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFileFailed(Path file, IOException failure) {
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult postVisitDirectory(Path directory, @Nullable IOException failure) {
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException e) {
+            throw new GitOperationException("Cannot measure " + root.getFileName(), e);
+        }
+        return bytes.get();
     }
 
     /**
@@ -241,6 +316,8 @@ public class GitRepositoryManager {
                             .setTimeout(timeoutSeconds)
                             .call();
                 }
+                // A fetch that brings nothing new changes no file, and eviction reads the last use from here.
+                Files.setLastModifiedTime(mirror, FileTime.from(Instant.now()));
                 return null;
             } catch (InvalidRemoteException | TransportException e) {
                 throw new RepositoryFetchException(e);

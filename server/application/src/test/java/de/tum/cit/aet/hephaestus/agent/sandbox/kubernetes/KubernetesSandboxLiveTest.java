@@ -317,7 +317,7 @@ class KubernetesSandboxLiveTest {
         liveWorkers = KubernetesFixtures.live(worker.workerId());
         requireNoAuthorityInItsOwnNamespace();
         pods = configuration.kubernetesPods(client, worker, sandbox, agentImage);
-        workspaces = new SandboxWorkspaceManager();
+        workspaces = new SandboxWorkspaceManager(Path.of(System.getProperty("java.io.tmpdir")));
         gateway = new LiveSandboxGateway(gatewayProperties.port());
         assertEquals(GATEWAY_PORT, gateway.port(), "the gateway listens on the port it was given");
         meters = new SimpleMeterRegistry();

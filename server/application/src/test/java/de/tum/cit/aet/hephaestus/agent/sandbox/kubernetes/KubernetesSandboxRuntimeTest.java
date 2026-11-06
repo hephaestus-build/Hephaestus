@@ -52,6 +52,7 @@ import io.fabric8.mockwebserver.http.RecordedRequest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -977,7 +978,7 @@ class KubernetesSandboxRuntimeTest {
                         liveWorkers,
                         new SandboxExits(unprovedPods, new SimpleMeterRegistry()),
                         cache()),
-                new SandboxWorkspaceManager(),
+                new SandboxWorkspaceManager(Path.of(System.getProperty("java.io.tmpdir"))),
                 sessions,
                 meters);
         HealthIndicator readiness =
@@ -1196,7 +1197,11 @@ class KubernetesSandboxRuntimeTest {
     }
 
     private SandboxAttemptRunner adapter() {
-        return new SandboxAttemptRunner(backend(), new SandboxWorkspaceManager(), sessions, meters);
+        return new SandboxAttemptRunner(
+                backend(),
+                new SandboxWorkspaceManager(Path.of(System.getProperty("java.io.tmpdir"))),
+                sessions,
+                meters);
     }
 
     private Pod storedPod(String name) {

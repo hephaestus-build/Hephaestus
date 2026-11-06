@@ -291,6 +291,21 @@ groups:
         annotations:
           summary: A sandbox gateway holds more than 80 percent of the connections it allows
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusGitCacheNearlyFull
+        expr: git_cache_bytes{job="hephaestus"} / git_cache_limit_bytes{job="hephaestus"} > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: A role's Git cache volume stayed above 90 percent, and eviction cannot free it
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusGitMirrorsEvicted
+        expr: sum(increase(git_mirror_evictions_total{job="hephaestus"}[1h])) >= 5
+        labels:
+          severity: warning
+        annotations:
+          summary: At least five kept Git mirrors were evicted in one hour; the volume is too small for the monitored repositories
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewUnreachable
         expr: >-
           sum by (cause) (increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause=~"server_unreachable|provider_unreachable"}[1h])) >= 3

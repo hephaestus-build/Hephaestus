@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
@@ -76,7 +77,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
 
     private GitRepositoryManager manager(boolean enabled, long maxSnapshotBytes) {
         return new GitRepositoryManager(
-                new GitRepositoryProperties(enabled, 2, maxSnapshotBytes),
+                new GitRepositoryProperties(enabled, 2, maxSnapshotBytes, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(fabric.toString()),
                 GitTransportFixtures.guarded());
@@ -94,6 +95,24 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         assertThat(commits).isEmpty();
         assertThatThrownBy(() -> disabled.ensureRepository(KEY, source.toUri().toString(), null))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    /** A fetch that brings nothing changes no file, and only the mirror's own time tells eviction it is in use. */
+    @Test
+    void shouldCountAFetchThatBringsNothingAsUse() throws Exception {
+        var other = new RepositoryKey(100L, 2L);
+        repository().close();
+        prepare();
+        manager.ensureRepository(other, source.toUri().toString(), null);
+        for (var repository : List.of(KEY, other)) {
+            Files.setLastModifiedTime(
+                    fabric.resolve("mirrors/100/" + repository.repositoryId() + ".git"),
+                    FileTime.fromMillis(repository.equals(KEY) ? 1000 : 2000));
+        }
+
+        manager.ensureRepository(KEY, source.toUri().toString(), null);
+
+        assertThat(manager.localRepositoriesLeastRecentlyUsedFirst()).containsExactly(other, KEY);
     }
 
     @Test

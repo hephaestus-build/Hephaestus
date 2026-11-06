@@ -79,6 +79,8 @@ spec:
             # The buildpack's 10M direct-memory default sits below this role's NATS and HTTP footprint.
             - name: JAVA_TOOL_OPTIONS
               value: -XX:MaxDirectMemorySize=128M
+            - name: GIT_MAX_CACHE_BYTES
+              value: {{ include "hephaestus.gitCacheBytes" (dict "gitCache" .Values.server.gitCache "role" "server") | quote }}
             - name: NATS_SERVER
               value: {{ include "hephaestus.natsUrl" . | quote }}
             - name: HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD

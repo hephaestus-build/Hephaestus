@@ -327,6 +327,8 @@ spec:
               value: -XX:MaxDirectMemorySize=128M -Djdk.virtualThreadScheduler.maxPoolSize={{ add (int .Values.worker.sandboxGateway.maxConnections) 256 }}
             - name: SANDBOX_API_MAX_CONNECTIONS
               value: {{ .Values.worker.sandboxGateway.maxConnections | quote }}
+            - name: GIT_MAX_CACHE_BYTES
+              value: {{ include "hephaestus.gitCacheBytes" (dict "gitCache" .Values.worker.gitCache "role" "worker") | quote }}
             - name: AGENT_ENABLED
               value: "true"
             - name: HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX

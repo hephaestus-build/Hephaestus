@@ -556,6 +556,50 @@ tests:
               summary: A sandbox gateway holds more than 80 percent of the connections it allows
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: a Git cache that stays nearly full fires, one with room does not
+    interval: 1m
+    input_series:
+      - series: 'git_cache_bytes{job="hephaestus",instance="worker:9090"}'
+        values: "1000x6 950x15"
+      - series: 'git_cache_limit_bytes{job="hephaestus",instance="worker:9090"}'
+        values: "1000x21"
+      - series: 'git_cache_bytes{job="hephaestus",instance="server:9090"}'
+        values: "100x21"
+      - series: 'git_cache_limit_bytes{job="hephaestus",instance="server:9090"}'
+        values: "1000x21"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusGitCacheNearlyFull
+        exp_alerts: []
+      - eval_time: 18m
+        alertname: HephaestusGitCacheNearlyFull
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: hephaestus
+              instance: worker:9090
+            exp_annotations:
+              summary: A role's Git cache volume stayed above 90 percent, and eviction cannot free it
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: five evictions in one hour fire, a few do not
+    interval: 1m
+    input_series:
+      - series: 'git_mirror_evictions_total{job="hephaestus",instance="worker:9090"}'
+        values: "0x10 2x10 6x20"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HephaestusGitMirrorsEvicted
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: HephaestusGitMirrorsEvicted
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: At least five kept Git mirrors were evicted in one hour; the volume is too small for the monitored repositories
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: an unreachable provider fires with its cause, a reachable server does not
     interval: 1m
     input_series:

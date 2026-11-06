@@ -13,10 +13,14 @@ import org.springframework.validation.annotation.Validated;
  * @param maxConcurrentIngestions how many captured commits are written to PostgreSQL at once
  * @param maxSnapshotBytes The most disk that the checkout and reachable history of one review may use. Hephaestus
  *                         refuses a larger repository whole and does not capture part of it.
+ * @param maxCacheBytes The most disk that Git mirrors, review checkouts and staged archives may use on this process's
+ *     volume. Set it to the size of that volume. Above 80 % of it, Hephaestus deletes the mirrors it used least recently.
+ *     A deleted mirror costs one full fetch at its next capture.
  */
 @ConfigurationProperties(prefix = "hephaestus.git")
 @Validated
 public record GitRepositoryProperties(
         @DefaultValue("false") boolean enabled,
         @DefaultValue("2") @Min(1) int maxConcurrentIngestions,
-        @DefaultValue("8589934592") @Min(1) long maxSnapshotBytes) {}
+        @DefaultValue("8589934592") @Min(1) long maxSnapshotBytes,
+        @DefaultValue("10737418240") @Min(1) long maxCacheBytes) {}

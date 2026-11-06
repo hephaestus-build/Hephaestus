@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -218,7 +219,8 @@ public class SandboxGatewaySessions {
             String prefix = selectionPrefix(parameter, value);
             Path selected = selections.get(prefix);
             if (selected == null) {
-                selected = Files.createTempFile(inputTar.getParent(), "workspace-selection-", ".tar");
+                selected = Files.createTempFile(
+                        inputTar.getParent(), EvidenceSpool.currentPrefix() + "workspace-selection-", ".tar");
                 boolean retained = false;
                 try {
                     boolean found = false;

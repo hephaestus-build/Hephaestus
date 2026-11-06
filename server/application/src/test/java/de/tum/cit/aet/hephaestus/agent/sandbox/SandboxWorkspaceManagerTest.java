@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -24,10 +26,24 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 @Tag("unit")
 class SandboxWorkspaceManagerTest {
-    private final SandboxWorkspaceManager manager = new SandboxWorkspaceManager();
+    private SandboxWorkspaceManager manager;
 
     @TempDir
     Path temporary;
+
+    @BeforeEach
+    void setUp() {
+        manager = new SandboxWorkspaceManager(temporary.resolve("spool"));
+    }
+
+    /** The fixed `/tmp` does not grow with a worker's reviews, and a later process sweeps what this one leaves here. */
+    @Test
+    void shouldStageTheArchiveInTheSpoolUnderTheProcessPrefix() throws Exception {
+        Path archive = manager.createInputTar(Map.of("inputs/a.txt", new byte[] {1}), Map.of());
+
+        assertThat(archive.getParent()).isEqualTo(temporary.resolve("spool"));
+        assertThat(EvidenceSpool.isCurrentProcess(archive)).isTrue();
+    }
 
     @Test
     void shouldPreserveMemoryAndDiskInputsInOneArchive() throws Exception {

@@ -63,7 +63,7 @@ class SandboxGatewaySessionsTest {
             assertThatThrownBy(() -> session.download("repo", "7"))
                     .isInstanceOf(WorkspaceBudgetExceededException.class);
             try (var paths = Files.list(temporary)) {
-                selection = paths.filter(path -> path.getFileName().toString().startsWith("workspace-selection-"))
+                selection = paths.filter(path -> path.getFileName().toString().contains("workspace-selection-"))
                         .findFirst()
                         .orElseThrow();
             }

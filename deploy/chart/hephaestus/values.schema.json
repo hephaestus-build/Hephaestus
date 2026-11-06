@@ -115,7 +115,11 @@
 			"additionalProperties": false,
 			"required": ["sizeLimit"],
 			"properties": {
-				"sizeLimit": { "$ref": "#/definitions/quantity" }
+				"sizeLimit": {
+					"description": "The size of this role's Git cache volume, in whole Mi or Gi. Above 80 % of it, the role deletes the Git mirrors that it used least recently.",
+					"type": "string",
+					"pattern": "^[1-9][0-9]*(?:Mi|Gi)$"
+				}
 			}
 		},
 		"volume": {

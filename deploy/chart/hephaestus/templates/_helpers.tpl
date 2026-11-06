@@ -672,6 +672,11 @@ PostgreSQL volume.
 {{- end -}}
 {{- end -}}
 
+{{/* The bytes of one role's Git cache volume, so the role evicts mirrors before the kubelet evicts the Pod. */}}
+{{- define "hephaestus.gitCacheBytes" -}}
+{{- mul (include "hephaestus.memoryMi" (dict "value" .gitCache.sizeLimit "name" (printf "%s.gitCache.sizeLimit" .role)) | int64) 1048576 -}}
+{{- end -}}
+
 {{/*
 The Go runtime's soft memory limit for the bundled broker: 80 % of its container limit. Without it, a catch-up of several
 streams grows the heap to the container limit and the kernel kills the broker. With it, the collector works harder and the

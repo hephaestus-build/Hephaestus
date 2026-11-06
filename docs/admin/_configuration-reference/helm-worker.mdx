@@ -7,7 +7,7 @@
 | `worker.databasePool.minimumIdle` | integer | `5` | yes | `minimum: 0. maximum: 400` |
 | `worker.drainTimeoutSeconds` | integer | `1800` | yes | `minimum: 0. maximum: 86400` |
 | `worker.enabled` | boolean | `false` | yes | — |
-| `worker.gitCache.sizeLimit` | string | `"50Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.gitCache.sizeLimit` | string | `"50Gi"` | yes | The size of this role's Git cache volume, in whole Mi or Gi. Above 80 % of it, the role deletes the Git mirrors that it used least recently. |
 | `worker.replicas` | integer | `2` | yes | `minimum: 0. maximum: 16` |
 | `worker.resources.limits.cpu` | string | `"4"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
 | `worker.resources.limits.ephemeral-storage` | string | `"52Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |

@@ -106,7 +106,7 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
         }
         if (populated) when(persister.persist(any(), any(), any())).thenReturn(Outcome.CAPTURED);
         var localGit = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 2, 8L * 1024 * 1024 * 1024),
+                new GitRepositoryProperties(true, 2, 8L * 1024 * 1024 * 1024, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded());
