@@ -276,14 +276,19 @@ function isHttpsUrl(value: string): boolean {
 	}
 }
 
+/** The instant of a `YYYY-MM-DDTHH:MM:SSZ` timestamp, or undefined for any other string or an impossible date. */
+export function exactUtcTime(value: string): Date | undefined {
+	const time = new Date(value);
+	return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(value) &&
+		!Number.isNaN(time.valueOf()) &&
+		time.toISOString() === value.replace("Z", ".000Z")
+		? time
+		: undefined;
+}
+
 function expiryError(exception: Exception, now: Date): string | undefined {
-	const expiry = new Date(exception.expires);
-	if (
-		!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(exception.expires) ||
-		Number.isNaN(expiry.valueOf()) ||
-		expiry.toISOString() !== exception.expires.replace("Z", ".000Z") ||
-		expiry <= now
-	) {
+	const expiry = exactUtcTime(exception.expires);
+	if (expiry === undefined || expiry <= now) {
 		return `invalid or expired exception: ${exception.vulnerability} (${exception.expires})`;
 	}
 	if (expiry.valueOf() - now.valueOf() > 90 * 24 * 60 * 60 * 1000) {
