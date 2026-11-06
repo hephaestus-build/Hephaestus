@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 @Tag("integration")
@@ -45,6 +46,9 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private ProductFeedbackFilingRepository filings;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     /** A member account signed in the way production does: a numeric JWT subject wired to a workspace member. */
     private record Member(long accountId, Account.AppRole role, Workspace workspace) {
@@ -268,6 +272,54 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .isEqualTo(HttpStatus.CONFLICT)
                 .expectBody(Void.class);
         assertThat(feedback.findById(report.getId()).orElseThrow().isResolved()).isFalse();
+    }
+
+    @Test
+    void shouldLimitOrdinaryAccountsAcrossInstanceAndWorkspaceSubmissions() {
+        Member member = user("feedback-daily-limit");
+        seedDailyReports(member);
+        send(member, "A sixth report")
+                .expectStatus()
+                .isEqualTo(HttpStatus.TOO_MANY_REQUESTS)
+                .expectBody()
+                .jsonPath("$.detail")
+                .isEqualTo("You can send up to 5 reports per day. Try again tomorrow (UTC).");
+        webTestClient
+                .post()
+                .uri("/product-feedback")
+                .headers(member.headers())
+                .bodyValue(Map.of("kind", "BUG", "message", "Try without a workspace"))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(HttpStatus.TOO_MANY_REQUESTS)
+                .expectBody(Void.class);
+        assertThat(feedback.findAllByAccountId(member.accountId())).hasSize(5);
+    }
+
+    @Test
+    void shouldAllowInstanceAdminsBeyondTheDailyMemberLimit() {
+        Member member = member("feedback-daily-admin");
+        seedDailyReports(member);
+        send(member, "An admin report").expectStatus().isOk().expectBody(Void.class);
+        assertThat(feedback.findAllByAccountId(member.accountId())).hasSize(6);
+    }
+
+    private void seedDailyReports(Member member) {
+        // Distinct calendar minutes today, excluding the current one even across midnight.
+        for (int minute = 1; minute <= FeedbackService.ACCOUNT_DAILY_REPORTS; minute++) {
+            jdbc.update(
+                    """
+                    INSERT INTO product_feedback
+                        (id, account_id, workspace_id, kind, message, app_version, created_at, submission_minute)
+                    VALUES (?, ?, ?, 'BUG', 'An earlier report', 'test', now(),
+                        date_trunc('day', now()) + (mod(extract(hour FROM now())::int * 60 +
+                            extract(minute FROM now())::int + ?, 1440)) * interval '1 minute')
+                    """,
+                    UUID.randomUUID(),
+                    member.accountId(),
+                    minute % 2 == 0 ? member.workspace().getId() : null,
+                    minute);
+        }
     }
 
     private WebTestClient.ResponseSpec send(Member member, String message) {

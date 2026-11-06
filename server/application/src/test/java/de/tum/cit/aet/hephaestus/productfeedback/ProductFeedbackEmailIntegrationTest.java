@@ -246,7 +246,8 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
                 new FeedbackRequestDTO(
                         ProductFeedback.Kind.BUG, "private-feedback-content", "/private/page", null, null),
                 Objects.requireNonNull(author.getId()),
-                null);
+                null,
+                false);
         return feedback.findById(receipt.id()).orElseThrow();
     }
 

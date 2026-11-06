@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_authenticated/product-feedback")({
 	search: {
 		middlewares: [retainSearchParams<typeof RootRoute.types.fullSearchSchema>(["chromeWorkspace"])],
 	},
-	head: pageHead("Your product feedback"),
+	head: pageHead("Your reports"),
 	component: YourProductFeedbackPage,
 });
 
@@ -61,7 +61,7 @@ function YourProductFeedbackPage() {
 		<PageLayout>
 			<PageHeader
 				icon={<MessageSquarePlus />}
-				title="Your product feedback"
+				title="Your reports"
 				description="The ideas, bugs and feedback you sent, and where each one is now."
 			/>
 			<MyProductFeedbackList

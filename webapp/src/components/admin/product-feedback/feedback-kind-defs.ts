@@ -19,7 +19,7 @@ export const FEEDBACK_KIND_DEFS: StatusDefs<FeedbackItem["kind"]> = {
 		description: "Something that did not work and, when the sender chose, the page it happened on.",
 	},
 	FEEDBACK: {
-		label: "Feedback",
+		label: "General",
 		icon: MessageSquare,
 		badgeVariant: "secondary",
 		description: "What works and what gets in the way, in the sender’s words.",

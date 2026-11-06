@@ -19,7 +19,6 @@ final class RoutingGate {
      */
     record Inputs(
             boolean allowPublic,
-            ProductFeedback.Kind kind,
             boolean publicRepository,
             boolean privateRepository,
             @Nullable Draft draft,
@@ -40,7 +39,6 @@ final class RoutingGate {
 
     private static FilingReason reason(Inputs in, @Nullable Draft draft) {
         if (!in.allowPublic() || !in.publicRepository()) return FilingReason.OPTED_OUT;
-        if (in.kind() == ProductFeedback.Kind.FEEDBACK) return FilingReason.LOW_CONFIDENCE;
         if (draft != null && draft.disposition() == Draft.Disposition.SECURITY) return FilingReason.SECURITY;
         if (in.blockingRedaction()) return FilingReason.REDACTION;
         if (draft == null) return FilingReason.NO_DRAFT;
@@ -54,7 +52,7 @@ final class RoutingGate {
     }
 
     /**
-     * A maintainer's {@code /publish} overrides only the quality conditions: the kind and the confidence. It never
+     * A maintainer's {@code /publish} overrides confidence only. The draft must still describe a coherent issue. It never
      * overrides consent, security, the risk latch or abuse, and it needs a draft.
      */
     static @Nullable FilingReason refusePromotion(boolean allowPublic, @Nullable Draft draft, boolean latched) {
@@ -63,6 +61,7 @@ final class RoutingGate {
         if (draft.disposition() == Draft.Disposition.SECURITY) return FilingReason.SECURITY;
         if (latched || draft.aboutNamedPerson()) return FilingReason.REDACTION;
         if (draft.abuse()) return FilingReason.ABUSE;
+        if (draft.disposition() != Draft.Disposition.ISSUE || !draft.coherent()) return FilingReason.LOW_CONFIDENCE;
         return null;
     }
 
@@ -79,7 +78,6 @@ final class RoutingGate {
      */
     static Outcome evaluate(
             boolean allowPublic,
-            ProductFeedback.Kind kind,
             boolean publicRepository,
             boolean privateRepository,
             String message,
@@ -102,7 +100,7 @@ final class RoutingGate {
             if (draftCounts.keySet().stream().anyMatch(Redaction.Removal::blocking)) blocking = true;
         }
         var decision =
-                decide(new Inputs(allowPublic, kind, publicRepository, privateRepository, redacted, blocking, latched));
+                decide(new Inputs(allowPublic, publicRepository, privateRepository, redacted, blocking, latched));
         return new Outcome(decision, redacted, original, counts);
     }
 }

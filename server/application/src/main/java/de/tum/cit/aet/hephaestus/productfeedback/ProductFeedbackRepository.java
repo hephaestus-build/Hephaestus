@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -10,6 +11,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 interface ProductFeedbackRepository extends JpaRepository<ProductFeedback, UUID> {
+    /** Serializes the account's quota check and insert across every server and workspace. Reads no rows. */
+    @WorkspaceAgnostic("Account-wide submission lock; reads no workspace data")
+    @Query(
+            value =
+                    "SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended('product-feedback-submit:' || CAST(:accountId AS text), 0))) locked",
+            nativeQuery = true)
+    int lockSubmission(@Param("accountId") long accountId);
+
+    long countByAccountIdAndCreatedAtGreaterThanEqual(long accountId, Instant since);
+
     void deleteAllByWorkspaceId(Long workspaceId);
 
     void deleteAllByAccountId(long accountId);

@@ -27,6 +27,10 @@ public class FeedbackController {
             summary = "Send product feedback to instance administrators")
     public FilingDTOs.FeedbackReceiptDTO feedback(
             WorkspaceContext workspace, @Valid @RequestBody FeedbackRequestDTO request) {
-        return feedback.add(request, CurrentAccount.requireId(), workspace.id());
+        return feedback.add(
+                request,
+                CurrentAccount.requireId(),
+                workspace.id(),
+                CurrentAccount.roles().contains("app_admin"));
     }
 }

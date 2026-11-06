@@ -118,7 +118,6 @@ class RoutingService {
             Instant now) {
         var outcome = RoutingGate.evaluate(
                 filing.isAllowPublic(),
-                report.getKind(),
                 destination.getPublicRepository() != null,
                 destination.getPrivateRepository() != null,
                 report.getMessage(),

@@ -60,7 +60,7 @@ Code selects the route after the model drafts the issue:
 
 | Route | Conditions |
 | --- | --- |
-| Public issue | The reporter allows publication. The report is a bug or idea with a valid draft for the outgoing revision. All privacy, security, safety, and confidence checks pass. |
+| Public issue | The reporter allows publication. The report has a valid actionable draft for the outgoing revision. All privacy, security, safety, and confidence checks pass. |
 | Private issue | The public gate does not pass and a private destination is set. |
 | Admin email and saved report | No suitable destination is set, **Pause** is on, or filing stops. |
 
@@ -77,7 +77,7 @@ Each private issue starts with a reason:
 | `security` | The report can describe a security problem. |
 | `redaction` | Code found a secret, credential, email address, or known person’s name. |
 | `about a person` | The report concerns a named person. |
-| `low confidence` | The report is unclear, is not an issue, or is not a bug or idea. |
+| `low confidence` | The report is unclear or is not an actionable issue. |
 | `abuse` | The safety check found abuse. |
 | `no draft` | The model was unavailable, the limit was reached, or the model response stayed invalid. |
 
@@ -85,7 +85,10 @@ Security, blocking redaction, or a report about a named person sets a persistent
 An edit or retry cannot clear it.
 Without a draft, the private issue uses the original report after code redaction.
 The public route never uses this fallback text.
-Praise, questions, and **Send feedback** reports stay private.
+
+The model is instructed to classify praise and support questions as non-issues.
+A misclassified report can still become public if the reporter allowed it and the other checks pass.
+The selected report kind alone does not keep it private.
 
 The app uses Bug or Feature issue types where available. It adds no labels.
 A possible duplicate becomes a new issue with a reference to the possible match.
@@ -119,7 +122,7 @@ See [Email setup](./production-setup.mdx#email) for relay setup.
 
 ## Publish a private issue
 
-The reporter can select **Allow public** in **Your product feedback**.
+The reporter can select **Allow public** in **Your reports**.
 This permits publication but does not publish the report.
 
 1. Confirm that the reporter allows public and that the report has a valid draft.
@@ -129,7 +132,7 @@ This permits publication but does not publish the report.
 The server checks the commenter’s current permission on both repositories at dispatch.
 Organization membership or a read-only collaborator role is insufficient.
 An unknown permission denies publication.
-The command can override kind and confidence checks only.
+The command can override confidence checks only.
 It cannot override the reporter’s choice, security, the risk latch, or abuse.
 
 GitHub cannot transfer a private issue to a public repository.
@@ -216,5 +219,5 @@ To resume new filing, turn off **Pause** after you correct the cause.
 | GitHub write stopped | `DESTINATION_UNAVAILABLE` or `GITHUB_REFUSED` explains the stop. | Turn on **Pause** if privacy is in doubt. Correct app access or the refusal, then select **Retry**. |
 | `/publish` does nothing | **Pause**, missing reporter permission, insufficient repository access, or a safety condition blocks it. | Resume only when safe. Check the app’s response and both repository permissions. |
 | No admin email | No verified subscribed admin or no usable relay exists. | Read the saved report in the console. Restore email delivery and subscriptions. |
-| No reporter email | The account lacks a verified address, delivery is unavailable, or updates are off. | Use **Your product feedback** for status. Private comments do not generate reporter emails. |
+| No reporter email | The account lacks a verified address, delivery is unavailable, or updates are off. | Use **Your reports** for status. Private comments do not generate reporter emails. |
 | Cleanup needs action | The app cannot remove edit history, or cleanup remained incomplete for 30 days. | Complete the manual erasure steps above before you confirm them. |
