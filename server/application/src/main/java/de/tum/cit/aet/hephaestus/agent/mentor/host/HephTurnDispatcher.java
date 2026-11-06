@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
+import de.tum.cit.aet.hephaestus.mentor.MentorRedaction;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import io.micrometer.core.instrument.Counter;
@@ -76,6 +77,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     private static final Duration HOST_READY_TIMEOUT = Duration.ofMinutes(3);
     private final MentorTurnStarter starter;
     private final MentorTurnService turns;
+    private final MentorRedaction redaction;
     private final MentorTurnCompletion completion;
     private final MentorLedgerNotifications notifications;
     private final HephHost host;
@@ -102,6 +104,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     public HephTurnDispatcher(
             MentorTurnStarter starter,
             MentorTurnService turns,
+            MentorRedaction redaction,
             MentorTurnCompletion completion,
             MentorLedgerNotifications notifications,
             HephHost host,
@@ -117,6 +120,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             Duration drainTimeout) {
         this.starter = starter;
         this.turns = turns;
+        this.redaction = redaction;
         this.completion = completion;
         this.notifications = notifications;
         this.host = host;
@@ -305,12 +309,24 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     }
 
     @Override
+    public void contextChanged(MentorLedgerEvents.ContextChanged change) {
+        for (Running turn : running.values()) {
+            if (turn.workspaceId == change.workspaceId()) {
+                discardContext(turn);
+            }
+        }
+    }
+
+    @Override
     public void resync() {
         wake.release();
         for (Running turn : running.values()) {
             try {
-                if (turns.require(turn.workspaceId, turn.turnId).getStatus() == MentorTurn.Status.STOPPED) {
+                MentorTurn stored = turns.require(turn.workspaceId, turn.turnId);
+                if (stored.getStatus() == MentorTurn.Status.STOPPED) {
                     stop(turn, "developer");
+                } else if (stored.getStartedAt() != null && redaction.personErasedSince(stored.getStartedAt())) {
+                    discardContext(turn);
                 }
             } catch (RuntimeException e) {
                 log.debug(
@@ -319,6 +335,11 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                         e.getClass().getSimpleName());
             }
         }
+    }
+
+    private void discardContext(Running turn) {
+        stop(turn, "lease");
+        finishQuietly(turn, MentorTurn.Status.FAILED, COULD_NOT_FINISH, "context_changed");
     }
 
     /**

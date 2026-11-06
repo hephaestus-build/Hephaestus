@@ -211,8 +211,10 @@ public class MentorTurnService {
     @Transactional
     public void updatePartial(long workspaceId, UUID turnId, int attempt, UUID leaseId, JsonNode partial) {
         turns.commitWithoutFlushWait();
+        copies.holdForCapture();
         MentorTurnRepository.RunningAttempt running = turns.findRunningAttempt(workspaceId, turnId, attempt, leaseId)
                 .orElseThrow(() -> new MentorLeaseLostException(turnId, attempt));
+        if (redaction.personErasedSince(running.getStartedAt())) throw new MentorLeaseLostException(turnId, attempt);
         progress.next(workspaceId, turnId, attempt, partial.toString(), clock.instant())
                 .ifPresent(update -> progress.frames(
                                 workspaceId,
@@ -248,7 +250,8 @@ public class MentorTurnService {
                         : appended.stream()
                                 .filter(piEntry -> MentorPiEntries.kind(piEntry) == MentorEntry.Kind.SUMMARY)
                                 .toList();
-        boolean copiesData = stored.stream().anyMatch(MentorPiEntries::copiesPersonData);
+        // Answers can copy earlier context without a new tool call in this attempt.
+        boolean copiesData = !stored.isEmpty();
         if (copiesData) {
             // Before any row lock: a person erasure holds this fence while it locks ledger rows.
             copies.holdForCapture();
@@ -496,10 +499,7 @@ public class MentorTurnService {
             inserted.add(entry);
         }
         entryService.appended(conversation, inserted);
-        redaction.eraseStaleCopies(
-                inserted,
-                attemptStart,
-                fenced && copies.erasedSince(MentorEntryRepository.COPIES_PERSON_DATA_STORE, attemptStart));
+        redaction.eraseStaleCopies(inserted, attemptStart, fenced && redaction.personErasedSince(attemptStart));
     }
 
     private MentorTurn held(long workspaceId, UUID turnId, int attempt, UUID leaseId) {

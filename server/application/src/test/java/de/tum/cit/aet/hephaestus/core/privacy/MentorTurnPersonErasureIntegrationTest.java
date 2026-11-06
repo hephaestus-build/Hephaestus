@@ -176,7 +176,6 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
 
     private MentorEntry toolResultOf(Workspace workspace, MentorTurn turn) {
         List<MentorEntry> stored = MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId());
-        assertThat(stored.getLast().isRedacted()).as("the answer stays").isFalse();
         return stored.stream()
                 .filter(entry -> entry.getKind() == MentorEntry.Kind.TOOL_RESULT)
                 .findFirst()
@@ -202,7 +201,43 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 assertThat(result.isRedacted()).isTrue();
                 assertThat(String.valueOf(result.getPayload())).doesNotContain("Target's open review");
             });
+            assertThat(MentorLedgerFixtures.turnEntries(
+                            entityManager, erasure.workspace().getId(), turn.getId()))
+                    .filteredOn(entry -> entry.getKind() == MentorEntry.Kind.HEPH)
+                    .allSatisfy(entry -> {
+                        assertThat(entry.isRedacted()).isTrue();
+                        assertThat(entry.getText()).isEmpty();
+                        assertThat(String.valueOf(entry.getPayload())).doesNotContain("Alex");
+                    });
         }
+    }
+
+    @Test
+    void shouldEraseAnAnswerThatUsesEarlierContextWithoutAnotherToolCall() {
+        Erasure erasure = requestErasure(sourceThatFailsOnce());
+        MentorTurn earlier = ask(erasure.workspace(), erasure.main(), "Who reviews?");
+        end(earlier, "Alex reviews.");
+        MentorTurn running = ask(erasure.workspace(), erasure.main(), "And who merges?");
+        run(erasure);
+        turns.end(
+                running.getWorkspaceId(),
+                running.getId(),
+                running.getAttempt(),
+                Objects.requireNonNull(running.getLeaseId()),
+                new MentorTurnService.Ending(
+                        MentorTurn.Status.DONE,
+                        List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Alex merges.")),
+                        null,
+                        null));
+        assertThat(MentorLedgerFixtures.turnEntries(
+                        entityManager, erasure.workspace().getId(), running.getId()))
+                .filteredOn(entry -> entry.getKind() == MentorEntry.Kind.HEPH)
+                .singleElement()
+                .satisfies(entry -> {
+                    assertThat(entry.isRedacted()).isTrue();
+                    assertThat(entry.getText()).isEmpty();
+                    assertThat(String.valueOf(entry.getPayload())).doesNotContain("Alex");
+                });
     }
 
     @Test

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,9 +44,16 @@ public class MentorRedaction {
 
     private static final String SEARCH_CONVERSATION = "search_conversation";
 
+    private final PersonDataCopyFence copies;
     private final MentorEntryRepository entries;
     private final ApplicationEventPublisher events;
     private final ObjectMapper mapper;
+
+    /** An attempt may have retained copied context even when it made no new tool call. */
+    @Transactional(readOnly = true)
+    public boolean personErasedSince(Instant startedAt) {
+        return copies.erasedSince(MentorEntryRepository.COPIES_PERSON_DATA_STORE, startedAt);
+    }
 
     /** Redacts the entries and every copy of them, in any workspace. */
     @Transactional
@@ -53,14 +61,24 @@ public class MentorRedaction {
         redactWithCopies(entryIds);
     }
 
+    /** Person-copy erasure also removes answers that may have used the copied data. */
+    @Transactional
+    public void redactPersonCopies(Collection<UUID> entryIds) {
+        redactWithCopies(entryIds, true);
+    }
+
     private void redactWithCopies(Collection<UUID> entryIds) {
+        redactWithCopies(entryIds, false);
+    }
+
+    private void redactWithCopies(Collection<UUID> entryIds, boolean withDerivedAnswers) {
         if (entryIds.isEmpty()) {
             return;
         }
         UUID[] ids = entryIds.toArray(UUID[]::new);
         entries.lockTreesOf(ids);
-        List<MentorEntryRepository.EntryRef> messages = entries.findUnredactedMessagesAmong(ids);
-        entries.redactWithCopies(ids, ERASED, true);
+        entries.flush();
+        List<MentorEntryRepository.EntryRef> messages = entries.redactWithCopies(ids, ERASED, true, withDerivedAnswers);
         // Tool results, summaries and system entries are never shown, so only messages change an open conversation.
         Map<Conversation, List<UUID>> byConversation = new LinkedHashMap<>();
         for (MentorEntryRepository.EntryRef message : messages) {
@@ -84,7 +102,8 @@ public class MentorRedaction {
     @Transactional
     public void eraseCopiesOf(Collection<UUID> entryIds) {
         if (!entryIds.isEmpty()) {
-            entries.redactWithCopies(entryIds.toArray(UUID[]::new), ERASED, false);
+            entries.flush();
+            entries.redactWithCopies(entryIds.toArray(UUID[]::new), ERASED, false, false);
         }
     }
 
@@ -97,7 +116,7 @@ public class MentorRedaction {
      * @param personErased whether the person-erasure step that redacts the tool results that copy anyone's data
      *     ({@link MentorEntryRepository#COPIES_PERSON_DATA}) ran since the attempt started. That step runs after every
      *     step that erases a source, so the attempt may have read the person's data; its own such results, and the
-     *     summaries over them, are erased too. The step records no workspace, so a step for a person in any workspace
+     *     answers and summaries derived from earlier context, are erased too. The step records no workspace, so a step for a person in any workspace
      *     counts.
      */
     @Transactional
@@ -110,7 +129,7 @@ public class MentorRedaction {
         }
         if (personErased) {
             appended.stream()
-                    .filter(entry -> MentorPiEntries.copiesPersonData(entry.getPayload()))
+                    .filter(entry -> entry.getKind() != MentorEntry.Kind.USER)
                     .map(MentorEntry::getId)
                     .forEach(stale::add);
         }
