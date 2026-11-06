@@ -13,6 +13,7 @@ import {
 	indexContainsSubject,
 	validateImageBundleInventory,
 	requiresSignedEvidence,
+	generationTime,
 	validateLicenseReport,
 	validateManifest,
 } from "./verify-release-evidence.ts";
@@ -312,7 +313,7 @@ ${failure === "wrong-signature" ? String.raw`printf '%s\n' 'signature refused' >
 });
 
 void describe("complete archived checksum coverage", { skip: process.platform === "win32" }, () => {
-	for (const omission of ["policy", "syft", "advisory", "source"] as const) {
+	for (const omission of ["manifest", "policy", "syft", "advisory", "source", "time"] as const) {
 		void it(`a signed checksum list missing ${omission} cannot trust the unlisted forged file`, async () => {
 			const directory = await mkdtemp(path.join(tmpdir(), "release-coverage-"));
 			const bin = path.join(directory, "bin");
@@ -331,6 +332,7 @@ void describe("complete archived checksum coverage", { skip: process.platform ==
 						schemaVersion: 1,
 						release: "v0.86.1",
 						sourceSbom: omission === "source" ? 1 : undefined,
+						generatedAt: omission === "time" ? undefined : "2026-09-01T00:00:00Z",
 						subjects: [subject("linux/amd64"), subject("linux/arm64")],
 					}),
 				],
@@ -360,13 +362,14 @@ void describe("complete archived checksum coverage", { skip: process.platform ==
 			}
 
 			const missing = {
+				manifest: "manifest.json",
 				policy: "vulnerability-policy.json",
 				syft: "server-linux-amd64.syft.json",
 				advisory: advisories[0],
 				source: "source.cdx.json",
+				time: undefined,
 			}[omission];
-			assert.ok(missing !== undefined);
-			if (omission === "policy") {
+			if (omission === "policy" && missing !== undefined) {
 				files.set(missing, "unlisted forged policy data");
 			}
 			let checksums = "";
@@ -388,8 +391,41 @@ void describe("complete archived checksum coverage", { skip: process.platform ==
 				{ encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` } },
 			);
 			assert.notEqual(child.status, 0);
-			assert.ok(child.stderr.includes(`SHA256SUMS does not cover ${missing}`));
+			assert.ok(
+				child.stderr.includes(
+					missing === undefined
+						? "release manifest has no valid generation time"
+						: `SHA256SUMS does not cover ${missing}`,
+				),
+			);
 			assert.doesNotMatch(child.stderr, /Unexpected token|unlisted forged/u);
+		});
+	}
+});
+
+void describe("bundle generation time", () => {
+	const now = new Date("2026-11-08T00:00:01Z");
+
+	void it("reads the exact time of the signed manifest", () => {
+		assert.deepEqual(
+			generationTime({ generatedAt: "2026-10-30T21:04:32Z" }, now),
+			new Date("2026-10-30T21:04:32Z"),
+		);
+	});
+
+	for (const generatedAt of [
+		undefined,
+		null,
+		1_793_000_000,
+		"",
+		"2026-10-30",
+		"2026-10-30T21:04:32.000Z",
+		"2026-10-30T21:04:32+00:00",
+		"2026-02-30T00:00:00Z",
+		"2026-11-08T00:00:02Z",
+	]) {
+		void it(`fails closed on ${String(generatedAt)}`, () => {
+			assert.throws(() => generationTime({ generatedAt }, now), /no valid generation time/u);
 		});
 	}
 });

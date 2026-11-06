@@ -13,6 +13,7 @@ import {
 	advisoryFile,
 	componentAdvisories,
 	evaluate,
+	exactUtcTime,
 	needsComponentEvidence,
 } from "./check-release-vulnerabilities.ts";
 import { asString, readJsonFileSync } from "./lib/json.ts";
@@ -371,6 +372,26 @@ function verifyOwnedCapture(cycloneDx: unknown, commit: unknown, capture: boolea
 	}
 }
 
+/** When the bundle was generated. In a signed bundle, SHA256SUMS covers the manifest that records it. */
+export function generationTime(manifest: JsonObject, now = new Date()): Date {
+	const time =
+		typeof manifest.generatedAt === "string" ? exactUtcTime(manifest.generatedAt) : undefined;
+	if (time === undefined || time > now) {
+		throw new Error("release manifest has no valid generation time");
+	}
+	return time;
+}
+
+/**
+ * The time at which to evaluate the stored policy. Verification asks whether the release satisfied that policy
+ * when it was signed; a fresh scan answers for today, under the current policy. Thus, an exception that lapsed
+ * after signing does not fail the archive. Every mode reads the value, so a preflight finds a bad one first.
+ */
+function evaluationTime(manifest: JsonObject, historical: boolean): Date {
+	const generatedAt = generationTime(manifest);
+	return historical ? generatedAt : new Date();
+}
+
 export function verifyReleaseEvidence(
 	directory: string,
 	mode: VerificationMode = "verify",
@@ -437,6 +458,7 @@ export function verifyReleaseEvidence(
 		}),
 		...componentAdvisories(policy, undefined, historical).map(advisoryFile),
 	]);
+	const evaluatedAt = evaluationTime(manifestValue, historical);
 	for (const subject of manifest.subjects) {
 		const suffix = subject.platform.replace("/", "-");
 		const prefix = path.join(directory, `${subject.image}-${suffix}`);
@@ -458,7 +480,7 @@ export function verifyReleaseEvidence(
 			subject.image,
 			trivy,
 			policy,
-			new Date(),
+			evaluatedAt,
 			{
 				digest: subject.digest,
 				platform: subject.platform,
