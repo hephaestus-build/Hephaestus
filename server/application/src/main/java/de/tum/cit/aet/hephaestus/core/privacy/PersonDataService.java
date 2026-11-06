@@ -25,6 +25,8 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.RecoverableDataAccessException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -286,17 +288,22 @@ public class PersonDataService {
                 requests.saveAndFlush(r);
             });
         } catch (RuntimeException exception) {
+            boolean retry = exception instanceof TransientDataAccessException
+                    || exception instanceof RecoverableDataAccessException;
             log.atError()
                     .addKeyValue("event.name", "person_data.erasure.failed")
                     .addKeyValue("person_data.request.id", id)
                     .addKeyValue("person_data.store", activeStore)
                     .addKeyValue("error.type", exception.getClass().getName())
-                    .log("Person data erasure failed");
+                    .log(
+                            retry
+                                    ? "Person data erasure will retry after a temporary store failure"
+                                    : "Person data erasure stopped; an instance admin must resume it");
             tx.executeWithoutResult(status -> {
                 var r = requests.lock(id).orElseThrow(() -> notFound());
                 if (r.getState() == PersonDataRequest.State.ERASING) {
-                    r.setState(PersonDataRequest.State.FAILED);
-                    r.setFailureCode("STORE_ERASURE_FAILED");
+                    if (!retry) r.setState(PersonDataRequest.State.FAILED);
+                    r.setFailureCode(retry ? "STORE_ERASURE_RETRY_PENDING" : "STORE_ERASURE_FAILED");
                     requests.saveAndFlush(r);
                 }
             });

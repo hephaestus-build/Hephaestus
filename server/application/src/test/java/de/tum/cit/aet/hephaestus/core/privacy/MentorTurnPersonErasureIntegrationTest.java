@@ -49,6 +49,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -337,8 +338,26 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 new MentorTurnService.Ending(MentorTurn.Status.DONE, appended, null, null));
     }
 
+    @Test
+    void shouldRetryATemporaryStoreFailureFromTheScheduledBacklogWithoutAnotherAdminConfirmation() {
+        Erasure erasure = requestErasure(sourceThatFailsOnce(new TransientDataAccessResourceException("temporary")));
+        var failed = erasure.service().get(erasure.requestId()).request();
+        assertThat(failed.getState()).isEqualTo(PersonDataRequest.State.ERASING);
+        assertThat(failed.getFailureCode()).isEqualTo("STORE_ERASURE_RETRY_PENDING");
+        var runner = new PersonDataJobRunner(jdbc, erasure.service());
+        runner.run();
+        var completed = erasure.service().get(erasure.requestId()).request();
+        assertThat(completed.getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(completed.getFailureCode()).isNull();
+        assertThat(completed.getScopeJson()).isNull();
+    }
+
     /** A source step that fails on its first run, before the last step, so the erasure fails and resumes. */
     private PersonDataContributor sourceThatFailsOnce() {
+        return sourceThatFailsOnce(new IllegalStateException("source step failed"));
+    }
+
+    private PersonDataContributor sourceThatFailsOnce(RuntimeException failure) {
         var failOnce = new AtomicBoolean(true);
         return new JdbcPersonDataStore(
                 namedJdbc, mapper, "source_step", "user", "t.id = ANY(:users)", "id,name", "id", "name=NULL", 0) {
@@ -346,7 +365,7 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
             public long erase(PersonDataSelection selection, PersonScope frozenScope) {
                 long count = super.erase(selection, frozenScope);
                 if (failOnce.getAndSet(false)) {
-                    throw new IllegalStateException("source step failed");
+                    throw failure;
                 }
                 return count;
             }
