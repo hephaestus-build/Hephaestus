@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793986200000-1" author="hephaestus">
+        <comment>Permit a review to stop because its attempts ended before they confirmed a decision for each destination.</comment>
+        <sql>ALTER TABLE review DROP CONSTRAINT ck_review_stop_reason;</sql>
+        <sql>ALTER TABLE review ADD CONSTRAINT ck_review_stop_reason CHECK(stop_reason IS NULL OR stop_reason IN ('TIMED_OUT','EXECUTION_FAILED','PREPARATION_FAILED','PROCESSING_FAILED','PERSON_DATA_ERASED','STALE_ROLLOUT_REVISION','CANCELLED_BY_ADMIN','REPLACED','LEGACY_FAILURE','EXECUTION_INCOMPLETE','RESULT_WITHHELD','READINESS_REFUSED','SUSPECT_LISTING','BUDGET','USAGE_UNVERIFIABLE','DEADLINE','CANCELLED','ENUMERATION_FAILED','ENUMERATION_LIMIT','NO_SCAN_PRACTICES','MODEL_CHANGED','MODEL_UNAVAILABLE','ERROR','LEGACY_SCOPE_UNKNOWN','CONTRACT_CHANGED','NO_SANDBOX_ROOM','COMPOSITION_UNCONFIRMED'));</sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM review WHERE stop_reason='COMPOSITION_UNCONFIRMED') THEN
+        RAISE EXCEPTION 'Cannot remove a stop reason used by existing reviews. Restore a verified backup instead.';
+    END IF;
+END $$;
+ALTER TABLE review DROP CONSTRAINT ck_review_stop_reason;
+ALTER TABLE review ADD CONSTRAINT ck_review_stop_reason CHECK(stop_reason IS NULL OR stop_reason IN ('TIMED_OUT','EXECUTION_FAILED','PREPARATION_FAILED','PROCESSING_FAILED','PERSON_DATA_ERASED','STALE_ROLLOUT_REVISION','CANCELLED_BY_ADMIN','REPLACED','LEGACY_FAILURE','EXECUTION_INCOMPLETE','RESULT_WITHHELD','READINESS_REFUSED','SUSPECT_LISTING','BUDGET','USAGE_UNVERIFIABLE','DEADLINE','CANCELLED','ENUMERATION_FAILED','ENUMERATION_LIMIT','NO_SCAN_PRACTICES','MODEL_CHANGED','MODEL_UNAVAILABLE','ERROR','LEGACY_SCOPE_UNKNOWN','CONTRACT_CHANGED','NO_SANDBOX_ROOM'));
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

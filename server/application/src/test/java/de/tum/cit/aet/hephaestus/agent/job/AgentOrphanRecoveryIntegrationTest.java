@@ -141,6 +141,9 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("Orphan recovery over PostgreSQL Integration")
 class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @Autowired
+    private ReviewJobCompletionService completion;
+
+    @Autowired
     private PracticeVersionService runtimePracticeVersions;
 
     private ReviewJobZombieSweeper sweeper;
@@ -279,8 +282,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         when(properties.maxRetries()).thenReturn(5);
         // A tiny renewal interval: the quiet time after the priming check ends at once, and the cutoff is now.
         when(properties.heartbeatInterval()).thenReturn(Duration.ofMillis(1));
-        recovery =
-                new ReviewJobRecovery(jobRepository, properties, objectMapper, attemptUsage, Optional.of(continuation));
+        recovery = new ReviewJobRecovery(
+                jobRepository, properties, objectMapper, attemptUsage, Optional.of(continuation), meterRegistry);
         sweeper = new ReviewJobZombieSweeper(
                 jobRepository,
                 workerRegistryRepository,
@@ -502,7 +505,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("requeueOrphan refuses an admitted attempt in SQL, and only its owner's attempt can end it")
+    @DisplayName("requeueOrphan refuses an admitted attempt in SQL")
     void shouldRefuseToRequeueAnAdmittedAttemptWhenAnyCallerTries() {
         UUID admitted = runningJobOwnedBy("owner", Instant.now(), 0);
         admitWithResult(admitted);
@@ -510,17 +513,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
 
         int requeued = transactionTemplate.execute(
                 s -> jobRepository.requeueOrphan(admitted, lease("owner"), 5, Instant.now()));
-        int byStranger = transactionTemplate.execute(
-                s -> jobRepository.completeAdmittedOwnedBy(admitted, lease("stranger"), 0, Instant.now()));
-        int byLaterAttempt = transactionTemplate.execute(
-                s -> jobRepository.completeAdmittedOwnedBy(admitted, lease("owner"), 1, Instant.now()));
-        int notAdmitted = transactionTemplate.execute(
-                s -> jobRepository.completeAdmittedOwnedBy(unadmitted, lease("owner"), 0, Instant.now()));
 
         assertThat(requeued).isZero();
-        assertThat(byStranger).isZero();
-        assertThat(byLaterAttempt).isZero();
-        assertThat(notAdmitted).isZero();
         ReviewJob untouched = jobRepository.findById(admitted).orElseThrow();
         assertThat(untouched.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
         assertThat(untouched.getAttempt()).isZero();
@@ -565,9 +559,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                     new ReviewJobRepository.CompositionRequeue(0, 5, Instant.now()));
         });
         assertThat(staleRequeue).isZero();
-        Integer staleCompletion = transactionTemplate.execute(
-                s -> jobRepository.completeAdmittedOwnedBy(jobId, lease("dead-replica-9"), 0, Instant.now()));
-        assertThat(staleCompletion).isZero();
         fastForwardAvailableAt(jobId);
         assertThat(eligibleForClaim(jobId)).isTrue();
     }
@@ -642,10 +633,39 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(ResultAdmissionService.isContinuation(closing)).isTrue();
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {6, 7})
+    @DisplayName("an admitted review lost after the retry limit gets further attempts that only withhold what is open")
+    void shouldHandOnAnAdmittedReviewWhoseWithholdingAttemptIsLost(int attempt) {
+        UUID jobId = runningJobOwnedBy("dead-replica-13", Instant.now().minus(Duration.ofMinutes(5)), attempt);
+        admitWithResult(jobId);
+        expireLeasesOf("dead-replica-13");
+
+        sweeper.recoverOrphanedJobs();
+
+        ReviewJob closing = jobRepository.findById(jobId).orElseThrow();
+        assertThat(closing.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(closing.getAttempt()).isEqualTo(attempt + 1);
+    }
+
     @Test
-    @DisplayName("an admitted review whose last attempt is lost too completes with its results kept and never fails")
-    void shouldCompleteAnAdmittedReviewWhoseAttemptAfterTheRetryLimitIsLost() {
-        UUID jobId = runningJobOwnedBy("dead-replica-12", Instant.now().minus(Duration.ofMinutes(5)), 6);
+    @DisplayName(
+            "an admitted review past its timeout is handed on, because a timeout records no destination's decision")
+    void shouldHandOnAnAdmittedReviewThatPassedItsTimeout() {
+        UUID jobId = runningJobOwnedBy("hung-replica", Instant.now().minus(Duration.ofHours(2)), 0);
+        admitWithResult(jobId);
+
+        sweeper.reapStaleRunningJobs();
+
+        ReviewJob closing = jobRepository.findById(jobId).orElseThrow();
+        assertThat(closing.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(closing.getAttempt()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("an admitted review whose every attempt is lost closes as partial with its own reason, results kept")
+    void shouldCloseAnAdmittedReviewAsPartialWhenEveryAttemptIsLost() {
+        UUID jobId = runningJobOwnedBy("dead-replica-12", Instant.now().minus(Duration.ofMinutes(5)), 8);
         Result observed = admitWithResult(jobId);
         expireLeasesOf("dead-replica-12");
         var unrecorded = meterRegistry.counter(
@@ -653,12 +673,15 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         double unrecordedBefore = unrecorded.count();
 
         sweeper.recoverOrphanedJobs();
+        completion.tick();
 
-        ReviewJob completed = jobRepository.findById(jobId).orElseThrow();
-        assertThat(completed.getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
+        ReviewJob ended = jobRepository.findById(jobId).orElseThrow();
+        assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
         assertThat(unrecorded.count() - unrecordedBefore).isEqualTo(1);
-        assertThat(completed.getErrorMessage()).isNull();
         assertThat(practiceResultRepository.findById(observed.getId())).isPresent();
+        assertThat(jdbc.queryForObject(
+                        "SELECT status||'/'||stop_reason FROM review WHERE id=?", String.class, ended.getReviewId()))
+                .isEqualTo("PARTIAL/COMPOSITION_UNCONFIRMED");
     }
 
     @Test

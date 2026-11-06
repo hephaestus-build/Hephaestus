@@ -107,7 +107,13 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
                 attemptUsage,
                 meterRegistry,
                 new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
-                new ReviewJobRecovery(jobRepository, AGENT_PROPS, objectMapper, attemptUsage, Optional.empty()),
+                new ReviewJobRecovery(
+                        jobRepository,
+                        AGENT_PROPS,
+                        objectMapper,
+                        attemptUsage,
+                        Optional.empty(),
+                        new SimpleMeterRegistry()),
                 AGENT_PROPS);
         sweeper.ticker = ticker::get;
         lenient().when(jobRepository.databaseNow()).thenAnswer(inv -> databaseClock.get());
@@ -254,7 +260,8 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
                             AGENT_PROPS,
                             objectMapper,
                             TerminalUsageTestFixtures.attemptUsageOverMocks(jobRepository, usageRecorder),
-                            Optional.empty()),
+                            Optional.empty(),
+                            new SimpleMeterRegistry()),
                     AGENT_PROPS);
             clearInvocations(jobRepository);
 

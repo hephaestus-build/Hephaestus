@@ -137,11 +137,17 @@ public class ReviewJobCompletionService {
                                 : admitted || job.getExecutionStartedAt() != null
                                         ? ReviewStatus.PARTIAL
                                         : ReviewStatus.FAILED;
+        boolean unconfirmed = output != null
+                && RefusalOutcome.COMPOSITION_UNCONFIRMED
+                        .name()
+                        .equals(output.path("outcome").asString());
         var stop = readinessRefused
                 ? ReviewStopReason.READINESS_REFUSED
-                : completed
-                        ? runtimeIncomplete ? ReviewStopReason.EXECUTION_INCOMPLETE : null
-                        : job.getStatus() == ReviewJobStatus.TIMED_OUT ? ReviewStopReason.TIMED_OUT : reason;
+                : unconfirmed
+                        ? ReviewStopReason.COMPOSITION_UNCONFIRMED
+                        : completed
+                                ? runtimeIncomplete ? ReviewStopReason.EXECUTION_INCOMPLETE : null
+                                : job.getStatus() == ReviewJobStatus.TIMED_OUT ? ReviewStopReason.TIMED_OUT : reason;
         reviews.complete(
                 job.getWorkspaceId(),
                 review.id(),

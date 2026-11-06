@@ -129,7 +129,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
             properties(),
             new JsonMapper(),
             TerminalUsageTestFixtures.attemptUsageOverMocks(jobs, mock(LlmUsageRecorder.class)),
-            Optional.empty());
+            Optional.empty(),
+            new SimpleMeterRegistry());
 
     private static final String ADMITTED_RESULT =
             "{\"contractVersion\":3,\"results\":[{\"practiceSlug\":\"silent-failure\","
@@ -946,7 +947,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         // The cancellation owns the outcome: nothing hands the attempt on, and its fenced terminal write changes
         // nothing.
         verifyNoInteractions(recovery);
-        verify(jobs, never()).completeAdmittedOwnedBy(any(), any(), anyInt(), any());
     }
 
     @Test

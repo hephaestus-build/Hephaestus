@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -113,7 +114,13 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
                 attemptUsage,
                 meterRegistry,
                 new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
-                new ReviewJobRecovery(jobRepository, agentProperties, objectMapper, attemptUsage, Optional.empty()),
+                new ReviewJobRecovery(
+                        jobRepository,
+                        agentProperties,
+                        objectMapper,
+                        attemptUsage,
+                        Optional.empty(),
+                        new SimpleMeterRegistry()),
                 agentProperties);
         workspace = workspaceRepository.save(TestEntities.activeWorkspace("stale-reap-ws"));
         LlmConnection connection = connectionRepository.save(LlmCatalogTestFixtures.connection("stale-reap"));

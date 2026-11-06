@@ -4286,7 +4286,8 @@ export const zReview = z.object({
         'ERROR',
         'LEGACY_SCOPE_UNKNOWN',
         'CONTRACT_CHANGED',
-        'NO_SANDBOX_ROOM'
+        'NO_SANDBOX_ROOM',
+        'COMPOSITION_UNCONFIRMED'
     ]).nullable()
 });
 
@@ -4421,7 +4422,8 @@ export const zReviewSummary = z.object({
         'ERROR',
         'LEGACY_SCOPE_UNKNOWN',
         'CONTRACT_CHANGED',
-        'NO_SANDBOX_ROOM'
+        'NO_SANDBOX_ROOM',
+        'COMPOSITION_UNCONFIRMED'
     ]).nullable()
 });
 
@@ -4557,7 +4559,8 @@ export const zReviewDetail = z.object({
         'ERROR',
         'LEGACY_SCOPE_UNKNOWN',
         'CONTRACT_CHANGED',
-        'NO_SANDBOX_ROOM'
+        'NO_SANDBOX_ROOM',
+        'COMPOSITION_UNCONFIRMED'
     ]).nullable(),
     usage: zReviewUsage
 });
@@ -4985,7 +4988,8 @@ export const zScanDetail = z.object({
         'ERROR',
         'LEGACY_SCOPE_UNKNOWN',
         'CONTRACT_CHANGED',
-        'NO_SANDBOX_ROOM'
+        'NO_SANDBOX_ROOM',
+        'COMPOSITION_UNCONFIRMED'
     ]).nullable()
 });
 
@@ -5041,7 +5045,8 @@ export const zScanSummary = z.object({
         'ERROR',
         'LEGACY_SCOPE_UNKNOWN',
         'CONTRACT_CHANGED',
-        'NO_SANDBOX_ROOM'
+        'NO_SANDBOX_ROOM',
+        'COMPOSITION_UNCONFIRMED'
     ]).nullable()
 });
 

@@ -210,18 +210,18 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldPreserveAdmissionFactsWhenALostWriterIsCompleted() {
+    void shouldPreserveAdmissionFactsWhenALostWriterEnds() {
         var job = running("runtime-terminal-admitted");
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("a".repeat(64));
         jobs.saveAndFlush(job);
-        assertThat(transactions.<Integer>execute(
-                        status -> jobs.completeAdmittedOwnedBy(job.getId(), OWNER, 0, Instant.now())))
+        assertThat(transactions.<Integer>execute(status -> jobs.transitionStatusOwnedBy(
+                        job.getId(), ReviewJobStatus.FAILED, Instant.now(), "lost", OWNER, 0)))
                 .isEqualTo(1);
         var stored = jobs.findById(job.getId()).orElseThrow();
         assertThat(stored.getAdmissionAttempt()).isZero();
         assertThat(stored.getAdmissionDigest()).isEqualTo("a".repeat(64));
         assertThat(stored.getAttempt()).isZero();
-        assertThat(stored.getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
+        assertThat(stored.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
     }
 }

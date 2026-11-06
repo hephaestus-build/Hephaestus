@@ -347,7 +347,9 @@ public class WorkerFeedbackComposer {
                 if (handedOn == null) handedOn = stop.cause();
                 continue;
             }
-            withhold(plan, open.destination(), stop, open.resultIds());
+            // A refused withholding stays open, so a next attempt tries to record it again.
+            if (!withhold(plan, open.destination(), stop, open.resultIds()) && handedOn == null)
+                handedOn = stop.cause();
         }
         if (handedOn != null) {
             count(handedOn, "handed_on");
@@ -400,12 +402,14 @@ public class WorkerFeedbackComposer {
                 .toList();
     }
 
-    private void withhold(Plan plan, FeedbackDestination destination, Stop stop, List<UUID> resultIds) {
-        if (resultIds.isEmpty()) return;
+    /** Whether the server recorded the withholding; there is nothing to record without results. */
+    private boolean withhold(Plan plan, FeedbackDestination destination, Stop stop, List<UUID> resultIds) {
+        if (resultIds.isEmpty()) return true;
         try {
             admission.publishPackage(
                     plan.identity(), CompositionPackages.withheld(destination, stop.reason(), resultIds));
             count(stop.cause(), "withheld");
+            return true;
         } catch (AdmissionConflictException | PublicationContextRefusedException refused) {
             count(stop.cause(), "refused");
             log.error(
@@ -413,6 +417,7 @@ public class WorkerFeedbackComposer {
                     destination,
                     plan.identity().jobId(),
                     refused.getClass().getSimpleName());
+            return false;
         }
     }
 

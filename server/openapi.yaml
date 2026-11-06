@@ -21929,6 +21929,7 @@ components:
           - LEGACY_SCOPE_UNKNOWN
           - CONTRACT_CHANGED
           - NO_SANDBOX_ROOM
+          - COMPOSITION_UNCONFIRMED
           - null
       required:
       - activeJobCount
@@ -22340,6 +22341,7 @@ components:
           - LEGACY_SCOPE_UNKNOWN
           - CONTRACT_CHANGED
           - NO_SANDBOX_ROOM
+          - COMPOSITION_UNCONFIRMED
           - null
         usage:
           $ref: "#/components/schemas/ReviewUsage"
@@ -24065,6 +24067,7 @@ components:
           - LEGACY_SCOPE_UNKNOWN
           - CONTRACT_CHANGED
           - NO_SANDBOX_ROOM
+          - COMPOSITION_UNCONFIRMED
           - null
       required:
       - activeJobCount
@@ -24649,6 +24652,7 @@ components:
           - LEGACY_SCOPE_UNKNOWN
           - CONTRACT_CHANGED
           - NO_SANDBOX_ROOM
+          - COMPOSITION_UNCONFIRMED
           - null
       required:
       - baselineScanId
@@ -25014,6 +25018,7 @@ components:
           - LEGACY_SCOPE_UNKNOWN
           - CONTRACT_CHANGED
           - NO_SANDBOX_ROOM
+          - COMPOSITION_UNCONFIRMED
           - null
       required:
       - baselineScanId

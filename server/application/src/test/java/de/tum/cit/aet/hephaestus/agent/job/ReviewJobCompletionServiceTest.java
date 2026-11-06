@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -97,6 +99,43 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
                         "The execution ended without an admitted result");
         assertThat(job.getProcessingStatus()).isEqualTo(ProcessingStatus.FAILED);
         verifyNoInteractions(reviews);
+    }
+
+    @Test
+    void shouldKeepTheTrueReasonOfAnAdmittedRunThatEndedAfterItComposed() {
+        var job = RuntimeReviewTestData.job();
+        job.setStatus(ReviewJobStatus.TIMED_OUT);
+        job.setStartedAt(Instant.now());
+        job.setExecutionStartedAt(Instant.now());
+        job.setAdmissionAttempt(0);
+        job.setAdmissionDigest("proof");
+
+        service(job, ReviewKind.ITEM).tick();
+
+        verify(reviews)
+                .complete(
+                        anyLong(),
+                        any(),
+                        argThat(completion -> completion.status() == ReviewStatus.PARTIAL
+                                && completion.reason() == ReviewStopReason.TIMED_OUT));
+    }
+
+    @Test
+    void shouldCloseAReviewAsUnconfirmedOnlyWhenRecoveryEndedIt() {
+        var job = RuntimeReviewTestData.job();
+        job.setStatus(ReviewJobStatus.FAILED);
+        job.setAdmissionAttempt(0);
+        job.setAdmissionDigest("proof");
+        job.setOutput(new JsonMapper().createObjectNode().put("outcome", "COMPOSITION_UNCONFIRMED"));
+
+        service(job, ReviewKind.ITEM).tick();
+
+        verify(reviews)
+                .complete(
+                        anyLong(),
+                        any(),
+                        argThat(completion -> completion.status() == ReviewStatus.PARTIAL
+                                && completion.reason() == ReviewStopReason.COMPOSITION_UNCONFIRMED));
     }
 
     @Test

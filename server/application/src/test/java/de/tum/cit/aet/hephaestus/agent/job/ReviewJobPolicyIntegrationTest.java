@@ -190,7 +190,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                         properties,
                         mapper,
                         new ReviewAttemptUsageService(jobs, attemptUsageRows, mock(LlmUsageRecorder.class)),
-                        Optional.empty()));
+                        Optional.empty(),
+                        new SimpleMeterRegistry()));
     }
 
     @Autowired
@@ -660,7 +661,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                         admission,
                         new ReviewJobTelemetry(metrics, Tracer.NOOP),
                         capacity),
-                new ReviewJobRecovery(jobs, settings, mapper, usage, Optional.empty()));
+                new ReviewJobRecovery(jobs, settings, mapper, usage, Optional.empty(), new SimpleMeterRegistry()));
     }
 
     @Test

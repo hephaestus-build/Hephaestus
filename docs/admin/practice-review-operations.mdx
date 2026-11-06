@@ -136,7 +136,7 @@ Feedback that the worker cannot write is withheld with the most specific reason:
   For example, the budget ran out, or the model decided nothing.
 
 These causes withhold at once, because another attempt would meet them again.
-A review whose results were admitted never fails because of its feedback.
+A review whose results were admitted keeps them, whatever happens to its feedback.
 The `agent.job.composition.stopped` metric below counts each cause.
 
 A passing cause withholds nothing. Examples are a provider outage, an unexpected failure, or the composition timeout.
@@ -255,8 +255,8 @@ Use them for alerts instead of application logs.
 - **`agent.job.delivery.recovered`** — deliveries stopped by an executor crash and successfully retried.
 - **`agent.job.composition.stopped`** — destinations whose feedback the worker did not write, tagged by `cause` and `outcome`.
   `withheld` counts a recorded withholding, and `handed_on` counts an attempt handed on to compose again.
-  `refused` counts a withholding that the server refused, which leaves its destination without a recorded reason.
-  `unrecorded` counts a review whose last attempt was lost as well, so it completed with open destinations.
+  `refused` counts a withholding that the server refused. The attempt is handed on to record it again.
+  `unrecorded` counts a review whose attempts all ended before they confirmed each destination, so it closed as Partial.
   The causes that withhold at once are `no_ai`, `budget`, `deadline`, `model_refused`, `context_window`, `publication_refused`, `no_decision`, `inputs_gone`, `inputs_erased` and `retries_exhausted`.
   The passing causes are `provider`, `routing_unavailable` and `unexpected`.
 - **`agent.job.retention.stripped`** / **`agent.job.retention.deleted`** — rows pruned by the retention sweep.

@@ -28,5 +28,7 @@ public enum ReviewStopReason {
     /** History only: the review ran before its coverage was recorded. No code writes it, and old rows keep it. */
     LEGACY_SCOPE_UNKNOWN,
     CONTRACT_CHANGED,
-    NO_SANDBOX_ROOM;
+    NO_SANDBOX_ROOM,
+    /** The results were admitted, but the attempts ended before they could confirm a decision for each destination. */
+    COMPOSITION_UNCONFIRMED;
 }

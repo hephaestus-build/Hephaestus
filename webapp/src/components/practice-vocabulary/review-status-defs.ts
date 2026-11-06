@@ -140,6 +140,8 @@ export const REVIEW_STOP_REASON_SENTENCES: Record<ReviewStopReason, string> = {
 	REPLACED: "A newer review of the same work replaced it.",
 	LEGACY_FAILURE: "It was cancelled before Hephaestus recorded why.",
 	EXECUTION_INCOMPLETE: "The review did not record an observation for every selected practice.",
+	COMPOSITION_UNCONFIRMED:
+		"The observations are kept, but we could not confirm where the feedback went.",
 	RESULT_WITHHELD: "Its candidate observations were withheld.",
 	READINESS_REFUSED: "Something the review needs was not ready.",
 	SUSPECT_LISTING: "The file listing changed too much to trust, so files were not removed.",
