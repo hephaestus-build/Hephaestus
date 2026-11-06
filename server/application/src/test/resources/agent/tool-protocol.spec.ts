@@ -1389,6 +1389,7 @@ void test(
 async function raw(
 	frames: Buffer[],
 	done: (replies: Header[]) => boolean = () => false,
+	waitMs = 5000,
 ): Promise<{ replies: Header[]; closed: boolean }> {
 	const socket = connect(served);
 	await once(socket, "connect");
@@ -1407,7 +1408,7 @@ async function raw(
 	socket.write(Buffer.concat(frames));
 	const timer = setTimeout(() => {
 		settled.resolve(false);
-	}, 5000);
+	}, waitMs);
 	const closed = await settled.promise;
 	clearTimeout(timer);
 	socket.destroy();
@@ -1479,6 +1480,8 @@ void test("the tools side counts a burst of requests in one chunk against its in
 	const { replies } = await raw(
 		[hello, ...execs],
 		(seen) => seen.filter((reply) => reply.type !== "hello").length === 20,
+		// Only the ceiling of a loaded host: `done` ends the wait as soon as every reply came.
+		60_000,
 	);
 	const busy = replies.filter((reply) => reply.type === "error" && reply.error === "busy");
 	assert.equal(busy.length, 20 - LIMITS.inFlight);
