@@ -154,7 +154,7 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
                         "kind",
                         "GITLAB",
                         "config",
-                        "{\"serverUrl\":\"" + alias.getServerUrl() + "\"}"));
+                        "{\"gitlabGroupId\":42,\"serverUrl\":\"" + alias.getServerUrl() + "\"}"));
         seed.insert(
                 "issue",
                 Map.of(

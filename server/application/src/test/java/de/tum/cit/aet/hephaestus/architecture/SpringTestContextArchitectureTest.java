@@ -43,6 +43,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("workspace.ManualRepositoryAuthorityIntegrationTest", "manual-repository-authority"),
             assignment("workspace.WorkspaceRepositoryCoverageIntegrationTest", "repository-coverage"),
             assignment("workspace.GitLabWorkspaceCreationIntegrationTest", "gitlab-workspace-creation"),
+            assignment("workspace.WorkspacePurgeIntegrationTest", "gitlab-workspace-creation"),
             assignment("StartupBudgetIntegrationTest", "startup"),
             assignment("agent.mentor.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
@@ -120,7 +121,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry("base", "shared PostgreSQL, HTTP, security, review fixtures and application acceptance context"),
             Map.entry(
                     "gitlab-workspace-creation",
-                    "real workspace creation, persisted group identity and endpoint validation with only the provider group confirmation controlled"),
+                    "real workspace creation and purge, persisted group identity and endpoint validation with only the provider group confirmation controlled"),
             Map.entry(
                     "repository-provider-scope",
                     "real SQL provider, tenant and monitor lifetime enforcement with controlled GitLab transport and sync orchestration boundary"),

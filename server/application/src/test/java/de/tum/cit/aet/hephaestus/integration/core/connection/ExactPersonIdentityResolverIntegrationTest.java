@@ -260,7 +260,7 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
                         "kind",
                         "GITLAB",
                         "config",
-                        "{\"serverUrl\":\"" + provider.getServerUrl() + "\"}"));
+                        "{\"gitlabGroupId\":42,\"serverUrl\":\"" + provider.getServerUrl() + "\"}"));
         for (long sourceId : List.of(995202L, 995203L, 995204L, 995205L, 995208L)) {
             var source = new HashMap<String, Object>(Map.of(
                     "id",
