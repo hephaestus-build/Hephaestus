@@ -504,7 +504,7 @@ Withdrawal and correction address the stored provider references in place.
 Each destination ends with prepared feedback or a withholding that the server records.
 A destination that no composed decision reached gets the cause that stopped it, a `CompositionStop`.
 A destination that the server did not route gets no withholding.
-A composition stop never fails the review.
+A composition stop never changes a result.
 The `agent.job.composition.stopped` counter records each stop with its cause and outcome.
 
 A cause that another attempt would meet again withholds at once, with the most specific reason:
@@ -552,7 +552,7 @@ The handed-on attempts use the job's retry limit with its backoff.
 Attempts after the limit compose nothing and withhold each open destination as Not composed.
 A lost attempt or a refused withholding hands on again, up to three attempts after the limit.
 If those end too, the job fails with its results kept, and the review closes as Partial with [Composition unconfirmed](./practice-review-glossary.mdx#runtime-terms).
-A review that passes its timeout after admission takes the same path.
+The sweep sends a review that outlives its timeout after admission down the same path.
 
 A claim check can refuse a handed-on attempt: the developer declined AI, the budget is spent, or the model is gone.
 The attempt is then claimed to withhold what is open with that cause, without a model call.

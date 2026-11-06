@@ -145,7 +145,8 @@ Under load, the model calls wait for the shared call limit, so the time can run 
 A new attempt of the same job then writes only the feedback that is still open.
 It starts no sandbox and uses the job's retry limit with its usual backoff.
 The attempt at the retry limit withholds what a passing cause leaves open.
-If that attempt is lost too, one more attempt only withholds what is open.
+If that attempt is lost too, up to three attempts after the limit only withhold what is open.
+If those end too, the review closes as Partial with Composition unconfirmed.
 A handed-on attempt that the developer's AI choice, the budget or a missing model would refuse also only withholds, with that reason.
 
 A sandbox that cannot prepare its workspace runs again in a new attempt, within the same shared retry limit.

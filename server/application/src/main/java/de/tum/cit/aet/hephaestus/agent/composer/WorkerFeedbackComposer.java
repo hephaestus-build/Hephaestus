@@ -59,7 +59,7 @@ import tools.jackson.databind.node.ObjectNode;
  * work first, then the private feedback, which reads the review it follows. Each destination ends with prepared
  * feedback or a withholding the server records, with the cause that stopped it (see {@link CompositionStop}). A passing
  * cause hands the attempt on instead, so another attempt composes what is open, and a composition that cannot finish
- * never fails the review.
+ * never changes a result.
  *
  * <p>Each session is bounded: the model calls of one practice's turn per practice it decides (at most three), the
  * attempt's own output-token limit per call, and the composition deadline, which the proxy enforces on every call.

@@ -118,7 +118,6 @@ public class ReviewJobRecovery {
                     attempt,
                     now,
                     mapper.createObjectNode().put("outcome", RefusalOutcome.COMPOSITION_UNCONFIRMED.name()));
-            if (changed > 0) compositionUnconfirmed.increment();
         } else if (cancellation != null) {
             changed = jobs.transitionToCancelledOwnedBy(
                     jobId, now, "The worker stopped this attempt.", cancellation, leaseId, attempt);
@@ -133,7 +132,10 @@ public class ReviewJobRecovery {
         }
         if (changed == 0) return Outcome.NONE;
         bill(owned, counts);
-        if (admitted) return Outcome.UNCONFIRMED;
+        if (admitted) {
+            compositionUnconfirmed.increment();
+            return Outcome.UNCONFIRMED;
+        }
         return cancellation != null ? Outcome.CANCELLED : Outcome.FAILED;
     }
 
