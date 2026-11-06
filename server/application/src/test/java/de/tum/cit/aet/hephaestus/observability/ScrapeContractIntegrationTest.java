@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -24,6 +25,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * for every role, and on the scrape of this context for each meter that the server role registers at start. A renamed
  * meter, or a rule that reads a name that no role exports, fails here instead of leaving an alert that never fires.
  */
+// An own context: the shared one also holds the meters of other classes, so its series depend on the class order.
+@TestPropertySource(properties = "hephaestus.test.context=scrape-contract")
 class ScrapeContractIntegrationTest extends BaseIntegrationTest {
 
     private static final Path RULES = Path.of("../../deploy/chart/hephaestus/files/hephaestus-alerts.yml");
@@ -67,7 +70,7 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
             Map.entry("webhook_stream_oldest_message_age_seconds", "webhook role"),
             Map.entry("webhook_stream_poll_age_seconds", "webhook role"));
 
-    /** The series of this context's scrape. A meter with an unbounded label grows past it. */
+    /** The series of a server at start. A meter that registers too many label sets at start grows past it. */
     private static final int SERIES_BUDGET = 3000;
 
     @Autowired

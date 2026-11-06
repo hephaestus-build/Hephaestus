@@ -104,6 +104,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("practices.review.ReviewTimingFactsIntegrationTest", "review-reviewtimingfacts"),
             assignment("practices.review.feedbackmode.FeedbackModeReviewIntegrationTest", "review-feedbackmodereview"),
             assignment("practices.scan.ScanReportIntegrationTest", "review-scanreport"),
+            assignment("observability.ScrapeContractIntegrationTest", "scrape-contract"),
             assignment("productfeedback.ProductFeedbackEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.ProductFeedbackUpdateEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.ProductFeedbackCleanupIntegrationTest", "product-feedback-github"),
@@ -225,6 +226,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "scm-source-currentness",
                     "real native SCM capture and current-row reconciliation with a listener spy"
                             + " for transactional rollback and durable retry"),
+            Map.entry("scrape-contract", "the series of a server at start, before other classes add meters"),
             Map.entry("slack-enabled", "real Slack item resolution with the configured provider adapter"),
             Map.entry("slack-ingest", "enabled Slack ingest wiring with its review-submission spy"),
             Map.entry("slack-lifecycle", "agent submission boundary override"),
@@ -283,6 +285,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "notification.AccountDeletionEmailIntegrationTest",
             "notification.AccountSecurityEmailIntegrationTest",
             "notification.email.EmailAdminControllerIntegrationTest",
+            "observability.ScrapeContractIntegrationTest",
             "practices.research.ResearchDisclosureControllerIntegrationTest",
             "practices.review.DisabledIntegrationHistoryIntegrationTest",
             "practices.review.ScmEventReviewIntegrationTest$QuietWindow",
