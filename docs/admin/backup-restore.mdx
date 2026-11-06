@@ -175,7 +175,8 @@ kubectl -n "$NAMESPACE" rollout status deployment "$SERVER_DEPLOYMENT" --timeout
 
 A command timeout does not stop the Pod.
 If recovery exceeds one hour, repeat only the wait command.
-If it exceeds one day, extend the progress deadline before you repeat the wait.
+If it approaches one day, extend the progress deadline before it expires.
+If the deadline has expired, wait for the recovery Pod's readiness with `kubectl wait --for=condition=Ready pod <pod-name> --timeout=60m`.
 A failed startup logs `person_data.recovery.failed` with a closed `person_data.recovery.reason` code.
 It does not log the manifest or an exception that can quote its identities.
 

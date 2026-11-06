@@ -271,32 +271,32 @@ public class PersonDataService {
                 for (var store : registry.stores()) {
                     activeStore = store.store();
                     Boolean proceed = tx.execute(status -> {
-                        PersonDataRequest r = lockAdmittedErasure(id);
-                        if (r == null) return false;
-                        var completed = completed(r);
-                        if (!inventory.containsAll(completed.keySet()))
-                            throw new IllegalStateException("Erasure contributor inventory changed");
-                        if (!completed.containsKey(store.store())) {
-                            long count;
-                            try {
-                                count = store.erase(Objects.requireNonNull(frozen.get(store.store())), scope(r));
-                            } catch (RuntimeException failure) {
-                                // A broken connection can make rollback replace the original store exception.
-                                temporaryStoreFailure.set(isTemporaryFailure(failure));
-                                throw failure;
+                        try {
+                            PersonDataRequest r = lockAdmittedErasure(id);
+                            if (r == null) return false;
+                            var completed = completed(r);
+                            if (!inventory.containsAll(completed.keySet()))
+                                throw new IllegalStateException("Erasure contributor inventory changed");
+                            if (!completed.containsKey(store.store())) {
+                                long count = store.erase(Objects.requireNonNull(frozen.get(store.store())), scope(r));
+                                // The database clock, which every runtime shares: PersonDataCopyFence.erasedSince
+                                // compares
+                                // it with the start of a Heph turn, which is on the database clock too.
+                                Instant erasedAt = Objects.requireNonNull(
+                                                jdbc.queryForObject("SELECT clock_timestamp()", Timestamp.class))
+                                        .toInstant();
+                                completed.put(
+                                        store.store(),
+                                        new PersonDataStoreReceipt(count, erasedAt, r.getAdministratorAccountId()));
+                                r.setCompletedJson(mapper.writeValueAsString(completed));
+                                requests.saveAndFlush(r);
                             }
-                            // The database clock, which every runtime shares: PersonDataCopyFence.erasedSince compares
-                            // it with the start of a Heph turn, which is on the database clock too.
-                            Instant erasedAt = Objects.requireNonNull(
-                                            jdbc.queryForObject("SELECT clock_timestamp()", Timestamp.class))
-                                    .toInstant();
-                            completed.put(
-                                    store.store(),
-                                    new PersonDataStoreReceipt(count, erasedAt, r.getAdministratorAccountId()));
-                            r.setCompletedJson(mapper.writeValueAsString(completed));
-                            requests.saveAndFlush(r);
+                            return true;
+                        } catch (RuntimeException failure) {
+                            // A broken connection can make rollback replace the original transaction exception.
+                            temporaryStoreFailure.set(isTemporaryFailure(failure));
+                            throw failure;
                         }
-                        return true;
                     });
                     if (!Boolean.TRUE.equals(proceed)) return;
                 }
@@ -314,36 +314,40 @@ public class PersonDataService {
             }
         } catch (RuntimeException exception) {
             boolean temporary = temporaryStoreFailure.get() || isTemporaryFailure(exception);
-            @Nullable Boolean retry = null;
+            PersonDataRequest.@Nullable State failureState = null;
             try {
-                retry = tx.execute(status -> {
+                failureState = tx.execute(status -> {
                     var r = requests.lock(id).orElseThrow(() -> notFound());
-                    if (r.getState() != PersonDataRequest.State.ERASING) return false;
+                    if (r.getState() != PersonDataRequest.State.ERASING) return r.getState();
                     boolean retryPending = temporary && !"STORE_ERASURE_RETRY_PENDING".equals(r.getFailureCode());
                     if (!retryPending) r.setState(PersonDataRequest.State.FAILED);
                     r.setFailureCode(retryPending ? "STORE_ERASURE_RETRY_PENDING" : "STORE_ERASURE_FAILED");
                     requests.saveAndFlush(r);
-                    return retryPending;
+                    return r.getState();
                 });
             } finally {
-                if (!Boolean.TRUE.equals(retry))
+                boolean retry = failureState == PersonDataRequest.State.ERASING;
+                boolean failed = failureState == null || failureState == PersonDataRequest.State.FAILED;
+                if (failed)
                     meters.counter(CoreMetrics.PERSON_DATA_ERASURE_FAILURES).increment();
-                var event = Boolean.TRUE.equals(retry) ? log.atWarn() : log.atError();
+                var event = failed ? log.atError() : log.atWarn();
                 event.addKeyValue(
                                 "event.name",
-                                Boolean.TRUE.equals(retry)
+                                retry
                                         ? "person_data.erasure.retry_pending"
-                                        : "person_data.erasure.failed")
+                                        : failed ? "person_data.erasure.failed" : "person_data.erasure.cleanup_failed")
                         .addKeyValue("person_data.request.id", id)
                         .addKeyValue("person_data.store", activeStore)
                         .addKeyValue("error.type", exception.getClass().getName())
-                        .addKeyValue("person_data.failure_recorded", retry != null)
+                        .addKeyValue("person_data.failure_recorded", failureState != null)
                         .log(
-                                retry == null
+                                failureState == null
                                         ? "Person data erasure status could not be recorded; check database availability"
-                                        : Boolean.TRUE.equals(retry)
+                                        : retry
                                                 ? "Person data erasure will retry once after a temporary store failure"
-                                                : "Person data erasure stopped; an instance admin must resume it");
+                                                : failed
+                                                        ? "Person data erasure stopped; an instance admin must resume it"
+                                                        : "Person data erasure pass cleanup failed; check the request state");
             }
         }
     }
