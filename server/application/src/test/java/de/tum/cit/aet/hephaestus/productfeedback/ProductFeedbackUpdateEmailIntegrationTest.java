@@ -251,7 +251,8 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
                         new FeedbackRequestDTO(
                                 ProductFeedback.Kind.BUG, "private-feedback-content", "/private/page", null, null),
                         accountId(reporter),
-                        null)
+                        null,
+                        false)
                 .id();
     }
 

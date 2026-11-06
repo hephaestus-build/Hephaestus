@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
-import { ProductFeedbackMenu } from "@/components/product-feedback/ProductFeedbackMenu";
+import { ProductFeedbackButton } from "@/components/product-feedback/ProductFeedbackButton";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { expectSettledVisible } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
@@ -24,7 +24,7 @@ const meta = {
 		username: "johnDoe",
 		workspaceSlug: "demo-workspace",
 		sidebarTrigger: <SidebarTrigger />,
-		feedbackDialog: <ProductFeedbackMenu onSendFeedback={fn()} />,
+		feedbackDialog: <ProductFeedbackButton onSendFeedback={fn()} />,
 		onLogin: fn(),
 		onLogout: fn(),
 		onRetrySession: fn(),
@@ -152,14 +152,21 @@ export const AccountMenu: Story = {
 		session: "signed-in",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Product feedback" })).toBeVisible();
+		await expect(
+			canvas.getByRole("button", { name: "Send feedback about Hephaestus" }),
+		).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: /^Account/u }));
 		const menu = within(await screen.findByRole("menu"));
 		const settings = menu.getByRole("menuitem", { name: "User settings" });
 		await expectSettledVisible(settings);
 		await expect(settings).toHaveAttribute("href", "/settings?chromeWorkspace=demo-workspace");
+		await expect(menu.getByRole("menuitem", { name: "Your reports" })).toHaveAttribute(
+			"href",
+			"/product-feedback?chromeWorkspace=demo-workspace",
+		);
 		await expect(menu.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
 			"User settings",
+			"Your reports",
 			"Sign out",
 		]);
 	},
@@ -176,6 +183,7 @@ export const ReadOnly: Story = {
 		const menu = within(await screen.findByRole("menu"));
 		await expectSettledVisible(menu.getByRole("menuitem", { name: "Sign out" }));
 		await expect(menu.queryByRole("menuitem", { name: "User settings" })).not.toBeInTheDocument();
+		await expect(menu.queryByRole("menuitem", { name: "Your reports" })).not.toBeInTheDocument();
 	},
 };
 
@@ -192,7 +200,7 @@ export const Mobile: Story = {
 		// Firefox lays this row out wider than Chromium does, so Chromium has to show room to spare
 		// between the logo and the controls: a row that fits exactly here overflows there.
 		const logo = canvas.getByRole("link", { name: "Hephaestus home" });
-		const feedback = canvas.getByRole("button", { name: /^Product feedback/u });
+		const feedback = canvas.getByRole("button", { name: "Send feedback about Hephaestus" });
 		await expect(
 			feedback.getBoundingClientRect().left - logo.getBoundingClientRect().right,
 		).toBeGreaterThanOrEqual(40);

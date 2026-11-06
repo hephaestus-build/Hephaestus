@@ -87,16 +87,21 @@ Every report not on GitHub has an admin email fallback.
 Person actions use guarded transitions on the same version.
 An edit restarts the five-minute public hold and checks the outgoing revision again.
 Keep private cannot cancel a write that has already started.
-The saved response describes the intended route. The confirmation follows the row until it reaches its actual destination.
+The saved response describes the intended route. The receipt toast confirms storage and links to Your reports, which follows the row until it reaches its actual destination.
+
+The header opens the same composer directly on all screen sizes.
+Report history belongs to the account menu. The form asks for a message and any required sharing choice, with diagnostics behind an optional disclosure.
+The draft retains its original page context across navigation within the same workspace.
 
 ## Routing gate and consent
 
-One function, `admitPublic(report, revision)`, guards every public write at dispatch.
-It applies to first filing, edits, retries, and promotion.
+`RoutingGate` decides whether a draft is eligible for public filing.
+`FilingService` checks current consent and the destination before dispatch.
+Maintainer promotion calls `RoutingGate.refusePromotion` and then checks repository permissions.
 The ordinary public route requires all these conditions:
 
 - The reporter allows publication for this report under the current consent event.
-- The report kind is `BUG` or `IDEA`.
+- The draft describes an actionable issue, regardless of the submitted report kind.
 - A public destination and a valid draft exist for the exact outgoing revision.
 - The disposition is `ISSUE`, rather than `SECURITY` or `NOT_AN_ISSUE`.
 - The report has no risk latch or blocking redaction finding.
@@ -104,7 +109,9 @@ The ordinary public route requires all these conditions:
 - Confidence is `HIGH`.
 
 Otherwise, the report goes to the private repository, or to email when no private destination exists.
-`FEEDBACK`, praise, and questions therefore stay private.
+The prompt asks the model to classify praise and support questions as `NOT_AN_ISSUE`.
+Code does not independently identify those semantics.
+A misclassification can therefore become public when permission and the other checks allow it.
 Private issues record the first applicable reason: opted out, security, redaction, about a person, low confidence, abuse, or no draft.
 No-draft private issues use the code-redacted original text.
 
@@ -136,12 +143,12 @@ The model receives the report as delimited untrusted data and a bounded snapshot
 The snapshot contains at most 500 recently updated open issues, excludes pull requests, and refreshes every 15 minutes.
 Titles have a 120-character cap and share a fixed token budget.
 The model never receives private issue titles.
-The draft records snapshot coverage. A new filing enters the snapshot immediately.
+The snapshot is a bounded set of titles, not a complete duplicate search or source inspection.
 
 The model returns a disposition, issue type, title, sections, optional match, safety fields, and confidence.
 It leaves absent facts empty rather than invent reproduction steps.
 Code validates types, lengths, and that a proposed match exists and is open in the snapshot.
-An invalid response gets one corrective retry, then no draft.
+An invalid response selects the no-draft route.
 
 The constrained renderer escapes model fields as plain text under fixed bug or feature headings.
 It rejects model-supplied HTML, images, links, headings, and comments.
@@ -174,6 +181,12 @@ An unknown result blocks another write. A matching issue is adopted instead of c
 
 An atomic pace reservation allows one filing at a time per instance, at least ten seconds apart and at most 30 per hour.
 Public filing also has a five-per-account daily cap.
+Before queueing a report, submission allows ordinary accounts five accepted reports per UTC day across all workspaces and the instance endpoint.
+An account-scoped transaction advisory lock serializes the count and insert across server replicas.
+Instance admins bypass this submission cap. The existing per-minute, drafting, and filing limits still apply.
+
+Exhausting a model budget cannot bypass the submission cap through private fallback filing.
+
 The server honors `Retry-After` and reset headers.
 It waits when the installation has less than 20 percent of its rate limit left.
 These bounds leave headroom for practice feedback but cannot guarantee GitHub’s undisclosed limits.
@@ -204,7 +217,9 @@ At dispatch, the commenter needs current `write` or `admin` permission on both r
 An unknown permission denies promotion. `authorAssociation` does not establish authority.
 
 Promotion requires reporter permission and a valid redacted draft.
-It overrides kind and confidence only, never consent, security, the risk latch, or abuse.
+It overrides confidence only. The draft must remain an actionable, coherent `ISSUE`.
+It never overrides consent, security, the risk latch, or abuse.
+
 It creates a public issue with its own durable attempt marker, then closes the private issue with the public link.
 It adds no private backlink to the public issue.
 The no-draft fallback text cannot be promoted.
@@ -266,3 +281,33 @@ The ADR records the full alternatives and conditions for revisiting them.
 The [admin guide](/admin/product-feedback) owns setup, recovery, and manual cleanup.
 The [user guide](/user/product-feedback) owns the reporting flow and choices.
 The [personal-data map](/admin/dsms/personal-data-map) owns export and erasure coverage.
+
+## Source investigation boundary
+
+The current drafter has no source checkout or execution tools.
+It receives the release name stored with the report, the attached route, and a public issue-title snapshot.
+It must not claim a reproduction, root cause, relevant file, or fixed release from those inputs alone.
+The composer submits `FEEDBACK` for every report and leaves issue classification to the drafter.
+The API still accepts the stored report kinds. They do not determine eligibility for public filing.
+
+The model classification limits are described under [Routing gate and consent](#routing-gate-and-consent).
+
+A source-aware investigation needs the same capture boundary as practice reviews:
+
+- Resolve the reported release to an immutable commit in an operator-selected source repository.
+  The issue destination need not contain the code.
+- Capture a bounded read-only checkout and relevant open and closed issue excerpts.
+  Record their revisions and completeness. Record unavailable releases or incomplete searches as unavailable evidence.
+- Run investigation in the existing isolated runtime with a separate product feedback job contract.
+  Give it a deadline, token budget and lowest-priority model admission.
+  Do not create a practice review or charge a workspace for instance reports.
+- Separate user statements from observations supported by source evidence.
+  Require commit and file references for technical claims. Retain uncertainty where reproduction is unavailable.
+- Return a structured candidate to the existing validation, redaction, consent, hold and filing stages.
+  Give investigation no GitHub write credentials. It never decides to publish, close or comment on another issue.
+
+This is an extension boundary, not a capability of the current single-call drafter.
+It deliberately requires captured evidence and an explicit runtime contract before source inspection can be enabled.
+[GitHub’s task guidance](https://docs.github.com/en/copilot/tutorials/cloud-agent/get-the-best-results) supports well-scoped problems and acceptance criteria.
+[Anthropic’s workflow guidance](https://www.anthropic.com/research/building-effective-agents) supports starting with a bounded workflow and measuring quality before adding autonomous execution.
+[GitHub’s API guidance](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api) supports paced writes and honoring backoff signals.

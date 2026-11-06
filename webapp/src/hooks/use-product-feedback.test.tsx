@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { FeedbackReceipt } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
-import { useSubmitProductFeedback } from "./use-product-feedback";
+import { useProductFeedbackSharing, useSubmitProductFeedback } from "./use-product-feedback";
 
 const RECEIPT = {
 	id: "a1a1a1a1-0000-0000-0000-000000000001",
@@ -86,4 +86,54 @@ describe("product feedback wire contract", () => {
 		});
 		expect(requests).toBe(1);
 	});
+});
+
+it("blocks sending on a failed destination read and recovers when retried", async () => {
+	server.use(
+		http.get("*/product-feedback/sharing", () =>
+			HttpResponse.json({ status: 503 }, { status: 503 }),
+		),
+	);
+	const { wrapper } = setup();
+	const { result } = renderHook(() => useProductFeedbackSharing(true), { wrapper });
+	await waitFor(() => expect(result.current.sharing.status).toBe("error"));
+	server.use(
+		http.get("*/product-feedback/sharing", () =>
+			HttpResponse.json({ filesToGitHub: true, mention: false }),
+		),
+	);
+	act(() => result.current.retry());
+	await waitFor(() => expect(result.current.sharing.status).toBe("private"));
+});
+
+it("shows the server's daily limit and keeps the report draft actionable", async () => {
+	server.use(
+		http.post("*/product-feedback", () =>
+			HttpResponse.json(
+				{
+					status: 429,
+					detail: "You can send up to 5 reports per day. Try again tomorrow (UTC).",
+				},
+				{ status: 429 },
+			),
+		),
+	);
+	const { wrapper } = setup();
+	const { result } = renderHook(() => useSubmitProductFeedback(undefined), { wrapper });
+	await act(async () => {
+		await result.current.submit({ kind: "FEEDBACK", message: "Another report" });
+	});
+	await waitFor(() => expect(result.current.error).toContain("tomorrow (UTC)"));
+	expect(result.current.error).toContain("Your draft is still here.");
+});
+
+it("treats a lost response as unconfirmed delivery instead of encouraging a duplicate report", async () => {
+	server.use(http.post("*/product-feedback", () => HttpResponse.error()));
+	const { wrapper } = setup();
+	const { result } = renderHook(() => useSubmitProductFeedback(undefined), { wrapper });
+	await act(async () => {
+		await result.current.submit({ kind: "FEEDBACK", message: "A report" });
+	});
+	await waitFor(() => expect(result.current.error).toContain("could not confirm receipt"));
+	expect(result.current.error).toContain("Check Your reports before trying again.");
 });

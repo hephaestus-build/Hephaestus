@@ -122,7 +122,7 @@ Product feedback is filed in GitHub automatically, and it is worked on there.
 5. **The public gate.** Code decides. The model's answer is only an input.
    A report becomes a public issue only when every condition holds:
    - the person allowed public for this report;
-   - the kind is bug or idea;
+   - the draft describes an actionable issue; the selected kind alone never makes it private;
    - a valid draft exists for the exact outgoing text;
    - the model's disposition is an issue, not a security report;
    - redaction found no secret, no email address and no known name;
@@ -141,7 +141,7 @@ Product feedback is filed in GitHub automatically, and it is worked on there.
 7. **Promotion.** A maintainer comments `/publish` on a private issue.
    - At dispatch, the server reads the commenter's permission on both repositories. It requires `write` or `admin`. An unknown answer denies.
    - The reporter must have allowed public, and the report must have a valid draft. The fallback text that has no draft is never promoted.
-   - The command overrides only the quality conditions: the kind and the confidence. It never overrides consent, security, the latch or abuse.
+   - The command overrides only the quality conditions: the confidence. It never overrides consent, security, the latch or abuse.
    - The app files a new public issue from the redacted draft and closes the private one.
 8. **Withdrawal and erasure.** The person can make their own public issue private. The app moves it to the private repository.
    On account erasure, the rows are deleted at once.

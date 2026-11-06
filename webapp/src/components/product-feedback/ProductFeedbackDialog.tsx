@@ -1,4 +1,4 @@
-import { lazy, type ReactNode, Suspense, useId, useState } from "react";
+import { type ReactNode, useId, useRef, useState } from "react";
 
 import type { FeedbackRequest } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
@@ -17,17 +17,16 @@ import {
 	Field,
 	FieldContent,
 	FieldDescription,
+	FieldError,
 	FieldLabel,
-	FieldLegend,
 	FieldSet,
-	FieldTitle,
 } from "@/components/ui/field";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { hasText } from "@/lib/text";
 
-import { FEEDBACK_KIND_COPY, type FeedbackKind, READERS } from "./feedback-copy";
+import { ProductFeedbackSharingField } from "./ProductFeedbackSharingField";
 
 /** The server's `FeedbackRequest` limits; a longer value is refused, so the sender never sees a cut. */
 export const MESSAGE_MAX_LENGTH = 5000;
@@ -35,8 +34,6 @@ export const PAGE_PATH_MAX_LENGTH = 500;
 export const USER_AGENT_MAX_LENGTH = 500;
 /** The counter appears once this many characters are left, not before: a count nobody is near is noise. */
 const COUNTER_THRESHOLD = 500;
-
-const KINDS: FeedbackKind[] = ["IDEA", "BUG", "FEEDBACK"];
 
 export interface FeedbackContext {
 	/** The page's route, such as `/w/$workspaceSlug/activity`, never its address: no workspace slug or id. */
@@ -46,11 +43,11 @@ export interface FeedbackContext {
 
 /**
  * Whether this report may become a public GitHub issue, as far as the composer has to ask.
- * `off`: the instance has no public repository, or the choice could not be read; then nothing is
- * asked and the server decides. `ask`: the person has not chosen for the current notice.
+ * `off`: the instance does not file to GitHub; then nothing is asked. `ask`: the person has not chosen for the current notice.
  */
 export type ProductFeedbackSharingChoice =
 	| { status: "loading" }
+	| { status: "error" }
 	| { status: "off" }
 	/** Reports become private GitHub issues; there is no public repository, so nothing is asked. */
 	| { status: "private" }
@@ -59,105 +56,86 @@ export type ProductFeedbackSharingChoice =
 
 /** Where a report goes, said before Send, from what the instance does with it. */
 function destinationCopy(sharing: ProductFeedbackSharingChoice): string {
-	if (sharing.status === "off" || sharing.status === "loading") {
-		return `This goes straight to ${READERS}. Your name and contact address go with it, so they can follow up.`;
+	if (sharing.status === "off") {
+		return "Your instance admins receive this report with your name and contact address.";
 	}
 	if (sharing.status === "private") {
-		return "Hephaestus drafts a private GitHub issue from your report for the maintainers. Your name and contact address stay on this instance.";
+		return "An AI model drafts a private GitHub issue for the Hephaestus maintainers. Your name and contact address stay on this instance.";
 	}
-	return "Hephaestus drafts a GitHub issue from your report. The choice below decides who can read it.";
+	if (sharing.status === "loading" || sharing.status === "error") {
+		return "Share a problem or an idea about Hephaestus.";
+	}
+	return "Share a problem or an idea with the Hephaestus maintainers.";
 }
 
 export interface ProductFeedbackDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	kind: FeedbackKind;
-	onKindChange: (kind: FeedbackKind) => void;
 	context?: FeedbackContext;
 	sharing: ProductFeedbackSharingChoice;
 	isSubmitting: boolean;
 	error?: string;
 	/** Resolves to whether the submission was accepted; the draft is cleared only then. */
 	onSubmit: (request: FeedbackRequest) => Promise<boolean>;
-	/** The confirmation of the accepted report, shown in place of the form until the dialog closes. */
-	confirmation?: ReactNode;
-	/** The workspace the header keeps, so the settings link stays in it. */
-	workspaceSlug?: string;
+	onRetrySharing: () => void;
+	reportsLink: ReactNode;
 }
 
-/**
- * The message draft lives in this component and survives closing because the header keeps it
- * mounted; only an accepted send clears it. The details box starts ticked for a bug report, where
- * the page and browser are what make it reproducible, and unticked otherwise.
- *
- * The sharing choice is asked once: with no choice yet, two options start unselected and Send waits
- * for one. After that, one switch starts from the remembered choice and applies to this report only.
- */
+/** Kept mounted by the header so closing or navigating inside the app preserves the draft. */
 export function ProductFeedbackDialog({
 	open,
 	onOpenChange,
-	kind,
-	onKindChange,
 	context,
 	sharing,
 	isSubmitting,
 	error,
 	onSubmit,
-	confirmation,
-	workspaceSlug,
+	onRetrySharing,
+	reportsLink,
 }: ProductFeedbackDialogProps) {
 	const id = useId();
+	const messageField = useRef<HTMLTextAreaElement>(null);
+	const sharingRegion = useRef<HTMLDivElement>(null);
 	const [message, setMessage] = useState("");
-	const [includeContext, setIncludeContext] = useState<boolean>();
+	const [includeContext, setIncludeContext] = useState(false);
+	// A resumed draft still describes its original page, even after navigation to report history.
+	const [draftContext, setDraftContext] = useState<FeedbackContext>();
 	const [shareChoice, setShareChoice] = useState<boolean>();
-	const attachContext = includeContext ?? kind === "BUG";
+	const [attempted, setAttempted] = useState(false);
+	const attachedContext = draftContext ?? context;
 	const share = shareChoice ?? (sharing.status === "remembered" ? sharing.allowPublic : undefined);
-	const sharingReady =
-		sharing.status === "off" ||
-		sharing.status === "private" ||
-		(sharing.status !== "loading" && share !== undefined);
-	const copy = FEEDBACK_KIND_COPY[kind];
+	const needsChoice = sharing.status === "ask" && share === undefined;
+	const messageInvalid = attempted && !message.trim();
+	const sharingUnavailable = sharing.status === "loading" || sharing.status === "error";
 	const remaining = MESSAGE_MAX_LENGTH - message.length;
 	const submit = async () => {
-		if (!message.trim() || isSubmitting || !sharingReady) {
+		if (isSubmitting || sharingUnavailable) {
+			return;
+		}
+		setAttempted(true);
+		if (!message.trim()) {
+			messageField.current?.focus();
+			return;
+		}
+		if (needsChoice) {
+			sharingRegion.current?.querySelector<HTMLElement>('[role="radio"]')?.focus();
 			return;
 		}
 		const accepted = await onSubmit({
-			kind,
+			kind: "FEEDBACK",
 			message: message.trim(),
-			pagePath: attachContext ? context?.pagePath : undefined,
-			userAgent: attachContext ? context?.userAgent : undefined,
+			pagePath: includeContext ? attachedContext?.pagePath : undefined,
+			userAgent: includeContext ? attachedContext?.userAgent : undefined,
 			...(sharing.status === "off" || sharing.status === "private" ? {} : { share }),
 		});
 		if (accepted) {
 			setMessage("");
-			setIncludeContext(undefined);
+			setIncludeContext(false);
+			setDraftContext(undefined);
 			setShareChoice(undefined);
+			setAttempted(false);
 		}
 	};
-	if (confirmation !== undefined) {
-		return (
-			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent className="sm:max-w-lg">
-					<DialogHeader>
-						<DialogTitle>{copy.heading}</DialogTitle>
-						<DialogDescription className="sr-only">What happens to your report</DialogDescription>
-					</DialogHeader>
-					<DialogBody className="py-1">{confirmation}</DialogBody>
-					<DialogFooter>
-						<Button
-							type="button"
-							// oxlint-disable-next-line jsx-a11y/no-autofocus -- The receipt replaces the form and unmounts Send; without this, keyboard focus falls to the page.
-							autoFocus
-							onClick={() => onOpenChange(false)}
-						>
-							Done
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
-		);
-	}
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-lg">
@@ -169,95 +147,118 @@ export function ProductFeedbackDialog({
 					}}
 				>
 					<DialogHeader>
-						<DialogTitle>{copy.heading}</DialogTitle>
+						<DialogTitle>Send feedback</DialogTitle>
 						<DialogDescription>{destinationCopy(sharing)}</DialogDescription>
 					</DialogHeader>
-					<DialogBody className="flex flex-col gap-5 py-1">
-						<FieldSet disabled={isSubmitting} className="gap-5">
-							<FieldLegend className="sr-only">Kind and message</FieldLegend>
-							<RadioGroup
-								aria-label="What is this about?"
-								value={kind}
-								onValueChange={onKindChange}
-								className="grid gap-2 sm:grid-cols-3"
-							>
-								{KINDS.map((value) => (
-									<FieldLabel key={value} htmlFor={`${id}-${value}`}>
-										<Field orientation="horizontal">
-											<FieldContent>
-												<FieldTitle id={`${id}-${value}-title`}>
-													{FEEDBACK_KIND_COPY[value].title}
-												</FieldTitle>
-												<FieldDescription id={`${id}-${value}-detail`}>
-													{FEEDBACK_KIND_COPY[value].detail}
-												</FieldDescription>
-											</FieldContent>
-											<RadioGroupItem
-												id={`${id}-${value}`}
-												value={value}
-												aria-labelledby={`${id}-${value}-title`}
-												aria-describedby={`${id}-${value}-detail`}
-											/>
-										</Field>
-									</FieldLabel>
-								))}
-							</RadioGroup>
-							<Field>
-								<FieldLabel htmlFor={`${id}-message`}>{copy.label}</FieldLabel>
+					<DialogBody className="flex flex-col gap-6 py-1">
+						<FieldSet disabled={isSubmitting} className="gap-6">
+							<Field data-invalid={messageInvalid || undefined}>
+								<FieldLabel htmlFor={`${id}-message`}>Your feedback</FieldLabel>
 								<Textarea
+									ref={messageField}
 									id={`${id}-message`}
 									name="message"
+									autoComplete="off"
 									required
 									value={message}
 									maxLength={MESSAGE_MAX_LENGTH}
-									rows={5}
-									aria-describedby={`${id}-hint`}
-									placeholder={copy.placeholder}
-									onChange={(event) => setMessage(event.target.value)}
+									className="min-h-32"
+									aria-invalid={messageInvalid || undefined}
+									aria-describedby={`${id}-hint${messageInvalid ? ` ${id}-message-error` : ""}`}
+									placeholder="Tell us what happened, or share an idea…"
+									onKeyDown={(event) => {
+										if (
+											(event.metaKey || event.ctrlKey) &&
+											!event.nativeEvent.isComposing &&
+											event.key === "Enter"
+										) {
+											event.preventDefault();
+											event.currentTarget.form?.requestSubmit();
+										}
+									}}
+									onChange={(event) => {
+										const next = event.target.value;
+										setDraftContext((previous) =>
+											hasText(next) || includeContext ? (previous ?? context) : undefined,
+										);
+										setMessage(next);
+									}}
 								/>
-								<FieldDescription id={`${id}-hint`} className="flex justify-between gap-3">
-									<span>Leave out secrets and other people’s personal data.</span>
-									<span aria-live="polite" className="shrink-0 tabular-nums">
-										{remaining <= COUNTER_THRESHOLD &&
-											`${remaining.toLocaleString()} characters left`}
-									</span>
+								<FieldDescription id={`${id}-hint`}>
+									Leave out passwords, tokens, and other people’s personal details.
 								</FieldDescription>
+								<span
+									aria-live="polite"
+									className="text-xs text-muted-foreground tabular-nums empty:sr-only"
+								>
+									{remaining <= COUNTER_THRESHOLD &&
+										`${remaining.toLocaleString()} characters left`}
+								</span>
+								{messageInvalid && (
+									<FieldError id={`${id}-message-error`}>
+										Write your feedback before sending.
+									</FieldError>
+								)}
 							</Field>
-							{context && (
-								<Field orientation="horizontal">
-									<Checkbox
-										id={`${id}-context`}
-										checked={attachContext}
-										onCheckedChange={setIncludeContext}
-									/>
-									<FieldContent>
-										<FieldLabel htmlFor={`${id}-context`}>
-											Attach the page and browser you’re on
-										</FieldLabel>
-										<FieldDescription className="break-all">
-											<code className="text-xs">{context.pagePath}</code>
-											<br />
-											<span className="text-xs">{context.userAgent}</span>
-										</FieldDescription>
-									</FieldContent>
-								</Field>
+							<div ref={sharingRegion} className="empty:hidden">
+								<SharingField
+									id={id}
+									sharing={sharing}
+									share={share}
+									onShareChange={setShareChoice}
+									invalid={attempted && needsChoice}
+									onRetry={onRetrySharing}
+								/>
+							</div>
+							{attachedContext && (
+								<details className="text-sm">
+									<summary className="cursor-pointer rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden">
+										{includeContext ? "Page details included" : "Add page details (optional)"}
+									</summary>
+									<div className="mt-3 flex flex-col gap-3">
+										<Field orientation="horizontal">
+											<Checkbox
+												id={`${id}-context`}
+												checked={includeContext}
+												onCheckedChange={(next) => {
+													setDraftContext((previous) =>
+														next || hasText(message) ? (previous ?? context) : undefined,
+													);
+													setIncludeContext(next);
+												}}
+											/>
+											<FieldContent>
+												<FieldLabel htmlFor={`${id}-context`}>
+													Include page and browser details
+												</FieldLabel>
+												<FieldDescription>
+													Only the page route and browser details shown below are attached.
+												</FieldDescription>
+											</FieldContent>
+										</Field>
+										<dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs text-muted-foreground">
+											<dt>Page</dt>
+											<dd className="break-all">
+												<code>{attachedContext.pagePath}</code>
+											</dd>
+											<dt>Browser</dt>
+											<dd className="break-words">{attachedContext.userAgent}</dd>
+										</dl>
+									</div>
+								</details>
 							)}
-							<SharingField
-								id={id}
-								sharing={sharing}
-								share={share}
-								onShareChange={setShareChoice}
-								workspaceSlug={workspaceSlug}
-							/>
 						</FieldSet>
-						<p role="alert" className="text-sm text-destructive empty:hidden">
-							{error}
-						</p>
+						{hasText(error) && (
+							<div className="flex flex-col items-start gap-2">
+								<FieldError>{error}</FieldError>
+								{reportsLink}
+							</div>
+						)}
 					</DialogBody>
 					<DialogFooter>
-						<Button type="submit" disabled={!message.trim() || isSubmitting || !sharingReady}>
+						<Button type="submit" disabled={isSubmitting || sharingUnavailable}>
 							{isSubmitting && <Spinner />}
-							{isSubmitting ? "Sending…" : "Send"}
+							{isSubmitting ? "Sending…" : "Send feedback"}
 						</Button>
 					</DialogFooter>
 				</DialogForm>
@@ -271,14 +272,9 @@ interface SharingFieldProps {
 	sharing: ProductFeedbackSharingChoice;
 	share: boolean | undefined;
 	onShareChange: (share: boolean) => void;
-	workspaceSlug?: string;
+	invalid: boolean;
+	onRetry: () => void;
 }
-
-/** The question is asked only where a public repository exists, so its code loads only there. */
-const ProductFeedbackSharingField = lazy(async () => {
-	const { ProductFeedbackSharingField: field } = await import("./ProductFeedbackSharingField");
-	return { default: field };
-});
 
 function SharingSkeleton() {
 	return (
@@ -289,22 +285,32 @@ function SharingSkeleton() {
 	);
 }
 
-function SharingField({ id, sharing, share, onShareChange, workspaceSlug }: SharingFieldProps) {
+function SharingField({ id, sharing, share, onShareChange, invalid, onRetry }: SharingFieldProps) {
 	if (sharing.status === "off" || sharing.status === "private") {
 		return null;
 	}
 	if (sharing.status === "loading") {
 		return <SharingSkeleton />;
 	}
+	if (sharing.status === "error") {
+		return (
+			<div className="text-sm" role="alert">
+				<p>
+					We could not load the sharing options. Your draft is still here. Try again before sending.
+				</p>
+				<Button type="button" variant="outline" size="sm" onClick={onRetry}>
+					Retry
+				</Button>
+			</div>
+		);
+	}
 	return (
-		<Suspense fallback={<SharingSkeleton />}>
-			<ProductFeedbackSharingField
-				id={id}
-				status={sharing.status}
-				share={share}
-				onShareChange={onShareChange}
-				workspaceSlug={workspaceSlug}
-			/>
-		</Suspense>
+		<ProductFeedbackSharingField
+			id={id}
+			status={sharing.status}
+			share={share}
+			onShareChange={onShareChange}
+			invalid={invalid}
+		/>
 	);
 }

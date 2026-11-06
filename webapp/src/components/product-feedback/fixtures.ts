@@ -32,7 +32,7 @@ export const heldReport = {
 export const draftingReport = {
 	...base,
 	id: "b1b1b1b1-0000-0000-0000-000000000002",
-	kind: "IDEA",
+	kind: "FEEDBACK",
 	excerpt: "Let me pin the practices I am working on to the top of my page.",
 	createdAt: minutesBefore(0),
 	state: "DRAFTING",
