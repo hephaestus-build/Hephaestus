@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
+import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
@@ -116,6 +117,19 @@ class ReviewMethodPersistenceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private MeterRegistry meters;
+
+    @Test
+    void shouldLogAQueuedJobOnceItsTransactionCommits() {
+        try (var logs = new LogCapture(ReviewJobService.class)) {
+            var job = prepareReview().job();
+
+            assertThat(logs.events("agent.job.queued")).singleElement().satisfies(fields -> {
+                assertThat(fields).containsEntry("job.id", job.getId().toString());
+                assertThat(fields).containsEntry("review.id", job.getReviewId().toString());
+                assertThat(fields).containsEntry("job.outcome", "queued");
+            });
+        }
+    }
 
     @Test
     void shouldEnqueueTheUnchangedMethodAfterDatabaseJsonPersistence() {

@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationCopyOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationCopyReceipt;
@@ -19,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -114,6 +116,14 @@ public class MentorTurnCompletion {
                 leaseId,
                 new MentorTurnService.Ending(ending.outcome(), ending.entries(), ending.lastPartial(), ending.error()));
         MentorTurn turn = ended.turn();
+        String status = turn.getStatus().name().toLowerCase(Locale.ROOT);
+        TransactionCallbacks.afterCommit(() -> log.atInfo()
+                .addKeyValue("event.name", "mentor.turn.ended")
+                .addKeyValue(StructuredLogKeys.WORKSPACE_ID, workspaceId)
+                .addKeyValue("turn.id", turnId)
+                .addKeyValue("turn.attempt", attempt)
+                .addKeyValue("turn.outcome", status)
+                .log("Conversation turn ended"));
         if (turn.getStatus() == MentorTurn.Status.FAILED) {
             String failureCause = ending.cause() == null ? turn.getFailureCause() : ending.cause();
             turns.recordFailure(turn, failureCause, ending.lastFailedCall());

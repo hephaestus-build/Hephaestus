@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnUsage;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnWaits;
+import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.testconfig.ConversationReceipts;
@@ -217,6 +218,27 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         incompletePublications.resubmitIncompletePublications(publication -> true);
 
         assertThat(settled(shown)).isEqualTo("DELIVERED/POSTED/true/m8a1b2c3");
+    }
+
+    @Test
+    void shouldLogAnEndedTurnOnceAndARolledBackEndNever() {
+        MentorTurn turn = admittedTurn(Duration.ofMinutes(5));
+        UUID shown = claimed(turn);
+
+        try (var logs = new LogCapture(MentorTurnCompletion.class)) {
+            transactionTemplate.executeWithoutResult(status -> {
+                end(turn, MentorTurn.Status.DONE, showing(shown, "m6a1b2c3"));
+                status.setRollbackOnly();
+            });
+            assertThat(logs.events("mentor.turn.ended")).isEmpty();
+
+            end(turn, MentorTurn.Status.DONE, showing(shown, "m6a1b2c3"));
+
+            assertThat(logs.events("mentor.turn.ended")).singleElement().satisfies(fields -> {
+                assertThat(fields).containsEntry("turn.id", turn.getId().toString());
+                assertThat(fields).containsEntry("turn.outcome", "done");
+            });
+        }
     }
 
     @Test

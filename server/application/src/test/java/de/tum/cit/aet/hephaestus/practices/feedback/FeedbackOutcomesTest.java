@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRepository;
 import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
@@ -89,6 +90,25 @@ class FeedbackOutcomesTest {
     }
 
     @Test
+    void shouldLogAMoveToASettledStateOnceAndARepeatedStateNever() {
+        when(feedback.updateDelivery(anyLong(), any(), any(), any(), any())).thenReturn(1);
+        when(feedback.hasOtherPostedFeedback(anyLong(), any(), any())).thenReturn(true);
+        var ready = row(FeedbackState.READY, null);
+        var delivered = row(FeedbackState.DELIVERED, ORDERED);
+
+        try (var logs = new LogCapture(FeedbackOutcomes.class)) {
+            outcomes.update(ready, FeedbackState.DELIVERED, null, ORDERED);
+            assertThat(logs.events("feedback.copy.settled")).singleElement().satisfies(fields -> {
+                assertThat(fields).containsEntry("feedback.id", ready.getId().toString());
+                assertThat(fields).containsEntry("feedback.state", "delivered");
+            });
+
+            outcomes.update(delivered, FeedbackState.DELIVERED, null, ORDERED);
+            assertThat(logs.events("feedback.copy.settled")).hasSize(1);
+        }
+    }
+
+    @Test
     void shouldNotCountAgainAStateAndADeliveryThatTheFeedbackAlreadyHas() {
         var row = row(FeedbackState.DELIVERED, ORDERED);
         when(feedback.updateDelivery(anyLong(), any(), any(), any(), any())).thenReturn(1);
@@ -98,6 +118,30 @@ class FeedbackOutcomesTest {
 
         assertThat(settled("delivered", "none")).isZero();
         assertThat(firstDeliveries()).isZero();
+    }
+
+    @Test
+    void shouldLogSettledFeedbackOnceWithItsDestinationAndReason() {
+        var withheld = Feedback.builder()
+                .id(UUID.randomUUID())
+                .workspaceId(1)
+                .reviewId(UUID.randomUUID())
+                .destination(FeedbackDestination.CONVERSATION)
+                .state(FeedbackState.WITHHELD)
+                .stopReason(FeedbackStopReason.COMPOSER_WITHHELD)
+                .build();
+
+        try (var logs = new LogCapture(FeedbackOutcomes.class)) {
+            outcomes.created(withheld);
+            outcomes.created(row(FeedbackState.READY, null));
+
+            assertThat(logs.events("feedback.copy.settled")).singleElement().satisfies(fields -> {
+                assertThat(fields).containsEntry("feedback.id", withheld.getId().toString());
+                assertThat(fields).containsEntry("feedback.destination", "conversation");
+                assertThat(fields).containsEntry("feedback.state", "withheld");
+                assertThat(fields).containsEntry("feedback.reason", "composer_withheld");
+            });
+        }
     }
 
     @Test
