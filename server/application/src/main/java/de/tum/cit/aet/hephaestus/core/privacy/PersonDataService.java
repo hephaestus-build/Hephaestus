@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
@@ -69,7 +70,7 @@ public class PersonDataService {
 
     @PostConstruct
     void registerFailureCounter() {
-        meters.counter("person.data.erasure.failures");
+        meters.counter(CoreMetrics.PERSON_DATA_ERASURE_FAILURES);
     }
 
     public record Snapshot(
@@ -326,7 +327,7 @@ public class PersonDataService {
                 });
             } finally {
                 if (!Boolean.TRUE.equals(retry))
-                    meters.counter("person.data.erasure.failures").increment();
+                    meters.counter(CoreMetrics.PERSON_DATA_ERASURE_FAILURES).increment();
                 var event = Boolean.TRUE.equals(retry) ? log.atWarn() : log.atError();
                 event.addKeyValue(
                                 "event.name",
