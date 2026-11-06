@@ -2,7 +2,12 @@ import { cn } from "cn";
 
 import type { TrendSupport } from "@/api/types.gen";
 import { FOCUS_RING } from "@/components/common/focus";
-import { definitionFor, UNKNOWN_STATUS_DEF, type StatusDef, statusToneClass } from "@/components/common/status-def";
+import {
+	definitionFor,
+	UNKNOWN_STATUS_DEF,
+	type StatusDef,
+	statusToneClass,
+} from "@/components/common/status-def";
 
 import type { StandingScope } from "./practice-group-standing-defs";
 import {
@@ -27,7 +32,11 @@ export function TrendWords({ def }: { def: StatusDef }) {
 }
 
 /** The direction in plain words; a group's says it in its own. */
-function directionSentence(direction: TrendDirection, scope: StandingScope, def: StatusDef): string {
+function directionSentence(
+	direction: TrendDirection,
+	scope: StandingScope,
+	def: StatusDef,
+): string {
 	return scope === "group"
 		? definitionFor(GROUP_TREND_DESCRIPTIONS, direction, def.description)
 		: def.description;
@@ -58,9 +67,12 @@ export function PracticeTrendChip({
 }: PracticeTrendChipProps) {
 	const def = definitionFor(PRACTICE_TREND_DEFS, direction);
 	// The direction in plain words first, then one sentence on what it compares.
-	const sentence = def === UNKNOWN_STATUS_DEF ? def.description : [directionSentence(direction, scope, def), trendComparison(direction, scope, support)]
-		.filter(Boolean)
-		.join(" ");
+	const sentence =
+		def === UNKNOWN_STATUS_DEF
+			? def.description
+			: [directionSentence(direction, scope, def), trendComparison(direction, scope, support)]
+					.filter(Boolean)
+					.join(" ");
 	return (
 		<StatusTooltip
 			openOnTap

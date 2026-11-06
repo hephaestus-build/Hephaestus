@@ -5,6 +5,7 @@ import type { TrendSupport } from "@/api/types.gen";
 import { settledPopup } from "@/stories/overlay";
 import { wellSupported } from "@/stories/practice-profile-story-mock-data";
 
+import type { TrendDirection } from "./practice-trend-defs";
 import { PracticeTrendChip } from "./PracticeTrendChip";
 
 const none: TrendSupport = {
@@ -58,5 +59,27 @@ export const GroupScope: Story = {
 			"Your recent work meets this group's practices more often than before. Compares, practice by practice,",
 		);
 		await expect(tooltip).not.toHaveTextContent(/four|eight/u);
+	},
+};
+
+/** A newer server can send a direction outside this build's generated union. */
+export const UnknownServerValue: Story = {
+	args: {
+		// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Simulate a newer server value outside this build's generated union.
+		direction: "FUTURE_DIRECTION" as TrendDirection,
+		scope: "group",
+		support: wellSupported,
+	},
+	play: async ({ canvas }) => {
+		const trigger = canvas.getByRole("button", { name: "Unknown" });
+		await expect(trigger).toHaveAccessibleDescription(
+			"This version of Hephaestus does not recognize this value.",
+		);
+		await userEvent.hover(trigger);
+		const tooltip = await settledPopup();
+		await expect(tooltip).toHaveTextContent(
+			"This version of Hephaestus does not recognize this value.",
+		);
+		await expect(tooltip).not.toHaveTextContent(/Compares|meets this/u);
 	},
 };
