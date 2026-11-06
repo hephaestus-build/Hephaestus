@@ -778,7 +778,7 @@ For one node of 16 GiB, apply `small-16gib.yaml` after `small.yaml`:
 --values deploy/chart/hephaestus/profiles/small-16gib.yaml
 ```
 
-It keeps worker updates at `Recreate`, with a drain of at most 10 minutes.
+It keeps worker updates at `Recreate`.
 It admits 32 resident turns with the same tools-Pod quota as `small.yaml`.
 The worker still runs five reviews and up to 32 resident conversation turns at a time, as in `small.yaml`.
 
@@ -1665,7 +1665,11 @@ The server stops before its new version starts (`Recreate`).
 The webhook role rolls. In the single-node profiles, the worker drains and stops before its replacement starts.
 The replacement proves the cluster with the isolation probe before it claims work.
 
-An old worker drains for up to `worker.drainTimeoutSeconds`, 30 minutes by default, and Kubernetes no longer counts it while it stops.
+An old worker drains for up to `worker.drainTimeoutSeconds`, and Kubernetes no longer counts it while it stops.
+The value is 30 minutes by default and 10 minutes in the single-node profiles.
+
+With `Recreate`, the Helm `--timeout` must cover the drain, 2 minutes of shutdown and up to 5 minutes of start.
+Past the timeout, Helm rolls the release back. If you set a longer drain, set a longer timeout.
 Start the next upgrade only after the old worker is gone: `kubectl --namespace hephaestus get pods -l app.kubernetes.io/component=worker` shows no `Terminating` Pod.
 A review runs for up to 3 hours.
 
@@ -1809,7 +1813,7 @@ Keep PostgreSQL and NATS running until the workers have drained:
    This restores the budgets. Verify that the roles and budgets are ready before you resume reconciliation.
 
 The commands use the release and namespace `hephaestus`. Substitute your own names and allow more time if you configured a longer drain.
-The `small-16gib` profile retains a ten-minute drain and `Recreate` updates until upgrade capacity is qualified.
+The single-node profiles retain a ten-minute drain. The `small-16gib` profile retains `Recreate` updates until upgrade capacity is qualified.
 The host's five-minute kubelet shutdown budget cannot provide a full thirty-minute review drain.
 After a reboot or an interrupted drain, fenced attempts retry through durable recovery.
 

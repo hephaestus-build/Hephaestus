@@ -611,6 +611,25 @@ await test("a release package refuses a later quoted images key, which Helm woul
 	);
 });
 
+for (const name of ["small", "small-16gib"] as const) {
+	await test(`${name}: a Recreate worker stops and starts within the upgrade's Helm timeout`, () => {
+		const worker = workload(rendered([...layersFor(name), workerLayer]), "worker");
+		assert.equal(get(worker, "spec", "strategy", "type"), "Recreate");
+		// Past the timeout, Helm rolls the release back, also after its migration ran.
+		const installer = readFileSync(
+			new URL("../deploy/platform/k3s-install.sh", import.meta.url),
+			"utf8",
+		);
+		const timeout = /--wait-for-jobs --timeout (?<minutes>\d+)m\b/u.exec(installer)?.groups
+			?.minutes;
+		const stop = Number(get(podSpec(worker), "terminationGracePeriodSeconds"));
+		const probe = get(container(worker), "startupProbe");
+		const start = Number(get(probe, "periodSeconds")) * Number(get(probe, "failureThreshold"));
+		assert.ok(stop + start <= Number(timeout) * 60, `${stop} s to stop, ${start} s to start`);
+		assert.ok(Number(get(worker, "spec", "progressDeadlineSeconds")) >= stop + start);
+	});
+}
+
 const alertRules = readFileSync(path.join(chart, "files", "hephaestus-alerts.yml"), "utf8");
 const alertRulesOn = {
 	observability: {
@@ -1328,8 +1347,8 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 		type: "Recreate",
 	});
 	const spec = podSpec(worker);
-	assert.equal(envValue(worker, "HEPHAESTUS_WORKER_DRAIN_TIMEOUT"), "1800s");
-	assert.equal(get(spec, "terminationGracePeriodSeconds"), 1800 + 120);
+	assert.equal(envValue(worker, "HEPHAESTUS_WORKER_DRAIN_TIMEOUT"), "600s");
+	assert.equal(get(spec, "terminationGracePeriodSeconds"), 600 + 120);
 	assert.equal(get(spec, "topologySpreadConstraints", 0, "whenUnsatisfiable"), "ScheduleAnyway");
 	assert.deepEqual(
 		list(get(spec, "tolerations")).map((toleration) => [
