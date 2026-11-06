@@ -17,6 +17,7 @@ import jakarta.validation.Valid;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ProblemDetail;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,6 +46,17 @@ public class EmailAdminController {
         this.gateway = gateway;
         this.renderer = renderer;
         this.contacts = contacts;
+    }
+
+    /** @param configured this instance has a relay and a sender, so it can try to send email at all */
+    public record EmailStatusDTO(
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+            boolean configured) {}
+
+    @GetMapping("/status")
+    @Operation(operationId = "getEmailStatus", summary = "Whether this instance can send email at all")
+    public EmailStatusDTO status() {
+        return new EmailStatusDTO(gateway.configured());
     }
 
     @PostMapping("/test")

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { ShieldCheck, SlidersHorizontal, UserRoundCog } from "lucide-react";
+import { Inbox, ShieldCheck, SlidersHorizontal, UserRoundCog } from "lucide-react";
 import { hasText } from "@/lib/text";
 
 import {
@@ -11,10 +11,20 @@ import {
 
 interface NavFooterProps {
 	isAppAdmin?: boolean;
+	/** Product feedback that waits in the instance console, where only this row leads an admin. */
+	waitingReports?: number;
 	workspaceSlug?: string;
 }
 
-export function NavFooter({ isAppAdmin = false, workspaceSlug }: NavFooterProps) {
+function waitingLabel(count: number): string {
+	return count === 1 ? "1 report waiting" : `${count} reports waiting`;
+}
+
+export function NavFooter({
+	isAppAdmin = false,
+	waitingReports = 0,
+	workspaceSlug,
+}: NavFooterProps) {
 	// Changing the AI choice ends on the page the reader left, never on the setup page itself.
 	const returnTo = useLocation().href;
 	return (
@@ -22,6 +32,17 @@ export function NavFooter({ isAppAdmin = false, workspaceSlug }: NavFooterProps)
 			{isAppAdmin && (
 				<>
 					<SidebarMenu>
+						{waitingReports > 0 && (
+							<SidebarMenuItem>
+								<SidebarMenuButton
+									tooltip={waitingLabel(waitingReports)}
+									render={<Link to="/admin/feedback" search={{ chromeWorkspace: workspaceSlug }} />}
+								>
+									<Inbox />
+									<span>{waitingLabel(waitingReports)}</span>
+								</SidebarMenuButton>
+							</SidebarMenuItem>
+						)}
 						<SidebarMenuItem>
 							<SidebarMenuButton
 								tooltip="Instance administration"

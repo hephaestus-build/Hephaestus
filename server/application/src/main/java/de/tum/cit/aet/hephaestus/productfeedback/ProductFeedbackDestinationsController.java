@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /** Where the instance files product feedback, its health, and the reports that failed to file. */
 @RestController
@@ -70,6 +72,30 @@ public class ProductFeedbackDestinationsController {
     public ResponseEntity<Void> retry(@PathVariable UUID feedbackId) {
         if (!filing.retry(feedbackId))
             throw new EntityNotFoundException("Stopped product feedback", feedbackId.toString());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/file-saved")
+    @RequiresRecentSignIn
+    @Audited(ledger = AuditLedger.AUTH_EVENT, type = "PRODUCT_FEEDBACK_FILED_BY_ADMIN")
+    @Operation(
+            operationId = "fileAllSavedProductFeedback",
+            summary = "Send every report that is saved for admins to GitHub as private issues")
+    public FilingDTOs.ProductFeedbackMoveDTO fileAll() {
+        return new FilingDTOs.ProductFeedbackMoveDTO(filing.fileAllSaved(CurrentAccount.requireId()));
+    }
+
+    @PostMapping("/{feedbackId}/file")
+    @RequiresRecentSignIn
+    @Audited(ledger = AuditLedger.AUTH_EVENT, type = "PRODUCT_FEEDBACK_FILED_BY_ADMIN")
+    @Operation(
+            operationId = "fileSavedProductFeedback",
+            summary = "Send a report that is saved for admins to GitHub as a private issue")
+    @ApiResponse(responseCode = "204", description = "The report goes through drafting and routing")
+    public ResponseEntity<Void> file(@PathVariable UUID feedbackId) {
+        if (!filing.fileSaved(feedbackId, CurrentAccount.requireId()))
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "This report cannot go to GitHub now. Check the destination and Pause.");
         return ResponseEntity.noContent().build();
     }
 

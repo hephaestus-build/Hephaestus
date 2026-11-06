@@ -69,6 +69,7 @@ export const EVENT_TYPE_LABELS: Record<AuthEventType, string> = {
 	PUBLIC_ACTIVITY_CHANGED: "Public activity publication changed",
 	PRODUCT_FEEDBACK_DESTINATIONS_CHANGED: "Product feedback destinations changed",
 	PRODUCT_FEEDBACK_CLEANUP_CONFIRMED: "Product feedback cleanup step confirmed",
+	PRODUCT_FEEDBACK_FILED_BY_ADMIN: "Saved product feedback sent into filing",
 	PERSON_DATA_PREVIEWED: "Person data previewed",
 	PERSON_DATA_EXPORTED: "Person data exported",
 	PERSON_DATA_ERASURE_REQUESTED: "Person data erasure requested",

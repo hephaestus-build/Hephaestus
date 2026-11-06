@@ -285,7 +285,7 @@ function issueLine(report: MyProductFeedback): string | undefined {
 		return "The maintainers have it as a private issue on GitHub.";
 	}
 	if (report.state === "SENT_TO_ADMINS") {
-		return "It is saved on this instance. Its admins can read it in the admin console.";
+		return "It is saved on this instance. Its admins can read it, and can send it to GitHub as a private issue drafted by an AI model.";
 	}
 	return undefined;
 }

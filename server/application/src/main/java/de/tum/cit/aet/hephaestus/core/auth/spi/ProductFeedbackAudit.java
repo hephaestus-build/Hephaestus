@@ -21,4 +21,7 @@ public interface ProductFeedbackAudit {
 
     /** @return whether the event was staged in the caller's transaction */
     boolean recordCleanupConfirmed(long actingAccountId, UUID cleanupId, String step, String repository);
+
+    /** Records that an admin sent a saved report into filing. Holds the report's id only, never its text. */
+    boolean recordFiledByAdmin(long actingAccountId, UUID feedbackId);
 }

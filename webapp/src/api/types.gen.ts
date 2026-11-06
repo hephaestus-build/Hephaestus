@@ -1380,6 +1380,13 @@ export type EditProductFeedbackDraft = {
     title: string;
 };
 
+export type EmailStatus = {
+    /**
+     * this instance has a relay and a sender, so it can try to send email at all
+     */
+    configured: boolean;
+};
+
 export type EmailTestRequest = {
     /**
      * the mailbox to send the test email to; blank means the caller's own verified address
@@ -1546,6 +1553,7 @@ export type FeedbackDisagreement = {
 export type FeedbackItem = {
     account?: FeedbackAccountRef;
     appVersion?: string;
+    canFile: boolean;
     createdAt: Date;
     id: string;
     kind: 'IDEA' | 'BUG' | 'FEEDBACK';
@@ -1553,6 +1561,7 @@ export type FeedbackItem = {
     pagePath?: string;
     resolvedAt?: Date;
     resolvedBy?: FeedbackAccountRef;
+    savedBeforeDisclosure: boolean;
     userAgent?: string;
     workspace?: FeedbackWorkspaceRef;
 };
@@ -4137,7 +4146,18 @@ export type ProductFeedbackDestinations = {
     privateRepository?: string;
     publicCheck: 'UNSET' | 'INSTALLED' | 'MISSING' | 'NOT_PRIVATE' | 'NOT_PUBLIC' | 'DIFFERENT_OWNER';
     publicRepository?: string;
+    /**
+     * saved reports that the private repository can take now; 0 without one or while paused
+     */
+    reportsToMove: number;
     snapshotAt?: Date;
+};
+
+export type ProductFeedbackMove = {
+    /**
+     * how many reports started moving; a repeated call finds only what is left
+     */
+    moved: number;
 };
 
 /**
@@ -7396,7 +7416,7 @@ export type AdminListAuthEventsData = {
         size?: number;
         accountId?: number;
         actingAccountId?: number;
-        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
+        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED' | 'PRODUCT_FEEDBACK_FILED_BY_ADMIN' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
         result?: Array<'SUCCESS' | 'FAILURE'>;
         from?: Date;
         to?: Date;
@@ -7419,7 +7439,7 @@ export type AdminCountAuthEventsData = {
     query?: {
         accountId?: number;
         actingAccountId?: number;
-        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
+        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED' | 'PRODUCT_FEEDBACK_FILED_BY_ADMIN' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
         result?: Array<'SUCCESS' | 'FAILURE'>;
         from?: Date;
         to?: Date;
@@ -7442,7 +7462,7 @@ export type AdminExportAuthEventsData = {
     query?: {
         accountId?: number;
         actingAccountId?: number;
-        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
+        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED' | 'PRODUCT_FEEDBACK_FILED_BY_ADMIN' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
         result?: Array<'SUCCESS' | 'FAILURE'>;
         from?: Date;
         to?: Date;
@@ -7526,6 +7546,22 @@ export type AdminGetConfigurationReadinessResponses = {
 };
 
 export type AdminGetConfigurationReadinessResponse = AdminGetConfigurationReadinessResponses[keyof AdminGetConfigurationReadinessResponses];
+
+export type GetEmailStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/admin/email/status';
+};
+
+export type GetEmailStatusResponses = {
+    /**
+     * OK
+     */
+    200: EmailStatus;
+};
+
+export type GetEmailStatusResponse = GetEmailStatusResponses[keyof GetEmailStatusResponses];
 
 export type AdminSendTestEmailData = {
     body?: EmailTestRequest;
@@ -8685,6 +8721,22 @@ export type UpdateProductFeedbackDestinationsResponses = {
 
 export type UpdateProductFeedbackDestinationsResponse = UpdateProductFeedbackDestinationsResponses[keyof UpdateProductFeedbackDestinationsResponses];
 
+export type FileAllSavedProductFeedbackData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/admin/product-feedback/file-saved';
+};
+
+export type FileAllSavedProductFeedbackResponses = {
+    /**
+     * OK
+     */
+    200: ProductFeedbackMove;
+};
+
+export type FileAllSavedProductFeedbackResponse = FileAllSavedProductFeedbackResponses[keyof FileAllSavedProductFeedbackResponses];
+
 export type ListProductFeedbackNeedsActionData = {
     body?: never;
     path?: never;
@@ -8718,6 +8770,24 @@ export type AdminTriageProductFeedbackResponses = {
 };
 
 export type AdminTriageProductFeedbackResponse = AdminTriageProductFeedbackResponses[keyof AdminTriageProductFeedbackResponses];
+
+export type FileSavedProductFeedbackData = {
+    body?: never;
+    path: {
+        feedbackId: string;
+    };
+    query?: never;
+    url: '/admin/product-feedback/{feedbackId}/file';
+};
+
+export type FileSavedProductFeedbackResponses = {
+    /**
+     * The report goes through drafting and routing
+     */
+    204: void;
+};
+
+export type FileSavedProductFeedbackResponse = FileSavedProductFeedbackResponses[keyof FileSavedProductFeedbackResponses];
 
 export type RetryProductFeedbackFilingData = {
     body?: never;

@@ -40,6 +40,7 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	isAdmin: boolean;
 	isOwner?: boolean;
 	isAppAdmin: boolean;
+	waitingReports?: number;
 	/** Lists Ask Hephaestus in the main navigation of the active workspace; the container decides from membership and setup. */
 	showConversation: boolean;
 	readOnly?: boolean;
@@ -66,6 +67,7 @@ export function AppSidebar({
 	isAdmin,
 	isOwner = false,
 	isAppAdmin,
+	waitingReports,
 	showConversation,
 	readOnly = false,
 	integrationKinds,
@@ -215,7 +217,11 @@ export function AppSidebar({
 			<SidebarContent onClick={handleSectionClick}>{sidebarContent}</SidebarContent>
 			<SidebarFooter onClick={handleSectionClick}>
 				{!readOnly && (
-					<NavFooter isAppAdmin={isAppAdmin} workspaceSlug={activeWorkspace?.workspaceSlug} />
+					<NavFooter
+						isAppAdmin={isAppAdmin}
+						waitingReports={waitingReports}
+						workspaceSlug={activeWorkspace?.workspaceSlug}
+					/>
 				)}
 			</SidebarFooter>
 			<SidebarRail />

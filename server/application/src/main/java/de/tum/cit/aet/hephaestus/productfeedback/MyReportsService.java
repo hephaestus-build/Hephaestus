@@ -105,7 +105,8 @@ class MyReportsService {
         consents.save(new ProductFeedbackConsent(
                 accountId, request.allowPublic(), request.mention(), destination.getNoticeVersion(), now));
         if (!request.allowPublic()) {
-            for (ProductFeedbackFiling filing : filings.findAllByAccount(accountId)) {
+            // Locked: a claim that takes a held row at this moment must not be overwritten by this flush.
+            for (ProductFeedbackFiling filing : filings.lockAllByAccount(accountId)) {
                 if (!filing.isAllowPublic()) continue;
                 if (!isOnGitHub(filing)) keepPrivate(filing, now);
                 else if (filing.getRoute() == FilingRoute.PRIVATE) filing.setAllowPublic(false);
@@ -185,6 +186,8 @@ class MyReportsService {
             ProductFeedbackDestination destination = destinations.current();
             filing.setRoute(destination.getPrivateRepository() != null ? FilingRoute.PRIVATE : FilingRoute.EMAIL);
             filing.setReason(FilingReason.OPTED_OUT);
+            // Routing froze the public repository. Left in place, filing would read it as a changed destination.
+            filing.clearRecipient();
             filing.setState(FilingState.QUEUED);
             filing.setNextAttemptAt(now);
             meters.route(Objects.requireNonNull(filing.getRoute()), FilingReason.OPTED_OUT);

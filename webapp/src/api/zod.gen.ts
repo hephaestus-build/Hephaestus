@@ -1047,6 +1047,10 @@ export const zEditProductFeedbackDraft = z.object({
     title: z.string().min(0).max(80)
 });
 
+export const zEmailStatus = z.object({
+    configured: z.boolean()
+});
+
 export const zEmailTestRequest = z.object({
     to: z.email().min(0).max(254).optional()
 });
@@ -1412,6 +1416,7 @@ export const zFeedbackWorkspaceRef = z.object({
 export const zFeedbackItem = z.object({
     account: zFeedbackAccountRef.optional(),
     appVersion: z.string().optional(),
+    canFile: z.boolean(),
     createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
     id: z.uuid(),
     kind: z.enum([
@@ -1423,6 +1428,7 @@ export const zFeedbackItem = z.object({
     pagePath: z.string().optional(),
     resolvedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
     resolvedBy: zFeedbackAccountRef.optional(),
+    savedBeforeDisclosure: z.boolean(),
     userAgent: z.string().optional(),
     workspace: zFeedbackWorkspaceRef.optional()
 });
@@ -2948,7 +2954,12 @@ export const zProductFeedbackDestinations = z.object({
         'DIFFERENT_OWNER'
     ]),
     publicRepository: z.string().optional(),
+    reportsToMove: z.int(),
     snapshotAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional()
+});
+
+export const zProductFeedbackMove = z.object({
+    moved: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
 
 /**

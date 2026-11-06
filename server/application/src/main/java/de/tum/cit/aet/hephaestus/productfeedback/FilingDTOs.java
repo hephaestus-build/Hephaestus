@@ -130,6 +130,7 @@ final class FilingDTOs {
      *
      * @param llmModelId the instance model that drafts issues, or null for none (reports then go private undrafted)
      * @param draftsToday drafts made since midnight UTC, against {@code dailyDraftLimit}
+     * @param reportsToMove saved reports that the private repository can take now; 0 without one or while paused
      * @param oldestWaitingSince the oldest report not yet on GitHub or in the admin email
      */
     record ProductFeedbackDestinationsDTO(
@@ -142,10 +143,15 @@ final class FilingDTOs {
             @NonNull RepositoryCheck publicCheck,
             @NonNull RepositoryCheck privateCheck,
             @Schema(requiredMode = RequiredMode.REQUIRED) long draftsToday,
+            @Schema(requiredMode = RequiredMode.REQUIRED) long reportsToMove,
             @Schema(requiredMode = RequiredMode.REQUIRED) long needsAction,
             @Nullable Instant lastFiledAt,
             @Nullable Instant oldestWaitingSince,
             @Nullable Instant snapshotAt) {}
+
+    /** @param moved how many reports started moving; a repeated call finds only what is left */
+    record ProductFeedbackMoveDTO(
+            @Schema(requiredMode = RequiredMode.REQUIRED) int moved) {}
 
     /**
      * @param newNoticeVersion true to raise the notice version, so that every person chooses again

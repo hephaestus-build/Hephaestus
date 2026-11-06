@@ -128,6 +128,13 @@ public class ProductFeedbackFiling {
     @Column(name = "output_tokens", nullable = false)
     private long outputTokens;
 
+    /**
+     * The composer told the reporter that a model provider can read this report. A report written under an older notice
+     * keeps false for good, because a later notice does not reach it: it can move to GitHub, but no model ever reads it.
+     */
+    @Column(name = "file_disclosed", nullable = false)
+    private boolean fileDisclosed;
+
     /** The repository the report was routed to, frozen at routing. */
     @Column(name = "repository", length = 200)
     private @Nullable String repository;
@@ -180,6 +187,7 @@ public class ProductFeedbackFiling {
         this.feedbackId = feedbackId;
         this.state = state;
         this.allowPublic = allowPublic;
+        this.fileDisclosed = true;
         this.nextAttemptAt = now;
         this.createdAt = now;
         this.updatedAt = now;
@@ -187,5 +195,18 @@ public class ProductFeedbackFiling {
 
     boolean publicRoute() {
         return route == FilingRoute.PUBLIC;
+    }
+
+    /** Whether an admin can send this saved report to GitHub now. An admin's action only ever files privately. */
+    boolean canFileAt(ProductFeedbackDestination destination) {
+        return state == FilingState.EMAILED && !destination.isPaused() && destination.getPrivateRepository() != null;
+    }
+
+    /** Forgets the repository routing froze, so the next claim freezes the one the report's route now names. */
+    void clearRecipient() {
+        repository = null;
+        repositoryId = null;
+        repositoryNodeId = null;
+        installationId = null;
     }
 }

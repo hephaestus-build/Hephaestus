@@ -69,7 +69,8 @@ class DraftingService implements ProductFeedbackDrafting {
         ProductFeedbackDestination destination = destinations.current();
         Long model = destination.getLlmModelId();
         String input = filing.getPromptInput();
-        if (model == null || input == null || overBudget(report, destination, now)) {
+        // A report whose author was not told about the model never reaches one, whatever path led here.
+        if (!filing.isFileDisclosed() || model == null || input == null || overBudget(report, destination, now)) {
             answered(filing, null, now);
             return new Claim(false, Optional.empty());
         }

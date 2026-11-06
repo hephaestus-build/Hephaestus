@@ -50,4 +50,15 @@ public class ProductFeedbackAuditAdapter implements ProductFeedbackAudit {
                         .toString())
                 .recordInCurrentTransaction();
     }
+
+    @Override
+    public boolean recordFiledByAdmin(long actingAccountId, UUID feedbackId) {
+        return authEventLogger
+                .event(AuthEvent.EventType.PRODUCT_FEEDBACK_FILED_BY_ADMIN, AuthEvent.Result.SUCCESS)
+                .actingAccount(actingAccountId)
+                .details(json.createObjectNode()
+                        .put("feedbackId", feedbackId.toString())
+                        .toString())
+                .recordInCurrentTransaction();
+    }
 }

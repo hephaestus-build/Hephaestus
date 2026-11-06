@@ -10,8 +10,10 @@ import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSub
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
@@ -123,7 +125,7 @@ class FeedbackService {
                 feedback.findById(id).orElseThrow(() -> new EntityNotFoundException("Product feedback", id.toString()));
         // The console lists only reports that GitHub will not get; one that is filed, or on its way, is worked on
         // there.
-        boolean onGitHub = filings.findById(id)
+        boolean onGitHub = filings.lock(id)
                 .map(filing -> filing.getState() != FilingState.EMAILED && filing.getState() != FilingState.STOPPED)
                 .orElse(false);
         if (onGitHub)
@@ -140,6 +142,14 @@ class FeedbackService {
             accountIds.add(f.getAccountId());
             accountIds.add(f.getResolvedByAccountId());
         }
+        ProductFeedbackDestination destination = destinations.current();
+        Set<UUID> fileable = new HashSet<>();
+        Set<UUID> undrafted = new HashSet<>();
+        for (ProductFeedbackFiling filing :
+                filings.findAllById(list.stream().map(ProductFeedback::getId).toList())) {
+            if (filing.canFileAt(destination)) fileable.add(filing.getFeedbackId());
+            if (!filing.isFileDisclosed()) undrafted.add(filing.getFeedbackId());
+        }
         FeedbackRefs.Resolved resolved = refs.resolve(
                 accountIds, list.stream().map(ProductFeedback::getWorkspaceId).toList());
         return list.stream()
@@ -154,7 +164,9 @@ class FeedbackService {
                         f.getAppVersion(),
                         Objects.requireNonNull(f.getCreatedAt()),
                         f.getResolvedAt(),
-                        resolved.account(f.getResolvedByAccountId())))
+                        resolved.account(f.getResolvedByAccountId()),
+                        !f.isResolved() && fileable.contains(f.getId()),
+                        undrafted.contains(f.getId())))
                 .toList();
     }
 }

@@ -255,7 +255,7 @@ describe("product feedback that can become a public GitHub issue", () => {
 		await screen.findByRole("heading", { name: "Your reports" });
 		await user.click(await screen.findByRole("button", { name: "Keep private" }));
 		await screen.findByText("Report kept private");
-		await screen.findByText("You chose to keep it private.");
+		await screen.findByText("It is not marked public, so it stays private.");
 		expect(keptPrivate).toStrictEqual([REPORT_ID]);
 	});
 

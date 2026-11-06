@@ -75,6 +75,9 @@ class DestinationService {
                 check(destination.getPublicRepository(), publicRepository, false, privateRepository),
                 check(destination.getPrivateRepository(), privateRepository, true, publicRepository),
                 filings.countDraftedSince(now.truncatedTo(ChronoUnit.DAYS)),
+                destination.getPrivateRepository() == null || destination.isPaused()
+                        ? 0
+                        : filings.countSavedForAdmins(),
                 filings.countByState(FilingState.STOPPED) + cleanups.countByManualSinceNotNull(),
                 filings.lastFiledAt().orElse(null),
                 filings.oldestWaiting().map(ProductFeedbackFiling::getCreatedAt).orElse(null),

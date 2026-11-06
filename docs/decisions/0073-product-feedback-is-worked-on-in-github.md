@@ -5,6 +5,13 @@
 **Authors:** Felix T.J. Dietrich
 **Relates to:** ADR 0025 (job claims and orphan recovery), ADR 0026 (the governed model catalog) and ADR 0068 (the worker runs model calls).
 
+**Update (2026-11-06):** A report that is not on GitHub must still reach someone, also on an instance that cannot send email.
+So the main sidebar shows instance admins how many reports wait, and leads to them.
+An admin can send a saved report to GitHub as a private issue. It starts over from drafting, needs a recent sign-in and leaves an audit event. An admin's action never publishes: a public issue needs the reporter's own choice.
+A report written under a notice that named only the instance admins moves too, but only to the private repository and with no model call: its issue is the author's redacted text. A later notice does not reach it, so its filing row keeps `file_disclosed` false.
+An instance can run with no destination and connect GitHub later: the list then offers to move what waits. Each report moves in its own transaction, so a move can stop and run again, and the marker keeps a report from getting a second issue.
+The list of reports not on GitHub is thus a waiting room, not the inbox that option 1 rejected. Its only way out for a real report is GitHub.
+
 ## Context
 
 Product feedback is a report about Hephaestus itself: a bug, an idea, or anything else.

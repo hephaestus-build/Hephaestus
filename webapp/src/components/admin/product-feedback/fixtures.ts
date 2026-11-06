@@ -12,6 +12,8 @@ export const bugReport = {
 	userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:131.0) Gecko/20100101 Firefox/131.0",
 	appVersion: "0.71.0",
 	createdAt: minutesBefore(40),
+	canFile: false,
+	savedBeforeDisclosure: false,
 } satisfies FeedbackItem;
 
 export const idea = {
@@ -22,6 +24,8 @@ export const idea = {
 	workspace: { id: 7, slug: "acme", displayName: "Acme" },
 	appVersion: "0.71.0",
 	createdAt: hoursBefore(2),
+	canFile: false,
+	savedBeforeDisclosure: false,
 } satisfies FeedbackItem;
 
 export const praise = {
@@ -31,6 +35,8 @@ export const praise = {
 	account: { id: 3, displayName: "Linus Torvalds" },
 	appVersion: "0.71.0",
 	createdAt: hoursBefore(6),
+	canFile: false,
+	savedBeforeDisclosure: false,
 } satisfies FeedbackItem;
 
 /** Sent by an account that has since been erased. */
@@ -42,6 +48,8 @@ export const orphanedFeedback = {
 	pagePath: "/w/globex/conversation",
 	appVersion: "0.70.2",
 	createdAt: daysBefore(2),
+	canFile: false,
+	savedBeforeDisclosure: false,
 } satisfies FeedbackItem;
 
 export const resolvedBugReport = {
@@ -57,6 +65,8 @@ export const resolvedBugReport = {
 	createdAt: daysBefore(12),
 	resolvedAt: daysBefore(10),
 	resolvedBy: { id: 1, displayName: "Ada Lovelace", email: "ada@example.org" },
+	canFile: false,
+	savedBeforeDisclosure: false,
 } satisfies FeedbackItem;
 
 export const openFeedback: FeedbackItem[] = [bugReport, idea, praise, orphanedFeedback];

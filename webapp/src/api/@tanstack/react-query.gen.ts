@@ -164,6 +164,8 @@ export { downloadDataExportOptions, downloadDataExportQueryKey } from './react-q
 export { editMyProductFeedbackDraftMutation } from './react-query/editMyProductFeedbackDraft.gen.js';
 export { exchangeClientSignInMutation } from './react-query/exchangeClientSignIn.gen.js';
 export { exportScanSarifOptions, exportScanSarifQueryKey } from './react-query/exportScanSarif.gen.js';
+export { fileAllSavedProductFeedbackMutation } from './react-query/fileAllSavedProductFeedback.gen.js';
+export { fileSavedProductFeedbackMutation } from './react-query/fileSavedProductFeedback.gen.js';
 export { getAccountAiChoiceOptions, getAccountAiChoiceQueryKey } from './react-query/getAccountAiChoice.gen.js';
 export { getActivityFacetsOptions, getActivityFacetsQueryKey } from './react-query/getActivityFacets.gen.js';
 export { getActivityPeopleOptions, getActivityPeopleQueryKey } from './react-query/getActivityPeople.gen.js';
@@ -180,6 +182,7 @@ export { getConsentStatusOptions, getConsentStatusQueryKey } from './react-query
 export { getCsrfTokenOptions, getCsrfTokenQueryKey } from './react-query/getCsrfToken.gen.js';
 export { getCurrentUserOptions, getCurrentUserQueryKey } from './react-query/getCurrentUser.gen.js';
 export { getDataExportStatusOptions, getDataExportStatusQueryKey } from './react-query/getDataExportStatus.gen.js';
+export { getEmailStatusOptions, getEmailStatusQueryKey } from './react-query/getEmailStatus.gen.js';
 export { getFeedbackModeRollupOptions, getFeedbackModeRollupQueryKey } from './react-query/getFeedbackModeRollup.gen.js';
 export { getGitLabRepositorySelectionOptions, getGitLabRepositorySelectionQueryKey } from './react-query/getGitLabRepositorySelection.gen.js';
 export { getInstanceCatalogOptions, getInstanceCatalogQueryKey } from './react-query/getInstanceCatalog.gen.js';
