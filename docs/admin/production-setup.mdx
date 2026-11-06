@@ -450,6 +450,29 @@ Conversation turns are refused when a worker claims them, before the conversatio
 Work resumes automatically next UTC calendar month, or about a minute after a cap increase or removal.
 The pause appears on both workspace **AI usage** and **AI models** pages.
 
+**A cap can be passed by a bounded amount.**
+Work that already runs stops at its next model call.
+The proxy adds the spend of all running reviews and conversation turns of the workspace to the month's spend.
+It does this before a call waits for capacity, and again right before the call goes to the provider.
+A purse can pass its cap by at most this amount:
+
+- The calls in flight when the cap is reached, each at the cost of the most expensive single call. Input, output, cache reads and cache writes all count, and each retry is a new call.
+- The spend of runs that ended in the last 5 seconds. A worker reads the month's spend at most every 5 seconds.
+
+The cap counts only usage that Hephaestus recorded, and Hephaestus does not estimate tokens or charges.
+Your provider's invoice can therefore be higher than the ledger for these calls:
+
+- A call that was cancelled, or that stalled or failed in mid-stream. `gen_ai_client_calls_total` counts them by `outcome`.
+- A served answer without a usage block. `llm_proxy_usage_missing_total` counts them.
+- A streamed call to a provider that refuses the usage request. `llm_proxy_stream_usage_unsupported_total` counts them.
+- An answer with an unreadable usage block. `llm_proxy_usage_unparseable_total` counts them.
+
+Three more cases can show a higher spend than the running sum did:
+
+- A running model without a price counts as zero until its run ends. The ledger then marks the month as unverifiable, and the purse pauses.
+- At the end of a run, a runner's own report can replace a lower total from the proxy.
+- A conversation turn that an account merge takes back leaves the running sum shortly before its ledger row exists.
+
 **Practice reviews and conversations fail differently.**
 A queued practice review is refused before execution and posts nothing.
 The end user sees no error.

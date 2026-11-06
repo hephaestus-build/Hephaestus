@@ -49,6 +49,12 @@ public class ReviewAttemptUsageService {
         this.recorder = recorder;
     }
 
+    /** What the workspace's running attempts have spent so far, per purse. */
+    @Transactional(readOnly = true)
+    public List<ReviewAttemptUsageRepository.RunningSpendRow> runningSpend(long workspaceId) {
+        return attempts.sumRunningSpend(workspaceId);
+    }
+
     /** Where a returned call was settled. */
     public enum CallSettlement {
         /** On the attempt that still runs; the in-flight counters took it too. */

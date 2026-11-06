@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>The ledger only gains a row when an agent job or mentor turn ENDS, so {@link #decide} is blind to
  * work running right now. A gate that must also bound a run already in progress reads {@link #headroom}
- * and adds the in-flight spend itself.
+ * and adds the running spend itself.
  */
 @Service
 public class LlmBudgetService {
@@ -90,7 +90,7 @@ public class LlmBudgetService {
 
     /**
      * The same month-window reads as {@link #decide}, handed back as numbers, so a caller that can see
-     * spend the ledger cannot yet — the LLM proxy, mid-attempt — can add it before the cap comparison.
+     * spend the ledger cannot yet — the LLM proxy — can add it before the cap comparison.
      */
     @Transactional(readOnly = true)
     public LlmBudgetHeadroom headroom(Long workspaceId) {
@@ -134,7 +134,7 @@ public class LlmBudgetService {
 
     /**
      * A purse already exhausted on recorded spend alone skips the probe: EXHAUSTED outranks
-     * UNVERIFIABLE, and adding in-flight spend can only keep it exhausted.
+     * UNVERIFIABLE, and adding running spend can only keep it exhausted.
      */
     private static boolean probeUnpriced(
             @Nullable BigDecimal spentUsd, @Nullable BigDecimal budgetUsd, BooleanSupplier hasUnpriced) {

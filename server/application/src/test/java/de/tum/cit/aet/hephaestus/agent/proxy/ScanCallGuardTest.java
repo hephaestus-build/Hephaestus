@@ -82,7 +82,7 @@ class ScanCallGuardTest extends BaseUnitTest {
                 1L,
                 1L,
                 1L,
-                new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, job.getId(), 0, BigDecimal.ZERO, LEASE),
+                new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, job.getId(), 0, LEASE),
                 null,
                 null,
                 workDeadline);
@@ -346,7 +346,7 @@ class ScanCallGuardTest extends BaseUnitTest {
                 1L,
                 1L,
                 1L,
-                new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, job.getId(), 0, BigDecimal.ZERO, LEASE),
+                new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, job.getId(), 0, LEASE),
                 ModelKind.CHAT,
                 null,
                 Instant.now().plusSeconds(60));

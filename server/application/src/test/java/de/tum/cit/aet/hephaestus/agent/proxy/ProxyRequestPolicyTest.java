@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -62,7 +61,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
                 7L,
                 8L,
                 1L,
-                new ProxyRouting.BilledAttempt(source, id, 0, BigDecimal.ZERO, LEASE),
+                new ProxyRouting.BilledAttempt(source, id, 0, LEASE),
                 null,
                 null,
                 source == UsageSourceType.MENTOR_TURN ? null : Instant.now().plusSeconds(60));
@@ -115,7 +114,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
                 7L,
                 8L,
                 null,
-                new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, id, 0, BigDecimal.ZERO, LEASE),
+                new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, id, 0, LEASE),
                 null,
                 null,
                 null);

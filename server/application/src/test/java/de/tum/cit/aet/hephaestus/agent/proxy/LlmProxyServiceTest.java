@@ -59,7 +59,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.math.BigDecimal;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -903,8 +902,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     7L,
                     8L,
                     9L,
-                    new ProxyRouting.BilledAttempt(
-                            UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE),
+                    new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, LEASE),
                     null,
                     null,
                     null);
@@ -1548,8 +1546,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("a call that the turn's end cancelled does not replace the failure the turn ended on")
         void aCancelledCallDoesNotReplaceTheFailure() {
-            var attempt = new ProxyRouting.BilledAttempt(
-                    UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
+            var attempt = new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, LEASE);
             try (var call = streamingCalls.begin(attempt)) {
                 call.failed(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503));
                 call.failed(new MentorTurn.FailedCall("upstream_idle", 503));
@@ -2404,8 +2401,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 }
             };
             var billed = mentor
-                    ? new ProxyRouting.BilledAttempt(
-                            UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 0, BigDecimal.ZERO, null)
+                    ? new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 0, null)
                     : ATTEMPT;
             var routing = new ProxyRouting(
                     mentor ? "mentor-session:body-limit" : "job:body-limit",
@@ -2637,11 +2633,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
     private static final int REVIEW_CALLS_AT_THREE = 12;
 
     private static final ProxyRouting.BilledAttempt ATTEMPT = new ProxyRouting.BilledAttempt(
-            UsageSourceType.REVIEW_JOB,
-            UUID.fromString("00000000-0000-0000-0000-0000000000aa"),
-            0,
-            BigDecimal.ZERO,
-            OTHER_LEASE);
+            UsageSourceType.REVIEW_JOB, UUID.fromString("00000000-0000-0000-0000-0000000000aa"), 0, OTHER_LEASE);
 
     // A work deadline no test reaches, for job routes whose test is not about it.
     private static Instant laterThanAnyTest() {

@@ -57,7 +57,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.persistence.EntityManager;
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -554,7 +553,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Test
     void shouldRecordTheLastFailedModelCallOnTheTurnWhenTheHostEndsItFailed() throws Exception {
         var attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, turn.getLeaseId());
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getLeaseId());
         try (var call = callsInFlight.begin(attempt)) {
             call.failed(new MentorTurn.FailedCall("WebClientRequestException", null));
         }
@@ -578,7 +577,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Test
     void shouldStillRecordTheFailedModelCallWhenTheEndRollsBackAndTheHostRepeatsIt() throws Exception {
         var attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, turn.getLeaseId());
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getLeaseId());
         try (var call = callsInFlight.begin(attempt)) {
             call.failed(new MentorTurn.FailedCall("upstream_status", 503));
         }

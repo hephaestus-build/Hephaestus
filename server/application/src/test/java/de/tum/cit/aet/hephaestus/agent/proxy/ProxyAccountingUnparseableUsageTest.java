@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -37,8 +36,8 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     @Test
     @DisplayName("an unreadable 2xx body is counted, not silently dropped")
     void shouldCountUnparseableUpstreamBody() {
-        ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
+        ProxyRouting.BilledAttempt attempt =
+                new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, LEASE);
         byte[] notJson = "<html>502 upstream</html>".getBytes(StandardCharsets.UTF_8);
 
         assertThatCode(() -> accounting.recordUsage(attempt, null, LlmApiProtocol.OPENAI_COMPLETIONS, notJson))
@@ -58,8 +57,8 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
 
     @Test
     void shouldCountAServedBodyThatReportsNoUsageAsMissingNotUnparseable() {
-        ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
+        ProxyRouting.BilledAttempt attempt =
+                new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, LEASE);
         byte[] body = "{\"choices\":[{\"message\":{\"content\":\"hi\"}}]}".getBytes(StandardCharsets.UTF_8);
 
         accounting.recordUsage(attempt, null, LlmApiProtocol.OPENAI_COMPLETIONS, body);
@@ -74,8 +73,8 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
 
     @Test
     void shouldLogTheParseFailureTypeWithoutTheModelAnswer() {
-        ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
+        ProxyRouting.BilledAttempt attempt =
+                new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, LEASE);
         // An unquoted token is what a parser quotes back in its message.
         byte[] answer = "{\"choices\":[{\"text\":privateanswercanary}]}".getBytes(StandardCharsets.UTF_8);
         Logger logger = (Logger) LoggerFactory.getLogger(ProxyAccounting.class);
@@ -108,8 +107,8 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     @Test
     @DisplayName("a readable body still bills and leaves the counter alone")
     void shouldNotCountAParseableBody() {
-        ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
+        ProxyRouting.BilledAttempt attempt =
+                new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, LEASE);
         byte[] body = """
             {"usage":{"prompt_tokens":10,"completion_tokens":5,\
             "prompt_tokens_details":{"cached_tokens":4},\
@@ -129,8 +128,8 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
 
     @Test
     void shouldCountInvalidTokenTotals() {
-        ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
+        ProxyRouting.BilledAttempt attempt =
+                new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, LEASE);
         byte[] body = """
             {"usage":{"prompt_tokens":3,"prompt_tokens_details":{"cached_tokens":4}}}
             """.getBytes(StandardCharsets.UTF_8);
@@ -146,8 +145,8 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
 
     @Test
     void shouldStillCountThePracticeScriptCallWhenItsBodyIsUnreadable() {
-        ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.PRACTICE_SCRIPT_EMBEDDING, UUID.randomUUID(), 0, BigDecimal.ZERO, LEASE);
+        ProxyRouting.BilledAttempt attempt =
+                new ProxyRouting.BilledAttempt(UsageSourceType.PRACTICE_SCRIPT_EMBEDDING, UUID.randomUUID(), 0, LEASE);
         byte[] notJson = "<html>502 upstream</html>".getBytes(StandardCharsets.UTF_8);
 
         PracticeScriptCall call = new PracticeScriptCall(ModelKind.EMBEDDING, null, "comment-quality");

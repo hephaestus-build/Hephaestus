@@ -71,8 +71,8 @@ public class ProxyAccounting {
     }
 
     /**
-     * Whether the payer of THIS call has crossed their monthly cap, counting the calling attempt's own
-     * spend, which the ledger cannot see until the run ends.
+     * Whether the payer of THIS call has crossed their monthly cap, counting what the workspace's running
+     * work has spent, which the ledger cannot see until each run ends.
      */
     public boolean refuseForBudget(ProxyRouting routing) {
         return budgetBlocked(budgetGate.isBlocked(routing), UsageFundingSource.capTag(routing.connectionScope()));
