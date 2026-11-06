@@ -1564,6 +1564,11 @@ The restored database is readable only with the keys that sealed its values.
 Keep them as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
 Restore the NATS JetStream data separately, as the [broker recovery procedure](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers) describes.
 
+Before reducing application replicas, record `SHOW max_connections` and set `postgresql.parameters.max_connections` to that value.
+Keep this override until WAL replay finishes. Include it in the recovery set for a replacement host.
+Automatic connection sizing decreases with replica counts, but PostgreSQL rejects recovery below the source setting.
+The [PostgreSQL recovery requirements](https://www.postgresql.org/docs/18/hot-standby.html#HOT-STANDBY-ADMIN) describe this constraint.
+
 #### Prepare replacement storage
 
 On a replacement host, restore the release keys, TLS Secrets, verified chart and site values first.
