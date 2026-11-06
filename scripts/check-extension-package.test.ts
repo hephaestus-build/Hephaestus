@@ -129,6 +129,10 @@ void test("rejects missing packaged icons and empty extension pages", () => {
 		"options.html": Buffer.from("options"),
 		"inline.html": Buffer.from("inline"),
 		"action.html": Buffer.from("confirmation"),
+		LICENSE: Buffer.from("MIT License"),
+		"THIRD_PARTY_NOTICES/background.md": Buffer.from("worker dependencies"),
+		"THIRD_PARTY_NOTICES/provider.md": Buffer.from("content script dependencies"),
+		"THIRD_PARTY_NOTICES/action+inline+options.md": Buffer.from("UI dependencies"),
 		"icon/16.png": Buffer.from("icon"),
 		"icon/32.png": Buffer.from("icon"),
 		"icon/48.png": Buffer.from("icon"),
@@ -136,6 +140,17 @@ void test("rejects missing packaged icons and empty extension pages", () => {
 	};
 	assert.deepEqual(missingPackageAssets(Buffer.from(zipSync(assets))), []);
 	assert.deepEqual(unexpectedPackageAssets(Buffer.from(zipSync(assets))), []);
+	assert.deepEqual(
+		missingPackageAssets(
+			Buffer.from(
+				zipSync({
+					...assets,
+					"THIRD_PARTY_NOTICES/provider.md": Buffer.alloc(0),
+				}),
+			),
+		),
+		["THIRD_PARTY_NOTICES/provider.md"],
+	);
 	assert.deepEqual(
 		unexpectedPackageAssets(
 			Buffer.from(zipSync({ ...assets, "sidepanel.html": Buffer.from("obsolete") })),

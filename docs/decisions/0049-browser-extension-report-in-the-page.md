@@ -53,6 +53,7 @@ Within the chosen section, and on lists:
 
 ## Decision
 
+- Desktop Chrome is the only supported browser because we verify its sign-in, site permissions, and isolated report frame together.
 - The content script inserts one generic host into a known slot of the work's content column — after
   the description, with a merge request's reports, at the top of a work item's activity, or above the
   changed files — and nowhere else; a page without a known, visible slot gets no report. The host
