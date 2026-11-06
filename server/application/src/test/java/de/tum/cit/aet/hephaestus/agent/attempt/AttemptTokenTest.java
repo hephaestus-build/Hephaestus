@@ -32,8 +32,8 @@ class AttemptTokenTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         key = AttemptSigningKey.generate();
-        issuer = new AttemptTokenIssuer(key);
-        verifier = new AttemptTokenVerifier(key, new SimpleMeterRegistry());
+        issuer = new AttemptTokenIssuer(AttemptKeyFixtures.keyring(key));
+        verifier = new AttemptTokenVerifier(AttemptKeyFixtures.keyring(key), new SimpleMeterRegistry());
     }
 
     @Test

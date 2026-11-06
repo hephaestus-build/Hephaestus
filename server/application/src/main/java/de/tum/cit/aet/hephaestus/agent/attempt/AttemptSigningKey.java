@@ -8,9 +8,8 @@ import java.security.interfaces.RSAPublicKey;
 import java.util.UUID;
 
 /**
- * The key that this worker signs and verifies its attempt tokens with. A worker verifies only the tokens that it issued
- * itself: each sandbox calls the gateway of the worker that runs its attempt. The key therefore lives in memory, and a
- * restarted worker's new key ends every token of the attempts that it no longer runs.
+ * The key that this worker signs its attempt tokens with. Its private half lives only in this process's memory, so a
+ * restart rotates it. {@link AttemptKeyring} publishes its public half, and any worker can then verify the tokens.
  *
  * @param kid the token's {@code kid} header
  */

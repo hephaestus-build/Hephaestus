@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.attempt;
 
 import com.auth0.jwt.JWT;
-import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.auth0.jwt.interfaces.JWTVerifier;
@@ -14,22 +13,16 @@ import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** Checks the attempt tokens that this worker's {@link AttemptTokenIssuer} signed. */
+/** Checks attempt tokens that any live worker's {@link AttemptTokenIssuer} signed. */
 public class AttemptTokenVerifier {
 
     private static final String EXPECTED_ALG = "RS256";
 
-    private final String kid;
-    private final JWTVerifier verifier;
+    private final AttemptKeyring keyring;
     private final MeterRegistry meterRegistry;
 
-    public AttemptTokenVerifier(AttemptSigningKey key, MeterRegistry meterRegistry) {
-        this.kid = key.kid();
-        this.verifier = JWT.require(Algorithm.RSA256(key.publicKey(), null))
-                .withIssuer(AttemptTokenIssuer.ISSUER)
-                .withAudience(AttemptTokenIssuer.AUDIENCE)
-                .acceptLeeway(5)
-                .build();
+    public AttemptTokenVerifier(AttemptKeyring keyring, MeterRegistry meterRegistry) {
+        this.keyring = keyring;
         this.meterRegistry = meterRegistry;
     }
 
@@ -67,8 +60,9 @@ public class AttemptTokenVerifier {
         if (tokenKid == null || tokenKid.isBlank()) {
             throw new AttemptTokenInvalidException("missing kid header", "kid");
         }
-        if (!kid.equals(tokenKid)) {
-            throw new AttemptTokenInvalidException("unknown kid: " + tokenKid, "kid");
+        JWTVerifier verifier = keyring.verifierFor(tokenKid);
+        if (verifier == null) {
+            throw new AttemptTokenInvalidException("unknown kid", "kid");
         }
         DecodedJWT verified;
         try {

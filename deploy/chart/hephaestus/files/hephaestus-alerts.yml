@@ -313,6 +313,13 @@ groups:
         annotations:
           summary: At least five kept Git mirrors were evicted in one hour; the volume is too small for the monitored repositories
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusAttemptKeysNotSyncing
+        expr: sum by (task) (increase(attempt_key_sync_failures_total{job="hephaestus"}[15m])) >= 5
+        labels:
+          severity: warning
+        annotations:
+          summary: A worker failed five times in 15 minutes to publish or load the keys that verify sandbox credentials
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewUnreachable
         expr: >-
           sum by (cause) (increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause=~"server_unreachable|provider_unreachable"}[1h])) >= 3

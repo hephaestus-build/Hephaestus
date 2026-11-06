@@ -663,6 +663,27 @@ tests:
               summary: At least five kept Git mirrors were evicted in one hour; the volume is too small for the monitored repositories
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: repeated failures to sync attempt keys fire with their task, a few do not
+    interval: 1m
+    input_series:
+      - series: 'attempt_key_sync_failures_total{job="hephaestus",instance="worker:9090",task="refresh"}'
+        values: "0x5 0+1x20"
+      - series: 'attempt_key_sync_failures_total{job="hephaestus",instance="worker:9090",task="publish"}'
+        values: "0x25"
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: HephaestusAttemptKeysNotSyncing
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: HephaestusAttemptKeysNotSyncing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              task: refresh
+            exp_annotations:
+              summary: A worker failed five times in 15 minutes to publish or load the keys that verify sandbox credentials
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: an unreachable provider fires with its cause, a reachable server does not
     interval: 1m
     input_series:

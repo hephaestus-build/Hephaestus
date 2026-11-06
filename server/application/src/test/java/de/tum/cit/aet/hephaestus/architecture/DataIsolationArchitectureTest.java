@@ -139,6 +139,8 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces
             "InstallationInboxStep", // Installation deliveries have no workspace until their handler creates one
             "WorkerRegistry", // Fleet-wide worker liveness/capacity registry; not workspace-scoped
+            // Fleet-wide public keys that verify attempt tokens; a token's workspace is a signed claim
+            "AttemptPublicKey",
             "InstanceSettings", // Singleton instance-wide operator settings (silent-mode brake)
             "ReleaseStart" // The releases this instance started
             );
