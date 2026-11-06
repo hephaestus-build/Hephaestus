@@ -202,7 +202,11 @@ void test("the tools side, which has no program entry, refuses a program", async
 	await once(tools, "listening");
 	const side = await ToolClient.open(address, nonce);
 	try {
-		const channel = side.script({ execArgv: [], timeoutMs: 1000 }, () => undefined, () => undefined);
+		const channel = side.script(
+			{ execArgv: [], timeoutMs: 1000 },
+			() => undefined,
+			() => undefined,
+		);
 		await assert.rejects(channel.exit, { name: "ToolProtocolError", code: "unknown" });
 	} finally {
 		side.close();

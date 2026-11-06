@@ -35,23 +35,26 @@ export const ARCHITECTURES = {
 
 type Instruction = [code: number, jumpIfTrue: number, jumpIfFalse: number, value: number];
 
-/** The filter for one architecture. Jumps count instructions after the next one; a call from another ABI ends the process. */
+/**
+ * The filter for one architecture. A jump counts instructions after the next one, so the offsets below depend on the order.
+ * Index 6 and 10 allow, 9 and 11 refuse, and 12 ends the process: a call from another architecture or ABI lands there.
+ */
 export function program(architecture: keyof typeof ARCHITECTURES): Instruction[] {
 	const { audit, socket, ioUringSetup } = ARCHITECTURES[architecture];
 	return [
-		/* 0 */ [LOAD_WORD, 0, 0, ARCHITECTURE_AT],
-		/* 1 */ [JUMP_EQUAL, 0, 10, audit],
-		/* 2 */ [LOAD_WORD, 0, 0, NUMBER_AT],
-		/* 3 */ [JUMP_AT_LEAST, 8, 0, X32_CALLS],
-		/* 4 */ [JUMP_EQUAL, 2, 0, socket],
-		/* 5 */ [JUMP_EQUAL, 5, 0, ioUringSetup],
-		/* 6 */ [RETURN, 0, 0, RET_ALLOW],
-		/* 7 */ [LOAD_WORD, 0, 0, FIRST_ARGUMENT_AT],
-		/* 8 */ [JUMP_EQUAL, 1, 0, AF_UNIX],
-		/* 9 */ [RETURN, 0, 0, RET_ERRNO + EAFNOSUPPORT],
-		/* 10 */ [RETURN, 0, 0, RET_ALLOW],
-		/* 11 */ [RETURN, 0, 0, RET_ERRNO + EPERM],
-		/* 12 */ [RETURN, 0, 0, RET_KILL_PROCESS],
+		[LOAD_WORD, 0, 0, ARCHITECTURE_AT],
+		[JUMP_EQUAL, 0, 10, audit],
+		[LOAD_WORD, 0, 0, NUMBER_AT],
+		[JUMP_AT_LEAST, 8, 0, X32_CALLS],
+		[JUMP_EQUAL, 2, 0, socket],
+		[JUMP_EQUAL, 5, 0, ioUringSetup],
+		[RETURN, 0, 0, RET_ALLOW],
+		[LOAD_WORD, 0, 0, FIRST_ARGUMENT_AT],
+		[JUMP_EQUAL, 1, 0, AF_UNIX],
+		[RETURN, 0, 0, RET_ERRNO + EAFNOSUPPORT],
+		[RETURN, 0, 0, RET_ALLOW],
+		[RETURN, 0, 0, RET_ERRNO + EPERM],
+		[RETURN, 0, 0, RET_KILL_PROCESS],
 	];
 }
 

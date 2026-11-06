@@ -10,7 +10,7 @@ function verdict(
 ): number {
 	const instructions = program(architecture);
 	let accumulator = 0;
-	for (let at = 0; at < instructions.length; ) {
+	for (let at = 0; at < instructions.length;) {
 		const [code, jumpIfTrue, jumpIfFalse, value] = instructions[at] ?? [0, 0, 0, 0];
 		if (code === 0x20) {
 			accumulator = { 0: call.number, 4: call.audit, 16: call.family }[value] ?? 0;

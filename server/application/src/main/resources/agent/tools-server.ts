@@ -1261,8 +1261,8 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			if (inFlight.has(id)) {
 				throw new ToolProtocolError("protocol", "a request id that is already in flight");
 			}
-			const operations = options.programsOnly === true ? ["script.run"] : ALL_OPERATIONS;
-			if (!operations.includes(header.type)) {
+			const offered = options.programsOnly === true ? ["script.run"] : ALL_OPERATIONS;
+			if (!offered.includes(header.type)) {
 				if (header.type === "put") {
 					rememberRefusedPut(id);
 				}
