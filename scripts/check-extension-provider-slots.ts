@@ -17,12 +17,28 @@ export interface SlotCase {
 
 // Public, fixed work pages keep the probe independent of sign-in and new repository activity.
 export const SLOT_CASES: readonly SlotCase[] = [
-	{ provider: "GITHUB", layout: "github-pull-request", url: "https://github.com/cli/cli/pull/14625" },
+	{
+		provider: "GITHUB",
+		layout: "github-pull-request",
+		url: "https://github.com/cli/cli/pull/14625",
+	},
 	{ provider: "GITHUB", layout: "github-diff", url: "https://github.com/cli/cli/pull/14625/files" },
 	{ provider: "GITHUB", layout: "github-issue", url: "https://github.com/cli/cli/issues/11404" },
-	{ provider: "GITLAB", layout: "gitlab-merge-request", url: "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/252562" },
-	{ provider: "GITLAB", layout: "gitlab-diff", url: "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/252562/diffs" },
-	{ provider: "GITLAB", layout: "gitlab-work-item", url: "https://gitlab.com/gitlab-org/gitlab/-/issues/233836" },
+	{
+		provider: "GITLAB",
+		layout: "gitlab-merge-request",
+		url: "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/252562",
+	},
+	{
+		provider: "GITLAB",
+		layout: "gitlab-diff",
+		url: "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/252562/diffs",
+	},
+	{
+		provider: "GITLAB",
+		layout: "gitlab-work-item",
+		url: "https://gitlab.com/gitlab-org/gitlab/-/issues/233836",
+	},
 ];
 
 declare global {
@@ -41,7 +57,11 @@ export async function providerSlotBundle(): Promise<string> {
 		resolve: { alias: { "~": path.join(ROOT, "extension/src") } },
 		build: {
 			write: false,
-			lib: { entry: path.join(ROOT, "extension/src/content/anchors.ts"), name: "HephaestusProviderSlots", formats: ["iife"] },
+			lib: {
+				entry: path.join(ROOT, "extension/src/content/anchors.ts"),
+				name: "HephaestusProviderSlots",
+				formats: ["iife"],
+			},
 		},
 	});
 	const outputs = (Array.isArray(result) ? result : [result]).flatMap((item) => {
@@ -66,14 +86,20 @@ function slotMatches({ provider, layout }: Pick<SlotCase, "provider" | "layout">
 export async function checkProviderSlots(cases: readonly SlotCase[] = SLOT_CASES) {
 	const script = await providerSlotBundle();
 	const browser = await chromium.launch();
-	const results: { url: string; layout: string; status: "passed" | "failed"; detail?: string }[] = [];
+	const results: { url: string; layout: string; status: "passed" | "failed"; detail?: string }[] =
+		[];
 	try {
 		const context = await browser.newContext();
-		await context.addInitScript({ content: `${script}\nwindow.HephaestusProviderSlots = HephaestusProviderSlots;` });
+		await context.addInitScript({
+			content: `${script}\nwindow.HephaestusProviderSlots = HephaestusProviderSlots;`,
+		});
 		for (const entry of cases) {
 			const page = await context.newPage();
 			try {
-				const response = await page.goto(entry.url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+				const response = await page.goto(entry.url, {
+					waitUntil: "domcontentloaded",
+					timeout: 30_000,
+				});
 				if (response?.ok() !== true) {
 					throw new Error(`Page unavailable: HTTP ${response?.status() ?? "no response"}`);
 				}
@@ -97,7 +123,10 @@ export async function checkProviderSlots(cases: readonly SlotCase[] = SLOT_CASES
 if (import.meta.main) {
 	const results = await checkProviderSlots();
 	await mkdir(path.dirname(REPORT), { recursive: true });
-	await writeFile(REPORT, `${JSON.stringify({ checkedAt: new Date().toISOString(), results }, null, 2)}\n`);
+	await writeFile(
+		REPORT,
+		`${JSON.stringify({ checkedAt: new Date().toISOString(), results }, null, 2)}\n`,
+	);
 	if (results.some((result) => result.status === "failed")) {
 		process.exitCode = 1;
 	}

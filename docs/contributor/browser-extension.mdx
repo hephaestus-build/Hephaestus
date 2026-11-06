@@ -370,6 +370,9 @@ second component tree or framework.
   build.
   The package check examines its manifest directly in the zip. The **Quality → Extension** leg keeps the
   zip as the `extension-chrome-*` artifact.
+- **Live provider slots** (`node scripts/check-extension-provider-slots.ts`): a nightly run checks six public GitHub and GitLab layouts.
+  It bundles the actual adapter and requires its report slot to be visible on each page.
+  The `extension-provider-slots` artifact records each result. Run the workflow manually to check a provider change.
 - **End to end** (`test:extension:e2e`): Playwright launches Chromium with the `e2e` build. Provider
   pages are fixtures Playwright serves in place of GitHub and GitLab. The Hephaestus server is real.
   The suite does not stub any server response. One project exercises the fixture pages alone. The other
@@ -390,8 +393,8 @@ Against a real server with the `e2e` profile, it signs in, resolves seeded work 
   optional-permission prompt is never shown.
 - **The production zip in a browser.** `check:extension-package` checks that zip statically.
   The suite does not drive it in a browser.
-- **The real provider pages.** Slots are fixtures of shapes probed on real pages. A provider redesign
-  shows up only on the real site.
+- **Every real provider layout.** The nightly probe checks public pages without sign-in.
+  Signed-in layouts and self-hosted GitLab versions still need manual checks.
 - **A fresh build in a reused browser profile.** A persistent profile can keep an old service worker
   after the bundle changes. Prove a build in a fresh, disposable profile.
 
