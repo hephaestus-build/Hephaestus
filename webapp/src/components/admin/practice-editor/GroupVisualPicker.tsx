@@ -9,15 +9,17 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { hasText } from "@/lib/text";
 
 import {
-	COLOR_KEYS,
-	DEFAULT_GROUP_COLOR,
 	DEFAULT_GROUP_ICON,
-	getGroupVisual,
-	pickedGroupIcon,
 	ICON_NAMES,
 	iconComponent,
 	iconLabel,
 	iconSearchText,
+	pickedGroupIcon,
+} from "@/components/practice-vocabulary/group-icons";
+import {
+	COLOR_KEYS,
+	DEFAULT_GROUP_COLOR,
+	getGroupVisual,
 	PILL,
 } from "@/components/practice-vocabulary/group-visuals";
 

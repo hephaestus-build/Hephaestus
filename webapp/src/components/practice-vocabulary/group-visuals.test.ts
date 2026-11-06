@@ -1,17 +1,9 @@
 import { Folder, Rocket } from "lucide-react";
 import { describe, expect, it } from "vitest";
 
-import {
-	getGroupVisual,
-	groupInk,
-	ICON_NAMES,
-	iconLabel,
-	iconSearchText,
-	pickedGroupIcon,
-	PILL,
-	PracticeGroupIcon,
-	UNASSIGNED_GROUP_VISUAL,
-} from "./group-visuals";
+import { ICON_NAMES, iconLabel, iconSearchText, pickedGroupIcon } from "./group-icons";
+import { getGroupVisual, groupInk, PILL, UNASSIGNED_GROUP_VISUAL } from "./group-visuals";
+import { PracticeGroupIcon } from "./level-icons";
 
 describe("groupVisuals", () => {
 	it("draws every group with the one group icon and keeps the admin-set color", () => {

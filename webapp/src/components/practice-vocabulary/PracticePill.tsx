@@ -3,7 +3,8 @@ import { HIT_AREA_24 } from "@/components/common/focus";
 import { InlineLink } from "@/components/common/InlineLink";
 import { Badge } from "@/components/ui/badge";
 
-import { type GroupMark, PracticeIcon } from "./group-visuals";
+import type { GroupMark } from "./group-visuals";
+import { PracticeIcon } from "./level-icons";
 
 /** The practice icon's ink where the surface does not know the group: neutral, not a group's color. */
 const NO_GROUP_INK = "text-muted-foreground";
