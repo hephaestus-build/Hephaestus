@@ -47,7 +47,7 @@ public class ReviewModelGateway {
         ATTEMPT_ENDED,
         /** The endpoint could not grant capacity before the attempt ended. */
         CAPACITY,
-        /** The attempt already had its most model calls in flight. */
+        /** The attempt already had its most model calls in flight, or the gateway its most request bodies: ask again. */
         CALLS_IN_FLIGHT
     }
 

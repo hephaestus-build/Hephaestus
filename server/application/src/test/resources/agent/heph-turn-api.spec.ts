@@ -381,6 +381,33 @@ void test("a context read and an end the worker did not answer are sent again", 
 	}
 });
 
+void test("a gateway limit does not end a turn: a refused context read and end are sent again", async () => {
+	const served = contract("context.response.json");
+	const worker = await fakeWorker([
+		{ status: 429 },
+		{ status: 200, body: served },
+		{ status: 429 },
+		{ status: 204 },
+	]);
+	try {
+		assert.deepEqual(await worker.api.context(), served);
+		await worker.api.end({ outcome: "DONE", entries: [], reason: null, detail: null });
+
+		assert.deepEqual(
+			worker.received.map(({ method, path }) => `${method} ${path}`),
+			[
+				"GET /turn/turn-1/context",
+				"GET /turn/turn-1/context",
+				"POST /turn/turn-1/end",
+				"POST /turn/turn-1/end",
+			],
+		);
+		assert.deepEqual(worker.received[3]?.body, worker.received[2]?.body);
+	} finally {
+		worker.close();
+	}
+});
+
 void test("a partial answer the worker did not answer is not sent again", async () => {
 	const worker = await fakeWorker([{ status: 503 }]);
 	try {

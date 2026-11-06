@@ -304,6 +304,9 @@ worker:
   # counts on their budget, so many reviews leave it no room. Provider calls still need pool grants; the tools quota stays
   # at eight assigned plus two warm Pods per worker, independent of resident turns.
   conversationTurns: 8
+  sandboxGateway:
+    # Connections that the sandbox gateway holds open. A review holds about 54, and 174 at most.
+    maxConnections: 4096
   # How long a stopping worker serves its running attempts and claims nothing new. A practice
   # review's median run is 10 to 16 minutes, and its bound is 3 hours. When the drain ends, a review
   # that is still running stops and is tried again, within its separate limit on drains.

@@ -6,7 +6,7 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { discoverCapabilities, present } from "./gateway-capabilities.ts";
+import { discoverCapabilities, present, retryAfterMs } from "./gateway-capabilities.ts";
 
 const DOWNLOAD_ATTEMPTS = 3;
 const DOWNLOAD_BACKOFF_MS = 500;
@@ -21,10 +21,14 @@ export async function downloadWorkspace(
 	const { workspaceByteBudget: budget } = await discoverCapabilities(endpoint, headers);
 	for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt += 1) {
 		let retryable = true;
+		let wait = DOWNLOAD_BACKOFF_MS * 2 ** (attempt - 1);
 		try {
 			const response = await fetch(`${endpoint}/workspace`, { headers });
 			if (!response.ok || !response.body) {
-				retryable = response.status === 425 || response.status >= 500;
+				retryable = response.status === 425 || response.status === 429 || response.status >= 500;
+				if (response.status === 429) {
+					wait = retryAfterMs(response);
+				}
 				await response.body?.cancel();
 				throw new Error(`Workspace download refused: ${response.status}`);
 			}
@@ -69,7 +73,7 @@ export async function downloadWorkspace(
 				throw error;
 			}
 			console.error(`workspace download attempt ${attempt} failed: ${String(error)}`);
-			await sleep(DOWNLOAD_BACKOFF_MS * 2 ** (attempt - 1));
+			await sleep(wait);
 		}
 	}
 }

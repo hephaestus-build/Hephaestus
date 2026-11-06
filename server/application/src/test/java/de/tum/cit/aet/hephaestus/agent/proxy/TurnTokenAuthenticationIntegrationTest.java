@@ -38,6 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -127,7 +128,11 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
 
     private Result call(String method, String path, String token) throws Exception {
         var filter = new JobTokenAuthenticationFilter(
-                jobRepository, turnRepository, new SandboxGatewaySessions(), jwtVerifier);
+                jobRepository,
+                turnRepository,
+                new SandboxGatewaySessions(),
+                jwtVerifier,
+                Mockito.mock(ProxyAccounting.class));
         var request = new MockHttpServletRequest(method, path);
         request.setRemoteAddr("10.0.0.2");
         request.addHeader("Authorization", "Bearer " + token);

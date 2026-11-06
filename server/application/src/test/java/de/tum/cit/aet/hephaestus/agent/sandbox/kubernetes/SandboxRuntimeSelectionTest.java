@@ -66,7 +66,9 @@ class SandboxRuntimeSelectionTest {
                     SandboxRuntimeConfiguration.class,
                     KubernetesSandboxConfiguration.class,
                     WorkerPropertiesConfiguration.class)
-            .withBean(SandboxGatewayProperties.class, () -> new SandboxGatewayProperties(8081, 4_194_304, 120))
+            .withBean(
+                    SandboxGatewayProperties.class,
+                    () -> new SandboxGatewayProperties(8081, 4_194_304, 120, 1000, 4096))
             .withBean(SandboxGatewaySessions.class, SandboxGatewaySessions::new)
             .withBean(ReviewJobRepository.class, () -> mock(ReviewJobRepository.class))
             .withBean(WorkerRegistryRepository.class, () -> mock(WorkerRegistryRepository.class))

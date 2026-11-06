@@ -38,8 +38,9 @@ async function run(command: string, args: string[]) {
 	return exited(spawn(command, args, { stdio: "inherit" }));
 }
 
+/** A gateway limit answers 429: a finished review waits it out instead of losing its result. */
 function retryable(status: number): boolean {
-	return status === 425 || status >= 500;
+	return status === 425 || status === 429 || status >= 500;
 }
 
 async function waitBeforeRetry(attempt: number, deadline: number): Promise<void> {

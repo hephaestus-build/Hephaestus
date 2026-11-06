@@ -11,11 +11,18 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
+import de.tum.cit.aet.hephaestus.core.auth.ratelimit.RateLimitResponse;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.web.PayloadSizeFilter;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.time.Duration;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,7 +52,8 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <ol>
  *   <li>the sandbox capabilities on the gateway connector, authenticated by a sandbox credential
- *       ({@link JobTokenAuthenticationProvider}) and rate-limited per caller. A review job reaches its runtime, its
+ *       ({@link JobTokenAuthenticationProvider}), rate-limited per source address before any credential is read and per
+ *       caller after it. A review job reaches its runtime, its
  *       review endpoints and the model; a Heph turn reaches the model and its own turn endpoints; a Heph host's session
  *       reaches only its own runtime discovery, workspace and command channel. The Heph host's turn bookkeeping (its
  *       context, partial answer and end) is exempt from the rate limit: the host sends a partial answer several times
@@ -63,6 +71,14 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnWorkerRole
 class LlmProxySecurityConfig {
 
+    /** A refused caller asks again this often; each attempt costs one request of its rate limit. */
+    private static final long BODY_BUDGET_RETRY_SECONDS = 5;
+
+    @Bean
+    SandboxGatewayBodyBudget sandboxGatewayBodyBudget() {
+        return SandboxGatewayBodyBudget.ofHeap();
+    }
+
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE)
     SecurityFilterChain llmProxyFilterChain(
@@ -74,6 +90,7 @@ class LlmProxySecurityConfig {
             SandboxGatewaySessions gatewaySessions,
             AttemptTokenVerifier jwtVerifier,
             BucketResolver bucketResolver,
+            SandboxGatewayBodyBudget bodyBudget,
             ProxyAccounting accounting,
             ObjectMapper objectMapper)
             throws Exception {
@@ -110,12 +127,18 @@ class LlmProxySecurityConfig {
         RequestMatcher capabilities =
                 new OrRequestMatcher(modelCalls, runtimeReads, resultUpload, hostCommands, turnEndpoints);
         var limit = new AuthRateLimitProperties.Limit(gatewayProperties.requestsPerMinute(), Duration.ofMinutes(1));
+        var sourceLimit =
+                new AuthRateLimitProperties.Limit(gatewayProperties.sourceRequestsPerMinute(), Duration.ofMinutes(1));
 
         http.securityMatcher(new AndRequestMatcher(onGatewayConnector(gateway), capabilities))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(
-                        (request, response, exception) -> response.setStatus(HttpStatus.NOT_FOUND.value())))
+                                (request, response, exception) -> response.setStatus(HttpStatus.NOT_FOUND.value()))
+                        .accessDeniedHandler((request, response, exception) -> {
+                            accounting.gatewayRefused(SandboxGatewayRefusal.FORBIDDEN);
+                            response.setStatus(HttpStatus.FORBIDDEN.value());
+                        }))
                 .authorizeHttpRequests(auth -> auth.requestMatchers(hostCommands)
                         .access(caller(identity -> identity.hostSession() != null))
                         .requestMatchers(runtimeReads)
@@ -138,12 +161,21 @@ class LlmProxySecurityConfig {
                                 caller(identity -> identity.job() != null))))
                 .addFilterBefore(
                         new JobTokenAuthenticationFilter(
-                                agentJobRepository, mentorTurnRepository, gatewaySessions, jwtVerifier),
+                                agentJobRepository, mentorTurnRepository, gatewaySessions, jwtVerifier, accounting),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(
-                        bounded(gatewayProperties.maxRequestBytes(), bodies), JobTokenAuthenticationFilter.class)
+                        new SandboxGatewaySourceLimitFilter(sourceLimit, objectMapper, accounting),
+                        JobTokenAuthenticationFilter.class)
                 .addFilterBefore(
-                        bounded(SandboxOutputArchive.MAX_OUTPUT_BYTES, resultUpload),
+                        bounded(gatewayProperties.maxRequestBytes(), bodies, bodyBudget, objectMapper, accounting),
+                        JobTokenAuthenticationFilter.class)
+                .addFilterBefore(
+                        bounded(
+                                SandboxOutputArchive.MAX_OUTPUT_BYTES,
+                                resultUpload,
+                                bodyBudget,
+                                objectMapper,
+                                accounting),
                         JobTokenAuthenticationFilter.class)
                 .addFilterAfter(
                         new SandboxGatewayRateLimitFilter(
@@ -155,15 +187,19 @@ class LlmProxySecurityConfig {
 
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE + 1)
-    SecurityFilterChain hideNonGatewayCapabilities(HttpSecurity http, SandboxGatewayConnector gateway)
-            throws Exception {
-        return hidden(http, onGatewayConnector(gateway));
+    SecurityFilterChain hideNonGatewayCapabilities(
+            HttpSecurity http, SandboxGatewayConnector gateway, ProxyAccounting accounting) throws Exception {
+        // An exception that left the first chain arrives here as an error dispatch: a failure, not a caller's probe.
+        return hidden(http, onGatewayConnector(gateway), request -> {
+            if (request.getDispatcherType() != DispatcherType.ERROR)
+                accounting.gatewayRefused(SandboxGatewayRefusal.UNKNOWN_ROUTE);
+        });
     }
 
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE + 3)
     SecurityFilterChain blockLlmProxyOnOtherConnectors(HttpSecurity http) throws Exception {
-        return hidden(http, PathPatternRequestMatcher.withDefaults().matcher("/internal/llm/**"));
+        return hidden(http, PathPatternRequestMatcher.withDefaults().matcher("/internal/llm/**"), request -> {});
     }
 
     /** Admits an authenticated sandbox caller of one kind. */
@@ -173,11 +209,40 @@ class LlmProxySecurityConfig {
     }
 
     /** The body bound over the requests one matcher selects, so each capability states its own. */
-    private static PayloadSizeFilter bounded(long maxBytes, RequestMatcher requests) {
+    private static PayloadSizeFilter bounded(
+            long maxBytes,
+            RequestMatcher requests,
+            SandboxGatewayBodyBudget budget,
+            ObjectMapper objectMapper,
+            ProxyAccounting accounting) {
         return new PayloadSizeFilter(maxBytes) {
             @Override
             protected boolean shouldNotFilter(HttpServletRequest request) {
                 return !requests.matches(request);
+            }
+
+            @Override
+            protected void accepted(
+                    HttpServletRequest request, HttpServletResponse response, FilterChain chain, long contentLength)
+                    throws ServletException, IOException {
+                if (!budget.tryHold(contentLength)) {
+                    accounting.gatewayRefused(SandboxGatewayRefusal.BODY_BUDGET);
+                    // The refusal that a direct model call waits out; a limit of the gateway is no provider's answer.
+                    response.setHeader(
+                            LlmProxyService.REFUSAL_HEADER, ReviewModelGateway.Refusal.CALLS_IN_FLIGHT.name());
+                    RateLimitResponse.writeTooManyRequests(request, response, BODY_BUDGET_RETRY_SECONDS, objectMapper);
+                    return;
+                }
+                try {
+                    chain.doFilter(request, response);
+                } finally {
+                    budget.release(contentLength);
+                }
+            }
+
+            @Override
+            protected void refused(HttpServletRequest request, String reason) {
+                accounting.gatewayRefused(SandboxGatewayRefusal.OVERSIZED);
             }
         };
     }
@@ -188,14 +253,19 @@ class LlmProxySecurityConfig {
     }
 
     /** Denies everything it matches and reports nothing but {@code 404} while doing so. */
-    private static SecurityFilterChain hidden(HttpSecurity http, RequestMatcher matcher) throws Exception {
+    private static SecurityFilterChain hidden(
+            HttpSecurity http, RequestMatcher matcher, Consumer<HttpServletRequest> onRefusal) throws Exception {
         http.securityMatcher(matcher)
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .exceptionHandling(errors -> errors.authenticationEntryPoint(
-                                (request, response, exception) -> response.setStatus(HttpStatus.NOT_FOUND.value()))
-                        .accessDeniedHandler(
-                                (request, response, exception) -> response.setStatus(HttpStatus.NOT_FOUND.value())))
+                .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, exception) -> {
+                            onRefusal.accept(request);
+                            response.setStatus(HttpStatus.NOT_FOUND.value());
+                        })
+                        .accessDeniedHandler((request, response, exception) -> {
+                            onRefusal.accept(request);
+                            response.setStatus(HttpStatus.NOT_FOUND.value());
+                        }))
                 .authorizeHttpRequests(auth -> auth.anyRequest().denyAll());
         return http.build();
     }

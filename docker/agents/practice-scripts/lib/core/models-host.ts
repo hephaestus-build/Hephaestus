@@ -31,10 +31,10 @@ const rerankResponseSchema = z.object({
 
 /**
  * A fetch that asks again while the proxy refuses the call because its attempt already has its most
- * model calls in flight. The wait follows `Retry-After`. The loop ends when the call is aborted, or when
- * the proxy answers otherwise: a call past the attempt's work deadline gets its refusal. Any other
- * answer, a provider's 429 included, goes to the caller as it is. A direct call runs once, so without
- * this wait a full cap would leave the call unrated.
+ * model calls in flight, or because the gateway holds as many request bodies as its heap allows. The
+ * wait follows `Retry-After`. The loop ends when the call is aborted, or when the proxy answers
+ * otherwise. Any other answer, a provider's 429 included, goes to the caller as it is. A direct call
+ * runs once, so without this wait a full cap would leave the call unrated.
  */
 export function waitingWhileCallsInFlight(base: typeof fetch = fetch): typeof fetch {
 	return async (input, init) => {

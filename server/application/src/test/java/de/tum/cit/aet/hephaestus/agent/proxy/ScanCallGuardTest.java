@@ -67,7 +67,7 @@ class ScanCallGuardTest extends BaseUnitTest {
     private static final PracticeReviewProperties PRACTICE_REVIEW =
             new PracticeReviewProperties(false, 15, 5, null, 36, 48_000, 200_000, 1000, Duration.ofMinutes(10));
     private final ScanCallGuard guard = new ScanCallGuard(
-            jobs, reviews, budget, new SandboxGatewayProperties(8081, 10000, 120), mapper, PRACTICE_REVIEW);
+            jobs, reviews, budget, new SandboxGatewayProperties(8081, 10000, 120, 1000, 4096), mapper, PRACTICE_REVIEW);
 
     private ProxyRouting route() {
         return route(Instant.now().plusSeconds(60));

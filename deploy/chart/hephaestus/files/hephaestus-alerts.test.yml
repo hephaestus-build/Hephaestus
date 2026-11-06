@@ -471,6 +471,51 @@ tests:
               summary: Review sandboxes failed to start, initialize or finish at least three times in one hour
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: a steady refusal fires with its reason, ended attempts and a few refusals do not
+    interval: 1m
+    input_series:
+      - series: 'sandbox_gateway_refused_total{job="hephaestus",instance="worker:9090",reason="unauthenticated"}'
+        values: "0+10x30"
+      - series: 'sandbox_gateway_refused_total{job="hephaestus",instance="worker:9090",reason="principal_limit"}'
+        values: "0+1x30"
+      - series: 'sandbox_gateway_refused_total{job="hephaestus",instance="worker:9090",reason="attempt_ended"}'
+        values: "0+50x30"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusSandboxGatewayRefusing
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HephaestusSandboxGatewayRefusing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              reason: unauthenticated
+            exp_annotations:
+              summary: The sandbox gateway refused at least 60 requests for one reason in ten minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a gateway near its connection limit fires, one with room does not
+    interval: 1m
+    input_series:
+      - series: 'sandbox_gateway_connections{job="hephaestus",instance="worker:9090"}'
+        values: "100x6 3500x10"
+      - series: 'sandbox_gateway_connections_limit{job="hephaestus",instance="worker:9090"}'
+        values: "4096x16"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusSandboxGatewayConnectionsHigh
+        exp_alerts: []
+      - eval_time: 14m
+        alertname: HephaestusSandboxGatewayConnectionsHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: hephaestus
+              instance: worker:9090
+            exp_annotations:
+              summary: A sandbox gateway holds more than 80 percent of the connections it allows
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: an unreachable provider fires with its cause, a reachable server does not
     interval: 1m
     input_series:

@@ -84,12 +84,23 @@ Capability calls receive these responses:
 
 - Over `SANDBOX_API_MAX_REQUEST_BYTES`: `413`.
 - No declared body length: `411`.
+- Past `SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE` from one connection peer: `429` with a `Retry-After`, before the gateway reads a credential.
+- When the request bodies in flight would pass a quarter of the worker's heap: `429` with a `Retry-After`.
 - Past `SANDBOX_API_REQUESTS_PER_MINUTE`: `429` with a `Retry-After`.
 
 If the gateway cannot reach the store for rate-limit counts, it serves the call without a limit.
 It counts that failure under `sandbox.gateway.limiter.errors`.
 Thus, a limiter outage never stops a review.
 The Gateway never routes to this port.
+
+The source limit reads the address of the connection, so a forwarded header does not change it.
+
+The gateway holds at most `worker.sandboxGateway.maxConnections` connections open.
+Up to 100 further connections wait in the operating system's queue, and the rest fail.
+A model call holds its connection until its stream ends, and it runs on a virtual thread.
+Thus, this limit and the body limit above bound the calls in flight at this connector.
+The model call pool can still make a call wait.
+A caller that stays silent for 30 seconds loses its connection.
 
 To deploy a worker pod:
 
@@ -216,6 +227,8 @@ Otherwise, it uses the base default.
 | `hephaestus.sandbox.gateway.port`                | 8081    | 8081      | —         | env default (`SANDBOX_API_PORT`)                |
 | `hephaestus.sandbox.gateway.requests-per-minute` | 696     | 696       | —         | env default (`SANDBOX_API_REQUESTS_PER_MINUTE`) |
 | `hephaestus.sandbox.gateway.max-request-bytes`   | 4194304 | 4194304   | —         | env default (`SANDBOX_API_MAX_REQUEST_BYTES`)   |
+| `hephaestus.sandbox.gateway.source-requests-per-minute` | 12000 | 12000 | — | env default (`SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE`) |
+| `hephaestus.sandbox.gateway.max-connections`     | 4096    | 4096      | —         | env default (`SANDBOX_API_MAX_CONNECTIONS`)     |
 | Needs user-auth wiring                           | yes     | no        | no        | role gating                                     |
 
 Bold cells show values that the role's profile overlay specifies, not the base defaults.
@@ -262,7 +275,7 @@ Kubernetes sandbox work is the worker capability, controlled by `hephaestus.runt
 A server pod that keeps the worker role, such as a monolith, opens the sandbox gateway on the same port.
 It needs the same firewall controls as a separate worker.
 The webhook role turns off the worker role and opens no gateway.
-Its three `sandbox.gateway` cells therefore show `—`.
+Its five `sandbox.gateway` cells therefore show `—`.
 
 Git needs no such row.
 It runs in-process through JGit in the role that does the work.

@@ -315,7 +315,8 @@ export function httpTurnApi(
 			await response.body?.cancel();
 			throw tooLarge(`${path} of turn ${turnId} is larger than the worker accepts`);
 		}
-		if (response.status >= 500) {
+		// A limit of the gateway passes as a worker's 5xx does: the end of a turn must not lose its answer to one.
+		if (response.status === 429 || response.status >= 500) {
 			const detail = await response.text();
 			throw new WorkerStatusError(
 				`${path} failed with ${response.status}: ${detail.slice(0, 300)}`,
@@ -343,7 +344,7 @@ export function httpTurnApi(
 
 	/**
 	 * A call that is safe to repeat, repeated once for each retry delay while the worker does not answer it or answers
-	 * with a 5xx.
+	 * with a 429 or a 5xx.
 	 */
 	async function repeated<T>(what: string, send: () => Promise<T>): Promise<T> {
 		for (let attempt = 0; ; attempt += 1) {

@@ -40,7 +40,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     private final SandboxGatewaySessions sessions = mock(SandboxGatewaySessions.class);
     private final AttemptTokenVerifier verifier = mock(AttemptTokenVerifier.class);
     private final JobTokenAuthenticationFilter filter =
-            new JobTokenAuthenticationFilter(jobs, turns, sessions, verifier);
+            new JobTokenAuthenticationFilter(jobs, turns, sessions, verifier, mock(ProxyAccounting.class));
 
     @AfterEach
     void clearContext() {

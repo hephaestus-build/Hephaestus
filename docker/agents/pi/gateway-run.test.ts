@@ -611,6 +611,7 @@ for (const scenario of [
 
 for (const scenario of [
 	{ name: "retries an unfinished upload", first: 503, expires: false },
+	{ name: "waits out a limit of the gateway", first: 429, expires: false },
 	{ name: "retries a disconnected response", first: null, expires: false },
 	{ name: "stops retries at the upload deadline", first: 503, expires: true },
 ]) {
