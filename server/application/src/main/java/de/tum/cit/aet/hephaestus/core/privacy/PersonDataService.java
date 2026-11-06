@@ -12,6 +12,11 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
+import java.sql.SQLException;
+import java.sql.SQLRecoverableException;
+import java.sql.SQLTransientException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -19,6 +24,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
@@ -59,6 +65,12 @@ public class PersonDataService {
     private final PlatformTransactionManager transactions;
     private final ObjectMapper mapper;
     private final JdbcTemplate jdbc;
+    private final MeterRegistry meters;
+
+    @PostConstruct
+    void registerFailureCounter() {
+        meters.counter("person.data.erasure.failures");
+    }
 
     public record Snapshot(
             PersonDataRequest request, List<PersonDataContributor.ExternalDelivery> externalDeliveries) {}
@@ -236,61 +248,71 @@ public class PersonDataService {
 
     private void runSteps(UUID id) {
         TransactionTemplate tx = new TransactionTemplate(transactions);
-        var admission = copyFence.erase();
+        var temporaryStoreFailure = new AtomicBoolean();
         String activeStore = "inventory";
-        try (admission) {
-            Map<String, PersonDataSelection> frozen = tx.execute(status -> {
-                PersonDataRequest r = lockAdmittedErasure(id);
-                return r == null ? Map.<String, PersonDataSelection>of() : selections(r);
-            });
-            if (frozen == null || frozen.isEmpty()) return;
-            Set<String> inventory = registry.stores().stream()
-                    .map(PersonDataContributor::store)
-                    .collect(Collectors.toUnmodifiableSet());
-            if (!frozen.keySet().equals(inventory))
-                throw new IllegalStateException("Erasure contributor inventory changed");
-            for (var store : registry.stores()) {
-                activeStore = store.store();
-                store.prepareErasure(Objects.requireNonNull(frozen.get(store.store())));
-            }
-            for (var store : registry.stores()) {
-                activeStore = store.store();
-                Boolean proceed = tx.execute(status -> {
+        try {
+            var admission = copyFence.erase();
+            try (admission) {
+                Map<String, PersonDataSelection> frozen = tx.execute(status -> {
                     PersonDataRequest r = lockAdmittedErasure(id);
-                    if (r == null) return false;
-                    var completed = completed(r);
-                    if (!inventory.containsAll(completed.keySet()))
-                        throw new IllegalStateException("Erasure contributor inventory changed");
-                    if (!completed.containsKey(store.store())) {
-                        long count = store.erase(Objects.requireNonNull(frozen.get(store.store())), scope(r));
-                        // The database clock, which every runtime shares: PersonDataCopyFence.erasedSince compares
-                        // it with the start of a Heph turn, which is on the database clock too.
-                        Instant erasedAt = Objects.requireNonNull(
-                                        jdbc.queryForObject("SELECT clock_timestamp()", Timestamp.class))
-                                .toInstant();
-                        completed.put(
-                                store.store(),
-                                new PersonDataStoreReceipt(count, erasedAt, r.getAdministratorAccountId()));
-                        r.setCompletedJson(mapper.writeValueAsString(completed));
-                        requests.saveAndFlush(r);
-                    }
-                    return true;
+                    return r == null ? Map.<String, PersonDataSelection>of() : selections(r);
                 });
-                if (!Boolean.TRUE.equals(proceed)) return;
+                if (frozen == null || frozen.isEmpty()) return;
+                Set<String> inventory = registry.stores().stream()
+                        .map(PersonDataContributor::store)
+                        .collect(Collectors.toUnmodifiableSet());
+                if (!frozen.keySet().equals(inventory))
+                    throw new IllegalStateException("Erasure contributor inventory changed");
+                for (var store : registry.stores()) {
+                    activeStore = store.store();
+                    store.prepareErasure(Objects.requireNonNull(frozen.get(store.store())));
+                }
+                for (var store : registry.stores()) {
+                    activeStore = store.store();
+                    Boolean proceed = tx.execute(status -> {
+                        PersonDataRequest r = lockAdmittedErasure(id);
+                        if (r == null) return false;
+                        var completed = completed(r);
+                        if (!inventory.containsAll(completed.keySet()))
+                            throw new IllegalStateException("Erasure contributor inventory changed");
+                        if (!completed.containsKey(store.store())) {
+                            long count;
+                            try {
+                                count = store.erase(Objects.requireNonNull(frozen.get(store.store())), scope(r));
+                            } catch (RuntimeException failure) {
+                                // A broken connection can make rollback replace the original store exception.
+                                temporaryStoreFailure.set(isTemporaryFailure(failure));
+                                throw failure;
+                            }
+                            // The database clock, which every runtime shares: PersonDataCopyFence.erasedSince compares
+                            // it with the start of a Heph turn, which is on the database clock too.
+                            Instant erasedAt = Objects.requireNonNull(
+                                            jdbc.queryForObject("SELECT clock_timestamp()", Timestamp.class))
+                                    .toInstant();
+                            completed.put(
+                                    store.store(),
+                                    new PersonDataStoreReceipt(count, erasedAt, r.getAdministratorAccountId()));
+                            r.setCompletedJson(mapper.writeValueAsString(completed));
+                            requests.saveAndFlush(r);
+                        }
+                        return true;
+                    });
+                    if (!Boolean.TRUE.equals(proceed)) return;
+                }
+                tx.executeWithoutResult(status -> {
+                    PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
+                    if (r.getState() != PersonDataRequest.State.ERASING) return;
+                    suppression.release(id);
+                    r.setState(PersonDataRequest.State.COMPLETE);
+                    r.setCompletedAt(Instant.now());
+                    r.setScopeJson(null);
+                    r.setSelectionsJson(null);
+                    r.setFailureCode(null);
+                    requests.saveAndFlush(r);
+                });
             }
-            tx.executeWithoutResult(status -> {
-                PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
-                if (r.getState() != PersonDataRequest.State.ERASING) return;
-                suppression.release(id);
-                r.setState(PersonDataRequest.State.COMPLETE);
-                r.setCompletedAt(Instant.now());
-                r.setScopeJson(null);
-                r.setSelectionsJson(null);
-                r.setFailureCode(null);
-                requests.saveAndFlush(r);
-            });
         } catch (RuntimeException exception) {
-            boolean temporary = isTemporaryFailure(exception);
+            boolean temporary = temporaryStoreFailure.get() || isTemporaryFailure(exception);
             @Nullable Boolean retry = null;
             try {
                 retry = tx.execute(status -> {
@@ -303,6 +325,8 @@ public class PersonDataService {
                     return retryPending;
                 });
             } finally {
+                if (!Boolean.TRUE.equals(retry))
+                    meters.counter("person.data.erasure.failures").increment();
                 var event = Boolean.TRUE.equals(retry) ? log.atWarn() : log.atError();
                 event.addKeyValue(
                                 "event.name",
@@ -329,7 +353,14 @@ public class PersonDataService {
             if (cause instanceof TransientDataAccessException
                     || cause instanceof RecoverableDataAccessException
                     || cause instanceof DataAccessResourceFailureException
-                    || cause instanceof CannotCreateTransactionException) {
+                    || cause instanceof CannotCreateTransactionException
+                    || cause instanceof SQLTransientException
+                    || cause instanceof SQLRecoverableException
+                    || (cause instanceof SQLException sql
+                            && sql.getSQLState() != null
+                            && (sql.getSQLState().startsWith("08")
+                                    || sql.getSQLState().startsWith("53")
+                                    || sql.getSQLState().startsWith("57")))) {
                 return true;
             }
             cause = cause.getCause();

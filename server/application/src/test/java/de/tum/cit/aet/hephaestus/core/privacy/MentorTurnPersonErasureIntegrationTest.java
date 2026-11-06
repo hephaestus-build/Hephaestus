@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.persistence.EntityManager;
 import java.time.Duration;
 import java.util.List;
@@ -74,6 +75,9 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private MeterRegistry meters;
 
     @Autowired
     private NamedParameterJdbcTemplate namedJdbc;
@@ -370,7 +374,22 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRetryAfterTheStoreConnectionAndItsRollbackBothFail() {
+        Erasure erasure =
+                requestErasure(sourceThatFails(1, () -> jdbc.execute("SELECT pg_terminate_backend(pg_backend_pid())")));
+        var interrupted = erasure.service().get(erasure.requestId()).request();
+        assertThat(interrupted.getState()).isEqualTo(PersonDataRequest.State.ERASING);
+        assertThat(interrupted.getFailureCode()).isEqualTo("STORE_ERASURE_RETRY_PENDING");
+
+        new PersonDataJobRunner(jdbc, erasure.service()).run();
+        var completed = erasure.service().get(erasure.requestId()).request();
+        assertThat(completed.getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(completed.getFailureCode()).isNull();
+    }
+
+    @Test
     void shouldStopRepeatedStoreFailuresAndKeepTheRequestVisibleForAnAdmin() {
+        double failuresBefore = meters.counter("person.data.erasure.failures").count();
         Erasure erasure =
                 requestErasure(sourceThatFails(2, new DataAccessResourceFailureException("connection unavailable")));
         var runner = new PersonDataJobRunner(jdbc, erasure.service());
@@ -379,6 +398,7 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(stopped.getState()).isEqualTo(PersonDataRequest.State.FAILED);
         assertThat(stopped.getFailureCode()).isEqualTo("STORE_ERASURE_FAILED");
         assertThat(stopped.getScopeJson()).isNotNull();
+        assertThat(meters.counter("person.data.erasure.failures").count()).isEqualTo(failuresBefore + 1);
         runner.run();
         assertThat(erasure.service().get(erasure.requestId()).request().getState())
                 .isEqualTo(PersonDataRequest.State.FAILED);
@@ -394,6 +414,12 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     private PersonDataContributor sourceThatFails(int failures, RuntimeException failure) {
+        return sourceThatFails(failures, () -> {
+            throw failure;
+        });
+    }
+
+    private PersonDataContributor sourceThatFails(int failures, Runnable fail) {
         var remaining = new AtomicInteger(failures);
         return new JdbcPersonDataStore(
                 namedJdbc, mapper, "source_step", "user", "t.id = ANY(:users)", "id,name", "id", "name=NULL", 0) {
@@ -401,7 +427,7 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
             public long erase(PersonDataSelection selection, PersonScope frozenScope) {
                 long count = super.erase(selection, frozenScope);
                 if (remaining.getAndDecrement() > 0) {
-                    throw failure;
+                    fail.run();
                 }
                 return count;
             }
@@ -424,7 +450,8 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 tokens,
                 transactions,
                 mapper,
-                jdbc);
+                jdbc,
+                meters);
     }
 
     /** The account linked to the user's provider identity, so an erasure by that identity resolves it. */

@@ -345,6 +345,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         turn.contextErased = true;
         turn.partial = null;
         turn.hostPartial = null;
+        callsInFlight.seal(turn.turnId, turn.attempt, true);
         stop(turn, "lease");
     }
 

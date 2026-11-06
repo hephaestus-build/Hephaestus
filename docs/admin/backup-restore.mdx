@@ -142,8 +142,12 @@ The chart uses the `prod` profile and a startup probe.
 A large erasure manifest can take longer than that probe permits.
 Use this temporary Deployment patch while normal workloads and public access remain stopped.
 It preserves the readiness probe and removes the startup and liveness probes until recovery completes.
+It extends the rollout progress deadline to one day.
 The mounted Secret contains private identities.
 Restrict its namespace access to recovery operators.
+This Secret procedure requires a manifest below 1 MiB.
+For a larger manifest, mount a protected read-only volume at the same path instead of a Secret.
+Reapply every later decision in one startup before you permit processing.
 
 Set `NAMESPACE`, `SERVER_DEPLOYMENT` and `ERASURE_MANIFEST` to the namespace, server Deployment and private manifest file.
 
@@ -155,7 +159,7 @@ kubectl -n "$NAMESPACE" get deployment "$SERVER_DEPLOYMENT" -o json > "$server_r
 kubectl -n "$NAMESPACE" create secret generic "$erasure_secret" --from-file="manifest.json=$ERASURE_MANIFEST"
 server_container=$(jq -r '.spec.template.spec.containers[0].name' "$server_recovery_dir/before.json")
 jq -n --arg container "$server_container" --arg secret "$erasure_secret" '
-  {spec: {replicas: 1, template: {spec: {
+  {spec: {replicas: 1, progressDeadlineSeconds: 86400, template: {spec: {
     containers: [{name: $container, startupProbe: null, livenessProbe: null,
       env: [
         {name: "SPRING_PROFILES_ACTIVE", value: "prod,erasure-recovery"},
@@ -171,6 +175,7 @@ kubectl -n "$NAMESPACE" rollout status deployment "$SERVER_DEPLOYMENT" --timeout
 
 A command timeout does not stop the Pod.
 If recovery exceeds one hour, repeat only the wait command.
+If it exceeds one day, extend the progress deadline before you repeat the wait.
 A failed startup logs `person_data.recovery.failed` with a closed `person_data.recovery.reason` code.
 It does not log the manifest or an exception that can quote its identities.
 

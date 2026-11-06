@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
@@ -248,7 +249,8 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 beans.getBean(IssuedJwtRepository.class),
                 beans.getBean(PlatformTransactionManager.class),
                 mapper,
-                jdbc);
+                jdbc,
+                beans.getBean(MeterRegistry.class));
         // Fault injection still needs the production transaction advice on each service operation.
         var initialized = beans.getAutowireCapableBeanFactory().initializeBean(recoveryService, "recoveryFaultService");
         var advisedService = PersonDataService.class.cast(initialized);

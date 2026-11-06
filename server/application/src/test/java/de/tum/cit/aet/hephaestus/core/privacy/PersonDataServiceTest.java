@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -61,7 +62,8 @@ class PersonDataServiceTest extends BaseUnitTest {
                 mock(IssuedJwtRepository.class),
                 mock(PlatformTransactionManager.class),
                 mapper,
-                mock(JdbcTemplate.class));
+                mock(JdbcTemplate.class),
+                new SimpleMeterRegistry());
     }
 
     @Test

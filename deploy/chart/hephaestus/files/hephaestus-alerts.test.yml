@@ -4,6 +4,24 @@ rule_files:
 evaluation_interval: 1m
 
 tests:
+  - name: a stopped erasure fires, automatic recovery without a stopped erasure stays silent
+    interval: 1m
+    input_series:
+      - series: 'person_data_erasure_failures_total{job="hephaestus"}'
+        values: "0 0 1 1 1"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusPersonErasureInterrupted
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HephaestusPersonErasureInterrupted
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Person erasure stopped or could not record its failure state
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: a target that cannot be scraped fires, a scraped one does not
     interval: 1m
     input_series:
