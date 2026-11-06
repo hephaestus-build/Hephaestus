@@ -85,7 +85,7 @@ class ReviewPodSidecarsTest extends BaseUnitTest {
                 .doesNotHaveDuplicates();
         assertThat(container(pod, KubernetesPods.TOOLS).getRestartPolicy()).isEqualTo("Always");
         assertThat(container(pod, KubernetesPods.PROGRAMS).getRestartPolicy()).isEqualTo("Always");
-        assertThat(pod.getSpec().getShareProcessNamespace()).isNotEqualTo(Boolean.TRUE);
+        assertThat(pod.getSpec().getShareProcessNamespace()).isNotEqualTo(true);
     }
 
     @Test
