@@ -144,8 +144,8 @@ class GitHubSubIssueScopeIntegrationTest extends BaseIntegrationTest {
                 workspaces, connections, WorkspaceTestFixtures.installationWorkspace(nativeId, owner), nativeId);
         String targetPath = owner + "/target";
         String siblingPath = owner + "/sibling";
-        monitors.save(WorkspaceTestFixtures.repositoryMonitor(workspace, targetPath));
-        monitors.save(WorkspaceTestFixtures.repositoryMonitor(workspace, siblingPath));
+        monitors.save(WorkspaceTestFixtures.repositoryMonitor(workspace, targetPath, nativeId + 1));
+        monitors.save(WorkspaceTestFixtures.repositoryMonitor(workspace, siblingPath, nativeId + 3));
         var foreign = repository(gitlab, nativeId + 1, targetPath);
         var foreignIssue = issue(foreign, nativeId + 2, 7);
         var sibling = repository(github, nativeId + 3, siblingPath);
@@ -245,8 +245,7 @@ class GitHubSubIssueScopeIntegrationTest extends BaseIntegrationTest {
         var workspace = WorkspaceTestFixtures.persistInstallationWorkspace(
                 workspaces, connections, WorkspaceTestFixtures.installationWorkspace(nativeId, owner), nativeId);
         var repository = repository(github, nativeId + 1, path);
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, path);
-        monitor.setNativeId(repository.getNativeId());
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, path, repository.getNativeId());
         monitors.saveAndFlush(monitor);
         var parent = issue(repository, nativeId + 2, 7);
         var holder = itemIndex.upsert(

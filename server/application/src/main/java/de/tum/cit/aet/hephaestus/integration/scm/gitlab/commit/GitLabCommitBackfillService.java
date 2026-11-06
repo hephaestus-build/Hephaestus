@@ -96,8 +96,7 @@ public class GitLabCommitBackfillService {
     public SyncResult backfillCommits(Long scopeId, Repository repository, GitLabProjectAdmission.ProjectRead read) {
         if (syncTargetProvider.getSyncTargetsForScope(scopeId).stream()
                 .anyMatch(target -> (target.repositoryNameWithOwner().equals(repository.getNameWithOwner())
-                                || (target.nativeId() != null
-                                        && target.nativeId().equals(repository.getNativeId())))
+                                || target.nativeId().equals(repository.getNativeId()))
                         && syncTargetProvider.isRepositoryUnavailable(scopeId, target.id()))) {
             return SyncResult.abortedError(0);
         }

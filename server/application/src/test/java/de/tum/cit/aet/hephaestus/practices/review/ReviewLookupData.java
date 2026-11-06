@@ -62,7 +62,7 @@ public class ReviewLookupData {
         var kind = IntegrationKind.valueOf(type.name());
         ConnectionConfig config = type == IdentityProviderType.GITHUB
                 ? new ConnectionConfig.GitHubPatConfig(null, server, Set.of())
-                : new ConnectionConfig.GitLabConfig(server, null, null, Set.of(), null);
+                : new ConnectionConfig.GitLabConfig(server, 42L, null, Set.of(), null);
         var connection = new Connection(workspace, kind, server, config);
         ReflectionTestUtils.setField(connection, "state", IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
@@ -81,8 +81,8 @@ public class ReviewLookupData {
         repository.setUpdatedAt(Instant.now());
         repository.setPushedAt(Instant.now());
         repository = repositories.saveAndFlush(repository);
-        var monitor = monitors.saveAndFlush(
-                WorkspaceTestFixtures.repositoryMonitor(workspace, repository.getNameWithOwner()));
+        var monitor = monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
+                workspace, repository.getNameWithOwner(), repository.getNativeId()));
         Issue work;
         if (pullRequest) {
             var pull = new PullRequest();

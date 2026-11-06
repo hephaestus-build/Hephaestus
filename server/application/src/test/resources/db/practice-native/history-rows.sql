@@ -27,10 +27,15 @@ INSERT INTO public.config_audit_event (id, occurred_at, workspace_id, actor_kind
 INSERT INTO public.config_audit_event (id, occurred_at, workspace_id, actor_kind, actor_account_id, acting_account_id, entity_type, entity_id, action, changed_keys, old_value, new_value, elevated_via_instance_admin) VALUES (995905, '2026-01-05 00:00:00+00', NULL, 'SYSTEM', NULL, NULL, 'CATALOG_GROUP', 'catalog-group', 'UPDATED', '{name}', '{}', '{}', false) ON CONFLICT DO NOTHING;
 INSERT INTO public.config_audit_event (id, occurred_at, workspace_id, actor_kind, actor_account_id, acting_account_id, entity_type, entity_id, action, changed_keys, old_value, new_value, elevated_via_instance_admin) VALUES (995906, '2026-01-06 00:00:00+00', 992101, 'SYSTEM', NULL, NULL, 'CATALOG_GROUP', 'workspace-catalog-history', 'UPDATED', '{name}', '{}', '{}', false) ON CONFLICT DO NOTHING;
 INSERT INTO public.config_audit_event (id, occurred_at, workspace_id, actor_kind, actor_account_id, acting_account_id, entity_type, entity_id, action, changed_keys, old_value, new_value, elevated_via_instance_admin) VALUES (995907, '2026-01-07 00:00:00+00', 992101, 'SYSTEM', NULL, NULL, 'PRACTICE_GROUP', 'practice-group', 'UPDATED', '{name}', '{}', '{}', false) ON CONFLICT DO NOTHING;
+-- The legacy monitor has an explicit source origin, so its provider identity can be recovered on upgrade.
+INSERT INTO public.connection (id, workspace_id, kind, instance_key, state, config)
+VALUES (992700, 992101, 'GITHUB', 'released-native-ids', 'SUSPENDED',
+    '{"type":"GITHUB_PAT","serverUrl":"https://practice-v1.example","enabledStreams":[]}') ON CONFLICT DO NOTHING;
 INSERT INTO public.connection (id, workspace_id, kind, instance_key, display_name, state, state_reason, config, credentials_encrypted, credentials_alg, created_at, updated_at, version, credentials_key_version, credentials_rotation_failed_at, attention_problem, attention_revision) VALUES (992701, 992201, 'GITLAB', 'released-stops', NULL, 'ACTIVE', NULL, '{"type": "GITLAB", "serverUrl": "https://gitlab.cutover.example", "signingMode": "PLAINTEXT", "gitlabGroupId": 701, "tokenMetadata": null, "enabledStreams": [], "gitlabWebhookId": 702, "projectExclusions": {"nativeIds": [703], "unresolvedPaths": ["other/stopped-path"]}}', NULL, NULL, '2026-11-02 23:56:59.557776+00', '2026-11-02 23:56:59.557776+00', 0, NULL, NULL, NULL, 0) ON CONFLICT DO NOTHING;
 INSERT INTO public.consent_decision (id, account_id, purpose, granted, mechanism, notice_version, occurred_at, research_organization) VALUES (992251, 992106, 'PRIVACY_NOTICE_ACKNOWLEDGEMENT', true, 'ACCOUNT_SETTINGS', '2026-08-30', '2026-01-01 00:00:00+00', NULL) ON CONFLICT DO NOTHING;
 INSERT INTO public.item (id, workspace_id, kind, parent_id, source_id, path, created_at, removed_at) VALUES (1, 992101, 'scm.repository', NULL, 992108, NULL, '2026-11-02 23:57:00.353666+00', NULL) ON CONFLICT DO NOTHING;
 INSERT INTO public.item (id, workspace_id, kind, parent_id, source_id, path, created_at, removed_at) VALUES (2, 992201, 'scm.repository', NULL, 992705, NULL, '2026-11-02 23:57:00.353666+00', NULL) ON CONFLICT DO NOTHING;
+INSERT INTO public.item (id, workspace_id, kind, parent_id, source_id, path, created_at, removed_at) VALUES (6, 992201, 'scm.repository', NULL, 992704, NULL, '2026-11-02 23:57:00.353666+00', '2026-11-02 23:57:00.353666+00') ON CONFLICT DO NOTHING;
 INSERT INTO public.item (id, workspace_id, kind, parent_id, source_id, path, created_at, removed_at) VALUES (3, 992101, 'scm.issue', 1, 992109, NULL, '2026-01-01 00:00:00+00', '2026-11-02 23:57:00.353666+00') ON CONFLICT DO NOTHING;
 INSERT INTO public.item (id, workspace_id, kind, parent_id, source_id, path, created_at, removed_at) VALUES (4, 992101, 'scm.pull_request', 1, 992109, NULL, '2026-01-01 00:00:00+00', NULL) ON CONFLICT DO NOTHING;
 INSERT INTO public.item (id, workspace_id, kind, parent_id, source_id, path, created_at, removed_at) VALUES (5, 992101, 'scm.pull_request_review', 4, 992119, NULL, '2026-11-02 23:57:00.353666+00', '2026-11-02 23:57:00.353666+00') ON CONFLICT DO NOTHING;
@@ -314,7 +319,7 @@ SELECT pg_catalog.setval('public.git_provider_id_seq', 3, true);
 SELECT pg_catalog.setval('public.identity_id_seq', 992108, true);
 SELECT pg_catalog.setval('public.issue_comment_id_seq', 1, false);
 SELECT pg_catalog.setval('public.issue_id_seq', 1, false);
-SELECT pg_catalog.setval('public.item_id_seq', 5, true);
+SELECT pg_catalog.setval('public.item_id_seq', 6, true);
 SELECT pg_catalog.setval('public.label_id_seq', 1, false);
 SELECT pg_catalog.setval('public.llm_call_pool_id_seq', 1, false);
 SELECT pg_catalog.setval('public.llm_connection_id_seq', 1, false);

@@ -40,6 +40,7 @@ class WorkspaceResolverTest extends BaseUnitTest {
 
     private RepositoryToMonitor createMonitor(Workspace workspace) {
         RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setNativeId(1L);
         monitor.setWorkspace(workspace);
         return monitor;
     }

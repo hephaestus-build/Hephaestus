@@ -735,6 +735,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         var monitor = new RepositoryToMonitor();
         monitor.setWorkspace(ws);
         monitor.setNameWithOwner(repository.getNameWithOwner());
+        monitor.setNativeId(repository.getNativeId());
         monitorRepository.save(monitor);
         for (int i = 0; i < count; i++) {
             UUID id = UUID.randomUUID();

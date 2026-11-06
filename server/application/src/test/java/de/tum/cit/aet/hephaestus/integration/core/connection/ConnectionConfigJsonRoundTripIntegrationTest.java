@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -105,7 +106,7 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
         Long id = persistAndClear(
                 IntegrationKind.GITLAB,
                 "https://gitlab.example.test",
-                new ConnectionConfig.GitLabConfig("https://gitlab.example.test", null, null, Set.of("issues"), null));
+                new ConnectionConfig.GitLabConfig("https://gitlab.example.test", 42L, null, Set.of("issues"), null));
         entityManager
                 .createNativeQuery("""
                 UPDATE connection SET config = CAST(:config AS jsonb)
@@ -115,7 +116,7 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
                         {"type":"GITLAB","serverUrl":"https://gitlab.example.test",
                          "gitlabGroupId":42,"gitlabWebhookId":73,"signingMode":"PLAINTEXT",
                          "enabledStreams":["issues"],"tokenMetadata":null,
-                         "projectExclusions":{"nativeIds":[7001,7002],"unresolvedPaths":["team/legacy"]}}
+                         "projectExclusions":{"nativeIds":[7001,7002]}}
                         """)
                 .setParameter("id", id)
                 .setParameter("workspaceId", workspace.getId())
@@ -124,7 +125,7 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
 
         Connection connection = connectionRepository.findById(id).orElseThrow();
         var config = (ConnectionConfig.GitLabConfig) connection.getConfig();
-        var expected = new ConnectionConfig.GitLabProjectExclusions(Set.of(7001L, 7002L), Set.of("team/legacy"));
+        var expected = new ConnectionConfig.GitLabProjectExclusions(Set.of(7001L, 7002L), Map.of());
         assertThat(config.projectExclusions()).isEqualTo(expected);
         var metadata = new ConnectionConfig.GitLabTokenMetadata(
                 LocalDate.of(2027, 1, 1), Instant.parse("2026-10-15T10:00:00Z"));
@@ -145,9 +146,7 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
                        AND CAST(:expected AS jsonb) @> (config -> 'projectExclusions')
                 FROM connection WHERE id = :id AND workspace_id = :workspaceId
                 """)
-                .setParameter(
-                        "expected",
-                        "{\"nativeIds\":[7001,7002],\"unresolvedPaths\":[\"team/legacy\"],\"stopReceipts\":{}}")
+                .setParameter("expected", "{\"nativeIds\":[7001,7002],\"stopReceipts\":{}}")
                 .setParameter("id", id)
                 .setParameter("workspaceId", workspace.getId())
                 .getSingleResult();
@@ -157,13 +156,11 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldKeepGitLabStopReceiptsThroughReadAndConfigUpdates() {
         UUID receipt = UUID.fromString("6f1c2a3b-4d5e-4f60-8a71-92b3c4d5e6f7");
-        var exclusions = ConnectionConfig.GitLabProjectExclusions.empty()
-                .stop(7001L, "team/stopped", receipt)
-                .exclude(null, "team/legacy");
+        var exclusions = ConnectionConfig.GitLabProjectExclusions.empty().stop(7001L, receipt);
         Long id = persistAndClear(
                 IntegrationKind.GITLAB,
                 "https://gitlab.example.test",
-                new ConnectionConfig.GitLabConfig("https://gitlab.example.test", null, null, Set.of("issues"), null)
+                new ConnectionConfig.GitLabConfig("https://gitlab.example.test", 42L, null, Set.of("issues"), null)
                         .withProjectExclusions(exclusions));
 
         Connection connection = connectionRepository.findById(id).orElseThrow();

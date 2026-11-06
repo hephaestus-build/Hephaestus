@@ -63,8 +63,9 @@ class GitHubAccountRenameRepositoryIdentityIntegrationTest extends BaseIntegrati
                 WorkspaceTestFixtures.installationWorkspace(installationId, oldLogin)
                         .withAccountType(AccountType.USER),
                 installationId);
-        var monitor = monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, oldPath));
-        var outsideMonitor = monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, outsidePath));
+        var monitor = monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, oldPath, nativeId));
+        var outsideMonitor =
+                monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, outsidePath, nativeId + 1));
         var correct = repository(github, nativeId, oldPath);
         var foreign = repository(gitlab, nativeId, oldPath);
         var outside = repository(github, nativeId + 1, outsidePath);

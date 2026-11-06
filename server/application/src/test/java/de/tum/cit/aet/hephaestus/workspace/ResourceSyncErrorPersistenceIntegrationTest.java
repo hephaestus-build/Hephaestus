@@ -99,6 +99,7 @@ class ResourceSyncErrorPersistenceIntegrationTest extends AbstractWorkspaceInteg
 
     private static RepositoryToMonitor monitor(Workspace workspace) {
         RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setNativeId(1L);
         monitor.setWorkspace(workspace);
         monitor.setNameWithOwner("acme/shared-repo");
         return monitor;

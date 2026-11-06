@@ -147,19 +147,9 @@ public class GitLabWebhookService {
             return WebhookSetupResult.skipped("GitLab instance is not configured on the connection");
         }
         Long storedWebhookId = config.gitlabWebhookId();
-        Long currentGroupId = config.gitlabGroupId();
 
         try {
-            // Step 1: Look up group by path to get numeric ID
-            long groupId;
-            if (currentGroupId != null) {
-                groupId = currentGroupId;
-            } else {
-                var groupInfo = client.lookupGroup(scopeId, accountLogin);
-                groupId = groupInfo.id();
-                long resolvedGroupId = groupId;
-                updateGitLabConfig(scopeId, cfg -> cfg.withGitlabGroupId(resolvedGroupId));
-            }
+            long groupId = config.gitlabGroupId();
             GitLabRouteCredential.Issued issued = routeCredential.issue(
                     new GitLabRouteCredential.Route(connectionId, scopeId, origin.get(), groupId, accountLogin));
             String webhookUrl = connectionWebhookUrl(connectionId) + issued.keyId() + "/" + issued.routeId();
@@ -416,8 +406,7 @@ public class GitLabWebhookService {
                             if (connection == null
                                     || connectionId == null
                                     || !(connection.getConfig() instanceof GitLabConfig cfg)
-                                    || cfg.gitlabWebhookId() == null
-                                    || cfg.gitlabGroupId() == null) {
+                                    || cfg.gitlabWebhookId() == null) {
                                 return null;
                             }
                             return new GitLabHealthCandidate(

@@ -351,7 +351,8 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
         repository.setCreatedAt(Instant.now());
         repository.setUpdatedAt(Instant.now());
         repository = repositories.saveAndFlush(repository);
-        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(seed.workspace(), repository.getNameWithOwner()));
+        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
+                seed.workspace(), repository.getNameWithOwner(), repository.getNativeId()));
         var author = users.saveAndFlush(TestUserFactory.createUser(
                 ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE), "standing-author", provider));
         var identity = new Identity();

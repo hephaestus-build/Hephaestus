@@ -191,6 +191,7 @@ public abstract class AbstractGitHubLiveSyncIntegrationTest extends BaseGitHubLi
     protected RepositoryToMonitor registerRepositoryToMonitor(String fullName) {
         RepositoryToMonitor monitor = new RepositoryToMonitor();
         monitor.setNameWithOwner(fullName);
+        monitor.setNativeId(fixtureService.getRepositoryInfo(fullName).databaseId());
         monitor.setWorkspace(workspace);
         RepositoryToMonitor saved = repositoryToMonitorRepository.save(monitor);
         workspace.getRepositoriesToMonitor().add(saved);

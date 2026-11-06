@@ -302,22 +302,9 @@ public class GitLabRouteAdmission implements RouteAdmission {
         repositoryMonitors.monitorAllowed(workspace(route), List.of(repository));
     }
 
-    /**
-     * This workspace's monitors of project {@code nativeId}: those stored with that id, or else one stored without an
-     * id at {@code knownPath}, the path of the stored row for that very project, inside the connected group. A monitor
-     * without an id anywhere else is not provably this project's and is left unchanged.
-     */
-    private List<RepositoryToMonitor> ownMonitors(AdmittedRoute route, long nativeId, @Nullable String knownPath) {
-        List<RepositoryToMonitor> byId =
-                repositoryToMonitorRepository.findByWorkspaceIdAndNativeId(route.workspaceId(), nativeId);
-        if (!byId.isEmpty() || knownPath == null || !route.contains(knownPath)) {
-            return byId;
-        }
-        return repositoryToMonitorRepository
-                .findByWorkspaceIdAndNameWithOwner(route.workspaceId(), knownPath)
-                .filter(monitor -> monitor.getNativeId() == null)
-                .map(monitor -> List.of(monitor))
-                .orElse(List.of());
+    /** This workspace's monitors of the exact provider project. */
+    private List<RepositoryToMonitor> ownMonitors(AdmittedRoute route, long nativeId) {
+        return repositoryToMonitorRepository.findByWorkspaceIdAndNativeId(route.workspaceId(), nativeId);
     }
 
     private Workspace workspace(AdmittedRoute route) {
@@ -413,7 +400,7 @@ public class GitLabRouteAdmission implements RouteAdmission {
         // A stored project is trusted without asking GitLab only while this workspace monitors it: the shared row may
         // still hold a path its project was moved away from, and monitoring it again needs GitLab's word.
         Boolean monitoredKnown = transaction.execute(status -> holdActive(route)
-                && projectAllowed(route, projectId, path)
+                && projectAllowed(route, projectId)
                 && repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(route.workspaceId(), path)
                 && repositoryRepository
                         .findByNameWithOwnerAndProviderId(path, route.providerId())
@@ -454,11 +441,7 @@ public class GitLabRouteAdmission implements RouteAdmission {
         } catch (RepositoryNotFoundOnGitProviderException | WebClientResponseException.NotFound e) {
             transaction.executeWithoutResult(status -> {
                 if (holdActive(route)) {
-                    String knownPath = repositoryRepository
-                            .findByNativeIdAndProviderId(nativeId, route.providerId())
-                            .map(Repository::getNameWithOwner)
-                            .orElse(null);
-                    ownMonitors(route, nativeId, knownPath).stream()
+                    ownMonitors(route, nativeId).stream()
                             .filter(monitor -> read.originalMonitors().values().stream()
                                     .anyMatch(ids -> ids.contains(monitor.getId())))
                             .forEach(monitor -> syncTargetProvider.recordRepositoryUnavailable(
@@ -474,11 +457,7 @@ public class GitLabRouteAdmission implements RouteAdmission {
             }
             // The shared row may already carry another workspace's view of the move, so this workspace's monitor is
             // found by the project's id, not by the row's current path.
-            String knownPath = repositoryRepository
-                    .findByNativeIdAndProviderId(nativeId, route.providerId())
-                    .map(Repository::getNameWithOwner)
-                    .orElse(null);
-            List<RepositoryToMonitor> own = ownMonitors(route, nativeId, knownPath);
+            List<RepositoryToMonitor> own = ownMonitors(route, nativeId);
             Repository stored = inside && reported != null
                     ? projectAdmission
                             .discover(
@@ -500,12 +479,6 @@ public class GitLabRouteAdmission implements RouteAdmission {
             if (stored == null) {
                 return false;
             }
-            // A monitor from before native ids learns this project's id where it is; the shared monitor boundary
-            // then merges any other monitor of the project into the first and moves that one to the reported path.
-            own.stream()
-                    .filter(monitor -> monitor.getNativeId() == null)
-                    .forEach(monitor -> syncTargetProvider.reconcileSyncTargetIdentity(
-                            monitor.getId(), nativeId, monitor.getNameWithOwner()));
             monitorIfAllowed(route, stored);
             return true;
         });
@@ -565,12 +538,13 @@ public class GitLabRouteAdmission implements RouteAdmission {
         }
     }
 
-    private boolean projectAllowed(AdmittedRoute route, @Nullable Long nativeId, String path) {
+    private boolean projectAllowed(AdmittedRoute route, @Nullable Long nativeId) {
+        if (nativeId == null) return false;
         return connectionRepository
                 .findConfigInState(route.connectionId(), route.workspaceId(), IntegrationState.ACTIVE)
                 .filter(ConnectionConfig.GitLabConfig.class::isInstance)
                 .map(ConnectionConfig.GitLabConfig.class::cast)
-                .filter(config -> !config.projectExclusions().excludes(nativeId, path))
+                .filter(config -> !config.projectExclusions().excludes(nativeId))
                 .isPresent();
     }
 

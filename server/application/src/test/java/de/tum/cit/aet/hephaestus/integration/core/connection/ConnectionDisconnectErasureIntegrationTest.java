@@ -133,6 +133,7 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
         github.setState(IntegrationState.ACTIVE);
         connection = connectionRepository.save(github);
         RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setNativeId(1L);
         monitor.setNameWithOwner(workspace.getAccountLogin() + "/disconnect-erase");
         monitor.setWorkspace(workspace);
         repositoryToMonitorRepository.save(monitor);

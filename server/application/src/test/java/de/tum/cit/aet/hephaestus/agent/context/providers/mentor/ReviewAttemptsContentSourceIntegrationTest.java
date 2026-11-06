@@ -166,8 +166,8 @@ class ReviewAttemptsContentSourceIntegrationTest extends BaseIntegrationTest {
         repository.setCreatedAt(Instant.now());
         repository.setUpdatedAt(Instant.now());
         repositories.saveAndFlush(repository);
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, repository.getNameWithOwner());
-        monitor.setNativeId(repository.getNativeId());
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(
+                workspace, repository.getNameWithOwner(), repository.getNativeId());
         monitors.saveAndFlush(monitor);
         var pull = new PullRequest();
         pull.setNativeId(nativeId);

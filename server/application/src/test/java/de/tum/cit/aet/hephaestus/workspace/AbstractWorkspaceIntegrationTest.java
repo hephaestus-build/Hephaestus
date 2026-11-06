@@ -1,5 +1,9 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
+
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
@@ -16,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabPreflightService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import java.time.Instant;
@@ -25,6 +30,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTest {
 
@@ -61,11 +67,15 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
     @Autowired
     private ConnectionService activityConnectionService;
 
+    @MockitoSpyBean
+    protected GitLabPreflightService fixtureGitLabGroups;
+
     private final AtomicLong userIdGenerator = new AtomicLong(50_000);
 
     @BeforeEach
     void resetWorkspaceDatabaseState() {
         databaseTestUtils.cleanDatabase();
+        doReturn(42L).when(fixtureGitLabGroups).resolveAccountId(anyString(), any(), anyString());
     }
 
     protected void connectActivitySource(Workspace workspace, IdentityProvider provider) {
@@ -73,7 +83,7 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
             case GITHUB ->
                 new ConnectionConfig.GitHubAppConfig(
                         workspace.getId(), workspace.getAccountLogin(), provider.getServerUrl(), Set.of());
-            case GITLAB -> new ConnectionConfig.GitLabConfig(provider.getServerUrl(), null, null, Set.of(), null);
+            case GITLAB -> new ConnectionConfig.GitLabConfig(provider.getServerUrl(), 42L, null, Set.of(), null);
             default -> throw new IllegalArgumentException("Activity source must be GitHub or GitLab");
         };
         IntegrationKind kind =

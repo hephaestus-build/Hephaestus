@@ -310,7 +310,7 @@ class ProductionSchemaContractIntegrationTest {
     void shouldRejectMalformedBaseBranches(String branches) {
         long workspaceId = insertWorkspace("base-branches-" + UUID.randomUUID());
         Long monitorId = jdbcTemplate.queryForObject(
-                "INSERT INTO repository_to_monitor (workspace_id, name_with_owner, generated_paths) VALUES (?, ?,"
+                "INSERT INTO repository_to_monitor (workspace_id, name_with_owner, native_id, generated_paths) VALUES (?, ?, 12345,"
                         + " '[]'::jsonb) RETURNING id",
                 Long.class,
                 workspaceId,
@@ -337,7 +337,7 @@ class ProductionSchemaContractIntegrationTest {
         long ownerWorkspace = insertWorkspace("monitor-owner-" + UUID.randomUUID());
         long targetWorkspace = insertWorkspace("monitor-target-" + UUID.randomUUID());
         Long monitorId = jdbcTemplate.queryForObject(
-                "INSERT INTO repository_to_monitor (workspace_id, name_with_owner, generated_paths) VALUES (?, ?,"
+                "INSERT INTO repository_to_monitor (workspace_id, name_with_owner, native_id, generated_paths) VALUES (?, ?, 12345,"
                         + " '[]'::jsonb) RETURNING id",
                 Long.class,
                 ownerWorkspace,

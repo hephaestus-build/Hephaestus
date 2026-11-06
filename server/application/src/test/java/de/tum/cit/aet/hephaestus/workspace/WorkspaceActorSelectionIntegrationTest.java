@@ -88,7 +88,7 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractWorkspaceIntegratio
         connect(
                 workspace,
                 IntegrationKind.GITLAB,
-                new ConnectionConfig.GitLabConfig("https://gitlab.lrz.de", null, null, Set.of(), null));
+                new ConnectionConfig.GitLabConfig("https://gitlab.lrz.de", 42L, null, Set.of(), null));
         assertThat(actors.select(
                         workspace.getId(),
                         List.of(

@@ -137,9 +137,10 @@ public class WorkspaceService {
      */
     public Workspace createWorkspace(CreateWorkspaceRequestDTO request) {
         @Nullable List<RepositoryIdentity> selected = verifiedSelection(request);
+        Long groupId = verifiedGroupId(request);
         return Objects.requireNonNull(transactionTemplate.execute(status -> {
             long owner = authenticatedOwner(request);
-            return createWorkspaceInTransaction(request, selected, () -> owner);
+            return createWorkspaceInTransaction(request, selected, groupId, () -> owner);
         }));
     }
 
@@ -150,8 +151,9 @@ public class WorkspaceService {
      */
     public Workspace createWorkspace(CreateWorkspaceRequestDTO request, Long ownerUserId) {
         @Nullable List<RepositoryIdentity> selected = verifiedSelection(request);
+        Long groupId = verifiedGroupId(request);
         return Objects.requireNonNull(transactionTemplate.execute(
-                status -> createWorkspaceInTransaction(request, selected, () -> ownerAccount(ownerUserId))));
+                status -> createWorkspaceInTransaction(request, selected, groupId, () -> ownerAccount(ownerUserId))));
     }
 
     /**
@@ -175,6 +177,19 @@ public class WorkspaceService {
             throw new AccessForbiddenException("Connect your GitHub account before you create a GitHub workspace.");
         }
         return SecurityUtils.getCurrentAccountId().orElseThrow();
+    }
+
+    private @Nullable Long verifiedGroupId(CreateWorkspaceRequestDTO request) {
+        if (request.kind() != IntegrationKind.GITLAB) return null;
+        return repositoryVerifiers.stream()
+                .filter(candidate -> candidate.kind() == IntegrationKind.GITLAB)
+                .findFirst()
+                .orElseThrow(
+                        () -> new IllegalStateException("GitLab group verification is not available on this server"))
+                .resolveAccountId(
+                        Objects.requireNonNull(request.personalAccessToken()),
+                        request.serverUrl(),
+                        Objects.requireNonNull(request.accountLogin()));
     }
 
     /**
@@ -205,7 +220,10 @@ public class WorkspaceService {
     }
 
     private Workspace createWorkspaceInTransaction(
-            CreateWorkspaceRequestDTO request, @Nullable List<RepositoryIdentity> selected, LongSupplier ownerAccount) {
+            CreateWorkspaceRequestDTO request,
+            @Nullable List<RepositoryIdentity> selected,
+            @Nullable Long groupId,
+            LongSupplier ownerAccount) {
         String workspaceSlug = Objects.requireNonNull(request.workspaceSlug(), "workspaceSlug is required");
         String displayName = Objects.requireNonNull(request.displayName(), "displayName is required");
         String accountLogin = Objects.requireNonNull(request.accountLogin(), "accountLogin is required");
@@ -243,8 +261,8 @@ public class WorkspaceService {
                     IntegrationKind.GITLAB,
                     serverUrl,
                     new ConnectionConfig.GitLabConfig(
-                            Objects.requireNonNull(serverUrl), /* gitlabGroupId */
-                            null, /* gitlabWebhookId */
+                            Objects.requireNonNull(serverUrl),
+                            Objects.requireNonNull(groupId), /* gitlabWebhookId */
                             null,
                             Set.of(),
                             null),

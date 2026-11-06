@@ -358,7 +358,13 @@ class GitHubIssueDependencyScopeIntegrationTest extends BaseIntegrationTest {
     }
 
     private void monitor(String path) {
-        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, path));
+        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
+                workspace,
+                path,
+                repositories
+                        .findByNameWithOwnerAndProviderId(path, Objects.requireNonNull(github.getId()))
+                        .orElseThrow()
+                        .getNativeId()));
     }
 
     private Repository repository(IdentityProvider provider, long id, String path) {

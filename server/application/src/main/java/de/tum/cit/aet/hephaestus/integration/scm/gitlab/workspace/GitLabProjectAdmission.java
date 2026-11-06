@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -45,7 +44,6 @@ public class GitLabProjectAdmission {
     public record ProjectRead(ConnectionRead connection, long repositoryId, long nativeId, long monitorId) {}
 
     private final ConnectionRepository connections;
-    private final ConnectionService connectionService;
     private final RepositoryRepository repositories;
     private final RepositoryToMonitorRepository monitors;
     private final WorkspaceRepository workspaces;
@@ -60,16 +58,7 @@ public class GitLabProjectAdmission {
         Map<String, Set<Long>> original = new HashMap<>();
         if (discovery) {
             for (RepositoryToMonitor monitor : monitors.findByWorkspaceId(workspaceId)) {
-                Long nativeId = monitor.getNativeId();
-                if (nativeId == null) {
-                    nativeId = repositories
-                            .findByNameWithOwnerAndProviderId(monitor.getNameWithOwner(), providerId)
-                            .map(Repository::getNativeId)
-                            .orElse(null);
-                }
-                String key = nativeId != null
-                        ? "id:" + nativeId
-                        : "path:" + monitor.getNameWithOwner().toLowerCase(Locale.ROOT);
+                String key = "id:" + monitor.getNativeId();
                 original.computeIfAbsent(key, ignored -> new HashSet<>()).add(monitor.getId());
             }
         }
@@ -105,7 +94,6 @@ public class GitLabProjectAdmission {
                             repository.getNativeId(),
                             repository.getNameWithOwner(),
                             repository.getProvider().getServerUrl(),
-                            false,
                             false)) return Optional.empty();
             return monitors.findByWorkspaceIdAndSourceRepositoryId(workspaceId, repository.getId()).stream()
                     .min(Comparator.comparing(RepositoryToMonitor::getId))
@@ -116,7 +104,7 @@ public class GitLabProjectAdmission {
 
     @Transactional(readOnly = true)
     public Optional<ProjectRead> capture(ConnectionRead discovery, Repository repository) {
-        Set<Long> expected = originalMonitors(discovery, repository.getNativeId(), repository.getNameWithOwner());
+        Set<Long> expected = originalMonitors(discovery, repository.getNativeId());
         return captureProject(discovery.workspaceId(), repository)
                 .filter(read -> read.connection().connectionId() == discovery.connectionId())
                 .filter(read -> expected.isEmpty() || expected.contains(read.monitorId()));
@@ -140,8 +128,7 @@ public class GitLabProjectAdmission {
                                 repository.getNativeId(),
                                 repository.getNameWithOwner(),
                                 repository.getProvider().getServerUrl(),
-                                true,
-                                false)
+                                true)
                         && monitors.findSourceRepositoryIdsOfMonitor(read.monitorId())
                                 .contains(read.repositoryId()))
                 .isPresent();
@@ -172,14 +159,14 @@ public class GitLabProjectAdmission {
             ConnectionRead read, long nativeId, String path, String serverUrl, Supplier<@Nullable T> write) {
         return Optional.ofNullable(transactions.execute(status -> {
             connections.acquireLifecycleLock(read.connectionId(), read.workspaceId());
-            Set<Long> original = originalMonitors(read, nativeId, path);
+            Set<Long> original = originalMonitors(read, nativeId);
             if (!original.isEmpty() && original.stream().noneMatch(monitors::existsById)) return null;
             if (selected(read.workspaceId())
                     && original.stream()
                             .map(monitors::findById)
                             .flatMap(Optional::stream)
                             .noneMatch(monitor -> Objects.equals(monitor.getNativeId(), nativeId))) return null;
-            return allowed(read, nativeId, path, serverUrl, true, true) ? write.get() : null;
+            return allowed(read, nativeId, path, serverUrl, true) ? write.get() : null;
         }));
     }
 
@@ -202,13 +189,11 @@ public class GitLabProjectAdmission {
                                 IntegrationState.ACTIVE)
                         .filter(GitLabConfig.class::isInstance)
                         .map(GitLabConfig.class::cast)
-                        .filter(config -> !config.projectExclusions()
-                                .excludes(repository.getNativeId(), repository.getNameWithOwner()))
+                        .filter(config -> !config.projectExclusions().excludes(repository.getNativeId()))
                         .isPresent();
     }
 
-    private boolean allowed(
-            ConnectionRead read, long nativeId, String path, String serverUrl, boolean locked, boolean canonical) {
+    private boolean allowed(ConnectionRead read, long nativeId, String path, String serverUrl, boolean locked) {
         Optional<GitLabConfig> config = locked
                 ? connections
                         .findConfigInState(read.connectionId(), read.workspaceId(), IntegrationState.ACTIVE)
@@ -228,14 +213,7 @@ public class GitLabProjectAdmission {
                         .filter(policy -> policy.getAccountLogin().equals(read.groupPath()))
                         .filter(policy -> contains(policy.getAccountLogin(), path))
                         .isEmpty()) return false;
-        if (canonical && current.projectExclusions().excludes(null, path)) {
-            current = connectionService
-                    .updateGitLabProjectExclusions(
-                            read.workspaceId(), exclusions -> exclusions.resolvePath(nativeId, path))
-                    .map(connection -> (GitLabConfig) connection.getConfig())
-                    .orElse(current);
-        }
-        return !current.projectExclusions().excludes(nativeId, path);
+        return !current.projectExclusions().excludes(nativeId);
     }
 
     /** Whether the workspace monitors only the projects it selected, as stored now. */
@@ -246,10 +224,8 @@ public class GitLabProjectAdmission {
                 .isPresent();
     }
 
-    private static Set<Long> originalMonitors(ConnectionRead read, long nativeId, String path) {
-        Set<Long> ids = new HashSet<>(read.originalMonitors().getOrDefault("id:" + nativeId, Set.of()));
-        ids.addAll(read.originalMonitors().getOrDefault("path:" + path.toLowerCase(Locale.ROOT), Set.of()));
-        return ids;
+    private static Set<Long> originalMonitors(ConnectionRead read, long nativeId) {
+        return read.originalMonitors().getOrDefault("id:" + nativeId, Set.of());
     }
 
     private static boolean contains(String group, String path) {

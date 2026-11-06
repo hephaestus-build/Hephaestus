@@ -43,7 +43,7 @@ class GitLabRepositoryIdentityLookupTest extends BaseUnitTest {
     void setUp() {
         lenient()
                 .when(connection.getConfig())
-                .thenReturn(new ConnectionConfig.GitLabConfig(CONFIGURED, null, null, Set.of(), null));
+                .thenReturn(new ConnectionConfig.GitLabConfig(CONFIGURED, 42L, null, Set.of(), null));
         lenient()
                 .when(connections.findActive(WORKSPACE_ID, IntegrationKind.GITLAB))
                 .thenReturn(Optional.of(connection));

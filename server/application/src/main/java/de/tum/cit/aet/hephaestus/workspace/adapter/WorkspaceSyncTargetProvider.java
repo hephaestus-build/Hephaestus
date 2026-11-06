@@ -506,15 +506,12 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
         repositoryToMonitorRepository.findById(syncTargetId).ifPresent(rtm -> {
             boolean dirty = false;
 
-            // Capture the stable id the first time it resolves, and replace one
-            // proven to belong to another provider
-            // instance's repository of the same name: the scoped queries would hide
-            // the monitored repository.
+            // Replace an ID proven to belong to another provider instance's repository of the same name:
+            // the scoped queries would hide the monitored repository.
             Long workspaceId = Objects.requireNonNull(rtm.getWorkspace()).getId();
             if (resolvedNativeId != null
-                    && (rtm.getNativeId() == null
-                            || (!rtm.getNativeId().equals(resolvedNativeId)
-                                    && holdsAnotherInstancesId(rtm, resolvedNativeId)))) {
+                    && !rtm.getNativeId().equals(resolvedNativeId)
+                    && holdsAnotherInstancesId(rtm, resolvedNativeId)) {
                 // These writes run without the workspace lock. Another monitor of this workspace holding the id
                 // is reported and left as it is; the uniqueness constraint would reject the write.
                 if (repositoryToMonitorRepository.existsByWorkspaceIdAndNativeIdAndIdNot(
@@ -535,11 +532,8 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
             boolean nameDiffers = resolvedNameWithOwner != null
                     && !resolvedNameWithOwner.isBlank()
                     && !resolvedNameWithOwner.equals(rtm.getNameWithOwner());
-            // Re-key only when the stable id agrees (or was just captured) — never
-            // rename by name
-            // alone, which could clobber a legitimately reassigned row.
-            boolean idAgrees = rtm.getNativeId() != null
-                    && (resolvedNativeId == null || rtm.getNativeId().equals(resolvedNativeId));
+            // A name alone cannot identify a reassigned repository.
+            boolean idAgrees = resolvedNativeId == null || rtm.getNativeId().equals(resolvedNativeId);
             if (nameDiffers
                     && idAgrees
                     && repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwnerAndIdNot(

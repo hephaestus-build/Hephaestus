@@ -7,13 +7,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -60,13 +58,17 @@ public sealed interface ConnectionConfig
     /** GitLab. */
     record GitLabConfig(
             String serverUrl,
-            @Nullable Long gitlabGroupId,
+            Long gitlabGroupId,
             @Nullable Long gitlabWebhookId,
             Set<String> enabledStreams,
             @Nullable GitLabTokenMetadata tokenMetadata,
             GitLabProjectExclusions projectExclusions)
             implements ConnectionConfig {
         public GitLabConfig {
+            if (gitlabGroupId == null || gitlabGroupId <= 0) {
+                throw new IllegalArgumentException(
+                        "A GitLab connection requires the provider group ID. Verify the group before connecting.");
+            }
             Objects.requireNonNull(serverUrl, "A GitLab connection names its server");
             if (serverUrl.isBlank()) throw new IllegalArgumentException("A GitLab connection names its server");
             projectExclusions = Objects.requireNonNullElseGet(projectExclusions, GitLabProjectExclusions::empty);
@@ -74,7 +76,7 @@ public sealed interface ConnectionConfig
 
         public GitLabConfig(
                 String serverUrl,
-                @Nullable Long gitlabGroupId,
+                Long gitlabGroupId,
                 @Nullable Long gitlabWebhookId,
                 Set<String> enabledStreams,
                 @Nullable GitLabTokenMetadata tokenMetadata) {
@@ -107,97 +109,65 @@ public sealed interface ConnectionConfig
                     serverUrl, gitlabGroupId, webhookId, enabledStreams, tokenMetadata, projectExclusions);
         }
 
-        /**
-         * Returns a copy with {@link #gitlabGroupId} replaced, for when the GraphQL group
-         * lookup resolves the numeric id on a workspace that only carried the group path.
-         */
-        public GitLabConfig withGitlabGroupId(@Nullable Long groupId) {
+        /** Returns a copy with the provider-verified group ID. */
+        public GitLabConfig withGitlabGroupId(Long groupId) {
             return new GitLabConfig(
                     serverUrl, groupId, gitlabWebhookId, enabledStreams, tokenMetadata, projectExclusions);
         }
     }
 
     /**
-     * Explicit stops survive mirror deletion. Known projects are identified only by native ID;
-     * a legacy monitor without a known source ID stops its path until a canonical read binds the ID.
-     *
-     * <p>A Stop of a known project also records an opaque receipt. Removing the work the workspace kept from that
-     * project must name it, so a request prepared before a later Add and Stop cannot act on the newer Stop. A new
-     * Stop replaces the receipt and an Add clears it. Stops recorded before receipts existed have none, so their kept
-     * work cannot be removed until the project is stopped again.
+     * Explicit stops identify projects by the provider ID and survive mirror deletion.
+     * A fresh Stop replaces its receipt, and Add clears it. Removal of retained work must name that receipt,
+     * so a request prepared for an earlier Stop cannot remove the work of a later one.
+     * A stop recorded before receipts existed needs another Stop before its retained work can be removed.
      */
-    record GitLabProjectExclusions(Set<Long> nativeIds, Set<String> unresolvedPaths, Map<Long, UUID> stopReceipts) {
+    record GitLabProjectExclusions(Set<Long> nativeIds, Map<Long, UUID> stopReceipts) {
         public GitLabProjectExclusions {
             nativeIds = Set.copyOf(Objects.requireNonNullElse(nativeIds, Set.of()));
-            unresolvedPaths = Objects.requireNonNullElse(unresolvedPaths, Set.<String>of()).stream()
-                    .map(GitLabProjectExclusions::normalizePath)
-                    .collect(Collectors.toUnmodifiableSet());
-            stopReceipts = Map.copyOf(Objects.requireNonNullElse(stopReceipts, Map.<Long, UUID>of()));
-            if (nativeIds.stream().anyMatch(id -> id <= 0) || unresolvedPaths.contains("")) {
-                throw new IllegalArgumentException("Project exclusions require positive IDs or nonblank paths");
+            stopReceipts = Map.copyOf(Objects.requireNonNullElse(stopReceipts, Map.of()));
+            if (nativeIds.stream().anyMatch(id -> id <= 0)) {
+                throw new IllegalArgumentException("Project stops require positive provider IDs");
             }
             if (!nativeIds.containsAll(stopReceipts.keySet())) {
                 throw new IllegalArgumentException("A stop receipt requires the excluded project ID");
             }
         }
 
-        public GitLabProjectExclusions(Set<Long> nativeIds, Set<String> unresolvedPaths) {
-            this(nativeIds, unresolvedPaths, Map.of());
-        }
-
         public static GitLabProjectExclusions empty() {
-            return new GitLabProjectExclusions(Set.of(), Set.of());
+            return new GitLabProjectExclusions(Set.of(), Map.of());
         }
 
-        public boolean excludes(@Nullable Long nativeId, String path) {
-            return (nativeId != null && nativeIds.contains(nativeId)) || unresolvedPaths.contains(normalizePath(path));
+        public boolean excludes(long nativeId) {
+            return nativeIds.contains(nativeId);
         }
 
         public Optional<UUID> stopReceipt(long nativeId) {
             return Optional.ofNullable(stopReceipts.get(nativeId));
         }
 
-        public GitLabProjectExclusions exclude(@Nullable Long nativeId, String path) {
+        /** A fresh Stop replaces the receipt, so an older Remove cannot release the newer Stop's work. */
+        public GitLabProjectExclusions stop(long nativeId, UUID receipt) {
             Set<Long> ids = new HashSet<>(nativeIds);
-            Set<String> paths = new HashSet<>(unresolvedPaths);
-            if (nativeId == null) paths.add(normalizePath(path));
-            else ids.add(nativeId);
-            return new GitLabProjectExclusions(ids, paths, stopReceipts);
-        }
-
-        /** Excludes a known project under a new receipt, which replaces the receipt of any earlier Stop. */
-        public GitLabProjectExclusions stop(long nativeId, String path, UUID receipt) {
-            var excluded = exclude(nativeId, path);
+            ids.add(nativeId);
             Map<Long, UUID> receipts = new HashMap<>(stopReceipts);
             receipts.put(nativeId, receipt);
-            return new GitLabProjectExclusions(excluded.nativeIds(), excluded.unresolvedPaths(), receipts);
+            return new GitLabProjectExclusions(ids, receipts);
         }
 
-        /** Keeps the project excluded and spends its receipt once the work kept from it is removed. */
+        /** Keeps the project excluded and spends its receipt once the retained work is removed. */
         public GitLabProjectExclusions withoutStopReceipt(long nativeId) {
             Map<Long, UUID> receipts = new HashMap<>(stopReceipts);
             receipts.remove(nativeId);
-            return new GitLabProjectExclusions(nativeIds, unresolvedPaths, receipts);
+            return new GitLabProjectExclusions(nativeIds, receipts);
         }
 
-        public GitLabProjectExclusions include(@Nullable Long nativeId, String path) {
+        public GitLabProjectExclusions include(long nativeId) {
             Set<Long> ids = new HashSet<>(nativeIds);
-            Set<String> paths = new HashSet<>(unresolvedPaths);
+            ids.remove(nativeId);
             Map<Long, UUID> receipts = new HashMap<>(stopReceipts);
-            if (nativeId != null) {
-                ids.remove(nativeId);
-                receipts.remove(nativeId);
-            }
-            paths.remove(normalizePath(path));
-            return new GitLabProjectExclusions(ids, paths, receipts);
-        }
-
-        public GitLabProjectExclusions resolvePath(long nativeId, String path) {
-            return excludes(null, path) ? include(null, path).exclude(nativeId, path) : this;
-        }
-
-        private static String normalizePath(String path) {
-            return path.trim().toLowerCase(Locale.ROOT);
+            receipts.remove(nativeId);
+            return new GitLabProjectExclusions(ids, receipts);
         }
     }
 

@@ -96,7 +96,7 @@ public interface ActivityLedgerRepository extends Repository<ActivityEvent, UUID
 
     @Query(value = """
             SELECT EXISTS (SELECT 1 FROM repository r JOIN repository_to_monitor m
-              ON (m.native_id=r.native_id OR (m.native_id IS NULL AND m.name_with_owner=r.name_with_owner))
+              ON m.native_id=r.native_id
             WHERE m.workspace_id=:workspaceId AND r.id=:repositoryId AND r.provider_id=:providerId)
             """, nativeQuery = true)
     boolean isMonitored(

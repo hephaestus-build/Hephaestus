@@ -64,8 +64,8 @@ class GitHubWebhookRepositoryIdentityIntegrationTest extends BaseIntegrationTest
                 IdentityProviderType.GITLAB, "https://" + UUID.randomUUID() + ".gitlab.example.test"));
         var workspace = WorkspaceTestFixtures.persistInstallationWorkspace(
                 workspaces, connections, WorkspaceTestFixtures.installationWorkspace(nativeId, owner), nativeId);
-        monitors.save(WorkspaceTestFixtures.repositoryMonitor(workspace, owner + "/target"));
-        monitors.save(WorkspaceTestFixtures.repositoryMonitor(workspace, owner + "/sibling"));
+        monitors.save(WorkspaceTestFixtures.repositoryMonitor(workspace, owner + "/target", nativeId));
+        monitors.save(WorkspaceTestFixtures.repositoryMonitor(workspace, owner + "/sibling", nativeId + 1));
     }
 
     @Test

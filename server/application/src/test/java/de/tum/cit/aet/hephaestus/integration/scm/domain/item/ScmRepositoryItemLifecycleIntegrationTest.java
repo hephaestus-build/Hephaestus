@@ -390,7 +390,8 @@ class ScmRepositoryItemLifecycleIntegrationTest extends BaseIntegrationTest {
 
         assertThat(repositoryItemIds(fixture)).isEmpty();
         assertThat(monitors.findById(monitor.getId()))
-                .hasValueSatisfying(row -> assertThat(row.getNativeId()).isNull());
+                .hasValueSatisfying(row -> assertThat(row.getNativeId())
+                        .isEqualTo(fixture.repository().getNativeId()));
     }
 
     @Test
@@ -492,7 +493,8 @@ class ScmRepositoryItemLifecycleIntegrationTest extends BaseIntegrationTest {
     }
 
     private RepositoryToMonitor monitor(Workspace workspace, Repository repository) {
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, repository.getNameWithOwner());
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(
+                workspace, repository.getNameWithOwner(), repository.getNativeId());
         return monitors.saveAndFlush(monitor);
     }
 

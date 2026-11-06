@@ -120,8 +120,7 @@ class GitLabDiscussionSyncServiceIntegrationTest extends BaseIntegrationTest {
                 WorkspaceTestFixtures.gitLabPatWorkspace("repair").withSlug("discussion-" + unique),
                 serverUrl);
         workspaceId = Objects.requireNonNull(workspace.getId());
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, "repair/" + unique);
-        monitor.setNativeId(1L);
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, "repair/" + unique, 1L);
         monitors.saveAndFlush(monitor);
         authorId = author(2, "author");
     }

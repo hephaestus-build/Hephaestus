@@ -286,8 +286,8 @@ class GitHubSubIssuesMessageHandlerIntegrationTest extends BaseIntegrationTest {
         connection.setDisplayName(workspace.getAccountLogin());
         ReflectionTestUtils.setField(connection, "state", IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, testRepository.getNameWithOwner());
-        monitor.setNativeId(testRepository.getNativeId());
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(
+                workspace, testRepository.getNameWithOwner(), testRepository.getNativeId());
         monitors.saveAndFlush(monitor);
         return workspace;
     }

@@ -166,7 +166,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
         workspace = createWorkspace("intro-course", "Intro course", "course", AccountType.ORG, student);
         connect(workspace, INSTANCE);
         course = repository(instance, "course/intro");
-        monitor(workspace, "course/intro");
+        monitor(workspace, course);
     }
 
     @Test
@@ -540,7 +540,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
                 .isEqualTo("SUCCESS");
 
         Workspace disconnected = createWorkspace("no-connection", "No connection", "other", AccountType.ORG, student);
-        monitor(disconnected, "course/intro");
+        monitor(disconnected, course);
         JsonNode unavailable = payload(disconnected.getId(), student.getId());
         assertThat(unavailable.path("status").asString()).isEqualTo("UNAVAILABLE");
         assertThat(unavailable.has("pullRequests")).isFalse();
@@ -751,7 +751,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
         connection.setState(IntegrationState.ACTIVE);
         connectionRepository.saveAndFlush(connection);
         Repository app = repository(github, "gh-course/app");
-        monitor(team, "gh-course/app");
+        monitor(team, app);
         PullRequest pr = mergeRequest(app, 3, true, MergeStateStatus.CLEAN, CheckState.NONE, HEAD);
         pr.setAuthor(author);
         pr.setBody("Fixes #2");
@@ -941,7 +941,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
                 target,
                 IntegrationKind.GITLAB,
                 "GITLAB",
-                new ConnectionConfig.GitLabConfig(serverUrl, null, null, Set.of(), null));
+                new ConnectionConfig.GitLabConfig(serverUrl, 42L, null, Set.of(), null));
         connection.setState(IntegrationState.ACTIVE);
         connectionRepository.saveAndFlush(connection);
     }
@@ -961,10 +961,11 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
         return repositoryRepository.save(repository);
     }
 
-    private void monitor(Workspace target, String path) {
+    private void monitor(Workspace target, Repository repository) {
         RepositoryToMonitor monitor = new RepositoryToMonitor();
         monitor.setWorkspace(target);
-        monitor.setNameWithOwner(path);
+        monitor.setNameWithOwner(repository.getNameWithOwner());
+        monitor.setNativeId(repository.getNativeId());
         monitorRepository.save(monitor);
     }
 

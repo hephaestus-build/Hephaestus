@@ -31,7 +31,6 @@ import org.jspecify.annotations.Nullable;
             @UniqueConstraint(
                     name = "uk_repository_to_monitor_workspace_id",
                     columnNames = {"workspace_id", "id"}),
-            // NULLs are distinct: monitors whose repository is not resolved yet are not constrained.
             @UniqueConstraint(
                     name = "uk_repository_to_monitor_workspace_native_id",
                     columnNames = {"workspace_id", "native_id"})
@@ -56,12 +55,10 @@ public class RepositoryToMonitor {
      * name-keyed reconciliation lookup — the native id never changes for the life of the repository.
      * It is the identity of record used to re-key {@code nameWithOwner} after an upstream rename.
      *
-     * <p>Nullable: rows created before this column existed (and PAT rows whose repository has not yet
-     * been resolved from the provider) carry {@code null} until the next sync that resolves the repo
-     * populates it. A workspace has a single SCM connection, so the id is unambiguous without a
-     * provider discriminator column, and a workspace holds at most one monitor per id.
+     * <p>A workspace has a single SCM connection, so the id is unambiguous without a
+     * provider discriminator column. Resolve it before creating the monitor.
      */
-    @Nullable
+    @Column(nullable = false)
     private Long nativeId;
 
     /** Review policy independent of repository coverage selection and provider sync state. */

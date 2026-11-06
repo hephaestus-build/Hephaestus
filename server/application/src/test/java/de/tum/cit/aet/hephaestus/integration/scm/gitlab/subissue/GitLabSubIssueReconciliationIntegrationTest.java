@@ -130,8 +130,7 @@ class GitLabSubIssueReconciliationIntegrationTest extends BaseIntegrationTest {
                 provider.getServerUrl());
         scopeId = workspace.getId();
         repository = repository(provider, 1, PROJECT);
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, PROJECT);
-        monitor.setNativeId(repository.getNativeId());
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, PROJECT, repository.getNativeId());
         monitors.saveAndFlush(monitor);
         parent = issue(repository, 1, 1, null);
         existingChild = issue(repository, 2, 2, parent);

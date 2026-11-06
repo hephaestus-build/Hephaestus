@@ -74,7 +74,7 @@ class ConnectionDetailDTOTest {
                 "group",
                 new ConnectionConfig.GitLabConfig(
                         "https://gitlab.com",
-                        null,
+                        42L,
                         null,
                         Set.of(),
                         new ConnectionConfig.GitLabTokenMetadata(expiry, checked)));

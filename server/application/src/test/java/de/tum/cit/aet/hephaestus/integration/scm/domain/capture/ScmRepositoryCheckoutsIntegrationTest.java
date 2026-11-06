@@ -358,8 +358,8 @@ class ScmRepositoryCheckoutsIntegrationTest extends BaseIntegrationTest {
     }
 
     private void monitor(Workspace owner, Repository repository) {
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(owner, repository.getNameWithOwner());
-        monitor.setNativeId(repository.getNativeId());
+        var monitor =
+                WorkspaceTestFixtures.repositoryMonitor(owner, repository.getNameWithOwner(), repository.getNativeId());
         monitors.save(monitor);
     }
 

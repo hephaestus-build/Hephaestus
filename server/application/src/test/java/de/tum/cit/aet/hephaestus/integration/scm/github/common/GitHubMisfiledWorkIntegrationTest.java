@@ -248,7 +248,9 @@ class GitHubMisfiledWorkIntegrationTest extends BaseIntegrationTest {
         repository.setCreatedAt(Instant.now());
         repository.setUpdatedAt(Instant.now());
         repository = repositories.saveAndFlush(repository);
-        if (monitored) monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, nameWithOwner));
+        if (monitored)
+            monitors.saveAndFlush(
+                    WorkspaceTestFixtures.repositoryMonitor(workspace, nameWithOwner, repository.getNativeId()));
         return repository;
     }
 

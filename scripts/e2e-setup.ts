@@ -508,7 +508,7 @@ async function selectPullRequest(
 ): Promise<number | undefined> {
 	const parameters: unknown[] = [workspaceId];
 	let pullRequestScope =
-		"FROM issue i JOIN repository r ON r.id=i.repository_id JOIN repository_to_monitor rtm ON rtm.workspace_id=$1 AND lower(rtm.name_with_owner)=lower(r.name_with_owner) AND (rtm.native_id IS NULL OR rtm.native_id=r.native_id) WHERE i.issue_type='PULL_REQUEST'";
+		"FROM issue i JOIN repository r ON r.id=i.repository_id JOIN repository_to_monitor rtm ON rtm.workspace_id=$1 AND lower(rtm.name_with_owner)=lower(r.name_with_owner) AND rtm.native_id=r.native_id WHERE i.issue_type='PULL_REQUEST'";
 	if (config.repository !== undefined) {
 		parameters.push(config.repository);
 		pullRequestScope += ` AND lower(r.name_with_owner)=lower($${parameters.length})`;

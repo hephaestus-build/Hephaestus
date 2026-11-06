@@ -1800,8 +1800,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         repository.setCreatedAt(now);
         repository.setUpdatedAt(now);
         repository = repositories.saveAndFlush(repository);
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, repository.getNameWithOwner());
-        monitor.setNativeId(repository.getNativeId());
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(
+                workspace, repository.getNameWithOwner(), repository.getNativeId());
         monitors.saveAndFlush(monitor);
         var pull = new PullRequest();
         pull.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));

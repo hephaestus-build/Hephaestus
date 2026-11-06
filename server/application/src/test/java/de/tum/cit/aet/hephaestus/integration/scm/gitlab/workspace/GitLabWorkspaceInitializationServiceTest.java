@@ -185,7 +185,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         lenient()
                 .when(connectionService.findActiveGitLabConfig(anyLong()))
                 .thenReturn(Optional.of(
-                        new ConnectionConfig.GitLabConfig("https://gitlab.com", null, null, Set.of(), null)));
+                        new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, null, Set.of(), null)));
         lenient()
                 .when(connectionService.findActiveBearerToken(anyLong(), eq(IntegrationKind.GITLAB)))
                 .thenReturn(Optional.of(new BearerToken("glpat-test-token", null)));
@@ -737,9 +737,11 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             var firstMonitor = new RepositoryToMonitor();
             firstMonitor.setId(10L);
             firstMonitor.setNameWithOwner(first.getNameWithOwner());
+            firstMonitor.setNativeId(first.getNativeId());
             var secondMonitor = new RepositoryToMonitor();
             secondMonitor.setId(20L);
             secondMonitor.setNameWithOwner(second.getNameWithOwner());
+            secondMonitor.setNativeId(second.getNativeId());
             when(repositoryRepository.findAllByWorkspaceMonitors(1L)).thenReturn(List.of(first, second));
             when(repositoryToMonitorRepository.findByWorkspaceId(1L)).thenReturn(List.of(firstMonitor, secondMonitor));
             // The provider refuses the credential while the first repository syncs.
@@ -773,9 +775,11 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             var originalMonitor = new RepositoryToMonitor();
             originalMonitor.setId(77L);
             originalMonitor.setNameWithOwner(stopped.getNameWithOwner());
+            originalMonitor.setNativeId(stopped.getNativeId());
             var siblingMonitor = new RepositoryToMonitor();
             siblingMonitor.setId(78L);
             siblingMonitor.setNameWithOwner(sibling.getNameWithOwner());
+            siblingMonitor.setNativeId(sibling.getNativeId());
             when(repositoryRepository.findAllByWorkspaceMonitors(1L)).thenReturn(List.of(stopped, sibling));
             when(repositoryToMonitorRepository.findByWorkspaceId(1L))
                     .thenReturn(List.of(originalMonitor, siblingMonitor));

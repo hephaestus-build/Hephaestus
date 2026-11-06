@@ -167,6 +167,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         // Add a monitored repository (saved directly — purge reloads workspace with EAGER fetch)
         RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setNativeId(1L);
         monitor.setNameWithOwner(slug + "-group/my-repo");
         monitor.setWorkspace(workspace);
         repositoryToMonitorRepository.save(monitor);
@@ -280,6 +281,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             // Add a monitored repository (saved directly — purge reloads workspace with EAGER
             // fetch)
             RepositoryToMonitor monitor = new RepositoryToMonitor();
+            monitor.setNativeId(1L);
             monitor.setNameWithOwner("cleanup-group/repo");
             monitor.setWorkspace(workspace);
             repositoryToMonitorRepository.save(monitor);

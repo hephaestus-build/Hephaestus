@@ -313,6 +313,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
         ensureAdminMembership(workspaceBeta);
 
         RepositoryToMonitor repository = new RepositoryToMonitor();
+        repository.setNativeId(12345L);
         repository.setNameWithOwner("acme/demo-repo");
         repository.setWorkspace(workspaceAlpha);
         repository = repositoryToMonitorRepository.save(repository);
@@ -542,6 +543,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 "repo-conflict-" + workspace.getId());
 
         RepositoryToMonitor repository = new RepositoryToMonitor();
+        repository.setNativeId(12345L);
         repository.setNameWithOwner("acme/test-repo");
         repository.setWorkspace(workspace);
         repository = repositoryToMonitorRepository.save(repository);

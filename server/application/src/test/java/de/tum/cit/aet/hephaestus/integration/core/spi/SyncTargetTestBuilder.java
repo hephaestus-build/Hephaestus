@@ -25,7 +25,7 @@ public final class SyncTargetTestBuilder {
     private @Nullable Instant backfillLastRunAt;
     private @Nullable String issueSyncCursor;
     private @Nullable String pullRequestSyncCursor;
-    private @Nullable Long nativeId;
+    private Long nativeId = 1L;
 
     private SyncTargetTestBuilder() {}
 
@@ -128,7 +128,7 @@ public final class SyncTargetTestBuilder {
         return this;
     }
 
-    public SyncTargetTestBuilder nativeId(@Nullable Long value) {
+    public SyncTargetTestBuilder nativeId(Long value) {
         this.nativeId = value;
         return this;
     }

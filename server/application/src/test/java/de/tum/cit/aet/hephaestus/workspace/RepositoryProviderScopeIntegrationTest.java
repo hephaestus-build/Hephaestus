@@ -321,7 +321,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
-    void shouldBindUnresolvedStopBeforeProjectPersistenceAndPermitUnrelatedPathReuse() {
+    void shouldKeepTheNativeStopBeforeProjectPersistenceAndPermitUnrelatedPathReuse() {
         Workspace own = workspace("unresolved-stop", persistUser("unresolved-owner"));
         own.setRepositorySelection(RepositorySelection.ALL);
         workspaces.saveAndFlush(own);
@@ -331,7 +331,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 .orElseGet(() -> provider(origin));
         long sourceProviderId = Objects.requireNonNull(source.getId());
         Connection connection = connect(own, source);
-        monitor(own, null);
+        monitor(own, NATIVE_ID);
         monitorService.removeRepositoryFromMonitor(own.getWorkspaceSlug(), NAME);
         assertThat(repositories.findByNameWithOwnerAndProviderId(NAME, sourceProviderId))
                 .isEmpty();
@@ -345,7 +345,6 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
         var bound = (ConnectionConfig.GitLabConfig)
                 connections.findById(connection.getId()).orElseThrow().getConfig();
         assertThat(bound.projectExclusions().nativeIds()).containsExactly(NATIVE_ID);
-        assertThat(bound.projectExclusions().unresolvedPaths()).isEmpty();
 
         var reused = projects.syncProject(own.getId(), NAME).orElseThrow();
         assertThat(reused.getNativeId()).isEqualTo(NATIVE_ID + 1);
@@ -361,7 +360,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
-    void shouldAddAnUnmirroredPathWithoutResolvingAnUnrelatedUnresolvedExclusion() {
+    void shouldAddAnUnmirroredProjectWithoutClearingAnotherProjectsStop() {
         Workspace own = workspace("unrelated-pending-add", persistUser("unrelated-add-owner"));
         String origin = gitLabProperties.defaultServerUrl();
         IdentityProvider source = gitProviderRepository
@@ -369,7 +368,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 .orElseGet(() -> provider(origin));
         long providerId = Objects.requireNonNull(source.getId());
         Connection connection = connect(own, source);
-        monitor(own, null);
+        monitor(own, NATIVE_ID);
         monitorService.removeRepositoryFromMonitor(own.getWorkspaceSlug(), NAME);
         String addedPath = "shared-org/new-project";
         // GitLab confirms the added project to this workspace's credential once, then cannot be asked again.
@@ -392,8 +391,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 .hasMessage("Canonical lookup unavailable");
         var current = (ConnectionConfig.GitLabConfig)
                 connections.findById(connection.getId()).orElseThrow().getConfig();
-        assertThat(current.projectExclusions().nativeIds()).isEmpty();
-        assertThat(current.projectExclusions().unresolvedPaths()).containsExactly(NAME);
+        assertThat(current.projectExclusions().nativeIds()).containsExactly(NATIVE_ID);
         assertThat(monitors.findByWorkspaceIdAndNameWithOwner(own.getId(), NAME))
                 .isEmpty();
     }
@@ -770,27 +768,6 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
         }
     }
 
-    @Test
-    void shouldRetainTheOriginalLegacyMonitorWhenDiscoveryMergesItsNativeDuplicate() {
-        Workspace own = workspace("duplicate-lifetime", persistUser("duplicate-owner"));
-        IdentityProvider source = provider("https://duplicate.example.test");
-        connect(own, source);
-        Repository stored = repository(source, NATIVE_ID, NAME);
-        var legacy = monitor(own, null);
-        var duplicate = new RepositoryToMonitor();
-        duplicate.setWorkspace(own);
-        duplicate.setNativeId(NATIVE_ID);
-        duplicate.setNameWithOwner("shared-org/old-path");
-        duplicate = monitors.saveAndFlush(duplicate);
-        var original = projectAdmission
-                .captureConnection(own.getId(), Objects.requireNonNull(source.getId()))
-                .orElseThrow();
-        gitLabMonitors.monitorAllowed(own, List.of(stored));
-        assertThat(monitors.findById(duplicate.getId())).isEmpty();
-        assertThat(projectAdmission.capture(original, stored).orElseThrow().monitorId())
-                .isEqualTo(legacy.getId());
-    }
-
     private static String inventoryResponse(SyncType phase, int iid, String title, boolean hasNext) {
         String nodes = phase == SyncType.LABELS
                 ? "{\"id\":\"gid://gitlab/ProjectLabel/" + (1000 + iid) + "\",\"title\":\"" + title
@@ -978,10 +955,9 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 .isEqualTo(RepositorySelection.ALL);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     @WithMentorUser
-    void shouldExposeOnlyTheConnectedInstanceWhenNamesAndNativeIdsCollide(boolean knownId) {
+    void shouldExposeOnlyTheConnectedInstanceWhenNamesAndNativeIdsCollide() {
         User caller = persistUser("mentor");
         Workspace own = workspace("source-a", caller);
         Workspace other = workspace("source-b", caller);
@@ -991,8 +967,8 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
         connect(other, second);
         Repository mine = repository(first, NATIVE_ID, NAME);
         Repository theirs = repository(second, NATIVE_ID, NAME);
-        monitor(own, knownId ? NATIVE_ID : null);
-        monitor(other, knownId ? NATIVE_ID : null);
+        monitor(own, NATIVE_ID);
+        monitor(other, NATIVE_ID);
 
         assertThat(repositories.findAllByWorkspaceMonitors(own.getId()))
                 .extracting(Repository::getId)
@@ -1013,7 +989,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
     void shouldExposeNoRepositoryWhenTheWorkspaceHasNoSourceConnection() {
         Workspace workspace = workspace("unconnected", persistUser("mentor"));
         Repository repository = repository(provider("https://unconnected.example.test"), NATIVE_ID, NAME);
-        monitor(workspace, null);
+        monitor(workspace, NATIVE_ID);
         assertThat(repositories.findAllByWorkspaceMonitors(workspace.getId())).isEmpty();
         assertNoWorkFacts(workspace, issue(repository));
     }
@@ -1040,7 +1016,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                         "provider-scope-test",
                         UUID.randomUUID().toString(),
                         "Source connected"));
-        monitor(workspace, null);
+        monitor(workspace, NATIVE_ID);
         Issue work = issue(mine);
         assertWorkFacts(workspace, work);
 
@@ -1146,7 +1122,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 workspace,
                 IntegrationKind.GITLAB,
                 old.getServerUrl(),
-                new ConnectionConfig.GitLabConfig(old.getServerUrl(), null, null, Set.of(), null)));
+                new ConnectionConfig.GitLabConfig(old.getServerUrl(), 42L, null, Set.of(), null)));
         monitor(workspace, NATIVE_ID);
         assertThat(repositories.findAllByWorkspaceMonitors(workspace.getId())).isEmpty();
         assertNoWorkFacts(workspace, issue(oldRepository));
@@ -1201,8 +1177,6 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
         monitorService.removeRepositoryMonitorForInstallation(installationId, NAME, NATIVE_ID);
         assertThat(monitors.findById(monitor.getId())).isPresent();
         assertThat(repositories.findById(replacement.getId())).isPresent();
-        monitor.setNativeId(null);
-        monitors.saveAndFlush(monitor);
         monitorService.removeRepositoryMonitorForInstallation(installationId, NAME, NATIVE_ID);
         assertThat(monitors.findById(monitor.getId())).isPresent();
         monitorService.removeRepositoryMonitorForInstallation(installationId, NAME, NATIVE_ID + 1);
@@ -1243,7 +1217,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
         Workspace unknown = workspace("unknown-erase", persistUser("unknown-erase-owner"));
         Repository first = repository(provider("https://unknown-erase-a.example.test"), NATIVE_ID, NAME);
         Repository second = repository(provider("https://unknown-erase-b.example.test"), NATIVE_ID, NAME);
-        RepositoryToMonitor monitor = monitor(unknown, null);
+        RepositoryToMonitor monitor = monitor(unknown, NATIVE_ID);
         eraser.eraseWorkspaceScmMirror(unknown.getId());
         assertThat(monitors.findById(monitor.getId())).isEmpty();
         assertThat(repositories.findById(first.getId())).isPresent();
@@ -1465,7 +1439,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 workspace,
                 IntegrationKind.GITLAB,
                 provider.getServerUrl(),
-                new ConnectionConfig.GitLabConfig(provider.getServerUrl(), null, null, Set.of(), null));
+                new ConnectionConfig.GitLabConfig(provider.getServerUrl(), 42L, null, Set.of(), null));
         // A synthetic token, so an explicit Add can ask GitLab with the token and server its connection stores.
         String token = "synthetic-token-" + workspace.getWorkspaceSlug();
         unsaved.setCredentials(new BearerToken(token, null), credentialConverter);
@@ -1496,7 +1470,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
         return repositories.saveAndFlush(repository);
     }
 
-    private RepositoryToMonitor monitor(Workspace workspace, @Nullable Long nativeId) {
+    private RepositoryToMonitor monitor(Workspace workspace, Long nativeId) {
         RepositoryToMonitor monitor = new RepositoryToMonitor();
         monitor.setWorkspace(workspace);
         monitor.setNameWithOwner(NAME);

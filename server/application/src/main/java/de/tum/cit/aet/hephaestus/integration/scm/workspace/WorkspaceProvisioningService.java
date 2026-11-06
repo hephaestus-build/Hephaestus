@@ -13,6 +13,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SelectedRepositoryVerifier;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProviderAvailability;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -63,6 +65,8 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
     private final MembershipService workspaceMembershipService;
     private final ConnectionService connectionService;
     private final WebClient webClient;
+    private final List<SelectedRepositoryVerifier> repositoryVerifiers;
+    private final List<RepositoryIdentityLookup> identityLookups;
     private final ScmServerEndpointPolicy endpoints;
 
     private final Map<IntegrationKind, WorkspaceProviderAvailability> providerAvailability;
@@ -80,7 +84,11 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
             ConnectionService connectionService,
             List<WorkspaceProviderAvailability> providerAvailabilityList,
             ScmServerEndpointPolicy endpoints,
-            WebClient.Builder webClients) {
+            WebClient.Builder webClients,
+            List<SelectedRepositoryVerifier> repositoryVerifiers,
+            List<RepositoryIdentityLookup> identityLookups) {
+        this.repositoryVerifiers = repositoryVerifiers;
+        this.identityLookups = identityLookups;
         this.endpoints = endpoints;
         this.workspaceProperties = workspaceProperties;
         this.workspaceRepository = workspaceRepository;
@@ -166,7 +174,17 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
                 .filter(nameWithOwner -> !isBlank(nameWithOwner))
                 .forEach(nameWithOwner -> {
                     RepositoryToMonitor monitor = new RepositoryToMonitor();
-                    monitor.setNameWithOwner(nameWithOwner);
+                    var identity = identityLookups.stream()
+                            .filter(lookup -> lookup.kind() == IntegrationKind.GITHUB)
+                            .findFirst()
+                            .flatMap(lookup -> lookup.resolve(savedWorkspace.getId(), nameWithOwner))
+                            .filter(reported ->
+                                    reported.nativeId() > 0 && nameWithOwner.equalsIgnoreCase(reported.fullPath()))
+                            .orElseThrow(
+                                    () -> new IllegalStateException(
+                                            "We could not verify the GitHub repository ID. Check the repository name and token access."));
+                    monitor.setNameWithOwner(identity.fullPath());
+                    monitor.setNativeId(identity.nativeId());
                     monitor.setWorkspace(savedWorkspace);
                     repositoryToMonitorRepository.save(monitor);
                     savedWorkspace.getRepositoriesToMonitor().add(monitor);
@@ -231,6 +249,12 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         }
 
         String serverUrl = resolveGitLabServerUrl(config.serverUrl());
+        long groupId = repositoryVerifiers.stream()
+                .filter(verifier -> verifier.kind() == IntegrationKind.GITLAB)
+                .findFirst()
+                .orElseThrow(
+                        () -> new IllegalStateException("GitLab group verification is not available on this server"))
+                .resolveAccountId(token, serverUrl, groupPath);
         Long ownerUserId = syncGitLabUserForPAT(token, serverUrl, groupPath);
 
         String slug = workspaceSlugs.allocate(groupPath, "gitlab-pat-" + serverUrl + "-" + groupPath);
@@ -242,16 +266,13 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         workspace.setRepositorySelection(RepositorySelection.ALL);
         Workspace savedWorkspace = workspaceRepository.save(workspace);
 
-        // instance_key derived from "<serverUrl>:<groupId>" lets multiple GitLab orgs
-        // co-exist if needed; the group id isn't known yet at bootstrap so we use the
-        // server URL alone — webhook registration will fill in the group id later.
+        // The workspace owns the connection; the instance URL distinguishes its provider origin.
         String instanceKey = serverUrl;
         connectionService.provisionPatConnection(
                 savedWorkspace,
                 IntegrationKind.GITLAB,
                 instanceKey,
-                new ConnectionConfig.GitLabConfig(
-                        serverUrl, /* gitlabGroupId */ null, /* gitlabWebhookId */ null, Set.of(), null),
+                new ConnectionConfig.GitLabConfig(serverUrl, groupId, /* gitlabWebhookId */ null, Set.of(), null),
                 token,
                 "bootstrap-gitlab-pat-workspace-" + savedWorkspace.getId());
 

@@ -111,7 +111,9 @@ class WorkspaceProvisioningServiceTest {
                 List.of(),
                 new ScmServerEndpointPolicy(
                         new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
-                WebClient.builder());
+                WebClient.builder(),
+                List.of(),
+                List.of());
     }
 
     @Test
@@ -257,7 +259,9 @@ class WorkspaceProvisioningServiceTest {
                 List.of(),
                 new ScmServerEndpointPolicy(
                         new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
-                WebClient.builder());
+                WebClient.builder(),
+                List.of(),
+                List.of());
         when(workspaceRepository.findAllByAccountLoginIgnoreCase("hephaestustest"))
                 .thenReturn(List.of(gitlabWorkspace, githubDuplicate));
         when(connectionService.findActive(10L, IntegrationKind.GITLAB)).thenReturn(Optional.of(mock(Connection.class)));
@@ -291,7 +295,9 @@ class WorkspaceProvisioningServiceTest {
                     connectionService,
                     List.of(),
                     new ScmServerEndpointPolicy(environment, WebClient.builder(), new ScmEgressProperties(List.of())),
-                    WebClient.builder());
+                    WebClient.builder(),
+                    List.of(),
+                    List.of());
             gitlab.enqueue(new MockResponse.Builder()
                     .addHeader("Content-Type", "application/json")
                     .body("{\"id\":90001,\"username\":\"ab12cde\",\"name\":\"Student\""

@@ -146,7 +146,7 @@ class MentorWorkContextIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 workspace,
                 IntegrationKind.GITLAB,
                 "GITLAB",
-                new ConnectionConfig.GitLabConfig(INSTANCE, null, null, Set.of(), null));
+                new ConnectionConfig.GitLabConfig(INSTANCE, 42L, null, Set.of(), null));
         connection.setState(IntegrationState.ACTIVE);
         connectionRepository.saveAndFlush(connection);
         course = monitored("context/course");
@@ -247,7 +247,7 @@ class MentorWorkContextIntegrationTest extends AbstractWorkspaceIntegrationTest 
         // Monitored only by another workspace on the same instance.
         Workspace other = createWorkspace("other-context", "Other", "other-context", AccountType.ORG, tutor);
         Repository foreign = repository(instance, "context/foreign");
-        monitor(other, "context/foreign");
+        monitor(other, foreign);
         Issue foreignSub = issue(foreign, 64, tutor, "FOREIGN-SUB");
         foreignSub.setParentIssue(assigned);
         issueRepository.save(foreignSub);
@@ -507,14 +507,15 @@ class MentorWorkContextIntegrationTest extends AbstractWorkspaceIntegrationTest 
 
     private Repository monitored(String path) {
         Repository repository = repository(instance, path);
-        monitor(workspace, path);
+        monitor(workspace, repository);
         return repository;
     }
 
-    private void monitor(Workspace target, String path) {
+    private void monitor(Workspace target, Repository repository) {
         RepositoryToMonitor monitor = new RepositoryToMonitor();
         monitor.setWorkspace(target);
-        monitor.setNameWithOwner(path);
+        monitor.setNameWithOwner(repository.getNameWithOwner());
+        monitor.setNativeId(repository.getNativeId());
         monitorRepository.save(monitor);
     }
 

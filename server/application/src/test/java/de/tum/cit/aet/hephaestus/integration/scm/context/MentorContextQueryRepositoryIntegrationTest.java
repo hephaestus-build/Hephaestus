@@ -159,7 +159,7 @@ class MentorContextQueryRepositoryIntegrationTest extends BaseIntegrationTest {
             connectSource(
                     gitLab.scope(),
                     IntegrationKind.GITLAB,
-                    new ConnectionConfig.GitLabConfig(user.getProvider().getServerUrl(), null, null, Set.of(), null));
+                    new ConnectionConfig.GitLabConfig(user.getProvider().getServerUrl(), 42L, null, Set.of(), null));
             connectSource(
                     gitHub.scope(),
                     IntegrationKind.GITHUB,
@@ -310,6 +310,7 @@ class MentorContextQueryRepositoryIntegrationTest extends BaseIntegrationTest {
             RepositoryToMonitor monitor = new RepositoryToMonitor();
             monitor.setWorkspace(scope);
             monitor.setNameWithOwner(repository.getNameWithOwner());
+            monitor.setNativeId(repository.getNativeId());
             repositoryToMonitorRepository.save(monitor);
             return new Side(scope, repository, reader, person(provider, serverUrl, "author"));
         }

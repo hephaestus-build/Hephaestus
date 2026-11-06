@@ -240,7 +240,7 @@ class ScmJobFolderProjectorIntegrationTest extends AbstractWorkspaceIntegrationT
         connect(
                 gitLabWorkspace,
                 IntegrationKind.GITLAB,
-                new ConnectionConfig.GitLabConfig("https://gitlab.com", null, null, Set.of(), null));
+                new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, null, Set.of(), null));
         RepositoryToMonitor gitLabMonitor = new RepositoryToMonitor();
         gitLabMonitor.setNameWithOwner(onGitLab.getNameWithOwner());
         gitLabMonitor.setNativeId(onGitLab.getNativeId());
@@ -420,6 +420,7 @@ class ScmJobFolderProjectorIntegrationTest extends AbstractWorkspaceIntegrationT
         repository.setDefaultBranch("main");
         repository = repositoryRepository.save(repository);
         RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setNativeId(repository.getNativeId());
         monitor.setWorkspace(monitoredBy);
         monitor.setNameWithOwner(nameWithOwner);
         repositoryToMonitorRepository.save(monitor);

@@ -191,8 +191,7 @@ public class ManualRepositoryMonitorService {
             }
             long nativeId = resolvedNativeId;
             if (connectionService
-                    .updateGitLabProjectExclusions(
-                            workspaceId, exclusions -> exclusions.include(nativeId, nameWithOwner))
+                    .updateGitLabProjectExclusions(workspaceId, exclusions -> exclusions.include(nativeId))
                     .isEmpty()) {
                 throw new RepositoryProviderNotConnectedException(workspace.getWorkspaceSlug());
             }

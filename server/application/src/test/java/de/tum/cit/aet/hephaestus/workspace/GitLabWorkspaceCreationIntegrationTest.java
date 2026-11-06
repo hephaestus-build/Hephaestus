@@ -3,6 +3,9 @@ package de.tum.cit.aet.hephaestus.workspace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
@@ -152,6 +155,24 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
+    void shouldKeepNoWorkspaceWhenGitLabCannotConfirmTheGroupId() {
+        Consumer<HttpHeaders> caller = gitLabCaller("group-refused");
+        doThrow(new ResponseStatusException(
+                        HttpStatus.UNPROCESSABLE_CONTENT,
+                        "We could not verify the GitLab group ID. Check the group path and token access."))
+                .when(fixtureGitLabGroups)
+                .resolveAccountId(anyString(), any(), anyString());
+
+        postGitLabWorkspace(caller, "gitlab-group-refused", DEFAULT_INSTANCE)
+                .expectStatus()
+                .isEqualTo(422)
+                .expectBody(Void.class);
+
+        assertThat(workspaceRepository.findByWorkspaceSlug("gitlab-group-refused"))
+                .isEmpty();
+    }
+
+    @Test
     void shouldRefuseUnconfiguredInstanceBeforeCreatingTheWorkspace() {
         postGitLabWorkspace(gitLabCaller("mentor"), "gitlab-unconfigured", "https://gitlab.attacker.example")
                 .expectStatus()
@@ -295,6 +316,13 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
         Workspace persisted = workspaceRepository.findById(workspace.id()).orElseThrow();
         assertThat(persisted.getAccountLogin()).isEqualTo("my-group/my-project");
+        assertThat(connectionRepository
+                        .findActive(workspace.id(), IntegrationKind.GITLAB)
+                        .orElseThrow()
+                        .getConfig())
+                .isInstanceOfSatisfying(
+                        ConnectionConfig.GitLabConfig.class,
+                        config -> assertThat(config.gitlabGroupId()).isEqualTo(42L));
         // A request that names no selection follows every project of the group.
         assertThat(persisted.getRepositorySelection()).isEqualTo(RepositorySelection.ALL);
         User instanceActor = userRepository

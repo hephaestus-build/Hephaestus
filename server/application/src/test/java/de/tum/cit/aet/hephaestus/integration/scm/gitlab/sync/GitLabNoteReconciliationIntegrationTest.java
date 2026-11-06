@@ -104,8 +104,8 @@ class GitLabNoteReconciliationIntegrationTest extends AbstractWorkspaceIntegrati
         var workspace = WorkspaceTestFixtures.persistGitLabWorkspace(
                 workspaces, connections, WorkspaceTestFixtures.gitLabPatWorkspace("team"), provider.getServerUrl());
         workspaceId = Objects.requireNonNull(workspace.getId());
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, repository.getNameWithOwner());
-        monitor.setNativeId(repository.getNativeId());
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(
+                workspace, repository.getNameWithOwner(), repository.getNativeId());
         monitors.saveAndFlush(monitor);
         issue = new Issue();
         issue.setProvider(provider);

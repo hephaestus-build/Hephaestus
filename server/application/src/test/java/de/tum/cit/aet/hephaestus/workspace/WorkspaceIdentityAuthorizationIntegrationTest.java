@@ -283,6 +283,7 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
         RepositoryToMonitor monitor = new RepositoryToMonitor();
         monitor.setWorkspace(workspace);
         monitor.setNameWithOwner(repository.getNameWithOwner());
+        monitor.setNativeId(repository.getNativeId());
         monitoredRepositories.save(monitor);
         activityEvents.insertIfAbsent(
                 id,
