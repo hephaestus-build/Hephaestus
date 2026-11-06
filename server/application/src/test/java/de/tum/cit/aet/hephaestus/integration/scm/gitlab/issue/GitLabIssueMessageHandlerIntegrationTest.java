@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuetype.IssueType;
@@ -197,8 +198,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     null,
                     null);
 
-            processor.processFromSync(closed, savedRepo, null);
-            processor.processFromSync(closed, savedRepo, null);
+            processor.processFromSync(closed, ProcessingContext.forSync(null, savedRepo));
+            processor.processFromSync(closed, ProcessingContext.forSync(null, savedRepo));
 
             // Re-reading a closed issue is no event: its close is reported once.
             assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).hasSize(1);
@@ -228,8 +229,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                             null,
                             null,
                             null),
-                    savedRepo,
-                    null);
+                    ProcessingContext.forSync(null, savedRepo));
 
             assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).hasSize(2);
         }
@@ -253,7 +253,9 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                             false,
                             FIXTURE_ISSUE_HTML_URL,
                             null,
-                            null,
+                            Objects.requireNonNull(before.getUpdatedAt())
+                                    .plusSeconds(1)
+                                    .toString(),
                             null,
                             null,
                             null,
@@ -267,8 +269,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                             null,
                             null,
                             null),
-                    savedRepo,
-                    null);
+                    ProcessingContext.forSync(null, savedRepo));
 
             assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).hasSize(1);
             Issue after = issueRepository
@@ -466,11 +467,13 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             handleOnRoute(loadPayload("issue.open"));
             handleOnRoute(edited(loadPayload("issue.open"), REVIEWED_BODY));
             Issue reviewed = currentIssue();
+            assertThat(reviewed.getBody()).isEqualTo(REVIEWED_BODY);
             String reviewedRevision = reviewRevision();
             UUID practiceResultId = recordResult(reviewed);
             eventListener.clear();
 
-            processor.processFromSync(sync(REVIEWED_BODY, List.of(FIXTURE_LABEL_NAME)), savedRepo, null);
+            processor.processFromSync(
+                    sync(REVIEWED_BODY, List.of(FIXTURE_LABEL_NAME)), ProcessingContext.forSync(null, savedRepo));
 
             assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).isEmpty();
             assertThat(reviewRevision()).isEqualTo(reviewedRevision);
@@ -484,8 +487,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     change.equals("content")
                             ? sync("Implement the whole flow at once", List.of(FIXTURE_LABEL_NAME))
                             : sync(REVIEWED_BODY, List.of()),
-                    savedRepo,
-                    null);
+                    ProcessingContext.forSync(null, savedRepo));
 
             assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).hasSize(1);
             assertThat(reviewRevision()).isNotEqualTo(reviewedRevision);
@@ -515,7 +517,9 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                             attrs.assigneeId(),
                             attrs.milestoneId(),
                             attrs.createdAt(),
-                            attrs.updatedAt(),
+                            Objects.requireNonNull(currentIssue().getUpdatedAt())
+                                    .plusSeconds(1)
+                                    .toString(),
                             attrs.closedAt(),
                             attrs.duplicatedToId(),
                             attrs.type(),
@@ -536,7 +540,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     false,
                     FIXTURE_ISSUE_HTML_URL,
                     null,
-                    null,
+                    Objects.requireNonNull(currentIssue().getUpdatedAt()).toString(),
                     null,
                     null,
                     null,

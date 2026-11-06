@@ -345,14 +345,15 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
      * Promotes a stub {@code ISSUE} row to {@code PULL_REQUEST} ahead of the upsert. The
      * {@code COALESCE}s seed PR-specific NOT-NULL primitives so the discriminator flip survives
      * the single-table-inheritance CHECK constraint; {@code upsertCore} overwrites them with
-     * real values immediately after.
+     * real values immediately after. The issue version does not order pull request snapshots,
+     * so the promotion clears it before the upsert.
      */
     @WorkspaceAgnostic("Sync corrects the type of one shared mirror row of a repository taken from the provider event")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Transactional
     @Query(
             value =
-                    "UPDATE issue SET issue_type = :newType, is_draft = COALESCE(is_draft, false), is_merged = COALESCE(is_merged, false), commits = COALESCE(commits, 0), additions = COALESCE(additions, 0), deletions = COALESCE(deletions, 0), changed_files = COALESCE(changed_files, 0) WHERE repository_id = :repositoryId AND number = :number AND issue_type = :currentType",
+                    "UPDATE issue SET issue_type = :newType, updated_at = NULL, is_draft = COALESCE(is_draft, false), is_merged = COALESCE(is_merged, false), commits = COALESCE(commits, 0), additions = COALESCE(additions, 0), deletions = COALESCE(deletions, 0), changed_files = COALESCE(changed_files, 0) WHERE repository_id = :repositoryId AND number = :number AND issue_type = :currentType",
             nativeQuery = true)
     int correctDiscriminator(
             @Param("repositoryId") long repositoryId,
@@ -370,7 +371,7 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
      * <b>Note:</b> This only handles scalar fields and FK references. ManyToMany relationships
      * (labels, assignees) must be handled separately after calling this method.
      *
-     * @return 1 if inserted, 1 if updated (always 1 on success due to DO UPDATE)
+     * @return 1 if inserted or updated, 0 when a newer stored version prevents the write
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Transactional
@@ -415,6 +416,7 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
             -- a quoted range it never finds the end of, and the whole ApplicationContext fails to
             -- start. NativeQueryCommentArchTest enforces this.
             deleted_at = NULL
+        WHERE issue.updated_at IS NULL OR EXCLUDED.updated_at >= issue.updated_at
         """, nativeQuery = true)
     int upsertCore(
             @Param("nativeId") Long nativeId,

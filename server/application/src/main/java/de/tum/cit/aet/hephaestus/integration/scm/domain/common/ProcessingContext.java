@@ -36,10 +36,9 @@ import org.jspecify.annotations.Nullable;
  * @param repository The repository being processed (JPA entity - transaction required)
  * @param provider The git provider instance (e.g., github.com, gitlab.lrz.de)
  * @param observedAt When Hephaestus received what is processed: when JetStream stored the webhook,
- *     or when a sync asked for the page. Pull and merge request processing sets it ({@link
- *     #withObservedAt}) and compares it; a payload it handles outside a delivery is observed when
- *     it is handled, as a core NATS message is. Other contexts carry the time they were made, which
- *     nothing compares.
+ *     or when a sync asked for the page. Issue, pull request and merge request processing compare this time.
+ *     Sync callers capture it before the provider request and set it with {@link #withObservedAt}.
+ *     A payload handled outside a delivery is observed when it is handled, as a core NATS message is.
  * @param correlationId Unique ID for distributed tracing - correlates all log entries and events
  *     from a single webhook or sync operation
  * @param webhookAction The webhook action (e.g. "opened", "closed") if from webhook

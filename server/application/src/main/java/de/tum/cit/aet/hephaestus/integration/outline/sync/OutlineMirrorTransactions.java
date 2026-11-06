@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.outline.sync;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
@@ -55,7 +56,11 @@ public class OutlineMirrorTransactions {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public OutlineDocumentSnapshot upsertDocument(
-            long workspaceId, long connectionId, String documentId, Consumer<OutlineDocument> mutator) {
+            long workspaceId,
+            long connectionId,
+            String documentId,
+            @Nullable Instant sourceUpdatedAt,
+            Consumer<OutlineDocument> mutator) {
         OutlineDocument doc = documentRepository
                 .findByWorkspaceIdAndConnectionIdAndDocumentId(workspaceId, connectionId, documentId)
                 .orElseGet(() -> {
@@ -65,6 +70,9 @@ public class OutlineMirrorTransactions {
                     fresh.setDocumentId(documentId);
                     return fresh;
                 });
+        if (ProviderStateVersion.isOlder(sourceUpdatedAt, doc.getOutlineUpdatedAt())) {
+            return OutlineDocumentSnapshot.of(doc);
+        }
         mutator.accept(doc);
         people.recordAuthors(doc);
         return OutlineDocumentSnapshot.of(documentRepository.saveAndFlush(doc));
@@ -80,8 +88,30 @@ public class OutlineMirrorTransactions {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public @Nullable OutlineDocumentSnapshot updateDocument(
             long workspaceId, long connectionId, String documentId, Consumer<OutlineDocument> mutator) {
+        return updateDocument(workspaceId, connectionId, documentId, null, mutator);
+    }
+
+    /** A lifecycle payload applies only while its provider version is newer than the current snapshot. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public @Nullable OutlineDocumentSnapshot updateDocumentAtVersion(
+            long workspaceId,
+            long connectionId,
+            String documentId,
+            Instant sourceUpdatedAt,
+            Consumer<OutlineDocument> mutator) {
+        return updateDocument(workspaceId, connectionId, documentId, sourceUpdatedAt, mutator);
+    }
+
+    private @Nullable OutlineDocumentSnapshot updateDocument(
+            long workspaceId,
+            long connectionId,
+            String documentId,
+            @Nullable Instant sourceUpdatedAt,
+            Consumer<OutlineDocument> mutator) {
         return documentRepository
                 .findByWorkspaceIdAndConnectionIdAndDocumentId(workspaceId, connectionId, documentId)
+                .filter(doc -> sourceUpdatedAt == null
+                        || !ProviderStateVersion.cannotReplace(sourceUpdatedAt, doc.getOutlineUpdatedAt()))
                 .map(doc -> {
                     mutator.accept(doc);
                     return OutlineDocumentSnapshot.of(documentRepository.saveAndFlush(doc));
