@@ -11,6 +11,8 @@
 import { createHash } from "node:crypto";
 
 import { isCommitId, type PinnedBlob, safeRepositoryPath } from "./pi-change.ts";
+import type { ToolClient } from "./tool-client.ts";
+import { LIMITS } from "./tool-protocol.ts";
 
 export type ObjectType = "commit" | "tree" | "blob";
 
@@ -22,8 +24,8 @@ export interface ObjectSource {
 	size: (id: string) => Promise<number | null>;
 }
 
-/** The most bytes of a commit or a tree that the walk reads: a tree of tens of thousands of entries fits. */
-export const TREE_BYTES = 16 * 1024 * 1024;
+/** The most bytes of a commit or a tree that the walk reads: what one `exec` streams, over 100,000 tree entries. */
+export const TREE_BYTES = LIMITS.execStreamBytes;
 
 /** The most commits that the walk visits to find a cited one, across an attempt. */
 export const HISTORY_COMMITS = 5000;
@@ -34,6 +36,40 @@ const DIRECTORY_MODE = "40000";
 interface TreeEntry {
 	mode: string;
 	id: string;
+}
+
+/** How long the tools side may take to answer for one object. */
+const OBJECT_TIMEOUT_MS = 30_000;
+
+/** The Git objects of `repository`, from the tools side. A failed call answers null: it is not a claim about the object. */
+export function toolObjects(tools: ToolClient, repository: string): ObjectSource {
+	const git = async (args: string[], limit: number): Promise<Buffer | null> => {
+		const chunks: Buffer[] = [];
+		try {
+			const exit = await tools.exec(
+				{
+					argv: ["git", "-C", repository, ...args],
+					cwd: repository,
+					timeoutMs: OBJECT_TIMEOUT_MS,
+					maxOutputBytes: limit,
+				},
+				(chunk) => {
+					chunks.push(chunk);
+				},
+			);
+			return exit.code === 0 && !exit.truncated ? Buffer.concat(chunks) : null;
+		} catch {
+			return null;
+		}
+	};
+	return {
+		read: async (type, id, limit) => git(["cat-file", type, id], limit),
+		size: async (id) => {
+			const answer = await git(["cat-file", "-s", id], 32);
+			const size = answer === null ? Number.NaN : Number(answer.toString("latin1").trim());
+			return Number.isSafeInteger(size) && size >= 0 ? size : null;
+		},
+	};
 }
 
 /** The hash that names a Git object: SHA-1 for a 40-character id, SHA-256 for a 64-character one. */
