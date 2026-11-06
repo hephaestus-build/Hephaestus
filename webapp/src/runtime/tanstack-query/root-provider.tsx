@@ -7,6 +7,7 @@ const queryClient = new QueryClient({
 		queries: {
 			// A disconnected read must settle as an error, rather than leave its skeleton paused.
 			networkMode: "always",
+			refetchOnReconnect: true,
 			/**
 			 * The default of 0 refetches on every mount, refocus and reconnect, which stacks with the
 			 * SSE hints and poll intervals already keeping this app fresh and hits the same endpoint in
@@ -23,7 +24,6 @@ const queryClient = new QueryClient({
 		mutations: {
 			// A write belongs to the action now; reconnect must not replay a paused action later.
 			networkMode: "always",
-			retry: false,
 		},
 	},
 });
