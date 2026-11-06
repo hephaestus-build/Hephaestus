@@ -617,6 +617,13 @@ Restrict log access and retention as part of the instance's data-protection poli
 Identifiers such as `workspace.id`, `job.id`, a trace ID or a container ID are not anonymous.
 They connect records to a workspace and its people, so they are personal data under the same policy.
 
+The same holds for metrics.
+When tracing samples a request, the server attaches its trace ID and span ID to some histograms as exemplars, for example to `http_server_requests_seconds`.
+It does this only when a scraper asks for the OpenMetrics format, and with `management.tracing.sampling.probability` above 0.
+The chart's [monitoring stack](#monitoring-stack) keeps no exemplars: VictoriaMetrics stores the sample and drops its exemplar.
+A Prometheus with exemplar storage keeps them.
+Then its retention and access follow the policy for trace IDs.
+
 ## Agent-job lifecycle
 
 Lifecycle records contain `event.name`, `job.id`, `workspace.id`, `job.type`, `job.phase`,

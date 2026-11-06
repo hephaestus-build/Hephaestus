@@ -1,2 +1,3 @@
 org.springframework.context.ApplicationListener=\
-de.tum.cit.aet.hephaestus.testconfig.ClosedTestContextReleaser
+de.tum.cit.aet.hephaestus.testconfig.ClosedTestContextReleaser,\
+de.tum.cit.aet.hephaestus.observability.PersonalDataLogScan$Reattach
