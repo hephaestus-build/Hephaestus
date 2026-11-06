@@ -163,7 +163,8 @@ class IntegrationNatsConsumerLoggingTest {
                 new IntegrationConsumerStats(),
                 mock(ConnectionActivityRecorder.class),
                 List.of(),
-                NatsTraceContexts.none());
+                NatsTraceContexts.none(),
+                NatsTraceContexts.messageMeters());
     }
 
     @Test

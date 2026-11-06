@@ -153,6 +153,7 @@ public class IntegrationNatsConsumer {
     private final ConnectionActivityRecorder activityRecorder;
     private final List<RouteAdmission> routeAdmissions;
     private final NatsTraceContext traceContext;
+    private final IntegrationMessageMeters messageMeters;
 
     public IntegrationNatsConsumer(
             NatsConnectionProperties connectionProperties,
@@ -163,7 +164,8 @@ public class IntegrationNatsConsumer {
             IntegrationConsumerStats stats,
             ConnectionActivityRecorder activityRecorder,
             List<RouteAdmission> routeAdmissions,
-            NatsTraceContext traceContext) {
+            NatsTraceContext traceContext,
+            IntegrationMessageMeters messageMeters) {
         this.connectionProperties = connectionProperties;
         this.consumerProperties = consumerProperties;
         this.subscriptionProvider = subscriptionProvider;
@@ -173,6 +175,7 @@ public class IntegrationNatsConsumer {
         this.activityRecorder = activityRecorder;
         this.routeAdmissions = List.copyOf(routeAdmissions);
         this.traceContext = traceContext;
+        this.messageMeters = messageMeters;
     }
 
     // Lifecycle
@@ -836,6 +839,7 @@ public class IntegrationNatsConsumer {
 
     /** ACK after the handler commits; liveness reporting must not repeat a completed handler. */
     void handleMessage(@Nullable Long scopeId, Message msg) {
+        messageMeters.received(msg);
         traceContext.process(msg, () -> dispatchMessage(scopeId, msg));
     }
 
@@ -845,6 +849,7 @@ public class IntegrationNatsConsumer {
             return;
         }
         String subject = msg.getSubject();
+        long start = System.nanoTime();
         try {
             IntegrationMessageHandler resolvedHandler = dispatch(scopeId, msg);
             if (scopeId != null && resolvedHandler != null) {
@@ -890,9 +895,11 @@ public class IntegrationNatsConsumer {
                 failure.log("Handler failed");
             }
             stats.recordNak(Instant.now());
+            messageMeters.handled(msg, false, System.nanoTime() - start);
             poisonHandler.handleFailure(scopeId, msg, e);
             return;
         }
+        messageMeters.handled(msg, true, System.nanoTime() - start);
         try {
             msg.ack();
             stats.recordDispatch(Instant.now());

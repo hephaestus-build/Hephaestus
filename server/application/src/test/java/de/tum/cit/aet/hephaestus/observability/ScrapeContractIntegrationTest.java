@@ -65,6 +65,8 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
             Map.entry("mentor_turn_completed_total", "the first ended turn creates it, with its outcome"),
             Map.entry("integration_consumer_nak_total", "the first negative acknowledgement creates it"),
             Map.entry("integration_consumer_poison_total", "the first dead letter creates it"),
+            Map.entry("integration_message_lag_seconds_bucket", "the first event creates it, with its kind"),
+            Map.entry("integration_message_lag_seconds_count", "the first event creates it, with its kind"),
             Map.entry("product_feedback_steps_total", "the first step creates it, with its outcome"),
             Map.entry("webhook_publish_total", "webhook role"),
             Map.entry("webhook_rejected_total", "webhook role"),

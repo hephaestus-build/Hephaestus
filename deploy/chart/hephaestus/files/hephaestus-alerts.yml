@@ -93,6 +93,20 @@ groups:
         annotations:
           summary: A webhook stream holds deliveries past its age bound; a shorter bound has not taken effect
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A wait is measured when the event is handled. A catch-up after a restart ends inside the short window and
+      # the hold, so only a consumer that stays behind fires.
+      - alert: HephaestusEventsDelayed
+        expr: >-
+          1 - sum by (kind) (increase(integration_message_lag_seconds_bucket{job="hephaestus",le="300.0"}[10m]))
+          / sum by (kind) (increase(integration_message_lag_seconds_count{job="hephaestus"}[10m]))
+          > 0.1
+          and sum by (kind) (increase(integration_message_lag_seconds_count{job="hephaestus"}[10m])) >= 20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 10 % of a provider's events kept waiting over 5 minutes for 15 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusStreamConsumerStopped
         expr: max by (stream) (webhook_stream_consumer_pending{job="hephaestus",runtime_role="webhook"}) > 0
         for: 6h

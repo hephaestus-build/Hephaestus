@@ -419,6 +419,46 @@ tests:
               summary: LLM budget admission kept refusing work for 15 minutes
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: a consumer that stays behind fires, a short catch-up and short waits do not
+    interval: 1m
+    input_series:
+      - series: 'integration_message_lag_seconds_bucket{job="hephaestus",instance="server:9090",kind="github",le="300.0"}'
+        values: "0+3x60"
+      - series: 'integration_message_lag_seconds_count{job="hephaestus",instance="server:9090",kind="github"}'
+        values: "0+6x60"
+      - series: 'integration_message_lag_seconds_bucket{job="hephaestus",instance="server:9090",kind="gitlab",le="300.0"}'
+        values: "0+6x60"
+      - series: 'integration_message_lag_seconds_count{job="hephaestus",instance="server:9090",kind="gitlab"}'
+        values: "0+6x60"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusEventsDelayed
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: HephaestusEventsDelayed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: github
+            exp_annotations:
+              summary: More than 10 % of a provider's events kept waiting over 5 minutes for 15 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a catch-up after a restart does not fire
+    interval: 1m
+    input_series:
+      - series: 'integration_message_lag_seconds_bucket{job="hephaestus",instance="server:9090",kind="github",le="300.0"}'
+        values: "0x4 0 0 0 0 0+6x40"
+      - series: 'integration_message_lag_seconds_count{job="hephaestus",instance="server:9090",kind="github"}'
+        values: "0x4 30 60 90 120 120+6x40"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: HephaestusEventsDelayed
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: HephaestusEventsDelayed
+        exp_alerts: []
+
   - name: three failed or timed-out jobs in one hour fire, fewer do not
     interval: 1m
     input_series:

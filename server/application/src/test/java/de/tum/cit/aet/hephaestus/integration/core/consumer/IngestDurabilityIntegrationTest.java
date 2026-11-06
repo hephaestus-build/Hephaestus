@@ -107,7 +107,8 @@ class IngestDurabilityIntegrationTest {
                     new IntegrationConsumerStats(),
                     mock(ConnectionActivityRecorder.class),
                     List.of(),
-                    NatsTraceContexts.none());
+                    NatsTraceContexts.none(),
+                    NatsTraceContexts.messageMeters());
             ScopeConsumer consumer = new ScopeConsumer(
                     42L,
                     "ordered",
