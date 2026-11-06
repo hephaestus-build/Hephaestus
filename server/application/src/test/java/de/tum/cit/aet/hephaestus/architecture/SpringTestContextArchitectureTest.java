@@ -42,6 +42,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("workspace.RepositoryProviderScopeIntegrationTest", "repository-provider-scope"),
             assignment("workspace.ManualRepositoryAuthorityIntegrationTest", "manual-repository-authority"),
             assignment("workspace.WorkspaceRepositoryCoverageIntegrationTest", "repository-coverage"),
+            assignment("workspace.GitLabWorkspaceCreationIntegrationTest", "gitlab-workspace-creation"),
             assignment("StartupBudgetIntegrationTest", "startup"),
             assignment("agent.mentor.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
@@ -117,6 +118,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "review-enqueue-atomicity",
                     "real review transaction and event listener with an injected fault before queue creation"),
             Map.entry("base", "shared PostgreSQL, HTTP, security, review fixtures and application acceptance context"),
+            Map.entry(
+                    "gitlab-workspace-creation",
+                    "real workspace creation, persisted group identity and endpoint validation with only the provider group confirmation controlled"),
             Map.entry(
                     "repository-provider-scope",
                     "real SQL provider, tenant and monitor lifetime enforcement with controlled GitLab transport and sync orchestration boundary"),
