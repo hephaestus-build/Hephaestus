@@ -43,7 +43,6 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -53,6 +52,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
+import org.springframework.boot.context.properties.bind.Binder;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -92,7 +92,8 @@ final class LiveRunnerWorkspace {
                 new PiRuntimeFactory(MAPPER),
                 new PiResultParser(MAPPER, new SimpleMeterRegistry()),
                 new AgentImageProperties("hephaestus/agent-pi:live", ImagePullPolicy.NEVER),
-                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200_000, 1000, Duration.ofMinutes(10)),
+                // The shipped defaults: a live run must get the budget that a review gets.
+                new Binder(List.of()).bindOrCreate("hephaestus.practice-review", PracticeReviewProperties.class),
                 MAPPER);
     }
 
