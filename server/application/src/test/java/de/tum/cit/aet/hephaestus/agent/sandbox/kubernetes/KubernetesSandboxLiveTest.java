@@ -477,16 +477,28 @@ class KubernetesSandboxLiveTest {
                 .counter()
                 .count();
 
-        // External buffers touch anonymous pages without exhausting the JavaScript heap first.
-        SandboxResult result = reviews.execute(review(
-                jobId,
-                "exec node --max-old-space-size=64 -e 'const pages=[]; "
-                        + "setInterval(() => pages.push(Buffer.alloc(16*1024*1024, 1)), 50)'",
-                Map.of(),
-                Duration.ofMinutes(3)));
-
-        assertThat(result.exitCode()).isEqualTo(137);
-        assertThat(result.timedOut()).isFalse();
+        CompletableFuture<List<Pod>> terminated = client.pods()
+                .inNamespace(namespace())
+                .withLabel(KubernetesWorker.JOB_ID, jobId.toString())
+                .informOnCondition(candidates -> candidates.stream()
+                        .anyMatch(pod -> KubernetesPods.exitCode(pod, KubernetesPods.RUNTIME) != null));
+        try {
+            // External buffers touch anonymous pages without exhausting the JavaScript heap first.
+            assertThatThrownBy(() -> reviews.execute(review(
+                            jobId,
+                            "exec node --max-old-space-size=64 -e 'const pages=[]; "
+                                    + "setInterval(() => pages.push(Buffer.alloc(16*1024*1024, 1)), 50)'",
+                            Map.of(),
+                            Duration.ofMinutes(3))))
+                    .isInstanceOf(SandboxException.class)
+                    .hasRootCauseInstanceOf(IllegalStateException.class)
+                    .hasRootCauseMessage("Sandbox exited without uploading its result");
+            assertThat(terminated.get(COMMAND.toMillis(), TimeUnit.MILLISECONDS))
+                    .extracting(pod -> KubernetesPods.exitCode(pod, KubernetesPods.RUNTIME))
+                    .containsExactly(137);
+        } finally {
+            terminated.cancel(true);
+        }
         assertThat(meters.get(AgentMetrics.SANDBOX_EXITS)
                         .tags("kind", "review", "reason", "oom_killed")
                         .counter()
