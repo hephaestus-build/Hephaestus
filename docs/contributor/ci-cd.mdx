@@ -194,7 +194,8 @@ The gate changes the level of some oasdiff rules. `scripts/check-api-compatibili
 - A new value in a response enum is not a break, because [response enums are open](/admin/compatibility-policy#open-enums).
   Do not add an accepted break for one.
   The Chrome extension shows such a value as unknown.
-  A web app tab from the previous release can show its route error until the reader reloads the page.
+  From 1.0.0, the web app also shows an unknown value without a route error.
+  It offers a reload after an upgrade and keeps the current page until the reader chooses it.
 - From a base of `v1.0.0`, a removed optional response property is an `ERR` change.
   A changed response media type is an `ERR` change too.
 - From a base of `v1.0.0`, the gate fails on a removed operation or parameter.

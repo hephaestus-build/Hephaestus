@@ -96,6 +96,14 @@ it("does not poll in development", () => {
 	expect(requests).toBe(0);
 });
 
+it("removes its notice when the page unmounts so another toaster does not replay it", async () => {
+	const { unmount } = renderNotice();
+	await screen.findByText("Hephaestus was updated");
+	unmount();
+	render(<Toaster />);
+	expect(screen.queryByText("Hephaestus was updated")).toBeNull();
+});
+
 it("polls again while the tab stays open", async () => {
 	vi.useFakeTimers();
 	deployed = { version: "1.0.0" };

@@ -321,6 +321,9 @@ Thus, a *setting* becomes indistinguishable from a *provenance state*.
 A registry entry that would be identical for every value is not information. Say what to do about it
 in a sentence instead.
 
+A server value that this build does not recognize uses `definitionFor` and a neutral unknown state.
+Keep its meaning unknown instead of choosing a known status as a fallback.
+
 ## Field orientation
 
 `Field` ships three orientations and the choice is about **the control's width**, not about taste:

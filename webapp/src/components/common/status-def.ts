@@ -38,8 +38,7 @@ export const UNKNOWN_STATUS_DEF: StatusDef = {
 	label: "Unknown",
 	icon: CircleHelpIcon,
 	badgeVariant: "outline",
-	description:
-		"This version of Hephaestus does not recognize this value. Reload to check for an update.",
+	description: "This version of Hephaestus does not recognize this value.",
 };
 
 export function definitionFor(defs: Readonly<Record<string, StatusDef>>, value: string): StatusDef;
