@@ -548,18 +548,7 @@ public class ReviewServiceImpl implements ReviewService {
                                         ? ReviewStopReason.EXECUTION_INCOMPLETE
                                         : completion.reason());
         review.setCompletedAt(completion.completedAt());
-        for (var assignment : assignments.lockAssignments(workspaceId, reviewId)) {
-            if (assignment.getStatus() == ReviewPracticeStatus.QUEUED) {
-                // Capture never reached it, so it recorded nothing: it ends withheld for the reason the review stopped.
-                assignment.setStatus(ReviewPracticeStatus.WITHHELD);
-                assignment.setReason(
-                        Objects.requireNonNullElse(review.getStopReason(), ReviewStopReason.EXECUTION_INCOMPLETE)
-                                .name());
-            } else if (assignment.getStatus() != ReviewPracticeStatus.WITHHELD
-                    && assignment.getStatus() != ReviewPracticeStatus.FAILED) {
-                assignment.setStatus(ReviewPracticeStatus.DONE);
-            }
-        }
+        closeMembers(review);
         if (review.getKind() == ReviewKind.SCAN) reports.freeze(workspaceId, reviewId);
         outcomes.ended(review);
         if ((status == ReviewStatus.COMPLETE || status == ReviewStatus.PARTIAL)
@@ -585,11 +574,41 @@ public class ReviewServiceImpl implements ReviewService {
             review.setStatus(ReviewStatus.CANCELLED);
             review.setStopReason(ReviewStopReason.CANCELLED);
             review.setCompletedAt(clock.instant());
+            closeMembers(review);
             ended(review);
             if (review.getKind() == ReviewKind.SCAN) reports.freeze(workspaceId, reviewId);
             outcomes.ended(review);
         }
         return true;
+    }
+
+    /**
+     * Ends what the closed review still holds open. A practice that nothing measured ends withheld for the reason the
+     * review stopped, however far its capture got, and never done. A scan keeps its listed files: its report counts them
+     * as not reached.
+     */
+    private void closeMembers(Review review) {
+        long workspaceId = review.getWorkspaceId();
+        var reason = Objects.requireNonNullElse(review.getStopReason(), ReviewStopReason.EXECUTION_INCOMPLETE)
+                .name();
+        var unmeasured = new HashSet<Long>();
+        if (review.getKind() == ReviewKind.ITEM)
+            for (var member : memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(
+                    workspaceId, review.getId())) {
+                if (member.getState() != ReviewItemState.LISTED) continue;
+                unmeasured.add(member.getPracticeId());
+                member.withhold(reason, "The review ended before this practice was measured.", clock.instant());
+            }
+        for (var assignment : assignments.lockAssignments(workspaceId, review.getId())) {
+            if (assignment.getStatus() == ReviewPracticeStatus.QUEUED
+                    || unmeasured.contains(assignment.getPracticeId())) {
+                assignment.setStatus(ReviewPracticeStatus.WITHHELD);
+                assignment.setReason(reason);
+            } else if (assignment.getStatus() != ReviewPracticeStatus.WITHHELD
+                    && assignment.getStatus() != ReviewPracticeStatus.FAILED) {
+                assignment.setStatus(ReviewPracticeStatus.DONE);
+            }
+        }
     }
 
     private void ended(Review review) {

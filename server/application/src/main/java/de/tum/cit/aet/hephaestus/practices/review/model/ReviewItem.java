@@ -22,6 +22,8 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 @Entity
 @Table(
@@ -83,6 +85,16 @@ public class ReviewItem {
 
     @Column(name = "staged_attempt")
     private @Nullable Integer stagedAttempt;
+
+    /** Ends this membership without a result, for a recorded reason that the message explains. */
+    public void withhold(String reason, String message, Instant at) {
+        var kept = detail instanceof ObjectNode node ? node.deepCopy() : JsonNodeFactory.instance.objectNode();
+        kept.put("withholdingMessage", message);
+        detail = kept;
+        state = ReviewItemState.WITHHELD;
+        this.reason = reason;
+        attemptedAt = at;
+    }
 
     public record Id(UUID reviewId, long practiceId, long itemId) implements Serializable {}
 }

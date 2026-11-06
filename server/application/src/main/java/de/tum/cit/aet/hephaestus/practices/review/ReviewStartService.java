@@ -17,7 +17,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 @Service
@@ -72,14 +71,7 @@ public class ReviewStartService implements ReviewStart {
         for (var member :
                 memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(workspaceId, reviewId)) {
             if (member.getState() != ReviewItemState.LISTED) continue;
-            member.setState(ReviewItemState.WITHHELD);
-            member.setReason(reason);
-            member.setAttemptedAt(now);
-            var detail = member.getDetail() instanceof ObjectNode kept
-                    ? kept.deepCopy()
-                    : JsonNodeFactory.instance.objectNode();
-            detail.put("withholdingMessage", "A newer update of the work replaced this review before it started.");
-            member.setDetail(detail);
+            member.withhold(reason, "A newer update of the work replaced this review before it started.", now);
         }
         for (var assignment : assignments.lockAssignments(workspaceId, reviewId)) {
             if (assignment.getStatus() != ReviewPracticeStatus.QUEUED) continue;
