@@ -67,6 +67,79 @@ class CommitMetadataEnrichmentServiceTest extends BaseUnitTest {
     }
 
     @Nested
+    class ContributorIdentity {
+
+        @Test
+        @SuppressWarnings("unchecked")
+        void shouldStoreEachActorsGitHubIdWhenAuthorCommitterAndOverflowAuthorAreEnriched() {
+            String sha = "c".repeat(40);
+            Long commitId = 44L;
+            when(commitRepository.findShasWithoutContributorsByRepositoryId(1L)).thenReturn(List.of(sha));
+            Commit commit = new Commit();
+            commit.setId(commitId);
+            when(commitRepository.findByShaAndRepositoryId(sha, 1L)).thenReturn(Optional.of(commit));
+            Map<String, Object> commitData = Map.of(
+                    "oid",
+                    sha,
+                    "authors",
+                    Map.of(
+                            "totalCount",
+                            2,
+                            "nodes",
+                            List.of(actor("Author", "author@example.com", 1001L)),
+                            "pageInfo",
+                            Map.of("hasNextPage", true, "endCursor", "next")),
+                    "committer",
+                    actor("Committer", "committer@example.com", 1002L),
+                    "associatedPullRequests",
+                    Map.of("nodes", List.of()));
+            Map<String, Object> remainingAuthors = Map.of(
+                    "nodes",
+                    List.of(actor("Overflow", "overflow@example.com", 1003L)),
+                    "pageInfo",
+                    Map.of("hasNextPage", false));
+            ClientResponseField commitField = mock(ClientResponseField.class);
+            when(commitField.getValue()).thenReturn(commitData);
+            when(commitField.toEntity(any(ParameterizedTypeReference.class))).thenReturn(commitData);
+            ClientResponseField authorsField = mock(ClientResponseField.class);
+            when(authorsField.getValue()).thenReturn(remainingAuthors);
+            when(authorsField.toEntity(any(ParameterizedTypeReference.class))).thenReturn(remainingAuthors);
+            ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
+            when(response.isValid()).thenReturn(true);
+            when(response.field("repository.commit0")).thenReturn(commitField);
+            when(response.field("repository.object.authors")).thenReturn(authorsField);
+            HttpGraphQlClient client = mock(HttpGraphQlClient.class);
+            GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
+            when(client.document(anyString())).thenReturn(requestSpec);
+            when(requestSpec.execute()).thenReturn(Mono.just(response));
+            when(graphQlClientProvider.forScope(1L)).thenReturn(client);
+
+            service.enrichCommitMetadata(1L, "owner/repo", 1L);
+
+            verify(contributorRepository)
+                    .upsertContributorByNativeUserId(commitId, 1001L, "AUTHOR", "Author", "author@example.com", 0);
+            verify(contributorRepository)
+                    .upsertContributorByNativeUserId(
+                            commitId, 1002L, "COMMITTER", "Committer", "committer@example.com", 0);
+            verify(contributorRepository)
+                    .upsertContributorByNativeUserId(
+                            commitId,
+                            1003L,
+                            "CO_AUTHOR",
+                            "Overflow",
+                            "overflow@example.com",
+                            CommitMetadataEnrichmentService.AUTHORS_PAGE_SIZE);
+            verify(contributorRepository, never())
+                    .upsertContributor(anyLong(), any(), anyString(), any(), anyString(), anyInt());
+        }
+
+        private static Map<String, Object> actor(String name, String email, long databaseId) {
+            // GraphQL node ids are strings, so "id" must never stand in for the database id.
+            return Map.of("name", name, "email", email, "user", Map.of("id", "U_node", "databaseId", databaseId));
+        }
+    }
+
+    @Nested
     class SkipConditions {
 
         @Test
@@ -139,7 +212,8 @@ class CommitMetadataEnrichmentServiceTest extends BaseUnitTest {
 
             assertThat(result).isEqualTo(0);
             // Should not attempt any upserts
-            verify(contributorRepository, never()).upsertContributor(anyLong(), any(), any(), any(), any(), anyInt());
+            verify(contributorRepository, never())
+                    .upsertContributorByNativeUserId(anyLong(), any(), any(), any(), any(), anyInt());
         }
     }
 
@@ -229,7 +303,7 @@ class CommitMetadataEnrichmentServiceTest extends BaseUnitTest {
 
             // Verify contributor was upserted (primary author)
             verify(contributorRepository)
-                    .upsertContributor(
+                    .upsertContributorByNativeUserId(
                             eq(commitId), any(), eq("AUTHOR"), eq("Test Author"), eq("test@example.com"), eq(0));
         }
 

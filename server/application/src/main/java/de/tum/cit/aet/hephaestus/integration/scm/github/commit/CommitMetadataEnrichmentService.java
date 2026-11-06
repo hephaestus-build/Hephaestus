@@ -514,11 +514,11 @@ public class CommitMetadataEnrichmentService {
             }
 
             // Resolve user ID if available
-            Long userId = extractUserId(authorNode);
+            Long nativeUserId = extractNativeUserId(authorNode);
 
             String role = ordinal == 0 ? CommitContributor.Role.AUTHOR.name() : CommitContributor.Role.CO_AUTHOR.name();
 
-            contributorRepository.upsertContributor(commitId, userId, role, name, email, ordinal);
+            contributorRepository.upsertContributorByNativeUserId(commitId, nativeUserId, role, name, email, ordinal);
         }
 
         // Return overflow record if pagination is needed
@@ -547,10 +547,10 @@ public class CommitMetadataEnrichmentService {
             return;
         }
 
-        Long userId = extractUserId(committerMap);
+        Long nativeUserId = extractNativeUserId(committerMap);
 
-        contributorRepository.upsertContributor(
-                commitId, userId, CommitContributor.Role.COMMITTER.name(), name, email, 0);
+        contributorRepository.upsertContributorByNativeUserId(
+                commitId, nativeUserId, CommitContributor.Role.COMMITTER.name(), name, email, 0);
     }
 
     /**
@@ -662,11 +662,12 @@ public class CommitMetadataEnrichmentService {
                     continue;
                 }
 
-                Long userId = extractUserId(authorNode);
+                Long nativeUserId = extractNativeUserId(authorNode);
                 int ordinal = totalFetched + i;
                 String role = CommitContributor.Role.CO_AUTHOR.name(); // All follow-up authors are co-authors
 
-                contributorRepository.upsertContributor(overflow.commitId(), userId, role, name, email, ordinal);
+                contributorRepository.upsertContributorByNativeUserId(
+                        overflow.commitId(), nativeUserId, role, name, email, ordinal);
             }
 
             totalFetched += nodes.size();
@@ -1034,7 +1035,7 @@ public class CommitMetadataEnrichmentService {
      * Extracts the user's database ID from a GitActor node.
      */
     @Nullable
-    private Long extractUserId(Map<?, ?> actorMap) {
+    private Long extractNativeUserId(Map<?, ?> actorMap) {
         Object userObj = actorMap.get("user");
         if (!(userObj instanceof Map<?, ?> userMap)) {
             return null;
