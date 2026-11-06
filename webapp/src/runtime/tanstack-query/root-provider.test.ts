@@ -1,7 +1,12 @@
-import { type QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import {
+	onlineManager,
+	type QueryClient,
+	QueryClientProvider,
+	useQuery,
+} from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { problemStatusOf } from "@/lib/problem-detail";
 import { USER_VIEW_STORAGE_KEY, type UserViewSession } from "@/runtime/user-view/session";
@@ -11,6 +16,11 @@ import { useQueryReadRefusal } from "./use-query-read-refusal";
 
 beforeEach(() => {
 	getContext().queryClient.clear();
+});
+
+afterEach(() => {
+	getContext().queryClient.clear();
+	onlineManager.setOnline(true);
 });
 
 type Answer = { data: string } | { error: Error };
@@ -44,6 +54,35 @@ function queuedRead(...initial: Answer[]) {
 }
 
 const READ_KEY = ["read-under-retry-policy"];
+
+it("settles an offline read as an error without waiting for reconnect or retries", async () => {
+	onlineManager.setOnline(false);
+	const failure = new TypeError("Failed to fetch");
+	const read = queuedRead({ error: failure });
+	const { result } = renderRead(getContext().queryClient, read);
+	await waitFor(() => expect(result.current.isError).toBe(true));
+	expect(result.current.error).toBe(failure);
+	expect(result.current.fetchStatus).toBe("idle");
+	expect(read.requests).toBe(1);
+});
+
+it("rejects an offline write and never sends it again on reconnect", async () => {
+	const { queryClient } = getContext();
+	queryClient.mount();
+	try {
+		onlineManager.setOnline(false);
+		const write = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+		const mutation = queryClient.getMutationCache().build(queryClient, { mutationFn: write });
+		await expect(mutation.execute(undefined)).rejects.toThrow("Failed to fetch");
+		expect(mutation.state.status).toBe("error");
+		expect(mutation.state.isPaused).toBe(false);
+		onlineManager.setOnline(true);
+		await queryClient.resumePausedMutations();
+		expect(write).toHaveBeenCalledOnce();
+	} finally {
+		queryClient.unmount();
+	}
+});
 
 /** The read as a screen holds it: the client's own retry policy, and its refusal eviction. */
 function renderRead(queryClient: QueryClient, read: ReturnType<typeof queuedRead>) {
