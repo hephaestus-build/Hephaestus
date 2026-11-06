@@ -1,6 +1,6 @@
 // tools-server.ts — the tools side of tool protocol v1 (tool-protocol.ts).
 //
-// It runs as its own user, with no credential, and serves one loop over a Unix socket. It never starts a request: it
+// It runs as its own user, with no credential, and serves one loop over a Unix socket or TCP. It never starts a request: it
 // answers `hello`, runs `exec` calls in their own process groups, pages `read`s inside its roots, extracts `put`
 // archives read-only, and ends calls on `cancel` and `reset`. Every call is bounded: its time, its streamed and spilled
 // output, and the paths it may name, which it resolves through symlinks before it compares them. A failure of one call
@@ -35,6 +35,7 @@ import { finished } from "node:stream/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import {
+	type ToolAddress,
 	encode,
 	type Frame,
 	frameReader,
@@ -49,7 +50,7 @@ import {
 } from "./tool-protocol.ts";
 
 export interface ToolsServerOptions {
-	socketPath: string;
+	address: ToolAddress;
 	/** The nonce that the worker wrote into this Pod's spec: `hello` returns it, and the loop compares it. */
 	nonce: string;
 	/** The mutable directory inside a volume. Its parent belongs to the tools user; reset replaces this directory. */
@@ -431,7 +432,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 	if (
 		!within(workspace, realpathSync(options.scratch)) ||
 		options.putRoots.some((root) => !within(workspace, realpathSync(root))) ||
-		within(workspace, path.resolve(options.socketPath))
+		("path" in options.address && within(workspace, path.resolve(options.address.path)))
 	) {
 		throw new Error(
 			"Scratch and upload roots belong inside the mutable workspace, and the socket outside it.",
@@ -526,7 +527,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		sweepTrash();
 	}
 
-	return createServer({ highWaterMark: LIMITS.bodyBytes }, (socket: Socket) => {
+	return createServer({ highWaterMark: LIMITS.bodyBytes, noDelay: true }, (socket: Socket) => {
 		const reader = frameReader();
 		/** The ids of this connection's requests that have not sent their final frame. */
 		const inFlight = new Set<string>();
@@ -1197,7 +1198,15 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		socket.on("error", () => {
 			socket.destroy();
 		});
-	}).listen(options.socketPath);
+	}).listen(options.address);
+}
+
+function toolsPort(value: string): number {
+	const port = Number(value);
+	if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+		throw new Error("TOOLS_PORT must be a TCP port number");
+	}
+	return port;
 }
 
 if (import.meta.main) {
@@ -1216,8 +1225,13 @@ if (import.meta.main) {
 	for (const directory of [workspace, scratch, repos]) {
 		await mkdir(directory, { recursive: true, mode: 0o700 });
 	}
+	// A tools Pod serves its Heph loop over TCP on its Pod address; the review sidecar serves its loop on a socket.
+	const port = process.env.TOOLS_PORT;
 	startToolsServer({
-		socketPath: process.env.TOOLS_SOCKET ?? "/run/tools/tools.sock",
+		address:
+			port === undefined || port === ""
+				? { path: process.env.TOOLS_SOCKET ?? "/run/tools/tools.sock" }
+				: { host: "0.0.0.0", port: toolsPort(port) },
 		nonce,
 		workspace,
 		roots: ["/workspace", workspace],
