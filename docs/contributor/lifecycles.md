@@ -1,0 +1,51 @@
+---
+title: Lifecycles
+description: How to make a stored lifecycle explicit, and how much rigor each lifecycle needs.
+page_type: reference
+---
+
+A lifecycle is a value that moves through states over time.
+It can be a status enum, a set of nullable timestamps, or booleans that together mean a state.
+These rules apply to the server.
+[ADR 0078](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0078-lifecycles-are-explicit-and-rigor-follows-the-damage.md) records why we chose them.
+Some code that is older than ADR 0078 does not obey all the rules yet.
+Do not copy it.
+
+## Add a lifecycle
+
+1. Use one enum column for the state. Do not hide a state in a JSON key or in a combination of booleans.
+2. Add a CHECK for the closed set of values, in the same migration as the column.
+3. Add a CHECK for each column that a state implies, such as a reason or a completion time.
+4. Put the legal transitions in one table beside the enum. `IntegrationState` shows the form.
+5. Write each transition as a compare-and-set on the expected state, as `FeedbackSendRepository.claim` does.
+6. Refuse an illegal transition, and record the reason.
+7. Decide what a crash, a replay and a retry do to each state. State the answer in a test.
+
+Use a plain enum. Do not add a state machine framework.
+
+## Choose the rigor
+
+Rank a lifecycle by the damage of a wrong transition: trust, tenancy, data loss, then stuck work.
+The levels add up. Levels 1 to 3 follow the rank. Levels 4 and 5 apply only where their condition holds.
+
+| Level | Add | When |
+| --- | --- | --- |
+| 1 | CHECK constraints | Each stored lifecycle |
+| 2 | A transition table and table-driven tests | More than one writer |
+| 3 | Seeded random walks over events | A wrong transition costs trust, crosses a tenant, or loses data |
+| 4 | Optional: a small TLA+ model, outside CI | A concurrent protocol that is hard to reason about: a lease, a permit or a fence |
+| 5 | An invariant query with a metric and an alert | A rule across tables, which a CHECK cannot express |
+
+## Close what you own
+
+Most defects sit where one lifecycle hands over to another, not inside one.
+When a parent ends, end its children with the parent's reason.
+Do this in the same transaction inside one module, and through a durable event across modules ([Transactions and side effects](./transactions.md)).
+Do not leave a child in a state that only an active parent can move on.
+Do not report a child as finished when nothing measured it.
+
+## Repair old rows first
+
+A CHECK validates each existing row.
+Rows from before the 1.0 cutover can break a rule that today's code keeps.
+Count them on staging and in production first. Then repair them in the same migration.
