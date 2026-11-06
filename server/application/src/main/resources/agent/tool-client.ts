@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { connect, type Socket } from "node:net";
+import { serialize } from "node:v8";
 
 import {
 	type ToolAddress,
@@ -39,11 +40,14 @@ export interface ScriptRequest {
 /** A practice program that runs on the tools side. Everything it says is untrusted. */
 export interface ScriptChannel {
 	/** Whether the program can still receive a message. */
-	connected(): boolean;
-	/** Sends one JSON message to the program. */
-	send(message: object): void;
+	connected: () => boolean;
+	/**
+	 * Sends one message to the program, as a structured clone: a job carries a `Map`. This direction only, because the
+	 * loop never deserializes what the tools side sends. Throws when the message is past its bound.
+	 */
+	send: (message: object) => void;
 	/** Ends the program; `exit` then settles. */
-	kill(): void;
+	kill: () => void;
 	/** Settles when the program ended, and rejects when the connection did first. */
 	exit: Promise<{ code: number | null; signal: string | null }>;
 }
@@ -235,21 +239,24 @@ export class ToolClient {
 				}
 			},
 		);
-		const exit = reply.then(
-			({ header }) => {
-				open = false;
+		const ending = async () => {
+			try {
+				const { header } = await reply;
 				return { code: integer(header, "code") ?? null, signal: text(header, "signal") ?? null };
-			},
-			(error: unknown) => {
+			} finally {
 				open = false;
-				throw error;
-			},
-		);
+			}
+		};
+		const exit = ending();
 		return {
 			connected: () => open,
 			send: (message) => {
 				if (open) {
-					this.#write({ type: "script-in", id }, Buffer.from(JSON.stringify(message)));
+					const bytes = serialize(message);
+					if (bytes.length > LIMITS.scriptMessageBytes) {
+						throw new ToolProtocolError("request", "A message for the program is past its bound.");
+					}
+					this.#write({ type: "script-in", id }, bytes);
 				}
 			},
 			kill: () => {

@@ -33,6 +33,7 @@ import { createServer, type Server, type Socket } from "node:net";
 import path from "node:path";
 import { finished } from "node:stream/promises";
 import { setTimeout as sleep } from "node:timers/promises";
+import { deserialize } from "node:v8";
 
 import {
 	type ToolAddress,
@@ -242,17 +243,17 @@ async function makeReadOnly(dir: string): Promise<void> {
 	await chmod(dir, 0o555);
 }
 
-/** A message for a practice program: the loop writes JSON, so anything else is a broken frame. */
+/** A message for a practice program, as the loop serialized it; anything else is a broken frame. */
 function parsedMessage(body: Buffer): object {
 	try {
-		const value: unknown = JSON.parse(body.toString("utf8"));
+		const value: unknown = deserialize(body);
 		if (typeof value === "object" && value !== null) {
 			return value;
 		}
 	} catch {
 		// Refused below.
 	}
-	throw new ToolProtocolError("protocol", "a script message that is not a JSON object");
+	throw new ToolProtocolError("protocol", "a script message that is not an object");
 }
 
 /** The tools and every command have one authority; the trusted loop is outside it (ADR 0068, trust split). */
@@ -886,14 +887,19 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			child.once("exit", () => {
 				void endCall(id, child);
 			});
-			child.once("close", (code: number | null, signal: NodeJS.Signals | null) => {
-				clearTimeout(timer);
-				void endCall(id, child).finally(() => {
+			const finish = async (code: number | null, signal: NodeJS.Signals | null) => {
+				try {
+					await endCall(id, child);
 					final(id, { type: "script-exit", code, signal });
+				} finally {
 					running.delete(id);
 					calls.delete(call);
 					ended.resolve(undefined);
-				});
+				}
+			};
+			child.once("close", (code: number | null, signal: NodeJS.Signals | null) => {
+				clearTimeout(timer);
+				void finish(code, signal);
 			});
 		}
 

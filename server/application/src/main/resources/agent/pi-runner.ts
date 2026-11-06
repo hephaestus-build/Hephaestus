@@ -170,6 +170,7 @@ import {
 } from "./work/practice-scripts/lib/core/runtime-inputs.ts";
 import { InputReader } from "./work/practice-scripts/lib/core/script-inputs.ts";
 import {
+	forkedProgram,
 	abortReasonOf,
 	RETURN_MS,
 	SCRIPT_HEAP_BYTES,
@@ -3105,6 +3106,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						models: hostModels(boundModels, LLM_PROXY_URL, LLM_PROXY_TOKEN, slug),
 						budget: directBudget,
 						awaitModel: () => modelWait.call(),
+						start: forkedProgram,
 						review: async (options, signal) =>
 							reviewPractice(slug, practiceHeading, options, signal, sessionReads),
 						signal: AbortSignal.any([stopped.signal, measuringEnded.signal]),

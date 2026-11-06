@@ -24,6 +24,7 @@ import {
 	type ProgramOutcome,
 } from "./lib/core/program-host.ts";
 import { parseInputs } from "./lib/core/script-inputs.ts";
+import { forkedProgram } from "./lib/core/script-run.ts";
 import { stagePracticeScripts } from "./stage.ts";
 
 const USAGE =
@@ -192,6 +193,7 @@ try {
 				models: {},
 				budget: new ModelBudget(0, 1),
 				awaitModel: () => () => undefined,
+				start: forkedProgram,
 				review: async (options) => {
 					const asked: AskedReview = { input: options };
 					reviews.push(asked);

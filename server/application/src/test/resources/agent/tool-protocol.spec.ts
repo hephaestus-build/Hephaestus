@@ -59,6 +59,7 @@ writeFileSync(
 	if (m.kind === "flood") process.send("x".repeat(${2 * 1024 * 1024}));
 	if (m.kind === "exit") process.exit(m.code);
 	if (m.kind === "env") process.send(JSON.stringify(process.env));
+	if (m.kind === "size") process.send(JSON.stringify({ kind: "sized", size: m.value.size }));
 });
 `,
 );
@@ -1579,19 +1580,23 @@ async function hostile(
 }
 
 /** A running practice program, and each message that it sent. */
-function program(tools: ToolClient = client) {
+function runningProgram(tools: ToolClient = client) {
 	const messages: string[] = [];
 	const logs: Buffer[] = [];
 	const channel = tools.script(
 		{ execArgv: [], timeoutMs: 10_000 },
-		(message) => messages.push(message),
-		(chunk) => logs.push(chunk),
+		(message) => {
+			messages.push(message);
+		},
+		(chunk) => {
+			logs.push(chunk);
+		},
 	);
 	return { channel, messages, logs };
 }
 
 void test("a program's channel carries each message both ways, and its exit ends the call", async () => {
-	const { channel, messages } = program();
+	const { channel, messages } = runningProgram();
 	channel.send({ kind: "echo", value: "ping" });
 	await until(() => messages.length === 1, "the program's answer");
 	assert.deepEqual(JSON.parse(messages[0] ?? ""), { kind: "echoed", value: "ping" });
@@ -1601,20 +1606,21 @@ void test("a program's channel carries each message both ways, and its exit ends
 });
 
 void test("a program's output reaches the loop, and it gets no variable of the tools side", async () => {
-	const { channel, messages, logs } = program();
+	const { channel, messages, logs } = runningProgram();
 	channel.send({ kind: "log", value: "from the program" });
 	channel.send({ kind: "env" });
 	await until(() => messages.length === 1 && logs.length > 0, "the program's output");
 	assert.match(Buffer.concat(logs).toString(), /from the program/u);
-	assert.equal("HEPHAESTUS_SECRET" in (JSON.parse(messages[0] ?? "") as object), false);
+	assert.equal(messages[0]?.includes("HEPHAESTUS_SECRET"), false);
 	channel.kill();
 	await channel.exit;
 });
 
 void test("a cancel ends a program, and a late message goes nowhere", async () => {
-	const { channel } = program();
+	const { channel } = runningProgram();
 	channel.kill();
-	assert.equal((await channel.exit).signal, "SIGKILL");
+	const { signal } = await channel.exit;
+	assert.equal(signal, "SIGKILL");
 	channel.send({ kind: "echo", value: "too late" });
 	await client.reset();
 });
@@ -1624,14 +1630,37 @@ for (const [name, kind] of [
 	["a message past its bound", "flood"],
 ] as const) {
 	void test(`a program that sends ${name} ends, and nothing of it reaches the loop`, async () => {
-		const { channel, messages } = program();
+		const { channel, messages } = runningProgram();
 		channel.send({ kind });
 		await channel.exit;
 		assert.deepEqual(messages, []);
 	});
 }
 
-void test("a script message that is not JSON ends the connection", async () => {
+void test("a job's Map reaches the program whole", async () => {
+	const { channel, messages } = runningProgram();
+	channel.send({ kind: "echo", value: [...new Map([["a.ts", "added"]])] });
+	await until(() => messages.length === 1, "the program's answer");
+	assert.deepEqual(JSON.parse(messages[0] ?? ""), { kind: "echoed", value: [["a.ts", "added"]] });
+	channel.send({ kind: "size", value: new Map([["a.ts", "added"]]) });
+	await until(() => messages.length === 2, "the program's answer");
+	assert.deepEqual(JSON.parse(messages[1] ?? ""), { kind: "sized", size: 1 });
+	channel.kill();
+	await channel.exit;
+});
+
+void test("a message for a program past its bound is refused, and the connection stays", async () => {
+	const { channel, messages } = runningProgram();
+	assert.throws(() => {
+		channel.send({ kind: "echo", value: "x".repeat(LIMITS.scriptMessageBytes + 1) });
+	}, refusal("request"));
+	channel.send({ kind: "echo", value: "still here" });
+	await until(() => messages.length === 1, "the program's answer");
+	channel.kill();
+	await channel.exit;
+});
+
+void test("a script message that does not deserialize ends the connection", async () => {
 	const { replies, closed } = await raw([
 		hello,
 		encode({ type: "script.run", id: "s", execArgv: [], timeoutMs: 5000 }),

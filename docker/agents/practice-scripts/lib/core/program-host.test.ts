@@ -34,7 +34,7 @@ import {
 	type RequiredSource,
 } from "./program-host.ts";
 import { InputReader } from "./script-inputs.ts";
-import { ProgramSettlementError, RETURN_MS } from "./script-run.ts";
+import { forkedProgram, ProgramSettlementError, RETURN_MS } from "./script-run.ts";
 
 const roots: string[] = [];
 after(async () =>
@@ -209,6 +209,7 @@ async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
 			models: options.models ?? {},
 			budget: options.budget ?? new ModelBudget(10_000, MODEL_CONCURRENCY),
 			awaitModel: () => () => undefined,
+			start: forkedProgram,
 			review: async (reviewOptions, signal) => {
 				reviews.push(reviewOptions);
 				return options.review === undefined ? REVIEWED : options.review(reviewOptions, signal);

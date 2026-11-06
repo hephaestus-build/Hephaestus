@@ -10,6 +10,7 @@ import { parseCandidate, validateCitationCapabilities, practiceInputsSchema } fr
 import { EvidenceReader, noReceipts } from "./evidence-reader.ts";
 import { ModelBudget } from "./models-host.ts";
 import { runPracticeProgram } from "./program-host.ts";
+import { forkedProgram } from "./script-run.ts";
 
 const DEFAULT_FILES = { "a.ts": "first\nsecond\nthird" };
 async function fixture(t: TestContext, files: Record<string, string> = DEFAULT_FILES) {
@@ -167,6 +168,7 @@ void test("code that only quotes the assigned scan file gets no MET", async (t) 
 			models: {},
 			budget: new ModelBudget(0, 1),
 			awaitModel: () => () => undefined,
+			start: forkedProgram,
 			review: async () => parsed.candidate,
 			signal: new AbortController().signal,
 			log: () => undefined,

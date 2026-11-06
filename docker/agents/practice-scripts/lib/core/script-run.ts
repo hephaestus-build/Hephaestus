@@ -55,8 +55,65 @@ export interface SlotReport {
 	failures: Partial<Record<Reason, number>>;
 }
 
+/** What starts a program's process: its Node flags, and how long it may run. */
+export interface ProgramStart {
+	execArgv: readonly string[];
+	timeoutMs: number;
+}
+
+/** A program's process. It may run on another side of a trust boundary, so what it says is untrusted. */
+export interface ProgramProcess {
+	readonly connected: boolean;
+	send: (message: HostMessage) => void;
+	/** Ends the process at once. */
+	kill: () => void;
+	onOutput: (listener: (chunk: Buffer) => void) => void;
+	onMessage: (listener: (raw: unknown) => void) => void;
+	/** `signal` names what killed the process, if a signal did. */
+	onClose: (listener: (signal: string | null) => void) => void;
+	onError: (listener: (failure: Error) => void) => void;
+}
+
+/** The program's process as a child of this one. */
+export function forkedProgram(start: ProgramStart): ProgramProcess {
+	const child = fork(path.join(import.meta.dirname, "../..", "child.ts"), [], {
+		env: {},
+		execArgv: [...start.execArgv],
+		stdio: ["ignore", "pipe", "pipe", "ipc"],
+		serialization: "advanced",
+	});
+	return {
+		get connected() {
+			return child.connected;
+		},
+		send: (message) => {
+			child.send(message);
+		},
+		kill: () => {
+			child.kill("SIGKILL");
+		},
+		onOutput: (listener) => {
+			child.stdout?.on("data", listener);
+			child.stderr?.on("data", listener);
+		},
+		onMessage: (listener) => {
+			child.on("message", listener);
+		},
+		onClose: (listener) => {
+			child.once("close", (_code, signal) => {
+				listener(signal);
+			});
+		},
+		onError: (listener) => {
+			child.on("error", listener);
+		},
+	};
+}
+
 /** What the host gives one practice's program. */
 export interface ProgramServices {
+	/** Starts the program's process. */
+	start: (start: ProgramStart) => ProgramProcess;
 	reader: EvidenceReader;
 	/** The practice's direct models, with the credential: every call names the practice to the proxy. */
 	models: Partial<SlotModels>;
@@ -178,15 +235,13 @@ export async function runCustomProgram(
 	}
 	let report: SlotReport[] = [];
 	const readable = readableRoots([path.dirname(path.dirname(modulePath))]);
-	const child = fork(path.join(import.meta.dirname, "../..", "child.ts"), [], {
-		env: {},
+	const child = services.start({
 		execArgv: [
 			"--permission",
 			...readable.map((dir) => `--allow-fs-read=${dir}`),
 			`--max-old-space-size=${CHILD_HEAP_MB}`,
 		],
-		stdio: ["ignore", "pipe", "pipe", "ipc"],
-		serialization: "advanced",
+		timeoutMs: Math.max(0, job.deadline - Date.now()) + RETURN_MS,
 	});
 	let output = 0;
 	const prefix = (chunk: Buffer) => {
@@ -204,21 +259,20 @@ export async function runCustomProgram(
 			services.log(`  [${slug}] (more output is not logged)`);
 		}
 	};
-	child.stdout?.on("data", prefix);
-	child.stderr?.on("data", prefix);
+	child.onOutput(prefix);
 
 	const stopped = new AbortController();
 	let ended = false;
 	// The program ends at its review (see answerReview), so its exit does not stop the session it handed to.
 	const handOff = { happened: false };
 	const reviewEnded = Promise.withResolvers<undefined>();
-	const processGone = Promise.withResolvers<readonly unknown[]>();
+	const processGone = Promise.withResolvers<string | null>();
 	const endProgram = () => {
 		ended = true;
 		stopped.abort(new UnratedError("deadline", "the program ended"));
 	};
-	child.once("close", (...exit) => {
-		processGone.resolve(exit);
+	child.onClose((exitSignal) => {
+		processGone.resolve(exitSignal);
 		if (!handOff.happened) {
 			endProgram();
 		}
@@ -297,7 +351,7 @@ export async function runCustomProgram(
 	const limit = { reached: false };
 	const stopAtLimit = () => {
 		limit.reached = true;
-		child.kill("SIGKILL");
+		child.kill();
 		reviewEnded.resolve(undefined);
 	};
 	let killLater: ReturnType<typeof setTimeout> | undefined;
@@ -309,7 +363,7 @@ export async function runCustomProgram(
 
 	const fail = (stopReason: StopReason, error: string) => {
 		settled ??= { failure: { stopReason, error: cut(error) } };
-		child.kill("SIGKILL");
+		child.kill();
 	};
 
 	const answerModel = async (
@@ -389,7 +443,7 @@ export async function runCustomProgram(
 				request.call.abort(new UnratedError("cancelled", "the program ended at its review"));
 			}
 		}
-		child.kill("SIGKILL");
+		child.kill();
 		try {
 			const candidate = await services.review(parsed.options, call);
 			settled ??= {
@@ -447,7 +501,7 @@ export async function runCustomProgram(
 					skipped: true,
 				},
 			};
-			child.kill("SIGKILL");
+			child.kill();
 			return;
 		}
 		child.send({
@@ -478,7 +532,7 @@ export async function runCustomProgram(
 		}
 	};
 
-	child.on("message", (raw: unknown) => {
+	child.onMessage((raw) => {
 		if (handOff.happened) {
 			return;
 		}
@@ -507,7 +561,7 @@ export async function runCustomProgram(
 			settled = {
 				failure: { stopReason: "error", error: "the program sent a second final message" },
 			};
-			child.kill("SIGKILL");
+			child.kill();
 			return;
 		}
 		if (settled !== undefined && aborted === undefined) {
@@ -593,15 +647,15 @@ export async function runCustomProgram(
 			}
 		}
 	});
-	child.on("error", (error) => {
+	child.onError((failure) => {
 		// A send to a process that the host just ended raises an error event, which must not fail the review.
 		if (!handOff.happened) {
-			settled ??= { failure: { stopReason: "error", error: cut(messageOf(error)) } };
+			settled ??= { failure: { stopReason: "error", error: cut(messageOf(failure)) } };
 		}
 	});
 	const deadlineLimit = setTimeout(stopAtLimit, Math.max(0, job.deadline - Date.now()) + RETURN_MS);
 	child.send({ kind: "job", job: { ...job, modulePath } } satisfies HostMessage);
-	const exit = await processGone.promise;
+	const exitSignal = await processGone.promise;
 	if (handOff.happened) {
 		await reviewEnded.promise;
 	}
@@ -635,7 +689,6 @@ export async function runCustomProgram(
 			},
 		});
 	}
-	const exitSignal = exit[1];
 	return done({
 		failure: {
 			stopReason: "error",
