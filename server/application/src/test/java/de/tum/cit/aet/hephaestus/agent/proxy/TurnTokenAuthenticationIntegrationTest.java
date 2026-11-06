@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
+import de.tum.cit.aet.hephaestus.agent.usage.RunningSpend;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
@@ -35,7 +36,10 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.Authentication;
@@ -80,6 +84,9 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private Workspace workspace;
     private User developer;
@@ -157,8 +164,59 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(attempt.sourceId()).isEqualTo(turn.getId());
         assertThat(attempt.number()).isEqualTo(turn.getAttempt());
         // $10 per million input tokens, frozen at admission.
-        assertThat(routing.inFlightSpendUsd()).isEqualByComparingTo("1.00");
+        assertThat(new ProxyRunningSpend(reviewAttemptUsage, turnRepository)
+                        .of(workspace.getId())
+                        .instanceUsd())
+                .isEqualByComparingTo("1.00");
         assertThat(authentication.getDetails()).isInstanceOf(AttemptJwt.class);
+    }
+
+    /** A turn at $10 per million input tokens that has used a dollar. */
+    private RunningSpend spendOfATurnThatStandsAt(String status, boolean leased) {
+        transactions.executeWithoutResult(tx -> turnRepository.accumulateUsage(
+                turn.getId(), turn.getAttempt(), new MentorTurnUsage(100_000, 0, 0, 0, 0, 1)));
+        jdbc.update(
+                "UPDATE mentor_turn SET status=?,lease_id=CASE WHEN ? THEN lease_id END,"
+                        + "leased_until=CASE WHEN ? THEN leased_until END WHERE id=?",
+                status,
+                leased,
+                leased,
+                turn.getId());
+        return new ProxyRunningSpend(reviewAttemptUsage, turnRepository).of(workspace.getId());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "RUNNING, true, 1",
+        "STOPPED, true, 1",
+        "STOPPED, false, 0",
+        "QUEUED, false, 0",
+        "DONE, false, 0",
+        "FAILED, false, 0"
+    })
+    void shouldCountATurnOnlyUntilTheLedgerShowsIt(String status, boolean leased, String usd) {
+        assertThat(spendOfATurnThatStandsAt(status, leased).instanceUsd()).isEqualByComparingTo(usd);
+    }
+
+    @Test
+    void shouldChargeATurnToThePurseThatPaysIt() {
+        jdbc.update(
+                "UPDATE mentor_turn SET admission=jsonb_set(admission,'{price,fundingSource}','\"WORKSPACE\"') WHERE id=?",
+                turn.getId());
+
+        var spend = spendOfATurnThatStandsAt("RUNNING", true);
+
+        assertThat(spend.workspaceUsd()).isEqualByComparingTo("1");
+        assertThat(spend.instanceUsd()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void shouldCountAnUnpricedTurnAsNothingUntilItEnds() {
+        jdbc.update(
+                "UPDATE mentor_turn SET admission=jsonb_set(admission,'{price,pricingState}','\"UNPRICED\"') WHERE id=?",
+                turn.getId());
+
+        assertThat(spendOfATurnThatStandsAt("RUNNING", true).instanceUsd()).isEqualByComparingTo("0");
     }
 
     @Test

@@ -5,14 +5,14 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * A workspace's two caps and what the ledger says has been spent against each, kept as numbers so a
- * caller that can see spend the ledger cannot yet — the LLM proxy, mid-attempt — can add it before the
- * comparison rather than after the money is gone.
+ * caller that can see spend the ledger cannot yet — the LLM proxy, for work that still runs — can add it
+ * before the comparison rather than after the money is gone.
  *
  * <p>A {@code null} budget is an uncapped purse: never blocked, and its spend is never even queried,
  * so the matching {@code spent} field is {@code null} too.
  *
  * <p>{@code hasUnpricedSpend} may read {@code false} on a purse that is already exhausted on ledger
- * spend alone, because the producer skips the probe there. Harmless: in-flight spend is never negative,
+ * spend alone, because the producer skips the probe there. Harmless: running spend is never negative,
  * so such a purse stays exhausted, and EXHAUSTED outranks UNVERIFIABLE.
  */
 public record LlmBudgetHeadroom(
@@ -26,47 +26,37 @@ public record LlmBudgetHeadroom(
 
     /** The verdict on recorded spend alone. */
     public LlmBudgetDecision decide() {
-        return decideWith(null, BigDecimal.ZERO);
+        return decideWith(RunningSpend.NONE);
     }
 
     /**
-     * The verdict once {@code inFlightUsd} of not-yet-recorded spend is charged to {@code purse}.
+     * Whether a cap applies to a call that this purse pays, which is the only case in which running spend can change its
+     * verdict.
      *
-     * @param purse who pays; {@code null} means unattributable, and the amount is then charged to both
-     *     purses rather than to neither. Fail-safe, not fail-open.
-     * @param inFlightUsd already-incurred spend the ledger cannot see yet; never negative
+     * @param purse who pays; {@code null} means unattributable, and such a call is judged against both caps
      */
-    public LlmBudgetDecision decideWith(@Nullable UsageFundingSource purse, BigDecimal inFlightUsd) {
-        return new LlmBudgetDecision(
-                reason(
-                        instanceSpentUsd,
-                        instanceBudgetUsd,
-                        instanceHasUnpricedSpend,
-                        chargedTo(UsageFundingSource.INSTANCE, purse, inFlightUsd)),
-                reason(
-                        workspaceSpentUsd,
-                        workspaceBudgetUsd,
-                        workspaceHasUnpricedSpend,
-                        chargedTo(UsageFundingSource.WORKSPACE, purse, inFlightUsd)));
+    public boolean cappedFor(@Nullable UsageFundingSource purse) {
+        boolean instance = instanceBudgetUsd != null && purse != UsageFundingSource.WORKSPACE;
+        boolean workspace = workspaceBudgetUsd != null && purse != UsageFundingSource.INSTANCE;
+        return instance || workspace;
     }
 
-    private static BigDecimal chargedTo(
-            UsageFundingSource cap, @Nullable UsageFundingSource purse, BigDecimal inFlightUsd) {
-        if (inFlightUsd.signum() <= 0) {
-            return BigDecimal.ZERO;
-        }
-        return purse == null || purse == cap ? inFlightUsd : BigDecimal.ZERO;
+    /** The verdict once the spend of the work that runs now is charged to its purses. */
+    public LlmBudgetDecision decideWith(RunningSpend running) {
+        return new LlmBudgetDecision(
+                reason(instanceSpentUsd, instanceBudgetUsd, instanceHasUnpricedSpend, running.instanceUsd()),
+                reason(workspaceSpentUsd, workspaceBudgetUsd, workspaceHasUnpricedSpend, running.workspaceUsd()));
     }
 
     private static LlmBudgetBlockReason reason(
             @Nullable BigDecimal spentUsd,
             @Nullable BigDecimal budgetUsd,
             boolean hasUnpricedSpend,
-            BigDecimal inFlightUsd) {
+            BigDecimal runningUsd) {
         if (budgetUsd == null || spentUsd == null) {
             return LlmBudgetBlockReason.NONE;
         }
-        if (LlmBudgetService.capReached(spentUsd.add(inFlightUsd), budgetUsd)) {
+        if (LlmBudgetService.capReached(spentUsd.add(runningUsd), budgetUsd)) {
             return LlmBudgetBlockReason.EXHAUSTED;
         }
         return hasUnpricedSpend ? LlmBudgetBlockReason.UNPRICED_USAGE_BLOCKED : LlmBudgetBlockReason.NONE;

@@ -30,9 +30,11 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.FrozenCharge;
+import de.tum.cit.aet.hephaestus.agent.job.PracticeScriptCallUsage;
 import de.tum.cit.aet.hephaestus.agent.job.PracticeScriptKindTotal;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLlmUsageDelta;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.job.TerminalUsageTestFixtures;
@@ -960,7 +962,9 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             assertThat(recorded.getLlmCacheReadTokens()).isEqualTo(1200);
             assertThat(recorded.getLlmCacheWriteTokens()).isEqualTo(300);
             assertThat(recorded.getLlmOutputTokens()).isEqualTo(stream ? 9 : 7);
-            assertThat(routingOf(authenticate(tokenFor(job))).inFlightSpendUsd())
+            assertThat(new ProxyRunningSpend(attemptUsage, turnRepository)
+                            .of(workspace.getId())
+                            .instanceUsd())
                     .isEqualByComparingTo(stream ? "0.006353" : "0.006347");
             var refused = callPracticeScript(
                     service, job, "/internal/llm/practice-script/decision/decisions", PRACTICE, "{}");
@@ -1339,6 +1343,191 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 admittingPermits());
     }
 
+    // One dollar, at the one dollar per million input tokens that practiceScriptJob freezes.
+    private static final String ONE_DOLLAR_ANSWER = "{\"choices\":[{\"message\":{\"role\":\"assistant\","
+            + "\"content\":\"ok\"}}],\"usage\":{\"prompt_tokens\":1000000,\"completion_tokens\":0}}";
+
+    private int callChat(LlmProxyService service, ReviewJob job) throws Exception {
+        var request = new MockHttpServletRequest("POST", "/internal/llm/chat/completions");
+        request.setRemoteAddr("127.0.0.1");
+        request.addHeader("Authorization", "Bearer " + tokenFor(job));
+        var response = new MockHttpServletResponse();
+        byte[] body = "{\"model\":\"any\",\"messages\":[{\"role\":\"user\",\"content\":\"Review.\"}]}"
+                .getBytes(StandardCharsets.UTF_8);
+        AtomicReference<@Nullable ResponseEntity<?>> served = new AtomicReference<>();
+        filter.doFilter(
+                request,
+                response,
+                (filtered, ignored) -> served.set(service.proxy(request, response, new HttpHeaders(), body)));
+        var answer = served.get();
+        return answer == null ? response.getStatus() : answer.getStatusCode().value();
+    }
+
+    private static Dispatcher alwaysOneDollar() {
+        return new Dispatcher() {
+            @Override
+            public MockResponse dispatch(RecordedRequest request) {
+                return json(ONE_DOLLAR_ANSWER);
+            }
+        };
+    }
+
+    private LlmBudgetService capOf(String usd) {
+        var budget = mock(LlmBudgetService.class);
+        when(budget.headroom(workspace.getId()))
+                .thenReturn(new LlmBudgetHeadroom(BigDecimal.ZERO, new BigDecimal(usd), false, null, null, false));
+        return budget;
+    }
+
+    // The bound: each attempt can have one call out when the cap is crossed, and no attempt spends on its own count.
+    @Test
+    void shouldHoldTheWorkspaceWithinItsBoundWhenItsAttemptsSpendAtOnce() throws Exception {
+        int attempts = 6;
+        int capUsd = 3;
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.setDispatcher(alwaysOneDollar());
+            upstream.start();
+            var service = proxyService(
+                    200_000, 1000, WebClient.create(), capOf(Integer.toString(capUsd)), admittingPermits());
+            List<ReviewJob> jobs = new ArrayList<>();
+            for (int attempt = 0; attempt < attempts; attempt++) {
+                jobs.add(practiceScriptJob(upstream.url("/v1").toString()));
+            }
+            try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
+                List<Future<Integer>> spenders = new ArrayList<>();
+                for (ReviewJob job : jobs) {
+                    spenders.add(requests.submit(() -> {
+                        int status = callChat(service, job);
+                        for (int calls = 1; status == 200 && calls < 4 * capUsd; calls++) {
+                            status = callChat(service, job);
+                        }
+                        return status;
+                    }));
+                }
+                for (Future<Integer> spender : spenders) {
+                    assertThat(spender.get(60, TimeUnit.SECONDS)).isEqualTo(429);
+                }
+            }
+            assertThat(upstream.getRequestCount()).isBetween(capUsd, capUsd + attempts);
+        }
+    }
+
+    @Test
+    void shouldRefuseACallThatTheCapOvertookWhileItWaitedForCapacity() throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.setDispatcher(alwaysOneDollar());
+            upstream.start();
+            ReviewJob waiting = practiceScriptJob(upstream.url("/v1").toString());
+            ReviewJob spender = practiceScriptJob(upstream.url("/v1").toString());
+            var capacity = mock(LlmCallPermits.class);
+            var permit = mock(LlmCallPermits.Permit.class);
+            when(permit.revoked()).thenReturn(Mono.never());
+            var service = proxyService(200_000, 1000, WebClient.create(), capOf("1"), capacity);
+            when(capacity.acquire(anyLong(), any(), any(), any(), any())).thenAnswer(wait -> {
+                LlmCallPermits.Caller caller = wait.getArgument(2);
+                if (caller.sourceId().equals(waiting.getId())) {
+                    try (var other = Executors.newVirtualThreadPerTaskExecutor()) {
+                        assertThat(other.submit(() -> callChat(service, spender))
+                                        .get())
+                                .isEqualTo(200);
+                    }
+                }
+                return permit;
+            });
+
+            assertThat(callChat(service, waiting)).isEqualTo(429);
+
+            assertThat(upstream.getRequestCount()).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void shouldCountWhatRunningAttemptsSpentOncePerPurseUntilTheyEnd() {
+        ReviewJob job = practiceScriptJob("https://models.example.com/v1");
+        long workspaceId = workspace.getId();
+        var chat = new FrozenCharge(
+                "chat",
+                new LlmPriceSnapshot(
+                        UsageFundingSource.INSTANCE,
+                        UsagePricingState.PRICED,
+                        null,
+                        null,
+                        BigDecimal.ONE,
+                        new BigDecimal("2"),
+                        new BigDecimal("3"),
+                        new BigDecimal("4")));
+        var embedding = new FrozenCharge(
+                "embedding",
+                new LlmPriceSnapshot(
+                        UsageFundingSource.WORKSPACE,
+                        UsagePricingState.PRICED,
+                        null,
+                        null,
+                        BigDecimal.TEN,
+                        BigDecimal.ZERO,
+                        null,
+                        null));
+        var lease = Objects.requireNonNull(job.getLeaseId());
+        attemptUsage.registerCall(job.getId(), workspaceId, job.getAttempt(), lease, ModelKind.CHAT, chat);
+        attemptUsage.registerCall(job.getId(), workspaceId, job.getAttempt(), lease, ModelKind.EMBEDDING, embedding);
+        attemptUsage.registerCall(
+                job.getId(), workspaceId, job.getAttempt(), lease, ModelKind.RERANKING, FrozenCharge.UNKNOWN);
+        long million = 1_000_000;
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            attemptUsage.settleCall(
+                    job.getId(),
+                    workspaceId,
+                    job.getAttempt(),
+                    new PracticeScriptCallUsage(ModelKind.CHAT, PRACTICE, null, million, 0, 0, 0, 0),
+                    new ReviewJobLlmUsageDelta(million, million, 0, million, million));
+            attemptUsage.settleCall(
+                    job.getId(),
+                    workspaceId,
+                    job.getAttempt(),
+                    new PracticeScriptCallUsage(ModelKind.EMBEDDING, PRACTICE, null, million, 0, 0, 0, 0),
+                    null);
+            attemptUsage.settleCall(
+                    job.getId(),
+                    workspaceId,
+                    job.getAttempt(),
+                    new PracticeScriptCallUsage(ModelKind.RERANKING, PRACTICE, null, million, 0, 0, 0, 0),
+                    null);
+        });
+        var runningSpend = new ProxyRunningSpend(attemptUsage, turnRepository);
+
+        // Input, output, cache reads and cache writes at 1, 2, 3 and 4 dollars; the script's chat call is inside them.
+        assertThat(runningSpend.of(workspaceId).instanceUsd()).isEqualByComparingTo("10");
+        assertThat(runningSpend.of(workspaceId).workspaceUsd()).isEqualByComparingTo("10");
+
+        // Another workspace's running work changes nothing here.
+        var own = workspace;
+        workspace = createWorkspace("proxy-other", "Other", "proxy-other", AccountType.ORG, persistUser("proxy-other"));
+        ReviewJob other = practiceScriptJob("https://models.example.com/v1");
+        attemptUsage.registerCall(
+                other.getId(),
+                workspace.getId(),
+                other.getAttempt(),
+                Objects.requireNonNull(other.getLeaseId()),
+                ModelKind.CHAT,
+                chat);
+        new TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> attemptUsage.settleCall(
+                        other.getId(),
+                        workspace.getId(),
+                        other.getAttempt(),
+                        null,
+                        new ReviewJobLlmUsageDelta(million, 0, 0, 0, 0)));
+        assertThat(runningSpend.of(workspace.getId()).instanceUsd()).isEqualByComparingTo("1");
+        assertThat(runningSpend.of(own.getId()).instanceUsd()).isEqualByComparingTo("10");
+
+        // A hand-off to the next attempt bills the old one, so the new attempt starts from nothing.
+        jdbc.update("UPDATE review_job SET attempt=attempt+1 WHERE id=?", other.getId());
+        assertThat(runningSpend.of(workspace.getId()).instanceUsd()).isEqualByComparingTo("0");
+
+        jdbc.update("UPDATE review_job SET status='FAILED',completed_at=now() WHERE id=?", job.getId());
+        assertThat(runningSpend.of(workspaceId).instanceUsd()).isEqualByComparingTo("0");
+    }
+
     /** A pool that admits every call, as a model is always in a pool. */
     private static LlmCallPermits admittingPermits() {
         var permits = mock(LlmCallPermits.class);
@@ -1380,6 +1569,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 new ProxyAccounting(
                         new ProxyBudgetGate(
                                 budgetService,
+                                new ProxyRunningSpend(attemptUsage, turnRepository),
                                 new PracticeReviewProperties(
                                         false,
                                         15,
@@ -1409,8 +1599,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private static ProxyRouting.BilledAttempt billed(ReviewJob job, int attempt, UsageSourceType sourceType) {
-        return new ProxyRouting.BilledAttempt(
-                sourceType, job.getId(), attempt, BigDecimal.ZERO, LEASE, 0L, 0L, job.getWorkspaceId());
+        return new ProxyRouting.BilledAttempt(sourceType, job.getId(), attempt, LEASE, 0L, 0L, job.getWorkspaceId());
     }
 
     private void register(ReviewJob job, ModelKind kind) {

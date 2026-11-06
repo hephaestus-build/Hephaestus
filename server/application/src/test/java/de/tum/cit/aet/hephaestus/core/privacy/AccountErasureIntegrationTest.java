@@ -666,8 +666,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var meters = new SimpleMeterRegistry();
         ProxyUsageAccumulator accumulator = accumulator(meters);
         var charge = new FrozenCharge("gpt-5", price);
-        var attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, jobId, 0, BigDecimal.ZERO, LEASE, 0L, 0L, workspaceId);
+        var attempt = new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, jobId, 0, LEASE, 0L, 0L, workspaceId);
         assertThat(attemptUsage.registerCall(jobId, workspaceId, 0, LEASE, ModelKind.CHAT, charge))
                 .isTrue();
         accumulator.accumulate(attempt, null, new ProxyTokenUsage(1000, 100, 0, 0, 0));
@@ -1443,7 +1442,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var meters = new SimpleMeterRegistry();
         MentorTurnUsageAccumulator accumulator = mentorAccumulator(meters);
         var call = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, turn.getLeaseId());
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getLeaseId());
         accumulator.accumulate(call, new ProxyTokenUsage(100_000, 0, 0, 0, 0));
 
         personData.requestErasure(requestId, administratorId, false);
@@ -1536,7 +1535,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var meters = new SimpleMeterRegistry();
         MentorTurnUsageAccumulator accumulator = mentorAccumulator(meters);
         var call = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, turn.getLeaseId());
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getLeaseId());
         accumulator.accumulate(call, new ProxyTokenUsage(100_000, 0, 0, 0, 0));
 
         // The take-back commits and dates the attempt; the billing of the lost attempt has not run yet.

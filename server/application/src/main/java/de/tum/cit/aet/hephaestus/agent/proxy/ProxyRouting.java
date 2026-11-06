@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -45,8 +44,7 @@ public record ProxyRouting(
     }
 
     /**
-     * The one execution this credential bills to, with identity and spend read in the same instant so
-     * a caller cannot pair one execution's identity with another's spend.
+     * The one execution this credential bills to.
      *
      * @param sourceId the {@code review_job} id, or the {@code mentor_turn} id
      * @param number the row's {@code attempt} when the token was validated. Orphan recovery and the Heph turn lease
@@ -54,11 +52,10 @@ public record ProxyRouting(
      *     authenticated is still out, so a late call is settled on this attempt's own measurement, never on whoever
      *     owns the row now.
      * @param leaseId the lease that authenticated this attempt
-     * @param spentUsd priced with the rates frozen onto the execution at admission
-     * @param directModelTokens the tokens that the attempt's direct model calls used on every slot, read with
-     *     {@code spentUsd}; 0 for every other call
-     * @param directModelSearchUnits the search units that the attempt's direct reranking calls billed, read with
-     *     {@code spentUsd}; 0 for every other call
+     * @param directModelTokens the tokens that the attempt's direct model calls used on every slot; 0 for every other
+     *     call
+     * @param directModelSearchUnits the search units that the attempt's direct reranking calls billed; 0 for every
+     *     other call
      * @param workspaceId the job's workspace when the call was authenticated; a review call is settled only in it.
      *     {@code null} for a mentor turn
      */
@@ -66,35 +63,27 @@ public record ProxyRouting(
             UsageSourceType sourceType,
             UUID sourceId,
             int number,
-            BigDecimal spentUsd,
             @Nullable UUID leaseId,
             long directModelTokens,
             long directModelSearchUnits,
             @Nullable Long workspaceId) {
 
-        public BilledAttempt(
-                UsageSourceType sourceType, UUID sourceId, int number, BigDecimal spentUsd, @Nullable UUID leaseId) {
-            this(sourceType, sourceId, number, spentUsd, leaseId, 0L, 0L, null);
+        public BilledAttempt(UsageSourceType sourceType, UUID sourceId, int number, @Nullable UUID leaseId) {
+            this(sourceType, sourceId, number, leaseId, 0L, 0L, null);
         }
 
         public BilledAttempt(
                 UsageSourceType sourceType,
                 UUID sourceId,
                 int number,
-                BigDecimal spentUsd,
                 @Nullable UUID leaseId,
                 long directModelTokens,
                 long directModelSearchUnits) {
-            this(sourceType, sourceId, number, spentUsd, leaseId, directModelTokens, directModelSearchUnits, null);
+            this(sourceType, sourceId, number, leaseId, directModelTokens, directModelSearchUnits, null);
         }
     }
 
     public UUID sourceId() {
         return attempt.sourceId();
-    }
-
-    /** Spend the ledger cannot see yet, because it is only appended when a run ends. */
-    public BigDecimal inFlightSpendUsd() {
-        return attempt.spentUsd();
     }
 }

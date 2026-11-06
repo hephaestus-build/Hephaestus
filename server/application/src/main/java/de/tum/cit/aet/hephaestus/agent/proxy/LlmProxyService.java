@@ -482,6 +482,13 @@ class LlmProxyService {
         }
         ProxyTransportClosure transports = new ProxyTransportClosure();
         try {
+            // A wait for capacity can outlast the check above, while other calls of the workspace settle.
+            if (accounting.refuseForBudget(routing)) {
+                return refusal(
+                        spendingRefusal,
+                        ReviewModelGateway.Refusal.BUDGET,
+                        budgetReachedMessage(routing.connectionScope()));
+            }
             LlmConnectionHealth.Permit permit = health.acquire(routing.connectionScope(), routing.connectionId());
             if (permit == null) {
                 accounting.recordError(routing.apiProtocol());

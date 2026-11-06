@@ -180,7 +180,7 @@ class ReviewAttemptLateUsageIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     private static ProxyRouting.BilledAttempt billed(ReviewJob job, int attempt, UsageSourceType type, long workspace) {
-        return new ProxyRouting.BilledAttempt(type, job.getId(), attempt, BigDecimal.ZERO, LEASE, 0L, 0L, workspace);
+        return new ProxyRouting.BilledAttempt(type, job.getId(), attempt, LEASE, 0L, 0L, workspace);
     }
 
     private void call(ReviewJob job, int attempt, int input, int output) {

@@ -241,6 +241,35 @@ routing do not change: as § Decision says, a new need is a new purpose value.
 A practice script host sends up to 4 direct model calls at a time. The term counts only calls that have
 returned, so the direct calls of one attempt can overshoot the cap by those calls, not by one.
 
+## Update — 2026-11-06: running work shares one headroom
+
+Supersedes § How tight the cap is, and its **Concurrency** item.
+Each execution was bounded on its own, so N executions could together reach N times the cap.
+Calls that waited for capacity also passed the gate before their wait.
+
+We considered a reservation per call and rejected it.
+A reservation needs a cost bound before the call, and the proxy has none: it has no tokenizer, and output length is unknown.
+It also adds a lock per purse on the hot path, recovery for a crashed holder, and refusals near the cap from estimates alone.
+
+The gate now judges the ledger plus the settled spend of every running review attempt and conversation turn of the workspace, per purse.
+It reads that sum fresh, only for a workspace with a cap, and again after the call's grant, right before dispatch.
+`BilledAttempt#spentUsd` is gone: the sum holds the attempt's own spend.
+The ledger read is cached for 5 seconds instead of 30.
+A run leaves the sum when it ends, and a longer cache would hide its spend for longer.
+
+For each purse, the overshoot is at most the calls in flight at the crossing, each at the cost of the most expensive single call, plus the spend of runs that ended within the cache time.
+Calls in flight are bounded by the call limit of the pools that the workspace uses.
+`LlmProxyIntegrationTest` pins it with attempts that spend at once.
+
+Excluded from the bound, and stated in `docs/admin/production-setup.mdx`:
+
+- A call whose usage Hephaestus never recorded: it was cancelled, it stalled or failed in mid-stream, or its provider reported no usage or an unreadable one. Tokens and charges are never estimated, so the cap does not count such a call. Its counters show it.
+- Running spend on a model without a price. It counts as zero until the run ends, and the ledger then makes the month unverifiable.
+- A runner's report that exceeds the proxy's total, which the ledger takes at the end of the run.
+- A turn that an account merge takes back: its ledger row comes after commit, a moment after it leaves the sum.
+
+The submit and claim gates still read the ledger alone: they decide whether work may start, and the proxy stops it at its next call.
+
 ## Update — 2026-10-14 (#2656): the job table is renamed
 
 `agent_job` is renamed; see [ADR 0025](0025-agent-job-queue-on-postgresql.md#update--2026-10-14-2656-the-job-table-and-classes-are-renamed).

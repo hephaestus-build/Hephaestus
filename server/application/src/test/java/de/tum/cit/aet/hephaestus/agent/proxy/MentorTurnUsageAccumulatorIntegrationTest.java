@@ -249,7 +249,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
 
     private ProxyRouting.BilledAttempt attempt(MentorTurn turn) {
         return new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, turn.getLeaseId());
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), turn.getLeaseId());
     }
 
     private void accumulate(ProxyRouting.BilledAttempt attempt, ProxyTokenUsage usage) {
@@ -453,7 +453,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
     void shouldDropACallWhenItsAttemptNumberIsNotTheRunningOne() {
         MentorTurn turn = admittedTurn(ADMITTED);
         var stale = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt() + 1, BigDecimal.ZERO, turn.getLeaseId());
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt() + 1, turn.getLeaseId());
 
         accumulate(stale, new ProxyTokenUsage(500, 5, 0, 0, 0));
 
