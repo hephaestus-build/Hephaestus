@@ -169,7 +169,7 @@ public interface ExecSandboxes {
     /**
      * @param workerGone whether the worker that created the sandbox is positively gone; an unknown state is not gone
      */
-    record Listed(String id, String sandboxId, String workerInstance, boolean workerGone) {}
+    record Listed(String id, String sandboxId, String workerInstance, boolean workerGone, boolean ended) {}
 
     /** A staged path never leaves {@code /workspace}: each of its names is one plain name. */
     private static void requireName(String name) {
