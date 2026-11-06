@@ -496,6 +496,10 @@ jobs:
               - 'scripts/api-generator/**'
             agent-images:
               - 'docker/agents/**'
+              # Tool protocol v1, which the agent image compiles from its one source.
+              - 'server/application/src/main/resources/agent/tool-protocol.ts'
+              - 'server/application/src/main/resources/agent/tool-client.ts'
+              - 'server/application/src/main/resources/agent/tools-server.ts'
             postgres-image:
               - 'docker/postgres/**'
             # What changes an upgrade from the last release: a migration and the baseline synchronization.

@@ -14,5 +14,5 @@
 		"inlineSources": true,
 		"outDir": "dist"
 	},
-	"files": ["gateway-init.ts", "gateway-run.ts"]
+	"files": ["gateway-init.ts", "gateway-run.ts", "tools-server.ts", "tool-client.ts"]
 }

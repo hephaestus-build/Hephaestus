@@ -312,7 +312,17 @@ export async function prepareHost(): Promise<NodeJS.ProcessEnv> {
 	const local = `localhost:5111/hephaestus-build/agent-pi:${tag}`;
 	await run(
 		"docker",
-		["build", "--quiet", "-t", local, "-f", "docker/agents/pi/Dockerfile", "docker/agents"],
+		[
+			"build",
+			"--quiet",
+			"-t",
+			local,
+			"--build-context",
+			"agent-runtime=server/application/src/main/resources/agent",
+			"-f",
+			"docker/agents/pi/Dockerfile",
+			"docker/agents",
+		],
 		{ cwd: ROOT, stdout: "ignore" },
 	);
 	await run("docker", ["push", "--quiet", local], { stdout: "ignore" });

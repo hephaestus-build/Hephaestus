@@ -1880,7 +1880,12 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 		return { image, repository, indexDigest: digest };
 	};
 	const tag = `dev-${createHash("sha256").update(ROOT).digest("hex").slice(0, 12)}`;
-	const build = async (image: string, context: string, dockerfile?: string) => {
+	const build = async (
+		image: string,
+		context: string,
+		dockerfile?: string,
+		buildContexts: string[] = [],
+	) => {
 		await run(
 			"docker",
 			[
@@ -1888,6 +1893,7 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 				"--quiet",
 				"-t",
 				`hephaestus-local/${image}:${tag}`,
+				...buildContexts.flatMap((named) => ["--build-context", named]),
 				...(dockerfile === undefined ? [] : ["-f", dockerfile]),
 				context,
 			],
@@ -1898,7 +1904,9 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 		);
 	};
 	await build("webapp", ".", "webapp/Dockerfile");
-	await build("agent-pi", "docker/agents", "docker/agents/pi/Dockerfile");
+	await build("agent-pi", "docker/agents", "docker/agents/pi/Dockerfile", [
+		"agent-runtime=server/application/src/main/resources/agent",
+	]);
 	await build("postgres", "docker/postgres");
 	await run(
 		path.join(ROOT, "server", process.platform === "win32" ? "gradlew.bat" : "gradlew"),
