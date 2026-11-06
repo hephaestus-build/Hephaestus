@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
@@ -39,6 +40,41 @@ class KubernetesIsolationProbeJobsTest {
 
     private @Nullable KubernetesMockServer server;
     private @Nullable KubernetesClient client;
+
+    /** The route through the Service is proved both ways: a review reaches it, and a Pod of another kind does not. */
+    @Test
+    void shouldProveTheGatewayServiceRouteBothWays() {
+        KubernetesClient api = Objects.requireNonNull(client);
+        var worker = KubernetesFixtures.worker(SANDBOXES);
+        var probe = new KubernetesIsolationProbe(
+                api,
+                new KubernetesPods(api, worker, 10, ImagePullPolicy.IF_NOT_PRESENT),
+                new KubernetesSandboxJobs(api, worker),
+                worker,
+                "agent",
+                9090);
+
+        assertThat(probe.gateways(Optional.of("10.43.0.9"), true))
+                .contains(new KubernetesIsolationProbe.Target("gateway Service", "10.43.0.9", 8081, true));
+        assertThat(probe.gateways(Optional.of("10.43.0.9"), false))
+                .contains(new KubernetesIsolationProbe.Target("gateway Service", "10.43.0.9", 8081, false));
+        assertThat(probe.gateways(Optional.empty(), true))
+                .extracting(KubernetesIsolationProbe.Target::name)
+                .containsExactly("gateway");
+    }
+
+    /** A DNS failure says nothing about the boundary: it must not read as a failed gate on a healthy cluster. */
+    @Test
+    void shouldNameAServiceThatDoesNotResolveWithoutFailingWhereNoServiceExists() {
+        assertThat(KubernetesIsolationProbe.unresolvedRoute("gateway.heph.svc", Optional.empty()))
+                .singleElement()
+                .asString()
+                .contains("gateway.heph.svc");
+        assertThat(KubernetesIsolationProbe.unresolvedRoute("gateway.heph.svc", Optional.of("10.43.0.9")))
+                .isEmpty();
+        assertThat(KubernetesIsolationProbe.unresolvedRoute("", Optional.empty()))
+                .isEmpty();
+    }
 
     @Test
     void shouldRunEachProbePodAsABoundedJobAndLeaveNoJobWhenTheRunEnds() throws InterruptedException {

@@ -196,6 +196,42 @@ spec:
         - port: {{ $port }}
           protocol: TCP
 ---
+# Callers reach a worker that holds its isolation proof, because readiness carries that proof.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "sandbox-gateway") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "worker") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "hephaestus.selectorLabels" (dict "root" . "component" "worker") | nindent 4 }}
+  ports:
+    - name: sandbox-gateway
+      port: {{ $port }}
+      targetPort: sandbox-gateway
+      protocol: TCP
+---
+# The isolation probe proves a sandbox's route through a Service before its worker is ready, so this
+# one also selects a worker that is not ready. Nothing else calls it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "sandbox-gateway-probe") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "worker") | nindent 4 }}
+spec:
+  type: ClusterIP
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "hephaestus.selectorLabels" (dict "root" . "component" "worker") | nindent 4 }}
+  ports:
+    - name: sandbox-gateway
+      port: {{ $port }}
+      targetPort: sandbox-gateway
+      protocol: TCP
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -216,6 +252,14 @@ spec:
               kubernetes.io/metadata.name: {{ $sandboxes }}
           podSelector:
             {{- include "hephaestus.policy.gatewaySources" . | nindent 12 }}
+      ports:
+        - port: {{ $port }}
+          protocol: TCP
+    # The conversation loop calls the gateway port.
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "hephaestus.selectorLabels" (dict "root" . "component" "conversation-loop") | nindent 14 }}
       ports:
         - port: {{ $port }}
           protocol: TCP
@@ -356,6 +400,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            - name: HEPHAESTUS_SANDBOX_KUBERNETES_GATEWAY_PROBE_SERVICE
+              value: {{ printf "%s.%s.svc" (include "hephaestus.name" (dict "root" . "component" "sandbox-gateway-probe")) .Release.Namespace | quote }}
             - name: HEPHAESTUS_SANDBOX_KUBERNETES_RUNTIME_CLASS_NAME
               value: {{ $runtime.runtimeClassName | quote }}
             - name: HEPHAESTUS_SANDBOX_KUBERNETES_SECCOMP_PROFILE

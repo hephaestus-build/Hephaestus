@@ -60,7 +60,7 @@ public class KubernetesWorker {
         return workerId;
     }
 
-    /** The gateway as this worker's sandboxes reach it: the worker Pod's own address, never a Service. */
+    /** The gateway as the sandboxes that this worker starts reach it: the worker Pod's own address. */
     public String gatewayUrl() {
         return "http://" + properties.gatewayHost() + ":" + gatewayPort;
     }

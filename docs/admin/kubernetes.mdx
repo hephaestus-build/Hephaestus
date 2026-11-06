@@ -26,7 +26,7 @@ Hephaestus supports the chart on a cluster with these items:
   Below 1.35, the chart refuses the cluster.
   Upgrade a cluster at an older minor, for example 1.30 or 1.33, before Hephaestus runs on it.
   [ADR 0060](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0060-the-kubernetes-floor-follows-upstream-support.md) gives the reason.
-- A network plugin that enforces NetworkPolicy for egress and for ingress.
+- A network plugin that enforces NetworkPolicy for egress and for ingress, also on traffic to a Service address.
   The worker's isolation probe stops the worker on a plugin that does not ([Sandbox prerequisites](#sandbox-prerequisites)).
 - A Gateway API controller for `HTTPRoute` `v1` with the four features in [Gateway routes](#gateway-routes).
 - A storage class for `ReadWriteOnce` volumes, for the bundled PostgreSQL and NATS.
@@ -1441,9 +1441,9 @@ Each worker runs the isolation probe in the sandbox namespace at its start, and 
 The probe checks these items on the running cluster:
 
 - The API server refuses, in a dry run, a Pod that the Baseline standard admits and the Restricted standard refuses.
-- A Pod with the labels of a review sandbox reaches the worker's gateway port.
+- A Pod with the labels of a review sandbox reaches the worker's gateway port, directly and through a Service.
   It does not reach the worker's management port, the Kubernetes API, or the cluster DNS server.
-- A Pod of no sandbox kind does not reach the gateway port. Turn sandboxes have the same policy.
+- A Pod of no sandbox kind reaches the gateway port by neither route. Turn sandboxes have the same policy.
 - The probe Pods have no service account token, a read-only root filesystem, and a non-root user.
 - A named RuntimeClass exists: without it, no probe Pod runs.
 - A Pod with `hostUsers: false` has a private user mapping. A RuntimeClass does not replace this requirement.
@@ -1458,6 +1458,7 @@ They stay queued for a ready worker. Reviews and turns that already run continue
 
 A Pod that reaches a node but cannot start with the sandbox configuration fails the probe.
 A later probe whose Pods cannot start, because the sandbox quota is full or the nodes have no room, proves nothing.
+The same is true when the worker cannot resolve the name of its gateway probe Service.
 The worker logs a warning and keeps its last passing proof.
 A Pod that the sandbox quota refuses delays that verdict by up to 2 minutes.
 
