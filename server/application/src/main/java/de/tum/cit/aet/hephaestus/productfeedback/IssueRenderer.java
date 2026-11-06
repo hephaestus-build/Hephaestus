@@ -44,7 +44,7 @@ final class IssueRenderer {
     }
 
     /**
-     * @param repository {@code owner/name} the issue goes to, for the related-issue link
+     * @param publicRepository {@code owner/name} of the public repository, where a related issue lives; null for none
      * @param privateReason the reason line of a private issue, or null for a public one
      * @param reportId the report's id, written on private issues so that instance admins can find the reporter
      * @param mention the reporter's GitHub login, only when they opted in and the issue is public
@@ -53,7 +53,7 @@ final class IssueRenderer {
     static Rendered render(
             Draft draft,
             Context context,
-            String repository,
+            @Nullable String publicRepository,
             @Nullable String privateReason,
             @Nullable String reportId,
             @Nullable String mention,
@@ -76,9 +76,9 @@ final class IssueRenderer {
         }
         section(body, "Version", context.release() == null ? "" : code(context.release()));
         section(body, "Environment", environment(context));
-        if (draft.related() != null)
+        if (draft.related() != null && publicRepository != null)
             body.append("Possibly related: https://github.com/")
-                    .append(repository)
+                    .append(publicRepository)
                     .append("/issues/")
                     .append(draft.related())
                     .append("\n\n");

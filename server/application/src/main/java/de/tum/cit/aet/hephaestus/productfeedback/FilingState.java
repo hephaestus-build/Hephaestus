@@ -16,7 +16,10 @@ enum FilingState {
     FILING,
     /** On GitHub. */
     FILED,
-    /** Not on GitHub: the admin email carries it, because no destination is set or filing is paused. */
+    /**
+     * Not on GitHub: it stays in the admin console, because no destination is set or filing is paused. An email is sent
+     * only when the instance can send one, so this state says nothing about delivery.
+     */
     EMAILED,
     /** Filing failed for good; it waits in Needs action, and the admin email has carried it. */
     STOPPED;

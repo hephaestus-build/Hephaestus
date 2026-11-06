@@ -107,6 +107,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("productfeedback.ProductFeedbackEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.ProductFeedbackUpdateEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.ProductFeedbackCleanupIntegrationTest", "product-feedback-github"),
+            assignment("productfeedback.ProductFeedbackTrustGatesIntegrationTest", "product-feedback-github"),
             assignment("testconfig.BaseIntegrationTest", "base"),
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"));
 
@@ -289,6 +290,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "productfeedback.ProductFeedbackEmailIntegrationTest",
             "productfeedback.ProductFeedbackUpdateEmailIntegrationTest",
             "productfeedback.ProductFeedbackCleanupIntegrationTest",
+            "productfeedback.ProductFeedbackTrustGatesIntegrationTest",
             "testconfig.BaseIntegrationTest",
             "testconfig.RealAuthIntegrationTest");
 
@@ -320,6 +322,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
             "productfeedback.ProductFeedbackCleanupIntegrationTest",
+            "productfeedback.ProductFeedbackTrustGatesIntegrationTest",
             "agent.job.ReviewJobEventListenerIntegrationTest",
             "agent.practice.live.PracticeScriptLiveLlmTest",
             "core.runtime.WorkerGraphWithoutCluster",

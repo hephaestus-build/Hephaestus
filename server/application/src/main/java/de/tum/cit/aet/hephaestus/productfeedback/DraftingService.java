@@ -22,6 +22,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 class DraftingService implements ProductFeedbackDrafting {
     static final Duration LEASE = Duration.ofMinutes(2);
     static final Duration HOLD = Duration.ofMinutes(5);
+    /** How long a report waits for a worker before the server routes it without a draft. */
+    static final Duration EXPIRY = Duration.ofMinutes(10);
+
     static final int ACCOUNT_DAILY_DRAFTS = 5;
 
     private final ProductFeedbackFilingRepository filings;

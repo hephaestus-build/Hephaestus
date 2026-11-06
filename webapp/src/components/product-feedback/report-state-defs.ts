@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, Clock, Mail, PenLine, Send } from "lucide-react";
+import { CircleAlert, CircleCheck, Clock, Inbox, PenLine, Send } from "lucide-react";
 
 import type { MyProductFeedback } from "@/api/types.gen";
 import type { StatusDefs } from "@/components/common/status-def";
@@ -6,10 +6,10 @@ import type { StatusDefs } from "@/components/common/status-def";
 /** Where one of the person's reports is, as Your product feedback badges it. */
 export const REPORT_STATE_DEFS: StatusDefs<MyProductFeedback["state"]> = {
 	SENT_TO_ADMINS: {
-		label: "With the admins",
-		icon: Mail,
+		label: "Saved for admins",
+		icon: Inbox,
 		badgeVariant: "secondary",
-		description: "The admins of this instance have it. It is not on GitHub.",
+		description: "It is saved on this instance for its admins. It is not on GitHub.",
 	},
 	DRAFTING: {
 		label: "Drafting",
@@ -40,6 +40,6 @@ export const REPORT_STATE_DEFS: StatusDefs<MyProductFeedback["state"]> = {
 		icon: CircleAlert,
 		badgeVariant: "warning",
 		description:
-			"We could not file it on GitHub. The admins of this instance have it and can try again.",
+			"We could not file it on GitHub. It is saved for the admins of this instance, who can try again.",
 	},
 };

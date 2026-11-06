@@ -90,8 +90,12 @@ class DestinationService {
                             "The app cannot reach " + privateName + ". Install it there with Issues: read and write."));
             if (!found.isPrivate()) throw invalid(privateName + " is public. The private repository must be private.");
         }
-        if (publicName != null && issues.repository(publicName).isEmpty())
-            throw invalid("The app cannot reach " + publicName + ". Install it there with Issues: read and write.");
+        if (publicName != null) {
+            var found = issues.repository(publicName)
+                    .orElseThrow(() -> invalid(
+                            "The app cannot reach " + publicName + ". Install it there with Issues: read and write."));
+            if (found.isPrivate()) throw invalid(publicName + " is private. The public repository must be public.");
+        }
         if (publicName != null && publicName.equalsIgnoreCase(privateName))
             throw invalid("The public and private repositories must differ.");
         transactions.executeWithoutResult(status -> {
@@ -121,7 +125,10 @@ class DestinationService {
         return get();
     }
 
-    /** Reads the public repository's open issues for duplicate suggestions. */
+    /**
+     * Reads the public repository's open issues for duplicate suggestions. A repository that turned private keeps its
+     * name in the settings, but its titles must not reach a model that drafts public text.
+     */
     @Scheduled(fixedDelayString = "PT15M", initialDelayString = "PT1M")
     @SchedulerLock(name = "product-feedback-snapshot", lockAtMostFor = "PT10M", lockAtLeastFor = "PT1M")
     @WorkspaceAgnostic("The instance's one destination row; no workspace")
@@ -131,6 +138,10 @@ class DestinationService {
         try {
             var found = issues.repository(name).orElse(null);
             if (found == null) return;
+            if (found.isPrivate()) {
+                clearSnapshot(name);
+                return;
+            }
             var open = issues.openIssues(found, Snapshot.LIMIT).stream()
                     .map(issue -> new Snapshot.Entry(issue.number(), issue.title()))
                     .toList();
@@ -149,6 +160,16 @@ class DestinationService {
                 .ifPresent(destination -> {
                     destination.setSnapshot(Snapshot.write(open));
                     destination.setSnapshotAt(clock.instant());
+                }));
+    }
+
+    private void clearSnapshot(String name) {
+        transactions.executeWithoutResult(status -> repository
+                .findById(ProductFeedbackDestination.SINGLETON)
+                .filter(destination -> name.equalsIgnoreCase(destination.getPublicRepository()))
+                .ifPresent(destination -> {
+                    destination.setSnapshot(null);
+                    destination.setSnapshotAt(null);
                 }));
     }
 

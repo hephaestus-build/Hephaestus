@@ -88,9 +88,11 @@ class RoutingService {
     }
 
     private boolean routeOne() {
-        UUID id = filings.claimableAnswer().orElse(null);
+        Instant now = clock.instant();
+        UUID id = filings.claimableAnswer(now.minus(DraftingService.EXPIRY)).orElse(null);
         if (id == null) return false;
         ProductFeedbackFiling filing = filings.lock(id).orElseThrow();
+        if (filing.getState() != FilingState.ANSWERED) meters.draft("expired");
         ProductFeedback report = feedback.findById(id).orElseThrow();
         ProductFeedbackDestination destination = destinations.current();
         Draft draft = null;
@@ -105,7 +107,7 @@ class RoutingService {
                 meters.draft("invalid");
             }
         }
-        route(filing, report, destination, draft, clock.instant());
+        route(filing, report, destination, draft, now);
         return true;
     }
 

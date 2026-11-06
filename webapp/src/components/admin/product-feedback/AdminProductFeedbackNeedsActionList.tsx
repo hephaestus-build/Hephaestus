@@ -53,7 +53,7 @@ export interface AdminProductFeedbackNeedsActionListProps {
 const ROUTE_WORDS: Record<ProductFeedbackNeedsAction["route"], string> = {
 	PUBLIC: "a public issue",
 	PRIVATE: "a private issue",
-	EMAIL: "the admin email",
+	EMAIL: "the list of reports not on GitHub",
 };
 
 const SKELETON_ROWS = 2;
