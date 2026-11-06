@@ -116,5 +116,6 @@ Admin Guide (`docs/admin/`), and the ADR links to it.
 | [0075](0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) | A transaction is one use case and talks to nothing | Accepted (2026-11-03). Builds on 0003 and 0044. Relates to 0076. |
 | [0076](0076-reads-are-shaped-like-the-screen.md) | Reads are shaped like the screen, entities are for writes | Accepted (2026-11-03). Relates to 0072 and 0075. |
 | [0077](0077-provider-mirrors-are-shared-and-the-monitored-scope-isolates-them.md) | Provider mirrors are shared, and the monitored scope isolates them | Accepted (2026-11-04). Amends 0004. |
+| [0078](0078-lifecycles-are-explicit-and-rigor-follows-the-damage.md) | Lifecycles are explicit, and rigor follows the damage | Accepted (2026-11-06) |
 
 Template: [0000-template.md](0000-template.md).
