@@ -1,16 +1,13 @@
-import type { MyProductFeedback } from "@/api/types.gen";
+import type { FeedbackReceipt, MyProductFeedback } from "@/api/types.gen";
 
 /**
- * The approved wording for the choice about public GitHub issues (lane PF legal draft, part C).
+ * The wording for the choice about public GitHub issues. `detail` is the approved disclosure.
  * The operator's privacy notice names the model provider, so the screens say "An AI model".
  */
 export const SHARING_COPY = {
-	question: "Can this become a public GitHub issue?",
-	share: { title: "Share publicly" },
-	keepPrivate: { title: "Keep private" },
-	footnote: "We remember your choice. You can change it for each report.",
-	switchLabel: "Public GitHub issue",
-	switchDetail: "Checks run before publication. Public copies can remain.",
+	label: "Post as a public GitHub issue",
+	detail:
+		"Hephaestus removes personal details it finds, but it can miss some. Anyone can read a public issue, and copies can remain after you remove it.",
 	makePrivate:
 		"Move this issue to the private repository? It disappears from public view. Copies made while it was public can remain.",
 } as const;
@@ -42,6 +39,28 @@ export function reasonSentence(reason: string): string {
 /** What redaction took out, as a line the person can check. */
 export function removedLine(removed: string): string {
 	return `Removed: ${removed}`;
+}
+
+/**
+ * What the toast says right after Send: the route the server took, so that nothing looks lost. Your
+ * reports then shows the switch for a public issue, or says why a report must stay private.
+ *
+ * @param canGoPublic the instance has a public repository
+ */
+export function receiptLine(route: FeedbackReceipt["route"], canGoPublic: boolean): string {
+	switch (route) {
+		case "PUBLIC": {
+			return "Your report is saved. It can become a public GitHub issue after the checks pass.";
+		}
+		case "PRIVATE": {
+			return canGoPublic
+				? "Your report is saved. It becomes a private GitHub issue for the Hephaestus maintainers. To ask for a public issue, open Your reports."
+				: "Your report is saved. It becomes a private GitHub issue for the Hephaestus maintainers.";
+		}
+		case "EMAIL": {
+			return "It is saved for the admins of this instance. It is not on GitHub.";
+		}
+	}
 }
 
 /** A change the person makes to one of their reports; each control waits out the one in flight. */

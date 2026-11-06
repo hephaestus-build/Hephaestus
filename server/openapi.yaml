@@ -17734,8 +17734,8 @@ components:
           format: int64
         issueUrl:
           type: string
-          description: "the public issue; null for a private issue, which the person\
-            \ cannot open"
+          description: "the issue the person can open: a public one, or a private\
+            \ one for an instance admin"
         kind:
           type: string
           enum:

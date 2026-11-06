@@ -27,9 +27,6 @@ function submissionError(error: unknown): string {
 	if (status === 401) {
 		return "Your session has expired. Copy your draft before signing in again.";
 	}
-	if (status === 422) {
-		return `Choose whether this can become a public GitHub issue, then send it again. ${DRAFT_KEPT}`;
-	}
 	return `We could not send that. ${problemDetailOf(error, "The server refused the request.")} ${DRAFT_KEPT}`;
 }
 
@@ -49,10 +46,9 @@ export function useSubmitProductFeedback(
 			callbacks.onAccepted?.(receipt);
 		},
 		onError: (error: unknown) => callbacks.onRejected?.(submissionError(error)),
-		// A first answer to the sharing question is the person's choice from now on; a 422 means the
-		// composer asked too little, so it reads the choice again.
-		onSettled: (_data: unknown, error: unknown, variables: { body: FeedbackRequest }) => {
-			if (variables.body.share !== undefined || problemStatusOf(error) === 422) {
+		// A tick is remembered, so the next composer starts from it. Unticking applies to one report.
+		onSettled: (_data: unknown, _error: unknown, variables: { body: FeedbackRequest }) => {
+			if (variables.body.share === true) {
 				void queryClient.invalidateQueries({ queryKey: getProductFeedbackSharingQueryKey() });
 			}
 		},
@@ -80,7 +76,7 @@ export function useSubmitProductFeedback(
 	};
 }
 
-/** The composer's question about public issues, read while the composer is open. */
+/** What the composer can offer about a public issue, read while the composer is open. */
 export function useProductFeedbackSharing(enabled: boolean) {
 	const query = useQuery({ ...getProductFeedbackSharingOptions(), enabled });
 	let sharing: ProductFeedbackSharingChoice;
@@ -88,17 +84,10 @@ export function useProductFeedbackSharing(enabled: boolean) {
 		sharing = enabled ? { status: "loading" } : { status: "off" };
 	} else if (query.isError) {
 		sharing = { status: "error" };
-	} else if (!hasText(query.data.publicRepository)) {
-		sharing = query.data.filesToGitHub ? { status: "private" } : { status: "off" };
-	} else if (query.data.allowPublic === undefined) {
-		sharing = { status: "ask" };
+	} else if (hasText(query.data.publicRepository)) {
+		sharing = { status: "public", remembered: query.data.allowPublic === true };
 	} else {
-		sharing = { status: "remembered", allowPublic: query.data.allowPublic };
+		sharing = query.data.filesToGitHub ? { status: "private" } : { status: "off" };
 	}
-	return {
-		sharing,
-		retry: () => {
-			void query.refetch();
-		},
-	};
+	return { sharing };
 }

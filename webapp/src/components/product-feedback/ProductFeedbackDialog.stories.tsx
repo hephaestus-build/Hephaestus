@@ -6,19 +6,13 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { ProductFeedbackDialog } from "./ProductFeedbackDialog";
 
-const context = {
-	pagePath: "/w/$workspaceSlug/practice-profile",
-	userAgent: "Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0",
-};
-
 const meta = {
 	component: ProductFeedbackDialog,
 	args: {
 		open: true,
 		onOpenChange: fn(),
-		onRetrySharing: fn(),
 		reportsLink: <a href="/product-feedback">Your reports</a>,
-		context,
+		pagePath: "/w/$workspaceSlug/practice-profile",
 		sharing: { status: "off" },
 		isSubmitting: false,
 		onSubmit: fn(async () => true),
@@ -37,28 +31,15 @@ export const SendsFeedbackWithoutContext: Story = {
 			dialog.getByRole("textbox", { name: "Your feedback" }),
 			"The list jumps when I open it.",
 		);
-		await userEvent.click(dialog.getByRole("button", { name: "Send feedback" }));
+		await userEvent.click(dialog.getByRole("button", { name: "Send" }));
 		await expect(dialog.getByRole("textbox", { name: "Your feedback" })).toHaveValue("");
-	},
-};
-
-export const OptionalPageDetails: Story = {
-	play: async () => {
-		const dialog = within(await screen.findByRole("dialog"));
-		await userEvent.click(dialog.getByText("Add page details (optional)"));
-		const attach = dialog.getByRole("checkbox", { name: "Include page and browser details" });
-		await expect(attach).not.toBeChecked();
-		await expect(dialog.getByText(context.pagePath)).toBeVisible();
-		await expect(dialog.getByText(context.userAgent)).toBeVisible();
-		await userEvent.click(attach);
-		await expect(dialog.getByText("Page details included")).toBeVisible();
 	},
 };
 
 export const EmptySubmission: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await userEvent.click(dialog.getByRole("button", { name: "Send feedback" }));
+		await userEvent.click(dialog.getByRole("button", { name: "Send" }));
 		await expect(dialog.getByText("Write your feedback before sending.")).toBeVisible();
 		await expect(dialog.getByRole("textbox", { name: "Your feedback" })).toHaveFocus();
 	},
@@ -97,48 +78,52 @@ export const Error: Story = {
 	},
 };
 
-export const NoContext: Story = { args: { context: undefined } };
-export const FirstTimeChoice: Story = {
-	args: { sharing: { status: "ask" } },
-	play: async () => {
+export const NoPage: Story = { args: { pagePath: undefined } };
+
+/** The first report: Send works at once, and nothing is ticked for the person. */
+export const FirstReport: Story = {
+	args: { sharing: { status: "public", remembered: false } },
+	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await userEvent.type(
 			dialog.getByRole("textbox", { name: "Your feedback" }),
 			"Let me pin a practice.",
 		);
-		const keep = await dialog.findByRole("radio", { name: "Keep private" });
-		await expect(keep).not.toBeChecked();
-		await expect(dialog.getByRole("radio", { name: "Share publicly" })).not.toBeChecked();
-		await userEvent.click(dialog.getByRole("button", { name: "Send feedback" }));
-		await expect(dialog.getByText("Choose whether your report can become public.")).toBeVisible();
-		await expect(keep).toHaveFocus();
-		await userEvent.click(keep);
-		await expect(dialog.queryByText("Choose whether your report can become public.")).toBeNull();
+		await expect(
+			dialog.getByRole("checkbox", { name: "Post as a public GitHub issue" }),
+		).not.toBeChecked();
+		await userEvent.click(dialog.getByRole("button", { name: "Send" }));
+		await expect(args.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ share: false }));
 	},
 };
 
 export const RememberedPublic: Story = {
-	args: { sharing: { status: "remembered", allowPublic: true } },
-};
-export const RememberedPrivate: Story = {
-	args: { sharing: { status: "remembered", allowPublic: false } },
+	args: { sharing: { status: "public", remembered: true } },
+	play: async () => {
+		const dialog = within(await screen.findByRole("dialog"));
+		await expect(
+			dialog.getByRole("checkbox", { name: "Post as a public GitHub issue" }),
+		).toBeChecked();
+	},
 };
 export const PrivateRepository: Story = { args: { sharing: { status: "private" } } };
 export const SharingLoading: Story = { args: { sharing: { status: "loading" } } };
+
+/** A failed lookup never blocks a report: it stays private, and the toast says so. */
 export const SharingError: Story = {
 	args: { sharing: { status: "error" } },
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await expect(dialog.getByRole("button", { name: "Retry" })).toBeVisible();
-		await expect(dialog.getByRole("button", { name: "Send feedback" })).toBeDisabled();
+		await expect(dialog.getByRole("button", { name: "Send" })).toBeEnabled();
+		await expect(dialog.queryByRole("checkbox")).toBeNull();
 	},
 };
 
 export const Narrow: Story = {
-	args: { sharing: { status: "ask" } },
+	args: { sharing: { status: "public", remembered: false } },
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async () => {
-		await screen.findByRole("radio", { name: "Share publicly" });
+		await screen.findByRole("checkbox", { name: "Post as a public GitHub issue" });
 		await expectNoPageOverflow();
 	},
 };

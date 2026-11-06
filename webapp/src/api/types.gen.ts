@@ -2934,7 +2934,7 @@ export type MyProductFeedback = {
     issueClosedAs?: string;
     issueNumber?: number;
     /**
-     * the public issue; null for a private issue, which the person cannot open
+     * the issue the person can open: a public one, or a private one for an instance admin
      */
     issueUrl?: string;
     kind: 'IDEA' | 'BUG' | 'FEEDBACK';

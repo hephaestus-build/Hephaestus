@@ -5,8 +5,8 @@ import { InlineLink } from "@/components/common/InlineLink";
 import {
 	PAGE_PATH_MAX_LENGTH,
 	ProductFeedbackDialog,
-	USER_AGENT_MAX_LENGTH,
 } from "@/components/product-feedback/ProductFeedbackDialog";
+import { receiptLine } from "@/components/product-feedback/sharing-copy";
 import { useProductFeedbackSharing, useSubmitProductFeedback } from "@/hooks/use-product-feedback";
 import { toast } from "@/lib/toast";
 
@@ -30,13 +30,15 @@ export default function ProductFeedbackComposer({
 	useEffect(() => {
 		openRef.current = open;
 	}, [open]);
+	const { sharing } = useProductFeedbackSharing(open);
 	const feedback = useSubmitProductFeedback(workspaceSlug, {
-		onAccepted: () => {
+		onAccepted: (receipt) => {
 			onOpenChange(false);
-			toast.success("Feedback saved", {
+			toast.success("Report sent", {
+				description: receiptLine(receipt.route, sharing.status === "public"),
 				duration: 10_000,
 				action: {
-					label: "Your reports",
+					label: "View",
 					onClick: () => {
 						void navigate({ to: "/product-feedback", search: { chromeWorkspace: workspaceSlug } });
 					},
@@ -52,7 +54,6 @@ export default function ProductFeedbackComposer({
 			}
 		},
 	});
-	const { sharing, retry } = useProductFeedbackSharing(open);
 	return (
 		<ProductFeedbackDialog
 			open={open}
@@ -62,15 +63,11 @@ export default function ProductFeedbackComposer({
 				}
 				onOpenChange(next);
 			}}
-			context={{
-				pagePath: route.slice(0, PAGE_PATH_MAX_LENGTH),
-				userAgent: navigator.userAgent.slice(0, USER_AGENT_MAX_LENGTH),
-			}}
+			pagePath={route.slice(0, PAGE_PATH_MAX_LENGTH)}
 			sharing={sharing}
 			isSubmitting={feedback.isPending}
 			error={feedback.error}
 			onSubmit={feedback.submit}
-			onRetrySharing={retry}
 			reportsLink={
 				<InlineLink
 					render={

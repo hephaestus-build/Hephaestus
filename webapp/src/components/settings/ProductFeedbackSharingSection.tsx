@@ -31,7 +31,7 @@ export function hasProductFeedbackSharing(state: ProductFeedbackSharingSectionSt
 const DATE_FORMAT = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
 /**
- * The remembered choice about public GitHub issues, which the composer asks the first time, and the
+ * The remembered choice about public GitHub issues, which a tick in the composer also sets, and the
  * opt-in mention. Each change is recorded with its date, so withdrawing is one switch.
  */
 export function ProductFeedbackSharingSection({ state }: ProductFeedbackSharingSectionProps) {

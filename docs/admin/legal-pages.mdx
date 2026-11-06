@@ -488,6 +488,7 @@ When you name a repository under **Product feedback → Destinations** in the in
 
 - **To your model provider for a draft.** Your instance-level model drafts an issue from each report.
   Hephaestus removes the email addresses, secrets, and known names that it finds before the text reaches the provider.
+  Each report also carries the page route, which holds no name or ID, and the release. Name both in your privacy notice.
 - **To GitHub, in your private repository.** Reports that stay private become issues there.
   GitHub stores them under your organization’s agreement with GitHub.
 - **To GitHub, in your public repository, only with the person’s choice.** Anyone can read these issues.
@@ -520,14 +521,15 @@ Before you name a public repository, also:
    Consent is valid only when a private report costs the person nothing.
    In Hephaestus, a private report reaches the same maintainers.
 2. Add the [public issues notice](#public-issues-notice) to your privacy notice.
-3. Check the first-report choice in a staging instance.
+3. Check the composer in a staging instance.
 
-The question is **Can this become a public GitHub issue?**
-Its options are **Yes, share it publicly** and **No, keep it private**, with neither selected.
+The box is **Post as a public GitHub issue**, and it is clear until the person selects it.
+A report sent with the box clear stays private.
 The dialog names the model provider and explains redaction limits and public copies.
 The [user guide](/user/product-feedback#choose-public-or-private) describes the choice and its withdrawal.
 
-Hephaestus records each choice and each withdrawal as an event with the notice version and time (Art. 7(1) GDPR).
+Hephaestus records each selection and each withdrawal as an event with the notice version and time (Art. 7(1) GDPR).
+A report sent with the box clear records no event.
 It does not decide the legal basis for you.
 Replace the placeholders in both templates with your deployment’s actual recipients, agreements, legal bases, and retention.
 
@@ -539,7 +541,8 @@ Replace the placeholders in both templates with your deployment’s actual recip
 When you send product feedback about Hephaestus, we store it on [example.org] and use it to improve
 Hephaestus. An AI model from [model provider] turns your report into a short issue. Before your
 text goes to [model provider], Hephaestus removes the email addresses, secrets and names it finds.
-It can miss some, so leave out other people's personal details.
+It can miss some, so leave out other people's personal details. Each report also carries the page
+route, which holds no name or ID, and the release.
 
 If you keep a report private, it becomes an issue in a private GitHub repository that only the
 [maintainers / team name] can read. The issue doesn't carry your name or email address. It

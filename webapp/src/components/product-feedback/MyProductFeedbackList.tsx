@@ -106,8 +106,8 @@ export function MyProductFeedbackList({ state, pending, ...actions }: MyProductF
 					</EmptyMedia>
 					<EmptyTitle>No reports yet</EmptyTitle>
 					<EmptyDescription>
-						Your bug reports, ideas, and other product feedback appear here. Use Send feedback in
-						the header to get started.
+						Reports you send appear here with their status. Use Send feedback in the header to send
+						one.
 					</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
@@ -161,9 +161,7 @@ function MyProductFeedbackRow({
 				{hasText(report.issueUrl) && (
 					<p>
 						<InlineLink href={report.issueUrl} external className="underline">
-							{report.issueNumber === undefined
-								? "Public issue on GitHub"
-								: `Public issue #${report.issueNumber}`}
+							{issueLabel(report)}
 						</InlineLink>
 						{hasText(report.issueClosedAs) && (
 							<span className="text-muted-foreground">
@@ -177,7 +175,7 @@ function MyProductFeedbackRow({
 				{report.state === "HELD" && report.filedAfter !== undefined && (
 					<p className="text-muted-foreground">
 						Unless a check keeps it private, it becomes a public issue{" "}
-						{holdCountdown(report.filedAfter, now)}.
+						{holdCountdown(report.filedAfter, now)} or a little later.
 					</p>
 				)}
 				{hasText(report.reason) && (
@@ -269,7 +267,9 @@ function MyProductFeedbackRow({
 								<FieldContent>
 									<FieldLabel htmlFor={`${id}-allow-public`}>Allow public</FieldLabel>
 									<FieldDescription id={`${id}-allow-public-detail`}>
-										The maintainers can then publish it as a public issue.
+										The maintainers can then publish it as a public issue. Turning this on also
+										makes public your default for new reports. Turning it off changes only this
+										report. Change the default in your user settings.
 									</FieldDescription>
 								</FieldContent>
 							</Field>
@@ -280,13 +280,20 @@ function MyProductFeedbackRow({
 	);
 }
 
-/** Where a report is when it has no public issue to link: only what its state already shows. */
+function issueLabel(report: MyProductFeedback): string {
+	const kind = report.route === "PUBLIC" ? "Public" : "Private";
+	return report.issueNumber === undefined
+		? `${kind} issue on GitHub`
+		: `${kind} issue #${report.issueNumber}`;
+}
+
+/** Where a report is when it has no issue to link: only what its state already shows. */
 function issueLine(report: MyProductFeedback): string | undefined {
 	if (report.state === "FILED" && !hasText(report.issueUrl)) {
-		return "The maintainers have it as a private issue on GitHub.";
+		return "The Hephaestus maintainers have it as a private GitHub issue.";
 	}
 	if (report.state === "SENT_TO_ADMINS") {
-		return "It is saved on this instance. Its admins can read it, and can send it to GitHub as a private issue drafted by an AI model.";
+		return "Your report is saved on this instance for its admins. They can move it to GitHub as a private issue.";
 	}
 	return undefined;
 }
