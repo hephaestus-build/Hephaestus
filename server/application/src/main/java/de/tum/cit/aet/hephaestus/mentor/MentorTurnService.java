@@ -209,21 +209,23 @@ public class MentorTurnService {
      * @throws MentorLeaseLostException when the attempt no longer holds its lease
      */
     @Transactional
-    public void updatePartial(long workspaceId, UUID turnId, int attempt, UUID leaseId, JsonNode partial) {
+    public boolean updatePartial(long workspaceId, UUID turnId, int attempt, UUID leaseId, JsonNode partial) {
         turns.commitWithoutFlushWait();
-        if (!copies.tryHoldForCapture()) return;
+        if (!copies.tryHoldForCapture()) return false;
         MentorTurnRepository.RunningAttempt running = turns.findRunningAttempt(workspaceId, turnId, attempt, leaseId)
                 .orElseThrow(() -> new MentorLeaseLostException(turnId, attempt));
         if (redaction.personErasedSince(running.getStartedAt())) throw new MentorLeaseLostException(turnId, attempt);
-        progress.next(workspaceId, turnId, attempt, partial.toString(), clock.instant())
-                .ifPresent(update -> progress.frames(
-                                workspaceId,
-                                running.getConversationId(),
-                                turnId,
-                                MentorTurn.Surface.valueOf(running.getSurface()),
-                                attempt,
-                                update)
-                        .forEach(events::publishEvent));
+        var update = progress.next(workspaceId, turnId, attempt, partial.toString(), clock.instant());
+        if (update.isEmpty()) return false;
+        progress.frames(
+                        workspaceId,
+                        running.getConversationId(),
+                        turnId,
+                        MentorTurn.Surface.valueOf(running.getSurface()),
+                        attempt,
+                        update.orElseThrow())
+                .forEach(events::publishEvent);
+        return true;
     }
 
     /**

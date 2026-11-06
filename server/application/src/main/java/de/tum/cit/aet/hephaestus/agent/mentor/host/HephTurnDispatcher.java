@@ -416,13 +416,14 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             Instant sentAt = turn.partialSentAt;
             // An unchanged answer is sent again now and then, so a reader that started since sees it.
             if (partial.equals(stored) && sentAt != null && now.isBefore(sentAt.plus(PARTIAL_RESEND))) return;
-            completion.progress(
+            boolean sent = completion.progress(
                     turn.workspaceId,
                     turn.turnId,
                     turn.attempt,
                     turn.identity.leaseId(),
                     partial,
                     stored == null ? turn.claimed : null);
+            if (!sent) return;
             turn.partial = partial;
             turn.partialSentAt = now;
             if (turn.contextErased) {

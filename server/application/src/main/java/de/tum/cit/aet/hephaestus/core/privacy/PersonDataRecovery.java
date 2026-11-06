@@ -100,7 +100,7 @@ final class PersonDataRecovery implements SmartLifecycle {
                     || manifest.noLaterErasures() != manifest.people().isEmpty()) {
                 throw new IllegalStateException();
             }
-            // Resolve and validate the whole input before the first erasure changes a store.
+            // Validate every native identity before the first erasure changes a store.
             reason = FailureReason.IDENTITY_INVALID;
             List<List<PersonIdentity>> identities = manifest.people().stream()
                     .map(person ->

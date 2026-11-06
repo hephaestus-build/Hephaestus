@@ -70,12 +70,13 @@ public class MentorTurnCompletion {
      * @param startedAt when the attempt started, for its first partial answer, which times the attempt's first token;
      *     {@code null} for every later one
      */
-    public void progress(
+    public boolean progress(
             long workspaceId, UUID turnId, int attempt, UUID leaseId, JsonNode partial, @Nullable Instant startedAt) {
-        turns.updatePartial(workspaceId, turnId, attempt, leaseId, partial);
-        if (startedAt != null) {
+        boolean sent = turns.updatePartial(workspaceId, turnId, attempt, leaseId, partial);
+        if (sent && startedAt != null) {
             firstToken(meters).record(Duration.between(startedAt, clock.instant()));
         }
+        return sent;
     }
 
     /**

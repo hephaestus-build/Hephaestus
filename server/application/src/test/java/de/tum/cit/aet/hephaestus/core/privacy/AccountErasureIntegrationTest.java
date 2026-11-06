@@ -267,6 +267,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             "person_data_request",
             "person_evidence_copy",
             "slack_thread",
+            "outline_document_content",
             // The frozen selection names workspaces, not entries.
             MentorEntryRepository.COPIES_PERSON_DATA_STORE);
 
@@ -915,6 +916,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             targetFolders.add(captureMountedEvidence(worker, recorder, targetDerived.getLast(), target));
             otherFolders.add(captureMountedEvidence(worker, recorder, otherDerived.getLast(), other));
         }
+        Stream.concat(targetDerived.stream(), otherDerived.stream()).forEach(this::keepCompositionInputs);
         for (var derived : targetDerived) {
             var result = practiceResultRepository
                     .findById(derived.practiceResultIds().getFirst())
@@ -1025,11 +1027,12 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 "outline_collection",
                 "slack_monitored_channel",
                 "workspace_onboarding_settings");
-        counts.forEach((store, count) -> {
-            if (!nonPersonalProjections.contains(store)) {
-                assertThat(count).as("subject seeded in %s", store).isPositive();
-            }
-        });
+        assertThat(counts.entrySet().stream()
+                        .filter(entry -> !nonPersonalProjections.contains(entry.getKey()) && entry.getValue() == 0)
+                        .map(Map.Entry::getKey)
+                        .toList())
+                .as("personal stores without a subject fixture")
+                .isEmpty();
         assertThat(export.path("stores").propertyNames()).containsExactlyInAnyOrderElementsOf(counts.keySet());
         assertThat(counts.get("oauth_state_nonce")).isEqualTo(1L);
         assertThat(counts.get("client_session")).isEqualTo(1L);
@@ -1155,9 +1158,13 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(receipt.getSelectionsJson()).isNull();
         Map<String, Long> completed = PersonDataStoreReceipt.counts(mapper, receipt.getCompletedJson());
         Map<String, Long> expectedReceipts = new TreeMap<>(counts);
-        // These projections retain shared resources or suppression controls. The decision row was already deleted.
+        // Retained controls report no removal. Earlier owner steps already cleared the decision and resolver.
         for (String store : List.of(
-                "identity_restriction", "git_repository_history", "installation_account", "feedback_decision_actor")) {
+                "identity_restriction",
+                "git_repository_history",
+                "installation_account",
+                "feedback_decision_actor",
+                "product_feedback_resolver")) {
             expectedReceipts.put(store, 0L);
         }
         assertThat(completed)

@@ -304,7 +304,11 @@ public class PersonDataService {
                 });
             } finally {
                 var event = Boolean.TRUE.equals(retry) ? log.atWarn() : log.atError();
-                event.addKeyValue("event.name", "person_data.erasure.failed")
+                event.addKeyValue(
+                                "event.name",
+                                Boolean.TRUE.equals(retry)
+                                        ? "person_data.erasure.retry_pending"
+                                        : "person_data.erasure.failed")
                         .addKeyValue("person_data.request.id", id)
                         .addKeyValue("person_data.store", activeStore)
                         .addKeyValue("error.type", exception.getClass().getName())

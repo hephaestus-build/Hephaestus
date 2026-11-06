@@ -249,12 +249,15 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 beans.getBean(PlatformTransactionManager.class),
                 mapper,
                 jdbc);
+        // Fault injection still needs the production transaction advice on each service operation.
+        var initialized = beans.getAutowireCapableBeanFactory().initializeBean(recoveryService, "recoveryFaultService");
+        var advisedService = PersonDataService.class.cast(initialized);
         Path manifest = manifest("""
                 {"version":1,"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
                  "people":[{"accountId":%d,"identities":[]}]}
                 """.formatted(administratorId, personId));
         var processing = new AtomicBoolean();
-        try (var context = context(manifest, processing, recoveryService)) {
+        try (var context = context(manifest, processing, advisedService)) {
             assertThatThrownBy(context::refresh).hasStackTraceContaining("ERASURE_INCOMPLETE");
             assertThat(processing).isFalse();
         }

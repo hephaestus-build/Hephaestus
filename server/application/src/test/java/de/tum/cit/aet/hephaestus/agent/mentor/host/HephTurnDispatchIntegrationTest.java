@@ -507,6 +507,12 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
             assertThat(beans.getBean(MentorTurnProgress.class).snapshot(row(asked)))
                     .isNull();
         }
+        controller.partial(asked.getId(), partial, HephTurnFixtures.authenticated(turn));
+        assertThat(sent(asked)).isEqualTo(partial);
+        await().atMost(NOTIFIED)
+                .untilAsserted(
+                        () -> assertThat(beans.getBean(MentorTurnProgress.class).snapshot(row(asked)))
+                                .isEqualTo(partial));
     }
 
     @Test

@@ -60,7 +60,7 @@ final class PersonErasureAllStoresFixture {
                 "team_key",
                 "",
                 "kind",
-                "ERASED");
+                "HIDE_PUBLIC");
         row(
                 "person_data_request",
                 "administrator_account_id",
@@ -131,6 +131,7 @@ final class PersonErasureAllStoresFixture {
                 CANARY,
                 "new_value",
                 CANARY);
+        singletonAttribution("instance_settings", "silent_mode_changed_by_account_id", account);
         jdbc.update(
                 "UPDATE instance_settings SET silent_mode_changed_by_account_id=?,silent_mode_reason=? WHERE id=1",
                 account,
@@ -175,7 +176,6 @@ final class PersonErasureAllStoresFixture {
         row("product_feedback_filing", "feedback_id", report, "state", "DRAFT_QUEUED");
         singletonAttribution("product_feedback_destination", "updated_by_account_id", account);
         singletonAttribution("instance_llm_settings", "updated_by_account_id", account);
-        seeded.add(new SeededRow("instance_settings", Map.of("id", 1L)));
         UUID disclosure = UUID.randomUUID();
         row(
                 "research_disclosure",
@@ -707,6 +707,22 @@ final class PersonErasureAllStoresFixture {
                         .as("personal content in seeded %s", row.table())
                         .doesNotContain(CANARY);
                 var data = mapper.readTree(json);
+                if (row.table().equals("outline_document")) {
+                    for (String field : List.of(
+                            "title",
+                            "slug",
+                            "body_markdown",
+                            "content_hash",
+                            "created_by_subject",
+                            "created_by_name",
+                            "updated_by_subject",
+                            "updated_by_name")) {
+                        assertThat(data.path(field).isNull())
+                                .as("erased Outline field %s", field)
+                                .isTrue();
+                    }
+                    assertThat(data.path("collaborator_subjects")).isEmpty();
+                }
                 if (row.table().equals("person_data_request")) {
                     assertThat(data.path("scope_json").isNull()).isTrue();
                     assertThat(data.path("selections_json").isNull()).isTrue();

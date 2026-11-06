@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -36,6 +37,9 @@ class PersonDataRecoveryStartupIntegrationTest extends BaseIntegrationTest {
                 "{\"version\":1,\"restorePoint\":\"2026-01-01T00:00:00Z\",\"noLaterErasures\":true,\"people\":[]}");
         manifest.toFile().deleteOnExit();
         registry.add("hephaestus.privacy.recovery-manifest", manifest::toString);
+        registry.add(RuntimeRole.SERVER_PROPERTY, () -> "true");
+        registry.add(RuntimeRole.WORKER_PROPERTY, () -> "false");
+        registry.add(RuntimeRole.WEBHOOK_PROPERTY, () -> "false");
     }
 
     @Test
