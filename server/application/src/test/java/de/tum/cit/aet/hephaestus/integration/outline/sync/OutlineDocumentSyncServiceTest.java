@@ -483,7 +483,7 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void refreshDocument_deleteEvent_tombstonesWithoutAnyApiCall() {
+    void shouldConfirmAnUndatedDeleteBeforeTombstoning() {
         OutlineDocument row = mirrored("doc-1");
         row.setBodyMarkdown("# body");
         inMirror(row);
@@ -492,7 +492,24 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
 
         assertThat(row.isDeleted()).isTrue();
         assertThat(row.getBodyMarkdown()).isNull();
-        verify(outlineApiClient, never()).getDocumentInfo(anyString(), anyString(), anyString());
+        verify(outlineApiClient).getDocumentInfo(SERVER_URL, "token", "doc-1");
+        verify(outlineApiClient, never()).exportDocument(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void shouldKeepAnUndatedSoftDeleteTombstonedWhenTheProviderStillReturnsIt() {
+        OutlineDocument row = mirrored("doc-1");
+        row.setBodyMarkdown("# body");
+        row.setOutlineUpdatedAt(T1);
+        inMirror(row);
+        OutlineDocumentModel deleted = mock(OutlineDocumentModel.class);
+        when(deleted.getDeletedAt()).thenReturn(T2);
+        when(outlineApiClient.getDocumentInfo(SERVER_URL, "token", "doc-1")).thenReturn(Optional.of(deleted));
+
+        service(10).refreshDocument(WORKSPACE, "documents.delete", "doc-1");
+
+        assertThat(row.isDeleted()).isTrue();
+        assertThat(row.getBodyMarkdown()).isNull();
         verify(outlineApiClient, never()).exportDocument(anyString(), anyString(), anyString());
     }
 
@@ -505,6 +522,8 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
         row.setContentHash("hash");
         row.setCreatedBySubject("user-1");
         inMirror(row);
+        when(outlineApiClient.getDocumentInfo(SERVER_URL, "token", "doc-1"))
+                .thenReturn(Optional.of(archivedMeta("doc-1", T2, T2)));
 
         service(10).refreshDocument(WORKSPACE, "documents.archive", "doc-1");
 
@@ -514,7 +533,7 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
         assertThat(row.getBodyMarkdown()).isEqualTo("# body");
         assertThat(row.getContentHash()).isEqualTo("hash");
         assertThat(row.getCreatedBySubject()).isEqualTo("user-1");
-        verify(outlineApiClient, never()).getDocumentInfo(anyString(), anyString(), anyString());
+        verify(outlineApiClient).getDocumentInfo(SERVER_URL, "token", "doc-1");
         verify(outlineApiClient, never()).exportDocument(anyString(), anyString(), anyString());
     }
 
@@ -557,6 +576,25 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
         verify(outlineApiClient).exportDocument(SERVER_URL, "token", "doc-1");
         verify(documentRepository)
                 .saveAndFlush(argThat(d -> "doc-1".equals(d.getDocumentId()) && "# fresh".equals(d.getBodyMarkdown())));
+    }
+
+    @Test
+    void shouldKeepStoredDocumentWhenReplayHasTheSameVersion() {
+        OutlineDocument row = mirrored("doc-1");
+        row.setTitle("Stored title");
+        row.setBodyMarkdown("# stored body");
+        row.setContentHash("stored-hash");
+        row.setOutlineUpdatedAt(T2);
+        inMirror(row);
+
+        service(10).refreshDocument(WORKSPACE, "documents.update", "doc-1", meta("doc-1", T2));
+        service(10).refreshDocument(WORKSPACE, "documents.delete", "doc-1", meta("doc-1", T2));
+
+        assertThat(row.getTitle()).isEqualTo("Stored title");
+        assertThat(row.getBodyMarkdown()).isEqualTo("# stored body");
+        assertThat(row.isDeleted()).isFalse();
+        verify(outlineApiClient, never()).exportDocument(anyString(), anyString(), anyString());
+        verify(documentRepository, never()).saveAndFlush(any());
     }
 
     @Test

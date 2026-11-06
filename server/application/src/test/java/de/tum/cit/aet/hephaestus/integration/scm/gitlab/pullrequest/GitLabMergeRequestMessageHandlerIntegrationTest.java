@@ -1653,6 +1653,13 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(moved.getBaseRefOid())
                     .as("the base of the previous head is forgotten when no pair came with the" + " new one")
                     .isNull();
+
+            syncAt(accepted.plusSeconds(2), FIRST_HEAD, "e".repeat(40));
+            PullRequest replayed = mr2();
+            assertThat(replayed.getHeadRefOid())
+                    .as("an earlier read at the same provider version cannot restore the previous head")
+                    .isEqualTo(NEXT_HEAD);
+            assertThat(replayed.getBaseRefOid()).isNull();
         }
 
         private Map<String, @Nullable Object> paired(@Nullable String head, String pairedHead, String base) {

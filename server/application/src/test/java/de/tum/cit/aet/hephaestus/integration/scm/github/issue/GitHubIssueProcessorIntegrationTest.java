@@ -182,6 +182,10 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
     }
 
     private GitHubIssueDTO createBasicIssueDto(Long id, int number) {
+        return createBasicIssueDto(id, number, Instant.parse("2025-11-01T21:42:45Z"));
+    }
+
+    private GitHubIssueDTO createBasicIssueDto(Long id, int number, Instant updatedAt) {
         return new GitHubIssueDTO(
                 id, // id (webhook style - no databaseId)
                 null, // databaseId (null for webhook payloads)
@@ -194,7 +198,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                 "https://github.com/" + FIXTURE_REPO_FULL_NAME + "/issues/" + number,
                 0, // commentsCount
                 Instant.parse("2025-11-01T21:42:45Z"),
-                Instant.parse("2025-11-01T21:42:45Z"),
+                updatedAt,
                 null, // closedAt
                 false, // locked
                 createAuthorDto(),
@@ -207,6 +211,64 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                 ,
                 null // subIssuesSummary
                 );
+    }
+
+    @ParameterizedTest
+    @CsvSource({"100", "600"})
+    void shouldPublishAnAcceptedIssueWhenPostgreSQLRoundsItsVersion(long nanos) {
+        var dto = createBasicIssueDto(
+                9_803L, 64, Instant.parse("2026-01-01T00:00:00Z").plusNanos(nanos));
+
+        Issue created =
+                processor.process(dto, ProcessingContext.forWebhook(testWorkspace.getId(), testRepository, "opened"));
+
+        assertNotNull(created);
+        assertThat(issueRepository.findById(created.getId()))
+                .hasValueSatisfying(issue -> assertThat(issue.getTitle()).isEqualTo(dto.title()));
+        assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class)).hasSize(1);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0", "60"})
+    void shouldKeepStoredIssueWhenReplayHasAnEqualOrOlderVersion(long secondsNewer) {
+        GitHubIssueDTO replay = createBasicIssueDto(9_800L, 61);
+        Issue stored = processor.process(
+                replay, ProcessingContext.forWebhook(testWorkspace.getId(), testRepository, "edited"));
+        assertNotNull(stored);
+        stored.setTitle("Newer title");
+        stored.setBody("Newer body");
+        Instant replayVersion = Objects.requireNonNull(replay.updatedAt());
+        stored.setUpdatedAt(replayVersion.plusSeconds(secondsNewer));
+        issueRepository.saveAndFlush(stored);
+        eventListener.clear();
+
+        processor.process(replay, ProcessingContext.forWebhook(testWorkspace.getId(), testRepository, "edited"));
+
+        Issue actual = issueRepository
+                .findByRepositoryIdAndNumber(testRepository.getId(), 61)
+                .orElseThrow();
+        assertThat(actual.getTitle()).isEqualTo("Newer title");
+        assertThat(actual.getBody()).isEqualTo("Newer body");
+        assertThat(actual.getUpdatedAt()).isEqualTo(replayVersion.plusSeconds(secondsNewer));
+        assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"-1,false", "0,false", "1,true"})
+    void shouldRefreshATiedIssueOnlyWhenTheAuthoritativeReadBeganAfterTheStoredWrite(
+            long nanosAfterWrite, boolean accepted) {
+        GitHubIssueDTO currentProviderState = createBasicIssueDto(9_802L, 63);
+        Issue stored = processor.process(currentProviderState, createContext());
+        assertNotNull(stored);
+        Instant writtenAt = Instant.parse("2026-03-01T00:00:00Z");
+        stored.setTitle("Stored title");
+        stored.setLastSyncAt(writtenAt);
+        issueRepository.saveAndFlush(stored);
+
+        processor.process(currentProviderState, createContext().withObservedAt(writtenAt.plusNanos(nanosAfterWrite)));
+
+        Issue actual = issueRepository.findById(stored.getId()).orElseThrow();
+        assertThat(actual.getTitle()).isEqualTo(accepted ? currentProviderState.title() : "Stored title");
     }
 
     @Nested

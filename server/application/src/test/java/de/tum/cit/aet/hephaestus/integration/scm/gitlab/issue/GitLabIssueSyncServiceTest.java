@@ -110,7 +110,7 @@ class GitLabIssueSyncServiceTest extends BaseUnitTest {
         Repository repository = repository();
         scriptedResponses.add(page("GetProjectIssues", true));
         scriptedResponses.add(page("GetProjectIssues", false));
-        when(issueProcessor.processFromSync(any(), any(), any()))
+        when(issueProcessor.processFromSync(any(), any()))
                 .thenThrow(
                         new ObjectOptimisticLockingFailureException("private-repository-canary", "private-row-canary"))
                 .thenReturn(new Issue());
@@ -128,7 +128,7 @@ class GitLabIssueSyncServiceTest extends BaseUnitTest {
         Repository repository = repository();
         scriptedResponses.add(page("GetProjectIssuesHistorical", true));
         scriptedResponses.add(page("GetProjectIssuesHistorical", false));
-        when(issueProcessor.processFromSync(any(), any(), any()))
+        when(issueProcessor.processFromSync(any(), any()))
                 .thenThrow(
                         new ObjectOptimisticLockingFailureException("private-repository-canary", "private-row-canary"))
                 .thenReturn(new Issue());
@@ -148,7 +148,7 @@ class GitLabIssueSyncServiceTest extends BaseUnitTest {
         Repository repository = repository();
         scriptedResponses.add(page("GetProjectIssues", true, 1));
         scriptedResponses.add(page("GetProjectIssues", false, 1));
-        when(issueProcessor.processFromSync(any(), any(), any())).thenReturn(new Issue());
+        when(issueProcessor.processFromSync(any(), any())).thenReturn(new Issue());
         when(noteSyncService.syncNotesForIssue(any(), any(), anyInt(), any(), any()))
                 .thenThrow(
                         new ObjectOptimisticLockingFailureException("private-repository-canary", "private-row-canary"))
@@ -167,7 +167,7 @@ class GitLabIssueSyncServiceTest extends BaseUnitTest {
         Repository repository = repository();
         scriptedResponses.add(page("GetProjectIssuesHistorical", true, 1));
         scriptedResponses.add(page("GetProjectIssuesHistorical", false, 1));
-        when(issueProcessor.processFromSync(any(), any(), any())).thenReturn(new Issue());
+        when(issueProcessor.processFromSync(any(), any())).thenReturn(new Issue());
         when(noteSyncService.syncNotesForIssue(any(), any(), anyInt(), any(), any()))
                 .thenThrow(
                         new ObjectOptimisticLockingFailureException("private-repository-canary", "private-row-canary"))
@@ -188,7 +188,7 @@ class GitLabIssueSyncServiceTest extends BaseUnitTest {
         Repository repository = repository();
         scriptedResponses.add(page("GetProjectIssues", true, 1));
         scriptedResponses.add(page("GetProjectIssues", false, 1));
-        when(issueProcessor.processFromSync(any(), any(), any())).thenReturn(new Issue());
+        when(issueProcessor.processFromSync(any(), any())).thenReturn(new Issue());
         when(noteSyncService.syncNotesForIssue(any(), any(), anyInt(), any(), any()))
                 .thenThrow(new IllegalStateException("ordinary failure"))
                 .thenReturn(1);

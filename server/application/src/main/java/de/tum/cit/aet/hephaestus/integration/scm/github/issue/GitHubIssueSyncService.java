@@ -262,6 +262,7 @@ public class GitHubIssueSyncService {
                 final int currentPage = pageCount;
                 final OffsetDateTime sinceDt = sinceDateTime;
 
+                Instant observedAt = Instant.now();
                 ClientGraphQlResponse response = Mono.defer(() -> {
                             var requestBuilder = client.documentName(QUERY_DOCUMENT)
                                     .variable("owner", ownerAndName.owner())
@@ -355,7 +356,8 @@ public class GitHubIssueSyncService {
                     if (repo == null) {
                         return new PageResult(0, 0);
                     }
-                    ProcessingContext context = ProcessingContext.forSync(scopeId, repo);
+                    ProcessingContext context =
+                            ProcessingContext.forSync(scopeId, repo).withObservedAt(observedAt);
                     return processIssuePage(connection, context, issuesNeedingCommentPagination);
                 });
 

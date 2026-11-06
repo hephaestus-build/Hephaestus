@@ -84,6 +84,9 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
     private OutlineDocumentRepository documentRepository;
 
     @Autowired
+    private OutlineMirrorWriter mirrorWriter;
+
+    @Autowired
     private OutlineCollectionRepository collectionRepository;
 
     @Autowired
@@ -386,6 +389,26 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
 
         // The winner's write survived; the stale write was rejected, not silently merged.
         assertThat(documentById(DOC_ONE).getBodyMarkdown()).isEqualTo("# concurrent winner");
+    }
+
+    @Test
+    void shouldRejectAnOlderWriteAfterTheMirrorAdvancedDuringProviderPreparation() {
+        stubCollection(List.of(DOC_ONE), T2, T2);
+        scheduler.syncAllNow();
+        OutlineDocument current = documentById(DOC_ONE);
+        String storedBody = current.getBodyMarkdown();
+        String storedTitle = current.getTitle();
+
+        mirrorWriter.upsertDocument(workspaceId, connectionId, DOC_ONE, T1, doc -> {
+            doc.setTitle("Replayed title");
+            doc.setBodyMarkdown("# replayed body");
+            doc.setOutlineUpdatedAt(T1);
+        });
+
+        OutlineDocument actual = documentById(DOC_ONE);
+        assertThat(actual.getTitle()).isEqualTo(storedTitle);
+        assertThat(actual.getBodyMarkdown()).isEqualTo(storedBody);
+        assertThat(actual.getOutlineUpdatedAt()).isEqualTo(T2);
     }
 
     private OutlineCollection onlyCollection() {

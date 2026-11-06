@@ -46,6 +46,7 @@ The original broker timestamp and routing headers reach the dispatcher unchanged
 The lookup compares the subject and arrival time to reject a replaced stream's reused sequence.
 Replay and live dispatch share a local lock for the workspace and stream.
 Replay is an explicit late event; it does not rewind subsequent events or establish order across streams.
+[The stored work only moves forward](./sync-lifecycle.md#a-redelivered-or-older-payload-changes-nothing) defines provider versions and equal timestamps.
 A row lock keeps concurrent replay requests from applying the same row twice.
 Participating handler database writes and replay completion share one transaction, so those partial writes roll back on failure.
 Replay holds this transaction during provider calls.
