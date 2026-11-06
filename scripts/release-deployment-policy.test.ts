@@ -263,7 +263,7 @@ await test("a release publishes one signed k3s bundle, and the smoke runs what o
 	assert.doesNotMatch(smoke, /--pattern 'k3s-\*'/u);
 });
 
-await test("release evidence waits for the digest-bound sandbox check", () => {
+await test("release evidence waits for the digest-bound sandbox checks", () => {
 	const workflow: unknown = parseDocument(release).toJS();
 	const steps = asArray(
 		at(workflow, ["jobs", "tag-images", "steps"], "tag-images"),
@@ -276,16 +276,32 @@ await test("release evidence waits for the digest-bound sandbox check", () => {
 	);
 	const database = steps.findIndex((step) => step.uses === "./.github/actions/download-trivy-db");
 	const join = steps.findIndex((step) => step.wait === "sandbox-contract");
+	const qualification = steps.findIndex((step) => step.id === "sandbox-security");
+	const qualificationJoin = steps.findIndex((step) => step.wait === "sandbox-security");
 	const evidence = steps.findIndex((step) => step.name === "Generate and enforce release evidence");
 	assert.ok(digests !== -1 && sandbox > digests && security > sandbox && database > security);
 	assert.ok(join > database && evidence > join);
+	assert.ok(
+		qualification > sandbox && qualificationJoin > database && evidence > qualificationJoin,
+	);
+	const qualificationStep = steps[qualification];
+	assert.ok(qualificationStep);
+	assert.equal(qualificationStep.background, true);
+	assert.equal(
+		at(qualificationStep, ["env", "IMAGE"], "qualification image"),
+		at(steps[sandbox], ["env", "IMAGE"], "contract image"),
+	);
+	assert.match(
+		String(at(qualificationStep, ["env", "IMAGE"], "qualification image")),
+		/steps\.retag\.outputs\.agent-pi-digest/u,
+	);
 	const sandboxStep = steps[sandbox];
 	assert.ok(sandboxStep);
 	assert.equal(sandboxStep.background, true);
 	assert.equal(typeof sandboxStep.run, "string");
 	assert.deepEqual(
 		steps.filter((step) => step.background === true).map((step) => step.id),
-		["sandbox-contract"],
+		["sandbox-contract", "sandbox-security"],
 	);
 	for (const name of ["publish-release"]) {
 		const preparation = asArray(at(workflow, ["jobs", name, "steps"], name), name);

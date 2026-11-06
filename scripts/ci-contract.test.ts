@@ -3121,8 +3121,14 @@ void describe("CI contract", () => {
 		const release = await readFile(".github/workflows/release.yml", "utf8");
 		const cicd = await readFile(".github/workflows/cicd.yml", "utf8");
 		const preflight = job(cicd, "Release-preflight");
+		assert.match(preflight, /id: release-evidence/u);
+		assert.match(
+			preflight,
+			/IMAGE: ghcr\.io\/hephaestus-build\/agent-pi@\$\{\{ steps\.release-evidence\.outputs\.agent-pi-digest \}\}/u,
+		);
 		for (const source of [job(release, "tag-images"), preflight]) {
 			assert.match(source, /node scripts\/resolve-release-images\.ts /u);
+			assert.match(source, /node scripts\/sandbox-security\.ts --image "\$IMAGE"/u);
 			assert.match(source, /node scripts\/generate-release-evidence\.ts evidence \\/u);
 			assert.match(
 				source,
