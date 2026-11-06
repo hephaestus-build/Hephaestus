@@ -133,6 +133,10 @@ void test("rejects missing packaged icons and empty extension pages", () => {
 		"THIRD_PARTY_NOTICES/background.md": Buffer.from("worker dependencies"),
 		"THIRD_PARTY_NOTICES/provider.md": Buffer.from("content script dependencies"),
 		"THIRD_PARTY_NOTICES/action+inline+options.md": Buffer.from("UI dependencies"),
+		"THIRD_PARTY_NOTICES/wxt-LICENSE": Buffer.from("WXT copyright and permission"),
+		"THIRD_PARTY_NOTICES/webext-core-LICENSE": Buffer.from(
+			"Isolated-element copyright and permission",
+		),
 		"icon/16.png": Buffer.from("icon"),
 		"icon/32.png": Buffer.from("icon"),
 		"icon/48.png": Buffer.from("icon"),
@@ -140,6 +144,8 @@ void test("rejects missing packaged icons and empty extension pages", () => {
 	};
 	assert.deepEqual(missingPackageAssets(Buffer.from(zipSync(assets))), []);
 	assert.deepEqual(unexpectedPackageAssets(Buffer.from(zipSync(assets))), []);
+	const { LICENSE: _license, ...withoutLicense } = assets;
+	assert.deepEqual(missingPackageAssets(Buffer.from(zipSync(withoutLicense))), ["LICENSE"]);
 	assert.deepEqual(
 		missingPackageAssets(
 			Buffer.from(
