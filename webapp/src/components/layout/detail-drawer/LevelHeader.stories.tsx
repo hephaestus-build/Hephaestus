@@ -7,7 +7,7 @@ import { StandingSummaryBox } from "@/components/practice-vocabulary/StandingSum
 import { DrawerBody } from "@/components/ui/drawer";
 import { withPageBehind } from "@/stories/decorators";
 import { InLevelStack } from "@/stories/level-stack";
-import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
+import { expectSettledVisible, settledDrawerPanel, settledPopup } from "@/stories/overlay";
 import { expectNoOverflowingElement, expectNoPanelOverflow } from "@/stories/reflow";
 import { precedes } from "@/test/dom";
 import { levelInfo } from "./level-info";
@@ -235,7 +235,9 @@ export const WithInfo: Story = {
 		const panel = within(await settledDrawerPanel());
 		await expect(screen.getByRole("dialog")).toHaveAccessibleName("Describe what changed and why");
 		await userEvent.click(panel.getByRole("button", { name: "About this practice" }));
-		await expect(await screen.findByText("What the practice asks of your work.")).toBeVisible();
+		await expect(
+			within(await settledPopup()).getByText("What the practice asks of your work."),
+		).toBeVisible();
 		await expect(
 			panel.getByRole("heading", { name: "Describe what changed and why" }),
 		).toBeVisible();

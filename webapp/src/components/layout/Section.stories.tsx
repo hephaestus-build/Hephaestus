@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, screen } from "storybook/test";
+import { expect, within } from "storybook/test";
 
 import { InfoTip } from "@/components/common/InfoTip";
 import { Button } from "@/components/ui/button";
+import { settledPopup } from "@/stories/overlay";
 
 import { Section } from "./Section";
 import { forgetSectionFold } from "./section-folds";
@@ -103,6 +104,6 @@ export const WithInfo: Story = {
 		await expect(canvas.getByRole("heading", { name: "Review guidance" })).toBeVisible();
 		await expect(canvas.getByRole("region", { name: "Review guidance" })).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "About review guidance" }));
-		await expect(await screen.findByText("What a review checks.")).toBeVisible();
+		await expect(within(await settledPopup()).getByText("What a review checks.")).toBeVisible();
 	},
 };
