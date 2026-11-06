@@ -1,0 +1,136 @@
+{
+	"title": "Hephaestus: overview",
+	"filename": "overview",
+	"rows": [
+		{
+			"title": "Is the release up, and which version runs?",
+			"panels": [
+				{
+					"title": "Roles that answer the scrape",
+					"description": "Each role of the release. A gap is a role that the store could not read.",
+					"expr": ["sum by (runtime_role) (up{job=\"hephaestus\"})"],
+					"alias": ["{{runtime_role}}"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Version of each role",
+					"description": "The series of each role carries its version.",
+					"expr": ["max by (runtime_role, version) (application_build_info{job=\"hephaestus\"})"],
+					"alias": ["{{runtime_role}} {{version}}"],
+					"showLegend": true,
+					"width": 6
+				}
+			]
+		},
+		{
+			"title": "Objectives: what a person feels",
+			"panels": [
+				{
+					"title": "First feedback within 30 minutes",
+					"description": "The share of reviews with feedback on the work inside 30 minutes, over 6 hours. The objective is 90 %.",
+					"expr": [
+						"sum(increase(practice_review_first_delivery_seconds_bucket{job=\"hephaestus\",trigger=~\"event|request\",approval=\"none\",le=\"1800.0\"}[6h])) / sum(increase(practice_review_first_delivery_seconds_count{job=\"hephaestus\",trigger=~\"event|request\",approval=\"none\"}[6h]))"
+					],
+					"alias": ["within 30 min"],
+					"unit": "share",
+					"showLegend": true,
+					"width": 4
+				},
+				{
+					"title": "Conversation first token within 10 seconds",
+					"description": "The share of turns over 1 hour.",
+					"expr": [
+						"sum(increase(mentor_turn_first_token_seconds_bucket{job=\"hephaestus\",le=\"10.0\"}[1h])) / sum(increase(mentor_turn_first_token_seconds_count{job=\"hephaestus\"}[1h]))"
+					],
+					"alias": ["within 10 s"],
+					"unit": "share",
+					"showLegend": true,
+					"width": 4
+				},
+				{
+					"title": "Activity page p95",
+					"description": "The server time of the Activity reads.",
+					"expr": [
+						"histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"hephaestus\",runtime_role=\"server\",method=\"GET\",status!~\"5..\",uri=~\"(/public)?/workspaces/[^/]+/activity(/.*)?\"}[5m])))"
+					],
+					"alias": ["p95"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 4
+				}
+			]
+		},
+		{
+			"title": "API: traffic, errors and latency, per role",
+			"panels": [
+				{
+					"title": "Requests per second",
+					"description": "All routes of each role.",
+					"expr": [
+						"sum by (runtime_role) (rate(http_server_requests_seconds_count{job=\"hephaestus\"}[5m]))"
+					],
+					"alias": ["{{runtime_role}}"],
+					"unit": "req/s",
+					"showLegend": true,
+					"width": 4
+				},
+				{
+					"title": "Server errors per second",
+					"description": "Answers with a 5xx status.",
+					"expr": [
+						"sum by (runtime_role) (rate(http_server_requests_seconds_count{job=\"hephaestus\",status=~\"5..\"}[5m]))"
+					],
+					"alias": ["{{runtime_role}}"],
+					"unit": "req/s",
+					"showLegend": true,
+					"width": 4
+				},
+				{
+					"title": "Latency p95",
+					"description": "Over all routes of each role.",
+					"expr": [
+						"histogram_quantile(0.95, sum by (le, runtime_role) (rate(http_server_requests_seconds_bucket{job=\"hephaestus\"}[5m])))"
+					],
+					"alias": ["{{runtime_role}}"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 4
+				}
+			]
+		},
+		{
+			"title": "Saturation: what runs out first",
+			"panels": [
+				{
+					"title": "Database connections that wait",
+					"description": "Threads that wait for a pool connection.",
+					"expr": ["max by (runtime_role) (hikaricp_connections_pending{job=\"hephaestus\"})"],
+					"alias": ["{{runtime_role}}"],
+					"showLegend": true,
+					"width": 4
+				},
+				{
+					"title": "Heap in use",
+					"description": "Per role.",
+					"expr": [
+						"sum by (runtime_role) (jvm_memory_used_bytes{job=\"hephaestus\",area=\"heap\"})"
+					],
+					"alias": ["{{runtime_role}}"],
+					"unit": "bytes",
+					"showLegend": true,
+					"width": 4
+				},
+				{
+					"title": "Oldest queued job",
+					"description": "Work that waits for a worker.",
+					"expr": ["max(agent_queue_oldest_age_seconds{job=\"hephaestus\"})"],
+					"alias": ["age"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 4
+				}
+			]
+		}
+	]
+}

@@ -1,0 +1,118 @@
+{
+	"title": "Hephaestus: model calls",
+	"filename": "model-calls",
+	"rows": [
+		{
+			"title": "Do calls wait?",
+			"panels": [
+				{
+					"title": "Call limit",
+					"description": "The calls in flight that each pool allows now.",
+					"expr": ["max by (pool) (llm_pool_limit{job=\"hephaestus\"})"],
+					"alias": ["{{pool}}"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Calls that wait",
+					"description": "By pool and queue.",
+					"expr": ["max by (pool, queue) (llm_pool_waiters{job=\"hephaestus\"})"],
+					"alias": ["{{pool}} {{queue}}"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Wait p95, conversation calls",
+					"description": "The bound of the alert is 5 seconds.",
+					"expr": [
+						"histogram_quantile(0.95, sum by (le, pool) (rate(llm_pool_permit_wait_seconds_bucket{job=\"hephaestus\",class=~\"turn|product_feedback\"}[5m])))"
+					],
+					"alias": ["{{pool}}"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Wait p95, review calls",
+					"description": "The bound of the alert is 2 minutes.",
+					"expr": [
+						"histogram_quantile(0.95, sum by (le, pool) (rate(llm_pool_permit_wait_seconds_bucket{job=\"hephaestus\",class!~\"turn|product_feedback\"}[5m])))"
+					],
+					"alias": ["{{pool}}"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 6
+				}
+			]
+		},
+		{
+			"title": "How do calls end?",
+			"panels": [
+				{
+					"title": "Calls, per hour",
+					"description": "By outcome.",
+					"expr": [
+						"sum by (outcome) (increase(gen_ai_client_calls_total{job=\"hephaestus\"}[1h]))"
+					],
+					"alias": ["{{outcome}}"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Call duration p95",
+					"description": "From the grant to the end of the call.",
+					"expr": [
+						"histogram_quantile(0.95, sum by (le, pool) (rate(gen_ai_client_operation_duration_seconds_bucket{job=\"hephaestus\"}[5m])))"
+					],
+					"alias": ["{{pool}}"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Tokens, per hour",
+					"description": "By pool and type.",
+					"expr": [
+						"sum by (pool, type) (increase(gen_ai_client_tokens_total{job=\"hephaestus\"}[1h]))"
+					],
+					"alias": ["{{pool}} {{type}}"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Provider refusals, per hour",
+					"description": "By pool and status.",
+					"expr": [
+						"sum by (pool, status) (increase(llm_pool_upstream_throttled_total{job=\"hephaestus\"}[1h]))"
+					],
+					"alias": ["{{pool}} {{status}}"],
+					"showLegend": true,
+					"width": 6
+				}
+			]
+		},
+		{
+			"title": "Do workers keep their calls?",
+			"panels": [
+				{
+					"title": "Permits that expired, per hour",
+					"description": "A worker stopped with a call in flight.",
+					"expr": [
+						"sum by (pool) (increase(llm_pool_permits_expired_total{job=\"hephaestus\"}[1h]))"
+					],
+					"alias": ["{{pool}}"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Failed renewals, per hour",
+					"description": "The database did not take a renewal.",
+					"expr": ["sum(increase(llm_pool_lease_renewal_failures_total{job=\"hephaestus\"}[1h]))"],
+					"alias": ["failures"],
+					"showLegend": true,
+					"width": 6
+				}
+			]
+		}
+	]
+}

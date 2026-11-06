@@ -140,6 +140,8 @@ This is optional.
 | vmalert | Evaluates the release's [alert rules](#alert-rules) every 30 seconds |
 | Alertmanager | Sends the alerts to the receivers of your configuration |
 
+VictoriaMetrics also serves the [dashboards](#dashboards).
+
 Before you turn it on:
 
 1. Write the routes and receivers in a file `alertmanager.yml`.
@@ -185,6 +187,35 @@ The stack collects no logs: see [Collecting logs](#collecting-logs).
 On the project's test instance, VictoriaMetrics used at most 470 MiB while it scraped the roles and the kubelets, and vmalert used 22 MiB.
 Both used less than 0.05 of a CPU.
 The stack's requests and limits follow these numbers.
+
+### Dashboards
+
+The [monitoring stack](#monitoring-stack) serves five dashboards in the web view of VictoriaMetrics.
+They come with the chart, so each upgrade brings the dashboards of its release.
+To open them, forward the port and open `http://localhost:8428/vmui`, then choose **Dashboards**:
+
+```bash
+kubectl --namespace <namespace> port-forward service/<release>-victoria-metrics 8428
+```
+
+| Dashboard | Answers |
+| --- | --- |
+| Overview | Is the release up, do the objectives hold, and what runs out first? |
+| Reviews and feedback | Do reviews finish, where does an attempt spend its time, and does feedback reach people? |
+| Model calls | Do calls wait, how do they end, and do workers keep their calls? |
+| Database and tenancy | Does the pool make requests wait, does tenancy hold, and do privacy jobs run? |
+| Provider events and messaging | Do events arrive, and do consumers keep up? |
+
+The files are in `files/dashboards/` of the chart.
+A panel's description names what it shows.
+With your own Prometheus, use the queries in these files.
+
+### Daily reads
+
+| Question | Query | Healthy |
+| --- | --- | --- |
+| Which reads did a broad tenancy exemption let through? | `sum by (type) (increase(tenancy_bypassed_violation_total{job="hephaestus"}[1d]))` | No result, or 0 for each `type`. `type` is the code that holds the exemption |
+| Did tenancy report or refuse a read? | `sum by (table, mode) (increase(tenancy_violation_total{job="hephaestus"}[1d]))` | No result |
 
 ### Alert rules
 
