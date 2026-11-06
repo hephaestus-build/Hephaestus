@@ -381,7 +381,7 @@ The `tag-images` job does these steps in this order:
    It refuses a lock that does not cover the release image inventory of the checkout.
 3. It packages the copy with `helm package`.
    The chart version and `appVersion` are the release version without the leading `v`.
-   It refuses a package whose `helm show values` output does not hold the release lines exactly once.
+   It refuses a package whose values, as Helm parses them, are not the release's version, commit, and images.
 4. It pushes the package to `<release namespace>/charts/hephaestus` and reads the manifest digest from the push.
 5. It pulls the chart back by that digest and compares the bytes with the package.
 6. It writes the joint lock.

@@ -227,8 +227,11 @@ if (tool === 'git') {
   } else if (args[0] === 'show' && args[1] === 'chart') {
     process.stdout.write(fs.readFileSync(path.join(store, 'chart-metadata'), 'utf8'));
   } else if (args[0] === 'show' && args[1] === 'values') {
-    // A package holds the values.yaml it was made from, after one line that names the package.
-    process.stdout.write(fs.readFileSync(args[2], 'utf8').split('\n').slice(1).join('\n') + '\n');
+    // A package holds the values.yaml it was made from, after one line that names the package. Helm
+    // prints its parse as JSON; this tree has no YAML parser, and the release lines are flat.
+    const text = fs.readFileSync(args[2], 'utf8');
+    const group = name => Object.fromEntries([...new RegExp('^' + name + ':\n((?:  .*\n)+)', 'm').exec(text)[1].matchAll(/^  (\S+): (".*")$/gm)].map(([, key, value]) => [key, JSON.parse(value)]));
+    console.log(JSON.stringify({release: group('release'), images: group('images')}));
   } else if (args[0] === 'version' || (args[0] === 'registry' && args[1] === 'login')) {
     fs.readFileSync(0);
   } else if (args[0] === 'package') {

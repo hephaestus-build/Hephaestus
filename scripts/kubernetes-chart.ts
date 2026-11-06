@@ -88,8 +88,8 @@ export function chartValues(lock: ReleaseImageLock, inventory: ImageInventory): 
 
 /**
  * The release lines of the chart source's values.yaml. A release replaces exactly these lines in
- * its packaged copy; release-chart.ts then reads the package back through Helm and refuses any
- * second `release` or `images` key.
+ * its packaged copy; release-chart.ts then refuses a package whose values, as Helm parses them, are
+ * not this release's.
  */
 const sourceValues = 'release:\n  version: ""\n  commit: ""\nimages: {}\n';
 

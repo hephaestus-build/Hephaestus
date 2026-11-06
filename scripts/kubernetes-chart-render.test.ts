@@ -16,7 +16,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { appendFile, cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -596,6 +596,19 @@ await test("a release package runs the release's images with the operator's valu
 	assert.equal(envValue(server, "APP_VERSION"), "1.2.3");
 	// The chart source alone still refuses to render without a run's images.
 	assert.match(render([profile("small"), operator, reviews]).stderr, /images|release/u);
+});
+
+await test("a release package refuses a later quoted images key, which Helm would render", async (t) => {
+	const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-release-chart-"));
+	t.after(async () => rm(directory, { recursive: true, force: true }));
+	const source = path.join(directory, "hephaestus");
+	await cp(chart, source, { recursive: true });
+	const other = { ...prepared.images, webapp: `ghcr.io/other/webapp@${digest("d")}` };
+	await appendFile(path.join(source, "values.yaml"), `"images": ${JSON.stringify(other)}\n`);
+	await assert.rejects(
+		packageReleaseChart(prepared.release.version, source, prepared, directory),
+		/does not pin the v1\.2\.3 images/u,
+	);
 });
 
 const alertRules = readFileSync(path.join(chart, "files", "hephaestus-alerts.yml"), "utf8");

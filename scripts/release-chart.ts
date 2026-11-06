@@ -16,15 +16,11 @@
 import { createHash } from "node:crypto";
 import { cp, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import { type ImageInventory, readInventory } from "./commit-image-lock.ts";
-import {
-	type ChartValues,
-	chartValues,
-	releaseValuesFile,
-	releaseValuesLines,
-} from "./kubernetes-chart.ts";
-import { parseJson } from "./lib/json.ts";
+import { type ChartValues, chartValues, releaseValuesFile } from "./kubernetes-chart.ts";
+import { asRecord, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 import { releaseCertificateIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
 import {
@@ -157,21 +153,18 @@ export async function verifyReleaseChart(
 	}
 }
 
-/** The top-level keys that the release lines own. */
-const releaseKeys = /^(?:release|images):/gmu;
-
 /**
- * Refuse a package whose values.yaml, as Helm reads it back, does not hold the release's lines
- * exactly once, or holds another top-level `release` or `images` key that could replace them.
+ * Refuse a package whose values, as Helm itself parses them, do not name this release and exactly
+ * its images. A match on the file's text cannot do this: Helm lets a later quoted `"images":` key
+ * win, and that key is not the text of an `images:` line. This host has no YAML parser, so Helm
+ * prints its parse as JSON.
  */
 async function inspectValues(file: string, values: ChartValues, run: Execute) {
-	const shown = await run("helm", ["show", "values", file]);
-	const lines = releaseValuesLines(values);
-	const at = shown.indexOf(lines);
+	const shown = await run("helm", ["show", "values", file, "--jsonpath", "{$}"]);
+	const parsed = asRecord(parseJson(shown), `the values of ${path.basename(file)}`);
 	if (
-		at === -1 ||
-		(at > 0 && shown[at - 1] !== "\n") ||
-		(shown.match(releaseKeys)?.length ?? 0) !== 2
+		!isDeepStrictEqual(parsed.release, values.release) ||
+		!isDeepStrictEqual(parsed.images, values.images)
 	) {
 		throw new Error(`${path.basename(file)} does not pin the ${values.release.version} images`);
 	}
