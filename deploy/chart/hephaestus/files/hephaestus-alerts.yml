@@ -601,6 +601,24 @@ groups:
         annotations:
           summary: More than a quarter of the item reviews of the last six hours did not end complete
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A wrong claim costs more trust than a missing one, so a small share is worth a look. A mark that its author
+      # removed does not count. Without a judged result in the window there is no share to read.
+      - alert: HephaestusResultsMarkedIncorrect
+        expr: >-
+          (
+            sum(increase(practice_result_marked_total{job="hephaestus",kind="incorrect",change="set"}[7d]))
+            - sum(increase(practice_result_marked_total{job="hephaestus",kind="incorrect",change="removed"}[7d]))
+          ) / sum(increase(practice_result_recorded_total{job="hephaestus",outcome=~"met|not_met"}[7d])) > 0.05
+          and (
+            sum(increase(practice_result_marked_total{job="hephaestus",kind="incorrect",change="set"}[7d]))
+            - sum(increase(practice_result_marked_total{job="hephaestus",kind="incorrect",change="removed"}[7d]))
+          ) >= 5
+          and sum(increase(practice_result_recorded_total{job="hephaestus",outcome=~"met|not_met"}[7d])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: People marked more than 5 % of the week's judged results incorrect
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # Readback that cannot tell whether a copy reached the work leaves the feedback Unconfirmed: the copy may be
       # missing, and a retry could post it twice. A proved absence is the case where a resend is safe, so it does not fire.
       - alert: HephaestusFeedbackReadbackUnknown

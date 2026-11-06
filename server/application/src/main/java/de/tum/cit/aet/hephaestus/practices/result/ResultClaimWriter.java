@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.practices.metrics.PracticeTrustMeters;
 import de.tum.cit.aet.hephaestus.practices.model.Problem;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewOrder;
@@ -29,6 +31,7 @@ public class ResultClaimWriter {
     private final ReviewRepository reviews;
     private final ProblemRepository problems;
     private final JsonMapper json;
+    private final PracticeTrustMeters trust;
 
     public Result write(long ws, Review review, ResultCandidate c, Instant at) {
         itemLocks.lock(ws, c.itemId());
@@ -72,6 +75,8 @@ public class ResultClaimWriter {
             }
         }
         results.saveAndFlush(result);
+        var outcome = result.getOutcome();
+        TransactionCallbacks.afterCommit(() -> trust.recorded(outcome));
         for (var child : c.problems())
             problems.save(Problem.builder()
                     .id(UUID.randomUUID())

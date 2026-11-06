@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +58,9 @@ class ResultMarkServiceIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ResultMarkRepository marks;
 
+    @Autowired
+    private MeterRegistry meters;
+
     @Test
     void incorrectMarkAndRemovalDoNotChangeCurrentOccupancy() {
         var result = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
@@ -74,6 +79,32 @@ class ResultMarkServiceIntegrationTest extends BaseIntegrationTest {
                 result.getWorkspaceId(), result.getId(), mark.getId(), scenarioAccountId, "The location is verified");
         assertThat(removed.getRemovedAt()).isNotNull();
         assertThat(results.findById(result.getId()).orElseThrow().getEndedAt()).isNull();
+    }
+
+    @Test
+    void shouldCountAMarkAndItsRemoval() {
+        var result = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
+        double set = marked("set");
+        double removed = marked("removed");
+        var mark = service.create(
+                result.getWorkspaceId(),
+                result.getId(),
+                ResultMarkKind.INCORRECT,
+                scenarioAccountId,
+                "Incorrect location");
+
+        service.remove(
+                result.getWorkspaceId(), result.getId(), mark.getId(), scenarioAccountId, "The location is verified");
+
+        assertThat(marked("set")).isEqualTo(set + 1);
+        assertThat(marked("removed")).isEqualTo(removed + 1);
+    }
+
+    private double marked(String change) {
+        return meters.get(PracticeMetrics.RESULT_MARKED)
+                .tags("kind", "incorrect", "change", change)
+                .counter()
+                .count();
     }
 
     @Test

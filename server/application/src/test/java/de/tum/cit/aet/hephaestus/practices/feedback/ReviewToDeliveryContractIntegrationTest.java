@@ -474,6 +474,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldSealTheValidPracticeWhenItsSiblingEvidenceExpired() {
+        double recordedBefore = recorded();
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var scenario = review.pending().scenario();
             var sibling = versions.create(new PracticeVersionService.NewPractice(
@@ -534,6 +535,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .singleElement()
                     .satisfies(value -> assertThat(value.reason()).isEqualTo("COPY_AUTHORITY_UNAVAILABLE"));
             assertThat(resultIds(review)).hasSize(1);
+            assertThat(recorded())
+                    .as("the sealed result counts once its review commits")
+                    .isEqualTo(recordedBefore + 1);
         }
     }
 
@@ -636,6 +640,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private long firstDeliveries() {
         return meters.find(PracticeMetrics.REVIEW_FIRST_DELIVERY).timers().stream()
                 .mapToLong(Timer::count)
+                .sum();
+    }
+
+    private double recorded() {
+        return meters.find(PracticeMetrics.RESULT_RECORDED).counters().stream()
+                .mapToDouble(Counter::count)
                 .sum();
     }
 

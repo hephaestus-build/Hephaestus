@@ -457,6 +457,69 @@ tests:
         exp_alerts: []
       - eval_time: 25m
         alertname: HephaestusEventsDelayed
+
+  - name: incorrect marks above 5 % of the judged results fire once there are five
+    interval: 1h
+    input_series:
+      - series: 'practice_result_marked_total{job="hephaestus",instance="server:9090",kind="incorrect",change="set"}'
+        values: "0+2x6"
+      - series: 'practice_result_marked_total{job="hephaestus",instance="server:9090",kind="incorrect",change="removed"}'
+        values: "0x6"
+      - series: 'practice_result_recorded_total{job="hephaestus",instance="server:9090",outcome="met"}'
+        values: "0+10x6"
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: HephaestusResultsMarkedIncorrect
+        exp_alerts: []
+      - eval_time: 3h
+        alertname: HephaestusResultsMarkedIncorrect
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: People marked more than 5 % of the week's judged results incorrect
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: incorrect marks under 5 % of the judged results do not fire
+    interval: 1h
+    input_series:
+      - series: 'practice_result_marked_total{job="hephaestus",instance="server:9090",kind="incorrect",change="set"}'
+        values: "0+2x6"
+      - series: 'practice_result_marked_total{job="hephaestus",instance="server:9090",kind="incorrect",change="removed"}'
+        values: "0x6"
+      - series: 'practice_result_recorded_total{job="hephaestus",instance="server:9090",outcome="met"}'
+        values: "0+100x6"
+    alert_rule_test:
+      - eval_time: 3h
+        alertname: HephaestusResultsMarkedIncorrect
+        exp_alerts: []
+
+  - name: marks that their authors removed do not count
+    interval: 1h
+    input_series:
+      - series: 'practice_result_marked_total{job="hephaestus",instance="server:9090",kind="incorrect",change="set"}'
+        values: "0+2x6"
+      - series: 'practice_result_marked_total{job="hephaestus",instance="server:9090",kind="incorrect",change="removed"}'
+        values: "0+2x6"
+      - series: 'practice_result_recorded_total{job="hephaestus",instance="server:9090",outcome="met"}'
+        values: "0+10x6"
+    alert_rule_test:
+      - eval_time: 3h
+        alertname: HephaestusResultsMarkedIncorrect
+        exp_alerts: []
+
+  - name: marks in a week without a judged result do not fire
+    interval: 1h
+    input_series:
+      - series: 'practice_result_marked_total{job="hephaestus",instance="server:9090",kind="incorrect",change="set"}'
+        values: "0+2x6"
+      - series: 'practice_result_marked_total{job="hephaestus",instance="server:9090",kind="incorrect",change="removed"}'
+        values: "0x6"
+      - series: 'practice_result_recorded_total{job="hephaestus",instance="server:9090",outcome="met"}'
+        values: "0x6"
+    alert_rule_test:
+      - eval_time: 3h
+        alertname: HephaestusResultsMarkedIncorrect
         exp_alerts: []
 
   - name: three failed or timed-out jobs in one hour fire, fewer do not

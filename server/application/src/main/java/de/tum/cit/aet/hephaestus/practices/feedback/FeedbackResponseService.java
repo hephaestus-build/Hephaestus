@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
@@ -8,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponse;
 import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponseRepository;
+import de.tum.cit.aet.hephaestus.practices.metrics.PracticeTrustMeters;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackUsefulness;
@@ -33,6 +35,7 @@ public class FeedbackResponseService {
     private final CurrentDeveloperLookup currentDeveloperLookup;
     private final Clock clock;
     private final PersonDataWriteFence privacy;
+    private final PracticeTrustMeters trust;
 
     public FeedbackResponseDTO replaceResponse(
             WorkspaceContext workspace, UUID feedbackId, FeedbackResponseRequestDTO request) {
@@ -65,6 +68,10 @@ public class FeedbackResponseService {
                         && Objects.equals(row.getComment(), comment))
                 .isPresent()) {
             return FeedbackResponseDTO.from(current.get());
+        }
+        // A new comment or usefulness on the same resolution is no new answer.
+        if (resolution != null && current.map(FeedbackResponse::getResolution).orElse(null) != resolution) {
+            TransactionCallbacks.afterCommit(() -> trust.responded(resolution));
         }
         return append(workspaceId, feedbackId, resolution, usefulness, comment);
     }
