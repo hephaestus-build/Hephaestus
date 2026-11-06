@@ -474,6 +474,13 @@ provider instance stops the upgrade. Before applying the upgrade, complete these
 
 The shipped migration fragment owns the exact operator procedure.
 
+The contributor-link migration clears `commit_contributor.user_id` where the linked user is on another kind of provider than the commit's repository.
+A cleared row stays in the mirror without a user.
+Person export and erasure of that account no longer reach the row or the commit data found through it, because they follow `user_id`.
+Capture consent no longer counts that account for the commit.
+This is the same state as any unlinked contributor, and no identity is inferred from the email.
+The migration logs a count and no personal values.
+
 The conversation store holds no data from releases before it. The upgrade that added it deleted
 every earlier conversation, including the Hephaestus copies of Slack DMs. Slack keeps its own
 copy of each DM. Feedback shown in an earlier conversation keeps its state, but its copy no longer
