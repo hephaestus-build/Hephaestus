@@ -44,7 +44,7 @@ export const SLOT_CASES: readonly SlotCase[] = [
 declare global {
 	interface Window {
 		HephaestusProviderSlots: {
-			findReportSlot(root: ParentNode, provider: Provider): { layout: string } | undefined;
+			findReportSlot: (root: ParentNode, provider: Provider) => { layout: string } | undefined;
 		};
 	}
 }
