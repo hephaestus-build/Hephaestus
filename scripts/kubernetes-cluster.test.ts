@@ -491,3 +491,23 @@ await test("local live qualification requires an explicit namespace before invok
 		rmSync(emptyPath, { recursive: true, force: true });
 	}
 });
+
+await test("replacement-storage drill refuses local execution before invoking cluster tools", () => {
+	const emptyPath = mkdtempSync(path.join(tmpdir(), "heph-restore-no-tools-"));
+	try {
+		const result = spawnSync(
+			process.execPath,
+			[
+				fileURLToPath(new URL("kubernetes-cluster.ts", import.meta.url)),
+				"backup-drill",
+				"--pod-cidr",
+				"10.42.0.0/16",
+			],
+			{ encoding: "utf8", env: { ...process.env, CI: "false", PATH: emptyPath } },
+		);
+		assert.equal(result.status, 1);
+		assert.match(result.stderr, /requires the disposable CI cluster/u);
+	} finally {
+		rmSync(emptyPath, { recursive: true, force: true });
+	}
+});
