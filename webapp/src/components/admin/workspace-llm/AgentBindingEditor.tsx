@@ -3,6 +3,7 @@ import { type ReactNode, type SubmitEvent, useId, useRef, useState } from "react
 import { flushSync } from "react-dom";
 import { z } from "zod";
 import type { AgentBinding, AgentBindingRequest, AvailableLlmModel } from "@/api/types.gen";
+import { definitionFor } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { isPracticeScriptPurpose } from "@/components/practice-vocabulary/agent-purpose-defs";
 import {
@@ -11,6 +12,7 @@ import {
 	bindingReadiness,
 } from "@/components/practice-vocabulary/binding-readiness-defs";
 import {
+	UNKNOWN_DATA_HANDLING_DEF,
 	DATA_HANDLING_DEFS,
 	type DataHandlingTier,
 	UNCHOSEN_MEMBERS,
@@ -141,7 +143,7 @@ export function AgentBindingEditor({
 	const formRef = useRef<HTMLFormElement>(null);
 
 	const undeclared = tier === "UNDECLARED";
-	const tierLabel = DATA_HANDLING_DEFS[tier].label;
+	const tierLabel = definitionFor(DATA_HANDLING_DEFS, tier, UNKNOWN_DATA_HANDLING_DEF).label;
 	const rowTitle = undeclared ? UNCHOSEN_ROW_TITLE : tierLabel;
 	// The undeclared row takes any model; a declared row holds only models of its own tier.
 	const pickerTier = undeclared ? undefined : tier;
@@ -335,7 +337,11 @@ interface TierEditorHeadingProps {
 
 function TierEditorHeading({ id, tier, aiChoiceRequired, readiness }: TierEditorHeadingProps) {
 	const undeclared = tier === "UNDECLARED";
-	const { label, icon: TierIcon } = DATA_HANDLING_DEFS[tier];
+	const { label, icon: TierIcon } = definitionFor(
+		DATA_HANDLING_DEFS,
+		tier,
+		UNKNOWN_DATA_HANDLING_DEF,
+	);
 	return (
 		<div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
 			<div className="min-w-0 flex-1 space-y-0.5">
@@ -374,7 +380,15 @@ function ModelHint({
 		return (
 			<FieldDescription id={id}>
 				{movedModel.displayName} is now declared as{" "}
-				<span className="font-medium">{DATA_HANDLING_DEFS[movedModel.dataHandlingTier].label}</span>{" "}
+				<span className="font-medium">
+					{
+						definitionFor(
+							DATA_HANDLING_DEFS,
+							movedModel.dataHandlingTier,
+							UNKNOWN_DATA_HANDLING_DEF,
+						).label
+					}
+				</span>{" "}
 				and no longer serves this assignment.{" "}
 				{noModels ? (
 					<>

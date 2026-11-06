@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
 import { QueryErrorAlert, queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
+import { definitionFor } from "@/components/common/status-def";
 import { isPracticeScriptApi } from "@/lib/llm-api-protocol-labels";
 import { toolChoiceTestState } from "@/lib/llm-tool-choice-test";
 import { toast } from "@/lib/toast";
@@ -57,11 +58,13 @@ import {
 } from "@/components/admin/workspace-llm/WorkspaceLlmProviderPanel";
 import { type LoadState, panelState } from "@/components/common/panel-state";
 import {
+	UNKNOWN_AGENT_PURPOSE_DEF,
 	AGENT_PURPOSE_DEFS,
 	AGENT_PURPOSES,
 	isAgentPurpose,
 } from "@/components/practice-vocabulary/agent-purpose-defs";
 import {
+	UNKNOWN_DATA_HANDLING_DEF,
 	DATA_HANDLING_DEFS,
 	DATA_HANDLING_TIERS,
 	type DataHandlingTier,
@@ -114,7 +117,7 @@ function targetKeyOf(variables: unknown): string | undefined {
 function slotRefusalOf(error: unknown): string {
 	const declaredTier = isRecord(error) ? error.declaredTier : undefined;
 	return isDataHandlingTier(declaredTier)
-		? `This model is declared as ${DATA_HANDLING_DEFS[declaredTier].label}. Assign it under ${DATA_HANDLING_DEFS[declaredTier].label}.`
+		? `This model is declared as ${definitionFor(DATA_HANDLING_DEFS, declaredTier, UNKNOWN_DATA_HANDLING_DEF).label}. Assign it under ${definitionFor(DATA_HANDLING_DEFS, declaredTier, UNKNOWN_DATA_HANDLING_DEF).label}.`
 		: problemDetailOf(error);
 }
 
@@ -221,7 +224,9 @@ function ModelsContainer() {
 		onSuccess: async (_data, { target }) => {
 			await invalidateBindings();
 			bumpSaveRevision(target);
-			toast.success(`Assignment saved for ${AGENT_PURPOSE_DEFS[target.purpose].title}`);
+			toast.success(
+				`Assignment saved for ${definitionFor(AGENT_PURPOSE_DEFS, target.purpose, UNKNOWN_AGENT_PURPOSE_DEF).title}`,
+			);
 		},
 		onError: (error, { target }) => {
 			// A refusal of the row's own choice stays on the row: the slot's tier (409), or a model
@@ -236,7 +241,7 @@ function ModelsContainer() {
 				return;
 			}
 			toast.error(
-				`We could not save the assignment for ${AGENT_PURPOSE_DEFS[target.purpose].title}`,
+				`We could not save the assignment for ${definitionFor(AGENT_PURPOSE_DEFS, target.purpose, UNKNOWN_AGENT_PURPOSE_DEF).title}`,
 				{
 					description: problemDetailOf(error),
 				},
@@ -256,11 +261,13 @@ function ModelsContainer() {
 		onSuccess: async (_data, { target }) => {
 			await invalidateBindings();
 			bumpSaveRevision(target);
-			toast.success(`Assignment cleared for ${AGENT_PURPOSE_DEFS[target.purpose].title}`);
+			toast.success(
+				`Assignment cleared for ${definitionFor(AGENT_PURPOSE_DEFS, target.purpose, UNKNOWN_AGENT_PURPOSE_DEF).title}`,
+			);
 		},
 		onError: (error, { target }) => {
 			toast.error(
-				`We could not clear the assignment for ${AGENT_PURPOSE_DEFS[target.purpose].title}`,
+				`We could not clear the assignment for ${definitionFor(AGENT_PURPOSE_DEFS, target.purpose, UNKNOWN_AGENT_PURPOSE_DEF).title}`,
 				{
 					description: problemDetailOf(error),
 				},

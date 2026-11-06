@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { MessageSquareReplyIcon } from "lucide-react";
 import type { ReactElement } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { WeeklyDigest, WeeklyDigestFeedback } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
@@ -105,7 +106,7 @@ function FeedbackRow({ row, workspaceSlug }: { row: WeeklyDigestFeedback; worksp
 				<ItemContent>
 					<ItemTitle>
 						<PracticeTextPill name={row.practiceName} />
-						<StatusBadge def={FEEDBACK_DESTINATION_DEFS[row.destination]} />
+						<StatusBadge def={definitionFor(FEEDBACK_DESTINATION_DEFS, row.destination)} />
 					</ItemTitle>
 					{(work !== undefined || row.replaced) && (
 						<ItemDescription>

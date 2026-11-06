@@ -1,3 +1,4 @@
+import { definitionFor } from "@/components/common/status-def";
 import type { FeedbackMode } from "@/lib/practice-feedback-mode";
 
 import { StatusBadge, type StatusBadgeProps } from "@/components/common/StatusBadge";
@@ -8,5 +9,5 @@ export interface FeedbackModeBadgeProps extends Omit<StatusBadgeProps, "def"> {
 }
 
 export function FeedbackModeBadge({ feedbackMode, ...props }: FeedbackModeBadgeProps) {
-	return <StatusBadge def={FEEDBACK_MODE_DEFS[feedbackMode]} {...props} />;
+	return <StatusBadge def={definitionFor(FEEDBACK_MODE_DEFS, feedbackMode)} {...props} />;
 }

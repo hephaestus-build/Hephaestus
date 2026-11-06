@@ -1,7 +1,8 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "cn";
+import { definitionFor } from "@/components/common/status-def";
 
-import { PRACTICE_GROUP_STANDING_DEFS } from "./practice-group-standing-defs";
+import { UNKNOWN_STANDING_DEF, PRACTICE_GROUP_STANDING_DEFS } from "./practice-group-standing-defs";
 import { type StandingCounts, summarizeStandingCounts } from "./standing-counts";
 
 const standingCountsListVariants = cva("", {
@@ -45,7 +46,11 @@ export function StandingCountsList({ counts, size, className, ...props }: Standi
 			{...props}
 		>
 			{segments.map(({ standing, count, colorClass, label }) => {
-				const StandingIcon = PRACTICE_GROUP_STANDING_DEFS[standing].icon;
+				const StandingIcon = definitionFor(
+					PRACTICE_GROUP_STANDING_DEFS,
+					standing,
+					UNKNOWN_STANDING_DEF,
+				).icon;
 				return (
 					<li key={standing} className="inline-flex items-center gap-1.5 whitespace-nowrap">
 						<StandingIcon className={cn("shrink-0", colorClass)} aria-hidden />

@@ -2,13 +2,14 @@ import { CircleDashedIcon } from "lucide-react";
 
 import type { PracticesAcrossWorkspaceTiles, WorkspaceSplit } from "@/api/types.gen";
 import type { FilterOption } from "@/components/common/FilterToggle";
-import { statusValues } from "@/components/common/status-def";
+import { definitionFor, statusValues } from "@/components/common/status-def";
 import {
 	REVIEW_TIMEFRAME_DEFS,
 	type ReviewTimeframe,
 } from "@/components/practice-profile/practice-profile-search";
 import { count } from "@/components/practice-vocabulary/feedback-text";
 import {
+	UNKNOWN_STANDING_DEF,
 	isSettledStanding,
 	PRACTICE_GROUP_STANDING_DEFS,
 	type PracticeGroupStandingValue,
@@ -153,7 +154,8 @@ export function splitDescription(
 	}
 	const whole = `${splitTotalText(split)} in this workspace`;
 	const parts = split.parts.map(
-		(part) => `${part.developers} ${PRACTICE_GROUP_STANDING_DEFS[part.standing].label}`,
+		(part) =>
+			`${part.developers} ${definitionFor(PRACTICE_GROUP_STANDING_DEFS, part.standing, UNKNOWN_STANDING_DEF).label}`,
 	);
 	const noneYet = `${split.noneYet} ${NONE_YET_SEGMENT.inSentence}`;
 	const counts = `${whole}: ${[...parts, noneYet].join(", ")}.`;
@@ -161,7 +163,7 @@ export function splitDescription(
 		return counts;
 	}
 	const yourPart = isSettledStanding(yourStanding)
-		? `the ${PRACTICE_GROUP_STANDING_DEFS[yourStanding].label} part`
+		? `the ${definitionFor(PRACTICE_GROUP_STANDING_DEFS, yourStanding, UNKNOWN_STANDING_DEF).label} part`
 		: "the part with no standing yet";
 	return `${counts} You are in ${yourPart}.`;
 }

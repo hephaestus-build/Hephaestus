@@ -6,6 +6,7 @@ import { noNonAsciiFilename } from "./rules/no-non-ascii-filename.ts";
 import { noNondeterministicRender } from "./rules/no-nondeterministic-render.ts";
 import { noRedundantInTheDocument } from "./rules/no-redundant-in-the-document.ts";
 import { noStoryA11yOverride } from "./rules/no-story-a11y-override.ts";
+import { noUnsafeDefinitionLookup } from "./rules/no-unsafe-definition-lookup.ts";
 import { noWithinCanvasElement } from "./rules/no-within-canvas-element.ts";
 import { playMustAssert } from "./rules/play-must-assert.ts";
 import { preferAutoStoryTitle } from "./rules/prefer-auto-story-title.ts";
@@ -19,6 +20,7 @@ export default definePlugin({
 	rules: {
 		"ui-text-voice": uiTextVoice,
 		"no-manual-query-key": noManualQueryKey,
+		"no-unsafe-definition-lookup": noUnsafeDefinitionLookup,
 		"no-non-ascii-filename": noNonAsciiFilename,
 		"no-nondeterministic-render": noNondeterministicRender,
 		"focus-outline-in-forced-colors": focusOutlineInForcedColors,

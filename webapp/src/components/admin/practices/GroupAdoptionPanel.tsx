@@ -1,4 +1,5 @@
 import { ChevronRight, CircleAlert } from "lucide-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { GroupAdoptionPreview } from "@/components/admin/practices/catalog-adoption";
 import { PRACTICE_SETUP_LEVEL_LABELS } from "@/components/admin/practices/practice-search";
@@ -116,7 +117,7 @@ export function GroupAdoptionPanel({
 								const action =
 									state.preview.actions.find(({ slug }) => slug === practice.slug)?.action ??
 									"KEEP";
-								const def = CATALOG_GROUP_ACTION_DEFS[action];
+								const def = definitionFor(CATALOG_GROUP_ACTION_DEFS, action);
 								return (
 									<div key={practice.slug} role="listitem">
 										<Item

@@ -17,7 +17,7 @@ import { DotSeparator } from "@/components/common/DotSeparator";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { type StatusDef, statusToneClass } from "@/components/common/status-def";
+import { definitionFor, type StatusDef, statusToneClass } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { Section } from "@/components/layout/Section";
@@ -359,12 +359,12 @@ function ResultCountLinks({
 		// One flex row, so the counts with their icons, the commas, the dot and the link share one middle line.
 		<span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
 			{counted.map(([outcome, key], index) => {
-				const text = `${String(counts[key])} ${OUTCOME_DEFS[outcome].label.toLowerCase()}`;
+				const text = `${String(counts[key])} ${definitionFor(OUTCOME_DEFS, outcome).label.toLowerCase()}`;
 				return (
 					<span key={outcome} className="inline-flex items-center">
 						<CountLink
 							workspaceSlug={workspaceSlug}
-							def={OUTCOME_DEFS[outcome]}
+							def={definitionFor(OUTCOME_DEFS, outcome)}
 							text={text}
 							name={named(text)}
 							destination={{ list: "results", search: { ...scope, outcome: [outcome] } }}
@@ -439,7 +439,7 @@ function ReviewWhat({
 	review: ReviewDetail;
 	eventLabel: (name: string) => string;
 }) {
-	const origin = REVIEW_ORIGIN_DEFS[review.origin];
+	const origin = definitionFor(REVIEW_ORIGIN_DEFS, review.origin);
 	const event = review.startedBy;
 	return (
 		<ReviewFactGrid>
@@ -537,7 +537,7 @@ export function reviewHistory(review: ReviewDetail): SheetEvent[] {
 		events.push({
 			key: "ended",
 			at: review.completedAt,
-			title: REVIEW_STATUS_DEFS[review.status].label,
+			title: definitionFor(REVIEW_STATUS_DEFS, review.status).label,
 			detail: (
 				<>
 					{elapsed !== undefined && <span className="block">{elapsed} after it was asked for</span>}
@@ -573,7 +573,7 @@ function practiceReason(practice: ReviewPractice): string | undefined {
 	}
 	// Once its script has a run, the trace line under it says how that run went.
 	return practice.script === null
-		? REVIEW_PRACTICE_STATUS_DEFS[practice.status].description
+		? definitionFor(REVIEW_PRACTICE_STATUS_DEFS, practice.status).description
 		: undefined;
 }
 
@@ -616,7 +616,7 @@ function ReviewPracticeList({
 						>
 							{showStatus && (
 								<span>
-									<StatusBadge def={REVIEW_PRACTICE_STATUS_DEFS[practice.status]} />
+									<StatusBadge def={definitionFor(REVIEW_PRACTICE_STATUS_DEFS, practice.status)} />
 								</span>
 							)}
 							<span className="font-medium break-words">{practice.practiceName}</span>
@@ -737,9 +737,9 @@ function ReviewJobEntry({ job, position }: { job: ReviewJob; position: string })
 					{position}
 					{attemptLabel(job.attempt)}
 				</span>
-				<StatusBadge def={REVIEW_JOB_STATUS_DEFS[job.status]} />
+				<StatusBadge def={definitionFor(REVIEW_JOB_STATUS_DEFS, job.status)} />
 				{(!active || job.processingStatus !== "NONE") && (
-					<StatusBadge def={REVIEW_JOB_PROCESSING_DEFS[job.processingStatus]} />
+					<StatusBadge def={definitionFor(REVIEW_JOB_PROCESSING_DEFS, job.processingStatus)} />
 				)}
 			</p>
 			<p className="text-muted-foreground tabular-nums">

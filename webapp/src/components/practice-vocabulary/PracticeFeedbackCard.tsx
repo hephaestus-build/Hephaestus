@@ -9,7 +9,7 @@ import { InfoTip } from "@/components/common/InfoTip";
 import { InlineLink } from "@/components/common/InlineLink";
 import { ResponseButton, toneOf } from "@/components/common/ResponseButton";
 import { ResponseCommentBand } from "@/components/common/ResponseCommentBand";
-import { statusValues } from "@/components/common/status-def";
+import { definitionFor, statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { TipPopover } from "@/components/common/TipPopover";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
@@ -30,7 +30,11 @@ import { UNVERIFIED_HISTORY_NOTE } from "./claim-currentness";
 import { FEEDBACK_RESOLUTION_DEFS, type FeedbackResolution } from "./feedback-resolution-defs";
 import { FEEDBACK_STATE_DEFS, type FeedbackState, isOpenFeedback } from "./feedback-state-defs";
 import { count, type FeedbackTextSegment, linkWork } from "./feedback-text";
-import { FEEDBACK_USEFULNESS_DEFS, type FeedbackUsefulness } from "./feedback-usefulness-defs";
+import {
+	UNKNOWN_USEFULNESS_DEF,
+	FEEDBACK_USEFULNESS_DEFS,
+	type FeedbackUsefulness,
+} from "./feedback-usefulness-defs";
 import { type WorkSeenIn, workKey, workSeenIn } from "./feedback-work-kind";
 import { FeedbackText } from "./FeedbackText";
 import { FeedbackWorkTimeline } from "./FeedbackWorkTimeline";
@@ -647,7 +651,7 @@ export function PracticeFeedbackCard({
 				{openBand === "comment" && usefulness !== undefined && (
 					<ResponseCommentBand
 						key={usefulness}
-						{...FEEDBACK_USEFULNESS_DEFS[usefulness].note}
+						{...definitionFor(FEEDBACK_USEFULNESS_DEFS, usefulness, UNKNOWN_USEFULNESS_DEF).note}
 						isPending={isPending}
 						sending={saving === "send"}
 						onSend={onSendComment}

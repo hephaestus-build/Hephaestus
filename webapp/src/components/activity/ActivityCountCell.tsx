@@ -1,5 +1,6 @@
 import { PeopleIcon } from "@primer/octicons-react";
 import { cn } from "cn";
+import { definitionFor } from "@/components/common/status-def";
 import { GitLabUsersIcon } from "@/components/icons/gitlab-icons";
 import type { IconComponent } from "@/components/icons/provider-icons";
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
@@ -7,6 +8,7 @@ import { capitalise } from "@/lib/text";
 
 import { CountChip, NoneMark } from "./ActionChip";
 import {
+	UNKNOWN_ACTIVITY_KIND_DEF,
 	ACTIVITY_CATEGORY_DEFS,
 	ACTIVITY_KIND_DEFS,
 	type ActivityKind,
@@ -110,7 +112,7 @@ interface Part {
 }
 
 function kindPart(kind: ActivityKind, count: number, provider: ProviderType): Part {
-	const def = ACTIVITY_KIND_DEFS[kind];
+	const def = definitionFor(ACTIVITY_KIND_DEFS, kind, UNKNOWN_ACTIVITY_KIND_DEF);
 	return {
 		key: kind,
 		count,

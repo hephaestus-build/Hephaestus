@@ -1,6 +1,7 @@
 import { PulseIcon } from "@primer/octicons-react";
 import { CrosshairIcon, PlayIcon } from "lucide-react";
 import type { ReactElement } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import { cn } from "cn";
 
@@ -306,7 +307,7 @@ function ReviewRow({
 					</span>
 				)}
 				<span className="flex min-w-0 flex-col items-start gap-1.5">
-					<ReviewStatusBadge def={OWN_REVIEW_STATUS_DEFS[review.status]} />
+					<ReviewStatusBadge def={definitionFor(OWN_REVIEW_STATUS_DEFS, review.status)} />
 					<time dateTime={at.toISOString()} className="font-semibold">
 						{formatTime(at)}
 					</time>

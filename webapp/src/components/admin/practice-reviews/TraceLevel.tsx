@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ItemEvent, ItemRef, ReviewDetail, ReviewLineage } from "@/api/types.gen";
 import type { PanelState } from "@/components/common/panel-state";
@@ -158,7 +159,8 @@ function UnreviewedTrace({
 		<>
 			<span className="block font-medium">{eventLabel}</span>
 			<span className="block text-muted-foreground">
-				{ITEM_EVENT_FOUND_BY[event.foundBy].label} · {ITEM_EVENT_STATE_DEFS[event.state].label}
+				{ITEM_EVENT_FOUND_BY[event.foundBy].label} ·{" "}
+				{definitionFor(ITEM_EVENT_STATE_DEFS, event.state).label}
 			</span>
 		</>
 	);

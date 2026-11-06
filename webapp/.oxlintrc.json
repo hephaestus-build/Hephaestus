@@ -202,7 +202,8 @@
 
 		// -- House rules, defined in `tools/oxlint/` --------------------------------------------------
 		// Each states in its own `meta.docs.description` what it asks.
-		"hephaestus/no-manual-query-key": "error"
+		"hephaestus/no-manual-query-key": "error",
+		"hephaestus/no-unsafe-definition-lookup": "error"
 		// The rules that read a Storybook story object are scoped to story files in `overrides`.
 	},
 

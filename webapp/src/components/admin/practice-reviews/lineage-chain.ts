@@ -7,7 +7,8 @@ import type {
 	ReviewLineageNode,
 	ReviewRef,
 } from "@/api/types.gen";
-import type { BadgeVariant, StatusDef } from "@/components/common/status-def";
+import { definitionFor, type BadgeVariant, type StatusDef } from "@/components/common/status-def";
+
 import { deliveryOutcome } from "@/components/practice-vocabulary/delivery-state-defs";
 import {
 	FEEDBACK_LOCATION_DEFS,
@@ -191,7 +192,7 @@ export function branchOutcome(
 	item: ItemRef | undefined,
 ): BranchOutcome {
 	const def = feedbackStatus(feedback);
-	const location = FEEDBACK_LOCATION_DEFS[feedbackLocation(feedback, item)];
+	const location = definitionFor(FEEDBACK_LOCATION_DEFS, feedbackLocation(feedback, item));
 	const at = feedback.deliveredAt ?? undefined;
 	if (feedback.withdrawn) {
 		return {
@@ -273,7 +274,7 @@ export function verdictCounts(
 
 export function verdictSummary(results: readonly ReviewBoundResult[]): string {
 	const parts = verdictCounts(results).map(
-		({ outcome, count }) => `${count} ${OUTCOME_DEFS[outcome].label.toLowerCase()}`,
+		({ outcome, count }) => `${count} ${definitionFor(OUTCOME_DEFS, outcome).label.toLowerCase()}`,
 	);
 	return `${countOf(results.length, "observation", "observations")}: ${parts.join(", ")}`;
 }

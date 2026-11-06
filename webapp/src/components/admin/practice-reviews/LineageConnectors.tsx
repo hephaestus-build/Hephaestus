@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { cn } from "cn";
-import { type BadgeVariant, statusToneClass } from "@/components/common/status-def";
+import { definitionFor, type BadgeVariant, statusToneClass } from "@/components/common/status-def";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 
 import type { LineageFeedback, NumberedResult } from "./lineage-chain";
@@ -285,7 +285,7 @@ export function LineageConnectors({
 					const outcome = outcomes.get(line.practiceResultId);
 					const faint = traced !== undefined && !strong(line);
 					const tone = connectorTone(
-						outcome === undefined ? undefined : OUTCOME_DEFS[outcome].badgeVariant,
+						outcome === undefined ? undefined : definitionFor(OUTCOME_DEFS, outcome).badgeVariant,
 						lineState(faint, strong(line)),
 					);
 					return (

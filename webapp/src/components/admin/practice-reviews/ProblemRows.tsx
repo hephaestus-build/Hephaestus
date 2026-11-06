@@ -1,4 +1,5 @@
 import { CircleAlertIcon } from "lucide-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ReviewProblem } from "@/api/types.gen";
 import { useNow } from "@/components/common/use-now";
@@ -125,7 +126,7 @@ export function ProblemRow({ problem }: ProblemRowProps) {
 			}
 		>
 			<RecordTimeCell
-				status={SEVERITY_DEFS[problem.severity]}
+				status={definitionFor(SEVERITY_DEFS, problem.severity)}
 				at={problem.recordedAt}
 				statusTooltip={false}
 			/>
@@ -143,7 +144,7 @@ export function ProblemRow({ problem }: ProblemRowProps) {
 					<span className="flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
 						<ReviewPracticeName practiceName={problem.practiceName} group={problem.group} />
 						{/* In words too: the time column's glyph names it only on hover. */}
-						<StatusLabel def={SEVERITY_DEFS[problem.severity]} className="text-xs" />
+						<StatusLabel def={definitionFor(SEVERITY_DEFS, problem.severity)} className="text-xs" />
 						{place !== undefined && <code className="break-all">{place.location}</code>}
 						{place?.before !== undefined && <span>{place.before}</span>}
 					</span>

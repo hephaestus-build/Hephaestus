@@ -43,6 +43,7 @@
 			// Views, content script and worker only; the configs and the Playwright tree run on Node.
 			"files": ["src/**"],
 			"rules": {
+				"hephaestus/no-unsafe-definition-lookup": "error",
 				// Every request goes through the worker's generated client (`src/background/api.ts`).
 				"no-restricted-globals": [
 					"error",

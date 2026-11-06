@@ -17,10 +17,9 @@ import {
 	MessageSquareTextIcon,
 	MessagesSquareIcon,
 } from "lucide-react";
+import { definitionFor, type StatusDef } from "@/components/common/status-def";
 
 import type { EvidenceCitation } from "@/api/types.gen";
-
-import type { StatusDef } from "@/components/common/status-def";
 
 /** Code coordinates name source lines; object coordinates belong to serialized context, not the source UI. */
 export type EvidenceLocator = "code" | "object";
@@ -157,7 +156,7 @@ const UNKNOWN_SOURCE: EvidenceSourceDef = {
 
 /** The words for one source kind, or the neutral entry for one this build does not know. */
 export function evidenceSourceDef(sourceKind: string): EvidenceSourceDef {
-	return EVIDENCE_SOURCE_DEFS[sourceKind] ?? UNKNOWN_SOURCE;
+	return definitionFor(EVIDENCE_SOURCE_DEFS, sourceKind, UNKNOWN_SOURCE);
 }
 
 export function knownEvidenceSourceKinds(): string[] {

@@ -6,7 +6,7 @@ import {
 	VolumeOffIcon,
 } from "lucide-react";
 import type { ReviewFeedback } from "@/api/types.gen";
-import type { StatusDefs } from "@/components/common/status-def";
+import { definitionFor, type StatusDefs } from "@/components/common/status-def";
 
 export type WithholdingReason = NonNullable<ReviewFeedback["stopReason"]>;
 export type WithholdingFamily =
@@ -155,7 +155,11 @@ export function withholdingFamily(reason: WithholdingReason): WithholdingFamily 
 }
 
 export function withholdingReasonSentence(reason: WithholdingReason): string {
-	return WITHHOLDING_REASON_DEFS[reason];
+	return definitionFor(
+		WITHHOLDING_REASON_DEFS,
+		reason,
+		"Unknown reason. Reload to check for an update.",
+	);
 }
 
 function isWithholdingReason(value: string): value is WithholdingReason {

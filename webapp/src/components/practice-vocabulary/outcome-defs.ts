@@ -1,6 +1,6 @@
 import { CircleCheckIcon, CircleDashedIcon, CircleHelpIcon, WrenchIcon } from "lucide-react";
 import type { ResultList } from "@/api/types.gen";
-import type { StatusDefs } from "@/components/common/status-def";
+import { definitionFor, type StatusDefs } from "@/components/common/status-def";
 
 export type Outcome = ResultList["outcome"];
 export const OUTCOME_DEFS: StatusDefs<Outcome> = {
@@ -32,7 +32,7 @@ export const OUTCOME_DEFS: StatusDefs<Outcome> = {
 };
 
 export function outcomeCountNoun(outcome: Outcome, count: number): string {
-	const label = OUTCOME_DEFS[outcome].label.toLowerCase();
+	const label = definitionFor(OUTCOME_DEFS, outcome).label.toLowerCase();
 	return `${label} ${count === 1 ? "observation" : "observations"}`;
 }
 
@@ -41,7 +41,7 @@ export function problemCount(count: number): string {
 }
 
 export function outcomeLabel(outcome: Outcome, problems: number | undefined): string {
-	const { label } = OUTCOME_DEFS[outcome];
+	const { label } = definitionFor(OUTCOME_DEFS, outcome);
 	return outcome === "NOT_MET" && problems !== undefined && problems > 0
 		? `${label} · ${problemCount(problems)}`
 		: label;

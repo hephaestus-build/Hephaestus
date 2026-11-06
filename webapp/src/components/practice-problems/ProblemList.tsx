@@ -1,4 +1,5 @@
 import { FootprintsIcon } from "lucide-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import { cn } from "cn";
 import type { ReactNode } from "react";
@@ -61,7 +62,7 @@ export function ProblemCard({ problem, evidence, open, number, raised = false }:
 				)}
 				{/* The severity, from the same registry on every surface: the operator ranks problems by it,
 				    and the developer reads which problem blocks the work and which is a small gap. */}
-				<StatusBadge def={SEVERITY_DEFS[problem.severity]} />
+				<StatusBadge def={definitionFor(SEVERITY_DEFS, problem.severity)} />
 				<p className="min-w-0 flex-1 basis-48 text-sm font-medium text-pretty break-words">
 					{open === undefined ? (
 						summary

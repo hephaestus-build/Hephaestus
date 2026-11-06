@@ -4,7 +4,7 @@ import { cn } from "cn";
 import type { ConfigurationFact } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { statusToneClass, statusValues } from "@/components/common/status-def";
+import { definitionFor, statusToneClass, statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	Accordion,
@@ -172,7 +172,10 @@ function ReadyBody({
 	const countOf = (status: ConfigurationStatus) =>
 		groups.find((group) => group.status === status)?.facts.length ?? 0;
 	const summary = summaryOf(countOf("ACTION_REQUIRED"), countOf("NOT_CONFIGURED"));
-	const { icon: SummaryIcon, badgeVariant } = CONFIGURATION_STATUS_DEFS[summary.status];
+	const { icon: SummaryIcon, badgeVariant } = definitionFor(
+		CONFIGURATION_STATUS_DEFS,
+		summary.status,
+	);
 
 	return (
 		<>
@@ -193,7 +196,7 @@ function ReadyBody({
 }
 
 function FactGroup({ status, facts }: { status: ConfigurationStatus; facts: ConfigurationFact[] }) {
-	const def = CONFIGURATION_STATUS_DEFS[status];
+	const def = definitionFor(CONFIGURATION_STATUS_DEFS, status);
 	return (
 		<AccordionItem value={status}>
 			<AccordionTrigger headingLevel={2} className="items-center no-underline hover:no-underline">
@@ -223,7 +226,7 @@ function FactRow({ fact }: { fact: ConfigurationFact }) {
 				{fact.requirement === "REQUIRED" ? (
 					<span className="sr-only">{CONFIGURATION_REQUIREMENT_DEFS.REQUIRED.label}</span>
 				) : (
-					<StatusBadge def={CONFIGURATION_REQUIREMENT_DEFS[fact.requirement]} />
+					<StatusBadge def={definitionFor(CONFIGURATION_REQUIREMENT_DEFS, fact.requirement)} />
 				)}
 			</div>
 			<p className="text-sm text-muted-foreground">{fact.explanation}</p>

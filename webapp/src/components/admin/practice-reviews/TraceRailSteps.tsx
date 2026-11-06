@@ -1,5 +1,6 @@
 import { ChevronRightIcon, RepeatIcon } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import { cn } from "cn";
 import type { ItemRef, ReviewDetail, ReviewLineage } from "@/api/types.gen";
@@ -341,7 +342,7 @@ function StartStep({
 	item: Extract<RailItem, { kind: "start" }>;
 	previous: Date | undefined;
 }) {
-	const def = REVIEW_ORIGIN_DEFS[item.origin];
+	const def = definitionFor(REVIEW_ORIGIN_DEFS, item.origin);
 	return (
 		<Step dot={{ tone: "outline", hollow: true }} at={item.at} gapFrom={previous} data-step="start">
 			<span className="block px-1.5 py-1">
@@ -379,7 +380,7 @@ function ReviewStep({
 	}
 	const own = detail?.id === review.id ? detail : undefined;
 	const state = reviewStepState(review, own);
-	const origin = REVIEW_ORIGIN_DEFS[review.origin];
+	const origin = definitionFor(REVIEW_ORIGIN_DEFS, review.origin);
 	// The queue and the run stand on the stage's header; the model is all the system adds here.
 	const facts = [own?.model].filter(hasText);
 	return (

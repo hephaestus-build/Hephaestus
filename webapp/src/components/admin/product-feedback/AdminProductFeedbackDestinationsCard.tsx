@@ -1,5 +1,6 @@
 import { GitBranch } from "lucide-react";
 import { useId, useState } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type {
 	LlmModel,
@@ -309,7 +310,7 @@ function RepositoryField({
 }: RepositoryFieldProps) {
 	// The check describes the saved repository; a changed field is checked after the save.
 	const changed = value.trim() !== (saved ?? "");
-	const def = REPOSITORY_CHECK_DEFS[check];
+	const def = definitionFor(REPOSITORY_CHECK_DEFS, check);
 	return (
 		<Field orientation="responsive" data-invalid={invalid || undefined}>
 			<FieldContent>

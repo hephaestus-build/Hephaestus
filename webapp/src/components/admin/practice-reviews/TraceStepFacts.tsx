@@ -1,5 +1,6 @@
 import { ArrowRightIcon, ExternalLinkIcon } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ItemRef, ReviewDetail, ReviewLineage } from "@/api/types.gen";
 import { useNow } from "@/components/common/use-now";
@@ -279,10 +280,10 @@ function FeedbackFacts({
 								<span className="text-muted-foreground tabular-nums">{number}</span>{" "}
 								{result.practiceName}
 								<span className="text-muted-foreground">
-									{` · ${OUTCOME_DEFS[result.outcome].label.toLowerCase()}${
+									{` · ${definitionFor(OUTCOME_DEFS, result.outcome).label.toLowerCase()}${
 										result.severity === null
 											? ""
-											: `, ${SEVERITY_DEFS[result.severity].label.toLowerCase()}`
+											: `, ${definitionFor(SEVERITY_DEFS, result.severity).label.toLowerCase()}`
 									}`}
 								</span>
 							</li>

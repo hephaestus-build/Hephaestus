@@ -1,8 +1,9 @@
 import { use } from "react";
+import { definitionFor, type BadgeVariant } from "@/components/common/status-def";
 
 import { cn } from "cn";
 import type { ItemRef, ReviewRef } from "@/api/types.gen";
-import type { BadgeVariant } from "@/components/common/status-def";
+
 import { FEEDBACK_DESTINATION_DEFS } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { hasText } from "@/lib/text";
 
@@ -154,7 +155,7 @@ function FeedbackRow({
 				<span className={TRACE_ROW_CELLS}>
 					<span className="min-w-0">
 						<StepTag
-							def={FEEDBACK_DESTINATION_DEFS[feedback.destination]}
+							def={definitionFor(FEEDBACK_DESTINATION_DEFS, feedback.destination)}
 							data-feedback-destination={feedback.destination}
 						/>
 					</span>

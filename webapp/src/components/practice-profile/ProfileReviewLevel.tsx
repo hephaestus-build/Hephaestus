@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { GroupRef, ItemRef, ProfileReviewDetail, ResultList } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
@@ -237,7 +238,7 @@ function ReviewHead({ path, detail, positionOnWork, totalOnWork }: ReviewHeadPro
 						</time>
 					</span>
 				)}
-				{review && <ReviewStatusBadge def={OWN_REVIEW_STATUS_DEFS[review.status]} />}
+				{review && <ReviewStatusBadge def={definitionFor(OWN_REVIEW_STATUS_DEFS, review.status)} />}
 				{review !== undefined && review.origin !== "EVENT" && (
 					<ReviewOriginTag origin={review.origin} />
 				)}

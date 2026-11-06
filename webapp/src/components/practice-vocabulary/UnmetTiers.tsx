@@ -1,6 +1,8 @@
 import { cn } from "cn";
+import { definitionFor } from "@/components/common/status-def";
 
 import {
+	UNKNOWN_DATA_HANDLING_DEF,
 	DATA_HANDLING_DEFS,
 	DATA_HANDLING_TIERS,
 	type DataHandlingTier,
@@ -20,7 +22,7 @@ export function UnmetTiers({ tiers, className }: UnmetTiersProps) {
 		<span className={cn("flex items-start gap-1.5 text-xs text-muted-foreground", className)}>
 			<span className="flex shrink-0 gap-1 pt-px">
 				{DATA_HANDLING_TIERS.filter((tier) => tiers.includes(tier)).map((tier) => {
-					const Icon = DATA_HANDLING_DEFS[tier].icon;
+					const Icon = definitionFor(DATA_HANDLING_DEFS, tier, UNKNOWN_DATA_HANDLING_DEF).icon;
 					return <Icon key={tier} className="size-3.5" aria-hidden />;
 				})}
 			</span>

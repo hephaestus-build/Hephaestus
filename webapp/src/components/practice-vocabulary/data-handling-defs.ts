@@ -8,11 +8,17 @@ import {
 	HouseIcon,
 	LockIcon,
 } from "lucide-react";
+import {
+	UNKNOWN_STATUS_DEF,
+	definitionFor,
+	type StatusDef,
+	type StatusDefs,
+	statusValues,
+} from "@/components/common/status-def";
 
 import type { LlmModel, WorkspaceOnboarding } from "@/api/types.gen";
 import type { Fact } from "@/components/auth/FactList";
 
-import { type StatusDef, type StatusDefs, statusValues } from "@/components/common/status-def";
 import { andList } from "@/lib/text";
 
 export type DataHandlingTier = LlmModel["dataHandlingTier"];
@@ -22,6 +28,8 @@ export type MemberAiChoice = NonNullable<WorkspaceOnboarding["aiChoice"]>;
 export interface DataHandlingDef extends StatusDef {
 	facts: readonly Fact[];
 }
+
+export const UNKNOWN_DATA_HANDLING_DEF: DataHandlingDef = { ...UNKNOWN_STATUS_DEF, facts: [] };
 
 export const DATA_HANDLING_DEFS: Record<DataHandlingTier, DataHandlingDef> = {
 	IN_HOUSE: {
@@ -74,7 +82,7 @@ export function tierMembersPhrase(tiers: readonly DataHandlingTier[]): string {
 	const ordered = DATA_HANDLING_TIERS.filter((tier) => tiers.includes(tier));
 	const named = ordered
 		.filter((tier) => tier !== "UNDECLARED")
-		.map((tier) => DATA_HANDLING_DEFS[tier].label);
+		.map((tier) => definitionFor(DATA_HANDLING_DEFS, tier, UNKNOWN_DATA_HANDLING_DEF).label);
 	const groups = named.length > 0 ? [`${andList.format(named)} members`] : [];
 	if (ordered.includes("UNDECLARED")) {
 		groups.push(UNCHOSEN_MEMBERS);
@@ -178,5 +186,5 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 };
 
 export function memberAiChoiceTitle(choice: MemberAiChoice): string {
-	return MEMBER_AI_CHOICE_DEFS[choice].label;
+	return definitionFor(MEMBER_AI_CHOICE_DEFS, choice).label;
 }

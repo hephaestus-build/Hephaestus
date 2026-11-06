@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ClipboardCheck, Inbox, Pencil, RotateCcw } from "lucide-react";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
+import { definitionFor } from "@/components/common/status-def";
 
 import { cn } from "cn";
 import type {
@@ -27,6 +28,7 @@ import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLi
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { PracticeScriptModelLink } from "@/components/practice-trace/PracticeScriptModelLink";
 import {
+	UNKNOWN_AGENT_PURPOSE_DEF,
 	AGENT_PURPOSE_DEFS,
 	type AgentPurpose,
 	assignModelLabel,
@@ -234,7 +236,8 @@ function BlockingNeedsAlert({
 					return (
 						<p key={need.slot}>
 							The practice script does not run for {workOf(need.unmetTiers)}: no{" "}
-							{AGENT_PURPOSE_DEFS[purpose].noun} is assigned for them.{" "}
+							{definitionFor(AGENT_PURPOSE_DEFS, purpose, UNKNOWN_AGENT_PURPOSE_DEF).noun} is
+							assigned for them.{" "}
 							<PracticeScriptModelLink workspaceSlug={workspaceSlug} purpose={purpose}>
 								{assignModelLabel(purpose)}
 							</PracticeScriptModelLink>
@@ -314,7 +317,9 @@ function NeedItem({ workspaceSlug, need }: { workspaceSlug: string; need: Practi
 					<ModelKindMark
 						purpose={purpose}
 						size="md"
-						name={capitalise(AGENT_PURPOSE_DEFS[purpose].noun)}
+						name={capitalise(
+							definitionFor(AGENT_PURPOSE_DEFS, purpose, UNKNOWN_AGENT_PURPOSE_DEF).noun,
+						)}
 					/>
 					{badge && <StatusBadge def={badge} />}
 				</ItemTitle>

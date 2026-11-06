@@ -1,11 +1,13 @@
 import type { PracticeScriptModel, PracticeScriptRun, ReviewPractice } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
+import { definitionFor } from "@/components/common/status-def";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { PracticeScriptFixLink } from "@/components/practice-trace/PracticeScriptFixLink";
 import type { AgentPurpose } from "@/components/practice-vocabulary/agent-purpose-defs";
 import { DataHandlingMark } from "@/components/practice-vocabulary/DataHandlingMark";
 import { ModelKindMark } from "@/components/practice-vocabulary/ModelKindMark";
 import {
+	UNKNOWN_SCRIPT_RUN_DEF,
 	PRACTICE_SCRIPT_RUN_STATUS_DEFS,
 	practiceScriptFix,
 } from "@/components/practice-vocabulary/practice-script-run-status-defs";
@@ -119,7 +121,11 @@ function ScriptRow({
 			</TableHead>
 			<TableCell className="align-top whitespace-normal">
 				<span className="flex flex-col items-start gap-1">
-					{PRACTICE_SCRIPT_RUN_STATUS_DEFS[run.status].result(run)}
+					{definitionFor(
+						PRACTICE_SCRIPT_RUN_STATUS_DEFS,
+						run.status,
+						UNKNOWN_SCRIPT_RUN_DEF,
+					).result(run)}
 					{fix !== undefined && (
 						<PracticeScriptFixLink
 							workspaceSlug={workspaceSlug}

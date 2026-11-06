@@ -1,4 +1,5 @@
 import type { PracticeScriptRun } from "@/api/types.gen";
+import { definitionFor } from "@/components/common/status-def";
 
 export type PracticeScriptRunStatus = PracticeScriptRun["status"];
 export type PracticeScriptStopReason = NonNullable<PracticeScriptRun["stopReason"]>;
@@ -48,9 +49,15 @@ export const PRACTICE_SCRIPT_NO_RESULT_CAUSE_DEFS = {
 
 function failedReason(run: PracticeScriptRun): { sentence: string; result: string } | undefined {
 	if (run.noResultCause !== null) {
-		return PRACTICE_SCRIPT_NO_RESULT_CAUSE_DEFS[run.noResultCause];
+		return definitionFor(
+			PRACTICE_SCRIPT_NO_RESULT_CAUSE_DEFS,
+			run.noResultCause,
+			UNKNOWN_SCRIPT_REASON_DEF,
+		);
 	}
-	return run.stopReason === null ? undefined : PRACTICE_SCRIPT_STOP_REASON_DEFS[run.stopReason];
+	return run.stopReason === null
+		? undefined
+		: definitionFor(PRACTICE_SCRIPT_STOP_REASON_DEFS, run.stopReason, UNKNOWN_SCRIPT_REASON_DEF);
 }
 
 interface PracticeScriptRunStatusDef {
@@ -59,6 +66,16 @@ interface PracticeScriptRunStatusDef {
 	/** The *Run* cell of the review's *Practice scripts* section. */
 	result: (run: PracticeScriptRun) => string;
 }
+
+export const UNKNOWN_SCRIPT_REASON_DEF = {
+	sentence: "this version of Hephaestus does not recognize the reason",
+	result: "Unknown reason",
+};
+
+export const UNKNOWN_SCRIPT_RUN_DEF: PracticeScriptRunStatusDef = {
+	sentence: () => "This version of Hephaestus does not recognize the script run status.",
+	result: () => "Unknown status",
+};
 
 // Script execution is an operating fact; a status badge would imply a practice outcome.
 export const PRACTICE_SCRIPT_RUN_STATUS_DEFS = {
@@ -93,7 +110,11 @@ export const PRACTICE_SCRIPT_RUN_STATUS_DEFS = {
 } satisfies Record<PracticeScriptRunStatus, PracticeScriptRunStatusDef>;
 
 export function practiceScriptRunSentence(run: PracticeScriptRun): string {
-	return PRACTICE_SCRIPT_RUN_STATUS_DEFS[run.status].sentence(run);
+	return definitionFor(
+		PRACTICE_SCRIPT_RUN_STATUS_DEFS,
+		run.status,
+		UNKNOWN_SCRIPT_RUN_DEF,
+	).sentence(run);
 }
 
 const OPERATIONS_GUIDE_URL = "https://docs.hephaestus.build/admin/practice-review-operations";

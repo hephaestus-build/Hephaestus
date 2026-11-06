@@ -1,4 +1,5 @@
 import { Inbox } from "lucide-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { FeedbackItem } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -175,7 +176,7 @@ function FeedbackCard({ item, pending, filing, onTriage, onFile }: FeedbackCardP
 	return (
 		<Card>
 			<CardHeader className="flex flex-wrap items-center gap-x-3 gap-y-1">
-				<StatusBadge def={FEEDBACK_KIND_DEFS[item.kind]} />
+				<StatusBadge def={definitionFor(FEEDBACK_KIND_DEFS, item.kind)} />
 				<span className="font-medium">{item.account?.displayName ?? "Deleted account"}</span>
 				{hasText(item.account?.email) && (
 					<a

@@ -1,4 +1,5 @@
 import { cn } from "cn";
+import { definitionFor } from "@/components/common/status-def";
 import { OUTCOME_DEFS, type Outcome } from "@/components/practice-vocabulary/outcome-defs";
 import { resultSummary } from "./result-words";
 
@@ -24,7 +25,7 @@ export function resultChipClass({
 	return cn(
 		"inline-flex shrink-0 items-center justify-center rounded-full border font-semibold tabular-nums",
 		size === "md" ? "size-[1.125rem] text-2xs" : "size-4 text-2xs leading-none",
-		toneChip(OUTCOME_DEFS[outcome].badgeVariant),
+		toneChip(definitionFor(OUTCOME_DEFS, outcome).badgeVariant),
 		outcome === "DOES_NOT_APPLY" && "bg-background",
 		ringed && "ring-2 ring-foreground ring-offset-1 ring-offset-background",
 		className,
@@ -54,7 +55,7 @@ export function LineageResultChip({
 	className?: string;
 	connector?: string;
 }) {
-	const outcome = OUTCOME_DEFS[result.outcome];
+	const outcome = definitionFor(OUTCOME_DEFS, result.outcome);
 	const words = [
 		`Observation ${number}, ${outcome.label.toLowerCase()}`,
 		withSummary ? `: ${resultSummary(result)}` : "",

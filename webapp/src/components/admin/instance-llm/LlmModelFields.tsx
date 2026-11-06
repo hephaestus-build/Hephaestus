@@ -2,7 +2,7 @@ import { AlertTriangle, ChevronDown, ChevronsUpDownIcon } from "lucide-react";
 import { useId, useState } from "react";
 
 import { FactList } from "@/components/auth/FactList";
-import { type StatusDefs, statusValues } from "@/components/common/status-def";
+import { definitionFor, type StatusDefs, statusValues } from "@/components/common/status-def";
 import {
 	AI_MODEL_BRANDS,
 	AI_MODEL_BRAND_META,
@@ -10,6 +10,7 @@ import {
 } from "@/components/icons/ai-model-brand-logos";
 import { AiMark } from "@/components/icons/AiMark";
 import {
+	UNKNOWN_DATA_HANDLING_DEF,
 	DATA_HANDLING_DEFS,
 	type DataHandlingTier,
 	deriveDataHandlingTier,
@@ -437,7 +438,9 @@ export function LlmModelFields({
 					<Alert variant="warning">
 						<AlertTriangle aria-hidden />
 						<AlertTitle>
-							Assignments holding this model as {DATA_HANDLING_DEFS[leftTier].label} stop serving
+							Assignments holding this model as{" "}
+							{definitionFor(DATA_HANDLING_DEFS, leftTier, UNKNOWN_DATA_HANDLING_DEF).label} stop
+							serving
 						</AlertTitle>
 						<AlertDescription>
 							A row holds only models declared as its own tier. Nothing runs on this model there
@@ -478,7 +481,11 @@ export function LlmModelFields({
 							Choose who operates this model to declare it.
 						</p>
 					) : (
-						<FactList facts={DATA_HANDLING_DEFS[previewTier].facts} />
+						<FactList
+							facts={
+								definitionFor(DATA_HANDLING_DEFS, previewTier, UNKNOWN_DATA_HANDLING_DEF).facts
+							}
+						/>
 					)}
 				</div>
 			</FieldSet>

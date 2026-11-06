@@ -1,8 +1,7 @@
 import { ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
+import { UNKNOWN_STATUS_DEF, type StatusDef } from "@/components/common/status-def";
 
 import type { FeedbackResponse } from "@/api/types.gen";
-
-import type { StatusDef } from "@/components/common/status-def";
 
 export type FeedbackUsefulness = NonNullable<FeedbackResponse["usefulness"]>;
 
@@ -10,6 +9,11 @@ export interface FeedbackUsefulnessDef extends StatusDef {
 	/** The optional note a rating opens under its card. */
 	note: { name: string; label: string; placeholder: string };
 }
+
+export const UNKNOWN_USEFULNESS_DEF: FeedbackUsefulnessDef = {
+	...UNKNOWN_STATUS_DEF,
+	note: { name: "Feedback note", label: "Your feedback", placeholder: "Optional note" },
+};
 
 export const FEEDBACK_USEFULNESS_DEFS: Record<FeedbackUsefulness, FeedbackUsefulnessDef> = {
 	HELPFUL: {

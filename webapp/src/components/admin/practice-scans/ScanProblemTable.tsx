@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { CircleCheckIcon, CircleDashedIcon, HourglassIcon, SearchXIcon } from "lucide-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ProblemChanges, ScanReportProblem } from "@/api/types.gen";
 import { citationLocation } from "@/components/admin/practice-reviews/ResultEvidence";
@@ -219,7 +220,7 @@ function ScanProblemResults({
 								>
 									<TableCell className="max-w-md">
 										<div className="flex flex-wrap items-start gap-2">
-											<StatusBadge def={SEVERITY_DEFS[entry.problem.severity]} />
+											<StatusBadge def={definitionFor(SEVERITY_DEFS, entry.problem.severity)} />
 											<span className="min-w-0 flex-1">{entry.problem.summary}</span>
 										</div>
 									</TableCell>

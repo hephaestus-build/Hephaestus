@@ -1,5 +1,6 @@
 import type { ReviewSummary } from "@/api/types.gen";
-import type { StatusDef } from "@/components/common/status-def";
+import { definitionFor, type StatusDef } from "@/components/common/status-def";
+
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { useNow } from "@/components/common/use-now";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
@@ -75,7 +76,7 @@ export function ReviewSummaryRow({ review, open = false, request }: ReviewSummar
 
 export function reviewMarkers(review: Pick<ReviewSummary, "status">): StatusDef[] {
 	return review.status === "FAILED" || review.status === "PARTIAL"
-		? [REVIEW_STATUS_DEFS[review.status]]
+		? [definitionFor(REVIEW_STATUS_DEFS, review.status)]
 		: [];
 }
 
@@ -103,7 +104,7 @@ function StartedBy({ review }: { review: ReviewSummary }) {
 			{review.origin === "REQUEST" && review.requestedBy ? (
 				<ReviewPerson person={requesterAsPerson(review.requestedBy)} />
 			) : (
-				<StatusBadge def={REVIEW_ORIGIN_DEFS[review.origin]} />
+				<StatusBadge def={definitionFor(REVIEW_ORIGIN_DEFS, review.origin)} />
 			)}
 		</span>
 	);

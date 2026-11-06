@@ -5,8 +5,9 @@ import type { ComponentType } from "react";
 
 import { cn } from "cn";
 import type { WorkspaceSplit } from "@/api/types.gen";
-import { statusValues } from "@/components/common/status-def";
+import { definitionFor, statusValues } from "@/components/common/status-def";
 import {
+	UNKNOWN_STANDING_DEF,
 	isSettledStanding,
 	PRACTICE_GROUP_STANDING_DEFS,
 	type PracticeGroupStandingValue,
@@ -44,7 +45,7 @@ interface PartDef {
 }
 
 function standingPart(standing: PracticeGroupStandingValue): PartDef {
-	const def = PRACTICE_GROUP_STANDING_DEFS[standing];
+	const def = definitionFor(PRACTICE_GROUP_STANDING_DEFS, standing, UNKNOWN_STANDING_DEF);
 	return {
 		key: standing,
 		label: def.label,

@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { FileSearchIcon } from "lucide-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ScanReportItem } from "@/api/types.gen";
 import { resultLevel } from "@/components/admin/practice-reviews/review-levels";
@@ -168,7 +169,7 @@ function ScanItemResults({
 										<span className="block truncate">{entry.practiceName}</span>
 									</TableCell>
 									<TableCell>
-										<StatusBadge def={SCAN_ENTRY_DEFS[entry.status]} />
+										<StatusBadge def={definitionFor(SCAN_ENTRY_DEFS, entry.status)} />
 									</TableCell>
 									<TableCell className="text-sm">
 										<EntryResult entry={entry} />
@@ -207,7 +208,7 @@ function EntryResult({ entry }: { entry: ScanReportItem }) {
 			return (
 				<div className="space-y-1">
 					<div className="flex flex-wrap items-center gap-2">
-						<StatusBadge def={OUTCOME_DEFS[entry.outcome]} />
+						<StatusBadge def={definitionFor(OUTCOME_DEFS, entry.outcome)} />
 						{entry.problemCount > 0 && (
 							<span className="text-muted-foreground">{problemCount(entry.problemCount)}</span>
 						)}
@@ -254,7 +255,7 @@ function EarlierEvidence({
 	return (
 		<p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
 			<span>Earlier evidence, not from this scan: {formatDate(result.recordedAt)}</span>
-			<StatusBadge def={OUTCOME_DEFS[result.outcome]} />
+			<StatusBadge def={definitionFor(OUTCOME_DEFS, result.outcome)} />
 		</p>
 	);
 }

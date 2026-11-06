@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import { cn } from "cn";
 import type { ActivityAction } from "@/api/types.gen";
@@ -7,7 +8,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { ProviderType } from "@/lib/provider/provider-terms";
 import { capitalise } from "@/lib/text";
 
-import { ACTIVITY_KIND_DEFS, actionPhrase, countPhrase } from "./activity-kind-defs";
+import {
+	UNKNOWN_ACTIVITY_KIND_DEF,
+	ACTIVITY_KIND_DEFS,
+	actionPhrase,
+	countPhrase,
+} from "./activity-kind-defs";
 import { ACTIVITY_TONES, type ActivityTone } from "./activity-tones";
 
 /**
@@ -32,7 +38,7 @@ export interface ActionChipProps {
  * to assistive technology the chip is one image named by that phrase.
  */
 export function ActionChip({ action, providerType, display }: ActionChipProps) {
-	const def = ACTIVITY_KIND_DEFS[action.kind];
+	const def = definitionFor(ACTIVITY_KIND_DEFS, action.kind, UNKNOWN_ACTIVITY_KIND_DEF);
 	const byLabel = display === "work" && def.chip === "label";
 	const phrase = capitalise(
 		byLabel

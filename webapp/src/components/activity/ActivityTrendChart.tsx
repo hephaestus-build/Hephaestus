@@ -1,6 +1,7 @@
 import { ChevronRightIcon } from "lucide-react";
 import { useId } from "react";
 import { Bar, BarChart, ReferenceLine, XAxis, YAxis } from "recharts";
+import { definitionFor } from "@/components/common/status-def";
 
 import { cn } from "cn";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -34,6 +35,7 @@ import {
 import type { ActivityCategoryChart, ActivityCategoryChartState } from "./activity-category-chart";
 import { BAR_RADIUS, BarTooltip, MAX_BAR_SIZE } from "./activity-chart";
 import {
+	UNKNOWN_ACTIVITY_KIND_DEF,
 	ACTIVITY_CATEGORY_DEFS,
 	ACTIVITY_KIND_DEFS,
 	type ActivityCategoryDef,
@@ -200,7 +202,7 @@ function KindRow({
 	providerType: ProviderType;
 	last: boolean;
 }) {
-	const def = ACTIVITY_KIND_DEFS[series.kind];
+	const def = definitionFor(ACTIVITY_KIND_DEFS, series.kind, UNKNOWN_ACTIVITY_KIND_DEF);
 	const Icon = def.icon(providerType);
 	// The icon keeps the kind's own colour, as everywhere else; only its bars take a mark tone.
 	const tone = ACTIVITY_TONES[markTone(def.tone)];
@@ -312,7 +314,7 @@ function BucketTable({
 							</TableHead>
 							{chart.kinds.map(({ kind }) => (
 								<TableHead key={kind} numeric className="text-right">
-									{ACTIVITY_KIND_DEFS[kind].label}
+									{definitionFor(ACTIVITY_KIND_DEFS, kind, UNKNOWN_ACTIVITY_KIND_DEF).label}
 								</TableHead>
 							))}
 							{hasText(def.headline.column) && (

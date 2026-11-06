@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ScanSummary } from "@/api/types.gen";
 import { DotSeparator } from "@/components/common/DotSeparator";
@@ -99,7 +100,7 @@ export function ScanRows({ workspaceSlug, scans, filters }: ScanRowsProps) {
 						</TableCell>
 						<TableCell className="text-sm">{scanStartedBy(scan)}</TableCell>
 						<TableCell>
-							<StatusBadge def={REVIEW_STATUS_DEFS[scan.status]} />
+							<StatusBadge def={definitionFor(REVIEW_STATUS_DEFS, scan.status)} />
 						</TableCell>
 						<TableCell numeric className="text-right">
 							{nothing ? <NotCounted /> : scan.practiceCount}

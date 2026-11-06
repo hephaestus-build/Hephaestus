@@ -9,6 +9,7 @@ import { ROUTER_SEARCH } from "@/lib/router-search";
 import { csrfFetch } from "@/runtime/auth/csrf";
 import { RouteError } from "@/runtime/errors/RouteError";
 import { installPreloadErrorReload } from "@/runtime/preload-error";
+import { useUpdateNotice } from "@/runtime/use-update-notice";
 import {
 	installWorkspaceNavigation,
 	workspaceAddressConfig,
@@ -89,6 +90,7 @@ declare module "@tanstack/react-router" {
 }
 
 function WrappedRouterProvider() {
+	useUpdateNotice();
 	const auth = useAuth();
 	return <RouterProvider router={router} context={{ ...TanstackQuery.getContext(), auth }} />;
 }

@@ -1,4 +1,5 @@
 import {
+	QuestionIcon,
 	CheckIcon,
 	CodeReviewIcon,
 	CommentDiscussionIcon,
@@ -10,6 +11,7 @@ import {
 	IssueClosedIcon,
 	IssueOpenedIcon,
 } from "@primer/octicons-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ActivityAction } from "@/api/types.gen";
 import {
@@ -72,6 +74,17 @@ export interface ActivityKindDef {
 	/** What it happens on, which is how a row names the work once the provider no longer has it. */
 	work: "pull-request" | "issue" | "any";
 }
+
+export const UNKNOWN_ACTIVITY_KIND_DEF: ActivityKindDef = {
+	icon: () => QuestionIcon,
+	tone: "muted",
+	label: "Unknown activity",
+	countLabel: "unknown activity",
+	chip: "label",
+	noun: () => ({ one: "unknown activity", many: "unknown activities" }),
+	credit: "actor",
+	work: "any",
+};
 
 const pullRequestNoun =
 	(verb: string) =>
@@ -208,7 +221,9 @@ export const ACTIVITY_KINDS = [
 
 /** "3 comments on code", "1 approval": a count of a kind as its chip and its copied line name it. */
 export function countPhrase(kind: ActivityKind, count: number, provider: ProviderType): string {
-	const { one, many } = ACTIVITY_KIND_DEFS[kind].noun(provider);
+	const { one, many } = definitionFor(ACTIVITY_KIND_DEFS, kind, UNKNOWN_ACTIVITY_KIND_DEF).noun(
+		provider,
+	);
 	return `${count} ${count === 1 ? one : many}`;
 }
 
@@ -217,7 +232,7 @@ export function countPhrase(kind: ActivityKind, count: number, provider: Provide
  * 2 times"), a comment by its count ("3 comments on code").
  */
 export function actionPhrase({ kind, count }: ActivityAction, provider: ProviderType): string {
-	const def = ACTIVITY_KIND_DEFS[kind];
+	const def = definitionFor(ACTIVITY_KIND_DEFS, kind, UNKNOWN_ACTIVITY_KIND_DEF);
 	if (def.chip === "count") {
 		return countPhrase(kind, count, provider);
 	}
@@ -251,7 +266,9 @@ export function goneWork(kinds: readonly ActivityKind[], provider: ProviderType)
 
 /** What the kinds happened on: a pull request if any of them says so, else an issue, else either. */
 export function workOf(kinds: readonly ActivityKind[]): ActivityKindDef["work"] {
-	const works = new Set(kinds.map((kind) => ACTIVITY_KIND_DEFS[kind].work));
+	const works = new Set(
+		kinds.map((kind) => definitionFor(ACTIVITY_KIND_DEFS, kind, UNKNOWN_ACTIVITY_KIND_DEF).work),
+	);
 	if (works.has("pull-request")) {
 		return "pull-request";
 	}

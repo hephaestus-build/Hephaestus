@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { Practice, PracticeDefinitionOptions, PracticeVersion } from "@/api/types.gen";
 import { PRACTICE_DEFINITION_FIELDS } from "@/components/admin/practices/practice-definition-fields";
@@ -63,7 +64,11 @@ export function PracticeLevel({
 			chips={
 				practice && (
 					<SheetStatusLine
-						status={<StatusBadge def={FEEDBACK_MODE_DEFS[practice.feedbackMode.effective]} />}
+						status={
+							<StatusBadge
+								def={definitionFor(FEEDBACK_MODE_DEFS, practice.feedbackMode.effective)}
+							/>
+						}
 						flag={
 							<FeedbackModeSourceNote
 								source={feedbackModeSourceOf(practice.feedbackMode, "PRACTICE", groupName ?? null)}

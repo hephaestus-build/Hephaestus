@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import type { ReviewFeedback } from "@/api/types.gen";
-import { statusToneClass } from "@/components/common/status-def";
+import { definitionFor, statusToneClass } from "@/components/common/status-def";
 import {
 	FEEDBACK_LOCATION_DEFS,
 	feedbackLocationSentence,
@@ -16,7 +16,7 @@ export interface FeedbackLocationLabelProps {
  * pull request #12". The mark is decoration, because the sentence names the provider too.
  */
 export function FeedbackLocationLabel({ feedback, className }: FeedbackLocationLabelProps) {
-	const def = FEEDBACK_LOCATION_DEFS[feedback.location];
+	const def = definitionFor(FEEDBACK_LOCATION_DEFS, feedback.location);
 	const Icon = def.icon;
 	return (
 		<span className={cn("inline-flex max-w-full min-w-0 items-center gap-1.5", className)}>

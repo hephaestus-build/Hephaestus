@@ -6,6 +6,7 @@ import {
 	TriangleAlertIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ReleaseStatus } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -124,7 +125,7 @@ function ReleaseHistory({ release }: { release: ReleaseStatus }) {
 }
 
 function CheckSummary({ release }: { release: ReleaseStatus }) {
-	const { description } = RELEASE_CHECK_STATUS_DEFS[release.status];
+	const { description } = definitionFor(RELEASE_CHECK_STATUS_DEFS, release.status);
 	const checked = <RelativeTime value={release.lastSuccess} fallback="at an unknown time" />;
 	switch (release.status) {
 		case "CURRENT": {
@@ -205,7 +206,7 @@ function migrationNote(schemaMigrations: boolean | undefined): string {
 export function InstanceReleaseCard({ state }: InstanceReleaseCardProps) {
 	const now = useNow();
 	const release = state.status === "ready" ? state.release : undefined;
-	const def = release ? RELEASE_CHECK_STATUS_DEFS[release.status] : undefined;
+	const def = release ? definitionFor(RELEASE_CHECK_STATUS_DEFS, release.status) : undefined;
 	const retryUntil = asDate(release?.retryUntil);
 	const rateLimited = retryUntil !== undefined && retryUntil.getTime() > now;
 	const checking = state.status === "ready" && state.check.status === "pending";
@@ -285,7 +286,7 @@ function ReleaseBody({ state }: InstanceReleaseCardProps) {
 				<QueryErrorAlert title="Release information may be out of date" {...state.refreshFailure} />
 			)}
 			<div className="flex flex-wrap items-center gap-2">
-				<StatusBadge def={RELEASE_CHECK_STATUS_DEFS[release.status]} />
+				<StatusBadge def={definitionFor(RELEASE_CHECK_STATUS_DEFS, release.status)} />
 				<span className="font-mono text-sm">{releaseLabel(release.running)}</span>
 			</div>
 

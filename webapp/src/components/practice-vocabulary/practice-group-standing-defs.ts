@@ -5,10 +5,9 @@ import {
 	CircleMinusIcon,
 	CircleSlashIcon,
 } from "lucide-react";
+import { UNKNOWN_STATUS_DEF, type StatusDef } from "@/components/common/status-def";
 
 import type { PracticeGroupStanding } from "@/api/types.gen";
-
-import type { StatusDef } from "@/components/common/status-def";
 
 export type PracticeGroupStandingValue = PracticeGroupStanding["standing"];
 
@@ -29,6 +28,13 @@ export interface PracticeGroupStandingDef extends StatusDef {
 	/** The standing as the title over a count of practices: "Practices going well". */
 	practicesTitle: string;
 }
+
+export const UNKNOWN_STANDING_DEF: PracticeGroupStandingDef = {
+	...UNKNOWN_STATUS_DEF,
+	shortLabel: "Unknown",
+	predicate: { one: "has an unknown standing", many: "have an unknown standing" },
+	practicesTitle: "Practices with an unknown standing",
+};
 export const PRACTICE_GROUP_STANDING_DEFS: Record<
 	PracticeGroupStandingValue,
 	PracticeGroupStandingDef
