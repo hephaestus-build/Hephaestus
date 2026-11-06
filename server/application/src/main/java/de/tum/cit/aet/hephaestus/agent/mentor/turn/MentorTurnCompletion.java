@@ -70,12 +70,13 @@ public class MentorTurnCompletion {
      * @param startedAt when the attempt started, for its first partial answer, which times the attempt's first token;
      *     {@code null} for every later one
      */
-    public void progress(
+    public boolean progress(
             long workspaceId, UUID turnId, int attempt, UUID leaseId, JsonNode partial, @Nullable Instant startedAt) {
-        turns.updatePartial(workspaceId, turnId, attempt, leaseId, partial);
-        if (startedAt != null) {
+        boolean sent = turns.updatePartial(workspaceId, turnId, attempt, leaseId, partial);
+        if (sent && startedAt != null) {
             firstToken(meters).record(Duration.between(startedAt, clock.instant()));
         }
+        return sent;
     }
 
     /**
@@ -114,9 +115,10 @@ public class MentorTurnCompletion {
                 new MentorTurnService.Ending(ending.outcome(), ending.entries(), ending.lastPartial(), ending.error()));
         MentorTurn turn = ended.turn();
         if (turn.getStatus() == MentorTurn.Status.FAILED) {
-            turns.recordFailure(turn, ending.cause(), ending.lastFailedCall());
+            String failureCause = ending.cause() == null ? turn.getFailureCause() : ending.cause();
+            turns.recordFailure(turn, failureCause, ending.lastFailedCall());
             // After commit: a rolled-back end is repeated by its host and would log the failure twice.
-            String cause = ending.cause() == null ? ending.error() : ending.cause();
+            String cause = failureCause == null ? turn.getError() : failureCause;
             MentorTurn.FailedCall lastFailedCall = ending.lastFailedCall();
             TransactionCallbacks.afterCommit(() -> log.warn(
                     "conversation turn {} attempt {} failed: {}; last failed model call: {}",

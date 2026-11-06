@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -146,7 +147,8 @@ class PersonDataJobResumptionIntegrationTest extends BaseIntegrationTest {
                 tokens,
                 transactions,
                 mapper,
-                jdbc);
+                jdbc,
+                new SimpleMeterRegistry());
         var tx = new TransactionTemplate(transactions);
         var identities = List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null));
         var preview = Objects.requireNonNull(tx.execute(status -> service.preview(adminId, null, identities)));

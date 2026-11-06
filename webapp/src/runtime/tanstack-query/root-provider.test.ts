@@ -1,7 +1,13 @@
-import { type QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import {
+	onlineManager,
+	type QueryClient,
+	QueryClientProvider,
+	useQuery,
+	useMutation,
+} from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { problemStatusOf } from "@/lib/problem-detail";
 import { USER_VIEW_STORAGE_KEY, type UserViewSession } from "@/runtime/user-view/session";
@@ -11,6 +17,10 @@ import { useQueryReadRefusal } from "./use-query-read-refusal";
 
 beforeEach(() => {
 	getContext().queryClient.clear();
+});
+
+afterEach(() => {
+	onlineManager.setOnline(true);
 });
 
 type Answer = { data: string } | { error: Error };
@@ -61,6 +71,38 @@ function renderRead(queryClient: QueryClient, read: ReturnType<typeof queuedRead
 		},
 	);
 }
+
+it("settles an offline read as an error without waiting for reconnect or retries", async () => {
+	onlineManager.setOnline(false);
+	const failure = new TypeError("Failed to fetch");
+	const read = queuedRead({ error: failure }, { data: "reconnected" });
+	const { result } = renderRead(getContext().queryClient, read);
+	await waitFor(() => expect(result.current.isError).toBe(true));
+	expect(result.current.error).toBe(failure);
+	expect(result.current.fetchStatus).toBe("idle");
+	expect(read.requests).toBe(1);
+	onlineManager.setOnline(true);
+	await waitFor(() => expect(result.current.data).toBe("reconnected"));
+	expect(read.requests).toBe(2);
+});
+
+it("rejects an offline write and never sends it again on reconnect", async () => {
+	const { queryClient } = getContext();
+	onlineManager.setOnline(false);
+	const write = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+	const { result } = renderHook(() => useMutation({ mutationFn: write }), {
+		wrapper: ({ children }: { children: ReactNode }) =>
+			createElement(QueryClientProvider, { client: queryClient }, children),
+	});
+	await act(async () => {
+		await expect(result.current.mutateAsync(undefined)).rejects.toThrow("Failed to fetch");
+	});
+	await waitFor(() => expect(result.current.isError).toBe(true));
+	expect(result.current.isPaused).toBe(false);
+	onlineManager.setOnline(true);
+	await queryClient.resumePausedMutations();
+	expect(write).toHaveBeenCalledOnce();
+});
 
 it("settles a refused read at its first answer, so later outages cannot bring the cached answer back", async () => {
 	const read = queuedRead({ data: "cached" });

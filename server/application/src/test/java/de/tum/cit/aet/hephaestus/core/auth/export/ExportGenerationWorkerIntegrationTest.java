@@ -105,10 +105,11 @@ class ExportGenerationWorkerIntegrationTest extends BaseIntegrationTest {
                         .counter()
                         .count())
                 .isEqualTo(1);
-        assertThat(registry.find("privacy.job.completed")
+        assertThat(registry.get("privacy.job.completed")
                         .tags("job", "export_generation", "outcome", "success")
-                        .counter())
-                .isNull();
+                        .counter()
+                        .count())
+                .isZero();
         assertThat(registry.find("privacy.job.affected").counter()).isNull();
     }
 }

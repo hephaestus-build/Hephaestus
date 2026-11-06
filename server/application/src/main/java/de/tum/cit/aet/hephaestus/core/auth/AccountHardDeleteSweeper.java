@@ -99,7 +99,7 @@ public class AccountHardDeleteSweeper {
                 } catch (RuntimeException e) {
                     failed++;
                     log.error(
-                            "auth.account: hard-delete FAILED for accountId={} (skipped, will retry" + " next sweep)",
+                            "auth.account: hard-delete incomplete for accountId={}; check the person-data request and its failure code",
                             id,
                             e);
                 }

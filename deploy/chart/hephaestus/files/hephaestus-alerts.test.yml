@@ -4,6 +4,24 @@ rule_files:
 evaluation_interval: 1m
 
 tests:
+  - name: a stopped erasure fires, automatic recovery without a stopped erasure stays silent
+    interval: 1m
+    input_series:
+      - series: 'person_data_erasure_failures_total{job="hephaestus"}'
+        values: "0 0 1 1 1"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusPersonErasureInterrupted
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HephaestusPersonErasureInterrupted
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Person erasure stopped or could not record its failure state
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: a target that cannot be scraped fires, a scraped one does not
     interval: 1m
     input_series:
@@ -409,10 +427,10 @@ tests:
       - series: 'agent_job_total{job="hephaestus",instance="worker-b:9090",outcome="timed_out"}'
         values: "0 0 0 0 1x30"
     alert_rule_test:
-      - eval_time: 3m
+      - eval_time: 8m
         alertname: HephaestusAgentJobsFailing
         exp_alerts: []
-      - eval_time: 5m
+      - eval_time: 10m
         alertname: HephaestusAgentJobsFailing
         exp_alerts:
           - exp_labels:
@@ -2185,3 +2203,261 @@ tests:
       - eval_time: 9h
         alertname: HephaestusPageExperiencePoorWeekly
         exp_alerts: []
+
+  - name: conversation calls that wait over 5 seconds fire once at least ten calls ended
+    interval: 1m
+    input_series:
+      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",class="turn",reason="capacity",le="5.0"}'
+        values: "0+1x30"
+      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",class="turn",reason="capacity"}'
+        values: "0+2x30"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HephaestusConversationModelWaitLong
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HephaestusConversationModelWaitLong
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              pool: own
+            exp_annotations:
+              summary: More than 10 % of a model's conversation calls waited over 5 seconds for a free call in 15 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: conversation calls that wait a short time do not fire
+    interval: 1m
+    input_series:
+      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",class="turn",reason="capacity",le="5.0"}'
+        values: "0+2x30"
+      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",class="turn",reason="capacity"}'
+        values: "0+2x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HephaestusConversationModelWaitLong
+        exp_alerts: []
+
+  - name: review calls that wait over two minutes fire after 15 minutes
+    interval: 1m
+    input_series:
+      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",class="event",reason="capacity",le="120.0"}'
+        values: "0+1x60"
+      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",class="event",reason="capacity"}'
+        values: "0+2x60"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HephaestusReviewModelWaitLong
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: HephaestusReviewModelWaitLong
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              pool: own
+            exp_annotations:
+              summary: More than a quarter of a model's review calls waited over two minutes for a free call in one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: review calls that queue for less than two minutes do not fire
+    interval: 1m
+    input_series:
+      - series: 'llm_pool_permit_wait_seconds_bucket{job="hephaestus",instance="worker:9090",pool="own",class="event",reason="capacity",le="120.0"}'
+        values: "0+2x60"
+      - series: 'llm_pool_permit_wait_seconds_count{job="hephaestus",instance="worker:9090",pool="own",class="event",reason="capacity"}'
+        values: "0+2x60"
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: HephaestusReviewModelWaitLong
+        exp_alerts: []
+
+  - name: three expired model permits in one hour fire, two do not
+    interval: 1m
+    input_series:
+      - series: 'llm_pool_permits_expired_total{job="hephaestus",instance="worker:9090",pool="own"}'
+        values: "0 1 2 2 2 2 2 3x20"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusModelPermitsExpired
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: HephaestusModelPermitsExpired
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              pool: own
+            exp_annotations:
+              summary: Workers stopped renewing at least three of a model's calls in flight in one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: three failed permit renewals in 15 minutes fire, two do not
+    interval: 1m
+    input_series:
+      - series: 'llm_pool_lease_renewal_failures_total{job="hephaestus",instance="worker:9090"}'
+        values: "0 1 2 2 2 2 2 3x20"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusModelPermitRenewalFailing
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: HephaestusModelPermitRenewalFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Workers failed at least three renewals of their model call permits in 15 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a capture over 10 minutes fires, a sandbox of the same length does not
+    interval: 1m
+    input_series:
+      - series: 'agent_job_stage_duration_seconds_count{job="hephaestus",instance="worker:9090",stage="capture",outcome="ok"}'
+        values: "0 1 2 3x20"
+      - series: 'agent_job_stage_duration_seconds_bucket{job="hephaestus",instance="worker:9090",stage="capture",outcome="ok",le="600.0"}'
+        values: "0x22"
+      - series: 'agent_job_stage_duration_seconds_count{job="hephaestus",instance="worker:9090",stage="sandbox",outcome="ok"}'
+        values: "0 1 2 3x20"
+      - series: 'agent_job_stage_duration_seconds_bucket{job="hephaestus",instance="worker:9090",stage="sandbox",outcome="ok",le="1800.0"}'
+        values: "0 1 2 3x20"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusReviewStageSlow
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: HephaestusReviewStageSlow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              stage: capture
+            exp_annotations:
+              summary: One stage of review attempts ran past its bound at least three times in six hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a sandbox over 30 minutes fires
+    interval: 1m
+    input_series:
+      - series: 'agent_job_stage_duration_seconds_count{job="hephaestus",instance="worker:9090",stage="sandbox",outcome="ok"}'
+        values: "0 1 2 3x20"
+      - series: 'agent_job_stage_duration_seconds_bucket{job="hephaestus",instance="worker:9090",stage="sandbox",outcome="ok",le="1800.0"}'
+        values: "0x22"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusReviewStageSlow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              stage: sandbox
+            exp_annotations:
+              summary: One stage of review attempts ran past its bound at least three times in six hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: three truncated redelivery runs in two hours fire, two do not
+    interval: 1m
+    input_series:
+      - series: 'github_webhook_redelivery_total{job="hephaestus",instance="server:9090",outcome="truncated"}'
+        values: "0x9 1x10 2x10 3x20"
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: HephaestusWebhookRedeliveryTruncated
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: HephaestusWebhookRedeliveryTruncated
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: GitHub redelivery runs read only part of the App's deliveries at least three times in two hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a privacy job that fails twice fires, one incomplete run does not
+    interval: 1m
+    input_series:
+      - series: 'privacy_job_completed_total{job="hephaestus",instance="server:9090",exported_job="account_erasure",outcome="failure"}'
+        values: "0 0 0 1 1 1 1 1 2x10"
+      - series: 'privacy_job_completed_total{job="hephaestus",instance="server:9090",exported_job="llm_usage_retention",outcome="incomplete"}'
+        values: "0 0 0 1x20"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusPrivacyJobFailing
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: HephaestusPrivacyJobFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              exported_job: account_erasure
+            exp_annotations:
+              summary: A privacy job failed or left eligible work at least twice in 26 hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: an hourly sweep that ends no run fires, one that keeps running does not
+    interval: 1m
+    input_series:
+      - series: 'privacy_job_completed_total{job="hephaestus",instance="server:9090",exported_job="account_erasure",outcome="success"}'
+        values: "0x130"
+      - series: 'privacy_job_completed_total{job="hephaestus",instance="server:9090",exported_job="account_erasure",outcome="failure"}'
+        values: "0x130"
+      - series: 'privacy_job_completed_total{job="hephaestus",instance="server:9090",exported_job="export_retention",outcome="success"}'
+        values: "0+1x130"
+    alert_rule_test:
+      - eval_time: 80m
+        alertname: HephaestusPrivacyJobNotRunning
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: HephaestusPrivacyJobNotRunning
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              exported_job: account_erasure
+            exp_annotations:
+              summary: An hourly privacy sweep ended no run in four hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a restart after an out-of-memory kill fires, a restart for another reason does not
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_last_terminated_reason{namespace="hephaestus",pod="hephaestus-worker-0",container="worker",reason="OOMKilled"}'
+        values: "1x30"
+      - series: 'kube_pod_container_status_restarts_total{namespace="hephaestus",pod="hephaestus-worker-0",container="worker"}'
+        values: "0x4 1x25"
+      - series: 'kube_pod_container_status_last_terminated_reason{namespace="hephaestus",pod="hephaestus-server-0",container="server",reason="Error"}'
+        values: "1x30"
+      - series: 'kube_pod_container_status_restarts_total{namespace="hephaestus",pod="hephaestus-server-0",container="server"}'
+        values: "0x4 1x25"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusContainerOomKilled
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: HephaestusContainerOomKilled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: hephaestus
+              pod: hephaestus-worker-0
+              container: worker
+            exp_annotations:
+              summary: The kernel killed a container for its memory
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 28m
+        alertname: HephaestusContainerOomKilled
+        exp_alerts: []
+
+  - name: a sandbox that the kernel killed fires, one that exited with an error does not
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_terminated_reason{namespace="sandbox",pod="hephaestus-turn-1",container="sandbox",reason="OOMKilled"}'
+        values: "1x5"
+      - series: 'kube_pod_container_status_terminated_reason{namespace="sandbox",pod="hephaestus-turn-2",container="sandbox",reason="Error"}'
+        values: "1x5"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HephaestusContainerOomKilled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: sandbox
+              pod: hephaestus-turn-1
+              container: sandbox
+            exp_annotations:
+              summary: The kernel killed a container for its memory
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response

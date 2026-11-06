@@ -12,6 +12,9 @@ public interface PersonDataCopyFence {
     /** Short READ_COMMITTED writes retain capture admission until their transaction commits. */
     void holdForCapture();
 
+    /** Short progress writes skip their frame when an erasure owns capture admission. */
+    boolean tryHoldForCapture();
+
     void holdForErasure();
 
     /**

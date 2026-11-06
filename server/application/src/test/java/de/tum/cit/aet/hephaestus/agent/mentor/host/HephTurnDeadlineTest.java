@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
+import de.tum.cit.aet.hephaestus.mentor.MentorRedaction;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -97,6 +98,7 @@ class HephTurnDeadlineTest extends BaseUnitTest {
         dispatcher = new HephTurnDispatcher(
                 starter,
                 turns,
+                mock(MentorRedaction.class),
                 completion,
                 mock(MentorLedgerNotifications.class),
                 new QueueHost(),

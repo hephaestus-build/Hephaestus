@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
+import de.tum.cit.aet.hephaestus.mentor.MentorRedaction;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -83,6 +84,7 @@ public class HephHostConfiguration {
     HephTurnDispatcher hephTurnDispatcher(
             MentorTurnStarter starter,
             MentorTurnService turns,
+            MentorRedaction redaction,
             MentorTurnCompletion completion,
             MentorLedgerNotifications notifications,
             HephHost host,
@@ -97,6 +99,7 @@ public class HephHostConfiguration {
         return new HephTurnDispatcher(
                 starter,
                 turns,
+                redaction,
                 completion,
                 notifications,
                 host,

@@ -1,3 +1,5 @@
+import { onlineManager } from "@tanstack/react-query";
+
 import { problemIsRetryable } from "@/lib/problem-detail";
 import { getUserViewSession } from "@/runtime/user-view/session";
 
@@ -22,5 +24,10 @@ export function sessionRetriesQueries(): boolean {
  * client has a retry default, and a guard, loader or action decides at once what a failure means.
  */
 export function retryQuery(failureCount: number, error: unknown): boolean {
-	return sessionRetriesQueries() && problemIsRetryable(error) && failureCount < QUERY_RETRIES;
+	return (
+		onlineManager.isOnline() &&
+		sessionRetriesQueries() &&
+		problemIsRetryable(error) &&
+		failureCount < QUERY_RETRIES
+	);
 }

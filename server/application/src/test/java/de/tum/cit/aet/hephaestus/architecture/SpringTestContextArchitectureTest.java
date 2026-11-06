@@ -45,6 +45,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("workspace.GitLabWorkspaceCreationIntegrationTest", "gitlab-workspace-creation"),
             assignment("workspace.WorkspacePurgeIntegrationTest", "gitlab-workspace-creation"),
             assignment("StartupBudgetIntegrationTest", "startup"),
+            assignment("core.privacy.PersonDataRecoveryStartupIntegrationTest", "erasure-recovery"),
             assignment("agent.mentor.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
             assignment("core.auth.clientsession.ClientSessionConcurrencyIntegrationTest", "dev-login"),
@@ -122,6 +123,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry(
                     "gitlab-workspace-creation",
                     "real workspace creation and purge, persisted group identity and endpoint validation with only the provider group confirmation controlled"),
+            Map.entry(
+                    "erasure-recovery",
+                    "real recovery profile, manifest binding and lifecycle ordering before scheduler and consumer startup"),
             Map.entry(
                     "repository-provider-scope",
                     "real SQL provider, tenant and monitor lifetime enforcement with controlled GitLab transport and sync orchestration boundary"),
@@ -261,6 +265,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> DYNAMIC_PROPERTY_TESTS = names(
             "StartupBudgetIntegrationTest",
+            "core.privacy.PersonDataRecoveryStartupIntegrationTest",
             "agent.practice.live.PracticeScriptLiveLlmTest",
             "core.auth.clientsession.ClientSessionMigratedSchemaTest",
             "integration.schema.ProductionSchemaContractIntegrationTest",

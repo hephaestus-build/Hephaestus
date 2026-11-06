@@ -1531,7 +1531,7 @@ With `postgresql.backup.enabled=true`, the bundled PostgreSQL archives its WAL t
 The repository is encrypted with `BACKUP_CIPHER_PASS`.
 A CronJob takes a full backup each Sunday at 02:15 UTC.
 Another takes a differential backup on the other days at the same time.
-`postgresql.backup.retentionFull` full backup chains stay, 2 by default.
+[Backup retention](./backup-restore#backup-retention) defines how many full backup chains stay and how long erasure recovery decisions must be available.
 A Job of each release creates the repository's stanza, so that the WAL archive works from the install.
 
 The backup Jobs do not mount the PostgreSQL volume.

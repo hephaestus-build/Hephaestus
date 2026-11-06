@@ -100,6 +100,8 @@ public class GitHubWebhookRedelivery {
      */
     static final Duration RUN_BUDGET = Duration.ofMinutes(5);
 
+    static final String LOCK_AT_MOST = "PT9M";
+
     private static final int PAGE_SIZE = 100;
     /** The least time between two redelivery requests: a backlog reaches the receiver as a stream, not a burst. */
     static final Duration PACE = Duration.ofMillis(200);
@@ -189,7 +191,7 @@ public class GitHubWebhookRedelivery {
     }
 
     @Scheduled(fixedDelayString = INTERVAL_ISO, initialDelayString = "PT2M")
-    @SchedulerLock(name = "github-webhook-redelivery", lockAtMostFor = "PT9M", lockAtLeastFor = "PT1M")
+    @SchedulerLock(name = "github-webhook-redelivery", lockAtMostFor = LOCK_AT_MOST, lockAtLeastFor = "PT1M")
     public void redeliverFailed() {
         if (!tokens.isConfigured()) {
             return;

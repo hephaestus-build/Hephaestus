@@ -136,6 +136,13 @@ groups:
         annotations:
           summary: GitHub refuses redeliveries, or the deliveries of the GitHub App cannot be read
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusWebhookRedeliveryTruncated
+        expr: sum(increase(github_webhook_redelivery_total{job="hephaestus",outcome="truncated"}[2h])) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: GitHub redelivery runs read only part of the App's deliveries at least three times in two hours
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookRedeliveriesRequested
         expr: >-
           sum by (namespace) (increase(github_webhook_redelivery_total{job="hephaestus",outcome="requested"}[1h])) >= 3
@@ -194,8 +201,48 @@ groups:
         annotations:
           summary: A model's call limit stayed at its floor of two calls for 30 minutes while its provider refused, queued or did not answer
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A conversation's reader waits for the answer, so its calls get a bound of seconds.
+      - alert: HephaestusConversationModelWaitLong
+        expr: >-
+          1 - sum by (pool) (increase(llm_pool_permit_wait_seconds_bucket{job="hephaestus",class=~"turn|product_feedback",le="5.0"}[15m]))
+          / sum by (pool) (increase(llm_pool_permit_wait_seconds_count{job="hephaestus",class=~"turn|product_feedback"}[15m]))
+          > 0.1
+          and sum by (pool) (increase(llm_pool_permit_wait_seconds_count{job="hephaestus",class=~"turn|product_feedback"}[15m])) >= 10
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 10 % of a model's conversation calls waited over 5 seconds for a free call in 15 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A review's calls queue by design. A call that waits two minutes holds its sandbox idle inside its deadline.
+      - alert: HephaestusReviewModelWaitLong
+        expr: >-
+          1 - sum by (pool) (increase(llm_pool_permit_wait_seconds_bucket{job="hephaestus",class!~"turn|product_feedback",le="120.0"}[1h]))
+          / sum by (pool) (increase(llm_pool_permit_wait_seconds_count{job="hephaestus",class!~"turn|product_feedback"}[1h]))
+          > 0.25
+          and sum by (pool) (increase(llm_pool_permit_wait_seconds_count{job="hephaestus",class!~"turn|product_feedback"}[1h])) >= 20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than a quarter of a model's review calls waited over two minutes for a free call in one hour
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusModelPermitsExpired
+        expr: sum by (pool) (increase(llm_pool_permits_expired_total{job="hephaestus"}[1h])) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: Workers stopped renewing at least three of a model's calls in flight in one hour
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusModelPermitRenewalFailing
+        expr: sum(increase(llm_pool_lease_renewal_failures_total{job="hephaestus"}[15m])) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: Workers failed at least three renewals of their model call permits in 15 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusAgentJobsFailing
         expr: sum(increase(agent_job_total{job="hephaestus",outcome=~"failed|timed_out"}[1h])) >= 3
+        for: 5m
         labels:
           severity: warning
         annotations:
@@ -230,6 +277,13 @@ groups:
         annotations:
           summary: The server answered a review's results with its own error, so the review ended without them
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusPersonErasureInterrupted
+        expr: sum(increase(person_data_erasure_failures_total{job="hephaestus"}[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Person erasure stopped or could not record its failure state
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewPreparationFailing
         expr: sum(increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause="preparation"}[30m])) >= 5
         for: 15m
@@ -237,6 +291,21 @@ groups:
           severity: warning
         annotations:
           summary: Review attempts kept failing before their sandbox started, so they run again
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A stage that never ends has no sample: the attempt's deadline ends it, and HephaestusAgentJobsFailing reports that.
+      - alert: HephaestusReviewStageSlow
+        expr: >-
+          (
+            sum by (stage) (increase(agent_job_stage_duration_seconds_count{job="hephaestus",stage!="sandbox"}[6h]))
+            - sum by (stage) (increase(agent_job_stage_duration_seconds_bucket{job="hephaestus",stage!="sandbox",le="600.0"}[6h]))
+            or
+            sum by (stage) (increase(agent_job_stage_duration_seconds_count{job="hephaestus",stage="sandbox"}[6h]))
+            - sum by (stage) (increase(agent_job_stage_duration_seconds_bucket{job="hephaestus",stage="sandbox",le="1800.0"}[6h]))
+          ) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: One stage of review attempts ran past its bound at least three times in six hours
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewWorkerLost
         expr: sum(increase(agent_job_orphan_failed_total{job="hephaestus"}[1h])) > 0
@@ -298,6 +367,24 @@ groups:
           severity: warning
         annotations:
           summary: Readers' browsers reported at least twenty failures of one kind in one hour
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # The metric's label job reaches the store as exported_job, because the scrape sets its own job.
+      - alert: HephaestusPrivacyJobFailing
+        expr: sum by (exported_job) (increase(privacy_job_completed_total{job="hephaestus",outcome=~"failure|incomplete"}[26h])) >= 2
+        labels:
+          severity: warning
+        annotations:
+          summary: A privacy job failed or left eligible work at least twice in 26 hours
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # Both sweeps run each hour, and an empty backlog also counts as a run.
+      - alert: HephaestusPrivacyJobNotRunning
+        expr: >-
+          sum by (exported_job) (increase(privacy_job_completed_total{job="hephaestus",exported_job=~"account_erasure|export_retention"}[4h])) == 0
+        for: 90m
+        labels:
+          severity: warning
+        annotations:
+          summary: An hourly privacy sweep ended no run in four hours
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   # Kubernetes and cluster metrics: kube-state-metrics, the kubelet, node-exporter and cert-manager.
@@ -559,6 +646,19 @@ groups:
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
   - name: hephaestus-kubernetes
     rules:
+      # All namespaces: the cluster serves only this release, and a killed cert-manager or exporter also needs a person.
+      # A restarted container shows in last_terminated_reason. A sandbox never restarts, so it shows in terminated_reason.
+      - alert: HephaestusContainerOomKilled
+        expr: >-
+          max by (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}) == 1
+          and on (namespace, pod, container) increase(kube_pod_container_status_restarts_total[15m]) > 0
+          or
+          max by (namespace, pod, container) (kube_pod_container_status_terminated_reason{reason="OOMKilled"}) == 1
+        labels:
+          severity: warning
+        annotations:
+          summary: The kernel killed a container for its memory
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusWebhookReceiverDown
         expr: >-
           kube_deployment_status_replicas_available == 0

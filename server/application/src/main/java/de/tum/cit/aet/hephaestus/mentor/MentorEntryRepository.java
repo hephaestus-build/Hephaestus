@@ -428,28 +428,29 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
             """, nativeQuery = true)
     List<UUID> lockTreesOf(@Param("ids") UUID[] ids);
 
-    /** The messages among these entries that are not redacted yet. */
-    @WorkspaceAgnostic("Person erasure and Slack removal redact entries by id across the workspaces they name")
-    @Query(value = """
-            SELECT id AS "id", workspace_id AS "workspaceId", conversation_id AS "conversationId"
-            FROM mentor_entry
-            WHERE id = ANY(CAST(:ids AS uuid[])) AND redacted_at IS NULL AND kind IN ('USER', 'HEPH', 'DIGEST')
-            """, nativeQuery = true)
-    List<EntryRef> findUnredactedMessagesAmong(@Param("ids") UUID[] ids);
-
     /**
      * Redacts these entries and their copies as {@link MentorRedaction} describes; without {@code withTargets}, only
      * the copies.
      */
     @WorkspaceAgnostic("Person erasure and Slack removal redact entries by id across the workspaces they name")
-    @Modifying(flushAutomatically = true)
     @Query(value = """
             WITH target AS (
-                SELECT id, conversation_id, seq, kind FROM mentor_entry
+                SELECT id, conversation_id, seq, kind, turn_id FROM mentor_entry
                 WHERE id = ANY(CAST(:ids AS uuid[])) AND redacted_at IS NULL
+            ), derived AS (
+                SELECT a.id, a.conversation_id, a.seq, a.kind
+                FROM target t
+                JOIN mentor_entry a ON a.conversation_id = t.conversation_id
+                    OR a.conversation_id IN (
+                        SELECT c.id FROM mentor_conversation c WHERE c.parent_conversation_id = t.conversation_id)
+                WHERE :withDerivedAnswers AND t.kind = 'TOOL_RESULT' AND a.kind IN ('HEPH', 'DIGEST') AND a.redacted_at IS NULL
+                  AND (a.conversation_id <> t.conversation_id OR a.seq > t.seq OR a.turn_id = t.turn_id)
+            ), messages AS (
+                SELECT id, conversation_id, seq, kind FROM target
+                UNION SELECT id, conversation_id, seq, kind FROM derived
             ), quoting AS (
                 SELECT r.id, r.conversation_id, r.seq
-                FROM target m
+                FROM messages m
                 JOIN mentor_conversation mc ON mc.id = m.conversation_id
                 JOIN mentor_conversation rc ON rc.id = COALESCE(mc.parent_conversation_id, mc.id)
                     OR rc.parent_conversation_id = COALESCE(mc.parent_conversation_id, mc.id)
@@ -461,6 +462,7 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
             ), changed AS (
                 SELECT id, conversation_id, seq FROM target
                 UNION SELECT id, conversation_id, seq FROM quoting
+                UNION SELECT id, conversation_id, seq FROM derived
             ), covering AS (
                 SELECT s.id
                 FROM mentor_entry s
@@ -476,7 +478,7 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
                       SELECT t.id FROM mentor_conversation t
                       WHERE t.id IN (SELECT conversation_id FROM changed)
                          OR t.parent_conversation_id IN (SELECT conversation_id FROM changed))
-            )
+            ), updated AS (
             UPDATE mentor_entry e
                SET redacted_at = clock_timestamp(), text = '', search_text = '',
                    payload = CASE
@@ -501,9 +503,16 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
                    END
              WHERE e.id IN (SELECT id FROM changed WHERE :withTargets OR id NOT IN (SELECT id FROM target)
                             UNION SELECT id FROM covering)
+            RETURNING e.id, e.workspace_id, e.conversation_id, e.kind
+            )
+            SELECT id AS "id", workspace_id AS "workspaceId", conversation_id AS "conversationId"
+            FROM updated WHERE kind IN ('USER','HEPH','DIGEST')
             """, nativeQuery = true)
-    int redactWithCopies(
-            @Param("ids") UUID[] ids, @Param("erased") String erased, @Param("withTargets") boolean withTargets);
+    List<EntryRef> redactWithCopies(
+            @Param("ids") UUID[] ids,
+            @Param("erased") String erased,
+            @Param("withTargets") boolean withTargets,
+            @Param("withDerivedAnswers") boolean withDerivedAnswers);
 
     /** How many of these entries are redacted, or were edited at or after {@code since}. */
     @Query(value = """

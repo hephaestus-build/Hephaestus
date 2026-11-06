@@ -18,6 +18,7 @@ public final class CoreMetrics {
     public static final String DATABASE_TRANSACTION_HTTP_REQUESTS = "database.transaction.http.requests";
     public static final String DATABASE_WAL_ARCHIVE_FAILING = "database.wal.archive.failing";
     public static final String DATABASE_WAL_ARCHIVE_SAMPLE_FAILURES = "database.wal.archive.sample.failures";
+    public static final String PERSON_DATA_ERASURE_FAILURES = "person.data.erasure.failures";
     public static final String PRIVACY_JOB_AFFECTED = "privacy.job.affected";
     public static final String PRIVACY_JOB_COMPLETED = "privacy.job.completed";
     public static final String TENANCY_PARSE_FAILURE_TOTAL = "tenancy.parse_failure.total";
