@@ -10,6 +10,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * How long each stage of a review attempt takes: one timer with a bounded {@code stage} and {@code outcome}, and one
@@ -21,6 +23,8 @@ import java.util.concurrent.TimeUnit;
  * which hands both the same timers.
  */
 public final class ReviewStageTelemetry {
+
+    private static final Logger log = LoggerFactory.getLogger(ReviewStageTelemetry.class);
 
     /** A capture takes seconds; a sandbox can run for its whole deadline. */
     private static final Duration[] BOUNDS = {
@@ -107,9 +111,16 @@ public final class ReviewStageTelemetry {
         /** Records the stage once. A second call does nothing. */
         public void end(Outcome outcome) {
             if (ended) return;
+            long nanos = System.nanoTime() - startedNanos;
             Objects.requireNonNull(Objects.requireNonNull(timers.get(stage)).get(outcome))
-                    .record(System.nanoTime() - startedNanos, TimeUnit.NANOSECONDS);
+                    .record(nanos, TimeUnit.NANOSECONDS);
             span.tag("hephaestus.review.stage.outcome", outcome.tag);
+            log.atInfo()
+                    .addKeyValue("event.name", "practice_review.stage.ended")
+                    .addKeyValue("review.stage", stage.tag)
+                    .addKeyValue("review.stage.outcome", outcome.tag)
+                    .addKeyValue("duration.ms", TimeUnit.NANOSECONDS.toMillis(nanos))
+                    .log("Review stage ended");
             close();
         }
 

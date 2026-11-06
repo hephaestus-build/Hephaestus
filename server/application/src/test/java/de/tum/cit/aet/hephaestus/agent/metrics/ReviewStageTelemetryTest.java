@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -66,6 +67,23 @@ class ReviewStageTelemetryTest extends BaseUnitTest {
         assertThat(registry.get(AgentMetrics.AGENT_JOB_STAGE_DURATION).timers())
                 .hasSize(4 * 4)
                 .allSatisfy(timer -> assertThat(timer.count()).isZero());
+    }
+
+    @Test
+    void shouldLogAStageOnceWithItsOutcome() {
+        try (var logs = new LogCapture(ReviewStageTelemetry.class)) {
+            var capture = stages.start(ReviewStageTelemetry.Stage.CAPTURE);
+            capture.end(ReviewStageTelemetry.Outcome.FAILED);
+            capture.end(ReviewStageTelemetry.Outcome.OK);
+
+            assertThat(logs.events("practice_review.stage.ended"))
+                    .singleElement()
+                    .satisfies(fields -> {
+                        assertThat(fields).containsEntry("review.stage", "capture");
+                        assertThat(fields).containsEntry("review.stage.outcome", "failed");
+                        assertThat(fields).containsKey("duration.ms");
+                    });
+        }
     }
 
     // Closing the scope is the operation; its binding is intentionally unread.

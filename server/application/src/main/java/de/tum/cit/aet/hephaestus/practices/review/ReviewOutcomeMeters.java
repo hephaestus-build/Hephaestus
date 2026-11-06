@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import static de.tum.cit.aet.hephaestus.core.TransactionCallbacks.afterCommit;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
@@ -13,12 +14,16 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Locale;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /** Counts each review, and each of its items, once when the review's end commits. */
 @Component
 @ConditionalOnServerRole
 class ReviewOutcomeMeters {
+
+    private static final Logger log = LoggerFactory.getLogger(ReviewOutcomeMeters.class);
 
     /**
      * A recorded withholding reason is a code constant, but no single enum holds them all. A value of any other shape
@@ -51,6 +56,18 @@ class ReviewOutcomeMeters {
         Counter ended = ended(review.getKind(), review.getStatus(), review.getStopReason());
         var items = memberships.endStates(review.getWorkspaceId(), review.getId());
         afterCommit(() -> {
+            log.atInfo()
+                    .addKeyValue("event.name", "practice_review.ended")
+                    .addKeyValue(StructuredLogKeys.WORKSPACE_ID, review.getWorkspaceId())
+                    .addKeyValue("review.id", review.getId())
+                    .addKeyValue("review.kind", kind)
+                    .addKeyValue("review.status", label(review.getStatus().name()))
+                    .addKeyValue(
+                            "review.reason",
+                            review.getStopReason() == null
+                                    ? "none"
+                                    : label(review.getStopReason().name()))
+                    .log("Review ended");
             ended.increment();
             items.forEach(item -> registry.counter(
                             PracticeMetrics.REVIEW_ITEMS_ENDED,

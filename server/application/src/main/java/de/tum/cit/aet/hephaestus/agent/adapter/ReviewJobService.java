@@ -12,8 +12,10 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobStateConflictException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMethodVerifier;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
@@ -30,6 +32,8 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -38,6 +42,8 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ReviewJobService implements ReviewQueue {
+
+    private static final Logger log = LoggerFactory.getLogger(ReviewJobService.class);
     private final ReviewJobRepository jobs;
     private final ReviewWriteGuard writeGuard;
     private final ReviewJobAssignments assignments;
@@ -97,7 +103,17 @@ public class ReviewJobService implements ReviewQueue {
         job.setConfigSnapshot(mapper.valueToTree(snapshot.withPracticeScript(direct)));
         jobs.saveAndFlush(job);
         assignmentStore.bind(review.workspaceId(), review.id(), job.getId(), selected);
-        return job.getId();
+        UUID jobId = job.getId();
+        TransactionCallbacks.afterCommit(() -> log.atInfo()
+                .addKeyValue("event.name", "agent.job.queued")
+                .addKeyValue(StructuredLogKeys.JOB_ID, jobId)
+                .addKeyValue(StructuredLogKeys.WORKSPACE_ID, review.workspaceId())
+                .addKeyValue("review.id", review.id())
+                .addKeyValue("job.phase", "queue")
+                .addKeyValue("job.outcome", "queued")
+                .addKeyValue("duration.ms", 0)
+                .log("Agent job lifecycle transition"));
+        return jobId;
     }
 
     private static BoundModelSlot slot(ReviewMethod method, String name) {

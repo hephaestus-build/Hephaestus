@@ -619,7 +619,7 @@ They connect records to a workspace and its people, so they are personal data un
 
 ## Agent-job lifecycle
 
-Lifecycle records contain `event.name`, `job.id`, `workspace.id`, `job.type`, `job.phase`,
+Lifecycle records contain `event.name`, `job.id`, `workspace.id`, `review.id`, `job.phase`,
 `job.outcome`, and `duration.ms`.
 
 | `event.name`         | Emitted when                  | `job.phase` | `job.outcome`                                   | `duration.ms`                 |
@@ -634,6 +634,19 @@ It has no phase, outcome or duration.
 `job.preparation.kind` and `job.preparation.reason` name the kind and the reason of the failure.
 `exception.type` and `exception.cause.types` name the exception classes.
 `job.result` names what the job does next.
+
+## Review and conversation events
+
+Each record has an `event.name` and `workspace.id`.
+
+| `event.name` | Emitted when | Fields |
+| --- | --- | --- |
+| `practice_review.stage.ended` | A stage of a review attempt ends | `review.stage`, `review.stage.outcome`, `duration.ms` |
+| `practice_review.ended` | A review reaches its terminal status | `review.id`, `review.kind`, `review.status`, `review.reason` |
+| `feedback.copy.settled` | Feedback reaches a destination's final state | `feedback.id`, `review.id`, `feedback.destination`, `feedback.state`, `feedback.reason` |
+| `mentor.turn.ended` | An attempt of a conversation turn ends | `turn.id`, `turn.attempt`, `turn.outcome` |
+
+`practice_review.stage.ended` has no `review.id`. It takes `workspace.id`, `job.id` and the trace ID from the log context of its attempt, so join it by `job.id`.
 
 ## Agent-job metrics
 

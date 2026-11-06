@@ -73,6 +73,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
+import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
@@ -570,7 +571,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldClearStagingWithItsCancellationCauseAtTerminalSettlement() {
-        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC);
+                var logs = new LogCapture("de.tum.cit.aet.hephaestus.practices.review.ReviewOutcomeMeters")) {
             Map<Meter.Id, Double> endedBefore = meters.find(PracticeMetrics.REVIEW_ENDED).counters().stream()
                     .collect(Collectors.toMap(Counter::getId, Counter::count));
             double withheldBefore = count(
@@ -612,6 +614,13 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                                     + (counter.count() - endedBefore.getOrDefault(counter.getId(), 0.0))))
                     .as("the review ends once, with its own status and stop reason")
                     .containsExactly(ended.get("status") + "/" + ended.get("reason") + "/1.0");
+            assertThat(logs.events("practice_review.ended"))
+                    .filteredOn(fields -> review.reviewId().toString().equals(fields.get("review.id")))
+                    .singleElement()
+                    .satisfies(fields -> {
+                        assertThat(fields).containsEntry("review.status", String.valueOf(ended.get("status")));
+                        assertThat(fields).containsEntry("review.reason", String.valueOf(ended.get("reason")));
+                    });
             assertThat(count(
                             PracticeMetrics.REVIEW_ITEMS_ENDED,
                             "kind",

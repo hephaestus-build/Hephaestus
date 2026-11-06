@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 import static de.tum.cit.aet.hephaestus.core.TransactionCallbacks.afterCommit;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRepository;
 import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
@@ -23,6 +24,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -32,6 +35,8 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnCaptureRole
 public class FeedbackOutcomes {
+
+    private static final Logger log = LoggerFactory.getLogger(FeedbackOutcomes.class);
 
     private static final Set<FeedbackState> SETTLED =
             EnumSet.of(FeedbackState.DELIVERED, FeedbackState.WITHHELD, FeedbackState.FAILED, FeedbackState.REJECTED);
@@ -87,7 +92,10 @@ public class FeedbackOutcomes {
     public void created(Feedback row) {
         if (!SETTLED.contains(row.getState())) return;
         Counter counter = settled(row.getDestination(), row.getState(), row.getStopReason());
-        afterCommit(counter::increment);
+        afterCommit(() -> {
+            counter.increment();
+            logSettled(row, row.getState(), row.getStopReason());
+        });
     }
 
     /** Writes the delivery state of {@code row}, which holds the state that it replaces. */
@@ -122,9 +130,11 @@ public class FeedbackOutcomes {
 
     private void moved(
             Feedback row, FeedbackState state, @Nullable FeedbackStopReason reason, @Nullable Instant deliveredAt) {
-        List<Runnable> counts = new ArrayList<>(2);
-        if (state != row.getState() && SETTLED.contains(state))
+        List<Runnable> counts = new ArrayList<>(3);
+        if (state != row.getState() && SETTLED.contains(state)) {
             counts.add(settled(row.getDestination(), state, reason)::increment);
+            counts.add(() -> logSettled(row, state, reason));
+        }
         // A copy is posted on the work or in a conversation. The practice page has no copy: its delivery is a read.
         if (row.getDeliveredAt() == null
                 && deliveredAt != null
@@ -145,6 +155,18 @@ public class FeedbackOutcomes {
             }
         }
         if (!counts.isEmpty()) afterCommit(() -> counts.forEach(Runnable::run));
+    }
+
+    private static void logSettled(Feedback row, FeedbackState state, @Nullable FeedbackStopReason reason) {
+        log.atInfo()
+                .addKeyValue("event.name", "feedback.copy.settled")
+                .addKeyValue(StructuredLogKeys.WORKSPACE_ID, row.getWorkspaceId())
+                .addKeyValue("feedback.id", row.getId())
+                .addKeyValue("review.id", row.getReviewId())
+                .addKeyValue("feedback.destination", label(row.getDestination().name()))
+                .addKeyValue("feedback.state", label(state.name()))
+                .addKeyValue("feedback.reason", reason == null ? "none" : label(reason.name()))
+                .log("Feedback settled");
     }
 
     private Counter settled(FeedbackDestination destination, FeedbackState state, @Nullable FeedbackStopReason reason) {
