@@ -100,9 +100,8 @@ spec:
         - port: http
           protocol: TCP
     {{- include "hephaestus.policy.metricsIngress" (dict "root" . "port" "management") | nindent 4 }}
-  # The receiver verifies, reads connection rows and publishes. It calls no provider.
+  # The receiver verifies and publishes. It reaches no database and calls no provider.
   egress:
-    {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.natsEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.traceEgress" . | nindent 4 }}
 ---
@@ -193,7 +192,7 @@ spec:
   {{- end }}
   ingress:
     - from:
-        {{- range $component := list "server" "webhook" "worker" "migration" }}
+        {{- range $component := list "server" "worker" "migration" }}
         {{- include "hephaestus.componentPeer" (dict "root" $root "component" $component) | nindent 8 }}
         {{- end }}
         {{- if .Values.postgresql.metrics.enabled }}

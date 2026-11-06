@@ -117,12 +117,10 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-            {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 256Mi
-        {{- include "hephaestus.postgresqlCaVolume" . | nindent 8 }}
 {{- if gt (int .Values.webhook.replicas) 1 }}
 ---
 apiVersion: policy/v1

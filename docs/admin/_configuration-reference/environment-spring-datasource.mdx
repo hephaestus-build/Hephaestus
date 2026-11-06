@@ -2,8 +2,8 @@
 
 | Variable | Setting | Application default | Containers | Description |
 | --- | --- | --- | --- | --- |
-| `DATABASE_PASSWORD` | `spring.datasource.password` | `prod: (empty)` | `server`, `webhook`, `worker`, `migration` | Login password of the database. |
-| `DATABASE_URL` | `spring.datasource.url` | `prod: (empty)` | `server`, `webhook`, `worker`, `migration` | JDBC URL of the database. |
-| `DATABASE_USERNAME` | `spring.datasource.username` | `prod: (empty)` | `server`, `webhook`, `worker`, `migration` | Login username of the database. |
+| `DATABASE_PASSWORD` | `spring.datasource.password` | `prod: (empty)` | `server`, `worker`, `migration` | Login password of the database. |
+| `DATABASE_URL` | `spring.datasource.url` | `prod: (empty)` | `server`, `worker`, `migration` | JDBC URL of the database. |
+| `DATABASE_USERNAME` | `spring.datasource.username` | `prod: (empty)` | `server`, `worker`, `migration` | Login username of the database. |
 | `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE` | `spring.datasource.hikari.maximum-pool-size` |  | `server`, `worker`, `migration` | Most PostgreSQL connections that one process holds in its pool. A worker can hold two connections per running review. Keep the sum over all processes below the PostgreSQL connection limit. |
 | `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE` | `spring.datasource.hikari.minimum-idle` |  | `server`, `worker`, `migration` | The minimum number of idle database connections that this process tries to keep in its pool. |
