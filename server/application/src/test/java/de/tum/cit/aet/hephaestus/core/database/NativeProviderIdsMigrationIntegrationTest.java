@@ -20,7 +20,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 @Tag("integration")
 class NativeProviderIdsMigrationIntegrationTest {
-    private static final String CHANGELOG = "db/changelog/next/20261106111924-fix-require-native-provider-ids.xml";
+    private static final String CHANGELOG = "db/changelog/next/20261106225511-fix-require-native-provider-ids.xml";
 
     @Test
     void shouldBackfillBothProvidersAndStopsWithoutChangingCheckpointsOrReceipts() throws Exception {
