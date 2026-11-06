@@ -1,4 +1,9 @@
-import type { TourStep, TourTarget } from "./ProductTour";
+import {
+	type TourSection,
+	type TourSectionOutline,
+	type TourStep,
+	tourSections,
+} from "./ProductTour";
 import {
 	AcrossPage,
 	FeedbackPlacesPanel,
@@ -24,9 +29,8 @@ function byText(text: string, root: ParentNode | null | undefined): HTMLElement 
 	];
 	return (
 		candidates
-			.filter((element) => element.textContent.trim().startsWith(text))
-			.sort((a, b) => a.textContent.length - b.textContent.length)
-			.at(0) ?? null
+			.filter((element) => element.textContent?.trim().startsWith(text))
+			.sort((a, b) => (a.textContent?.length ?? 0) - (b.textContent?.length ?? 0))[0] ?? null
 	);
 }
 
@@ -63,7 +67,7 @@ function firstWord(words: string[], within: ParentNode | null | undefined): HTML
 function tab(name: string, root: ParentNode): Element | null {
 	return (
 		[...root.querySelectorAll<HTMLElement>('[role="tab"]')].find((each) =>
-			each.textContent.trim().startsWith(name),
+			each.textContent?.trim().startsWith(name),
 		) ?? null
 	);
 }
@@ -72,23 +76,22 @@ function tab(name: string, root: ParentNode): Element | null {
  * The strip left of the lowest open level, over the dimmed page: a press there closes every level,
  * as in the app.
  */
-function besideLevels(): TourTarget | null {
+function besideLevels(): Element | null {
 	const popups = [...document.querySelectorAll('[data-slot="drawer-popup"]')];
 	if (popups.length === 0) {
 		return null;
 	}
 	const right = Math.min(...popups.map((popup) => popup.getBoundingClientRect().left));
 	const area = new DOMRect(8, 72, Math.max(0, right - 24), window.innerHeight - 144);
-	// The strip is no element of its own, so there is nothing to scroll into view.
-	return { getBoundingClientRect: () => area, scrollIntoView: () => undefined };
+	return { getBoundingClientRect: () => area, scrollIntoView: () => {} } as unknown as Element;
 }
 
 const STANDING_WORDS = ["Needs attention", "Mixed feedback", "Going well", "No standing yet"];
 const TREND_WORDS = [
-	"Not enough to compare",
-	"Direction unclear",
-	"More positive",
-	"More difficulties",
+	"No baseline yet",
+	"No clear baseline change",
+	"Increasing baseline",
+	"Decreasing baseline",
 ];
 
 const HOW = "How it works";
@@ -216,21 +219,23 @@ export const PRACTICE_PROFILE_TOUR: TourStep[] = [
 	}),
 	onProfile({
 		chapter: PROFILE,
-		title: "Why it was raised",
-		body: "The pull requests where it came up, each linked, so you can look at them again.",
-		target: (root) => up(byText("Why this was raised", openCard(root) ?? root), 1),
-	}),
-	onProfile({
-		chapter: PROFILE,
 		title: "The one thing to try next",
 		body: "The blue band is the next step: one concrete thing to try in your next piece of work.",
 		target: (root) => openCard(root)?.querySelector("[data-next-step-edge]")?.parentElement ?? null,
 	}),
 	onProfile({
 		chapter: PROFILE,
+		title: "Why it was raised",
+		// The example card starts with its details open, so this step has its target.
+		body: "In the card’s details: the pull requests where it came up, each linked, so you can look at them again.",
+		target: (root) => up(byText("Why this was raised", openCard(root) ?? root), 1),
+	}),
+	onProfile({
+		chapter: PROFILE,
 		title: "How a card goes away",
 		body: "Each pull request reviewed after the card adds a dot here. When three in a row come back clean, the card resolves by itself. If you fixed it or it does not fit your work, mark it yourself; your next work confirms it.",
-		target: (root) => up(byText("Work reviewed for this practice", openCard(root) ?? root), 2),
+		// The status row under the next step: the clean meter and the reader's own answers.
+		target: (root) => (openCard(root) ?? root).querySelector("[data-progress-status]"),
 	}),
 	onProfile({
 		chapter: PROFILE,
@@ -248,6 +253,7 @@ export const PRACTICE_PROFILE_TOUR: TourStep[] = [
 	}),
 	onProfile({
 		chapter: DEEPER,
+		clickHint: true,
 		title: "Click “See all practice groups”",
 		body: "This opens the first level: every practice group with your standing in it.",
 		target: (root) => byText("See all practice groups", root)?.closest("a") ?? null,
@@ -279,7 +285,7 @@ export const PRACTICE_PROFILE_TOUR: TourStep[] = [
 		page: <ProfileWithLevels levels={["groups"]} />,
 		inLevel: true,
 		title: "Your trend in this group",
-		body: "The trend compares your latest reviewed work with the work before it, in the last 90 days: more positive, more difficulties, direction unclear, or not enough to compare yet.",
+		body: "The trend says whether your recent work meets the practices more or less often than before: an increasing baseline, a decreasing one, no clear change, or no baseline yet.",
 		target: (root) => {
 			const found = firstWord(TREND_WORDS, firstGroupRow(root)?.querySelector("td"));
 			return found?.closest("button, span") ?? found;
@@ -301,7 +307,7 @@ export const PRACTICE_PROFILE_TOUR: TourStep[] = [
 		body: "Here you see the updates: which practices moved, and where the group stands now.",
 		target: (root) => {
 			const lists = firstGroupRow(root)?.querySelectorAll("ul");
-			return lists === undefined ? null : ([...lists].at(-1) ?? null);
+			return (lists && lists.length > 0 ? lists[lists.length - 1] : null) ?? null;
 		},
 		padding: 6,
 	}),
@@ -309,6 +315,7 @@ export const PRACTICE_PROFILE_TOUR: TourStep[] = [
 		chapter: DEEPER,
 		page: <ProfileWithLevels levels={["groups"]} />,
 		inLevel: true,
+		clickHint: true,
 		title: "Click “Open group”",
 		body: "This opens the next level: the group with all its practices.",
 		target: (root) => byText("Open group", firstGroupRow(root)),
@@ -364,7 +371,7 @@ export const PRACTICE_PROFILE_TOUR: TourStep[] = [
 		page: <ProfileWithLevels levels={["groups", "group", "practice"]} practiceTab="guide" />,
 		clickHint: true,
 		title: "Let’s go back to the home view",
-		body: "A click on the page beside the levels closes them, here all at once. Click Next and I click there for you.",
+		body: "A click on the page beside the levels closes them, here all at once. Click there.",
 		target: () => besideLevels(),
 		padding: 0,
 	}),
@@ -375,6 +382,7 @@ export const PRACTICE_PROFILE_TOUR: TourStep[] = [
 	}),
 	onProfile({
 		chapter: DEEPER,
+		clickHint: true,
 		title: "Click “Latest review”",
 		body: "The chip next to the title opens another level: every review of your work.",
 		target: (root) => byText("Latest review", root)?.closest("a, button") ?? null,
@@ -392,6 +400,7 @@ export const PRACTICE_PROFILE_TOUR: TourStep[] = [
 	// 4 · Compare: through the sidebar to the comparison, then back to the profile from the same place.
 	onProfile({
 		chapter: COMPARE,
+		clickHint: true,
 		title: "Click “Across the workspace” in the sidebar",
 		body: "Your profile is only for you; nobody else sees it. To see how you compare with the course, open “Across the workspace” in the sidebar, under “Your practices”.",
 		target: () => document.querySelector('a[href*="practices-across-the-workspace"]'),
@@ -402,10 +411,10 @@ export const PRACTICE_PROFILE_TOUR: TourStep[] = [
 		body: "This page shows how everyone in your course splits on each practice group. Nobody is named; only your own place is marked for you.",
 	}),
 	onAcross({
-		title: "Your figures next to the typical range",
-		body: "Your own numbers, such as reviewed pull requests or practices going well, each with the range where most of the course lies.",
+		title: "Your numbers next to the others",
+		body: "Your own numbers, such as reviewed pull requests or practices going well. The foot of each card says what it is based on. Where you are in the better half here, a small Top X% shows it.",
 		target: (root) =>
-			byText("Your figures", root)?.closest("section") ?? up(byText("Your figures", root), 3),
+			root.querySelector("[data-across-figures] ul") ?? root.querySelector("[data-across-figures]"),
 	}),
 	onAcross({
 		title: "Each group: how the course splits",
@@ -423,6 +432,7 @@ export const PRACTICE_PROFILE_TOUR: TourStep[] = [
 	onAcross({
 		page: <AcrossPage level />,
 		inLevel: true,
+		clickHint: true,
 		title: "Click “See your own standing”",
 		body: "At the foot of every level: one click takes you to the same group in your own profile.",
 		target: (root) => byText("See your own standing", root)?.closest("button") ?? null,
@@ -437,11 +447,71 @@ export const PRACTICE_PROFILE_TOUR: TourStep[] = [
 		target: (root) => byText("See this group across", root)?.closest("button") ?? null,
 		padding: 6,
 	}),
+];
+
+/**
+ * The tour's sections, by step ranges into `PRACTICE_PROFILE_TOUR` (0-based, both ends included).
+ * Most are one block; Going deeper alone splits into parts, one per level it opens. The one place
+ * that splits the tour; each range lies inside its section's steps.
+ */
+export const PRACTICE_PROFILE_TOUR_OUTLINE: readonly TourSectionOutline[] = [
 	{
-		end: true,
-		title: "That’s it! You find this tour here",
-		body: "In short: I review your pull requests against your course’s practices, comment on each one, and turn repeated problems into a card on your profile, with one next step. Whenever you want to see it again, click “Take the tour” here.",
-		target: () => document.querySelector("[data-tour-start]"),
-		padding: 6,
+		name: HOW,
+		line: "From your pull request to feedback.",
+		first: 0,
+		last: 8,
+	},
+	{
+		name: PROFILE,
+		line: "Your standing and your feedback cards.",
+		first: 9,
+		last: 15,
+	},
+	{
+		name: DEEPER,
+		line: "The levels behind each click.",
+		parts: [
+			{
+				name: "All practice groups",
+				line: "Standing, trend and changes per group.",
+				first: 16,
+				last: 22,
+			},
+			{
+				name: "One group",
+				line: "Every practice of one group.",
+				first: 23,
+				last: 24,
+			},
+			{
+				name: "One practice and its tabs",
+				line: "Its Feedback, Observations and Guide tabs.",
+				first: 25,
+				last: 30,
+			},
+			{
+				name: "Reviews of your work",
+				line: "Every review and what it checked.",
+				first: 31,
+				last: 32,
+			},
+		],
+	},
+	{
+		name: COMPARE,
+		line: "How the course does, anonymously.",
+		first: 33,
+		last: 39,
 	},
 ];
+
+let sections: TourSection[] | undefined;
+
+/**
+ * The sections with ids and counts, worked out on first use: the profile page and this tour import
+ * each other through the example scenes, so module-level values may not be ready yet.
+ */
+export function practiceProfileTourSections(): TourSection[] {
+	sections ??= tourSections(PRACTICE_PROFILE_TOUR_OUTLINE);
+	return sections;
+}

@@ -5,29 +5,52 @@ import {
 	MessageSquareTextIcon,
 	MousePointerClickIcon,
 	RepeatIcon,
+	RotateCcwIcon,
 	SearchIcon,
 	UserRoundIcon,
+	XIcon,
 } from "lucide-react";
-import { Fragment, type ReactNode, useContext, useEffect, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 
-import { cn } from "cn";
 import { HephMark } from "@/components/brand/HephaestusLogo";
+import {
+	PracticeTabsList,
+	PracticeTabsRail,
+	PracticeTabsTrigger,
+} from "@/components/common/practice-tabs";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import type { PracticeTab } from "@/components/practice-profile/practice-profile-search";
-import { getGroupVisual, groupMark } from "@/components/practice-vocabulary/group-visuals";
+import { PracticeGuideMarkdown } from "@/components/practice-guidance/PracticeGuideMarkdown";
+import { AllPracticeGroupsTable } from "@/components/practice-profile/AllPracticeGroupsTable";
+import { composeOverview } from "@/components/practice-profile/compose-overview";
+import { PracticeProfilePage } from "@/components/practice-profile/PracticeProfilePage";
+import { ReviewsTable } from "@/components/practice-profile/ReviewsTable";
+import {
+	getGroupVisual,
+	groupMark,
+	PracticeIcon,
+} from "@/components/practice-vocabulary/group-visuals";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
+import {
+	DEFAULT_PRACTICE_GROUP_SORT,
+	sortPracticeGroups,
+} from "@/components/practice-vocabulary/practice-group-list-order";
 import {
 	PRACTICE_GROUP_STANDING_DEFS,
 	PRACTICE_STANDING_DEFS,
 } from "@/components/practice-vocabulary/practice-group-standing-defs";
+import { PracticeFeedbackCard } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { PracticeGroupStandingRing } from "@/components/practice-vocabulary/PracticeGroupStandingRing";
-import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
+import { PracticePill, PracticeTitlePill } from "@/components/practice-vocabulary/PracticePill";
 import { PracticesAcrossTheWorkspacePage } from "@/components/practices-across-the-workspace/PracticesAcrossTheWorkspacePage";
+import { Tabs } from "@/components/ui/tabs";
 import { useFeedbackRatings } from "@/stories/feedback-ratings";
 import { ALL_FEEDBACK_CARDS } from "@/stories/practice-feedback-cards-story-mock-data";
+import { bundledGuidance, bundledPractice } from "@/stories/practice-guidance-story-mock-data";
 import {
 	groups,
+	groupStandings,
 	LATEST_REVIEW,
+	OVERVIEW_FIXTURE,
 	packagingGroup,
 	practicesByGroup,
 	practiceStandings,
@@ -36,13 +59,34 @@ import {
 	ACROSS_WORKSPACE,
 	ACROSS_WORKSPACE_TILES,
 } from "@/stories/practices-across-the-workspace-story-data";
+import { profileReviews } from "@/stories/profile-reviews-story-mock-data";
 
+import type { PracticeTab } from "@/components/practice-profile/practice-profile-search";
 import { TourAcrossLevel, type TourLevel, TourLevels } from "./tour-levels";
-import { TourProfilePageContext } from "./tour-profile-page";
-import styles from "./tour.module.css";
 
-/** The example pages' handlers: the tour shows them, the reader does not act on them. */
-const noop = () => undefined;
+const noop = () => {};
+
+/**
+ * The few movements the tour keeps: a fade in, the groups forming, and a level sliding in. They fill
+ * backwards only, so a later change of opacity or scale on the same element still shows.
+ */
+const SCENE_CSS = `
+@keyframes tour-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes tour-grow { from { transform: scaleX(0); } to { transform: none; } }
+@keyframes tour-drawer { from { transform: translateX(100%); } to { transform: none; } }
+.tour-in { animation: tour-in .24s cubic-bezier(.2,.9,.3,1) backwards; }
+.tour-grow { animation: tour-grow .2s ease-out backwards; }
+.tour-drawer { animation: tour-drawer .55s cubic-bezier(.2,.8,.2,1) both; }
+@media (prefers-reduced-motion: reduce) { .tour-scene * { animation: none !important; transition: none !important; } }
+`;
+
+function SceneStyles() {
+	return <style>{SCENE_CSS}</style>;
+}
+
+function delay(seconds: number) {
+	return { animationDelay: `${seconds}s` };
+}
 
 function HephStageIcon({ className }: { className?: string }) {
 	return <HephMark className={className} />;
@@ -80,14 +124,15 @@ const FILES = [
 /** A pull request as the reader knows it from GitHub or GitLab: what Heph will look at. */
 export function WorkPanel() {
 	return (
-		<div className={cn(styles.fadeIn, "overflow-hidden rounded-xl border bg-background text-sm")}>
+		<div className="tour-in overflow-hidden rounded-xl border bg-background text-sm">
+			<SceneStyles />
 			<div className="flex flex-col gap-1.5 border-b px-4 py-3">
 				<div className="flex items-center gap-2">
 					<span className="text-base font-semibold">Add caching to the course list</span>
 					<span className="text-base text-muted-foreground">#42</span>
 				</div>
 				<div className="flex items-center gap-2 text-xs text-muted-foreground">
-					<span className="flex items-center gap-1 rounded-full bg-provider-open-foreground px-2 py-0.5 font-medium text-provider-onemphasis-foreground">
+					<span className="flex items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 font-medium text-white">
 						<GitPullRequestIcon className="size-3" /> Open
 					</span>
 					<span>
@@ -119,8 +164,8 @@ export function WorkPanel() {
 						<span key={file.path} className="flex items-center justify-between gap-3">
 							<code className="truncate text-xs">{file.path}</code>
 							<span className="shrink-0 text-xs tabular-nums">
-								<span className="text-provider-success-foreground">+{file.added}</span>{" "}
-								<span className="text-provider-danger-foreground">−{file.removed}</span>
+								<span className="text-green-700">+{file.added}</span>{" "}
+								<span className="text-red-700">−{file.removed}</span>
 							</span>
 						</span>
 					))}
@@ -139,31 +184,27 @@ export function OnePracticePanel() {
 	const [open, setOpen] = useState(false);
 	useEffect(() => {
 		const timers = [
-			window.setTimeout(() => setPicked(true), 1300),
-			window.setTimeout(() => setOpen(true), 2200),
+			window.setTimeout(() => setPicked(true), 120),
+			window.setTimeout(() => setOpen(true), 340),
 		];
-		return () => {
-			for (const timer of timers) {
-				window.clearTimeout(timer);
-			}
-		};
+		return () => timers.forEach((timer) => window.clearTimeout(timer));
 	}, []);
 	const all = groups.flatMap((group) => practicesByGroup[group.slug] ?? []);
 	return (
 		<div className="flex flex-col gap-4">
+			<SceneStyles />
 			<div className="flex flex-wrap gap-1.5">
 				{all.map((practice) => {
 					const chosen = practice.slug === describe?.slug;
 					return (
 						<span
 							key={practice.slug}
-							className={cn(
-								"relative flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition-all duration-500",
+							className={`relative flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition-all duration-200 ${
 								chosen && picked
-									? "bg-mentor text-mentor-foreground ring-4 ring-mentor/20"
-									: "bg-secondary text-secondary-foreground",
-								picked && !chosen ? "opacity-35" : "opacity-100",
-							)}
+									? "bg-mentor text-white ring-4 ring-mentor/20"
+									: "bg-secondary text-secondary-foreground"
+							}`}
+							style={{ opacity: picked && !chosen ? 0.35 : 1 }}
 						>
 							{chosen && picked && <SearchIcon className="size-3.5" />}
 							{practice.name}
@@ -173,12 +214,7 @@ export function OnePracticePanel() {
 				<span className="px-2 py-1 text-xs text-muted-foreground">and more</span>
 			</div>
 			{open && (
-				<div
-					className={cn(
-						styles.fadeIn,
-						"flex flex-col items-start gap-2 rounded-xl border bg-background p-4",
-					)}
-				>
+				<div className="tour-in flex flex-col items-start gap-2 rounded-xl border bg-background p-4">
 					<PracticePill
 						name={describe?.name ?? "Describe what changed and why"}
 						group={packagingMark}
@@ -218,9 +254,7 @@ const clusterRows = (row: number) =>
 	);
 const clusterTop = (row: number) => {
 	let top = 0;
-	for (let at = 0; at < row; at += 1) {
-		top += CLUSTER_HEADER + clusterRows(at) * ROW + 12;
-	}
+	for (let at = 0; at < row; at++) top += CLUSTER_HEADER + clusterRows(at) * ROW + 12;
 	return top;
 };
 const clusterChips = clusterGroups
@@ -237,19 +271,22 @@ const clusterChips = clusterGroups
 /** The practices as one loose list, which then sorts itself into practice groups. */
 export function GroupPanel() {
 	const [clustered, setClustered] = useState(false);
+	const [run, setRun] = useState(0);
 	useEffect(() => {
-		const timer = window.setTimeout(() => setClustered(true), 1200);
+		setClustered(false);
+		const timer = window.setTimeout(() => setClustered(true), 80);
 		return () => window.clearTimeout(timer);
-	}, []);
+	}, [run]);
 	const flatHeight = Math.ceil(clusterChips.length / FLAT_COLUMNS) * ROW;
 	const clusterHeight = clusterTop(Math.ceil(clusterGroups.length / CLUSTER_COLUMNS));
 	return (
 		<div className="flex flex-col items-center gap-2">
+			<SceneStyles />
 			<div
-				className="relative h-(--tour-height) w-(--tour-width)"
+				className="relative"
 				style={{
-					"--tour-height": `${Math.max(flatHeight, clusterHeight) + 4}px`,
-					"--tour-width": `${CLUSTER_COLUMNS * (CLUSTER_WIDTH + 20) - 20}px`,
+					height: Math.max(flatHeight, clusterHeight) + 4,
+					width: CLUSTER_COLUMNS * (CLUSTER_WIDTH + 20) - 20,
 				}}
 			>
 				{clusterGroups.map((group, groupAt) => {
@@ -259,15 +296,14 @@ export function GroupPanel() {
 					return (
 						<div
 							key={group.slug}
-							className={cn(
-								"absolute top-(--tour-y) left-(--tour-x) h-(--tour-height) w-(--tour-width) rounded-2xl border bg-background transition-opacity duration-500",
-								clustered ? "opacity-100 delay-700" : "opacity-0 delay-0",
-							)}
+							className="absolute rounded-2xl border bg-background transition-opacity duration-200"
 							style={{
-								"--tour-x": `${(groupAt % CLUSTER_COLUMNS) * (CLUSTER_WIDTH + 20)}px`,
-								"--tour-y": `${clusterTop(Math.floor(groupAt / CLUSTER_COLUMNS))}px`,
-								"--tour-width": `${CLUSTER_WIDTH}px`,
-								"--tour-height": `${CLUSTER_HEADER + count * ROW + 6}px`,
+								left: (groupAt % CLUSTER_COLUMNS) * (CLUSTER_WIDTH + 20),
+								top: clusterTop(Math.floor(groupAt / CLUSTER_COLUMNS)),
+								width: CLUSTER_WIDTH,
+								height: CLUSTER_HEADER + count * ROW + 6,
+								opacity: clustered ? 1 : 0,
+								transitionDelay: clustered ? "0.3s" : "0s",
 							}}
 						>
 							<span
@@ -298,22 +334,17 @@ export function GroupPanel() {
 					return (
 						<div
 							key={practice.slug}
-							className={cn(
-								styles.chip,
-								"absolute top-0 left-0 flex h-6 items-center gap-1.5 rounded-full bg-secondary px-3 text-xs whitespace-nowrap text-secondary-foreground",
-							)}
+							className="absolute top-0 left-0 flex items-center gap-1.5 rounded-full bg-secondary px-3 text-xs whitespace-nowrap text-secondary-foreground"
 							style={{
-								"--tour-width": `${clustered ? CLUSTER_WIDTH - 16 : FLAT_WIDTH}px`,
-								"--tour-x": `${where.x}px`,
-								"--tour-y": `${where.y}px`,
+								height: CHIP_HEIGHT,
+								width: clustered ? CLUSTER_WIDTH - 16 : FLAT_WIDTH,
+								transform: `translate(${where.x}px, ${where.y}px)`,
+								transition: "transform .42s cubic-bezier(.4,0,.2,1), width .42s",
 							}}
 						>
-							<visual.Icon
-								className={cn(
-									"size-3.5 shrink-0 transition-opacity duration-500",
-									mark.ink,
-									clustered ? "opacity-100" : "opacity-0",
-								)}
+							<PracticeIcon
+								className={`size-3.5 shrink-0 transition-opacity duration-200 ${mark.ink}`}
+								style={{ opacity: clustered ? 1 : 0 }}
 							/>
 							<span className="truncate">{practice.name}</span>
 						</div>
@@ -346,8 +377,9 @@ const OBSERVATIONS = [
 export function ObservationPanel() {
 	return (
 		<div className="flex flex-col gap-3">
-			<div className={cn(styles.fadeIn, "flex items-center gap-2 text-sm")}>
-				<GitPullRequestIcon className="size-4 text-provider-open-foreground" />
+			<SceneStyles />
+			<div className="tour-in flex items-center gap-2 text-sm">
+				<GitPullRequestIcon className="size-4 text-green-600" />
 				<span className="font-medium">#42 Add caching to the course list</span>
 				<ArrowRightIcon className="size-4 text-muted-foreground" />
 				<span className="text-muted-foreground">I look at it practice by practice</span>
@@ -356,11 +388,8 @@ export function ObservationPanel() {
 				{OBSERVATIONS.map((row, at) => (
 					<div
 						key={row.practice}
-						className={cn(
-							styles.fadeIn,
-							"grid grid-cols-[7rem_1fr] items-start gap-4 rounded-xl border bg-background p-3",
-						)}
-						style={{ "--tour-delay": `${0.3 + at * 0.35}s` }}
+						className="tour-in grid grid-cols-[7rem_1fr] items-start gap-4 rounded-xl border bg-background p-3"
+						style={delay(at * 0.08)}
 					>
 						<StatusBadge def={OUTCOME_DEFS[row.outcome]} />
 						<div className="flex flex-col items-start gap-1">
@@ -376,7 +405,7 @@ export function ObservationPanel() {
 
 function Numbered({ n }: { n: number }) {
 	return (
-		<span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-mentor text-xs font-semibold text-mentor-foreground">
+		<span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-mentor text-xs font-semibold text-white">
 			{n}
 		</span>
 	);
@@ -404,17 +433,15 @@ function MiniCard() {
 export function FeedbackPlacesPanel() {
 	const [focus, setFocus] = useState(false);
 	useEffect(() => {
-		const timer = window.setTimeout(() => setFocus(true), 2600);
+		const timer = window.setTimeout(() => setFocus(true), 320);
 		return () => window.clearTimeout(timer);
 	}, []);
 	return (
 		<div className="grid grid-cols-2 items-start gap-6">
+			<SceneStyles />
 			<div
-				className={cn(
-					styles.fadeIn,
-					"flex flex-col gap-2 transition-opacity duration-700",
-					focus ? "opacity-35" : "opacity-100",
-				)}
+				className="tour-in flex flex-col gap-2 transition-opacity duration-250"
+				style={{ opacity: focus ? 0.35 : 1 }}
 			>
 				<span className="flex items-center gap-2 text-sm font-semibold">
 					<Numbered n={1} />
@@ -430,28 +457,21 @@ export function FeedbackPlacesPanel() {
 						sentence on the problem it solves.
 					</span>
 					<span className="text-xs text-muted-foreground">
-						AI-generated feedback. Answer or dispute it in Hephaestus.
+						AI-generated feedback. Answer it or disagree in Hephaestus.
 					</span>
 				</div>
 				<span className="text-xs text-muted-foreground">About this one pull request.</span>
 			</div>
 			<div
-				className={cn(
-					styles.fadeIn,
-					"flex origin-left flex-col gap-2 rounded-2xl transition-transform duration-700",
-					focus && styles.lifted,
-				)}
-				style={{ "--tour-delay": "0.4s" }}
+				className="tour-in flex flex-col gap-2 rounded-2xl"
+				style={delay(0.08)}
 			>
 				<span className="flex items-center gap-2 text-sm font-semibold">
 					<Numbered n={2} />
 					<UserRoundIcon className="size-4" /> On your profile, as a feedback card
 				</span>
 				<div
-					className={cn(
-						"rounded-xl transition-shadow duration-700",
-						focus && "ring-4 ring-mentor/30",
-					)}
+					className={`rounded-xl transition-shadow duration-250 ${focus ? "ring-4 ring-mentor/30" : ""}`}
 				>
 					<MiniCard />
 				</div>
@@ -473,15 +493,13 @@ const PATTERN = [
 export function PatternPanel() {
 	return (
 		<div className="grid grid-cols-[1fr_auto_1.1fr] items-center gap-4">
+			<SceneStyles />
 			<div className="flex flex-col gap-2">
 				{PATTERN.map((work, at) => (
 					<div
 						key={work.number}
-						className={cn(
-							styles.fadeIn,
-							"flex items-center gap-2 rounded-xl border bg-background p-2.5 text-sm",
-						)}
-						style={{ "--tour-delay": `${0.2 + at * 0.35}s` }}
+						className="tour-in flex items-center gap-2 rounded-xl border bg-background p-2.5 text-sm"
+						style={delay(at * 0.07)}
 					>
 						<StatusBadge def={OUTCOME_DEFS.NOT_MET} />
 						<span className="font-medium">#{work.number}</span>
@@ -492,11 +510,8 @@ export function PatternPanel() {
 					Same practice: Describe what changed and why
 				</span>
 			</div>
-			<ArrowRightIcon
-				className={cn(styles.fadeIn, "size-6 text-mentor")}
-				style={{ "--tour-delay": "1.3s" }}
-			/>
-			<div className={cn(styles.fadeIn, "flex flex-col gap-2")} style={{ "--tour-delay": "1.5s" }}>
+			<ArrowRightIcon className="tour-in size-6 text-mentor" style={delay(0.22)} />
+			<div className="tour-in flex flex-col gap-2" style={delay(0.3)}>
 				<MiniCard />
 				<span className="text-xs text-muted-foreground">
 					It goes away when three of your next pull requests in a row come back clean, or when you
@@ -517,12 +532,13 @@ export function ProfileContentsPanel() {
 	];
 	return (
 		<div className="grid grid-cols-[1fr_auto_auto] items-center gap-4">
+			<SceneStyles />
 			<ol className="flex flex-col gap-2">
 				{items.map(([title, detail], at) => (
 					<li
 						key={title}
-						className={cn(styles.fadeIn, "flex gap-3 rounded-xl border bg-background p-2.5")}
-						style={{ "--tour-delay": `${at * 0.25}s` }}
+						className="tour-in flex gap-3 rounded-xl border bg-background p-2.5"
+						style={delay(at * 0.06)}
 					>
 						<span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-mentor/10 text-xs font-semibold text-mentor">
 							{at + 1}
@@ -538,8 +554,8 @@ export function ProfileContentsPanel() {
 			<svg
 				aria-hidden
 				viewBox="0 0 24 240"
-				className={cn(styles.fadeIn, "h-60 w-6 text-mentor")}
-				style={{ "--tour-delay": "1.2s" }}
+				className="tour-in h-60 w-6 text-mentor"
+				style={delay(0.26)}
 			>
 				<path
 					d="M2 2 Q 12 2 12 20 L 12 104 Q 12 120 22 120 Q 12 120 12 136 L 12 220 Q 12 238 2 238"
@@ -550,13 +566,10 @@ export function ProfileContentsPanel() {
 				/>
 			</svg>
 			<div
-				className={cn(
-					styles.fadeIn,
-					"flex flex-col items-center gap-2 rounded-2xl border bg-background px-6 py-5",
-				)}
-				style={{ "--tour-delay": "1.5s" }}
+				className="tour-in flex flex-col items-center gap-2 rounded-2xl border bg-background px-6 py-5"
+				style={delay(0.32)}
 			>
-				<span className="flex size-12 items-center justify-center rounded-full bg-mentor text-mentor-foreground">
+				<span className="flex size-12 items-center justify-center rounded-full bg-mentor text-white">
 					<UserRoundIcon className="size-6" />
 				</span>
 				<span className="text-sm font-semibold">Your Practice profile</span>
@@ -583,7 +596,13 @@ export function LayersPanel() {
 	const [back, setBack] = useState(false);
 	const [pageClick, setPageClick] = useState(false);
 	const [pageBack, setPageBack] = useState(false);
+	const [run, setRun] = useState(0);
 	useEffect(() => {
+		setShown(1);
+		setPointing(false);
+		setBack(false);
+		setPageClick(false);
+		setPageBack(false);
 		const plan: [number, () => void][] = [
 			[700, () => setShown(2)],
 			[1700, () => setShown(3)],
@@ -609,13 +628,17 @@ export function LayersPanel() {
 			],
 		];
 		const timers = plan.map(([ms, act]) => window.setTimeout(act, ms));
-		return () => {
-			for (const timer of timers) {
-				window.clearTimeout(timer);
-			}
-		};
-	}, []);
-	const caption = layersCaption({ shown, pointing, back, pageClick, pageBack });
+		return () => timers.forEach((timer) => window.clearTimeout(timer));
+	}, [run]);
+	const caption = pageBack
+		? "A click on the page beside the levels closed the last one too."
+		: pageClick
+			? "Or click the page on the left, beside the levels…"
+			: back
+				? "A click on the crumb “All practice groups” closed the two levels above it."
+				: pointing
+					? "Now a click on a crumb goes back…"
+					: `${shown} ${shown === 1 ? "level" : "levels"} open`;
 	return (
 		<div className="flex flex-col gap-3">
 			<div className="flex justify-between text-xs">
@@ -634,22 +657,32 @@ export function LayersPanel() {
 				{LAYERS.slice(1).map((title, at) => {
 					const depth = at + 1;
 					const open = depth < shown;
-					const pointed = pointing && depth === shown - 1;
+					const top = depth === shown - 1;
 					return (
 						<div
 							key={title}
-							className={cn(
-								"absolute inset-y-0 right-0 flex w-(--tour-width) flex-col gap-2 border-l bg-background p-4 shadow-xl transition-transform duration-500",
-								!open && styles.offRight,
-							)}
-							style={{ "--tour-width": `${82 - depth * 8}%` }}
+							className="absolute inset-y-0 right-0 flex flex-col gap-2 border-l bg-background p-4 shadow-xl transition-transform duration-500"
+							style={{
+								width: `${82 - depth * 8}%`,
+								transform: open ? "none" : "translateX(105%)",
+							}}
 						>
-							<div className="flex items-center gap-1 text-2xs text-muted-foreground">
+							<div className="flex items-center gap-1 text-[11px] text-muted-foreground">
 								{LAYERS.slice(0, depth + 1).map((crumb, crumbAt) => (
 									<span key={crumb} className="flex items-center gap-1">
 										{crumbAt > 0 && <span>›</span>}
-										<span className={crumbTone(crumbAt, depth, pointed)}>{crumb}</span>
-										{crumbAt === 1 && pointed && (
+										<span
+											className={
+												crumbAt === depth
+													? "font-medium text-foreground"
+													: crumbAt === 1 && pointing && top
+														? "rounded bg-mentor/15 px-1 text-mentor"
+														: undefined
+											}
+										>
+											{crumb}
+										</span>
+										{crumbAt === 1 && pointing && top && (
 											<MousePointerClickIcon className="size-4 text-mentor" />
 										)}
 									</span>
@@ -666,56 +699,13 @@ export function LayersPanel() {
 	);
 }
 
-/** What the levels animation says at each moment of its plan. */
-function layersCaption({
-	shown,
-	pointing,
-	back,
-	pageClick,
-	pageBack,
-}: {
-	shown: number;
-	pointing: boolean;
-	back: boolean;
-	pageClick: boolean;
-	pageBack: boolean;
-}): string {
-	if (pageBack) {
-		return "A click on the page beside the levels closed the last one too.";
-	}
-	if (pageClick) {
-		return "Or click the page on the left, beside the levels…";
-	}
-	if (back) {
-		return "A click on the crumb “All practice groups” closed the two levels above it.";
-	}
-	if (pointing) {
-		return "Now a click on a crumb goes back…";
-	}
-	return `${shown} ${shown === 1 ? "level" : "levels"} open`;
-}
-
-/** The current level's crumb stands out; the crumb about to be clicked is marked. */
-function crumbTone(crumbAt: number, depth: number, pointed: boolean): string | undefined {
-	if (crumbAt === depth) {
-		return "font-medium text-foreground";
-	}
-	if (crumbAt === 1 && pointed) {
-		return "rounded bg-mentor/15 px-1 text-mentor";
-	}
-	return undefined;
-}
-
 /** The example Practice profile at full size, as it fills up after a few reviews. */
 function ProfileContent() {
 	const { ratingProps } = useFeedbackRatings();
-	const PracticeProfilePage = useContext(TourProfilePageContext);
-	if (PracticeProfilePage === null) {
-		return null;
-	}
 	return (
 		<PracticeProfilePage
 			hideTour
+			cardDetailsOpen
 			latestReview={LATEST_REVIEW}
 			practices={practiceStandings}
 			groups={groups}
@@ -733,6 +723,7 @@ function ProfileContent() {
 function FullPage({ children }: { children: ReactNode }) {
 	return (
 		<div className="h-full overflow-y-auto px-4 py-6">
+			<SceneStyles />
 			<div className="mx-auto w-full max-w-6xl">{children}</div>
 		</div>
 	);
@@ -753,20 +744,32 @@ export function AcrossPage({ level = false }: { level?: boolean }) {
 				<PracticesAcrossTheWorkspacePage
 					state={{ status: "ready", overview: ACROSS_WORKSPACE }}
 					tiles={{ status: "ready", tiles: ACROSS_WORKSPACE_TILES }}
-					window="DAYS_30"
-					onWindowChange={noop}
 					onOpenGroup={noop}
 				/>
 			</FullPage>
 			<div
 				aria-hidden
-				className={cn(
-					"pointer-events-none fixed inset-0 bg-scrim transition-opacity duration-500",
-					level ? "opacity-100" : "opacity-0",
-				)}
+				className="pointer-events-none fixed inset-0 bg-scrim transition-opacity duration-500"
+				style={{ opacity: level ? 1 : 0 }}
 			/>
 			<TourAcrossLevel open={level} />
 		</>
+	);
+}
+
+/** Heph greets in its own window, the same size the explanations use. */
+export function WelcomePanel() {
+	return (
+		<div className="flex flex-col items-center gap-4 text-center">
+			<SceneStyles />
+			<span className="tour-in flex size-24 items-center justify-center rounded-full bg-mentor/10 ring-1 ring-mentor/25">
+				<HephMark className="size-16" />
+			</span>
+			<span className="tour-in max-w-md text-sm text-muted-foreground" style={delay(0.06)}>
+				Hephaestus gives you feedback on how you work in your course project: not on whether your
+				code runs, but on practices such as describing your changes or testing them.
+			</span>
+		</div>
 	);
 }
 
@@ -782,22 +785,20 @@ const OVERVIEW_TEXT = [
 export function FlowOverviewPanel() {
 	return (
 		<div className="flex items-stretch">
+			<SceneStyles />
 			{TOUR_STAGES.map((stage, at) => (
 				<Fragment key={stage.label}>
 					{at > 0 && (
 						<span className="flex w-8 shrink-0 items-center">
 							<span
-								className={cn(styles.grow, "h-0.5 w-full origin-left rounded-full bg-mentor/50")}
-								style={{ "--tour-delay": `${at * 0.45 - 0.15}s` }}
+								className="tour-grow h-0.5 w-full origin-left rounded-full bg-mentor/50"
+								style={delay(at * 0.08 - 0.04)}
 							/>
 						</span>
 					)}
 					<div
-						className={cn(
-							styles.fadeIn,
-							"flex flex-1 flex-col items-center gap-2 rounded-2xl border bg-background p-3 text-center",
-						)}
-						style={{ "--tour-delay": `${at * 0.45}s` }}
+						className="tour-in flex flex-1 flex-col items-center gap-2 rounded-2xl border bg-background p-3 text-center"
+						style={delay(at * 0.08)}
 					>
 						<span className="flex size-11 items-center justify-center rounded-full bg-mentor/10 text-mentor">
 							<stage.Icon className="size-5" />
@@ -827,6 +828,7 @@ export function GroupStandingPanel() {
 	const counts = { DEVELOPING: 1, MIXED: 1, STRENGTH: 3 };
 	return (
 		<div className="grid grid-cols-[1.5fr_auto_1fr] items-center gap-5">
+			<SceneStyles />
 			<div className="flex flex-col gap-2">
 				<span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
 					Practice level: one standing each
@@ -834,25 +836,16 @@ export function GroupStandingPanel() {
 				{GROUP_EXAMPLE.map((practice, at) => (
 					<div
 						key={practice.name}
-						className={cn(
-							styles.fadeIn,
-							"flex items-center justify-between gap-3 rounded-xl border bg-background px-3 py-1.5",
-						)}
-						style={{ "--tour-delay": `${at * 0.2}s` }}
+						className="tour-in flex items-center justify-between gap-3 rounded-xl border bg-background px-3 py-1.5"
+						style={delay(at * 0.05)}
 					>
 						<span className="truncate text-sm">{practice.name}</span>
 						<StatusBadge def={PRACTICE_STANDING_DEFS[practice.standing]} />
 					</div>
 				))}
 			</div>
-			<ArrowRightIcon
-				className={cn(styles.fadeIn, "size-6 text-mentor")}
-				style={{ "--tour-delay": "1.1s" }}
-			/>
-			<div
-				className={cn(styles.fadeIn, "flex flex-col items-center gap-3")}
-				style={{ "--tour-delay": "1.3s" }}
-			>
+			<ArrowRightIcon className="tour-in size-6 text-mentor" style={delay(0.24)} />
+			<div className="tour-in flex flex-col items-center gap-3" style={delay(0.32)}>
 				<span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
 					Group level: added up
 				</span>
@@ -875,10 +868,8 @@ export function GroupStandingPanel() {
  * The example profile with the app's own levels over it: the steps that share it add and remove
  * levels, and the levels slide in and out as they do in the app.
  */
-const NO_LEVELS: TourLevel[] = [];
-
 export function ProfileWithLevels({
-	levels = NO_LEVELS,
+	levels = [],
 	practiceTab = "feedback",
 }: {
 	levels?: TourLevel[];
@@ -892,10 +883,8 @@ export function ProfileWithLevels({
 			{/* The app's backdrop behind open levels; the levels open without one here, so the tour stays usable. */}
 			<div
 				aria-hidden
-				className={cn(
-					"pointer-events-none fixed inset-0 bg-scrim transition-opacity duration-500",
-					levels.length > 0 ? "opacity-100" : "opacity-0",
-				)}
+				className="pointer-events-none fixed inset-0 bg-scrim transition-opacity duration-500"
+				style={{ opacity: levels.length > 0 ? 1 : 0 }}
 			/>
 			<TourLevels levels={levels} practiceTab={practiceTab} />
 		</>

@@ -44,8 +44,7 @@ import { profileReviews } from "@/stories/profile-reviews-story-mock-data";
 /** The levels the tour opens over its example profile, outermost first. */
 export type TourLevel = "groups" | "group" | "practice" | "reviews";
 
-/** The example levels' handlers: the tour drives the levels, the reader does not act on them. */
-const noop = () => undefined;
+const noop = () => {};
 
 const readyFeed = {
 	status: "ready",
@@ -79,18 +78,6 @@ const ENTRY = {
 	reviews: { kind: "reviews", id: "all" },
 } as const;
 
-/** The way across at the foot of each level that has one, as the app shows it. */
-const FOOTER_COPY: Partial<
-	Record<
-		(typeof ENTRY)[TourLevel]["kind"],
-		(typeof FOCUS_FOOTER_COPY)[keyof typeof FOCUS_FOOTER_COPY]
-	>
-> = {
-	"practice-groups": FOCUS_FOOTER_COPY.profileAllGroups,
-	"practice-group": FOCUS_FOOTER_COPY.profileGroup,
-	practice: FOCUS_FOOTER_COPY.profilePractice,
-};
-
 /**
  * The app's own drawer levels over the tour's example profile, with story data: they slide in and
  * out as the app's do when the tour adds or removes a level.
@@ -111,16 +98,22 @@ export function TourLevels({
 			modal={false}
 			// The way across, at the foot of a level, as the app shows it.
 			footer={(entry) => {
-				const copy = FOOTER_COPY[entry.kind];
-				if (copy === undefined) {
-					return null;
-				}
-				return <PracticeFocusFooter {...copy} accessibleLabel={copy.label} onSwitch={noop} />;
+				const copy =
+					entry.kind === "practice-groups"
+						? FOCUS_FOOTER_COPY.profileAllGroups
+						: entry.kind === "practice-group"
+							? FOCUS_FOOTER_COPY.profileGroup
+							: entry.kind === "practice"
+								? FOCUS_FOOTER_COPY.profilePractice
+								: undefined;
+				return copy ? (
+					<PracticeFocusFooter {...copy} accessibleLabel={copy.label} onSwitch={noop} />
+				) : null;
 			}}
 		>
 			{(entry, level) => {
 				switch (entry.kind) {
-					case "practice-groups": {
+					case "practice-groups":
 						return (
 							<AllPracticeGroupsLevel
 								nested={level.nested}
@@ -136,8 +129,7 @@ export function TourLevels({
 								state={{ status: "ready" }}
 							/>
 						);
-					}
-					case "practice-group": {
+					case "practice-group":
 						return (
 							<PracticeGroupDetailLevel
 								nested={level.nested}
@@ -154,8 +146,7 @@ export function TourLevels({
 								onRetry={noop}
 							/>
 						);
-					}
-					case "practice": {
+					case "practice":
 						return (
 							<PracticeDetailLevel
 								nested={level.nested}
@@ -175,8 +166,7 @@ export function TourLevels({
 								ratingProps={ratingProps}
 							/>
 						);
-					}
-					case "reviews": {
+					default:
 						return (
 							<ProfileReviewsLevel
 								nested={level.nested}
@@ -192,7 +182,6 @@ export function TourLevels({
 								onReviewNow={noop}
 							/>
 						);
-					}
 				}
 			}}
 		</DetailDrawerStack>

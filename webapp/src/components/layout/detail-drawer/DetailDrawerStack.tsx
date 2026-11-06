@@ -30,10 +30,7 @@ export interface DetailDrawerStackProps<TKind extends string = string> {
 	 * footer every level of a surface shares, so no level has to carry it.
 	 */
 	footer?: (entry: DetailStackEntry<TKind>) => ReactNode;
-	/**
-	 * False leaves the page around the levels usable, such as the product tour's own controls; the
-	 * caller then opens and closes the levels.
-	 */
+	/** Local demo: false lets the tour's own controls stay usable over the levels. */
 	modal?: boolean;
 }
 
@@ -143,7 +140,7 @@ function DetailDrawerLevelView<TKind extends string>({
 			modal={modal}
 			swipeDirection="right"
 			onOpenChange={(next, details) => {
-				// A non-modal stack is driven by its caller, such as the product tour, so nothing closes it here.
+				// Local demo: a non-modal stack is driven by its caller (the tour), so nothing closes it here.
 				if (next || !modal) {
 					return;
 				}
