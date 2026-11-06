@@ -1,5 +1,4 @@
 ---
-"hephaestus": patch
 ---
 
-Practice profile trends use plain labels and show only work counts supplied by the server. Review titles keep the work's link when it has no provider number.
+The final trend labels and comparison wording are recorded in practice-profile-plain-trends.md. This pending note is superseded and has no separate release impact.
