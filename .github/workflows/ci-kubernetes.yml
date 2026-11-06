@@ -163,6 +163,9 @@ jobs:
       - name: Back up, then restore to a point in time
         if: ${{ inputs.queue && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
         run: node scripts/kubernetes-cluster.ts backup-drill --work "$RUNNER_TEMP/kubernetes-cluster" --pod-cidr 10.42.0.0/16
+      - name: Verify kubelet memory eviction order on a disposable node
+        if: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        run: node scripts/kubernetes-memory-drill.ts release-images.tsv
       - name: Record the cluster state
         if: ${{ failure() }}
         run: |

@@ -96,6 +96,27 @@ A lower 1536 MiB limit is a qualification target, not an enabled setting.
 Count the pgBackRest server sidecar separately, and count a backup or stanza Job in addition.
 Do not add individual-container p95 values to claim a synchronized node peak.
 
+### Measure stateful memory
+
+The queries take each container's maximum over the window, then the maximum across its replacement containers.
+They exclude Pod-level cgroups and infrastructure containers.
+The working-set and charge maxima need not occur at the same time.
+Working set excludes some reclaimable file cache. The container's limit also covers that cache.
+Thus, working set alone does not justify a lower limit.
+
+For example, query the working set with this PromQL expression:
+
+```promql
+max by (container) (max_over_time(container_memory_working_set_bytes{namespace="hephaestus",container=~"postgresql|nats"}[14d]))
+```
+
+Use `container_memory_usage_bytes` for total charge and `tfirst_over_time` to check the actual sample window in VictoriaMetrics.
+A 14-day range selector does not prove that 14 days of samples exist.
+
+Compare total charge with inactive file cache, memory pressure and OOM counters before attributing a peak to reclaimable cache.
+Keep the existing ceilings until a controlled workload qualifies a lower limit.
+The [stateful observations](/contributor/capacity-benchmark#stateful-resource-observations) record the available evidence and its limits.
+
 Before lowering the process limit, run the reference load with the representative database, vacuum work, WAL archiving, and the permitted worker surge.
 Read `pg_settings` to verify the effective values and their command-line source.
 Require process charge within 1536 MiB, no OOM, no Hikari timeouts, and connection-acquire p95 below 50 ms.
