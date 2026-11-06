@@ -854,7 +854,11 @@ describe("a met result", () => {
 
 	it("gets no section of its own: the feedback follows the header", async () => {
 		await renderProfile();
-		await screen.findByRole("heading", { level: 2, name: "Your feedback" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole(
+			"heading",
+			{ level: 2, name: "Your recurring feedback patterns" },
+			ROUTE_RENDER_WAIT,
+		);
 		// The header still counts the practices going well; only the section is gone.
 		expect(practiceStandings.some((entry) => entry.standing === "STRENGTH")).toBe(true);
 		expect(screen.queryByRole("region", { name: "Going well" })).toBeNull();

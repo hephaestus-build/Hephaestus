@@ -104,7 +104,7 @@ interface LabelListProps {
 	Term: ComponentType<{ def: StatusDef }>;
 }
 
-/** A named group rather than a heading, so the page's outline keeps "Your feedback" as its first section. */
+/** A named group rather than a heading, so the page's outline keeps "Your recurring feedback patterns" as its first section. */
 function LabelList({ title, description, entries, Term }: LabelListProps) {
 	const titleId = useId();
 	return (
