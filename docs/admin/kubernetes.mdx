@@ -1631,6 +1631,20 @@ The restored database is readable only with the keys that sealed its values.
 Keep them as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
 Restore the NATS JetStream data separately, as the [broker recovery procedure](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers) describes.
 
+#### Prepare replacement storage
+
+On a replacement host, restore the release keys, TLS Secrets, verified chart and site values first.
+Keep migration disabled and all application replica counts at zero.
+Keep the failed volume until recovery is verified.
+
+Before enabling restore, provision an empty claim named `data-<release>-postgresql-0` in the release namespace.
+Use the PostgreSQL storage class, access mode and size from the site values.
+For node-local storage, bind the new volume to the replacement node.
+The restore Job needs this claim before PostgreSQL starts.
+Do not initialize a new database in it.
+
+Then follow the isolated or live recovery procedure below for the intended destination.
+
 #### Isolated restore drill
 
 Run the following procedure only on a disposable, isolated clone.
