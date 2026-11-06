@@ -13,6 +13,7 @@ import {
 	DEFAULT_GROUP_COLOR,
 	DEFAULT_GROUP_ICON,
 	getGroupVisual,
+	pickedGroupIcon,
 	ICON_NAMES,
 	iconComponent,
 	iconLabel,
@@ -41,7 +42,9 @@ export function GroupVisualPicker({
 }: GroupVisualPickerProps) {
 	const activeIcon = icon ?? DEFAULT_GROUP_ICON;
 	const activeColor = color ?? DEFAULT_GROUP_COLOR;
-	const { Icon: EffectiveIcon, pill } = getGroupVisual(icon, color);
+	const { pill } = getGroupVisual(icon, color);
+	// The picker previews the icon an admin picks; the developer surfaces draw one icon for every group.
+	const EffectiveIcon = pickedGroupIcon(icon);
 	const [query, setQuery] = useState("");
 	const [open, setOpen] = useState(false);
 	const colorLabelId = useId();

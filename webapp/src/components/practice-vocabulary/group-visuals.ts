@@ -310,8 +310,22 @@ export function groupMark({
 	return { Icon, ink: groupInk(pill) };
 }
 
-export function getGroupVisual(icon?: string | null, color?: string | null): GroupVisual {
-	const Icon = resolveIcon(icon) ?? Folder;
+/**
+ * Icons as level markers: every practice group wears the
+ * same folder, the app's own default group icon, and every practice the same clipboard with a check,
+ * the icon the app already gives practices (the admin "Practices" entry, empty practice tables). The
+ * icon then says which level a name belongs to; the group's color still tells the groups apart.
+ */
+export const PracticeGroupIcon: LucideIcon = Folder;
+export const PracticeIcon: LucideIcon = ClipboardCheck;
+
+/** The icon a workspace admin picked for a group, for the picker's own preview only. */
+export function pickedGroupIcon(icon?: string | null): LucideIcon {
+	return resolveIcon(icon) ?? Folder;
+}
+
+/** A group as the developer surfaces draw it: the one group icon, in the group's color. */
+export function getGroupVisual(_icon?: string | null, color?: string | null): GroupVisual {
 	const pill = pillFor(color) ?? SLATE_PILL;
-	return { Icon, pill };
+	return { Icon: PracticeGroupIcon, pill };
 }

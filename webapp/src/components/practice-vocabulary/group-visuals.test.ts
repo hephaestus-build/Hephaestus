@@ -7,15 +7,22 @@ import {
 	ICON_NAMES,
 	iconLabel,
 	iconSearchText,
+	pickedGroupIcon,
 	PILL,
+	PracticeGroupIcon,
 	UNASSIGNED_GROUP_VISUAL,
 } from "./group-visuals";
 
 describe("groupVisuals", () => {
-	it("uses an admin-set icon and color", () => {
+	it("draws every group with the one group icon and keeps the admin-set color", () => {
 		const visual = getGroupVisual("Rocket", "fuchsia");
-		expect(visual.Icon).toBe(Rocket);
+		expect(visual.Icon).toBe(PracticeGroupIcon);
 		expect(visual.pill).toBe(PILL.fuchsia);
+	});
+
+	it("keeps the admin-set icon for the picker's preview", () => {
+		expect(pickedGroupIcon("Rocket")).toBe(Rocket);
+		expect(pickedGroupIcon("NotAnIcon")).toBe(Folder);
 	});
 
 	it("uses a neutral fallback for missing or unknown values", () => {
