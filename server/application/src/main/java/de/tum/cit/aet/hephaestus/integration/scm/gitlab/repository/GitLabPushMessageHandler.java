@@ -264,7 +264,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
                     DataSource.WEBHOOK,
                     IdentityProviderType.GITLAB,
                     sha -> CommitUtils.buildGitLabCommitUrl(serverUrl, repository.getNameWithOwner(), sha),
-                    email -> authorResolver.resolveAndBackfillByEmail(email, providerId));
+                    email -> authorResolver.resolveByEmail(email, providerId));
             gitRepositoryManager.forEachCommitInRange(
                     key,
                     isInitialPush(beforeSha) ? null : beforeSha,

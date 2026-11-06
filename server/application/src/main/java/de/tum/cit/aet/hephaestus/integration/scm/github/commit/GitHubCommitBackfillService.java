@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
@@ -52,7 +53,7 @@ public class GitHubCommitBackfillService {
         String token = resolveToken(syncTarget);
         gitRepositoryManager.ensureRepository(key, cloneUrl, token);
 
-        Long providerId = repository.getProvider().getId();
+        Long providerId = Objects.requireNonNull(repository.getProvider().getId());
         var origin = new CommitDetailsPersister.Origin(
                 scopeId,
                 DataSource.GRAPHQL_SYNC,
