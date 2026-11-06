@@ -6,7 +6,7 @@ page_type: explanation
 
 Product feedback is a report about Hephaestus, separate from practice feedback.
 The instance stores the report first, drafts an issue, and files it in an operator-named GitHub repository.
-Without a destination, it retains the report for instance admins and sends the admin email fallback.
+Without a destination, it retains the report for instance admins, and sends the admin email if the instance can send one.
 
 The constraint is that each reporter’s effort ends at **Send**.
 Code must decide what can become public before GitHub receives it.
@@ -80,7 +80,9 @@ stateDiagram-v2
 An expired lease returns work to its previous waiting state with backoff.
 An expired or ambiguous GitHub attempt requires reconciliation before a new write or cleanup step.
 The server allows up to three automatic retries before **Needs action** requires **Retry**.
-Every report not on GitHub has an admin email fallback.
+Every report not on GitHub stays saved in the console.
+
+The admin email announces it only if email delivery is set up, so no state says that an email was sent.
 `MODEL_UNAVAILABLE`, `LIMIT_REACHED`, and `DRAFT_INVALID` select the no-draft route instead of stopping the report.
 `DESTINATION_UNAVAILABLE` and `GITHUB_REFUSED` stop filing.
 
@@ -108,7 +110,7 @@ The ordinary public route requires all these conditions:
 - Safety checks find no abuse or named-person subject and find the report coherent.
 - Confidence is `HIGH`.
 
-Otherwise, the report goes to the private repository, or to email when no private destination exists.
+Otherwise, the report goes to the private repository, or is saved for instance admins when no private destination exists.
 The prompt asks the model to classify praise and support questions as `NOT_AN_ISSUE`.
 Code does not independently identify those semantics.
 A misclassification can therefore become public when permission and the other checks allow it.
@@ -128,7 +130,7 @@ A new notice version requires a new choice.
 The hold catches mistakes. It does not supply consent through inactivity.
 
 The route freezes repository and installation IDs.
-Destination changes send queued reports for the previous destination to email with `DESTINATION_CHANGED`.
+Destination changes keep queued reports for the previous destination saved for instance admins with `DESTINATION_CHANGED`.
 The server checks private visibility before each private write and stops on an unknown result.
 The two destinations have distinct IDs and the same owner.
 
@@ -232,7 +234,7 @@ Private comments do not. Duplicate closure moves follow-up to the original issue
 Release mail requires a merged closing PR and a published release tag that contains its merge commit.
 It reports release ancestry, not the behavior of the running instance.
 
-**Pause** sends new and unfiled reports to email and holds publication commands until resume.
+**Pause** keeps new and unfiled reports saved for instance admins and holds publication commands until resume.
 It leaves follow-up, withdrawal, and erasure cleanup active.
 An in-flight write finishes or reconciles under the normal rules.
 
@@ -243,7 +245,7 @@ External cleanup runs asynchronously after reconciliation.
 
 It cancels held reports, moves public issues to private, replaces issue text, and closes private issues.
 Issue deletion and revision removal require maintainer action.
-After 30 days, incomplete cleanup becomes **Needs action** with an admin email.
+After 30 days, incomplete cleanup becomes **Needs action**, with an admin email if email delivery is set up.
 Its locator stays until the steps finish or an admin confirms manual completion.
 
 ## Routing evaluation

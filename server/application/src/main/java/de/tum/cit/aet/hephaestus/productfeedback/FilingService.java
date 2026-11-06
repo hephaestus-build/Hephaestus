@@ -174,7 +174,7 @@ class FilingService {
         var rendered = IssueRenderer.render(
                 draft,
                 new IssueRenderer.Context(report.getAppVersion(), filing.getPageRoute(), null),
-                repository.fullName(),
+                destination.getPublicRepository(),
                 isPublic ? null : Objects.requireNonNull(filing.getReason()).words(),
                 isPublic ? null : id.toString(),
                 isPublic ? filing.getMentionLogin() : null,

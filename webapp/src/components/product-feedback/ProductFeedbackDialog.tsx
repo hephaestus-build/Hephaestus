@@ -57,7 +57,7 @@ export type ProductFeedbackSharingChoice =
 /** Where a report goes, said before Send, from what the instance does with it. */
 function destinationCopy(sharing: ProductFeedbackSharingChoice): string {
 	if (sharing.status === "off") {
-		return "Your instance admins receive this report with your name and contact address.";
+		return "This report is saved for your instance admins, with your name and contact address.";
 	}
 	if (sharing.status === "private") {
 		return "An AI model drafts a private GitHub issue for the Hephaestus maintainers. Your name and contact address stay on this instance.";

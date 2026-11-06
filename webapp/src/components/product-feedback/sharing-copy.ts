@@ -28,11 +28,11 @@ const REASON_SENTENCES: Record<string, string> = {
 	abuse: "A check flagged its wording, so it stays private.",
 	"no draft": "No issue could be drafted from it, so it stays private.",
 	"destination changed":
-		"Where reports go changed while it waited, so the admins of this instance have it.",
+		"Where reports go changed while it waited, so it is saved for the admins of this instance.",
 	"destination unavailable":
-		"We could not reach the repository, so the admins of this instance have it and can try again.",
+		"We could not reach the repository, so it is saved for the admins of this instance, who can try again.",
 	"GitHub refused it":
-		"GitHub refused it, so the admins of this instance have it and can try again.",
+		"GitHub refused it, so it is saved for the admins of this instance, who can try again.",
 };
 
 export function reasonSentence(reason: string): string {

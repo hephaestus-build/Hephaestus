@@ -216,7 +216,7 @@ function AdminFeedbackInboxPage() {
 
 			<Section
 				title="Needs action"
-				description="Reports that failed to file on GitHub, and erased reports whose issues a maintainer must finish removing. The admin email announces each one."
+				description="Reports that failed to file on GitHub, and erased reports whose issues a maintainer must finish removing. If this instance can send email, the admin email announces each one."
 			>
 				<AdminProductFeedbackNeedsActionList
 					state={needsActionState}

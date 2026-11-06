@@ -114,7 +114,11 @@ export const NotOnGitHub: Story = {
 	args: { state: { status: "ready", reports: [stoppedReport, emailedReport] } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Not filed")).toBeVisible();
-		await expect(canvas.getByText("The admins of this instance have it.")).toBeVisible();
+		await expect(
+			canvas.getByText(
+				"It is saved on this instance. Its admins can read it in the admin console.",
+			),
+		).toBeVisible();
 		// Neither row has a change left to offer: the admins hold both.
 		await expect(canvas.queryByRole("button", { name: /private|Edit/u })).toBeNull();
 		await expect(canvas.queryByRole("switch")).toBeNull();

@@ -48,7 +48,7 @@ If that check fails or gives no answer, the write stops.
 The card shows destination health, the draft count, the last filing time, and the seven-day route split by reason.
 A destination change is audited.
 It never redirects a report already queued for the previous repository.
-Those reports go to the admin email fallback with `DESTINATION_CHANGED`.
+Those reports stay saved in the console, with the admin email if it is set up, and carry `DESTINATION_CHANGED`.
 
 Hephaestus refuses to remove the private repository while a public issue can still be made private.
 It also refuses while erasure cleanup still has to move a public issue there.
@@ -62,7 +62,7 @@ Code selects the route after the model drafts the issue:
 | --- | --- |
 | Public issue | The reporter allows publication. The report has a valid actionable draft for the outgoing revision. All privacy, security, safety, and confidence checks pass. |
 | Private issue | The public gate does not pass and a private destination is set. |
-| Admin email and saved report | No suitable destination is set, **Pause** is on, or filing stops. |
+| Saved report in the console, and the admin email if it is set up | No suitable destination is set, **Pause** is on, or filing stops. |
 
 Every public write checks the reporter’s current permission to publish and the frozen destination again.
 The first public filing waits five minutes after **Send**.
@@ -79,7 +79,7 @@ Each private issue starts with a reason:
 | `about a person` | The report concerns a named person. |
 | `low confidence` | The report is unclear or is not an actionable issue. |
 | `abuse` | The safety check found abuse. |
-| `no draft` | The model was unavailable, the limit was reached, or the model response stayed invalid. |
+| `no draft` | The model was unavailable, the limit was reached, the model response stayed invalid, or no worker took the report within 10 minutes. |
 
 Security, blocking redaction, or a report about a named person sets a persistent risk latch.
 An edit or retry cannot clear it.
@@ -113,7 +113,9 @@ Automatic retries use backoff, with up to three retries before manual action.
 An uncertain GitHub response requires reconciliation before another write.
 Do not create another report or clear its state to bypass that check.
 
-Admin email covers every report that is not on GitHub: no destination, or filing stopped.
+Every report that is not on GitHub stays saved in the console: no destination, or filing stopped.
+
+The admin email announces it only if email delivery is set up.
 It also lists the erased reports' issues that need a maintainer, in one email per cleanup run.
 It carries the kind and a link, never the report text or attached context.
 Active instance admins need a verified address and the relevant email subscription to receive it.
@@ -157,7 +159,8 @@ The [personal-data map](./dsms/personal-data-map.md) owns the store and export i
 The app cannot delete an issue or its edit history.
 So each issue that cleanup scrubs becomes a manual step: its edit history still shows the erased text.
 Cleanup that has not finished after 30 days also becomes a manual step, and the app stops its own attempts.
-For each manual step, Hephaestus sends the admin email and lists the step in **Needs action** with the issue link.
+For each manual step, Hephaestus lists the step in **Needs action** with the issue link.
+It also sends the admin email if email delivery is set up.
 
 If the app never learned the issue number, the step shows a marker instead.
 Search the repository for an issue whose body contains that marker.
@@ -193,13 +196,13 @@ Use a separate test repository with synthetic data to test public behavior.
 
 The destinations card shows available app installations and a usable model.
 The private smoke test produces one issue and no public issue.
-**Needs action** explains stopped reports, and the admin email fallback reaches its subscribed recipients.
+**Needs action** explains stopped reports. If email delivery is set up, the admin email reaches its subscribed recipients.
 The first real public report waits for its hold and contains no detected personal details.
 
 ## Undo
 
 1. Turn on **Pause** in **Destinations**.
-2. Check that new and unfiled reports go to the admin email fallback.
+2. Check that new and unfiled reports appear in the console list of reports not on GitHub.
 
 Keep the repositories configured.
 Follow-up, **Make private**, and erasure cleanup continue during **Pause**.
@@ -213,7 +216,7 @@ To resume new filing, turn off **Pause** after you correct the cause.
 | Installation missing or suspended | The app cannot reach the named repository. | Restore its installation and **Issues: read and write** permission. Select **Retry**. |
 | Private destination unavailable | The repository is public, inaccessible, or has an unknown visibility. | Turn on **Pause**. Restore private visibility and app access before **Retry**. |
 | Model unavailable | The model, pool, credentials, or provider connection is unavailable. | Restore the instance model and its pool. Reports without drafts stay private. |
-| Many `no draft` routes | The daily limit is reached or model output stays invalid. | Check the count and model health. Reassess the model with the routing evaluation. |
+| Many `no draft` routes | The daily limit is reached, model output stays invalid, or no worker runs. | Check the count and model health. If `product_feedback_steps_total{step="draft",outcome="expired"}` rises, check the worker. Reassess the model with the routing evaluation. |
 | Many private routes | Read the route split by reason. The gate can be strict or reports can contain detected personal data. | Inspect synthetic evaluation results before you change the model. Keep privacy checks in place. |
 | Public report waits longer than five minutes | The hold is a minimum. Drafts, filing pace, rate limits, or reconciliation can delay it. | Check worker and server health, model availability, and **Needs action**. |
 | GitHub write stopped | `DESTINATION_UNAVAILABLE` or `GITHUB_REFUSED` explains the stop. | Turn on **Pause** if privacy is in doubt. Correct app access or the refusal, then select **Retry**. |

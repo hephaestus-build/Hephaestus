@@ -80,7 +80,7 @@ export function AdminProductFeedbackDestinationsCard({
 				</CardTitle>
 				<CardDescription>
 					With a repository set, Hephaestus drafts an issue from each report and files it on GitHub.
-					With none, reports go to the admins of this instance by email.
+					With none, reports stay saved in the admin console.
 				</CardDescription>
 			</CardHeader>
 			{state.status === "loading" && (
@@ -245,8 +245,8 @@ function DestinationsForm({
 						<FieldContent>
 							<FieldLabel htmlFor={`${id}-paused`}>Pause</FieldLabel>
 							<FieldDescription>
-								While paused, new and unfiled reports go to the admins of this instance by email,
-								not to GitHub.
+								While paused, new and unfiled reports stay saved in the admin console, not on
+								GitHub.
 							</FieldDescription>
 						</FieldContent>
 						<Switch

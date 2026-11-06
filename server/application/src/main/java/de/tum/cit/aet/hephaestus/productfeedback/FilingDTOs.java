@@ -26,7 +26,7 @@ final class FilingDTOs {
 
     /** A report's state, as the person sees it. */
     enum ReportState {
-        /** The admins have it by email; it is not on GitHub. */
+        /** It is saved for the instance admins, in the admin console; it is not on GitHub. No email is implied. */
         SENT_TO_ADMINS,
         /** A model drafts the issue. */
         DRAFTING,
@@ -36,7 +36,7 @@ final class FilingDTOs {
         FILING,
         /** It is an issue on GitHub. */
         FILED,
-        /** Filing failed; the admins have it by email and can retry. */
+        /** Filing failed; it is saved for the instance admins, who can retry. */
         STOPPED
     }
 

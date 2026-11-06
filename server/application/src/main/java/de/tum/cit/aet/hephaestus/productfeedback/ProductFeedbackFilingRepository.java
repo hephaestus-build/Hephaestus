@@ -37,12 +37,18 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
                     """, nativeQuery = true)
     Optional<UUID> claimableDraft(@Param("now") Instant now);
 
-    /** A report whose draft answer, or lack of one, waits for the server to route it. */
+    /**
+     * A report whose draft answer, or lack of one, waits for the server to route it. One that no worker took or finished
+     * by {@code expired} routes without a draft, so a stopped worker role cannot hold a report back.
+     */
     @Query(value = """
-                    SELECT feedback_id FROM product_feedback_filing WHERE state = 'ANSWERED'
+                    SELECT feedback_id FROM product_feedback_filing
+                    WHERE state = 'ANSWERED'
+                       OR (state = 'DRAFT_QUEUED' AND next_attempt_at < :expired)
+                       OR (state = 'DRAFTING' AND lease_until < :expired)
                     ORDER BY next_attempt_at LIMIT 1 FOR UPDATE SKIP LOCKED
                     """, nativeQuery = true)
-    Optional<UUID> claimableAnswer();
+    Optional<UUID> claimableAnswer(@Param("expired") Instant expired);
 
     /** A routed report due for filing, a held one whose hold ended, or one whose filing lease expired. */
     @Query(value = """
