@@ -7,6 +7,7 @@ ruleTester.run("no-unsafe-definition-lookup", noUnsafeDefinitionLookup, {
 		"OUTCOME_DEFS.MET.label;",
 		'OUTCOME_DEFS["MET"].label;',
 		"statusValues(OUTCOME_DEFS).map(value => OUTCOME_DEFS[value].label);",
+		"statusValues(OUTCOME_DEFS).filter(isShown).map(value => OUTCOME_DEFS[value].label);",
 		"FEEDBACK_MODE_ORDER.map(value => FEEDBACK_MODE_DEFS[value].label);",
 		'(["MET"] as const).map(value => OUTCOME_DEFS[value].label);',
 		"MARK_FILTERS.map(({kind}) => RESULT_MARK_DEFS[kind].label);",
@@ -41,5 +42,13 @@ ruleTester.run("no-unsafe-definition-lookup", noUnsafeDefinitionLookup, {
 		},
 		{ code: "[serverValue].map(value => OUTCOME_DEFS[value]);", errors: [{ messageId: "unsafe" }] },
 		{ code: "OUTCOME_DEFS[key + suffix];", errors: [{ messageId: "unsafe" }] },
+		{
+			code: "serverValues.filter(isShown).map(value => OUTCOME_DEFS[value]);",
+			errors: [{ messageId: "unsafe" }],
+		},
+		{
+			code: "statusValues(OUTCOME_DEFS).map(() => serverValue).filter(isShown).map(value => OUTCOME_DEFS[value]);",
+			errors: [{ messageId: "unsafe" }],
+		},
 	],
 });

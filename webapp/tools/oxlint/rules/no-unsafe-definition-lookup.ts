@@ -68,6 +68,16 @@ function isLocalChoice(node: ESTree.MemberExpression): boolean {
 			while (choices.type === "TSAsExpression" || choices.type === "TSSatisfiesExpression") {
 				choices = choices.expression;
 			}
+			// Filtering retains the registry's finite keys.
+			if (
+				choices.type === "CallExpression" &&
+				choices.callee.type === "MemberExpression" &&
+				!choices.callee.computed &&
+				choices.callee.property.type === "Identifier" &&
+				choices.callee.property.name === "filter"
+			) {
+				choices = choices.callee.object;
+			}
 			return (
 				(choices.type === "ArrayExpression" &&
 					choices.elements.every((element) => element?.type === "Literal")) ||
