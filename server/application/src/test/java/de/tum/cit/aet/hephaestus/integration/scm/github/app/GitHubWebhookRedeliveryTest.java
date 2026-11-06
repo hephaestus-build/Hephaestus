@@ -321,6 +321,15 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
         assertThat(outcome("refused")).isEqualTo(GitHubWebhookRedelivery.REFUSALS_IN_A_ROW);
     }
 
+    @Test
+    void shouldEndEveryRunInsideItsLock() {
+        Duration longestRun = GitHubWebhookRedelivery.RUN_BUDGET
+                .plus(GitHubWebhookRedelivery.CONNECT_TIMEOUT)
+                .plus(GitHubWebhookRedelivery.READ_TIMEOUT);
+
+        assertThat(longestRun).isLessThan(Duration.parse(GitHubWebhookRedelivery.LOCK_AT_MOST));
+    }
+
     /** A clock that moves on by a minute each time the job reads it. */
     private static final class MinutePerReading extends Clock {
 

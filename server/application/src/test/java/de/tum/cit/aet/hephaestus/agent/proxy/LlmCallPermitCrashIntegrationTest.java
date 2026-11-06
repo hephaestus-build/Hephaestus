@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -70,13 +71,14 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
         pool.setDisplayName("Crash recovery");
         pool.setMaxConcurrentCalls(1);
         long poolId = pools.save(pool).getId();
+        var meters = new SimpleMeterRegistry();
         var survivor = new LlmCallPermits(
                 pools,
                 rows,
                 transactions,
                 PROPERTIES,
                 "survivor-" + UUID.randomUUID(),
-                new SimpleMeterRegistry(),
+                meters,
                 mock(LlmModelResolver.class));
         var postgres = PostgreSQLTestContainer.getInstance();
         Path output = directory.resolve("worker.log");
@@ -128,6 +130,11 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                     assertThat(rows.countActive(poolId)).isEqualTo(1);
                     assertThat(rows.rates(poolId).getRequests()).isEqualTo(2);
                     assertThat(replacement.isRevoked()).isFalse();
+                    assertThat(meters.get(AgentMetrics.LLM_POOL_PERMITS_EXPIRED)
+                                    .tag("pool", pool.getSlug())
+                                    .counter()
+                                    .count())
+                            .isEqualTo(1);
                     reporter.publishEntry("crashRecoveryAgeMs", Long.toString(age.toMillis()));
                     reporter.publishEntry(
                             "permitLeaseMs",

@@ -157,10 +157,11 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
                         .counter()
                         .count())
                 .isEqualTo(1);
-        assertThat(registry.find("privacy.job.completed")
+        assertThat(registry.get("privacy.job.completed")
                         .tags("job", "export_generation", "outcome", "success")
-                        .counter())
-                .isNull();
+                        .counter()
+                        .count())
+                .isZero();
         verify(repository, never()).save(any());
     }
 
