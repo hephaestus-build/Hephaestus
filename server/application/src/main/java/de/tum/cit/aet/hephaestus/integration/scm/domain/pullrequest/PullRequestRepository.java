@@ -30,6 +30,7 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     long count();
 
     /** Provider coverage includes tombstones and erased attribution: those source rows are not missing. */
+    @WorkspaceAgnostic("Backfill compares a monitored repository's shared pull request rows with the provider's count")
     @Query(
             value = "SELECT count(*) FROM issue WHERE repository_id=:repositoryId AND issue_type='PULL_REQUEST'",
             nativeQuery = true)
