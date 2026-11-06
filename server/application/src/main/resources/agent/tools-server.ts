@@ -6,7 +6,7 @@
 // output, and the paths it may name, which it resolves through symlinks before it compares them. A failure of one call
 // ends that call with a named refusal; only a broken frame ends the connection.
 
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, fork, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import {
@@ -61,6 +61,8 @@ export interface ToolsServerOptions {
 	scratch: string;
 	/** The roots that `put` may create a directory in. */
 	putRoots: string[];
+	/** The practice program's process entry point, where this side runs `script.run`; a tools Pod has none. */
+	scriptEntry?: string;
 	/**
 	 * Whether this user runs nothing but the tools: then `reset` also ends processes that left their call's group.
 	 * Only the sidecar's own user does; a test shares its user with the test runner.
@@ -238,6 +240,19 @@ async function makeReadOnly(dir: string): Promise<void> {
 		}
 	}
 	await chmod(dir, 0o555);
+}
+
+/** A message for a practice program: the loop writes JSON, so anything else is a broken frame. */
+function parsedMessage(body: Buffer): object {
+	try {
+		const value: unknown = JSON.parse(body.toString("utf8"));
+		if (typeof value === "object" && value !== null) {
+			return value;
+		}
+	} catch {
+		// Refused below.
+	}
+	throw new ToolProtocolError("protocol", "a script message that is not a JSON object");
 }
 
 /** The tools and every command have one authority; the trusted loop is outside it (ADR 0068, trust split). */
@@ -788,6 +803,100 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			});
 		}
 
+		/** A message from the loop to a running program. One that comes after the program ended goes nowhere. */
+		function scriptIn(id: string, body: Buffer): void {
+			const child = running.get(id)?.child;
+			if (child?.connected === true) {
+				child.send(parsedMessage(body));
+			}
+		}
+
+		/**
+		 * Runs a practice program and relays its channel: this side checks nothing that the program says, because the
+		 * loop treats every message as untrusted and answers only what its allowlist names.
+		 */
+		async function script(id: string, header: Header, arrivedAfter: number): Promise<void> {
+			const entry = options.scriptEntry;
+			if (entry === undefined) {
+				refuse(id, "unknown", "This tools side runs no practice programs.");
+				return;
+			}
+			const execArgv = strings(header, "execArgv");
+			const requested = integer(header, "timeoutMs");
+			if (execArgv === undefined || requested === undefined || requested <= 0) {
+				refuse(id, "request", "A script.run needs execArgv and a positive timeoutMs.");
+				return;
+			}
+			if (socket.destroyed) {
+				return;
+			}
+			if (resets !== arrivedAfter) {
+				refuse(id, "reset", "A reset ended this call before it started.");
+				return;
+			}
+			if (cancelled.has(id)) {
+				final(id, { type: "script-exit", code: null, signal: "SIGKILL" });
+				return;
+			}
+			let child: ChildProcess;
+			try {
+				child = fork(entry, [], {
+					env: { [CALL_MARKER]: id },
+					execArgv,
+					detached: true,
+					stdio: ["ignore", "pipe", "pipe", "ipc"],
+					serialization: "advanced",
+				});
+			} catch {
+				refuse(id, "spawn", "The program could not start.");
+				return;
+			}
+			const ended = Promise.withResolvers<undefined>();
+			const call: Call = { id, child, ended: ended.promise };
+			running.set(id, call);
+			calls.add(call);
+			const timer = setTimeout(
+				() => {
+					void endCall(id, child);
+				},
+				Math.min(requested, LIMITS.execTimeoutMs),
+			);
+			let logged = 0;
+			const log = (chunk: Buffer) => {
+				const room = LIMITS.scriptLogBytes - logged;
+				if (room > 0) {
+					const part = chunk.subarray(0, room);
+					logged += part.length;
+					send({ type: "script-log", id }, part);
+				}
+			};
+			child.stdout?.on("data", log);
+			child.stderr?.on("data", log);
+			child.on("message", (message: unknown) => {
+				const bytes = typeof message === "string" ? Buffer.from(message) : undefined;
+				if (bytes === undefined || bytes.length > LIMITS.scriptMessageBytes) {
+					void endCall(id, child);
+					return;
+				}
+				send({ type: "script-out", id }, bytes);
+			});
+			child.on("error", () => {
+				void endCall(id, child);
+			});
+			child.once("exit", () => {
+				void endCall(id, child);
+			});
+			child.once("close", (code: number | null, signal: NodeJS.Signals | null) => {
+				clearTimeout(timer);
+				void endCall(id, child).finally(() => {
+					final(id, { type: "script-exit", code, signal });
+					running.delete(id);
+					calls.delete(call);
+					ended.resolve(undefined);
+				});
+			});
+		}
+
 		async function read(id: string, header: Header): Promise<void> {
 			const file = await contained(text(header, "path") ?? "", options.roots);
 			if (file === undefined) {
@@ -1124,6 +1233,10 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				await putData(id, frame.body);
 				return;
 			}
+			if (header.type === "script-in") {
+				scriptIn(id, frame.body);
+				return;
+			}
 			if (header.type === "put-end") {
 				const entry = puts.get(id);
 				if (entry?.ending === true || (entry === undefined && !refusedPuts.has(id))) {
@@ -1137,7 +1250,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			if (inFlight.has(id)) {
 				throw new ToolProtocolError("protocol", "a request id that is already in flight");
 			}
-			if (!["exec", "read", "put", "reset"].includes(header.type)) {
+			if (!["exec", "script.run", "read", "put", "reset"].includes(header.type)) {
 				refuse(id, "unknown", `The tools side has no operation ${header.type}.`);
 				return;
 			}
@@ -1158,6 +1271,8 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			inFlight.add(id);
 			if (header.type === "exec") {
 				void settle(id, exec(id, header, resets));
+			} else if (header.type === "script.run") {
+				void settle(id, script(id, header, resets));
 			} else if (header.type === "read") {
 				void settle(id, read(id, header));
 			} else if (header.type === "reset") {
@@ -1237,6 +1352,7 @@ if (import.meta.main) {
 		roots: ["/workspace", workspace],
 		scratch,
 		putRoots: [repos],
+		scriptEntry: "/opt/practice-scripts/child.ts",
 		soleUser: true,
 	});
 }

@@ -48,6 +48,20 @@ execFileSync("mkdir", ["-p", path.join(workspace, "repos"), scratch, outside]);
 writeFileSync(path.join(outside, "kept.txt"), "kept\n");
 const socketPath = path.join(base, "tools.sock");
 const nonce = "pod-nonce";
+/** A practice program's process: it answers what it is told, and does what its message asks. */
+const scriptEntry = path.join(base, "program.mjs");
+writeFileSync(
+	scriptEntry,
+	`process.on("message", (m) => {
+	if (m.kind === "echo") process.send(JSON.stringify({ kind: "echoed", value: m.value }));
+	if (m.kind === "log") console.log(m.value);
+	if (m.kind === "binary") process.send({ not: "text" });
+	if (m.kind === "flood") process.send("x".repeat(${2 * 1024 * 1024}));
+	if (m.kind === "exit") process.exit(m.code);
+	if (m.kind === "env") process.send(JSON.stringify(process.env));
+});
+`,
+);
 const soleUser = process.env.TOOLS_TEST_SOLE_USER === "true";
 
 function trashDirectories(): string[] {
@@ -81,6 +95,7 @@ before(async () => {
 		roots: [workspace, scratch],
 		scratch,
 		putRoots: [path.join(workspace, "repos")],
+		scriptEntry,
 		soleUser,
 	});
 	await once(server, "listening");
@@ -1562,6 +1577,69 @@ async function hostile(
 	after(() => fake.close());
 	return ToolClient.open(dialAddress(fake, address), nonce);
 }
+
+/** A running practice program, and each message that it sent. */
+function program(tools: ToolClient = client) {
+	const messages: string[] = [];
+	const logs: Buffer[] = [];
+	const channel = tools.script(
+		{ execArgv: [], timeoutMs: 10_000 },
+		(message) => messages.push(message),
+		(chunk) => logs.push(chunk),
+	);
+	return { channel, messages, logs };
+}
+
+void test("a program's channel carries each message both ways, and its exit ends the call", async () => {
+	const { channel, messages } = program();
+	channel.send({ kind: "echo", value: "ping" });
+	await until(() => messages.length === 1, "the program's answer");
+	assert.deepEqual(JSON.parse(messages[0] ?? ""), { kind: "echoed", value: "ping" });
+	channel.send({ kind: "exit", code: 3 });
+	assert.deepEqual(await channel.exit, { code: 3, signal: null });
+	assert.equal(channel.connected(), false);
+});
+
+void test("a program's output reaches the loop, and it gets no variable of the tools side", async () => {
+	const { channel, messages, logs } = program();
+	channel.send({ kind: "log", value: "from the program" });
+	channel.send({ kind: "env" });
+	await until(() => messages.length === 1 && logs.length > 0, "the program's output");
+	assert.match(Buffer.concat(logs).toString(), /from the program/u);
+	assert.equal("HEPHAESTUS_SECRET" in (JSON.parse(messages[0] ?? "") as object), false);
+	channel.kill();
+	await channel.exit;
+});
+
+void test("a cancel ends a program, and a late message goes nowhere", async () => {
+	const { channel } = program();
+	channel.kill();
+	assert.equal((await channel.exit).signal, "SIGKILL");
+	channel.send({ kind: "echo", value: "too late" });
+	await client.reset();
+});
+
+for (const [name, kind] of [
+	["a message that is not text", "binary"],
+	["a message past its bound", "flood"],
+] as const) {
+	void test(`a program that sends ${name} ends, and nothing of it reaches the loop`, async () => {
+		const { channel, messages } = program();
+		channel.send({ kind });
+		await channel.exit;
+		assert.deepEqual(messages, []);
+	});
+}
+
+void test("a script message that is not JSON ends the connection", async () => {
+	const { replies, closed } = await raw([
+		hello,
+		encode({ type: "script.run", id: "s", execArgv: [], timeoutMs: 5000 }),
+		encode({ type: "script-in", id: "s" }, Buffer.from("not json")),
+	]);
+	assert.equal(replies[0]?.type, "hello");
+	assert.equal(closed, true);
+});
 
 void test("the loop ends the connection on a frame for no request in flight", async () => {
 	const tools = await hostile((_request, socket) => {

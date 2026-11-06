@@ -30,6 +30,10 @@ export const LIMITS = {
 	readFileBytes: 64 * 1024 * 1024,
 	/** The longest time that one `exec` may run. */
 	execTimeoutMs: 2 * 60 * 60 * 1000,
+	/** The most bytes of one message between a practice program and the loop: it fits one frame. */
+	scriptMessageBytes: 1024 * 1024,
+	/** The most bytes of a practice program's stdout and stderr that the tools side streams. */
+	scriptLogBytes: 64 * 1024,
 	/** How long the loop waits for the `exit` of a cancelled call before it ends the connection. */
 	cancelGraceMs: 10_000,
 	/** The longest time that the tools side extracts one `put` archive. */
@@ -45,6 +49,7 @@ export const LIMITS = {
 export const FINAL = {
 	hello: "hello",
 	exec: "exit",
+	script: "script-exit",
 	read: "read",
 	put: "put",
 	reset: "reset",

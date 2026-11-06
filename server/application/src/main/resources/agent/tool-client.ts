@@ -24,10 +24,28 @@ import {
 interface Pending {
 	/** The type of the frame that ends the request. */
 	final: string;
-	/** The type of the request's stream frames, if it streams. */
-	stream?: string;
+	/** The types of the request's stream frames, if it streams. */
+	stream?: readonly string[];
 	onStream: (frame: Frame) => void;
 	done: PromiseWithResolvers<Frame>;
+}
+
+/** What starts a practice program on the tools side. */
+export interface ScriptRequest {
+	execArgv: readonly string[];
+	timeoutMs: number;
+}
+
+/** A practice program that runs on the tools side. Everything it says is untrusted. */
+export interface ScriptChannel {
+	/** Whether the program can still receive a message. */
+	connected(): boolean;
+	/** Sends one JSON message to the program. */
+	send(message: object): void;
+	/** Ends the program; `exit` then settles. */
+	kill(): void;
+	/** Settles when the program ended, and rejects when the connection did first. */
+	exit: Promise<{ code: number | null; signal: string | null }>;
 }
 
 /** A `put` archive: the bytes of a tar file, with the size and SHA-256 that the tools side checks before it extracts. */
@@ -147,7 +165,7 @@ export class ToolClient {
 			}, LIMITS.cancelGraceMs);
 			grace.unref();
 		};
-		const { reply: exit } = this.#request(id, requestHeader, FINAL.exec, "out", (frame) => {
+		const { reply: exit } = this.#request(id, requestHeader, FINAL.exec, ["out"], (frame) => {
 			streamed += frame.body.length;
 			this.#streamedBytes += frame.body.length;
 			if (streamed > bound || this.#streamedBytes > LIMITS.attemptStreamBytes) {
@@ -184,6 +202,63 @@ export class ToolClient {
 			clearTimeout(grace);
 			signal?.removeEventListener("abort", cancel);
 		}
+	}
+
+	/**
+	 * Starts a practice program. `onMessage` receives each message it sends, and `onLog` its output, within the bounds of
+	 * {@link LIMITS}. An answer is `send`, and the caller decides whether a request deserves one.
+	 */
+	script(
+		request: ScriptRequest,
+		onMessage: (text: string) => void,
+		onLog: (chunk: Buffer) => void,
+	): ScriptChannel {
+		const id = randomUUID();
+		let open = true;
+		let streamed = 0;
+		const { reply } = this.#request(
+			id,
+			{ ...request, execArgv: [...request.execArgv], type: "script.run", id },
+			FINAL.script,
+			["script-out", "script-log"],
+			(frame) => {
+				if (frame.header.type === "script-log") {
+					streamed += frame.body.length;
+					if (streamed > LIMITS.scriptLogBytes) {
+						throw broken("the tools side streamed more than its bound");
+					}
+					onLog(frame.body);
+				} else if (frame.body.length > LIMITS.scriptMessageBytes) {
+					throw broken("the tools side sent a script message past its bound");
+				} else {
+					onMessage(frame.body.toString("utf8"));
+				}
+			},
+		);
+		const exit = reply.then(
+			({ header }) => {
+				open = false;
+				return { code: integer(header, "code") ?? null, signal: text(header, "signal") ?? null };
+			},
+			(error: unknown) => {
+				open = false;
+				throw error;
+			},
+		);
+		return {
+			connected: () => open,
+			send: (message) => {
+				if (open) {
+					this.#write({ type: "script-in", id }, Buffer.from(JSON.stringify(message)));
+				}
+			},
+			kill: () => {
+				if (open) {
+					this.#write({ type: "cancel", id });
+				}
+			},
+			exit,
+		};
 	}
 
 	async read(path: string, offset: number, limit: number): Promise<ReadPage> {
@@ -287,7 +362,7 @@ export class ToolClient {
 		id: string,
 		header: Header,
 		final: string,
-		stream?: string,
+		stream?: readonly string[],
 		onStream: (frame: Frame) => void = () => undefined,
 	): { reply: Promise<Frame> } {
 		if (this.#closed) {
@@ -332,7 +407,7 @@ export class ToolClient {
 		if (id === undefined || pending === undefined) {
 			throw broken(`a frame for no request in flight: ${type}`);
 		}
-		if (type === pending.stream) {
+		if (typeof type === "string" && pending.stream?.includes(type) === true) {
 			pending.onStream(frame);
 		} else if (type === "error") {
 			this.#pending.delete(id);
