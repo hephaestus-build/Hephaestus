@@ -165,7 +165,10 @@ class ProductFeedbackModelAdapter {
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(byte[].class)
+                    // A permit that a worker can no longer renew must end its transport, or the capacity counts twice.
+                    .takeUntilOther(permit.revoked())
                     .block(CALL_TIMEOUT);
+            if (response == null && permit.isRevoked()) return new ModelSession.Answer(0, new byte[0], false, null);
             byte[] answer = response == null ? new byte[0] : response;
             count(answer, usage);
             permit.served(true);
