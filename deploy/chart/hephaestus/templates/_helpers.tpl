@@ -271,13 +271,6 @@ container names this version, commit and environment.
   value: {{ printf "https://%s" .Values.host | quote }}
 - name: HEPHAESTUS_TRUSTED_PROXIES
   value: {{ .Values.trustedProxies | quote }}
-- name: DATABASE_URL
-  value: {{ include "hephaestus.databaseUrl" . | quote }}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_USERNAME") }}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_PASSWORD") }}
-{{ include "hephaestus.env.encryptionKeys" . }}
-- name: HEPHAESTUS_SECURITY_CREDENTIAL_ROTATION_ENABLED
-  value: {{ .Values.config.credentialKey.rotationEnabled | quote }}
 {{- /* Both agent image guards load in every role (ADR 0031): a reference the workers cannot run
 fails every pod, so each role is owed the lock's digest. */}}
 - name: HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST
@@ -291,6 +284,17 @@ fails every pod, so each role is owed the lock's digest. */}}
   value: {{ .Values.config.outline.allowedOrigins | quote }}
 - name: HEPHAESTUS_INTEGRATION_SLACK_ENABLED
   value: {{ .Values.config.slack.enabled | quote }}
+{{- end -}}
+
+{{/* The server and worker roles read the database and what it seals. The webhook role has neither (ADR 0066). */}}
+{{- define "hephaestus.env.storedData" -}}
+- name: DATABASE_URL
+  value: {{ include "hephaestus.databaseUrl" . | quote }}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_USERNAME") }}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_PASSWORD") }}
+{{ include "hephaestus.env.encryptionKeys" . }}
+- name: HEPHAESTUS_SECURITY_CREDENTIAL_ROTATION_ENABLED
+  value: {{ .Values.config.credentialKey.rotationEnabled | quote }}
 {{- end -}}
 
 {{/* The server and webhook roles both talk to JetStream and verify webhook deliveries. */}}

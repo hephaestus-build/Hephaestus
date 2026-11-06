@@ -49,14 +49,20 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.TransactionManager;
 
 /**
- * The webhook role as a deployment starts it, with PostgreSQL unreachable: its context holds no database, and it
- * still verifies and publishes deliveries of every provider (ADR 0066). The only service it reaches is NATS.
+ * The webhook role with no database login and no encryption key, as the chart gives it: its context holds no
+ * database, and it still verifies and publishes deliveries of every provider (ADR 0066). The only service it reaches
+ * is NATS.
  */
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-            // Nothing listens on port 1: a bean that opened a connection would fail the start.
-            "spring.datasource.url=jdbc:postgresql://127.0.0.1:1/unreachable",
+            // The chart gives this role no database login and no encryption key. These name a variable that is
+            // not set, so a bean that read one would fail the start.
+            "spring.datasource.url=jdbc:${WEBHOOK_ROLE_HAS_NO_DATABASE_URL}",
+            "spring.datasource.username=${WEBHOOK_ROLE_HAS_NO_DATABASE_USERNAME}",
+            "spring.datasource.password=${WEBHOOK_ROLE_HAS_NO_DATABASE_PASSWORD}",
+            "hephaestus.security.encryption-key=${WEBHOOK_ROLE_HAS_NO_ENCRYPTION_KEY}",
+            "hephaestus.security.credential-encryption-key=${WEBHOOK_ROLE_HAS_NO_CREDENTIAL_ENCRYPTION_KEY}",
             "hephaestus.sync.nats.enabled=true",
             "hephaestus.integration.outline.enabled=true"
         })
