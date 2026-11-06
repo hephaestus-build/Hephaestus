@@ -100,7 +100,7 @@ export const noUnsafeDefinitionLookup = defineRule({
 	create(context) {
 		if (
 			/\.(?:test|stories)\.[cm]?[jt]sx?$|\/(?:fixtures|lineage-story|tour-scenes)\.tsx?$|\/stories\//u.test(
-				context.filename,
+				context.filename.replaceAll("\\", "/"),
 			)
 		) {
 			return {};

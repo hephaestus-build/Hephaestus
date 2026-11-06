@@ -12,10 +12,26 @@ ruleTester.run("no-unsafe-definition-lookup", noUnsafeDefinitionLookup, {
 		"MARK_FILTERS.map(({kind}) => RESULT_MARK_DEFS[kind].label);",
 		"ACTIVITY_CATEGORY_DEFS[category].label(provider);",
 		{ code: "OUTCOME_DEFS[result.outcome].label;", filename: "result.stories.tsx" },
+		...[
+			"src/components/admin/practice-reviews/fixtures.ts",
+			"src/components/admin/practice-reviews/lineage-story.ts",
+			"src/components/tour/tour-scenes.tsx",
+			"src/stories/results.ts",
+		].flatMap((filename) =>
+			[filename, filename.replaceAll("/", "\\")].map((path) => ({
+				code: "OUTCOME_DEFS[result.outcome].label;",
+				filename: path,
+			})),
+		),
 	],
 	invalid: [
 		{ code: "OUTCOME_DEFS[result.outcome].label;", errors: [{ messageId: "unsafe" }] },
 		{ code: "OUTCOME_DEFS[outcome];", errors: [{ messageId: "unsafe" }] },
+		{
+			code: "OUTCOME_DEFS[result.outcome].label;",
+			filename: "src\\components\\results.tsx",
+			errors: [{ messageId: "unsafe" }],
+		},
 		{ code: "rows.map(row => OUTCOME_DEFS[row.outcome]);", errors: [{ messageId: "unsafe" }] },
 		{ code: "serverValues.map(value => OUTCOME_DEFS[value]);", errors: [{ messageId: "unsafe" }] },
 		{ code: "SERVER_VALUES.map(value => OUTCOME_DEFS[value]);", errors: [{ messageId: "unsafe" }] },
