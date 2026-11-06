@@ -1,0 +1,120 @@
+{
+	"title": "Hephaestus: provider events and messaging",
+	"filename": "messaging",
+	"rows": [
+		{
+			"title": "Do provider events arrive?",
+			"panels": [
+				{
+					"title": "Events published, per minute",
+					"description": "By stream and outcome.",
+					"expr": [
+						"sum by (stream, outcome) (rate(webhook_publish_total{job=\"hephaestus\"}[5m])) * 60"
+					],
+					"alias": ["{{stream}} {{outcome}}"],
+					"unit": "/min",
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Events refused, per hour",
+					"description": "By reason.",
+					"expr": ["sum by (reason) (increase(webhook_rejected_total{job=\"hephaestus\"}[1h]))"],
+					"alias": ["{{reason}}"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "GitHub redeliveries, per hour",
+					"description": "By outcome.",
+					"expr": [
+						"sum by (outcome) (increase(github_webhook_redelivery_total{job=\"hephaestus\"}[1h]))"
+					],
+					"alias": ["{{outcome}}"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Unrecovered GitHub events",
+					"description": "Events of the last two hours that failed every attempt.",
+					"expr": ["max(github_webhook_unrecovered{job=\"hephaestus\"})"],
+					"alias": ["events"],
+					"showLegend": true,
+					"width": 6
+				}
+			]
+		},
+		{
+			"title": "How late are events?",
+			"panels": [
+				{
+					"title": "Wait p95, per provider",
+					"description": "From the stream to the first handling. The alert bound is 5 minutes.",
+					"expr": [
+						"histogram_quantile(0.95, sum by (le, kind) (rate(integration_message_lag_seconds_bucket{job=\"hephaestus\"}[5m])))"
+					],
+					"alias": ["{{kind}}"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Handling p95, per provider",
+					"description": "The handling of one delivery.",
+					"expr": [
+						"histogram_quantile(0.95, sum by (le, kind) (rate(integration_message_process_duration_seconds_bucket{job=\"hephaestus\"}[5m])))"
+					],
+					"alias": ["{{kind}}"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 6
+				}
+			]
+		},
+		{
+			"title": "Do consumers keep up?",
+			"panels": [
+				{
+					"title": "Events that wait for a consumer",
+					"description": "Per stream.",
+					"expr": ["max by (stream) (webhook_stream_consumer_pending{job=\"hephaestus\"})"],
+					"alias": ["{{stream}}"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Oldest event against the age bound",
+					"description": "Per stream.",
+					"expr": [
+						"max by (stream) (webhook_stream_oldest_message_age_seconds{job=\"hephaestus\"})",
+						"max by (stream) (webhook_stream_age_bound_seconds{job=\"hephaestus\"})"
+					],
+					"alias": ["{{stream}} oldest", "{{stream}} bound"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Retries and stopped events, per hour",
+					"description": "Naks retry. A poison event stopped its retries.",
+					"expr": [
+						"sum(increase(integration_consumer_nak_total{job=\"hephaestus\"}[1h]))",
+						"sum(increase(integration_consumer_poison_total{job=\"hephaestus\"}[1h]))"
+					],
+					"alias": ["nak", "poison"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Stream fill",
+					"description": "The share of the byte bound in use.",
+					"expr": ["max by (stream) (webhook_stream_bytes_utilization{job=\"hephaestus\"})"],
+					"alias": ["{{stream}}"],
+					"unit": "share",
+					"showLegend": true,
+					"width": 6
+				}
+			]
+		}
+	]
+}

@@ -27,7 +27,7 @@ import { parseAllDocuments, stringify } from "yaml";
 
 import { parseInventory } from "./commit-image-lock.ts";
 import { chartValues } from "./kubernetes-chart.ts";
-import { asRecord, isRecord, parseJson, readJsonFileSync } from "./lib/json.ts";
+import { asArray, asRecord, isRecord, parseJson, readJsonFileSync } from "./lib/json.ts";
 import { packageReleaseChart } from "./release-chart.ts";
 import { parseReleaseImageLock } from "./release-image-lock.ts";
 
@@ -659,18 +659,52 @@ await test("the monitoring stack scrapes this release, evaluates its rules and n
 	assert.deepEqual(get(role, "rules"), [
 		{ apiGroups: [""], resources: ["pods"], verbs: ["get", "list", "watch"] },
 	]);
+	const metricsConfigMaps = stack.filter(
+		(resource) => kindOf(resource) === "ConfigMap" && componentOf(resource) === "victoria-metrics",
+	);
 	const scrape = String(
 		get(
-			stack.find(
-				(resource) =>
-					kindOf(resource) === "ConfigMap" && componentOf(resource) === "victoria-metrics",
-			),
+			metricsConfigMaps.find((resource) => get(resource, "data", "scrape.yml") !== undefined),
 			"data",
 			"scrape.yml",
 		),
 	);
 	assert.match(scrape, /names: \["hephaestus"\]/u);
 	assert.match(scrape, /regex: "hephaestus;heph;management"/u);
+	// vmui serves each dashboard file of the release, and a panel that a person reads needs a valid file.
+	const dashboards = metricsConfigMaps.find(
+		(resource) => get(resource, "data", "overview.json") !== undefined,
+	);
+	const dashboardFiles = asRecord(get(dashboards, "data"), "dashboards");
+	assert.deepEqual(Object.keys(dashboardFiles).toSorted(), [
+		"database.json",
+		"messaging.json",
+		"model-calls.json",
+		"overview.json",
+		"reviews-and-feedback.json",
+	]);
+	for (const [name, file] of Object.entries(dashboardFiles)) {
+		const rows = get(parseJson(String(file)), "rows");
+		assert.ok(Array.isArray(rows) && rows.length > 0, name);
+		for (const panel of rows.flatMap((row) => asArray(get(row, "panels"), name))) {
+			const queries = asArray(get(panel, "expr"), name);
+			assert.ok(queries.length > 0, `${name}: a panel without a query`);
+			assert.ok(typeof get(panel, "title") === "string", `${name}: a panel without a title`);
+			assert.equal(asArray(get(panel, "alias"), name).length, queries.length, `${name}: aliases`);
+		}
+	}
+	const metricsArgs = get(
+		workload(resources, "victoria-metrics"),
+		"spec",
+		"template",
+		"spec",
+		"containers",
+		0,
+		"args",
+	);
+	assert.ok(
+		Array.isArray(metricsArgs) && metricsArgs.includes("-vmui.customDashboardsPath=/dashboards"),
+	);
 	// vmalert evaluates the release's rules, except the groups whose exporters the stack does not run: their series
 	// never exist here, and HephaestusDeployMetricsMissing, an absent() rule, would fire for ever.
 	assert.deepEqual(ruleResources(resources), []);

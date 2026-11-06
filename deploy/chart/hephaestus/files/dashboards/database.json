@@ -1,0 +1,91 @@
+{
+	"title": "Hephaestus: database and tenancy",
+	"filename": "database",
+	"rows": [
+		{
+			"title": "Does the pool make requests wait?",
+			"panels": [
+				{
+					"title": "Connections in use against the maximum",
+					"description": "Per role.",
+					"expr": [
+						"sum by (runtime_role) (hikaricp_connections_active{job=\"hephaestus\"})",
+						"sum by (runtime_role) (hikaricp_connections_max{job=\"hephaestus\"})"
+					],
+					"alias": ["{{runtime_role}} active", "{{runtime_role}} maximum"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Acquire p95",
+					"description": "How long a request waits for a connection. The alert bound is 50 ms.",
+					"expr": [
+						"histogram_quantile(0.95, sum by (le, runtime_role) (rate(hikaricp_connections_acquire_seconds_bucket{job=\"hephaestus\"}[5m])))"
+					],
+					"alias": ["{{runtime_role}}"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Connection timeouts, per hour",
+					"description": "Each one failed a request.",
+					"expr": [
+						"sum by (runtime_role) (increase(hikaricp_connections_timeout_total{job=\"hephaestus\"}[1h]))"
+					],
+					"alias": ["{{runtime_role}}"],
+					"showLegend": true,
+					"width": 12
+				}
+			]
+		},
+		{
+			"title": "Does tenancy hold?",
+			"panels": [
+				{
+					"title": "Reads that a broad exemption let through, per day",
+					"description": "tenancy_bypassed_violation_total: statements with no workspace predicate that a type-level marker silenced, by the code that holds the marker. The value must reach zero before enforcement can tighten.",
+					"expr": [
+						"sum by (type) (increase(tenancy_bypassed_violation_total{job=\"hephaestus\"}[1d]))"
+					],
+					"alias": ["{{type}}"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Reads that tenancy refused or reported, per day",
+					"description": "tenancy_violation_total, by table and enforcement mode.",
+					"expr": [
+						"sum by (table, mode) (increase(tenancy_violation_total{job=\"hephaestus\"}[1d]))"
+					],
+					"alias": ["{{table}} {{mode}}"],
+					"showLegend": true,
+					"width": 6
+				}
+			]
+		},
+		{
+			"title": "Does the archive keep up?",
+			"panels": [
+				{
+					"title": "WAL archive failing",
+					"description": "1 while the newest sample failed.",
+					"expr": ["max(database_wal_archive_failing{job=\"hephaestus\"})"],
+					"alias": ["failing"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Privacy jobs, per day",
+					"description": "Runs by job and outcome. The store keeps the job as exported_job.",
+					"expr": [
+						"sum by (exported_job, outcome) (increase(privacy_job_completed_total{job=\"hephaestus\"}[1d]))"
+					],
+					"alias": ["{{exported_job}} {{outcome}}"],
+					"showLegend": true,
+					"width": 6
+				}
+			]
+		}
+	]
+}

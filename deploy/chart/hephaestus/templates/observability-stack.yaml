@@ -108,6 +108,16 @@ data:
             target_label: namespace
       {{- end }}
 ---
+# docs/admin/observability.mdx § Dashboards. vmui lists each file of the release.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $metrics }}-dashboards
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "victoria-metrics") | nindent 4 }}
+data:
+  {{- (.Files.Glob "files/dashboards/*.json").AsConfig | nindent 2 }}
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -157,6 +167,7 @@ spec:
             # A changed ConfigMap reaches the mounted file without a restart.
             - -promscrape.configCheckInterval=1m
             - -memory.allowedPercent=60
+            - -vmui.customDashboardsPath=/dashboards
           ports:
             - name: http
               containerPort: 8428
@@ -176,10 +187,16 @@ spec:
             - name: config
               mountPath: /config
               readOnly: true
+            - name: dashboards
+              mountPath: /dashboards
+              readOnly: true
       volumes:
         - name: config
           configMap:
             name: {{ $metrics }}
+        - name: dashboards
+          configMap:
+            name: {{ $metrics }}-dashboards
   volumeClaimTemplates:
     - metadata:
         name: data

@@ -1,0 +1,124 @@
+{
+	"title": "Hephaestus: reviews and feedback",
+	"filename": "reviews-and-feedback",
+	"rows": [
+		{
+			"title": "Do reviews finish?",
+			"panels": [
+				{
+					"title": "Reviews ended, per day",
+					"description": "By status. Partial reviews keep what they admitted.",
+					"expr": [
+						"sum by (kind, status) (increase(practice_review_ended_total{job=\"hephaestus\"}[1d]))"
+					],
+					"alias": ["{{kind}} {{status}}"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Review items withheld, per day",
+					"description": "By reason. A withheld item is no claim about the work.",
+					"expr": [
+						"sum by (reason) (increase(practice_review_items_ended_total{job=\"hephaestus\",state=\"withheld\"}[1d]))"
+					],
+					"alias": ["{{reason}}"],
+					"showLegend": true,
+					"width": 6
+				}
+			]
+		},
+		{
+			"title": "Where does an attempt spend its time?",
+			"panels": [
+				{
+					"title": "Stage p95",
+					"description": "Each stage of an attempt.",
+					"expr": [
+						"histogram_quantile(0.95, sum by (le, stage) (rate(agent_job_stage_duration_seconds_bucket{job=\"hephaestus\"}[1h])))"
+					],
+					"alias": ["{{stage}}"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Attempts ended, per hour",
+					"description": "By outcome.",
+					"expr": ["sum by (outcome) (increase(agent_job_total{job=\"hephaestus\"}[1h]))"],
+					"alias": ["{{outcome}}"],
+					"showLegend": true,
+					"width": 6
+				}
+			]
+		},
+		{
+			"title": "Do people trust the results?",
+			"panels": [
+				{
+					"title": "Results recorded, per day",
+					"description": "By outcome.",
+					"expr": [
+						"sum by (outcome) (increase(practice_result_recorded_total{job=\"hephaestus\"}[1d]))"
+					],
+					"alias": ["{{outcome}}"],
+					"showLegend": true,
+					"width": 4
+				},
+				{
+					"title": "Marks, per day",
+					"description": "Marks that people set or removed. The alert reads the share of incorrect marks.",
+					"expr": [
+						"sum by (kind, change) (increase(practice_result_marked_total{job=\"hephaestus\"}[1d]))"
+					],
+					"alias": ["{{kind}} {{change}}"],
+					"showLegend": true,
+					"width": 4
+				},
+				{
+					"title": "Answers to feedback, per day",
+					"description": "By resolution.",
+					"expr": [
+						"sum by (resolution) (increase(practice_feedback_response_total{job=\"hephaestus\"}[1d]))"
+					],
+					"alias": ["{{resolution}}"],
+					"showLegend": true,
+					"width": 4
+				}
+			]
+		},
+		{
+			"title": "Does feedback reach people?",
+			"panels": [
+				{
+					"title": "Feedback settled, per day",
+					"description": "By destination and state.",
+					"expr": [
+						"sum by (destination, state) (increase(practice_feedback_settled_total{job=\"hephaestus\"}[1d]))"
+					],
+					"alias": ["{{destination}} {{state}}"],
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Oldest feedback that waits",
+					"description": "Ready feedback without a first copy.",
+					"expr": ["max(practice_feedback_oldest_waiting_seconds{job=\"hephaestus\"})"],
+					"alias": ["age"],
+					"unit": "s",
+					"showLegend": true,
+					"width": 6
+				},
+				{
+					"title": "Readback results, per day",
+					"description": "Does the provider confirm the written copy?",
+					"expr": [
+						"sum by (provider, outcome) (increase(practice_feedback_readback_total{job=\"hephaestus\"}[1d]))"
+					],
+					"alias": ["{{provider}} {{outcome}}"],
+					"showLegend": true,
+					"width": 12
+				}
+			]
+		}
+	]
+}
