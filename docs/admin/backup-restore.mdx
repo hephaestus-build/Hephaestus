@@ -143,6 +143,7 @@ A large erasure manifest can take longer than that probe permits.
 Use this temporary Deployment patch while normal workloads and public access remain stopped.
 It preserves the readiness probe and removes the startup and liveness probes until recovery completes.
 It extends the rollout progress deadline to one day.
+
 The mounted Secret contains private identities.
 Restrict its namespace access to recovery operators.
 This Secret procedure requires a manifest below 1 MiB.
