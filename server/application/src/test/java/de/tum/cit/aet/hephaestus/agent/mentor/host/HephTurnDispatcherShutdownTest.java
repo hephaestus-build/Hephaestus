@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
+import de.tum.cit.aet.hephaestus.mentor.MentorRedaction;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -424,6 +425,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
         return new HephTurnDispatcher(
                 starter,
                 turns,
+                mock(MentorRedaction.class),
                 completion,
                 mock(MentorLedgerNotifications.class),
                 host,

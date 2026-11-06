@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
+import de.tum.cit.aet.hephaestus.mentor.MentorRedaction;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import io.micrometer.core.instrument.Counter;
@@ -76,6 +77,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     private static final Duration HOST_READY_TIMEOUT = Duration.ofMinutes(3);
     private final MentorTurnStarter starter;
     private final MentorTurnService turns;
+    private final MentorRedaction redaction;
     private final MentorTurnCompletion completion;
     private final MentorLedgerNotifications notifications;
     private final HephHost host;
@@ -102,6 +104,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     public HephTurnDispatcher(
             MentorTurnStarter starter,
             MentorTurnService turns,
+            MentorRedaction redaction,
             MentorTurnCompletion completion,
             MentorLedgerNotifications notifications,
             HephHost host,
@@ -117,6 +120,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             Duration drainTimeout) {
         this.starter = starter;
         this.turns = turns;
+        this.redaction = redaction;
         this.completion = completion;
         this.notifications = notifications;
         this.host = host;
@@ -164,6 +168,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         volatile @Nullable String stopReason;
         volatile @Nullable Instant stopSent;
         volatile boolean overDeadline;
+        volatile boolean contextErased;
 
         Running(MentorTurn turn, long accountId, Instant now, Instant deadline) {
             this.turnId = turn.getId();
@@ -305,12 +310,27 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     }
 
     @Override
+    public void contextChanged(MentorLedgerEvents.ContextChanged change) {
+        for (Running turn : running.values()) {
+            if (turn.workspaceId == change.workspaceId()) {
+                MentorTurn stored = turns.require(turn.workspaceId, turn.turnId);
+                if (stored.getStartedAt() != null && redaction.personErasedSince(stored.getStartedAt())) {
+                    discardContext(turn);
+                }
+            }
+        }
+    }
+
+    @Override
     public void resync() {
         wake.release();
         for (Running turn : running.values()) {
             try {
-                if (turns.require(turn.workspaceId, turn.turnId).getStatus() == MentorTurn.Status.STOPPED) {
+                MentorTurn stored = turns.require(turn.workspaceId, turn.turnId);
+                if (stored.getStatus() == MentorTurn.Status.STOPPED) {
                     stop(turn, "developer");
+                } else if (stored.getStartedAt() != null && redaction.personErasedSince(stored.getStartedAt())) {
+                    discardContext(turn);
                 }
             } catch (RuntimeException e) {
                 log.debug(
@@ -319,6 +339,14 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                         e.getClass().getSimpleName());
             }
         }
+    }
+
+    private void discardContext(Running turn) {
+        turn.contextErased = true;
+        turn.partial = null;
+        turn.hostPartial = null;
+        callsInFlight.seal(turn.turnId, turn.attempt, true);
+        stop(turn, "lease");
     }
 
     /**
@@ -332,7 +360,9 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     /** The attempt, while it {@linkplain #runs runs} here. */
     Optional<TurnAttempt> running(UUID turnId, int attempt) {
         Running turn = running.get(turnId);
-        return turn != null && turn.attempt == attempt ? Optional.of(turn.identity) : Optional.empty();
+        return turn != null && turn.attempt == attempt && !turn.contextErased
+                ? Optional.of(turn.identity)
+                : Optional.empty();
     }
 
     /**
@@ -343,7 +373,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
      */
     Instant deadline(UUID turnId, int attempt) {
         Running turn = running.get(turnId);
-        if (turn == null || turn.attempt != attempt) {
+        if (turn == null || turn.attempt != attempt || turn.contextErased) {
             throw new MentorLeaseLostException(turnId, attempt);
         }
         return turn.deadline;
@@ -357,7 +387,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
      */
     void partial(UUID turnId, int attempt, JsonNode partial) {
         Running turn = running.get(turnId);
-        if (turn == null || turn.attempt != attempt) {
+        if (turn == null || turn.attempt != attempt || turn.contextErased) {
             throw new MentorLeaseLostException(turnId, attempt);
         }
         turn.hostPartial = partial;
@@ -367,6 +397,11 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     private void reportPartial(Running turn) {
         turn.progress.lock();
         try {
+            if (turn.contextErased) {
+                turn.partial = null;
+                turn.hostPartial = null;
+                throw new MentorLeaseLostException(turn.turnId, turn.attempt);
+            }
             JsonNode partial = turn.hostPartial;
             if (partial == null) return;
             if (partial instanceof ObjectNode snapshot
@@ -382,15 +417,20 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             Instant sentAt = turn.partialSentAt;
             // An unchanged answer is sent again now and then, so a reader that started since sees it.
             if (partial.equals(stored) && sentAt != null && now.isBefore(sentAt.plus(PARTIAL_RESEND))) return;
-            completion.progress(
+            boolean sent = completion.progress(
                     turn.workspaceId,
                     turn.turnId,
                     turn.attempt,
                     turn.identity.leaseId(),
                     partial,
                     stored == null ? turn.claimed : null);
+            if (!sent) return;
             turn.partial = partial;
             turn.partialSentAt = now;
+            if (turn.contextErased) {
+                turn.partial = null;
+                turn.hostPartial = null;
+            }
         } finally {
             turn.progress.unlock();
         }
@@ -570,6 +610,10 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         Instant now = clock.instant();
         for (Running turn : List.copyOf(running.values())) {
             try {
+                if (turn.contextErased) {
+                    finishQuietly(turn, MentorTurn.Status.FAILED, COULD_NOT_FINISH, "context_changed");
+                    continue;
+                }
                 Instant stopSent = turn.stopSent;
                 if (stopSent != null && now.isAfter(stopSent.plus(stopGrace))) {
                     if (turn.overDeadline) {

@@ -478,3 +478,26 @@ The conversation store holds no data from releases before it. The upgrade that a
 every earlier conversation, including the Hephaestus copies of Slack DMs. Slack keeps its own
 copy of each DM. Feedback shown in an earlier conversation keeps its state, but its copy no longer
 names the message that showed it.
+
+### Erasure after recovery
+
+Completed erasure receipts discard identifying scope.
+A database restored to an earlier point cannot reconstruct a later erasure from those receipts or from WAL after the chosen recovery point.
+The operator supplies exact account and provider identities from the restricted incident record.
+The `erasure-recovery` profile reapplies them through the existing store inventory before processing starts.
+It fails closed until every request completes or the operator explicitly declares no later erasures.
+It creates no second decision journal and stores no manifest.
+
+The [restore procedure](../backup-restore.mdx#reapply-erasure-decisions-before-processing-resumes) owns the manifest, sequence and retention requirements.
+
+### Running conversation copies
+
+Person erasure clears copying tool results, later Hephaestus answers in those conversations, and answers in their child conversations.
+It also clears summaries and search results that could copy those words.
+The ledger reports each changed message to open conversations.
+A running turn drops its partial answer and sandbox when the context changes.
+A reconnected worker checks the durable erasure receipts before keeping an older attempt.
+
+Partial-answer writes and attempt completion share the erasure fence, so a late callback cannot restore copied content.
+This includes an answer that used earlier context without another tool call.
+A turn started after erasure reads the erased sources.

@@ -230,6 +230,13 @@ groups:
         annotations:
           summary: The server answered a review's results with its own error, so the review ended without them
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusPersonErasureInterrupted
+        expr: sum(increase(person_data_erasure_failures_total{job="hephaestus"}[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Person erasure stopped or could not record its failure state
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewPreparationFailing
         expr: sum(increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause="preparation"}[30m])) >= 5
         for: 15m

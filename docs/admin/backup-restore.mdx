@@ -32,6 +32,14 @@ Check WAL archival, completed backups and repository access.
 Rehearse an [isolated restore](./kubernetes#isolated-restore-drill), including clone lockdown, before relying on the backup.
 The operations runbook defines the recovery-time and recovery-point acceptance criteria.
 
+### Backup retention
+
+`postgresql.backup.retentionFull` sets the number of full pgBackRest backup chains to keep.
+Its default is 2.
+Erased data can remain in a backup until that backup expires under this setting and the repository expires it.
+This setting is a count, not a time limit.
+Keep the restricted erasure recovery manifest for the same window as every backup that can restore erased data, including separately retained copies.
+
 ## Backup
 
 Use the [chart backup procedure](./kubernetes#backup-and-restore).
@@ -43,6 +51,151 @@ Keep the originals until the recovery is verified.
 Choose the [isolated restore drill](./kubernetes#isolated-restore-drill) or [live recovery](./kubernetes#recover-the-live-installation) procedure for the intended destination.
 An isolated clone must complete lockdown before migrations or application roles start.
 Do not apply clone lockdown to the live recovery database.
+
+### Reapply erasure decisions before processing resumes
+
+Keep the normal server, worker and webhook Deployments stopped while PostgreSQL and JetStream are restored.
+Keep public access and provider egress closed.
+Before replay or normal processing, the server must pass the `erasure-recovery` startup profile.
+This profile runs the existing person-erasure service before lifecycle workers, scheduled tasks or broker consumers start.
+A missing or invalid manifest, an unknown provider instance, or an incomplete erasure stops startup.
+
+1. From the restricted incident record, prepare a JSON manifest of every erasure after the chosen recovery point.
+   Include each person's account ID, when known, and all known exact native identities.
+   Use numeric user IDs for GitHub and GitLab.
+   Use a user ID and team ID for Slack.
+   Use a user UUID for Outline.
+   Specify the exact provider type and server URL from the restored provider inventory.
+   Never substitute a login, display name or email.
+2. Keep the file outside the database and mount it read-only in the server Pod.
+   Restrict access to the recovery operators.
+   Do not put it in Helm values, a ConfigMap, a command-line argument or shared logs.
+   Only its mounted path goes in configuration.
+3. If restored receipts name mounted evidence stores, make their original volumes available for cleanup.
+   Use one isolated maintenance worker only for evidence deletion.
+   A maintenance worker can run with `HEPHAESTUS_AGENT_ENABLED=false`, `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX=0`, `HEPHAESTUS_RUNTIME_SERVER_ENABLED=false` and `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false`.
+   This permits its deletion poll without claiming reviews or conversation turns.
+   Keep provider egress denied.
+   An unavailable store keeps recovery blocked.
+   Follow [An evidence store is offline](./production-operations-runbook#an-evidence-store-is-offline).
+4. Complete the broker recovery checks before you start the server.
+5. Start the server with `erasure-recovery` added to its normal active profiles.
+   Set `HEPHAESTUS_PRIVACY_RECOVERY_MANIFEST` to the mounted path.
+   Set `HEPHAESTUS_RUNTIME_WORKER_ENABLED=false` and `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false`.
+6. Wait for server startup to complete.
+   If it stops, keep the other Deployments stopped, correct the private input or unfinished erasure, and retry.
+   Do not remove the recovery profile to bypass the failure.
+7. Remove the recovery profile and temporary manifest mount before you resume normal operation.
+   The Kubernetes procedure below restores the original Deployment.
+8. After normal server startup completes, open access and provider egress.
+   Start the other roles.
+   An old broker message remains subject to the reapplied native-identity suppression controls.
+
+The manifest uses this structure:
+
+```json
+{
+  "version": 1,
+  "restorePoint": "2026-11-01T00:00:00Z",
+  "administratorAccountId": 10,
+  "noLaterErasures": false,
+  "people": [
+    {
+      "accountId": 42,
+      "identities": [
+        {"providerType": "GITHUB", "serverUrl": "https://github.com", "subject": "123456"},
+        {"providerType": "GITLAB", "serverUrl": "https://gitlab.example.test", "subject": "234567"},
+        {"providerType": "SLACK", "serverUrl": "https://slack.com", "subject": "U123456", "teamId": "T123456"},
+        {"providerType": "OUTLINE", "serverUrl": "https://outline.example.test", "subject": "00000000-0000-4000-8000-000000000042"}
+      ],
+      "externalCopiesRemoved": true
+    }
+  ]
+}
+```
+
+The administrator must be active and have instance-admin rights in the restored database.
+Another administrator must authorize that administrator's own erasure.
+Set `externalCopiesRemoved` to `true` only after checking the provider locators and confirming removal as the [un-deliver procedure](./production-operations-runbook#un-deliver-external-feedback-then-purge) requires.
+Recovery does not delete provider-hosted copies itself.
+
+If no erasure happened after the recovery point, the operator must declare that explicitly:
+
+```json
+{
+  "version": 1,
+  "restorePoint": "2026-11-01T00:00:00Z",
+  "noLaterErasures": true,
+  "people": []
+}
+```
+
+An empty list without this declaration does not permit startup.
+The file itself is never stored in the database or logged.
+The existing erasure workflow temporarily keeps its frozen subject scope while a request is active.
+After completion, only its normal suppression controls and erasure receipts remain.
+Keep the manifest under the [backup retention rule](#backup-retention).
+
+### Mount the manifest for a Kubernetes recovery
+
+The chart uses the `prod` profile and a startup probe.
+A large erasure manifest can take longer than that probe permits.
+Use this temporary Deployment patch while normal workloads and public access remain stopped.
+It preserves the readiness probe and removes the startup and liveness probes until recovery completes.
+It extends the rollout progress deadline to one day.
+
+The mounted Secret contains private identities.
+Restrict its namespace access to recovery operators.
+This Secret procedure requires a manifest below 1 MiB.
+For a larger manifest, mount a protected read-only volume at the same path instead of a Secret.
+Reapply every later decision in one startup before you permit processing.
+
+Set `NAMESPACE`, `SERVER_DEPLOYMENT` and `ERASURE_MANIFEST` to the namespace, server Deployment and private manifest file.
+
+```bash
+umask 077
+server_recovery_dir=$(mktemp -d)
+erasure_secret="${SERVER_DEPLOYMENT}-erasure-recovery"
+kubectl -n "$NAMESPACE" get deployment "$SERVER_DEPLOYMENT" -o json > "$server_recovery_dir/before.json"
+kubectl -n "$NAMESPACE" create secret generic "$erasure_secret" --from-file="manifest.json=$ERASURE_MANIFEST"
+server_container=$(jq -r '.spec.template.spec.containers[0].name' "$server_recovery_dir/before.json")
+jq -n --arg container "$server_container" --arg secret "$erasure_secret" '
+  {spec: {replicas: 1, progressDeadlineSeconds: 86400, template: {spec: {
+    containers: [{name: $container, startupProbe: null, livenessProbe: null,
+      env: [
+        {name: "SPRING_PROFILES_ACTIVE", value: "prod,erasure-recovery"},
+        {name: "HEPHAESTUS_PRIVACY_RECOVERY_MANIFEST", value: "/var/run/hephaestus/erasure-recovery/manifest.json"},
+        {name: "HEPHAESTUS_RUNTIME_WORKER_ENABLED", value: "false"},
+        {name: "HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED", value: "false"}],
+      volumeMounts: [{name: "erasure-recovery", mountPath: "/var/run/hephaestus/erasure-recovery", readOnly: true}]}],
+    volumes: [{name: "erasure-recovery", secret: {secretName: $secret, defaultMode: 288}}]
+  }}}}' > "$server_recovery_dir/recovery-patch.json"
+kubectl -n "$NAMESPACE" patch deployment "$SERVER_DEPLOYMENT" --type=strategic --patch-file="$server_recovery_dir/recovery-patch.json"
+kubectl -n "$NAMESPACE" rollout status deployment "$SERVER_DEPLOYMENT" --timeout=60m
+```
+
+A command timeout does not stop the Pod.
+If recovery exceeds one hour, repeat only the wait command.
+If it approaches one day, extend the progress deadline before it expires.
+If the deadline has expired, wait for the recovery Pod's readiness with `kubectl wait --for=condition=Ready pod <pod-name> --timeout=60m`.
+A failed startup logs `person_data.recovery.failed` with a closed `person_data.recovery.reason` code.
+It does not log the manifest or an exception that can quote its identities.
+
+After recovery succeeds, restore the original Deployment specification, which has zero replicas from the maintenance stop.
+Wait for its recovery Pod to stop before you remove the Secret.
+Then start the normal server.
+
+```bash
+jq '{spec: .spec}' "$server_recovery_dir/before.json" > "$server_recovery_dir/restore-patch.json"
+kubectl -n "$NAMESPACE" patch deployment "$SERVER_DEPLOYMENT" --type=merge --patch-file="$server_recovery_dir/restore-patch.json"
+server_selector=$(jq -r '.spec.selector.matchLabels | to_entries | map(.key + "=" + .value) | join(",")' "$server_recovery_dir/before.json")
+kubectl -n "$NAMESPACE" wait --for=delete pod -l "$server_selector" --timeout=5m
+kubectl -n "$NAMESPACE" delete secret "$erasure_secret"
+kubectl -n "$NAMESPACE" scale deployment "$SERVER_DEPLOYMENT" --replicas=1
+kubectl -n "$NAMESPACE" rollout status deployment "$SERVER_DEPLOYMENT" --timeout=15m
+```
+
+Keep the original private manifest under the backup retention rule.
 
 ### Before restarting services
 

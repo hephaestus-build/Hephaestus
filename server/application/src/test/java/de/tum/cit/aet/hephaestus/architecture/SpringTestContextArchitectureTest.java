@@ -43,6 +43,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("workspace.ManualRepositoryAuthorityIntegrationTest", "manual-repository-authority"),
             assignment("workspace.WorkspaceRepositoryCoverageIntegrationTest", "repository-coverage"),
             assignment("StartupBudgetIntegrationTest", "startup"),
+            assignment("core.privacy.PersonDataRecoveryStartupIntegrationTest", "erasure-recovery"),
             assignment("agent.mentor.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
             assignment("core.auth.clientsession.ClientSessionConcurrencyIntegrationTest", "dev-login"),
@@ -117,6 +118,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "review-enqueue-atomicity",
                     "real review transaction and event listener with an injected fault before queue creation"),
             Map.entry("base", "shared PostgreSQL, HTTP, security, review fixtures and application acceptance context"),
+            Map.entry(
+                    "erasure-recovery",
+                    "real recovery profile, manifest binding and lifecycle ordering before scheduler and consumer startup"),
             Map.entry(
                     "repository-provider-scope",
                     "real SQL provider, tenant and monitor lifetime enforcement with controlled GitLab transport and sync orchestration boundary"),
@@ -256,6 +260,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> DYNAMIC_PROPERTY_TESTS = names(
             "StartupBudgetIntegrationTest",
+            "core.privacy.PersonDataRecoveryStartupIntegrationTest",
             "agent.practice.live.PracticeScriptLiveLlmTest",
             "core.auth.clientsession.ClientSessionMigratedSchemaTest",
             "integration.schema.ProductionSchemaContractIntegrationTest",

@@ -17,7 +17,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Redacts the tool results that may copy anyone's data ({@link MentorEntryRepository#COPIES_PERSON_DATA}) in each
- * workspace where another person's Heph conversation may have read this person's data. A tool result that copies no
+ * workspace where another person's Heph conversation may have read this person's data, together with answers derived
+ * from those results. A tool result that copies no
  * one's, such as a {@code show_feedback} result, stays: the app reads it to show the feedback Heph showed.
  *
  * <p>The selection freezes every workspace of the person, not entries, so tool results written after the preview are
@@ -96,7 +97,7 @@ final class MentorToolResultCopyPersonDataStore extends JdbcPersonDataStore {
                 """.formatted(MentorEntryRepository.COPIES_PERSON_DATA),
                 Map.of("workspaces", new SqlArrayValue("bigint", workspaces)),
                 (rs, row) -> Objects.requireNonNull(rs.getObject(1, UUID.class)));
-        redaction.redact(toolResults);
+        redaction.redactPersonCopies(toolResults);
         // A running turn of these workspaces may hold the person's data in its sandbox.
         for (Object workspace : workspaces) contextChanges.changed((Long) workspace);
         return selection.rows().size();

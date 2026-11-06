@@ -267,6 +267,8 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
 
     /** A running attempt, as the read before its partial answer found it. */
     interface RunningAttempt {
+        Instant getStartedAt();
+
         Long getWorkspaceId();
 
         UUID getConversationId();
@@ -282,7 +284,7 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
      */
     @WorkspaceAgnostic("The worker holds the attempt's lease; the statement returns the turn's workspace")
     @Query(value = """
-            SELECT workspace_id AS workspaceId, conversation_id AS conversationId, surface AS surface
+            SELECT workspace_id AS workspaceId, conversation_id AS conversationId, surface AS surface, started_at AS startedAt
               FROM mentor_turn
              WHERE workspace_id = :workspaceId AND id = :id AND attempt = :attempt AND lease_id = :leaseId
                AND status = 'RUNNING' AND leased_until > clock_timestamp()
