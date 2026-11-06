@@ -1267,8 +1267,14 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 		scheduled.getUTCMonth() + 1,
 		"*",
 	].join(" ");
+	// Pausing application replicas lowers the automatic budget, but WAL replay needs the source setting.
+	const maxConnections = Number(await psql("SHOW max_connections"));
+	if (!Number.isSafeInteger(maxConnections)) {
+		throw new Error("the source database returned an invalid max_connections setting");
+	}
 	const backup = (restore: { enabled: boolean; time: string }) => ({
 		postgresql: {
+			parameters: { max_connections: maxConnections },
 			backup: {
 				clientTlsSecret: "hephaestus-postgresql-backup-tls",
 				enabled: true,
