@@ -57,6 +57,7 @@ jobs:
       # Only a merge group runs the seeded upgrade, on the images that it builds.
       queue-upgrade: ${{ (github.event_name == 'merge_group' && steps.filter.outputs.database-upgrade == 'true') }}
       kubernetes: ${{ steps.filter.outputs.kubernetes }}
+      kubernetes-recovery: ${{ github.event_name == 'pull_request' && steps.filter.outputs.kubernetes-recovery == 'true' }}
       docs: ${{ steps.filter.outputs.docs }}
       ci-config: ${{ steps.filter.outputs.ci-config }}
       quality-config: ${{ steps.filter.outputs.quality-config }}
@@ -531,7 +532,14 @@ jobs:
               - 'docker/agents/**'
               - 'docker/postgres/**'
               - '.github/workflows/ci-kubernetes.yml'
+              - '.github/workflows/kubernetes-nightly.yml'
               - '.github/actions/setup-kubernetes-tools/**'
+            kubernetes-recovery:
+              - 'deploy/chart/**'
+              - 'docker/postgres/**'
+              - 'scripts/kubernetes-cluster.ts'
+              - '.github/workflows/ci-kubernetes.yml'
+              - '.github/workflows/kubernetes-nightly.yml'
             docs:
               - 'docs/**'
             # Changes the queue tier judges best before the queue: migrations, which the database
@@ -1085,13 +1093,13 @@ jobs:
     with:
       leg: chart
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
-      # A pull request runs the chart and the latest k3s on amd64; the floor on both architectures,
-      # kind and the drill wait for the merge queue, which tests the commit that main receives.
+      # A pull request runs the chart and latest k3s on amd64. The queue adds the floor on both
+      # architectures and kind, using the commit that main receives.
       queue: ${{ github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
 
   Kubernetes:
     name: "Kubernetes (${{ matrix.leg }} ${{ matrix.minor }} ${{ matrix.arch }})"
-    needs: [Kubernetes-chart, server-package]
+    needs: [detect-changes, Kubernetes-chart, server-package]
     if: ${{ !cancelled() && needs.Kubernetes-chart.result == 'success' }}
     strategy:
       fail-fast: false
@@ -1106,6 +1114,7 @@ jobs:
       minor: ${{ matrix.minor }}
       arch: ${{ matrix.arch }}
       queue: ${{ needs.Kubernetes-chart.outputs.queue == 'true' }}
+      backup-drill: ${{ needs.detect-changes.outputs.kubernetes-recovery == 'true' }}
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
 
   # A migration or the baseline synchronization changes what an upgrade from the last release does.

@@ -1244,11 +1244,21 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 	await join(`${RELEASE}-postgresql-tls`, {
 		"s3-ca.crt": await readFile(path.join(work, "ca.crt"), "utf8"),
 	});
+	// Manual backup Jobs exercise recovery. Future schedules keep CronJobs idle while Helm owns suspend.
+	const scheduled = new Date(Date.now() + 24 * 60 * 60 * 1000);
+	const schedule = [
+		scheduled.getUTCMinutes(),
+		scheduled.getUTCHours(),
+		scheduled.getUTCDate(),
+		scheduled.getUTCMonth() + 1,
+		"*",
+	].join(" ");
 	const backup = (restore: { enabled: boolean; time: string }) => ({
 		postgresql: {
 			backup: {
 				clientTlsSecret: "hephaestus-postgresql-backup-tls",
 				enabled: true,
+				schedule: { full: schedule, differential: schedule },
 				s3: {
 					bucket: BUCKET,
 					endpoint: `s3.${STORAGE_NAMESPACE}.svc`,
@@ -1330,18 +1340,6 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 		"migration.enabled=false,server.replicas=0,webhook.replicas=0,worker.replicas=0",
 	];
 	await install(work, [...backupOn, ...paused]);
-	for (const kind of ["full", "diff"]) {
-		await kubectl([
-			"-n",
-			NAMESPACE,
-			"patch",
-			"cronjob",
-			`${RELEASE}-postgresql-backup-${kind}`,
-			"--type=merge",
-			"-p",
-			'{"spec":{"suspend":true}}',
-		]);
-	}
 	await kubectl(["-n", NAMESPACE, "scale", `statefulset/${RELEASE}-postgresql`, "--replicas=0"]);
 	await kubectl([
 		"-n",
