@@ -1016,6 +1016,7 @@ No series names a workspace, a workspace's model, a job or a turn.
 | `gen_ai_client_tokens_total` | Counter | `pool`, `class`, `type` | Tokens that the provider reported. `type` is `input`, `output`, `cache_read`, or `cache_write`. `input` excludes the cached tokens |
 | `llm_pool_first_token_baseline`            | Gauge     | `pool`                     | The fastest first token that the pool knows, in milliseconds. All workers read it from the database. `workspace-models` is the largest of its pools |
 | `llm_pool_first_token_baseline_resets_total` | Counter | `pool`                     | How often a pool at its floor took a new baseline. A repeating rise means that the provider stays slow with no load from this instance |
+| `llm_pool_upstream_bucket_reached_total`   | Counter   | `pool`, `bucket`           | Served answers whose rate limit headers showed an empty bucket, which also pauses the pool. `bucket` is `requests`, `tokens`, `input_tokens`, or `output_tokens` |
 | `llm_pool_upstream_throttled_total`        | Counter   | `pool`, `status`           | Answers of the pool's provider that it serves too many calls |
 | `llm_pool_upstream_absorbed_total`         | Counter   | `pool`                     | Those answers that the caller never saw, because its call waited and asked again |
 | `llm_pool_cooldown_active`                 | Gauge     | `pool`                     | 1 while this worker knows the pool to be paused after a refusal. Take the maximum over the workers |

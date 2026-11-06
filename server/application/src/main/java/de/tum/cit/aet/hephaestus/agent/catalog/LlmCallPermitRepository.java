@@ -129,7 +129,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
     @Modifying
     @Query(
             value =
-                    "UPDATE llm_call_permit SET state='ACTIVE',granted_at=clock_timestamp(),renewed_at=clock_timestamp(),requests=1,tokens=:tokens WHERE id=:id AND state='WAITING'",
+                    "UPDATE llm_call_permit SET state='ACTIVE',granted_at=clock_timestamp(),renewed_at=clock_timestamp(),requests=1,tokens=:tokens,input_tokens=:tokens WHERE id=:id AND state='WAITING'",
             nativeQuery = true)
     int grant(@Param("id") UUID id, @Param("tokens") long tokens);
 
@@ -214,25 +214,45 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
         long getBackgroundRequests();
 
         long getBackgroundTokens();
+
+        long getInputTokens();
+
+        long getOutputTokens();
+
+        long getBackgroundInputTokens();
+
+        long getBackgroundOutputTokens();
     }
 
     /** Active calls retain their complete rate debit. Closed calls retain it for a full minute after closure. */
     @Query(
             value =
-                    "SELECT COALESCE(sum(requests),0) AS requests,COALESCE(sum(tokens),0) AS tokens,COALESCE(sum(requests) FILTER (WHERE call_class <> 'TURN'),0) AS \"backgroundRequests\",COALESCE(sum(tokens) FILTER (WHERE call_class <> 'TURN'),0) AS \"backgroundTokens\" FROM llm_call_permit WHERE pool_id=:poolId AND granted_at IS NOT NULL AND (closed_at IS NULL OR closed_at > clock_timestamp()-interval '1 minute')",
+                    "SELECT COALESCE(sum(requests),0) AS requests,COALESCE(sum(tokens),0) AS tokens,COALESCE(sum(input_tokens),0) AS \"inputTokens\",COALESCE(sum(output_tokens),0) AS \"outputTokens\",COALESCE(sum(requests) FILTER (WHERE call_class <> 'TURN'),0) AS \"backgroundRequests\",COALESCE(sum(tokens) FILTER (WHERE call_class <> 'TURN'),0) AS \"backgroundTokens\",COALESCE(sum(input_tokens) FILTER (WHERE call_class <> 'TURN'),0) AS \"backgroundInputTokens\",COALESCE(sum(output_tokens) FILTER (WHERE call_class <> 'TURN'),0) AS \"backgroundOutputTokens\" FROM llm_call_permit WHERE pool_id=:poolId AND granted_at IS NOT NULL AND (closed_at IS NULL OR closed_at > clock_timestamp()-interval '1 minute')",
             nativeQuery = true)
     Rates rates(@Param("poolId") long poolId);
 
     @Modifying
     @Query(
             value =
-                    "UPDATE llm_call_permit SET requests=requests+1,tokens=tokens+:tokens WHERE id=:id AND state='ACTIVE' AND worker_id=:workerId AND renewed_at >= clock_timestamp()-make_interval(secs => :staleSeconds)",
+                    "UPDATE llm_call_permit SET requests=requests+1,tokens=tokens+:tokens,input_tokens=input_tokens+:tokens WHERE id=:id AND state='ACTIVE' AND worker_id=:workerId AND renewed_at >= clock_timestamp()-make_interval(secs => :staleSeconds)",
             nativeQuery = true)
     int debitRetry(
             @Param("id") UUID id,
             @Param("workerId") String workerId,
             @Param("tokens") long tokens,
             @Param("staleSeconds") long staleSeconds);
+
+    /** Replaces a call's debit by what its provider reported. A call without a report keeps its bound. */
+    @Modifying
+    @Query(
+            value =
+                    "UPDATE llm_call_permit SET tokens=:input+:output,input_tokens=:input,output_tokens=:output WHERE id=:id AND worker_id=:workerId",
+            nativeQuery = true)
+    int settleTokens(
+            @Param("id") UUID id,
+            @Param("workerId") String workerId,
+            @Param("input") long input,
+            @Param("output") long output);
 
     @Query(
             value = "SELECT count(*) FROM llm_call_permit WHERE pool_id=:poolId AND state <> 'CLOSED'",

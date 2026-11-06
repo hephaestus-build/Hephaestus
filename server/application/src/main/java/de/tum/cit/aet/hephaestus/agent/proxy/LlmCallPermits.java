@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallDelay;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallLimit;
@@ -12,10 +13,12 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -394,14 +397,30 @@ public class LlmCallPermits {
     private boolean rateRoom(long poolId, LlmCallPoolRepository.Admission pool, LlmCallClass callClass) {
         Integer requests = pool.getRequestsPerMinute();
         Long tokens = pool.getTokensPerMinute();
-        if (requests == null && tokens == null) return true;
+        Long input = pool.getInputTokensPerMinute();
+        Long output = pool.getOutputTokensPerMinute();
+        if (requests == null && tokens == null && input == null && output == null) return true;
         var used = rows.rates(poolId);
         long bound = tokenBound(pool);
         if (requests != null && used.getRequests() >= requests) return false;
-        if (tokens != null && used.getTokens() > tokens - bound) return false;
+        // An output bucket counts tokens as a model writes them, so a call needs no room in it before it starts.
+        if (!fits(tokens, used.getTokens(), bound)
+                || !fits(input, used.getInputTokens(), bound)
+                || !fits(output, used.getOutputTokens(), 0)) return false;
         if (callClass.interactive()) return true;
         if (requests != null && used.getBackgroundRequests() >= backgroundShare(requests, pool, 1)) return false;
-        return tokens == null || used.getBackgroundTokens() <= backgroundShare(tokens, pool, bound) - bound;
+        return fitsBackground(tokens, used.getBackgroundTokens(), pool, bound)
+                && fitsBackground(input, used.getBackgroundInputTokens(), pool, bound)
+                && fitsBackground(output, used.getBackgroundOutputTokens(), pool, 0);
+    }
+
+    private static boolean fits(@Nullable Long budget, long used, long bound) {
+        return budget == null || used <= budget - bound;
+    }
+
+    private static boolean fitsBackground(
+            @Nullable Long budget, long used, LlmCallPoolRepository.Admission pool, long bound) {
+        return budget == null || used <= backgroundShare(budget, pool, bound) - bound;
     }
 
     /** Background calls get the rate's share that the limit gives them, and always at least one call. */
@@ -547,6 +566,46 @@ public class LlmCallPermits {
         if (!applied) return null;
         meters.pool(permit.pool).coolingFor(millis);
         return pause;
+    }
+
+    /**
+     * The head of a served response. When the provider's own headers say that a bucket is empty, every caller pauses
+     * briefly. The limit stays: nothing was refused. This runs on the transport's event loop, so the row is written beside
+     * it, and the tenant rule of a refusal applies.
+     */
+    public void served(Permit permit, HttpHeaders headers, boolean instanceCredential) {
+        var reached = RateLimitHeaders.reached(headers, Instant.now());
+        if (reached == null) return;
+        long millis =
+                Math.min(reached.pause().toMillis(), properties.maxCooldown().toMillis());
+        var unused = Thread.ofVirtual().name("llm-bucket-reached").start(() -> {
+            try {
+                boolean applied = Boolean.TRUE.equals(transactions.execute(status -> {
+                    var pool = pools.lockAdmission(permit.poolId).orElse(null);
+                    if (pool == null || (!instanceCredential && !pool.getDedicated())) return false;
+                    pools.coolDown(permit.poolId, millis);
+                    return true;
+                }));
+                if (!applied) return;
+                meters.pool(permit.pool).bucketReached(reached.bucket());
+                meters.pool(permit.pool).coolingFor(millis);
+            } catch (RuntimeException failed) {
+                log.warn(
+                        "Provider bucket pause not recorded: pool={}, error={}",
+                        permit.pool,
+                        failed.getClass().getSimpleName());
+            }
+        });
+    }
+
+    /** OpenAI and Anthropic answer 429 with these codes when an account has no quota left, which no wait mends. */
+    private static final List<String> SPENT_ACCOUNT = List.of("insufficient_quota", "enforced_spend_limit_reached");
+
+    /** Whether a refusal's body says that the account has no quota left, which is no answer about capacity. */
+    public static boolean spentAccount(byte @Nullable [] body) {
+        if (body == null) return false;
+        String answer = new String(body, StandardCharsets.UTF_8);
+        return SPENT_ACCOUNT.stream().anyMatch(answer::contains);
     }
 
     /** Whether a provider's status says it serves too many calls. */
@@ -741,6 +800,9 @@ public class LlmCallPermits {
         /** The limit's mark when the call started: an answer about an older limit says nothing about this one. */
         private final @Nullable Long throttleMark;
 
+        private volatile long reportedInputTokens = -1;
+        private volatile long reportedOutputTokens = -1;
+
         private Permit(UUID id, Waiter waiter, @Nullable Long throttleMark) {
             this.id = id;
             this.poolId = waiter.poolId;
@@ -774,6 +836,12 @@ public class LlmCallPermits {
         /** The tokens that the provider reported for this call. */
         public void tokens(ProxyTokenUsage usage) {
             meters.pool(pool).tokens(callClass, usage);
+        }
+
+        /** The whole usage of a call that ended on its own, which replaces its debit when the permit closes. */
+        public void settled(ProxyTokenUsage usage, LlmApiProtocol protocol) {
+            reportedInputTokens = usage.rateInputTokens(protocol);
+            reportedOutputTokens = usage.outputTokens();
         }
 
         /** The provider's answer never reached the caller, because the call asks again instead. */
@@ -819,6 +887,8 @@ public class LlmCallPermits {
                 Boolean freed = transactions.execute(status -> {
                     // First, in the order every grant takes these locks.
                     if (served) learn(this);
+                    if (reportedInputTokens >= 0)
+                        rows.settleTokens(id, workerId, reportedInputTokens, reportedOutputTokens);
                     return releaseRow(id, poolId);
                 });
                 pendingRelease.remove(id);

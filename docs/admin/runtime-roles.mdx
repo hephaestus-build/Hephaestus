@@ -596,7 +596,7 @@ The call asks the provider again after the pause. A conversation call waits up t
 The refusal reaches the caller as the provider's own answer, with its status, in these cases:
 
 - The provider asks for a longer pause than the call can wait.
-- The answer says that the account has no quota left (`insufficient_quota`).
+- The answer says that the account has no quota left (`insufficient_quota` or `enforced_spend_limit_reached`).
 - The answer is a 503 without `Retry-After`, which can be an outage. The connection's breaker also counts it.
 - A workspace-controlled credential was refused in a shared pool.
 
@@ -643,7 +643,10 @@ Each ten minutes of waiting offsets one origin priority step, so old backfill ca
 
 The pool also accounts for request and token rates across workers.
 Each physical request, including a protocol retry, consumes a rate debit.
-A configured per-call token bound reserves the provider's maximum input-plus-output charge.
+
+A configured per-call token bound reserves the provider's maximum input-plus-output charge on the pool's combined and input token rates.
+An output token rate has no reservation, because providers count output as the model writes it.
+When a call ends, the usage that its provider reported replaces that bound.
 The reservation remains conservative when usage is absent or the call is cancelled.
 Closed calls retain their debit for a full minute after closure.
 Background calls keep their share of the limit in the rate account too, and at least one call.

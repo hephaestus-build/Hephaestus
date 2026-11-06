@@ -26,6 +26,7 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -76,9 +77,6 @@ class LlmProxyService {
 
     /** How long any other call can. The caller's own retries come on top, and its failure must end the attempt in time. */
     static final Duration REVIEW_ABSORB_WINDOW = Duration.ofMinutes(2);
-
-    /** OpenAI answers 429 with this code when an account has no quota left, which no wait mends. */
-    private static final String SPENT_ACCOUNT = "insufficient_quota";
 
     private static final String AI_CHOICE_REFUSED = "Your AI choice no longer permits this model in this workspace.";
 
@@ -330,15 +328,13 @@ class LlmProxyService {
     }
 
     /**
-     * Whether a provider's refusal can wait: nothing went to the caller, it is a limit and not a spent account, and the
-     * provider's own pause ends in time. A 503 without {@code Retry-After} may be an outage, which the caller and the
+     * Whether a provider's refusal can wait: nothing went to the caller, and the provider's own pause ends in time. A 503 without {@code Retry-After} may be an outage, which the caller and the
      * connection's breaker must hear at once.
      */
     private static boolean absorbs(UpstreamResult upstream, Duration asked, Instant absorbUntil) {
         byte[] body = upstream.body();
         if (upstream.streamOutcome() != null || body == null) return false;
         if (upstream.status() == 503 && RetryAfter.parse(upstream.headers(), Instant.now()) == null) return false;
-        if (new String(body, StandardCharsets.UTF_8).contains(SPENT_ACCOUNT)) return false;
         return !Instant.now().plus(asked).isAfter(absorbUntil);
     }
 
@@ -501,15 +497,16 @@ class LlmProxyService {
             }
             span.tag("gen_ai.request.model", credential.upstreamModelId());
             boolean reviewStream = practiceScript == null && requestsStream(prepared.body());
+            boolean instanceCredential = routing.connectionScope() == UsageFundingSource.INSTANCE;
             // A review's stream runs until the attempt's deadline; these bounds free a silent provider's call sooner.
             Exchange exchange = new Exchange(
                     upstreamUri,
                     buildUpstreamHeaders(incomingHeaders, credential),
                     attempt.sourceType() == UsageSourceType.MENTOR_TURN || reviewStream ? silenceBounds : null,
                     Mono.firstWithSignal(call.cancelled(), poolPermit.revoked()),
-                    transports);
+                    transports,
+                    headers -> callPermits.served(poolPermit, headers, instanceCredential));
             ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, protocol);
-            boolean instanceCredential = routing.connectionScope() == UsageFundingSource.INSTANCE;
             tap.onFirstContent(waited -> callPermits.firstToken(poolPermit, waited, instanceCredential));
             // Both requests below share the attempt's one deadline; the second one does not get a new window.
             Instant deadline = routing.workDeadline();
@@ -624,7 +621,8 @@ class LlmProxyService {
                         || (silence != null && tap.sinceSent() >= silence.idle().toNanos());
                 callPermits.unanswered(poolPermit, stoppedAnswering, tap.sinceSent(), instanceCredential);
             }
-            if (LlmCallPermits.throttles(upstream.status())) {
+            // A spent account says nothing about capacity, so it slows no other call and leaves the limit alone.
+            if (LlmCallPermits.throttles(upstream.status()) && !LlmCallPermits.spentAccount(upstream.body())) {
                 Duration asked =
                         callPermits.throttled(poolPermit, upstream.status(), upstream.headers(), instanceCredential);
                 if (asked != null && !call.isCancelled() && absorbs(upstream, asked, absorbUntil)) {
@@ -656,7 +654,16 @@ class LlmProxyService {
             var outcome = upstream.streamOutcome();
             if (outcome != null)
                 return settleStream(
-                        routing, attempt, practiceScript, span, upstream.status(), outcome, tap, call, poolPermit);
+                        routing,
+                        attempt,
+                        practiceScript,
+                        span,
+                        upstream.status(),
+                        outcome,
+                        tap,
+                        call,
+                        poolPermit,
+                        protocol);
             boolean served = upstream.status() >= 200 && upstream.status() < 300;
             if (!served) {
                 call.failed(new MentorTurn.FailedCall(UPSTREAM_STATUS, upstream.status()));
@@ -667,7 +674,10 @@ class LlmProxyService {
             if (upstream.body() != null && served) {
                 ProxyTokenUsage usage = accounting.recordUsage(attempt, practiceScript, protocol, upstream.body());
                 tagUsage(span, usage);
-                if (usage != null) poolPermit.tokens(usage);
+                if (usage != null) {
+                    poolPermit.tokens(usage);
+                    poolPermit.settled(usage, protocol);
+                }
             }
             return ResponseEntity.status(upstream.status())
                     .headers(upstream.headers())
@@ -690,7 +700,8 @@ class LlmProxyService {
             ProxyStreamingUtils.StreamOutcome outcome,
             ProxyStreamUsageTap tap,
             ProxyCallsInFlight.Call call,
-            LlmCallPermits.Permit poolPermit) {
+            LlmCallPermits.Permit poolPermit,
+            LlmApiProtocol protocol) {
         boolean served = status >= 200 && status < 300;
         if (!served) {
             call.failed(new MentorTurn.FailedCall(UPSTREAM_STATUS, status));
@@ -717,7 +728,11 @@ class LlmProxyService {
                 ProxyTokenUsage usage = tap.observed();
                 accounting.recordUsage(attempt, practiceScript, usage);
                 tagUsage(span, usage);
-                if (usage != null) poolPermit.tokens(usage);
+                if (usage != null) {
+                    poolPermit.tokens(usage);
+                    // What a cut stream reported is less than the provider counts, so it keeps its bound.
+                    if (outcome == ProxyStreamingUtils.StreamOutcome.COMPLETED) poolPermit.settled(usage, protocol);
+                }
             }
         }
         return null;
@@ -750,13 +765,15 @@ class LlmProxyService {
      * @param bounds the silence the call is cut after; {@code null} for the client's own read bound, whose timeout is a
      *     plain upstream failure
      * @param cancelled completes when the attempt's end cancels the call
+     * @param served takes the head of a served response, on the transport's event loop
      */
     private record Exchange(
             URI uri,
             HttpHeaders headers,
             @Nullable Bounds bounds,
             Mono<Void> cancelled,
-            ProxyTransportClosure transports) {}
+            ProxyTransportClosure transports,
+            Consumer<HttpHeaders> served) {}
 
     /**
      * One upstream exchange, run on this request thread, which alone writes the servlet response. With a work deadline,
@@ -803,6 +820,9 @@ class LlmProxyService {
                 .exchangeToFlux(upstream -> {
                     answered.set(true);
                     tap.answered(upstream.statusCode().is2xxSuccessful());
+                    // A stream's end comes minutes later, when these numbers are old.
+                    if (upstream.statusCode().is2xxSuccessful())
+                        exchange.served().accept(upstream.headers().asHttpHeaders());
                     // No cap on a stream's body: it would cut a conversation answer that keeps writing, and the
                     // exchange's
                     // limit bounds every call.

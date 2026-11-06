@@ -107,6 +107,16 @@ public class LlmCallPool {
     @Column(name = "tokens_per_minute")
     private Long tokensPerMinute;
 
+    /** A provider's own bucket for input tokens, as Anthropic has. */
+    @Nullable
+    @Column(name = "input_tokens_per_minute")
+    private Long inputTokensPerMinute;
+
+    /** A provider's own bucket for output tokens, as Anthropic has. */
+    @Nullable
+    @Column(name = "output_tokens_per_minute")
+    private Long outputTokensPerMinute;
+
     /** Conservative input-plus-output bound for one call, certified against the provider model's context limit. */
     @Nullable
     @Column(name = "tokens_per_call")

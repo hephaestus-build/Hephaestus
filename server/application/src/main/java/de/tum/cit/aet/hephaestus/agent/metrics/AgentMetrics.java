@@ -49,6 +49,7 @@ public final class AgentMetrics {
     public static final String LLM_POOL_LIMIT_DECREASES = "llm.pool.limit.decreases";
     public static final String LLM_POOL_PERMITS_GRANTED = "llm.pool.permits.granted";
     public static final String LLM_POOL_UPSTREAM_ABSORBED = "llm.pool.upstream.absorbed";
+    public static final String LLM_POOL_UPSTREAM_BUCKET_REACHED = "llm.pool.upstream.bucket_reached";
     public static final String LLM_POOL_WAITERS = "llm.pool.waiters";
     public static final String LLM_POOL_LEASE_RENEWAL_FAILURES = "llm.pool.lease.renewal.failures";
     public static final String LLM_POOL_PERMITS_EXPIRED = "llm.pool.permits.expired";
