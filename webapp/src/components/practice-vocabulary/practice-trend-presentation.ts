@@ -39,8 +39,8 @@ export const GROUP_TREND_EXPLAINED =
 
 /**
  * The comparison sentence a trend's tooltip ends with: the practice's own counts where the trend has
- * them, and what is still missing where there is no
- * direction yet (nothing where that is unknown). No day spans and no practice coverage: the tooltip stays two short sentences.
+ * them, and what is still missing where there is no direction yet (nothing where that is unknown).
+ * No day spans and no practice coverage: the tooltip stays two short sentences.
  */
 export function trendComparison(
 	direction: TrendDirection,

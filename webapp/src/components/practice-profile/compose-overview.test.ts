@@ -412,3 +412,15 @@ it.each(["constructor", "toString", "FUTURE_DIRECTION"])(
 		expect(plainBullets(sentences.a)).toBe("Now shows a new trend.");
 	},
 );
+
+it.each(["constructor", "toString", "FUTURE_STANDING"])(
+	"keeps an unrecognized standing %s neutral",
+	(to) => {
+		const sentences = practiceSentences({
+			groupSlug: "g",
+			groupName: "G",
+			changes: [change("STANDING_MOVED", "a", "A", { from: "MIXED", to, evidence: [] })],
+		});
+		expect(plainBullets(sentences.a)).toBe("Your standing is now a new standing.");
+	},
+);

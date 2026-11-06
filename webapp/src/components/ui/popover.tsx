@@ -1,7 +1,7 @@
 /**
- * ⚠️ Diverges from the shadcn registry.
- * Keep the fade motion option for TipPopover when re-vendoring. Its short opacity transition
- * keeps tips stable as a reader moves between them and respects reduced motion.
+ * ⚠️ Diverges from the shadcn registry. Preserve these when re-vendoring with `vp exec shadcn add popover`:
+ * 1. Fixed positioning keeps panels aligned inside drawers (`overlay-reflow.stories.tsx`).
+ * 2. TipPopover's fade option uses a 100 ms opacity fade without slide or zoom.
  */
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import type * as React from "react";

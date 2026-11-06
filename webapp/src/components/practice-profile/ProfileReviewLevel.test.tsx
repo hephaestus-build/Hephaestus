@@ -13,7 +13,12 @@ const providers = new Map<string, ProfileReviewDetail["review"]["item"]["provide
 	["scm.pull_request", "GITLAB"],
 ]);
 
-function reviewOf(kind: string, label: string, url: string | null) {
+function reviewOf(
+	kind: string,
+	label: string,
+	url: string | null,
+	title: string | null = "Architecture notes",
+) {
 	const detail = {
 		...openProfileReviewDetail,
 		results: [],
@@ -27,7 +32,7 @@ function reviewOf(kind: string, label: string, url: string | null) {
 				container:
 					kind === "scm.pull_request" ? openProfileReviewDetail.review.item.container : null,
 				label,
-				title: "Architecture notes",
+				title,
 				url,
 			},
 		},
@@ -49,7 +54,7 @@ function reviewOf(kind: string, label: string, url: string | null) {
 			)}
 		</InLevelStack>,
 	);
-	return screen.getByRole("heading", { name: /Architecture notes/u });
+	return screen.getByRole("heading", { level: 2 });
 }
 
 it.each(["docs.document", "chat.message"])(
@@ -76,4 +81,9 @@ it("keeps the provider number as the link for numbered work", () => {
 	expect(within(heading).getByRole("link", { name: /^!12/u }).getAttribute("href")).toBe(
 		"https://example.com/merge_requests/12",
 	);
+});
+
+it("names untitled numbered work without the link's new-tab instruction", () => {
+	reviewOf("scm.pull_request", "!12", "https://example.com/merge_requests/12", null);
+	screen.getByRole("dialog", { name: "Merge request !12" });
 });

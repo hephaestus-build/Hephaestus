@@ -75,7 +75,7 @@ const rank = (event: ProfileEvent) => PRECEDENCE.indexOf(event.kind);
 const SENTENCE_ORDER: readonly ChangeKind[] = ["reset", "resolved", "down", "up", "first", "trend"];
 
 /** The registries' words, keyed by the enum values the wire carries. */
-const STANDING_LABELS: Record<string, string | undefined> = Object.fromEntries(
+const STANDING_LABELS = new Map(
 	Object.entries(PRACTICE_GROUP_STANDING_DEFS).map(([value, def]) => [value, def.label]),
 );
 /** Quote the chip's plain words so one registry owns each direction's visible name. */
@@ -85,7 +85,7 @@ const TREND_LABELS = new Map(
 
 /** The registry's word for a standing or a trend, which the wire types as a bare string. */
 const standingLabel = (value: string | null) =>
-	value === null ? undefined : STANDING_LABELS[value];
+	value === null ? undefined : STANDING_LABELS.get(value);
 const trendLabel = (value: string | null) => (value === null ? undefined : TREND_LABELS.get(value));
 
 function changeEvent(change: ProfileChange): ChangeEvent | undefined {

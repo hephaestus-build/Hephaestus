@@ -193,7 +193,7 @@ function ReviewHead({ path, detail, positionOnWork, totalOnWork }: ReviewHeadPro
 	// title as GitHub heads a pull request; a kind without one, such as a document, has none.
 	const number = item !== undefined && /^[#!]\d+$/u.test(item.label) ? item.label : undefined;
 	const title = headTitle(item, number);
-	const unnumberedTitle = number === undefined ? title : undefined;
+	const fallbackTitle = number === undefined ? title : `${title} ${number}`;
 	// Over the title: the repository, or the kind where the work names none.
 	const where = hasText(item?.container)
 		? item.container
@@ -212,7 +212,7 @@ function ReviewHead({ path, detail, positionOnWork, totalOnWork }: ReviewHeadPro
 				aria-label={
 					item !== undefined && number !== undefined && hasText(item.title)
 						? `${item.title}, ${itemKindNoun(item.kind, 1, item.provider)} ${number}`
-						: unnumberedTitle
+						: fallbackTitle
 				}
 				className="text-2xl font-semibold tracking-tight break-words"
 			>
