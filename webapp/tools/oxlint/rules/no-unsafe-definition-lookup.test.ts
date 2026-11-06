@@ -29,7 +29,7 @@ ruleTester.run("no-unsafe-definition-lookup", noUnsafeDefinitionLookup, {
 		{ code: "OUTCOME_DEFS[outcome];", errors: [{ messageId: "unsafe" }] },
 		{
 			code: "OUTCOME_DEFS[result.outcome].label;",
-			filename: "src\\components\\results.tsx",
+			filename: String.raw`src\components\results.tsx`,
 			errors: [{ messageId: "unsafe" }],
 		},
 		{ code: "rows.map(row => OUTCOME_DEFS[row.outcome]);", errors: [{ messageId: "unsafe" }] },
