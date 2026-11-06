@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, screen } from "storybook/test";
 
+import { InfoTip } from "@/components/common/InfoTip";
 import { Button } from "@/components/ui/button";
 
 import { Section } from "./Section";
@@ -92,5 +93,16 @@ export const Foldable: Story = {
 		);
 		await userEvent.keyboard("{Enter}");
 		await expect(fold).toHaveAttribute("aria-expanded", "true");
+	},
+};
+
+/** The explanation stays outside the section heading and does not change its name. */
+export const WithInfo: Story = {
+	args: { info: <InfoTip label="About review guidance">What a review checks.</InfoTip> },
+	play: async ({ canvas, userEvent }) => {
+		await expect(canvas.getByRole("heading", { name: "Review guidance" })).toBeVisible();
+		await expect(canvas.getByRole("region", { name: "Review guidance" })).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: "About review guidance" }));
+		await expect(await screen.findByText("What a review checks.")).toBeVisible();
 	},
 };

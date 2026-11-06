@@ -283,8 +283,8 @@ describe("group sentences", () => {
 			],
 		});
 		expect(sentences).toStrictEqual([
-			"A and C now show an increasing baseline.",
-			"B now shows a decreasing baseline.",
+			"A and C now show “Met more often”.",
+			"B now shows “Met less often”.",
 		]);
 	});
 
@@ -388,7 +388,7 @@ describe("practice sentences", () => {
 		// A first sighting names the work it was seen on, never the standing it landed at: that is
 		// the badge on the same row.
 		expect(plainBullets(sentences.first)).toBe("Seen for the first time on !1.");
-		expect(plainBullets(sentences.trend)).toBe("Now shows a decreasing baseline.");
+		expect(plainBullets(sentences.trend)).toBe("Now shows “Met less often”.");
 	});
 
 	it("say a practice was seen for the first time even when the wire names no work", () => {
@@ -400,3 +400,15 @@ describe("practice sentences", () => {
 		expect(plainBullets(sentences.first)).toBe("Seen for the first time.");
 	});
 });
+
+it.each(["constructor", "toString", "FUTURE_DIRECTION"])(
+	"keeps an unrecognized trend %s neutral",
+	(to) => {
+		const sentences = practiceSentences({
+			groupSlug: "g",
+			groupName: "G",
+			changes: [change("TREND_TURNED", "a", "A", { to, evidence: [] })],
+		});
+		expect(plainBullets(sentences.a)).toBe("Now shows a new trend.");
+	},
+);

@@ -211,11 +211,17 @@ function ReviewHead({ path, detail, positionOnWork, totalOnWork }: ReviewHeadPro
 				aria-label={
 					item !== undefined && number !== undefined && hasText(item.title)
 						? `${item.title}, ${itemKindNoun(item.kind, 1, item.provider)} ${number}`
-						: undefined
+						: title
 				}
 				className="text-2xl font-semibold tracking-tight break-words"
 			>
-				{title}
+				{number === undefined && hasText(item?.url) ? (
+					<InlineLink href={item.url} external>
+						{title}
+					</InlineLink>
+				) : (
+					title
+				)}
 				{number !== undefined && (
 					<>
 						{" "}

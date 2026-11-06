@@ -39,7 +39,7 @@ export const WithoutSupport: Story = {
 		await userEvent.hover(canvas.getByRole("button"));
 		const tooltip = await settledPopup();
 		await expect(tooltip).toHaveTextContent(
-			"A trend needs eight reviewed pieces of work. So far there are fewer.",
+			"A trend needs more reviewed work. So far there is too little.",
 		);
 	},
 };

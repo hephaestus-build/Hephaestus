@@ -1,3 +1,8 @@
+/**
+ * ⚠️ Diverges from the shadcn registry.
+ * Keep the fade motion option for TipPopover when re-vendoring. Its short opacity transition
+ * keeps tips stable as a reader moves between them and respects reduced motion.
+ */
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import type * as React from "react";
 

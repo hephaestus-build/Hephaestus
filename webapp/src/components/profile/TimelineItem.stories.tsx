@@ -3,7 +3,7 @@ import { expect } from "storybook/test";
 
 import { daysBefore } from "@/stories/story-clock";
 
-import { TimelineItem } from "./TimelineItem";
+import { TimelineItem, TimelineItemSkeleton } from "./TimelineItem";
 
 const meta = {
 	component: TimelineItem,
@@ -154,5 +154,60 @@ export const DotOnTheCardHead: Story = {
 			throw new Error("The timeline row lost its label.");
 		}
 		await expect(Math.abs(middle(dotBox).y - textMiddle(label))).toBeLessThanOrEqual(1);
+	},
+};
+
+/** Loading rows keep the same uninterrupted rail as the reviewed work above them. */
+export const LoadingRows: Story = {
+	args: { at: new Date(daysBefore(1)), label: "1 day ago", children: row("Reviewed work.") },
+	render: (args) => (
+		<>
+			<TimelineItem {...args} />
+			<TimelineItemSkeleton />
+			<TimelineItemSkeleton />
+		</>
+	),
+	play: async ({ canvasElement }) => {
+		const rows = [...canvasElement.querySelectorAll("li")];
+		await expect(rows).toHaveLength(3);
+		for (const index of [1, 2]) {
+			const item = rows[index];
+			const before = rows[index - 1];
+			const rail = item?.querySelector("[data-timeline-rail-in]");
+			const dot = item?.querySelector("[data-timeline-dot]");
+			if (rail == null || dot == null || before === undefined) {
+				throw new Error("A loading timeline row lost its rail or dot.");
+			}
+			await expect(rail).toBeVisible();
+			const line = rail.getBoundingClientRect();
+			const point = dot.getBoundingClientRect();
+			await expect(Math.abs(line.top - before.getBoundingClientRect().bottom)).toBeLessThanOrEqual(
+				1,
+			);
+			await expect(Math.abs(line.bottom - middle(point).y)).toBeLessThanOrEqual(1);
+			await expect(Math.abs(middle(line).x - middle(point).x)).toBeLessThanOrEqual(0.5);
+		}
+	},
+};
+
+export const LoadingRowsReflow: Story = {
+	...LoadingRows,
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+};
+
+export const FirstPageLoading: Story = {
+	args: LoadingRows.args,
+	render: () => (
+		<>
+			<TimelineItemSkeleton />
+			<TimelineItemSkeleton />
+		</>
+	),
+	play: async ({ canvasElement }) => {
+		const rail = canvasElement.querySelector("[data-timeline-rail-in]");
+		if (rail === null) {
+			throw new Error("The first loading row lost its rail.");
+		}
+		await expect(rail).not.toBeVisible();
 	},
 };

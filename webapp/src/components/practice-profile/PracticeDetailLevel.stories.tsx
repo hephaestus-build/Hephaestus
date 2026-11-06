@@ -881,9 +881,9 @@ export const NotReviewed: Story = {
 		await expect(screen.queryByText(/Read from|counts most/u)).not.toBeInTheDocument();
 		await expect(screen.queryByText(/pieces? of work$/u)).not.toBeInTheDocument();
 		// The trend chip says what a trend needs, in plain words.
-		const trend = screen.getByRole("button", { name: /No baseline yet/u });
+		const trend = screen.getByRole("button", { name: /Not enough to compare/u });
 		await expect(trend).toHaveAccessibleDescription(
-			/^A trend needs eight reviewed pieces of work\. So far there are fewer\./u,
+			/^A trend needs more reviewed work\. So far there is too little\./u,
 		);
 	},
 };
