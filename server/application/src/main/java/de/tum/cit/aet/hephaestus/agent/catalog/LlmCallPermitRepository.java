@@ -61,8 +61,11 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             """, nativeQuery = true)
     Optional<Boolean> hasBackgroundWaiters(@Param("poolId") long poolId, @Param("staleSeconds") long staleSeconds);
 
-    /** Reclaim expired owners without refunding calls that already reached the provider. */
-    @Modifying
+    /**
+     * Reclaim expired owners without refunding calls that already reached the provider.
+     *
+     * @return the permits whose owner stopped renewing them while their call was in flight
+     */
     @Query(value = """
             WITH expired AS (
               UPDATE llm_call_permit SET state='CLOSED',closed_at=renewed_at+make_interval(secs => :staleSeconds)
@@ -70,11 +73,14 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
                 AND renewed_at < clock_timestamp()-make_interval(secs => :staleSeconds)
               RETURNING id
             )
-            DELETE FROM llm_call_permit WHERE pool_id=:poolId AND
-              ((state='CLOSED' AND closed_at < clock_timestamp()-interval '1 minute') OR
-               (state='WAITING' AND renewed_at < clock_timestamp()-make_interval(secs => :staleSeconds)))
+            , deleted AS (
+              DELETE FROM llm_call_permit WHERE pool_id=:poolId AND
+                ((state='CLOSED' AND closed_at < clock_timestamp()-interval '1 minute') OR
+                 (state='WAITING' AND renewed_at < clock_timestamp()-make_interval(secs => :staleSeconds)))
+            )
+            SELECT count(*) FROM expired
             """, nativeQuery = true)
-    void prune(@Param("poolId") long poolId, @Param("staleSeconds") long staleSeconds);
+    long prune(@Param("poolId") long poolId, @Param("staleSeconds") long staleSeconds);
 
     interface Head {
         UUID getId();

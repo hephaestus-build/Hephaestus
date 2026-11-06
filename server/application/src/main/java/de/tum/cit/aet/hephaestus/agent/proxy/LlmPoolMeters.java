@@ -61,6 +61,22 @@ final class LlmPoolMeters {
     static final List<String> CALL_OUTCOMES =
             List.of("completed", "length", "refused", "unanswered", "error", "stalled", "cancelled");
 
+    /** A conversation's call should wait for seconds at most; a review's call can wait for minutes. */
+    private static final Duration[] WAIT_BOUNDS = {
+        Duration.ofMillis(100),
+        Duration.ofMillis(500),
+        Duration.ofSeconds(1),
+        Duration.ofSeconds(2),
+        Duration.ofSeconds(5),
+        Duration.ofSeconds(10),
+        Duration.ofSeconds(30),
+        Duration.ofMinutes(1),
+        Duration.ofMinutes(2),
+        Duration.ofMinutes(5),
+        Duration.ofMinutes(10),
+        Duration.ofMinutes(30)
+    };
+
     /** The outcomes that the provider stated, which a stream without content keeps instead of {@code unanswered}. */
     static final Set<String> EXPLICIT_OUTCOMES = Set.of("refused", "length", "error");
 
@@ -150,6 +166,7 @@ final class LlmPoolMeters {
         for (int status : THROTTLE_STATUSES) throttledCounter(slug, status);
         for (String cause : DECREASE_CAUSES) limitDecreasesCounter(slug, cause);
         absorbedCounter(slug);
+        expiredCounter(slug);
         for (LlmCallClass callClass : LlmCallClass.values()) {
             firstTokenTimer(slug, callClass);
             operationTimer(slug, callClass);
@@ -262,7 +279,14 @@ final class LlmPoolMeters {
                 .tag("pool", slug)
                 .tag("class", callClass.tag())
                 .tag("reason", reason)
-                .publishPercentileHistogram()
+                .serviceLevelObjectives(WAIT_BOUNDS)
+                .register(registry);
+    }
+
+    private Counter expiredCounter(String slug) {
+        return Counter.builder(AgentMetrics.LLM_POOL_PERMITS_EXPIRED)
+                .description("Permits whose worker stopped renewing them while their call was in flight")
+                .tag("pool", slug)
                 .register(registry);
     }
 
@@ -360,6 +384,10 @@ final class LlmPoolMeters {
 
         void absorbed() {
             absorbedCounter(slug).increment();
+        }
+
+        void expired(long permits) {
+            expiredCounter(slug).increment((double) permits);
         }
 
         /** Records that the pool is in a cooldown for {@code millis} from now, as this worker knows it. */

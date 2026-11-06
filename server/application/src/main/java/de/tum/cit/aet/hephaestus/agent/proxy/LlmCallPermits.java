@@ -268,14 +268,15 @@ public class LlmCallPermits {
             Round round = Objects.requireNonNull(transactions.execute(status -> {
                 var pool = pools.lockAdmission(poolId)
                         .orElseThrow(() -> new IllegalStateException("Configured call pool is unavailable"));
-                rows.prune(poolId, properties.permitLease().toSeconds());
+                long expired = rows.prune(poolId, properties.permitLease().toSeconds());
                 grantWhileRoom(poolId, pool, true);
                 grantWhileRoom(poolId, pool, false);
                 Map<UUID, Boolean> queued = new HashMap<>();
                 for (var row : rows.findQueued(workerId, mine.keySet()))
                     queued.put(row.getId(), row.getState().equals("ACTIVE"));
-                return new Round(queued, pool.getThrottleMark(), pool.getCooldownMillis() > 0);
+                return new Round(queued, pool.getThrottleMark(), pool.getCooldownMillis() > 0, pool.getSlug(), expired);
             }));
+            if (round.expired() > 0) meters.pool(round.slug()).expired(round.expired());
             mine.forEach((id, waiter) -> {
                 Boolean active = round.queued().get(id);
                 if (active == null)
@@ -585,7 +586,7 @@ public class LlmCallPermits {
 
     /** What one admission round found: whether each of this worker's requests is granted, the limit's mark, and a pause. */
     private record Round(
-            Map<UUID, Boolean> queued, @Nullable Long throttleMark, boolean cooling) {}
+            Map<UUID, Boolean> queued, @Nullable Long throttleMark, boolean cooling, String slug, long expired) {}
 
     /** This worker's admission rounds of one pool. */
     private static final class Admissions {

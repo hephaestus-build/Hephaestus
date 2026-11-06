@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.PrivacyJobMetrics.Outcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
 class PrivacyJobMetricsTest extends BaseUnitTest {
@@ -35,6 +36,17 @@ class PrivacyJobMetricsTest extends BaseUnitTest {
                         .counter()
                         .count())
                 .isEqualTo(3);
+    }
+
+    @Test
+    void reportsEachJobAtZeroBeforeItsFirstRun() {
+        for (Job job : Job.values()) {
+            assertThat(registry.get("privacy.job.completed")
+                            .tags("job", job.name().toLowerCase(Locale.ROOT), "outcome", "success")
+                            .counter()
+                            .count())
+                    .isZero();
+        }
     }
 
     @Test

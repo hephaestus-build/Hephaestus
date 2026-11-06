@@ -53,15 +53,20 @@ public class PrivacyJobMetrics {
 
     public PrivacyJobMetrics(MeterRegistry registry) {
         this.registry = registry;
+        // An alert sees a job that never ran only in a series that stays at zero.
+        for (Job job : Job.values()) for (Outcome outcome : Outcome.values()) completed(job, outcome);
     }
 
     public void record(Job job, Outcome outcome) {
-        Counter.builder(CoreMetrics.PRIVACY_JOB_COMPLETED)
+        completed(job, outcome).increment();
+    }
+
+    private Counter completed(Job job, Outcome outcome) {
+        return Counter.builder(CoreMetrics.PRIVACY_JOB_COMPLETED)
                 .description("Terminal privacy-job executions, tagged by bounded job and outcome values.")
                 .tag("job", job.tag)
                 .tag("outcome", outcome.tag)
-                .register(registry)
-                .increment();
+                .register(registry);
     }
 
     public void recordAffected(Job job, long affected) {

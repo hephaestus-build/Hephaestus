@@ -50,6 +50,7 @@ public final class AgentMetrics {
     public static final String LLM_POOL_UPSTREAM_ABSORBED = "llm.pool.upstream.absorbed";
     public static final String LLM_POOL_WAITERS = "llm.pool.waiters";
     public static final String LLM_POOL_LEASE_RENEWAL_FAILURES = "llm.pool.lease.renewal.failures";
+    public static final String LLM_POOL_PERMITS_EXPIRED = "llm.pool.permits.expired";
     public static final String LLM_POOL_PERMIT_ABANDONED = "llm.pool.permit.abandoned";
     public static final String LLM_POOL_PERMIT_WAIT = "llm.pool.permit.wait";
     public static final String LLM_POOL_PERMITS_ACTIVE = "llm.pool.permits.active";

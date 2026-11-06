@@ -91,10 +91,7 @@ class LlmUsageRetentionSweeperTest extends BaseUnitTest {
         assertThat(budgeted.sweepNow()).isEqualTo(BATCH_SIZE);
 
         assertThat(counter("privacy.job.completed", "outcome", "incomplete")).isEqualTo(1);
-        assertThat(registry.find("privacy.job.completed")
-                        .tags("job", "llm_usage_retention", "outcome", "success")
-                        .counter())
-                .isNull();
+        assertThat(counter("privacy.job.completed", "outcome", "success")).isZero();
     }
 
     @Test
