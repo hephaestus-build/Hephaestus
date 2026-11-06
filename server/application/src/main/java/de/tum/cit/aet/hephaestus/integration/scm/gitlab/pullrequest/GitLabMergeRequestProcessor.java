@@ -976,7 +976,17 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                     fetchedUpdatedAt);
             return stored;
         }
+        Instant lastWriteAt = existingOpt.map(PullRequest::getLastSyncAt).orElse(null);
+        Instant reviewsObservedAt =
+                existingOpt.map(PullRequest::getReviewersObservedAt).orElse(null);
+        if (reviewsObservedAt != null && (lastWriteAt == null || reviewsObservedAt.isAfter(lastWriteAt))) {
+            lastWriteAt = reviewsObservedAt;
+        }
+        boolean freshEqualRead = existingOpt.isPresent()
+                && ProviderStateVersion.acceptsEqualRead(
+                        fetchedUpdatedAt, existingOpt.get().getUpdatedAt(), context.observedAt(), lastWriteAt);
         boolean sameVersion = existingOpt.isPresent()
+                && !freshEqualRead
                 && ProviderStateVersion.cannotReplace(
                         fetchedUpdatedAt, existingOpt.get().getUpdatedAt());
         if (sameVersion

@@ -189,8 +189,9 @@ For these, the compare and the write are one step, also when a sync writes the s
   This rule applies to pull and merge requests, issues, comments, reviews, review comments, notes, diff notes and Outline documents.
 - An undated snapshot cannot replace a dated row.
 - Equal webhook versions keep the stored core fields, labels and assignees.
-  An authoritative issue sync can refresh that version if its request began after the stored write.
-  The request-start time must be later than `lastSyncAt`.
+  An authoritative issue sync or GitLab merge request sync can refresh an equal version.
+  Its request-start time must be later than `lastSyncAt`.
+  A GitLab merge request read must also start after its stored readiness read.
   The SQL upsert rejects strictly older versions when two inserts race before either row exists.
   A push can advance the head when its previous head matches the stored head.
   A sync can add readiness facts and closing references for that version and head.
