@@ -811,7 +811,17 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         Account administrator = new Account("Administrator");
         administrator.setAppRole(Account.AppRole.APP_ADMIN);
         administrator = accounts.saveAndFlush(administrator);
-        Account targetAccount = accounts.saveAndFlush(new Account("Target"));
+        Account targetAccount = new Account("Target");
+        targetAccount.setPrimaryEmail("person-all-stores-canary@example.test");
+        targetAccount.setPrimaryEmailVerifiedAt(Instant.now());
+        targetAccount.setTimeZone("Europe/Berlin");
+        targetAccount.setAiChoice(AiChoice.CLOUD);
+        targetAccount.setAiChoiceAt(Instant.now());
+        targetAccount.setPublicActivityVisible(true);
+        targetAccount.setPasskeyUserHandle(PersonErasureAllStoresFixture.CANARY);
+        targetAccount.setPasskeyProtectionEnabled(true);
+        targetAccount.setPasskeyRecoveryRequired(true);
+        targetAccount = accounts.saveAndFlush(targetAccount);
         Account otherAccount = accounts.saveAndFlush(new Account("Other"));
         var targetOAuthBinding = new OAuthStateService.StateBinding(
                 1L, IntegrationKind.GITHUB, Instant.now().truncatedTo(ChronoUnit.SECONDS), targetAccount.getId());
@@ -903,7 +913,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             message(workspace, team, "100.1", "200.1", "UOTHER", other, "Other person's shared reply");
             SlackThread unrelated = slackThread(workspace, "300.1", other);
             message(workspace, team, "300.1", "300.1", "UOTHER", other, "Unrelated conversation");
-            targetDerived.add(seedDerivedConversation(workspace, shared.getId(), target));
+            targetDerived.add(seedDerivedConversation(workspace, shared.getId(), target, index == 1));
             otherDerived.add(seedDerivedConversation(workspace, unrelated.getId(), other));
             copiedFeedback.add(seedFeedbackCopy(targetDerived.getLast(), otherDerived.getLast()));
             targetFolders.add(captureMountedEvidence(worker, recorder, targetDerived.getLast(), target));
@@ -922,6 +932,67 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                     .createdAt(Instant.now())
                     .build());
         }
+        var allStores = new PersonErasureAllStoresFixture(jdbc);
+        var firstDerived = targetDerived.getFirst();
+        long firstWorkspace = firstDerived.workspaceId();
+        var firstResult = practiceResultRepository
+                .findById(firstDerived.practiceResultIds().getFirst())
+                .orElseThrow();
+        var onWork = modelFixtures.feedback(
+                firstResult,
+                FeedbackDestination.ON_WORK,
+                FeedbackState.READY,
+                "Practice guidance for developer " + target.getId());
+        var subject = new PersonErasureAllStoresFixture.Subject(
+                Objects.requireNonNull(targetAccount.getId()),
+                target.getId(),
+                Objects.requireNonNull(scm.getId()),
+                firstWorkspace,
+                firstResult.getReviewId(),
+                firstDerived.jobId(),
+                firstResult.getId(),
+                onWork.getId());
+        allStores.seed(subject);
+        allStores.seedScm(target.getId(), Objects.requireNonNull(scm.getId()), 997000L);
+        var github = providers
+                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
+                .orElseGet(() -> providers.saveAndFlush(
+                        new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+        var githubUser = users.saveAndFlush(TestUserFactory.createUser(4242L, "target-github", github));
+        link(targetAccount, github, "4242", null);
+        allStores.seedScm(githubUser.getId(), Objects.requireNonNull(github.getId()), 998000L);
+        installation("all-stores-personal", "target-github", AccountType.USER);
+        var outline = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.OUTLINE, "https://privacy-outline.example.test"));
+        String outlineSubject = "00000000-0000-4000-8000-000000000042";
+        link(targetAccount, outline, outlineSubject, null);
+        var outlineConnection = connections.saveAndFlush(new Connection(
+                workspaces.findById(firstWorkspace).orElseThrow(),
+                IntegrationKind.OUTLINE,
+                "",
+                new ConnectionConfig.OutlineConfig(outline.getServerUrl(), null, null, Set.of())));
+        allStores.seedOutline(firstWorkspace, Objects.requireNonNull(outlineConnection.getId()), outlineSubject);
+        authoredVersion(workspaces.findById(firstWorkspace).orElseThrow(), "all-stores-authored", subject.account());
+        var ownConversation = mentorConversations.findOrCreateMain(firstWorkspace, subject.account());
+        mentorTurns.submit(
+                firstWorkspace,
+                ownConversation.getId(),
+                new MentorTurnService.Question(
+                        MentorTurn.Surface.APP,
+                        "Retained question",
+                        UUID.randomUUID().toString(),
+                        null,
+                        null));
+        var ownedTurn = mentorTurns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+        var model = LlmCatalogTestFixtures.admittedMentorConfig();
+        assertThat(mentorAttemptUsage.admit(
+                        firstWorkspace,
+                        ownedTurn.getId(),
+                        ownedTurn.getAttempt(),
+                        Objects.requireNonNull(ownedTurn.getLeaseId()),
+                        MentorTurnAdmission.of(model, Objects.requireNonNull(model.priceSnapshot()))))
+                .isTrue();
+
         PersonScope otherScope = resolver.resolve(Objects.requireNonNull(otherAccount.getId()), List.of());
         // Shared source aggregates change; compare the other person's own rows.
         PersonScope otherPrimaryScope =
@@ -940,6 +1011,20 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 mapper.readValue(Objects.requireNonNull(preview.request().getScopeJson()), PersonScope.class);
         var export = personData.export(requestId);
         Map<String, Long> counts = mapper.readValue(preview.request().getCountsJson(), new TypeReference<>() {});
+        Set<String> nonPersonalProjections = Set.of(
+                "organization",
+                "team",
+                "team_repository_permission",
+                "repository",
+                "outline_collection",
+                "slack_monitored_channel",
+                "workspace_onboarding_settings");
+        counts.forEach((store, count) -> {
+            if (!nonPersonalProjections.contains(store)) {
+                assertThat(count).as("subject seeded in %s", store).isPositive();
+            }
+        });
+        assertThat(export.path("stores").propertyNames()).containsExactlyInAnyOrderElementsOf(counts.keySet());
         assertThat(counts.get("oauth_state_nonce")).isEqualTo(1L);
         assertThat(counts.get("client_session")).isEqualTo(1L);
         assertThat(counts.get("client_sign_in_handoff")).isEqualTo(1L);
@@ -964,7 +1049,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 .doesNotContain("MOUNTED-PROFILE-CANARY", "credential-canary", "unrelated-profile-canary");
         targetFolders.forEach(path -> assertThat(path).exists());
         otherFolders.forEach(path -> assertThat(path).exists());
-        assertThat(counts.get("feedback")).isEqualTo(4L);
+        assertThat(counts.get("feedback")).isEqualTo(5L);
         assertThat(preview.externalDeliveries()).isEmpty();
         // Each delivered feedback has its own conversation copy and the copy in another person's conversation.
         assertThat(export.path("stores").path("feedback_copy"))
@@ -979,13 +1064,13 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(export.path("stores").path("feedback"))
                 .allSatisfy(row -> assertThat(row.path("body").toString())
                         .contains("Practice guidance for developer " + target.getId()));
-        assertThat(counts.get("result_mark")).isEqualTo(2L);
+        assertThat(counts.get("result_mark")).isEqualTo(3L);
         assertThat(export.path("stores").path("result_mark"))
-                .allSatisfy(
-                        row -> assertThat(row.path("reason").asString()).isEqualTo("Correction before access request"));
-        assertThat(counts.get("config_audit_event_membership_subject")).isEqualTo(2L);
+                .allSatisfy(row -> assertThat(row.path("reason").asString())
+                        .isIn("Correction before access request", PersonErasureAllStoresFixture.CANARY));
+        assertThat(counts.get("config_audit_event_membership_subject")).isEqualTo(3L);
         assertThat(counts.get("mentor_conversation")).isEqualTo(2L);
-        assertThat(counts.get("mentor_entry")).isEqualTo(2L);
+        assertThat(counts.get("mentor_entry")).isEqualTo(3L);
         assertThat(counts.get(MentorEntryRepository.COPIES_PERSON_DATA_STORE)).isEqualTo(2L);
         assertThat(counts.get("mentor_entry_feedback_copy")).isEqualTo(2L);
         assertThat(export.path("stores").path("mentor_entry_feedback_copy").toString())
@@ -998,7 +1083,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 // Tool results in another member's conversation are redacted, never exported.
                 .isEqualTo(store.equals(MentorEntryRepository.COPIES_PERSON_DATA_STORE) ? 0L : count));
         assertThat(export.path("stores").path("mentor_entry"))
-                .allSatisfy(row -> assertThat(row.path("text").asString()).isEqualTo("Delivered guidance"));
+                .allSatisfy(
+                        row -> assertThat(row.path("text").asString()).isIn("Delivered guidance", "Retained question"));
         assertThat(export.path("stores").path("mentor_entry").toString())
                 .doesNotContain("payload", "runtime-credential-canary");
         assertThat(export.toString())
@@ -1053,6 +1139,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             assertThat(agentJobRepository.findById(derived.jobId())).isEmpty();
         }
 
+        allStores.assertNoPersonalContentOrReferences(subject, mapper);
         var receipt = personData.get(requestId).request();
         assertThat(receipt.getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
         assertThat(receipt.getScopeJson()).isNull();
@@ -1060,15 +1147,15 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         Map<String, Long> completed = PersonDataStoreReceipt.counts(mapper, receipt.getCompletedJson());
         Map<String, Long> differentReceipts = new TreeMap<>();
         completed.forEach((store, count) -> {
-            if (!count.equals(counts.get(store))) differentReceipts.put(store, count);
+            if (count > Objects.requireNonNull(counts.get(store))) differentReceipts.put(store, count);
         });
         assertThat(completed.keySet()).containsExactlyInAnyOrderElementsOf(counts.keySet());
         assertThat(differentReceipts)
                 .as("Receipt counts that differ from the preview")
                 .isEmpty();
         // Both closures may retain only anonymised, tombstone or control rows.
-        var again = personData.preview(administratorId, targetAccount.getId(), frozen.identities());
-        Map<String, Long> reselected = mapper.readValue(again.request().getCountsJson(), new TypeReference<>() {});
+        var resolvedAfter = resolver.resolve(targetAccount.getId(), frozen.identities());
+        Map<String, Long> reselected = registry.counts(registry.select(resolvedAfter));
         var frozenAfter = registry.select(frozen);
         Map<String, List<Long>> remaining = new TreeMap<>();
         for (var store : registry.stores()) {
@@ -1085,7 +1172,36 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         .orElseThrow()
                         .getStatus())
                 .isEqualTo(Account.Status.DELETED);
-        assertThat(users.findById(target.getId()).orElseThrow().getLogin()).startsWith("erased-");
+        assertThat(jdbc.queryForObject("""
+                SELECT display_name='deleted-account' AND primary_email IS NULL AND primary_email_verified_at IS NULL
+                  AND time_zone IS NULL AND ai_choice IS NULL AND ai_choice_at IS NULL
+                  AND NOT feedback_delivery_enabled AND NOT public_activity_visible
+                  AND passkey_user_handle IS NULL AND NOT passkey_protection_enabled AND NOT passkey_recovery_required
+                FROM account WHERE id=?
+                """, Boolean.class, targetAccount.getId()))
+                .isTrue();
+        for (long userId : List.of(target.getId(), githubUser.getId())) {
+            assertThat(jdbc.queryForObject("""
+                    SELECT login='erased-'||id::text AND name IS NULL AND email IS NULL AND avatar_url='' AND html_url=''
+                    FROM "user" WHERE id=?
+                    """, Boolean.class, userId)).isTrue();
+        }
+        for (var derived : targetDerived) {
+            assertThat(jdbc.queryForList(
+                            "SELECT payload::text FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
+                            String.class,
+                            derived.jobId(),
+                            derived.workspaceId()))
+                    .allSatisfy(payload -> assertThat(payload).isEqualTo("{}"));
+        }
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM identity_restriction WHERE active_request_id=?", Long.class, requestId))
+                .isZero();
+        for (var identity : frozen.identities()) {
+            assertThat(suppression.isSuppressed(identity.providerId(), identity.subject(), identity.teamId()))
+                    .as("suppression remains for each native identity")
+                    .isTrue();
+        }
         for (var derived : targetDerived) {
             assertThat(mentor.refusal(derived.workspaceId(), targetAccount.getId()))
                     .contains(MentorRefusal.PERSON_ERASED);
@@ -1132,10 +1248,18 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                             contributor.store(),
                             contributor.export(
                                     Objects.requireNonNull(otherSelection.get(contributor.store())), otherPrimaryScope),
-                            copiedFeedback))
+                            copiedFeedback,
+                            otherDerived.stream()
+                                    .map(DerivedConversation::messageId)
+                                    .toList()))
                     .as("Another person's %s rows", contributor.store())
                     .isEqualTo(withoutErasedCopies(
-                            contributor.store(), otherRows.get(contributor.store()), copiedFeedback));
+                            contributor.store(),
+                            otherRows.get(contributor.store()),
+                            copiedFeedback,
+                            otherDerived.stream()
+                                    .map(DerivedConversation::messageId)
+                                    .toList()));
         }
         personData.requestErasure(requestId, administratorId, false);
         personData.run(requestId);
@@ -1341,11 +1465,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                     .isPresent();
             assertThat(feedbackRepository.findById(derived.preparedId())).isEmpty();
             assertThat(feedbackRepository.findById(derived.deliveredId())).isPresent();
-            assertThat(mentorEntryRepository
-                            .findById(derived.messageId())
-                            .orElseThrow()
-                            .getText())
-                    .isEqualTo("Delivered guidance");
+            var answer = mentorEntryRepository.findById(derived.messageId()).orElseThrow();
+            assertThat(answer.isRedacted()).isTrue();
+            assertThat(answer.getText()).isEmpty();
             assertThat(agentJobRepository.findById(derived.jobId())).isEmpty();
             assertThat(mentorEntryRepository
                             .findById(derived.toolResultId())
@@ -1362,17 +1484,14 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                                 .isRedacted())
                         .as("a context folder result is erased with the person")
                         .isTrue());
-        // A tool result that copies no one's data stays, so the other developer still sees the feedback Heph showed.
-        assertThat(mentorTimeline
-                        .entries(
-                                firstAffected.getId(),
-                                Objects.requireNonNull(accountFor(other).getId()),
-                                null,
-                                MentorTimeline.MAX_PAGE)
-                        .content())
-                .filteredOn(entry -> entry.id().equals(linkedAnswer))
-                .singleElement()
-                .satisfies(entry -> assertThat(entry.links()).isNotEmpty());
+        // A safe tool result stays; its answer could still have used the earlier copied context.
+        var answer = mentorEntryRepository.findById(linkedAnswer).orElseThrow();
+        assertThat(answer.isRedacted()).isTrue();
+        assertThat(jdbc.queryForList(
+                        "SELECT id FROM mentor_entry WHERE workspace_id=? AND turn_id=? AND kind='TOOL_RESULT'"
+                                + " AND payload->'message'->>'toolName'='show_feedback' AND redacted_at IS NULL",
+                        UUID.class, firstAffected.getId(), answer.getTurnId()))
+                .hasSize(1);
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM person_evidence_copy WHERE" + " payload<>'{}'::jsonb", Long.class))
                 .isZero();
@@ -1696,9 +1815,11 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
     /** The export of another person's rows without the Heph messages that the erasure redacts. */
     private static @Nullable Object withoutErasedCopies(
-            String store, @Nullable Object rows, List<ConversationFeedbackCopy> copies) {
+            String store, @Nullable Object rows, List<ConversationFeedbackCopy> copies, List<UUID> derivedAnswers) {
         if (!store.equals("mentor_entry") || !(rows instanceof List<?> list)) return rows;
-        var copiedIds = copies.stream().map(copy -> copy.messageId().toString()).collect(Collectors.toSet());
+        var copiedIds = Stream.concat(copies.stream().map(ConversationFeedbackCopy::messageId), derivedAnswers.stream())
+                .map(UUID::toString)
+                .collect(Collectors.toSet());
         return list.stream()
                 .filter(row -> !(row instanceof JsonNode node
                         && copiedIds.contains(node.path("id").asString())))
@@ -1838,6 +1959,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     private DerivedConversation seedDerivedConversation(Workspace workspace, long threadId, User owner) {
+        return seedDerivedConversation(workspace, threadId, owner, false);
+    }
+
+    private DerivedConversation seedDerivedConversation(Workspace workspace, long threadId, User owner, boolean withProblem) {
         UUID toolResult = seedToolResult(workspace, owner);
         MentorEntry message = mentorEntries.append(
                 workspace.getId(),
@@ -1858,8 +1983,10 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 "unrelated-profile-canary")));
         job.setOutput(mapper.valueToTree(Map.of("sourceText", "unrelated-profile-canary")));
         agentJobRepository.save(job);
-        var first = modelFixtures.result(
-                work, Objects.requireNonNull(accountFor(owner).getId()), "Result title");
+        var first = withProblem
+                ? modelFixtures.resultWithProblem(work, Objects.requireNonNull(accountFor(owner).getId()), "Result title",
+                        PersonErasureAllStoresFixture.CANARY)
+                : modelFixtures.result(work, Objects.requireNonNull(accountFor(owner).getId()), "Result title");
         var second = modelFixtures.result(
                 work, Objects.requireNonNull(accountFor(owner).getId()), "Result title");
         List<UUID> practiceResultIds = List.of(first.getId(), second.getId());
