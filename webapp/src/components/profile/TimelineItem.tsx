@@ -25,6 +25,12 @@ const DOT_BOX = "absolute inset-x-0 top-0 z-10 flex h-5 items-center justify-cen
 const DOT = "size-2.5 shrink-0 rounded-full border-2 border-background";
 /** The rail starts at the dot's middle, so dot and line share one axis. */
 const LINE = "absolute top-2.5 bottom-0 left-1/2 -translate-x-1/2 sm:top-[31px]";
+/**
+ * The rail's piece above the dot, from the row's top to the dot's middle, so the line of the row
+ * before meets this dot and runs on through it. The first row has nothing above it.
+ */
+const LINE_IN =
+	"absolute top-0 left-1/2 h-2.5 w-px -translate-x-1/2 bg-border group-first:hidden sm:h-[31px]";
 const CONTENT = "col-start-2 mb-3 min-w-0 sm:col-start-3 sm:row-start-1";
 
 export interface TimelineItemProps {
@@ -42,7 +48,8 @@ export interface TimelineItemProps {
 
 /**
  * One row on a vertical timeline: label column, dot on a connecting rail, then the content.
- * The rail hides its tail on the last item; place rows inside a plain `<ol>`.
+ * The rail runs from the top of each row but the first through its dot to the row's end, so it is one
+ * line through every dot, and hides its tail on the last item; place rows inside a plain `<ol>`.
  */
 export function TimelineItem({ at, label, tailContinues = false, children }: TimelineItemProps) {
 	return (
@@ -54,6 +61,7 @@ export function TimelineItem({ at, label, tailContinues = false, children }: Tim
 				{label}
 			</time>
 			<div className={RAIL}>
+				<span data-timeline-rail-in className={LINE_IN} aria-hidden />
 				<span className={DOT_BOX} aria-hidden>
 					<span data-timeline-dot className={cn(DOT, "bg-muted-foreground")} />
 				</span>
@@ -86,6 +94,7 @@ export function TimelineItemSkeleton() {
 				<Skeleton className="h-3 w-10" />
 			</div>
 			<div className={RAIL}>
+				<span className={LINE_IN} />
 				<span className={DOT_BOX}>
 					<span className={cn(DOT, "bg-muted-foreground/40")} />
 				</span>

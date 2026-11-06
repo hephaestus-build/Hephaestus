@@ -42,6 +42,50 @@ export const Default: Story = {
 	},
 };
 
+/**
+ * Several rows: the rail is one line through every dot. Each row's rail runs from its top into its
+ * dot, where the row before ends, and the first row has nothing above its dot.
+ */
+export const OneLineThroughEveryDot: Story = {
+	args: { at: new Date(daysBefore(1)), label: "1 day ago", children: row("Newest.") },
+	render: (args) => (
+		<>
+			<TimelineItem {...args} />
+			<TimelineItem at={new Date(daysBefore(3))} label="3 days ago">
+				{row("Older.")}
+			</TimelineItem>
+			<TimelineItem at={new Date(daysBefore(5))} label="5 days ago">
+				{row("Oldest.")}
+			</TimelineItem>
+		</>
+	),
+	play: async ({ canvasElement }) => {
+		const rows = [...canvasElement.querySelectorAll("li")];
+		const railsIn = rows.map((item) => item.querySelector("[data-timeline-rail-in]"));
+		const dots = rows.map((item) => item.querySelector("[data-timeline-dot]"));
+		await expect(rows).toHaveLength(3);
+		// Nothing above the first dot.
+		await expect(railsIn[0]).not.toBeVisible();
+		for (const index of [1, 2]) {
+			const railIn = railsIn[index];
+			const dot = dots[index];
+			const before = rows[index - 1];
+			if (railIn == null || dot == null || before === undefined) {
+				throw new Error("A timeline row lost its rail or dot.");
+			}
+			const railBox = railIn.getBoundingClientRect();
+			await expect(railIn).toBeVisible();
+			// It starts where the row before ends and reaches the middle of this row's dot.
+			await expect(
+				Math.abs(railBox.top - before.getBoundingClientRect().bottom),
+			).toBeLessThanOrEqual(1);
+			await expect(
+				Math.abs(railBox.bottom - middle(dot.getBoundingClientRect()).y),
+			).toBeLessThanOrEqual(1);
+		}
+	},
+};
+
 /** The last row of a collapsed list: the rail continues as a dashed tail, saying more follows. */
 export const ContinuingTail: Story = {
 	args: {
