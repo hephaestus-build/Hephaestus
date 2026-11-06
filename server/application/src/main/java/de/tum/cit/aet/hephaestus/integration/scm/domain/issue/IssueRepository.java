@@ -87,9 +87,6 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
             @Param("repositoryId") long repositoryId,
             @Param("itemKind") String itemKind);
 
-    @Query(value = "SELECT id FROM issue WHERE id = :id FOR SHARE", nativeQuery = true)
-    Optional<Long> lockForReview(@Param("id") long id);
-
     @Query(
             "SELECT i FROM Issue i WHERE i.repository.id = :repositoryId AND i.deletedAt IS NULL AND i.id > :after ORDER BY i.id")
     List<Issue> findLiveNoteParents(

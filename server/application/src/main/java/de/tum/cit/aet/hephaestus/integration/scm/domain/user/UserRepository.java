@@ -88,15 +88,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
         """)
     List<User> findAllHuman();
 
-    @Query("""
-            SELECT DISTINCT u
-            FROM User u
-            JOIN FETCH u.teamMemberships m
-            JOIN FETCH m.team t
-            WHERE u.type = 'USER'
-        """)
-    List<User> findAllHumanInTeams();
-
     /** Only a verified actor pinned by the workspace boundary or a non-HTTP caller identifies the developer. */
     default Optional<User> getCurrentUser() {
         return CurrentScmIdentityHolder.getUserId().flatMap(this::findById);
