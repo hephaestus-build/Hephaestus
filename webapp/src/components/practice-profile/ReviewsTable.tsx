@@ -318,6 +318,7 @@ function ReviewRow({
 				position={entry.positionOnWork}
 				total={entry.totalOnWork}
 				tags={review.origin !== "EVENT" && <ReviewOriginTag origin={review.origin} />}
+				titleFirst
 			/>
 			<ReviewSawCell saw={sawOf(entry)} />
 			<TableCell className="align-top whitespace-normal">

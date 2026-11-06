@@ -136,7 +136,6 @@ export function ReviewPracticeTable({
 	return (
 		<div className="flex min-w-0 flex-col gap-3">
 			<FilterToolbar hasFilter={hasFilter} onReset={() => onFiltersChange({})}>
-				{outcomeFacet.control}
 				<SelectFilter
 					label="Group"
 					allLabel="All groups"
@@ -162,6 +161,8 @@ export function ReviewPracticeTable({
 						}
 					/>
 				</div>
+				{/* After the practice filters, in the columns' order. */}
+				{outcomeFacet.control}
 			</FilterToolbar>
 			<AppliedFacetPills pills={outcomeFacet.pills} />
 			{hasFilter && rows.length !== results.length && (
@@ -226,7 +227,7 @@ export function ReviewPracticeTable({
 	);
 }
 
-/** The table's columns: Outcome, Practice and the row's link. */
+/** The table's columns: Practice, Outcome and the row's link. */
 const COLUMN_COUNT = 3;
 
 interface ResultGroup {
@@ -321,15 +322,13 @@ function ResultRow({
 						}
 			}
 		>
-			{/* The first cell carries the accent bar of the row the reader came back from. */}
-			<TableCell className={cn(OPEN_ROW_BAR, "align-middle whitespace-normal")}>
-				{/* An admin's mark belongs with the outcome it qualifies. */}
-				<span className="flex flex-col items-start gap-1">
-					<ResultOutcome outcome={result.outcome} plain={plainState} />
-					{result.markedIncorrectAt !== null && <StatusBadge def={RESULT_MARK_DEFS.INCORRECT} />}
-				</span>
-			</TableCell>
-			<TableCell className="align-middle whitespace-normal">
+			{/* The practice names the row, so it leads it as the row's header, and carries the accent bar
+			    of the row the reader came back from. */}
+			<TableHead
+				scope="row"
+				variant="body"
+				className={cn(OPEN_ROW_BAR, "align-middle font-normal whitespace-normal")}
+			>
 				<span className="flex min-w-0 flex-col items-start gap-1">
 					{/* The group heads the rows above; the row names the practice with its group's icon. */}
 					<PracticePill
@@ -341,6 +340,13 @@ function ResultRow({
 					/>
 					{/* Where the observation came from: a review before this one recorded it. */}
 					{earlierReview !== undefined && earlierReviewLink?.(earlierReview)}
+				</span>
+			</TableHead>
+			<TableCell className="align-middle whitespace-normal">
+				{/* An admin's mark belongs with the outcome it qualifies. */}
+				<span className="flex flex-col items-start gap-1">
+					<ResultOutcome outcome={result.outcome} plain={plainState} />
+					{result.markedIncorrectAt !== null && <StatusBadge def={RESULT_MARK_DEFS.INCORRECT} />}
 				</span>
 			</TableCell>
 			<TableCell className="text-right align-middle whitespace-normal">
@@ -403,12 +409,14 @@ function PracticesFrame({
 			<Table aria-label={TABLE_LABEL} aria-busy={busy || undefined} className="min-w-152">
 				<TableHeader>
 					<TableRow>
-						{/* In the review's order: the Outcome filter above narrows the rows instead. */}
-						<TableHead scope="col" className="w-40">
-							Outcome
-						</TableHead>
+						{/* The practice names the row, as the admin trace table orders it; the outcome follows in
+						    a fixed width, so its badges line up. In the review's order: the Outcome filter above
+						    narrows the rows instead. */}
 						<TableHead scope="col" className="w-auto">
 							Practice
+						</TableHead>
+						<TableHead scope="col" className="w-40">
+							Outcome
 						</TableHead>
 						{/* The row's own link stands here, so the head names it for a screen reader only. */}
 						<TableHead scope="col" className="text-right">
@@ -429,10 +437,10 @@ export function ReviewPracticeTableSkeleton({ rows }: { rows: number }) {
 				{Array.from({ length: rows }, (_, index) => (
 					<TableRow key={index} variant="static" aria-hidden>
 						<TableCell className="align-middle">
-							<Skeleton className="h-5 w-20" />
+							<Skeleton className="h-5 w-40" />
 						</TableCell>
 						<TableCell className="align-middle">
-							<Skeleton className="h-5 w-40" />
+							<Skeleton className="h-5 w-20" />
 						</TableCell>
 						<TableCell className="align-middle">
 							<Skeleton className="h-4 w-64" />

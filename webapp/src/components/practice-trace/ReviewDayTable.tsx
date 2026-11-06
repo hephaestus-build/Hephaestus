@@ -12,8 +12,9 @@ import {
 	RecordTableSkeleton,
 } from "@/components/practice-vocabulary/RecordTable";
 import { TableCell } from "@/components/ui/table";
-import { itemName } from "@/lib/item-kinds";
+import { itemKindLabel, itemName } from "@/lib/item-kinds";
 import { rendersContent } from "@/lib/react-node";
+import { hasText } from "@/lib/text";
 
 import { outcomeCounts, practicesLabel, type ReviewSaw } from "./review-saw";
 import { ReviewOrdinalTag } from "./review-tags";
@@ -90,6 +91,28 @@ export interface ReviewItemCellProps {
 	 * ("Review 2"), so the two read together.
 	 */
 	tags?: ReactNode;
+	/**
+	 * Names the work as GitHub lists a pull request: its title, then the provider's number in the
+	 * muted ink as the link ("Add dark mode toggle to settings #19", "!19" for a GitLab merge
+	 * request). Work without such a number keeps the kind line. Used by the developer's own list of
+	 * reviews.
+	 */
+	titleFirst?: boolean;
+}
+
+/** The provider's own number, as it writes it ("#19", "!19"); a kind without one has none. */
+function providerNumber(item: ItemRef): string | undefined {
+	const label = item.label.trim();
+	return /^[#!]\d+$/u.test(label) ? label : undefined;
+}
+
+/** The title without the number a provider title often ends in; untitled work by its kind. */
+function titleBeforeNumber(item: ItemRef, number: string): string {
+	let title = item.title?.trim() ?? "";
+	if (title.endsWith(` ${number}`)) {
+		title = title.slice(0, -number.length).trim();
+	}
+	return title === "" ? itemKindLabel(item.kind, 1, item.provider) : title;
 }
 
 export function ReviewItemCell({
@@ -99,8 +122,39 @@ export function ReviewItemCell({
 	linked = true,
 	children,
 	tags,
+	titleFirst = false,
 }: ReviewItemCellProps) {
 	const ItemIcon = reviewedWorkIcon(item.kind, item.provider ?? undefined);
+	const number = titleFirst ? providerNumber(item) : undefined;
+	if (number !== undefined) {
+		return (
+			<TableCell className="align-top whitespace-normal">
+				<span className="flex min-w-0 flex-col items-start gap-1">
+					<span className="flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+						<span className="flex max-w-full min-w-0 items-baseline gap-x-1.5">
+							<ItemIcon className="size-3.5 shrink-0 self-center text-muted-foreground" />
+							<span className="max-w-md font-medium">
+								{titleBeforeNumber(item, number)}{" "}
+								{linked && hasText(item.url) ? (
+									<InlineLink
+										href={item.url}
+										external
+										className="font-normal text-muted-foreground"
+									>
+										{number}
+									</InlineLink>
+								) : (
+									<span className="font-normal text-muted-foreground">{number}</span>
+								)}
+							</span>
+						</span>
+						{children}
+					</span>
+					<ReviewTags position={position} total={total} tags={tags} />
+				</span>
+			</TableCell>
+		);
+	}
 	const name = itemName(item);
 	const title = titleBeside(item, name);
 	return (

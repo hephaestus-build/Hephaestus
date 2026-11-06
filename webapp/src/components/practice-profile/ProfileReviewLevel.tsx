@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { GroupRef, ProfileReviewDetail, ResultList } from "@/api/types.gen";
+import type { GroupRef, ItemRef, ProfileReviewDetail, ResultList } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -28,7 +28,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
 import { Separator } from "@/components/ui/separator";
 import { formatDayTime } from "@/lib/dates";
-import { itemName } from "@/lib/item-kinds";
+import { itemKindLabel, itemKindNoun } from "@/lib/item-kinds";
 import { hasText } from "@/lib/text";
 
 import { REVIEW_SELECTION_CLEARED, reviewLevel } from "./practice-profile-search";
@@ -160,6 +160,17 @@ export function ProfileReviewLevel({
 	);
 }
 
+/** The heading's words before the number; untitled work is headed by its kind, "Merge request". */
+function headTitle(item: ItemRef | undefined, number: string | undefined): string {
+	if (hasText(item?.title)) {
+		return item.title;
+	}
+	if (number === undefined) {
+		return item?.label ?? "Review";
+	}
+	return itemKindLabel(item?.kind, 1, item?.provider);
+}
+
 interface ReviewHeadProps {
 	path: LevelPath;
 	detail: ProfileReviewDetail | undefined;
@@ -168,8 +179,8 @@ interface ReviewHeadProps {
 }
 
 /**
- * The review's head: the work it reviewed, as a link to the original, then its title and when and
- * how it ran. No asking here: the list one level down asks for another review of the work.
+ * The review's head: where the work lives, then its title with the provider's number after it as
+ * the link to the original, as GitHub heads a pull request, then when and how it ran. No asking here: the list one level down asks for another review of the work.
  */
 function ReviewHead({ path, detail, positionOnWork, totalOnWork }: ReviewHeadProps) {
 	const today = new Date(useNow());
@@ -177,28 +188,45 @@ function ReviewHead({ path, detail, positionOnWork, totalOnWork }: ReviewHeadPro
 	const item = review?.item;
 	const at = review?.completedAt ?? review?.createdAt;
 	const ItemIcon = reviewedWorkIcon(item?.kind, item?.provider ?? undefined);
-	const work = (
-		<>
-			{item ? itemName(item) : "Reviewed work"}
-			{hasText(item?.container) && `, ${item.container}`}
-		</>
-	);
+	// The provider's own number, as it writes it ("#19", "!19" for a GitLab merge request), after the
+	// title as GitHub heads a pull request; a kind without one, such as a document, has none.
+	const number = item !== undefined && /^[#!]\d+$/u.test(item.label) ? item.label : undefined;
+	const title = headTitle(item, number);
+	// Over the title: the repository, or the kind where the work names none.
+	const where = hasText(item?.container)
+		? item.container
+		: itemKindLabel(item?.kind, 1, item?.provider);
 
 	return (
 		<div className="flex min-w-0 flex-1 flex-col gap-2">
 			<LevelPathRow {...path} current="Review" />
 			<p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
 				<ItemIcon className="size-3.5 shrink-0" />
-				{hasText(item?.url) ? (
-					<InlineLink href={item.url} external className="min-w-0 truncate text-xs">
-						{work}
-					</InlineLink>
-				) : (
-					<span className="truncate">{work}</span>
-				)}
+				<span className="truncate">{where}</span>
 			</p>
-			<DrawerTitle className="text-2xl font-semibold tracking-tight break-words">
-				{hasText(item?.title) ? item.title : (item?.label ?? "Review")}
+			<DrawerTitle
+				// Read as "Add dark mode toggle to settings, pull request #19"; the number inside stays the
+				// link to the original, with its own name.
+				aria-label={
+					item !== undefined && number !== undefined && hasText(item.title)
+						? `${item.title}, ${itemKindNoun(item.kind, 1, item.provider)} ${number}`
+						: undefined
+				}
+				className="text-2xl font-semibold tracking-tight break-words"
+			>
+				{title}
+				{number !== undefined && (
+					<>
+						{" "}
+						{hasText(item?.url) ? (
+							<InlineLink href={item.url} external className="font-normal text-muted-foreground">
+								{number}
+							</InlineLink>
+						) : (
+							<span className="font-normal text-muted-foreground">{number}</span>
+						)}
+					</>
+				)}
 			</DrawerTitle>
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
 				{at && (

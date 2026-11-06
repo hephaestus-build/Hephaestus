@@ -152,7 +152,7 @@ export const MarksTheObservationOpenedLast: Story = {
 		await expect(row).not.toHaveAttribute("aria-current");
 		await userEvent.click(link);
 		await expect(row).toHaveAttribute("aria-current", "true");
-		const bar = getComputedStyle(row.querySelector("td") ?? row, "::before");
+		const bar = getComputedStyle(row.querySelector("th") ?? row, "::before");
 		await expect(bar.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
 		// Another observation opened from its row takes the mark over.
 		const other = canvas
@@ -161,7 +161,7 @@ export const MarksTheObservationOpenedLast: Story = {
 		other
 			?.querySelector("[data-observation-link] a")
 			?.addEventListener("click", (event) => event.preventDefault());
-		const otherCell = other?.querySelector("td");
+		const otherCell = other?.querySelector("th");
 		if (otherCell === null || otherCell === undefined) {
 			throw new Error("Expected the other row.");
 		}
