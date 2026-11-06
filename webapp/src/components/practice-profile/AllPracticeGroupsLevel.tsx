@@ -26,12 +26,16 @@ export function AllPracticeGroupsLevel({ nested, path, ...table }: AllPracticeGr
 				nested={nested}
 				path={path}
 				current={ALL_PRACTICE_GROUPS}
-				description={
-					<p className="max-w-2xl">
-						Every practice this workspace reviews, in its group. Practices that need attention are
-						named, and the rest are counted. Open a group to see the work behind it.
-					</p>
-				}
+				info={{
+					label: "About this level",
+					lead: "Every practice this workspace reviews, sorted into its group.",
+					content: (
+						<p>
+							Practices that need attention are named, the rest are counted. Open a group for the
+							work behind it.
+						</p>
+					),
+				}}
 			/>
 			<DrawerBody className="pt-2">
 				<AllPracticeGroupsTable {...table} />

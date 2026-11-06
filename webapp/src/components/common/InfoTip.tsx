@@ -1,5 +1,5 @@
 import { InfoIcon, type LucideIcon } from "lucide-react";
-import { type ReactNode, useId } from "react";
+import type { ReactNode } from "react";
 
 import { cn } from "cn";
 import { FOCUS_RING } from "@/components/common/focus";
@@ -14,8 +14,14 @@ export interface InfoTipProps {
 	 * the short label as its heading.
 	 */
 	nameContext?: string;
+	/**
+	 * The answer in one sentence, the panel's first line in the foreground's ink. With it the panel
+	 * leads with the answer instead of the label, and `children` adds at most two or three short
+	 * lines; the whole panel stays under about 40 words.
+	 */
+	lead?: string;
 	/** The explanation the page keeps out of its running text, best as {@link InfoLines}. */
-	children: ReactNode;
+	children?: ReactNode;
 	className?: string;
 }
 
@@ -61,42 +67,12 @@ export function InfoLines({ lines }: { lines: readonly InfoLine[] }) {
 	));
 }
 
-/** Lines of an (i) panel under one heading, for a panel that answers more than one question. */
-export interface InfoGroup {
-	heading: string;
-	lines: readonly InfoLine[];
-}
-
-/**
- * {@link InfoLines} in groups, each under its heading in bold, so a long panel reads as a few short
- * answers. Each group is a labelled group, so a screen reader hears where one ends.
- */
-export function InfoGroups({ groups }: { groups: readonly InfoGroup[] }) {
-	const id = useId();
-	return groups.map((group, index) => {
-		const headingId = `${id}-${index}`;
-		return (
-			<div
-				key={group.heading}
-				role="group"
-				aria-labelledby={headingId}
-				className="flex flex-col gap-1.5 pt-1"
-			>
-				<p id={headingId} className="font-semibold text-foreground">
-					{group.heading}
-				</p>
-				<InfoLines lines={group.lines} />
-			</div>
-		);
-	});
-}
-
 /**
  * An (i) button whose explanation opens on hover, on keyboard focus, and on a tap or a press, so a
  * pointer, a keyboard and a touch screen all reach it ({@link TipPopover}). The trigger is
  * `StatusIcon`'s: a chromeless button with a 24 px target and the focus ring.
  */
-export function InfoTip({ label, nameContext, children, className }: InfoTipProps) {
+export function InfoTip({ label, nameContext, lead, children, className }: InfoTipProps) {
 	return (
 		<TipPopover
 			label={label}
@@ -118,7 +94,8 @@ export function InfoTip({ label, nameContext, children, className }: InfoTipProp
 			wide
 			content={
 				<div className="flex flex-col gap-2 leading-relaxed text-muted-foreground">
-					<p className="font-semibold text-foreground">{label}</p>
+					{/* The answer first; a panel without one keeps its label as the heading. */}
+					<p className="font-semibold text-foreground">{lead ?? label}</p>
 					{children}
 				</div>
 			}

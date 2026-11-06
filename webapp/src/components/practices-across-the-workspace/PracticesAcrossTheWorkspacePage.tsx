@@ -20,13 +20,15 @@ import {
 	STANDING_BASIS_DEFS,
 } from "@/components/practice-vocabulary/standing-basis-defs";
 
-import { InfoGroups, InfoLines, InfoTip } from "@/components/common/InfoTip";
+import { InfoLines, InfoTip } from "@/components/common/InfoTip";
 import {
 	type AcrossWorkspaceWindow,
 	FIGURES_LOAD_ERROR,
+	FIGURES_LEAD,
 	FIGURES_PLAIN,
 	GROUPS_LOAD_ERROR,
 	PAGE_INTRO,
+	PAGE_INTRO_LEAD,
 	PAGE_INTRO_SHORT,
 	tileCohortText,
 	WINDOW_OPTIONS,
@@ -79,7 +81,7 @@ export function PracticesAcrossTheWorkspacePage({
 					description={
 						<>
 							{PAGE_INTRO_SHORT}{" "}
-							<InfoTip label="About this page">
+							<InfoTip label="About this page" lead={PAGE_INTRO_LEAD}>
 								<InfoLines lines={PAGE_INTRO} />
 							</InfoTip>
 						</>
@@ -100,8 +102,8 @@ export function PracticesAcrossTheWorkspacePage({
 							<>
 								{windowHeading(window)}
 								{windowTiles !== undefined && !stale && ` · ${tileCohortText(windowTiles)}`}{" "}
-								<InfoTip label="About your figures">
-									<InfoGroups groups={FIGURES_PLAIN} />
+								<InfoTip label="About your figures" lead={FIGURES_LEAD}>
+									<InfoLines lines={FIGURES_PLAIN} />
 								</InfoTip>
 							</>
 						}

@@ -197,11 +197,7 @@ export const Default: Story = {
 				level: 2,
 			}),
 		).toBeNull();
-		await expect(
-			screen.getByText(
-				"Feedback about patterns in your work: the open card, then the ones that resolved, newest first.",
-			),
-		).toBeVisible();
+		await expect(screen.queryByText(/^Feedback about patterns in your work/u)).toBeNull();
 		await expect(screen.getByRole("tab", { name: "Feedback 1" })).toHaveAttribute(
 			"aria-selected",
 			"true",
@@ -228,11 +224,8 @@ export const ObservationsTab: Story = {
 		);
 		// Below the top, dismissing returns to the group behind, so the control says Back.
 		await expect(screen.getByRole("button", { name: "Back" })).toBeVisible();
-		// The line under the tabs follows the open tab.
-		await expect(
-			screen.getByText(/^Observations about your work on this practice, newest first\./u),
-		).toBeVisible();
-		await expect(screen.queryByText(/^Feedback about patterns in your work/u)).toBeNull();
+		// The tab row has no line under it: the open tab's panel starts with its content.
+		await expect(screen.queryByText(/^Observations about your work on this practice/u)).toBeNull();
 		await expect(screen.getByRole("tab", { name: "Observations 3" })).toHaveAttribute(
 			"aria-selected",
 			"true",

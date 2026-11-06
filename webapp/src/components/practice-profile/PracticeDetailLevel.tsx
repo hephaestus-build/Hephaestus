@@ -95,18 +95,6 @@ import {
 } from "./practice-profile-search";
 import { requestedReviewNote } from "./requested-review-note";
 
-/**
- * What each tab holds, said in a line under the tab bar for the open tab, so a panel starts with
- * its content rather than a heading that repeats the tab's name.
- */
-const TAB_DESCRIPTIONS: Record<PracticeTab, string> = {
-	feedback:
-		"Feedback about patterns in your work: the open card, then the ones that resolved, newest first.",
-	results:
-		"Observations about your work on this practice, newest first. Open one to see its outcome and any problems, each with its next step.",
-	guide: "Why this practice matters, what good looks like, and how to do it.",
-};
-
 const TAB_LABELS: Record<PracticeTab, string> = {
 	feedback: "Feedback",
 	results: "Observations",
@@ -341,9 +329,6 @@ export function PracticeDetailLevel({
 						</div>
 					)}
 				</PracticeTabsRail>
-				{/* What the open tab holds, as a line anyone can read, touch included: the panel has no
-				    heading repeating the tab's name. */}
-				<p className="max-w-2xl text-sm text-muted-foreground">{TAB_DESCRIPTIONS[shownTab]}</p>
 				<TabsContent value="feedback" className="min-w-0">
 					<PracticeFeedbackSection
 						feedback={feedback}

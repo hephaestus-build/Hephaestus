@@ -16,6 +16,7 @@ import {
 } from "@/components/admin/practice-reviews/ReviewSortSelect";
 import type { FacetOption } from "@/components/common/FacetMultiSelect";
 import { FilterToggle } from "@/components/common/FilterToggle";
+import { InfoTip } from "@/components/common/InfoTip";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { ResultCount } from "@/components/common/ResultCount";
 import { statusFacetOptions } from "@/components/common/status-def";
@@ -212,19 +213,27 @@ export function ProfileReviewsLevel({
 		}
 	}
 
+	const reviewsLead = "Every review that recorded something about your work.";
+	const reviewsLine = `${
+		order === "OLDEST" ? "Oldest first" : "Newest first"
+	}. A review still running appears once it records something.`;
+
 	return (
 		<>
 			<DetailDrawerHeader nested={nested} dismiss="inPath">
 				<div className="flex min-w-0 flex-1 flex-col gap-2">
 					<LevelPathRow {...path} current="Reviews" />
-					<DrawerTitle className="text-2xl font-semibold tracking-tight break-words">
-						{REVIEWS_OF_YOUR_WORK}
-					</DrawerTitle>
-					<DrawerDescription className="max-w-2xl">
-						Reviews that recorded something about your work,{" "}
-						{order === "OLDEST" ? "oldest first" : "newest first"}. A review that is still running
-						appears once it records something.
-					</DrawerDescription>
+					{/* What the level lists, behind an (i) beside the title, so the level starts with its
+					    content; a screen reader still hears it as the drawer's description. */}
+					<div className="flex min-w-0 items-center gap-1.5">
+						<DrawerTitle className="text-2xl font-semibold tracking-tight break-words">
+							{REVIEWS_OF_YOUR_WORK}
+						</DrawerTitle>
+						<InfoTip label="About this level" lead={reviewsLead}>
+							<p>{reviewsLine}</p>
+						</InfoTip>
+					</div>
+					<DrawerDescription className="sr-only">{`${reviewsLead} ${reviewsLine}`}</DrawerDescription>
 				</div>
 			</DetailDrawerHeader>
 			<DrawerBody className="flex flex-col gap-3 pt-2">
