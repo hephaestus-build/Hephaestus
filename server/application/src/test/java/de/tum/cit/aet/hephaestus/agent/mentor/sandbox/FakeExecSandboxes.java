@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -37,6 +38,9 @@ public final class FakeExecSandboxes implements ExecSandboxes {
 
     /** Sandboxes of other workers that {@link #list} reports besides this worker's. */
     public final List<Listed> others = new CopyOnWriteArrayList<>();
+
+    /** The runtime ids of this worker's sandboxes that have ended; {@link #list} reports them as ended. */
+    public final Set<String> ended = ConcurrentHashMap.newKeySet();
 
     public volatile boolean failCreate;
     public volatile boolean quotaFull;
@@ -120,7 +124,7 @@ public final class FakeExecSandboxes implements ExecSandboxes {
     public List<Listed> list() {
         onList.run();
         List<Listed> all = new ArrayList<>(others);
-        running.forEach((id, sandboxId) -> all.add(new Listed(id, sandboxId, SELF, false)));
+        running.forEach((id, sandboxId) -> all.add(new Listed(id, sandboxId, SELF, false, ended.contains(id))));
         return all;
     }
 
