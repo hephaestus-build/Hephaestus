@@ -19,6 +19,12 @@ series never exist here, and an absent() rule among them, such as HephaestusDepl
 {{- $groups := list }}
 {{- range (fromYaml (.Files.Get "files/hephaestus-alerts.yml")).groups }}
 {{- if not (has .name (list "hephaestus-kubernetes" "hephaestus-pull-deploy")) }}
+{{- /* PostgreSQL counters survive exporter restarts. MetricsQL must skip their first sample, as Prometheus does. */}}
+{{- if eq .name "hephaestus-postgresql" }}
+{{- range .rules }}
+{{- $_ := set . "expr" (regexReplaceAll "\\bincrease\\s*\\(" .expr "increase_prometheus(") }}
+{{- end }}
+{{- end }}
 {{- $groups = append $groups . }}
 {{- end }}
 {{- end }}

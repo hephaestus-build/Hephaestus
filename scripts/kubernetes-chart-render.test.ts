@@ -740,6 +740,20 @@ await test("the monitoring stack scrapes this release, evaluates its rules and n
 			"groups",
 		),
 	);
+	const postgres = loaded.find((group) => get(group, "name") === "hephaestus-postgresql");
+	const deadlocks = asRecord(
+		list(get(postgres, "rules")).find(
+			(rule) => get(rule, "alert") === "HephaestusDatabaseDeadlocks",
+		),
+		"deadlock rule",
+	);
+	assert.equal(
+		deadlocks.expr,
+		'sum by (namespace, datname) (increase_prometheus(pg_stat_database_deadlocks{job="postgresql"}[15m])) > 0',
+	);
+	// The exported rules stay valid PromQL. The bundled engine changes only this counter rollup.
+	deadlocks.expr =
+		'sum by (namespace, datname) (increase(pg_stat_database_deadlocks{job="postgresql"}[15m])) > 0';
 	assert.deepEqual(
 		loaded,
 		tested.filter(

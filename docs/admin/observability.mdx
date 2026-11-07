@@ -465,6 +465,9 @@ It reads PostgreSQL through its Service, with TLS, as the role `hephaestus_monit
 That role is a member of `pg_monitor` only, and it can open at most 2 connections.
 The exporter does not run in the PostgreSQL Pod, so turning it on or off does not restart the database.
 
+PostgreSQL counters keep their totals across exporter restarts.
+The bundled monitoring stack uses the Prometheus-compatible counter rollup, so the first sample does not count as a new deadlock.
+
 To turn it on:
 
 1. Add `DATABASE_MONITOR_PASSWORD` to the release Secret: `sh hephaestus-keys.sh --metrics`.

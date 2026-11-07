@@ -2268,6 +2268,45 @@ tests:
         alertname: HephaestusDatabaseDeadlocks
         exp_alerts: []
 
+  - name: existing deadlock totals and counter resets stay quiet until a new deadlock
+    interval: 1m
+    input_series:
+      - series: 'pg_stat_database_deadlocks{job="postgresql",namespace="hephaestus",datname="kept_total"}'
+        values: "7x30"
+      - series: 'pg_stat_database_deadlocks{job="postgresql",namespace="hephaestus",datname="reset_only"}'
+        values: "7x2 0x28"
+      - series: 'pg_stat_database_deadlocks{job="postgresql",namespace="hephaestus",datname="increment_after_start"}'
+        values: "7x2 8x28"
+      - series: 'pg_stat_database_deadlocks{job="postgresql",namespace="hephaestus",datname="increment_after_reset"}'
+        values: "7 0x2 1x27"
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: HephaestusDatabaseDeadlocks
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: HephaestusDatabaseDeadlocks
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: HephaestusDatabaseDeadlocks
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: hephaestus
+              datname: increment_after_start
+            exp_annotations:
+              summary: PostgreSQL broke a deadlock in the last 15 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+          - exp_labels:
+              severity: warning
+              namespace: hephaestus
+              datname: increment_after_reset
+            exp_annotations:
+              summary: PostgreSQL broke a deadlock in the last 15 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 25m
+        alertname: HephaestusDatabaseDeadlocks
+        exp_alerts: []
+
   - name: a transaction open for 10 minutes fires, one open for 4 minutes does not
     interval: 1m
     input_series:
