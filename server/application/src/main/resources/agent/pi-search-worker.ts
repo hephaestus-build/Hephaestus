@@ -22,13 +22,25 @@ export interface SearchJob {
 
 type Matcher = (line: string) => boolean;
 
+interface OpenClaim {
+	found: ReadonlySet<string>;
+	matches: Matcher | null;
+	holds: boolean;
+	confirmed: Set<string>;
+}
+
 function matcherOf({ pattern, literal, ignoreCase }: SearchClaim): Matcher | null {
 	if (literal) {
 		const needle = ignoreCase ? pattern.toLowerCase() : pattern;
 		return (line) => (ignoreCase ? line.toLowerCase() : line).includes(needle);
 	}
+	// `rg` takes the flag inside the pattern too, and JavaScript takes it only outside.
+	const inline = pattern.startsWith("(?i)");
 	try {
-		const expression = new RegExp(pattern, ignoreCase ? "iu" : "u");
+		const expression = new RegExp(
+			inline ? pattern.slice(4) : pattern,
+			ignoreCase || inline ? "iu" : "u",
+		);
 		return (line) => expression.test(line);
 	} catch {
 		// `rg` and JavaScript differ here, so this pattern proves nothing.
@@ -49,23 +61,28 @@ function* filesOf(root: string, directory = ""): Generator<string> {
 	}
 }
 
-function leavesNothingOut(
-	{ found, matches }: { found: ReadonlySet<string>; matches: Matcher | null },
-	file: string,
-	lines: readonly string[],
-): boolean {
-	return (
-		matches === null ||
-		lines.every((line, index) => !matches(line) || found.has(`${file}:${String(index + 1)}`))
-	);
+/** Records what the loop found in one file. A match that the tools side left out ends the claim. */
+function compare(claim: OpenClaim, file: string, lines: readonly string[]): void {
+	const { matches } = claim;
+	if (matches === null) {
+		return;
+	}
+	for (const [index, line] of lines.entries()) {
+		if (matches(line)) {
+			const location = `${file}:${String(index + 1)}`;
+			claim.confirmed.add(location);
+			claim.holds &&= claim.found.has(location);
+		}
+	}
 }
 
-/** For each claim, whether the loop found no match that the tools side left out. Past `maxBytes`, none is proved. */
+/** For each claim, whether the loop and the tools side found the same matches. Past `maxBytes`, none is proved. */
 export function proved({ root, maxBytes, claims }: SearchJob): boolean[] {
-	const open = claims.map((claim) => ({
+	const open: OpenClaim[] = claims.map((claim) => ({
 		found: new Set(claim.found),
 		matches: matcherOf(claim),
 		holds: true,
+		confirmed: new Set(),
 	}));
 	let seen = 0;
 	for (const file of filesOf(root)) {
@@ -78,11 +95,15 @@ export function proved({ root, maxBytes, claims }: SearchJob): boolean[] {
 		if (!bytes.includes(0)) {
 			const lines = bytes.toString("utf8").split("\n");
 			for (const claim of open) {
-				claim.holds &&= leavesNothingOut(claim, file, lines);
+				compare(claim, file, lines);
 			}
 		}
 	}
-	return open.map((claim) => claim.matches !== null && claim.holds);
+	// A match that only the tools side found means that the two engines read the pattern differently, so the loop's
+	// silence about the rest proves nothing.
+	return open.map(
+		(claim) => claim.matches !== null && claim.holds && claim.found.size === claim.confirmed.size,
+	);
 }
 
 if (parentPort !== null) {

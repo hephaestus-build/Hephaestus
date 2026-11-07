@@ -48,6 +48,22 @@ void test("a literal pattern and case are read as the search read them", async (
 	);
 });
 
+void test("a case flag inside the pattern is read as `rg` reads it", async () => {
+	assert.deepEqual(
+		await proveSearches(root, [
+			claim({ pattern: "(?i)todo", found: ["src/a.ts:2"] }),
+			claim({ pattern: "(?i)todo", found: [] }),
+		]),
+		[true, false],
+	);
+});
+
+void test("a match that only the tools side found proves nothing: the engines disagree", async () => {
+	assert.deepEqual(await proveSearches(root, [claim({ found: ["src/a.ts:2", "README.md:1"] })]), [
+		false,
+	]);
+});
+
 void test("a pattern that JavaScript cannot read proves nothing", async () => {
 	assert.deepEqual(await proveSearches(root, [claim({ pattern: "(?P<name>x)[" })]), [false]);
 });
