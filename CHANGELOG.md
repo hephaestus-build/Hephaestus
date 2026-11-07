@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.0.0-rc.5
+
+### Minor Changes
+
+- The server now reports how long provider events wait before their first handling, and how long handling takes, per provider. `HephaestusEventsDelayed` fires when more than 10 % of a provider's events keep waiting over five minutes for 15 minutes.
+- The server now counts what reviews conclude, what people mark and how developers answer feedback, and `HephaestusResultsMarkedIncorrect` fires when people mark more than 5 % of a week's judged results incorrect. The observability guide adds a query that compares outcomes by practice.
+- Repository monitors and stopped GitLab projects now require their provider IDs. A renamed project keeps its selection, and a reused path cannot inherit an earlier stop.
+
+  The first bootstrap of a GitHub PAT workspace now requires GitHub to confirm every repository in its configuration.
+
+  **Operators:** Stop every role before the upgrade. The migration preserves all rows and fills missing IDs from provider identities that the workspace owns on its connection's origin. It names unresolved or duplicate selections and stops before this change writes data. Follow the native provider ID migration entry to repair them or remove an abandoned selection after the required checks.
+
+- A host's reconciler now accepts a later release that adds or removes a chart image, and each release proves that the previous release's verifier accepts it before it publishes.
+
+  **Operators:** a pull-based host with reconciler tooling from before 1.0.0-rc.4 stops at that release with `does not pin the v1.0.0-rc.4 images`. Follow [Hosts with reconciler tooling from before 1.0.0-rc.4](https://docs.hephaestus.build/admin/upgrade#hosts-with-reconciler-tooling-from-before-100-rc4) once, before you resume the timer.
+
+- Sending product feedback now takes one step. Write a sentence and select **Send**: a first report no longer asks you to choose between public and private first. A report stays private unless you select **Post as a public GitHub issue**, and Hephaestus remembers that choice for your next report. The notice after sending says where the report went and how to make it public. Instance admins now get a link to their own private issues in **Your reports**. Each report now carries the page route and release without a step. A route holds no name or ID, and it reaches a public issue only with your choice. The composer no longer sends browser details. **Operators:** add the page route and the release to your privacy notice if it lists what a report carries.
+- The sandbox gateway no longer limits a worker to 200 connections that serve a call at once, and it now refuses a flood before it reads a credential. `SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE` limits each connection peer, `worker.sandboxGateway.maxConnections` limits open connections, and the request bodies in flight stay within a quarter of the worker's heap. The defaults fit normal use. The metric `sandbox_gateway_refused_total` with a `reason` label replaces `sandbox_gateway_throttled_total`, so change any dashboard that reads the old name. Two new alerts watch refusals and the connection limit: load the rule file of the release to get them.
+- Repositories that outgrow a worker's disk now slow captures before they cost running reviews. Sandbox input archives moved from the fixed 1 GiB `/tmp` to the Git cache volume, and when that volume passes 80 percent of `gitCache.sizeLimit`, the server and worker delete the mirrors they used least recently, except those used in the last 10 minutes. Each deleted mirror costs a full fetch at its next capture. Review checkouts that fill the volume alone can still evict the Pod, so two new alerts watch the volume and evictions: load the rule file of the release to get them.
+
+  **Operators:** `server.gitCache.sizeLimit` and `worker.gitCache.sizeLimit` must now be a whole number of `Mi` or `Gi`. Change a value such as `20G` or `1.5Gi` before you upgrade.
+
+### Patch Changes
+
+- Any worker can now verify a sandbox's credential, which prepares running attempts to outlive the worker that started them. Each worker keeps its signing key in memory and stores only the public key, in a small new table. The upgrade adds that table automatically, and nothing else changes yet.
+- Chrome extension packages include the Hephaestus license and third-party license notices for every bundle.
+- The upgrade links a GitHub commit's unlinked first author in two cases: a noreply address holds the author's account id, or the email is stored on exactly one user. Every other unlinked contributor stays unlinked. The migration log states how many links it added.
+- GitHub repository and team events keep the receiving workspace when several workspaces share an account or monitor the same repository. These events no longer stop ingestion with an ambiguous workspace lookup. Related issues use that workspace only when it also monitors their repository.
+- A review whose attempts all ended before they confirmed where its feedback went now closes as Partial with its own reason, instead of Complete. Its results stay. Such a review gets more attempts first, which make no model call, and the new `HephaestusReviewFeedbackUnconfirmed` alert tells operators when one still closes this way.
+- A commit with a GitHub noreply address now links through the account id in that address. An address with no account id links only when GitHub names the account.
+- The server's workspace check no longer exempts organization memberships or the workspace content eraser as whole classes. Only the two membership deletes that span workspaces stay exempt, each with its reason.
+- Practice profile trends use plain labels and show only work counts supplied by the server. Review titles keep the work's link when it has no provider number.
+- The server's check that a database read stays inside one workspace now inspects more reads of commits, labels, milestones and repository collaborators. Reads and writes that sync and monitoring need across workspaces are named one by one. A read by the id of a repository or commit still relies, as before, on the code that found it within the workspace.
+- The chart now creates the Service `<release>-sandbox-gateway` in front of the workers' sandbox gateways, and the isolation probe proves a sandbox's route through a Service on your network plugin. A worker that cannot prove that route stops at its start, and reports itself not ready later. If the Service name does not resolve, the probe treats the run as inconclusive. Nothing calls the Service yet.
+- Active workspaces resume webhook consumption after a local consumer stops or the broker becomes available. A workspace suspension keeps its consumer stopped through transaction completion, and a rolled-back suspension resumes consumption. Fresh consumers start with new deliveries; they do not recover messages from before their creation.
+- A single-node upgrade no longer rolls back because a worker was still draining. The `small` profile now drains a worker for at most 10 minutes instead of 30, so the drain, the shutdown and the new worker's start fit in the documented 20-minute Helm timeout. A review that outlasts the drain runs again. It spends no retry, but it counts toward the limit on drains. To keep a longer drain, set `worker.drainTimeoutSeconds` and raise `--timeout` with it.
+- The server's check that a database read stays inside one workspace now inspects more reads of teams, team memberships and team repository permissions. The one read that reconciles workspace members from an organization's teams is named on its own. Removing deleted teams after a sync now reads only the teams of that provider.
+- Webhook redelivery and administrator replay skip database writes that already committed. A retry continues unfinished writes without repeating completed steps. Delivery keys expire after the longest live or configured stream retention plus one day.
+- An open tab can keep working after an upgrade. Values introduced by a newer server show as unknown instead of breaking the page. A quiet update notice offers a reload when you’re ready, without discarding your text automatically.
+
 ## 1.0.0-rc.4
 
 ### Minor Changes
