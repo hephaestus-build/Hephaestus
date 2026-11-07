@@ -154,6 +154,7 @@ public class IntegrationNatsConsumer {
     private final List<RouteAdmission> routeAdmissions;
     private final NatsTraceContext traceContext;
     private final IntegrationMessageMeters messageMeters;
+    private final DeliveryInbox inbox;
 
     public IntegrationNatsConsumer(
             NatsConnectionProperties connectionProperties,
@@ -165,7 +166,8 @@ public class IntegrationNatsConsumer {
             ConnectionActivityRecorder activityRecorder,
             List<RouteAdmission> routeAdmissions,
             NatsTraceContext traceContext,
-            IntegrationMessageMeters messageMeters) {
+            IntegrationMessageMeters messageMeters,
+            DeliveryInbox inbox) {
         this.connectionProperties = connectionProperties;
         this.consumerProperties = consumerProperties;
         this.subscriptionProvider = subscriptionProvider;
@@ -176,6 +178,7 @@ public class IntegrationNatsConsumer {
         this.routeAdmissions = List.copyOf(routeAdmissions);
         this.traceContext = traceContext;
         this.messageMeters = messageMeters;
+        this.inbox = inbox;
     }
 
     // Lifecycle
@@ -938,8 +941,12 @@ public class IntegrationNatsConsumer {
         Optional<RouteAdmission> admission = routeAdmissions.stream()
                 .filter(candidate -> candidate.owns(msg.getSubject()))
                 .findFirst();
-        if (admission.isEmpty()) resolved.onMessage(msg);
-        else if (!admission.get().admit(scopeId, msg, () -> resolved.onMessage(msg))) {
+        boolean[] admitted = {true};
+        inbox.dispatch(scopeId, msg, () -> {
+            if (admission.isEmpty()) resolved.onMessage(msg);
+            else admitted[0] = admission.get().admit(scopeId, msg, () -> resolved.onMessage(msg));
+        });
+        if (!admitted[0]) {
             log.info(
                     "Skipped message: reason=routeNotAdmitted, scopeId={}, route={}",
                     scopeId,

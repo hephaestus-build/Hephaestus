@@ -1,9 +1,14 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
@@ -14,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
@@ -24,11 +30,13 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.identity.SlackRosterIdentityResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.InboxTestMessages;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -93,6 +101,9 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
     @Autowired
     private MembershipService memberships;
 
+    @Autowired
+    private DeliveryInbox inbox;
+
     private SlackWorkspaceResolver workspaceResolver;
     private SlackRosterIdentityResolver identityResolver;
     private SlackIngestService ingestService;
@@ -125,17 +136,65 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
         when(identityResolver.displayName(anyLong(), any(), any())).thenReturn(Optional.of("A person"));
         when(identityResolver.humanAccountId(anyLong(), any(), any(), any())).thenReturn(Optional.of(human));
 
-        ingestService = new SlackIngestService(
+        ingestService = service(messageRepository);
+    }
+
+    private SlackIngestService service(SlackMessageRepository messages) {
+        return new SlackIngestService(
                 workspaceResolver,
                 monitoredChannelRepository,
                 new SlackChannelConsentGate(monitoredChannelRepository),
                 new SlackParticipantConsentGate(participantConsentRepository),
-                messageRepository,
+                messages,
                 threadRepository,
                 identityResolver,
                 conversationFeedbackErasure,
                 /* conversationIngestEnabled */ true,
                 new TransactionTemplate(transactionManager));
+    }
+
+    @Test
+    void shouldFinishAnEditAfterItsBaseInsertCommittedAndSkipCompletedRedelivery() {
+        var faultingMessages = mock(SlackMessageRepository.class, delegatesTo(messageRepository));
+        Instant editedAt = Instant.ofEpochSecond(201);
+        doThrow(new IllegalStateException("edit transaction failed"))
+                .when(faultingMessages)
+                .applyEdit(workspaceId, CHANNEL, "200.1", "edited body", editedAt);
+        var interrupted = service(faultingMessages);
+        var edit = new SlackIngestService.Edit("200.1", null, ALLOWED_USER, "edited body", "201.0");
+        var delivery = InboxTestMessages.delivery("slack-edit-" + UUID.randomUUID(), 1, Instant.now());
+
+        assertThatThrownBy(
+                        () -> inbox.dispatch(workspaceId, delivery, () -> interrupted.editMessage(TEAM, CHANNEL, edit)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, CHANNEL, "200.1"))
+                .isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT edited_at FROM slack_message WHERE workspace_id = ? AND slack_channel_id = ? AND slack_ts = ?",
+                        Timestamp.class,
+                        workspaceId,
+                        CHANNEL,
+                        "200.1"))
+                .isNull();
+
+        inbox.dispatch(workspaceId, delivery, () -> ingestService.editMessage(TEAM, CHANNEL, edit));
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT edited_at FROM slack_message WHERE workspace_id = ? AND slack_channel_id = ? AND slack_ts = ?",
+                        Timestamp.class,
+                        workspaceId,
+                        CHANNEL,
+                        "200.1"))
+                .isEqualTo(Timestamp.from(editedAt));
+        verify(identityResolver, times(1)).humanAccountId(workspaceId, TEAM, ALLOWED_USER, "A person");
+        inbox.dispatch(workspaceId, delivery, () -> {
+            throw new AssertionError("A completed edit must skip handler preparation");
+        });
+        assertThat(jdbcTemplate.queryForList(
+                        "SELECT step_name FROM consumer_inbox_step WHERE workspace_id = ? AND consumer_name = ?",
+                        String.class,
+                        workspaceId,
+                        delivery.metaData().getConsumer()))
+                .containsExactlyInAnyOrder("slack.message.ingest", "slack.message.edit", "complete");
     }
 
     @Test

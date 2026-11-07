@@ -73,6 +73,8 @@ public class WorkspaceScopedTables {
             "instance_settings",
             // The releases this instance started; no tenant dimension exists
             "release_start",
+            // Installation deliveries have no workspace until their handler creates one.
+            "installation_inbox_step",
             // Native-account email subscriptions are independent of workspace membership.
             "notification_subscription",
             // Instance LLM-config catalog — app_admin-owned, curated, shared across all

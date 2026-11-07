@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEvent;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
@@ -142,6 +143,16 @@ public class SlackChannelConsentService {
                     .isPresent()) {
                 return applyExistingRegistrationInTx(workspaceId, slackChannelId, resolvedName);
             }
+            if (!DeliveryInbox.claim("slack.channel.register." + workspaceId + "." + slackChannelId)) {
+                return new RegistrationOutcome(
+                        toDTO(
+                                workspaceId,
+                                monitoredChannelRepository
+                                        .findByWorkspaceIdAndSlackChannelId(workspaceId, slackChannelId)
+                                        .orElseThrow(
+                                                () -> new EntityNotFoundException("Slack channel", slackChannelId))),
+                        false);
+            }
             SlackMonitoredChannel channel = new SlackMonitoredChannel();
             channel.setWorkspaceId(workspaceId);
             channel.setSlackTeamId(teamId);
@@ -164,6 +175,9 @@ public class SlackChannelConsentService {
         SlackMonitoredChannel channel = monitoredChannelRepository
                 .findByWorkspaceIdAndSlackChannelId(workspaceId, slackChannelId)
                 .orElseThrow(() -> new EntityNotFoundException("Slack channel", slackChannelId));
+        if (!DeliveryInbox.claim("slack.channel.register." + workspaceId + "." + slackChannelId)) {
+            return new RegistrationOutcome(toDTO(workspaceId, channel), false);
+        }
         boolean changed = updateChannelName(channel, resolvedName);
         if (channel.getConsentState() == ConsentState.REVOKED) {
             ConsentState from = channel.getConsentState();
@@ -360,6 +374,7 @@ public class SlackChannelConsentService {
      */
     public void pauseForPlatformEvent(long workspaceId, String slackChannelId, String reason) {
         runInTx(() -> {
+            if (!DeliveryInbox.claim("slack.channel.pause." + workspaceId + "." + slackChannelId)) return;
             SlackMonitoredChannel channel = monitoredChannelRepository
                     .findByWorkspaceIdAndSlackChannelId(workspaceId, slackChannelId)
                     .orElse(null);
@@ -379,6 +394,7 @@ public class SlackChannelConsentService {
      */
     public void revokeForPlatformEvent(long workspaceId, String slackChannelId, String reason) {
         runInTx(() -> {
+            if (!DeliveryInbox.claim("slack.channel.revoke." + workspaceId + "." + slackChannelId)) return;
             SlackMonitoredChannel channel = monitoredChannelRepository
                     .findByWorkspaceIdAndSlackChannelId(workspaceId, slackChannelId)
                     .orElse(null);
@@ -400,7 +416,11 @@ public class SlackChannelConsentService {
         if (channelName == null || channelName.isBlank()) {
             return;
         }
-        monitoredChannelRepository.updateChannelName(workspaceId, slackChannelId, channelName);
+        runInTx(() -> {
+            if (DeliveryInbox.claim("slack.channel.rename." + workspaceId + "." + slackChannelId)) {
+                monitoredChannelRepository.updateChannelName(workspaceId, slackChannelId, channelName);
+            }
+        });
     }
 
     /** Run a DB-only side effect in one short transaction; never returns a value (platform-event wrappers only). */

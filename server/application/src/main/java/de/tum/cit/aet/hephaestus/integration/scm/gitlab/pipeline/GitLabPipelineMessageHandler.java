@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pipeline;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -56,12 +57,16 @@ public class GitLabPipelineMessageHandler extends AbstractIntegrationMessageHand
 
     @Override
     protected void dispatchEvent(GitLabPipelineEventDTO event, Instant arrivedAt) {
-        transactionTemplate.executeWithoutResult(status -> handle(event, arrivedAt));
+        transactionTemplate.executeWithoutResult(status -> {
+            if (DeliveryInbox.claim("gitlab.pipeline.event")) handle(event, arrivedAt);
+        });
     }
 
     @Override
     protected void handleEvent(GitLabPipelineEventDTO event) {
-        transactionTemplate.executeWithoutResult(status -> handle(event, Instant.now()));
+        transactionTemplate.executeWithoutResult(status -> {
+            if (DeliveryInbox.claim("gitlab.pipeline.event")) handle(event, Instant.now());
+        });
     }
 
     /**

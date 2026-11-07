@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.check;
 
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -116,7 +117,8 @@ public class GitHubCheckSuiteMessageHandler extends AbstractIntegrationMessageHa
         // A suite that ended neutral, skipped or stale says nothing about the head, but it may be the last to end:
         // the head's runs are read after it all the same.
         CheckState state = GitHubHeadCheckProcessor.fromCheckSuite(suite.status(), suite.conclusion());
-        if (state != null) headCheckProcessor.observe(suite.headSha(), state, context);
+        if (state != null && DeliveryInbox.claim("github.check_suite.event"))
+            headCheckProcessor.observe(suite.headSha(), state, context);
         List<Integer> numbers =
                 pullRequestRepository.findAllByRepository_IdAndHeadRefOid(repository.getId(), suite.headSha()).stream()
                         .map(PullRequest::getNumber)

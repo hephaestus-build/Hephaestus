@@ -137,6 +137,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "AccountExport", // GDPR Art. 20 self-service export; account-scoped, spans workspaces
             "LoginProvider", // Instance-scoped OAuth login provider (sign-in option); not workspace-scoped
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces
+            "InstallationInboxStep", // Installation deliveries have no workspace until their handler creates one
             "WorkerRegistry", // Fleet-wide worker liveness/capacity registry; not workspace-scoped
             "InstanceSettings", // Singleton instance-wide operator settings (silent-mode brake)
             "ReleaseStart" // The releases this instance started

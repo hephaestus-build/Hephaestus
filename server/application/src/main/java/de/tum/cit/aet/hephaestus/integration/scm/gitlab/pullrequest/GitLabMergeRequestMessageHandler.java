@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -156,6 +157,7 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
             return;
         }
         transactionTemplate.executeWithoutResult(status -> {
+            if (!DeliveryInbox.claim("gitlab.merge_request.readiness")) return;
             if (!contextResolver.mayStillWrite(stored.context(), stored.read())) {
                 return;
             }
@@ -224,6 +226,7 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
             return null;
         }
         ProcessingContext context = resolved.withObservedAt(arrivedAt);
+        if (!DeliveryInbox.claim("gitlab.merge_request.event")) return context;
 
         switch (action) {
             case OPEN, UPDATE -> mergeRequestProcessor.process(event, context);

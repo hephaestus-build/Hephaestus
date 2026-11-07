@@ -8,6 +8,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +18,8 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationCoreConnectionPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider.NatsSubscriptionInfo;
 import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider.StreamSubscription;
@@ -66,6 +69,8 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
     private String stream;
     private @Nullable Object originalConnection;
     private @Nullable Object originalSubscriptions;
+    private @Nullable Object originalDispatcher;
+    private @Nullable Object originalPoisonHandler;
 
     @Autowired
     private IntegrationNatsConsumer consumer;
@@ -87,6 +92,8 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
     void closeBrokerConnection() throws Exception {
         ReflectionTestUtils.setField(consumer, "natsConnection", originalConnection);
         ReflectionTestUtils.setField(consumer, "subscriptionProvider", originalSubscriptions);
+        ReflectionTestUtils.setField(consumer, "dispatcher", originalDispatcher);
+        ReflectionTestUtils.setField(consumer, "poisonHandler", originalPoisonHandler);
         broker.jetStreamManagement().deleteStream(stream);
         broker.close();
     }
@@ -120,6 +127,8 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                         .build());
         originalConnection = ReflectionTestUtils.getField(consumer, "natsConnection");
         originalSubscriptions = ReflectionTestUtils.getField(consumer, "subscriptionProvider");
+        originalDispatcher = ReflectionTestUtils.getField(consumer, "dispatcher");
+        originalPoisonHandler = ReflectionTestUtils.getField(consumer, "poisonHandler");
         ReflectionTestUtils.setField(consumer, "natsConnection", broker);
         var owner = persistUser("admin");
         workspace = createWorkspace("deadletters-a", "Events A", "events-a", AccountType.ORG, owner);
@@ -376,10 +385,14 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
         var handler = mock(IntegrationMessageHandler.class);
         when(dispatcher.dispatch("github.acme.repo.issues")).thenReturn(Optional.of(handler));
         doAnswer(call -> {
-                    workspace.setDisplayName("partial replay");
-                    deadLetterWorkspaces.saveAndFlush(workspace);
-                    if (illegalState) throw new IllegalStateException("failure after a database write");
-                    throw new IllegalArgumentException("failure after a database write");
+                    transactions.executeWithoutResult(status -> {
+                        if (!DeliveryInbox.claim("test.rollback")) return;
+                        workspace.setDisplayName("partial replay");
+                        deadLetterWorkspaces.saveAndFlush(workspace);
+                        if (illegalState) throw new IllegalStateException("failure after a database write");
+                        throw new IllegalArgumentException("failure after a database write");
+                    });
+                    return null;
                 })
                 .when(handler)
                 .onMessage(any());
@@ -496,6 +509,123 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                     assertThat(event.getResult()).isEqualTo(AuthEvent.Result.SUCCESS);
                     assertThat(event.getAccountId()).isEqualTo(replayed.replayedBy());
                 });
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldSkipCommittedDeliveryAfterLostAcknowledgementAndAdministratorReplay() throws Exception {
+        var handler = useHandler();
+        doAnswer(call -> {
+                    appendInStep("test.effect", " committed");
+                    return null;
+                })
+                .when(handler)
+                .onMessage(any());
+        Message first = delivery("github.acme.repo.issues", "{}", "lost-ack");
+        Message lostAck = spy(first);
+        doThrow(new IllegalStateException("connection closed")).when(lostAck).ack();
+        consumer.handleMessage(workspace.getId(), lostAck);
+
+        Message redelivery =
+                broker.getStreamContext(stream).getConsumerContext("lost-ack").next(Duration.ofSeconds(5));
+        if (redelivery == null) throw new AssertionError("Missing redelivery after lost acknowledgement");
+        assertThat(redelivery.metaData().streamSequence())
+                .isEqualTo(first.metaData().streamSequence());
+        assertThat(redelivery.metaData().deliveredCount()).isEqualTo(2);
+        consumer.handleMessage(workspace.getId(), redelivery);
+
+        service.capture(workspace.getId(), first, new IllegalStateException("settlement failed"));
+        var row = service.listWorkspace(workspace.getId(), null, 100).content().getFirst();
+        client.post()
+                .uri("/workspaces/deadletters-a/integrations/dead-letters/{id}/replays", row.id())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+        assertThat(deadLetterWorkspaces
+                        .findById(workspace.getId())
+                        .orElseThrow()
+                        .getDisplayName())
+                .isEqualTo("Events A committed");
+        verify(handler, times(1)).onMessage(any());
+        assertThat(service.listWorkspace(workspace.getId(), null, 100)
+                        .content()
+                        .getFirst()
+                        .replayedAt())
+                .isNotNull();
+    }
+
+    @Test
+    void shouldExhaustPoisonBudgetAfterAPartialCommitAndContinueToTheNextEvent() throws Exception {
+        var handler = useHandler();
+        ReflectionTestUtils.setField(
+                consumer,
+                "poisonHandler",
+                new IntegrationPoisonHandler(
+                        NatsConsumerPropertiesFixture.withFastPoisonBackoff(), new SimpleMeterRegistry(), service));
+        doAnswer(call -> {
+                    Message message = call.getArgument(0);
+                    if ("next".equals(new String(message.getData(), StandardCharsets.UTF_8))) return null;
+                    appendInStep("test.first", " first");
+                    transactions.executeWithoutResult(status -> {
+                        if (!DeliveryInbox.claim("test.second")) return;
+                        var current =
+                                deadLetterWorkspaces.findById(workspace.getId()).orElseThrow();
+                        current.setDisplayName(current.getDisplayName() + " rolled back");
+                        deadLetterWorkspaces.saveAndFlush(current);
+                        throw new IllegalStateException("unfinished second step");
+                    });
+                    return null;
+                })
+                .when(handler)
+                .onMessage(any());
+        Message first = delivery("github.acme.repo.issues", "{}", "partial");
+        broker.jetStream().publish("github.acme.repo.issues", "next".getBytes(StandardCharsets.UTF_8));
+        var context = broker.getStreamContext(stream).getConsumerContext("partial");
+        Message current = first;
+        for (int attempt = 1; attempt <= 10; attempt++) {
+            assertThat(current.metaData().streamSequence())
+                    .isEqualTo(first.metaData().streamSequence());
+            assertThat(current.metaData().deliveredCount()).isEqualTo(attempt);
+            consumer.handleMessage(workspace.getId(), current);
+            if (attempt < 10) {
+                Message retry = context.next(Duration.ofSeconds(5));
+                if (retry == null) throw new AssertionError("Partial commit stopped retrying");
+                current = retry;
+            }
+        }
+        assertThat(deadLetterWorkspaces
+                        .findById(workspace.getId())
+                        .orElseThrow()
+                        .getDisplayName())
+                .isEqualTo("Events A first");
+        assertThat(service.listWorkspace(workspace.getId(), null, 100).content())
+                .singleElement()
+                .satisfies(row ->
+                        assertThat(row.sequence()).isEqualTo(first.metaData().streamSequence()));
+        Message next = context.next(Duration.ofSeconds(5));
+        if (next == null) throw new AssertionError("Poison delivery blocked the next event");
+        assertThat(new String(next.getData(), StandardCharsets.UTF_8)).isEqualTo("next");
+        consumer.handleMessage(workspace.getId(), next);
+    }
+
+    private IntegrationMessageHandler useHandler() {
+        var dispatcher = mock(IntegrationMessageDispatcher.class);
+        var handler = mock(IntegrationMessageHandler.class);
+        when(handler.key()).thenReturn(new EventTypeKey(IntegrationKind.GITHUB, "issues"));
+        when(dispatcher.dispatch("github.acme.repo.issues")).thenReturn(Optional.of(handler));
+        ReflectionTestUtils.setField(consumer, "dispatcher", dispatcher);
+        return handler;
+    }
+
+    private void appendInStep(String step, String suffix) {
+        transactions.executeWithoutResult(status -> {
+            if (!DeliveryInbox.claim(step)) return;
+            var current = deadLetterWorkspaces.findById(workspace.getId()).orElseThrow();
+            current.setDisplayName(current.getDisplayName() + suffix);
+            deadLetterWorkspaces.saveAndFlush(current);
+        });
     }
 
     private Message delivery(String subject, String payload, String durable) throws Exception {

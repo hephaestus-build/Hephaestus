@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
@@ -120,6 +121,7 @@ public class SlackIngestService {
         if (workspaceId == null) {
             return;
         }
+        if (!DeliveryInbox.claim("slack.message.ingest")) return;
         Long authorAccountId = null;
         if (authorSlackUserId != null && !authorSlackUserId.isBlank()) {
             authorAccountId = identityResolver
@@ -209,7 +211,9 @@ public class SlackIngestService {
         if (announcedAt == null || !isAfterAnnouncement(deletedTs, announcedAt)) {
             return;
         }
-        messageRepository.tombstone(workspaceId, teamId, channelId, deletedTs, Instant.now());
+        if (DeliveryInbox.claim("slack.message.delete")) {
+            messageRepository.tombstone(workspaceId, teamId, channelId, deletedTs, Instant.now());
+        }
     }
 
     /** One edit of a message: the message's own fields as edited, and {@code editedTs}, Slack's time of the edit. */
@@ -250,10 +254,15 @@ public class SlackIngestService {
         // applyEdit means a delete-then-edit reorder no-ops (updated == 0, row present) and never resurrects a
         // tombstone. existsBy then distinguishes a TOMBSTONED row (updated == 0 but present -> skip) from a
         // genuinely-absent one (re-ingest).
-        boolean absent = Boolean.TRUE.equals(transactionTemplate.execute(
-                status -> messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt) == 0
-                        && !messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(
-                                workspaceId, channelId, ts)));
+        String step = "slack.message.edit";
+        boolean absent = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+            boolean present =
+                    messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, channelId, ts);
+            if (present && DeliveryInbox.claim(step)) {
+                messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt);
+            }
+            return !present;
+        }));
         if (!absent) {
             return;
         }
@@ -262,8 +271,9 @@ public class SlackIngestService {
         ingestChannelMessage(teamId, channelId, ts, threadTs, authorSlackUserId, text);
         // Stamp edited_at (insertIfAbsent does not): a row born from message_changed genuinely is an edited message,
         // so the projector's `edited` flag reads true. Idempotent second write on the now-present row.
-        transactionTemplate.executeWithoutResult(
-                status -> messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt));
+        transactionTemplate.executeWithoutResult(status -> {
+            if (DeliveryInbox.claim(step)) messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt);
+        });
     }
 
     /**
@@ -273,7 +283,7 @@ public class SlackIngestService {
     @Transactional
     public void refreshEdit(long workspaceId, String channelId, String ts, String text, @Nullable String editedTs) {
         Instant editedAt = instantOf(editedTs);
-        if (conversationIngestEnabled && editedAt != null) {
+        if (conversationIngestEnabled && editedAt != null && DeliveryInbox.claim("slack.message.refresh")) {
             messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt);
         }
     }
@@ -295,6 +305,7 @@ public class SlackIngestService {
      */
     @Transactional
     public void eraseChannel(long workspaceId, String channelId) {
+        if (!DeliveryInbox.claim("slack.channel.erase")) return;
         List<Long> threadIds = threadRepository.findIdsByWorkspaceIdAndSlackChannelId(workspaceId, channelId);
         monitoredChannelRepository.revokeConsent(workspaceId, channelId);
         conversationFeedbackErasure.eraseForThreads(workspaceId, threadIds);

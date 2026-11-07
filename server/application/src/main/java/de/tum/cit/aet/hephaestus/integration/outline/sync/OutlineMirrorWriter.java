@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.outline.sync;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentSnapshot;
@@ -26,7 +27,8 @@ import org.springframework.stereotype.Component;
  * never commit and would quietly lose the write. Re-running re-reads the row at its current version and re-applies
  * the mutation; the mutations are pure functions of already-fetched payload, so a replay costs no extra API call.
  *
- * <p>Losing twice is logged and skipped — the next reconcile re-diffs and converges.
+ * <p>A broker delivery retries after a second conflict so its unfinished step cannot be marked complete.
+ * A sync pass logs and skips that row; the next reconcile re-diffs and converges.
  */
 @Component
 @ConditionalOnServerRole
@@ -44,8 +46,8 @@ public class OutlineMirrorWriter {
     /**
      * Upsert one mirrored document. See {@link OutlineMirrorTransactions#upsertDocument}.
      *
-     * @return the snapshot of the written row, or {@code null} when the write lost the optimistic-lock
-     *         race twice (skipped; the next reconcile converges)
+     * @return the written or previously committed snapshot, or {@code null} when that row was erased
+     *         or a sync pass lost the optimistic-lock race twice
      */
     public @Nullable OutlineDocumentSnapshot upsertDocument(
             long workspaceId,
@@ -64,7 +66,7 @@ public class OutlineMirrorWriter {
      * {@link OutlineMirrorTransactions#updateDocument}.
      *
      * @return the snapshot of the written row, or {@code null} when the row was already gone or the write
-     *         lost the optimistic-lock race twice
+     *         lost the optimistic-lock race twice during a sync pass
      */
     public @Nullable OutlineDocumentSnapshot updateDocument(
             long workspaceId, long connectionId, String documentId, Consumer<OutlineDocument> mutator) {
@@ -90,10 +92,14 @@ public class OutlineMirrorWriter {
 
     /** Update a registered collection's bookkeeping. See {@link OutlineMirrorTransactions#updateCollection}. */
     public void updateCollection(
-            long workspaceId, long connectionId, String collectionId, Consumer<OutlineCollection> mutator) {
+            long workspaceId,
+            long connectionId,
+            String collectionId,
+            String purpose,
+            Consumer<OutlineCollection> mutator) {
         retryOnce(
                 () -> {
-                    transactions.updateCollection(workspaceId, connectionId, collectionId, mutator);
+                    transactions.updateCollection(workspaceId, connectionId, collectionId, purpose, mutator);
                     return null;
                 },
                 "collection",
@@ -107,8 +113,8 @@ public class OutlineMirrorWriter {
 
     /**
      * Runs {@code write} — one whole {@code REQUIRES_NEW} transaction — retrying it exactly once in a new
-     * transaction when a concurrent writer won the optimistic-lock race. A second conflict is logged and
-     * skipped rather than propagated: one contended row must not abort the pass around it.
+     * transaction when a concurrent writer won the optimistic-lock race. Broker deliveries propagate a
+     * second conflict; sync passes skip that row and continue with their remaining rows.
      */
     private <T> @Nullable T retryOnce(Supplier<T> write, String kind, String identifier) {
         try {
@@ -119,6 +125,7 @@ public class OutlineMirrorWriter {
         try {
             return write.get();
         } catch (ObjectOptimisticLockingFailureException stillContended) {
+            if (DeliveryInbox.isDispatching()) throw stillContended;
             log.warn(
                     "outline.sync: {} {} lost the optimistic-lock retry too — skipping, the next reconcile fixes it",
                     kind,

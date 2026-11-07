@@ -80,13 +80,7 @@ public class ConsumerDeadLetterReplayService {
             return consumer.serialDispatch(
                     workspaceId,
                     row.getStreamName(),
-                    () -> Objects.requireNonNull(transactions.execute(status -> {
-                        ConsumerDeadLetter locked = (workspaceId == null
-                                        ? repository.lockInstallation(row.getId())
-                                        : repository.lockWorkspace(workspaceId, row.getId()))
-                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-                        return apply(workspaceId, actorId, locked, stored, storedTime.toInstant());
-                    })));
+                    () -> apply(workspaceId, actorId, row, stored, storedTime.toInstant()));
         } catch (ResponseStatusException failure) {
             throw failure;
         } catch (RuntimeException failure) {
@@ -121,12 +115,19 @@ public class ConsumerDeadLetterReplayService {
                     "We could not replay this event. Check the connection and try again.",
                     failure);
         }
-        if (workspaceId == null && !audit.record(actorId, row.getId())) {
-            throw new IllegalStateException("The replay audit could not be recorded");
-        }
-        row.setReplayedAt(Instant.now());
-        row.setReplayedBy(actorId);
-        return ConsumerDeadLetterDTO.from(row);
+        return Objects.requireNonNull(transactions.execute(status -> {
+            ConsumerDeadLetter locked = (workspaceId == null
+                            ? repository.lockInstallation(row.getId())
+                            : repository.lockWorkspace(workspaceId, row.getId()))
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+            if (locked.getReplayedAt() != null) return ConsumerDeadLetterDTO.from(locked);
+            if (workspaceId == null && !audit.record(actorId, locked.getId())) {
+                throw new IllegalStateException("The replay audit could not be recorded");
+            }
+            locked.setReplayedAt(Instant.now());
+            locked.setReplayedBy(actorId);
+            return ConsumerDeadLetterDTO.from(locked);
+        }));
     }
 
     /** Preserve the broker timestamp used by SCM event identities, without a live acknowledgement channel. */

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.commit;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
@@ -82,6 +83,8 @@ public class CommitDetailsPersister {
 
     private Outcome capture(CommitDetails details, Repository repository, Origin origin) {
         Long repositoryId = repository.getId();
+        if (!DeliveryInbox.claim("commit.details." + repositoryId + "." + details.sha()))
+            return Outcome.ALREADY_CAPTURED;
         Commit existing = commitRepository
                 .findByShaAndRepositoryId(details.sha(), repositoryId)
                 .orElse(null);

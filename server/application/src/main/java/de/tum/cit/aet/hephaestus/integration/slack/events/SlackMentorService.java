@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
@@ -128,34 +129,33 @@ public class SlackMentorService {
         }
         try {
             // A disconnect either commits first, and nothing is stored, or waits and then erases what this stored.
-            Optional<MentorTurnService.Submission> accepted =
-                    workspaceResolver.whileConnected(workspaceId, teamId, () -> {
-                        UUID conversationId = replyTs == null
-                                ? topLevel(workspaceId, accountId, teamId, slackUserId, channelId)
-                                : thread(workspaceId, accountId, teamId, slackUserId, channelId, replyTs);
-                        return turns.submit(
-                                workspaceId,
-                                conversationId,
-                                new MentorTurnService.Question(
-                                        MentorTurn.Surface.SLACK,
-                                        text,
-                                        requestId(teamId, channelId, messageTs),
-                                        messageTs,
-                                        null));
-                    });
+            Optional<Boolean> accepted = workspaceResolver.whileConnected(workspaceId, teamId, () -> {
+                if (!DeliveryInbox.claim("slack.mentor.submit")) return false;
+                UUID conversationId = replyTs == null
+                        ? topLevel(workspaceId, accountId, teamId, slackUserId, channelId)
+                        : thread(workspaceId, accountId, teamId, slackUserId, channelId, replyTs);
+                MentorTurnService.Submission submission = turns.submit(
+                        workspaceId,
+                        conversationId,
+                        new MentorTurnService.Question(
+                                MentorTurn.Surface.SLACK,
+                                text,
+                                requestId(teamId, channelId, messageTs),
+                                messageTs,
+                                null));
+                log.info(
+                        "Accepted Slack Hephaestus question: workspace={} conversation={} turn={} new={}",
+                        workspaceId,
+                        submission.turn().getConversationId(),
+                        submission.turn().getId(),
+                        submission.created());
+                return true;
+            });
             if (accepted.isEmpty()) {
                 log.info(
                         "Slack DM for workspace {} arrived while its Slack connection ended; stored nothing",
                         workspaceId);
-                return;
             }
-            MentorTurnService.Submission submission = accepted.get();
-            log.info(
-                    "Accepted Slack Hephaestus question: workspace={} conversation={} turn={} new={}",
-                    workspaceId,
-                    submission.turn().getConversationId(),
-                    submission.turn().getId(),
-                    submission.created());
         } catch (MentorRejectedException rejected) {
             reply(workspaceId, channelId, replyTs, rejected.reason().userMessage());
         }
@@ -186,7 +186,12 @@ public class SlackMentorService {
         ownMessage(teamId, channelId, slackUserId, messageTs).ifPresent(found -> {
             MentorEntry entry = found.entry();
             if (entry.getKind() == MentorEntry.Kind.USER && !entry.isRedacted() && !text.isBlank()) {
-                entries.editSlackMessage(found.workspaceId(), entry.getConversationId(), messageTs, text);
+                workspaceResolver.whileConnected(found.workspaceId(), teamId, () -> {
+                    if (DeliveryInbox.claim("slack.mentor.edit")) {
+                        entries.editSlackMessage(found.workspaceId(), entry.getConversationId(), messageTs, text);
+                    }
+                    return true;
+                });
             }
         });
     }
@@ -195,7 +200,12 @@ public class SlackMentorService {
     public void handleDelete(String teamId, String channelId, String slackUserId, String deletedTs) {
         ownMessage(teamId, channelId, slackUserId, deletedTs).ifPresent(found -> {
             if (found.entry().getKind() == MentorEntry.Kind.USER) {
-                entries.deleteMessage(found.workspaceId(), found.entry().getId());
+                workspaceResolver.whileConnected(found.workspaceId(), teamId, () -> {
+                    if (DeliveryInbox.claim("slack.mentor.delete")) {
+                        entries.deleteMessage(found.workspaceId(), found.entry().getId());
+                    }
+                    return true;
+                });
             }
         });
     }
@@ -229,17 +239,19 @@ public class SlackMentorService {
         }
         long workspaceId = workspaceOpt.get();
         Optional<MentorTurn> stopped = workspaceResolver
-                .whileConnected(
-                        workspaceId,
-                        teamId,
-                        () -> conversations
-                                .findMainBySlack(workspaceId, teamId, slackUserId, channelId)
-                                .flatMap(main -> entries.findBySlackTs(workspaceId, main.getId(), threadTs))
-                                .flatMap(parent -> conversations.findThread(workspaceId, parent.getId()))
-                                .flatMap(thread -> turns.stopRunning(
-                                        workspaceId,
-                                        thread.getId(),
-                                        running -> stops(workspaceId, running, eventTs, streams))))
+                .whileConnected(workspaceId, teamId, () -> {
+                    if (!DeliveryInbox.claim("slack.mentor.stop")) {
+                        return Optional.<MentorTurn>empty();
+                    }
+                    return conversations
+                            .findMainBySlack(workspaceId, teamId, slackUserId, channelId)
+                            .flatMap(main -> entries.findBySlackTs(workspaceId, main.getId(), threadTs))
+                            .flatMap(parent -> conversations.findThread(workspaceId, parent.getId()))
+                            .flatMap(thread -> turns.stopRunning(
+                                    workspaceId,
+                                    thread.getId(),
+                                    running -> stops(workspaceId, running, eventTs, streams)));
+                })
                 .flatMap(turn -> turn);
         stopped.ifPresent(turn -> log.info(
                 "Stopped Slack conversation turn from its Slack session: workspace={} turn={}",

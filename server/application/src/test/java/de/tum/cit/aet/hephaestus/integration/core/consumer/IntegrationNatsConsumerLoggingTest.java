@@ -164,7 +164,8 @@ class IntegrationNatsConsumerLoggingTest {
                 mock(ConnectionActivityRecorder.class),
                 List.of(),
                 NatsTraceContexts.none(),
-                NatsTraceContexts.messageMeters());
+                NatsTraceContexts.messageMeters(),
+                DeliveryInboxes.passthrough());
     }
 
     @Test

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewthread
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -58,7 +59,9 @@ public class GitHubPullRequestReviewThreadMessageHandler
     /** The payload's pull request carries review requests, which are dated by when Hephaestus received them. */
     @Override
     protected void dispatchEvent(GitHubPullRequestReviewThreadEventDTO event, Instant arrivedAt) {
-        transactionTemplate.executeWithoutResult(status -> handle(event, arrivedAt));
+        transactionTemplate.executeWithoutResult(status -> {
+            if (DeliveryInbox.claim("github.review_thread.event")) handle(event, arrivedAt);
+        });
     }
 
     @Override

@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FoundBy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -418,17 +419,33 @@ public class OutlineDocumentSyncService {
                     current.get());
             return;
         }
-        // An older payload would restore older words or state (sync-lifecycle.md).
+        // Reject older payloads before resuming a committed step, but let a tied retry finish its event.
         Instant payloadUpdatedAt = prefetchedMeta == null ? null : prefetchedMeta.getUpdatedAt();
         if (prefetchedMeta != null
                 && mirrored.isPresent()
-                && (ProviderStateVersion.isOlder(
-                                payloadUpdatedAt, mirrored.get().outlineUpdatedAt())
-                        || (ProviderStateVersion.cannotReplace(
-                                        payloadUpdatedAt, mirrored.get().outlineUpdatedAt())
-                                && (mirrored.get().hasBody()
-                                        || TOMBSTONE_EVENTS.contains(eventName)
-                                        || ARCHIVE_EVENT.equals(eventName))))) {
+                && ProviderStateVersion.isOlder(payloadUpdatedAt, mirrored.get().outlineUpdatedAt())) {
+            log.debug("Skipped stale Outline delivery: workspaceId={}, event={}", workspaceId, eventName);
+            return;
+        }
+        // A mirror write can commit before its event transaction. Finish that event on redelivery.
+        if (DeliveryInbox.completed("outline.document.upsert." + ctx.connectionId() + "." + documentId)
+                || DeliveryInbox.completed("outline.document.update." + ctx.connectionId() + "." + documentId)) {
+            mirrored.ifPresent(document -> {
+                Instant archivedAt = document.archivedAt();
+                Instant occurredAt = ARCHIVE_EVENT.equals(eventName) && archivedAt != null
+                        ? archivedAt
+                        : DeliveryInbox.receivedAtOr(Instant.now());
+                recordAndOffer(workspaceId, document, eventName, occurredAt, FoundBy.WEBHOOK);
+            });
+            return;
+        }
+        if (prefetchedMeta != null
+                && mirrored.isPresent()
+                && ProviderStateVersion.cannotReplace(
+                        payloadUpdatedAt, mirrored.get().outlineUpdatedAt())
+                && (mirrored.get().hasBody()
+                        || TOMBSTONE_EVENTS.contains(eventName)
+                        || ARCHIVE_EVENT.equals(eventName))) {
             log.debug("Skipped stale Outline delivery: workspaceId={}, event={}", workspaceId, eventName);
             return;
         }
@@ -541,7 +558,7 @@ public class OutlineDocumentSyncService {
             if (upstream == null) {
                 continue;
             }
-            writeCollection(ctx, row, target -> {
+            writeCollection(ctx, row, "catalog", target -> {
                 target.setName(upstream.getName());
                 target.setUrlId(upstream.getUrlId());
                 target.setColor(upstream.getColor());
@@ -662,7 +679,7 @@ public class OutlineDocumentSyncService {
         int documentsUpstream = seen.size();
         int skipped = skippedForBudget;
         if (skipped > 0) {
-            writeCollection(ctx, collection, target -> {
+            writeCollection(ctx, collection, "progress", target -> {
                 target.setDocumentsUpstream(documentsUpstream);
                 target.setExportsSkippedForBudget(skipped);
                 target.setSyncStatus(SyncStatus.PENDING);
@@ -684,7 +701,7 @@ public class OutlineDocumentSyncService {
                     collectionId,
                     ctx.workspaceId());
         }
-        writeCollection(ctx, collection, target -> {
+        writeCollection(ctx, collection, "progress", target -> {
             target.setDocumentsUpstream(documentsUpstream);
             target.setExportsSkippedForBudget(skipped);
             target.setDocumentsSyncedAt(now);
@@ -705,7 +722,7 @@ public class OutlineDocumentSyncService {
                 "outline.sync: collection sync cancelled for workspaceId={}, collectionId={} — left PENDING",
                 ctx.workspaceId(),
                 collectionId);
-        writeCollection(ctx, collection, target -> target.setSyncStatus(SyncStatus.PENDING));
+        writeCollection(ctx, collection, "cancelled", target -> target.setSyncStatus(SyncStatus.PENDING));
     }
 
     /**
@@ -942,14 +959,16 @@ public class OutlineDocumentSyncService {
      * mutator runs against the row as re-read inside that transaction, never against the possibly-stale
      * copy this pass is iterating — which is also what makes it safely replayable on a lock conflict.
      */
-    private void writeCollection(SyncContext ctx, OutlineCollection collection, Consumer<OutlineCollection> mutator) {
-        mirrorWriter.updateCollection(ctx.workspaceId(), ctx.connectionId(), collection.getCollectionId(), mutator);
+    private void writeCollection(
+            SyncContext ctx, OutlineCollection collection, String purpose, Consumer<OutlineCollection> mutator) {
+        mirrorWriter.updateCollection(
+                ctx.workspaceId(), ctx.connectionId(), collection.getCollectionId(), purpose, mutator);
     }
 
     /** Record a per-collection failure on the admin-facing {@code lastSyncError}, clamped to the column width. */
     private void recordCollectionError(SyncContext ctx, OutlineCollection collection, String message) {
         String clamped = OutlineSyncMapping.truncate(message, MAX_ERROR_LENGTH);
-        writeCollection(ctx, collection, target -> target.setLastSyncError(clamped));
+        writeCollection(ctx, collection, "error", target -> target.setLastSyncError(clamped));
     }
 
     private static void logRateLimited(long workspaceId, OutlineRateLimitedException e) {

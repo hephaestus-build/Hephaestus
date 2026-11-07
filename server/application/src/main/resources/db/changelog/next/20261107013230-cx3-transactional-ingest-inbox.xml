@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793980412117-1" author="hephaestus">
+        <createTable tableName="consumer_inbox_step">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="consumer_inbox_stepPK"/>
+            </column>
+            <column name="consumer_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="processed_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="received_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="step_name" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stream_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stream_sequence" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1793980412117-2" author="hephaestus">
+        <createTable tableName="installation_inbox_step">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="installation_inbox_stepPK"/>
+            </column>
+            <column name="consumer_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="processed_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="received_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="step_name" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stream_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stream_sequence" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1793980412117-3" author="hephaestus">
+        <addUniqueConstraint columnNames="workspace_id, consumer_name, stream_name, stream_sequence, received_at, step_name" constraintName="uk_consumer_inbox_step_delivery" tableName="consumer_inbox_step"/>
+    </changeSet>
+    <changeSet id="1793980412117-4" author="hephaestus">
+        <addUniqueConstraint columnNames="consumer_name, stream_name, stream_sequence, received_at, step_name" constraintName="uk_installation_inbox_step_delivery" tableName="installation_inbox_step"/>
+    </changeSet>
+    <changeSet id="1793980412117-5" author="hephaestus">
+        <createIndex indexName="idx_consumer_inbox_step_processed_at" tableName="consumer_inbox_step">
+            <column name="processed_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1793980412117-6" author="hephaestus">
+        <createIndex indexName="idx_installation_inbox_step_processed_at" tableName="installation_inbox_step">
+            <column name="processed_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1793980412117-7" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="workspace_id" baseTableName="consumer_inbox_step" constraintName="fk_consumer_inbox_step_workspace" onDelete="CASCADE" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="workspace" validate="true"/>
+    </changeSet>
+</databaseChangeLog>

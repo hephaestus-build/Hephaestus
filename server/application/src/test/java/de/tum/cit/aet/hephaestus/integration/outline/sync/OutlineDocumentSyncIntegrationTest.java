@@ -16,11 +16,15 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
+import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
+import de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobStatus;
+import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentEvents;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineClientModels;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineContentClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookClient;
@@ -35,10 +39,12 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRep
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.InboxTestMessages;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -48,6 +54,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Real-Postgres proof of the Outline document reconcile with the HTTP wire mocked at the client boundary
@@ -101,6 +108,18 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private SyncJobRepository syncJobRepository;
 
+    @Autowired
+    private TransactionTemplate transactions;
+
+    @Autowired
+    private DeliveryInbox inbox;
+
+    @Autowired
+    private ItemRepository items;
+
+    @Autowired
+    private ItemEventRepository itemEvents;
+
     private long workspaceId;
     private long connectionId;
 
@@ -145,6 +164,122 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
         lenient()
                 .when(outlineApiClient.exportDocument(anyString(), anyString(), eq(DOC_TWO)))
                 .thenReturn("# Beta");
+    }
+
+    @Test
+    void shouldFinishTheEventAfterTheMirrorCommittedAndSkipCompletedRedeliveries() {
+        var delivery = InboxTestMessages.delivery("outline-inbox-" + workspaceId, 1, Instant.now());
+        assertThatThrownBy(() -> inbox.dispatch(workspaceId, delivery, () -> {
+                    mirrorWriter.upsertDocument(workspaceId, connectionId, DOC_ONE, T2, document -> {
+                        document.setCollectionId(COLLECTION_ID);
+                        document.setTitle("Accepted title");
+                        document.setBodyMarkdown("Accepted body");
+                        document.setContentHash("accepted-hash");
+                        document.setOutlineUpdatedAt(T2);
+                        document.setLastMaterializedAt(T2);
+                    });
+                    throw new IllegalStateException("The event transaction has not run yet");
+                }))
+                .isInstanceOf(IllegalStateException.class);
+        OutlineDocument committed = documentById(DOC_ONE);
+        long mirrorVersion = committed.getVersion();
+        assertThat(items.findSource(workspaceId, DocumentEvents.DOCUMENT.value(), committed.getId()))
+                .isEmpty();
+
+        var metadata = OutlineClientModels.document(
+                DOC_ONE,
+                "/doc/one",
+                "Accepted title",
+                T0,
+                T2,
+                DOC_ONE,
+                null,
+                COLLECTION_ID,
+                null,
+                null,
+                List.of(),
+                null);
+        inbox.dispatch(
+                workspaceId,
+                delivery,
+                () -> scheduler.refreshDocumentNow(workspaceId, "documents.update", DOC_ONE, metadata));
+        var item = items.findSource(workspaceId, DocumentEvents.DOCUMENT.value(), committed.getId())
+                .orElseThrow();
+        var version = DocumentEvents.version("Accepted title", "accepted-hash", false, null);
+        var event = itemEvents
+                .findByWorkspaceIdAndItemIdAndNameAndItemVersion(
+                        workspaceId, item.getId(), DocumentEvents.UPDATED.value(), version.value())
+                .orElseThrow();
+        assertThat(event.getOccurredAt())
+                .isEqualTo(delivery.metaData().timestamp().toInstant().truncatedTo(ChronoUnit.MICROS));
+        inbox.dispatch(workspaceId, delivery, () -> {
+            throw new AssertionError("The completed delivery ran again");
+        });
+        assertThat(documentById(DOC_ONE).getVersion()).isEqualTo(mirrorVersion);
+        assertThat(itemEvents.findByIdAndWorkspaceId(event.getId(), workspaceId))
+                .isPresent();
+        verify(outlineApiClient, never()).exportDocument(anyString(), anyString(), eq(DOC_ONE));
+    }
+
+    @Test
+    void shouldRetryAnUnfinishedArchiveAfterTwoOptimisticConflicts() {
+        mirrorWriter.upsertDocument(workspaceId, connectionId, DOC_ONE, T1, document -> {
+            document.setCollectionId(COLLECTION_ID);
+            document.setTitle("Archive me");
+            document.setBodyMarkdown("Body");
+            document.setContentHash("archive-hash");
+            document.setOutlineUpdatedAt(T1);
+        });
+        var delivery = InboxTestMessages.delivery("outline-conflict-" + workspaceId, 1, Instant.now());
+        assertThatThrownBy(() -> inbox.dispatch(
+                        workspaceId,
+                        delivery,
+                        () -> mirrorWriter.updateDocument(workspaceId, connectionId, DOC_ONE, document -> {
+                            throw new ObjectOptimisticLockingFailureException(OutlineDocument.class, document.getId());
+                        })))
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+        assertThat(documentById(DOC_ONE).getArchivedAt()).isNull();
+
+        var metadata = OutlineClientModels.document(
+                DOC_ONE, "/doc/one", "Archive me", T0, T2, DOC_ONE, null, COLLECTION_ID, null, null, List.of(), T2);
+        inbox.dispatch(
+                workspaceId,
+                delivery,
+                () -> scheduler.refreshDocumentNow(workspaceId, "documents.archive", DOC_ONE, metadata));
+        var archived = documentById(DOC_ONE);
+        assertThat(archived.getArchivedAt()).isEqualTo(T2);
+        var item = items.findSource(workspaceId, DocumentEvents.DOCUMENT.value(), archived.getId())
+                .orElseThrow();
+        var version = DocumentEvents.version("Archive me", "archive-hash", true, null);
+        assertThat(itemEvents.findByWorkspaceIdAndItemIdAndNameAndItemVersion(
+                        workspaceId, item.getId(), DocumentEvents.ARCHIVED.value(), version.value()))
+                .isPresent();
+    }
+
+    @Test
+    void shouldNotRecreateADocumentErasedAfterItsInboxStepCommitted() {
+        var delivery = InboxTestMessages.delivery("outline-erased-" + workspaceId, 1, Instant.now());
+        assertThatThrownBy(() -> inbox.dispatch(workspaceId, delivery, () -> {
+                    mirrorWriter.upsertDocument(workspaceId, connectionId, DOC_ONE, null, document -> {
+                        document.setCollectionId(COLLECTION_ID);
+                        document.setTitle("A document later erased");
+                    });
+                    throw new IllegalStateException("The delivery has not completed");
+                }))
+                .isInstanceOf(IllegalStateException.class);
+        transactions.executeWithoutResult(
+                status -> documentRepository.deleteByWorkspaceIdAndConnectionIdAndCollectionId(
+                        workspaceId, connectionId, COLLECTION_ID));
+
+        inbox.dispatch(
+                workspaceId,
+                delivery,
+                () -> assertThat(mirrorWriter.upsertDocument(workspaceId, connectionId, DOC_ONE, null, document -> {
+                            throw new AssertionError("The committed step must not apply its mutation again");
+                        }))
+                        .isNull());
+        assertThat(documentRepository.findSnapshotByDocumentId(workspaceId, connectionId, DOC_ONE))
+                .isEmpty();
     }
 
     private void stubCollection(List<String> docIds, Instant docOneUpdatedAt, Instant docTwoUpdatedAt) {

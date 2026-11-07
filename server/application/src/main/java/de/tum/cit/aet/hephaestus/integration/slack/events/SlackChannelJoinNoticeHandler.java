@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
@@ -73,6 +74,7 @@ public class SlackChannelJoinNoticeHandler {
             return;
         }
         long workspaceId = workspaceOpt.get();
+        if (DeliveryInbox.completed("slack.channel.register." + workspaceId + "." + channelId)) return;
 
         // Adding the app to a channel is Slack-native discovery. Register PENDING only; an admin still has to
         // activate the channel before anything is read.
