@@ -44,7 +44,7 @@ import tools.jackson.databind.ObjectMapper;
 class ProductFeedbackModelAdapter {
     private static final Logger log = LoggerFactory.getLogger(ProductFeedbackModelAdapter.class);
     /** Bounds the one call that a higher-class request may wait behind. */
-    static final Duration CALL_TIMEOUT = Duration.ofSeconds(60);
+    static final Duration CALL_TIMEOUT = Duration.ofMinutes(2);
 
     private final ProductFeedbackDrafting drafting;
     private final LlmModelResolver models;

@@ -79,7 +79,7 @@ Each private issue starts with a reason:
 | `about a person` | The report concerns a named person. |
 | `low confidence` | The report is unclear or is not an actionable issue. |
 | `abuse` | The safety check found abuse. |
-| `no draft` | The model was unavailable, the limit was reached, the model response stayed invalid, or no worker took the report within 10 minutes. |
+| `no model draft finished` | The model was unavailable, the limit was reached, the model response stayed invalid, or no worker took the report within 10 minutes. |
 
 Security, blocking redaction, or a report about a named person sets a persistent risk latch.
 An edit or retry cannot clear it.
@@ -225,7 +225,7 @@ To resume new filing, turn off **Pause** after you correct the cause.
 | Installation missing or suspended | The app cannot reach the named repository. | Restore its installation and **Issues: read and write** permission. Select **Retry**. |
 | Private destination unavailable | The repository is public, inaccessible, or has an unknown visibility. | Turn on **Pause**. Restore private visibility and app access before **Retry**. |
 | Model unavailable | The model, pool, credentials, or provider connection is unavailable. | Restore the instance model and its pool. Reports without drafts stay private. |
-| Many `no draft` routes | The daily limit is reached, model output stays invalid, or no worker runs. | Check the count and model health. If `product_feedback_steps_total{step="draft",outcome="expired"}` rises, check the worker. Reassess the model with the routing evaluation. |
+| Many `no model draft finished` routes | The daily limit is reached, model output stays invalid, or no worker runs. | Check the count and model health. If `product_feedback_steps_total{step="draft",outcome="expired"}` rises, check the worker. Reassess the model with the routing evaluation. |
 | Many private routes | Read the route split by reason. The gate can be strict or reports can contain detected personal data. | Inspect synthetic evaluation results before you change the model. Keep privacy checks in place. |
 | Public report waits longer than five minutes | The hold is a minimum. Drafts, filing pace, rate limits, or reconciliation can delay it. | Check worker and server health, model availability, and **Needs action**. |
 | GitHub write stopped | `DESTINATION_UNAVAILABLE` or `GITHUB_REFUSED` explains the stop. | Turn on **Pause** if privacy is in doubt. Correct app access or the refusal, then select **Retry**. |

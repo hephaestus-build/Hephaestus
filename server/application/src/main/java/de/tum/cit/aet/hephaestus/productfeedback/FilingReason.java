@@ -8,13 +8,13 @@ import java.util.Locale;
  */
 enum FilingReason {
     NONE("public"),
-    OPTED_OUT("opted out"),
+    OPTED_OUT("the reporter kept it private"),
     SECURITY("security"),
     REDACTION("redaction"),
     ABOUT_PERSON("about a person"),
     LOW_CONFIDENCE("low confidence"),
     ABUSE("abuse"),
-    NO_DRAFT("no draft"),
+    NO_DRAFT("no model draft finished, and only a drafted report can go public"),
     /** A destination changed while the report waited; it stays saved for the admins. */
     DESTINATION_CHANGED("destination changed"),
     /** GitHub refused the repository or the write; the report waits in Needs action. */

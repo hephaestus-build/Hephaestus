@@ -35,7 +35,7 @@ class IssueRendererTest {
     void shouldRenderPersonTextAsInertTextWhenItCarriesMarkup() {
         var rendered = IssueRenderer.render(
                 bug("See <img src=x> by @octocat in octo-org/repo#3 and #4, also https://evil.example/x"),
-                new IssueRenderer.Context("1.0.0", "/w/$workspaceSlug/activity", null),
+                new IssueRenderer.Context("1.0.0", "/w/$workspaceSlug/activity", null, true),
                 "example-org/product",
                 null,
                 null,
@@ -58,10 +58,28 @@ class IssueRendererTest {
     }
 
     @Test
+    void shouldNotSayAModelDraftedAReportThatNoModelDrafted() {
+        var rendered = IssueRenderer.render(
+                bug("The list jumps"),
+                new IssueRenderer.Context("1.0.0", null, null, false),
+                "example-org/product",
+                FilingReason.NO_DRAFT.words(),
+                "report-1",
+                null,
+                "marker-1",
+                "1.0.0");
+
+        assertThat(rendered.body())
+                .doesNotContain("Drafted by a model")
+                .contains("Filed as the reporter wrote it, without a model draft.")
+                .contains("**Private because:** no model draft finished");
+    }
+
+    @Test
     void shouldStateTheReasonAndTheReportOnlyOnAPrivateIssue() {
         var rendered = IssueRenderer.render(
                 bug("It breaks."),
-                new IssueRenderer.Context(null, null, null),
+                new IssueRenderer.Context(null, null, null, true),
                 "example-org/private",
                 "security",
                 "4d1c0e5e-report",

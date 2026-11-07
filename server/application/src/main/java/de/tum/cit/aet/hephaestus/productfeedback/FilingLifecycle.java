@@ -21,6 +21,8 @@ final class FilingLifecycle {
         DRAFT_CLAIMED,
         /** The worker handed back an answer, or that none came. */
         DRAFT_ENDED,
+        /** A draft call failed and has attempts left, so the report waits for a worker again. */
+        DRAFT_RETRIED,
         /** Routing decided: the report waits out its hold. */
         ROUTED_TO_HOLD,
         /** Routing decided: filing takes the report next. */
@@ -97,6 +99,7 @@ final class FilingLifecycle {
         allow(FilingState.DRAFTING, Event.DRAFT_CLAIMED, FilingState.DRAFTING);
         allow(FilingState.DRAFT_QUEUED, Event.DRAFT_ENDED, FilingState.ANSWERED);
         allow(FilingState.DRAFTING, Event.DRAFT_ENDED, FilingState.ANSWERED);
+        allow(FilingState.DRAFTING, Event.DRAFT_RETRIED, FilingState.DRAFT_QUEUED);
         // An expired report routes straight from a draft state, so a stopped worker role cannot hold it back.
         for (FilingState from : EnumSet.of(FilingState.ANSWERED, FilingState.DRAFT_QUEUED, FilingState.DRAFTING)) {
             allow(from, Event.ROUTED_TO_HOLD, FilingState.HELD);

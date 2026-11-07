@@ -28,6 +28,7 @@ class FilingLifecycleTest {
             Map.of(
                     Event.DRAFT_CLAIMED, FilingState.DRAFTING,
                     Event.DRAFT_ENDED, FilingState.ANSWERED,
+                    Event.DRAFT_RETRIED, FilingState.DRAFT_QUEUED,
                     Event.ROUTED_TO_HOLD, FilingState.HELD,
                     Event.ROUTED_TO_FILE, FilingState.QUEUED),
             FilingState.ANSWERED,
