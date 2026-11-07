@@ -376,7 +376,7 @@ The `tag-images` job does these steps in this order:
 1. It checks the release state with `plan-release.ts --source`.
    Only an absent release or this commit's own draft may continue, because the push writes the chart version tag.
 2. It copies `deploy/chart/hephaestus` of the released commit to `RUNNER_TEMP`.
-   It writes the release version, the source commit, and the five chart images into the `values.yaml` of the copy.
+   It writes the release version, the source commit, and the chart images into the `values.yaml` of the copy.
    `chartValues` in `scripts/kubernetes-chart.ts` is the one map from the lock to the chart images.
    It refuses a lock that does not cover the release image inventory of the checkout.
 3. It packages the copy with `helm package`.
@@ -389,7 +389,28 @@ The `tag-images` job does these steps in this order:
 8. It signs the joint lock with `keyless-sign.ts sign-blob` and the release workflow identity.
    It signs the chart digest in the registry with `keyless-sign.ts sign` and the same identity.
 9. It verifies the lock signature, and the chart again from the joint lock with `cosign verify`.
-   The pulled chart must pin exactly the images that `chartValues` makes from the joint lock and the inventory of the checkout.
+   The pulled chart must pin exactly the images that the joint lock names.
+
+The `publish-release` job then runs `scripts/check-previous-verifier.ts` against the signed draft.
+It runs the verifiers of the nearest published release and the latest stable release, from a tree with no installed packages.
+Only an immutable published release from 1.0.0-rc.4 on counts, so a pushed tag runs no code in this job.
+Older tooling follows the [manual step](../admin/upgrade#hosts-with-reconciler-tooling-from-before-100-rc4).
+A host adopts new tooling only after it applies a release, so an older verifier decides.
+The job stops before publication if one refuses.
+
+A digest or tag change in the same image set does not trip this check.
+For tooling up to 1.0.0-rc.4, an added, removed, or renamed chart image does.
+A change to the lock schema, the evidence manifest, the asset names, or the signing identity does, for any older verifier.
+
+To release a planned break, add entries to `security/accepted-verifier-breaks.json` in a reviewed pull request, before the Version PR:
+
+```json
+[{ "release": "v1.0.0-rc.5", "verifier": "v1.0.0-rc.4", "reason": "Adds the x image. Hosts follow <upgrade guide section>." }]
+```
+
+An entry covers one release and one verifier, and the job prints the failure as a warning.
+A break against the latest stable release needs one entry for each candidate and one for the stable release, in the same commit.
+Ship the operator step in the same pull request.
 
 The images are known before the package exists, and the joint lock that names the package digest comes after it.
 Thus, the package never contains the lock that names its digest.

@@ -370,7 +370,7 @@ export async function renderReleaseNotes(
 }
 
 /** Every release, drafts included — which the listing carries only for a token with push access. */
-async function listReleases(repository: string): Promise<ReleaseRef[]> {
+export async function listReleases(repository: string): Promise<ReleaseRef[]> {
 	const listed = await output("gh", [
 		"api",
 		"--paginate",

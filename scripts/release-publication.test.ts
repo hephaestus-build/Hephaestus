@@ -138,6 +138,16 @@ fs.appendFileSync(process.env.CALL_LOG, JSON.stringify([tool, ...args]) + '\n');
 if (tool === 'git') {
   // The release commit has no owned source: grep finds nothing, and the tree lists no links.
   if (args.includes(read('manifest.json').commit)) process.exit(args[0] === 'grep' ? 1 : 0);
+  // The release before this one. Its tree links this checkout's tooling: the scenarios here are about
+  // publication, and scripts/check-previous-verifier.test.ts owns the refusal.
+  if (args[0] === 'rev-parse') process.exit(0);
+  if (args[0] === 'worktree') {
+    if (args[1] === 'add') {
+      fs.mkdirSync(args.at(-2), {recursive: true});
+      fs.symlinkSync(path.join(process.cwd(), 'scripts'), path.join(args.at(-2), 'scripts'));
+    }
+    process.exit(0);
+  }
   throw new Error('Unexpected git command');
 } else if (tool === 'gh') {
   if (args[0] === 'attestation') {
@@ -153,7 +163,8 @@ if (tool === 'git') {
       console.log(process.env.MAIN_SHA ?? read('manifest.json').commit); process.exit(0);
     } else if (endpoint.endsWith('/releases?per_page=100')) {
       if (!args.includes('--paginate') || !args.includes('--jq') || args.includes('--slurp')) throw new Error('Expected projected paginated release listing');
-      response = read('releases').map(release => ({target_commitish:'main', ...release}));
+      // The release before every scenario's: published and immutable, so its verifier runs.
+      response = [{tag_name:'v0.92.0', draft:false, prerelease:false, immutable:true}, ...read('releases')].map(release => ({target_commitish:'main', ...release}));
     } else if (endpoint.includes('/git/matching-refs/tags/')) {
       if (!args.includes('--paginate') || !args.includes('--jq')) throw new Error('Expected projected paginated tag listing');
       const prefix = 'refs/tags/' + endpoint.split('/git/matching-refs/tags/')[1];

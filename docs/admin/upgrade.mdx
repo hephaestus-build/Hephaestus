@@ -176,3 +176,61 @@ The [database migration instructions](./compatibility-policy#database-migrations
 - [Prepare an older database](./liquibase-baseline-runbook.md): intermediate upgrades for older databases.
 - [Native Hibernate JSON cutover](./native-hibernate-json-cutover): the stopped-writer accounting cutover.
 - [Practice model cutover checks](./practice-model-cutover): the pilot rehearsal and a refused practice model upgrade.
+
+### Hosts with reconciler tooling from before 1.0.0-rc.4
+
+Do this procedure once, on a host with [pull-based deployment](./pull-based-deployment).
+
+The reconciler verifies a release with the tooling of the release before it.
+Tooling from before 1.0.0-rc.4 expects five chart images, and 1.0.0-rc.4 has nine.
+Thus, the old verifier stops each run with `does not pin the v1.0.0-rc.4 images`.
+The running release is not affected.
+
+Do not move the `tooling` link by hand. Each run sets it again from `applied.json`.
+
+1. Make the channel name `v1.0.0-rc.4`, without `freeze`. A frozen channel adopts the tooling, but it never verifies the release.
+2. If the host still runs an earlier release, complete the migration instructions of each release first. The second run below applies 1.0.0-rc.4.
+3. Stop the timer: `sudo systemctl stop hephaestus-reconcile.timer`. Confirm that `hephaestus-reconcile.service` no longer runs.
+4. Authenticate the release lock and record the release that it names. The script stops at the first failure and leaves `applied.json` as it was:
+
+   ```bash
+   sudo bash -s <<'SCRIPT'
+   set -euo pipefail
+   VERSION=1.0.0-rc.4
+   STATE=/var/lib/hephaestus
+   LOCK="release-v$VERSION.chart.json"
+   BASE="https://github.com/hephaestus-build/Hephaestus/releases/download/v$VERSION"
+   WORK=$(mktemp -d)
+   if systemctl is-active --quiet hephaestus-reconcile.timer; then
+     echo "Stop the timer first" >&2
+     exit 1
+   fi
+   if [ "$(jq -er .release "$STATE/applied.json")" = "v$VERSION" ]; then
+     echo "applied.json already names v$VERSION" >&2
+     exit 1
+   fi
+   curl -fsSL "$BASE/$LOCK" -o "$WORK/$LOCK"
+   curl -fsSL "$BASE/$LOCK.sigstore.json" -o "$WORK/$LOCK.sigstore.json"
+   cosign verify-blob --bundle "$WORK/$LOCK.sigstore.json" \
+     --certificate-identity 'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
+     --certificate-oidc-issuer https://token.actions.githubusercontent.com "$WORK/$LOCK"
+   commit=$(jq -er --arg release "v$VERSION" \
+     'select(.schemaVersion == 2 and .release == $release) | .commit | select(test("^[a-f0-9]{40}$"))' "$WORK/$LOCK")
+   git -C "$STATE/checkout" fetch --quiet origin "$commit"
+   cp -p "$STATE/applied.json" "$STATE/applied-before-tooling.json"
+   cp -p "$STATE/applied.json" "$STATE/applied.json.new"
+   jq --tab --arg release "v$VERSION" --arg commit "$commit" \
+     '.previous = .release | .release = $release | .commit = $commit
+      | .appliedAt = (now | strftime("%Y-%m-%dT%H:%M:%S.000Z"))' \
+     "$STATE/applied-before-tooling.json" > "$STATE/applied.json.new"
+   mv "$STATE/applied.json.new" "$STATE/applied.json"
+   SCRIPT
+   ```
+
+5. Read `/var/lib/hephaestus/applied.json`. To undo, restore `applied-before-tooling.json` to `applied.json` now, while the timer is stopped.
+6. Start the timer: `sudo systemctl start hephaestus-reconcile.timer`.
+
+The next run logs `Adopted the tooling of v1.0.0-rc.4`.
+The run after it logs `Applied v1.0.0-rc.4`: the new verifier checks the release, and a host that already runs it restarts no Pod.
+
+After the timer starts, do not restore the record. The older tooling would then apply the older chart. Use [Rollback](#rollback).

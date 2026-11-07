@@ -145,7 +145,7 @@ const lockFor = (
 			commit: "c".repeat(40),
 			// The lock names the images that `values` pins.
 			images: chartImages.map((name) => {
-				const [imageRepository, indexDigest] = values.images[name].split("@");
+				const [imageRepository, indexDigest] = (values.images[name] ?? "").split("@");
 				return {
 					image: name,
 					repository: imageRepository,
@@ -444,4 +444,40 @@ await test("verification leaves nothing behind for a foreign, unlocked, unsigned
 		);
 		assert.deepEqual(await readdir(directory), [], `${label} left output`);
 	}
+});
+
+await test("a host's verifier follows the signed lock: a next release may add an image, and nothing else may", async (t) => {
+	const lock = lockFor({ repository, version, digest: digest("b") });
+	const added = image("added", "d");
+	const [imageRepository = "", indexDigest = ""] = added.split("@");
+	const [first] = lock.images;
+	assert.ok(first);
+	const next = {
+		...lock,
+		images: [
+			...lock.images,
+			{ ...first, image: "added", repository: imageRepository, indexDigest },
+		],
+	};
+	const nextInventory = { images: [...chartImages, "added"], upstream: [] };
+	const bytes = `${chartBytes()}  added: ${JSON.stringify(added)}\n`;
+	// The tooling here knows nothing of the added image: only the signed lock names it.
+	await verifyReleaseChart(
+		next,
+		nextInventory,
+		await scratch(t),
+		{},
+		tools({ registry: lockedRegistry(bytes) }).execute,
+	);
+	await assert.rejects(
+		verifyReleaseChart(
+			lock,
+			inventory,
+			await scratch(t),
+			{},
+			tools({ registry: lockedRegistry(bytes) }).execute,
+		),
+		/does not pin the v0\.93\.0 images/u,
+		"an image that the lock does not name",
+	);
 });

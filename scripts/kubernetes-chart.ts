@@ -32,8 +32,16 @@ export type ChartImage = (typeof chartImages)[number];
 
 export interface ChartValues {
 	release: { version: string; commit: string };
-	images: Record<ChartImage, string>;
+	images: Readonly<Record<string, string>>;
 }
+
+/** Every image that a lock names, as a chart's values pin it, in the order of the values file. */
+const lockedImages = (lock: ReleaseImageLock): Readonly<Record<string, string>> =>
+	Object.fromEntries(
+		lock.images
+			.map((image) => [image.image, `${image.repository}@${image.indexDigest}`] as const)
+			.toSorted(([a], [b]) => a.localeCompare(b)),
+	);
 
 export function chartValues(lock: ReleaseImageLock, inventory: ImageInventory): ChartValues {
 	const inventoried = [...inventory.images, ...inventory.upstream.map((entry) => entry.name)];
@@ -63,27 +71,9 @@ export function chartValues(lock: ReleaseImageLock, inventory: ImageInventory): 
 			);
 		}
 	}
-	const reference = (name: ChartImage): string => {
-		const image = lock.images.find((candidate) => candidate.image === name);
-		if (image === undefined) {
-			throw new Error(`the release image inventory has no ${name}, which the chart runs`);
-		}
-		return `${image.repository}@${image.indexDigest}`;
-	};
-	return {
-		release: { version: lock.release, commit: lock.commit },
-		images: {
-			"agent-pi": reference("agent-pi"),
-			alertmanager: reference("alertmanager"),
-			"application-server": reference("application-server"),
-			nats: reference("nats"),
-			postgres: reference("postgres"),
-			"postgres-exporter": reference("postgres-exporter"),
-			"victoria-metrics": reference("victoria-metrics"),
-			vmalert: reference("vmalert"),
-			webapp: reference("webapp"),
-		},
-	};
+	// The lock decides the images, never a list here: a host verifies a release with the tooling of
+	// the one before, and a release may add or remove an image.
+	return { release: { version: lock.release, commit: lock.commit }, images: lockedImages(lock) };
 }
 
 /**
@@ -101,7 +91,7 @@ export function releaseValuesLines(values: ChartValues): string {
 		`  version: ${quoted(values.release.version)}`,
 		`  commit: ${quoted(values.release.commit)}`,
 		"images:",
-		...chartImages.map((name) => `  ${name}: ${quoted(values.images[name])}`),
+		...Object.entries(values.images).map(([name, image]) => `  ${name}: ${quoted(image)}`),
 		"",
 	].join("\n");
 }
