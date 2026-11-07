@@ -29,7 +29,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: A product feedback report has waited more than 30 minutes to reach GitHub or the admin email
+          summary: A product feedback report has waited more than 30 minutes to reach GitHub or the admins
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusProductFeedbackFilingFailing
         expr: sum(increase(product_feedback_steps_total{job="hephaestus",step="file",outcome="stopped"}[1h])) > 0
@@ -37,6 +37,13 @@ groups:
           severity: warning
         annotations:
           summary: Product feedback stopped filing to GitHub; the reports wait in Needs action
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusProductFeedbackMoveRefused
+        expr: sum(increase(product_feedback_steps_total{job="hephaestus",step="transition",outcome="refused"}[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Product feedback refused a state move; the report keeps its state and can hold back filing
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusConsumerPoison
         expr: sum by (kind) (increase(integration_consumer_poison_total{job="hephaestus"}[10m])) > 0

@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 @Tag("integration")
@@ -259,7 +260,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         send(member, "Filed on GitHub").expectStatus().isOk().expectBody(Void.class);
         ProductFeedback report = feedback.findAllByAccountId(member.accountId()).getFirst();
         ProductFeedbackFiling filing = filings.findById(report.getId()).orElseThrow();
-        filing.setState(FilingState.FILED);
+        ReflectionTestUtils.setField(filing, "state", FilingState.FILED);
         filings.save(filing);
 
         webTestClient

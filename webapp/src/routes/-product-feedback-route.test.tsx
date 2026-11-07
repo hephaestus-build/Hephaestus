@@ -33,7 +33,7 @@ describe("product feedback sent from a workspace page", () => {
 			),
 			http.post("*/workspaces/acme/product-feedback", async ({ request }) => {
 				sent.push(zFeedbackRequest.parse(await request.json()));
-				return HttpResponse.json({ id: "r1", route: "EMAIL", state: "SENT_TO_ADMINS" });
+				return HttpResponse.json({ id: "r1", route: "ADMINS", state: "SAVED_FOR_ADMINS" });
 			}),
 		);
 	});

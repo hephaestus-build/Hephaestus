@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.jspecify.annotations.Nullable;
 
-/** The instance's one product feedback destination setting. With no repository set, reports go to the admin email. */
+/** The instance's one product feedback destination setting. With no repository set, reports stay saved for the admins. */
 @Entity
 @Table(name = "product_feedback_destination")
 @Getter
@@ -37,7 +37,7 @@ public class ProductFeedbackDestination {
     @Column(name = "daily_draft_limit", nullable = false)
     private int dailyDraftLimit = 50;
 
-    /** New and unfiled reports go to the admin email while paused; follow-up, withdrawal and cleanup continue. */
+    /** New and unfiled reports stay saved for the admins while paused; follow-up, withdrawal and cleanup continue. */
     @Column(nullable = false)
     private boolean paused;
 

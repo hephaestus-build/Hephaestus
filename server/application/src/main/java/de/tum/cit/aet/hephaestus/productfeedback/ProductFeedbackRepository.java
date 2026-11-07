@@ -29,13 +29,13 @@ interface ProductFeedbackRepository extends JpaRepository<ProductFeedback, UUID>
     @WorkspaceAgnostic("Instance administrators read product feedback from every workspace and from none")
     @Query(value = """
                     SELECT p.* FROM product_feedback p LEFT JOIN product_feedback_filing f ON f.feedback_id = p.id
-                    WHERE (f.feedback_id IS NULL OR f.state IN ('EMAILED', 'STOPPED'))
+                    WHERE (f.feedback_id IS NULL OR f.state IN ('SAVED', 'STOPPED'))
                       AND (:status = 'ALL' OR (:status = 'OPEN' AND p.resolved_at IS NULL)
                            OR (:status = 'RESOLVED' AND p.resolved_at IS NOT NULL))
                     ORDER BY CASE WHEN :status = 'RESOLVED' THEN p.resolved_at ELSE p.created_at END DESC
                     """, countQuery = """
                     SELECT count(*) FROM product_feedback p LEFT JOIN product_feedback_filing f ON f.feedback_id = p.id
-                    WHERE (f.feedback_id IS NULL OR f.state IN ('EMAILED', 'STOPPED'))
+                    WHERE (f.feedback_id IS NULL OR f.state IN ('SAVED', 'STOPPED'))
                       AND (:status = 'ALL' OR (:status = 'OPEN' AND p.resolved_at IS NULL)
                            OR (:status = 'RESOLVED' AND p.resolved_at IS NOT NULL))
                     """, nativeQuery = true)

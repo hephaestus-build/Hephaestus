@@ -1325,10 +1325,10 @@ export const zFeedbackReceipt = z.object({
     route: z.enum([
         'PUBLIC',
         'PRIVATE',
-        'EMAIL'
+        'ADMINS'
     ]),
     state: z.enum([
-        'SENT_TO_ADMINS',
+        'SAVED_FOR_ADMINS',
         'DRAFTING',
         'HELD',
         'FILING',
@@ -2400,10 +2400,10 @@ export const zMyProductFeedback = z.object({
     route: z.enum([
         'PUBLIC',
         'PRIVATE',
-        'EMAIL'
+        'ADMINS'
     ]),
     state: z.enum([
-        'SENT_TO_ADMINS',
+        'SAVED_FOR_ADMINS',
         'DRAFTING',
         'HELD',
         'FILING',
@@ -2978,7 +2978,7 @@ export const zProductFeedbackNeedsAction = z.object({
     route: z.enum([
         'PUBLIC',
         'PRIVATE',
-        'EMAIL'
+        'ADMINS'
     ]),
     stoppedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date())
 });

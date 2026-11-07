@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
-/** Where a report is on its way to GitHub. Only the listed transitions happen, each under a compare-and-set on the attempt. */
+/** Where a report is on its way to GitHub. {@link FilingLifecycle} owns which moves are allowed. */
 enum FilingState {
     /** Waits for the worker to draft it. */
     DRAFT_QUEUED,
@@ -16,12 +16,9 @@ enum FilingState {
     FILING,
     /** On GitHub. */
     FILED,
-    /**
-     * Not on GitHub: it stays in the admin console, because no destination is set or filing is paused. An email is sent
-     * only when the instance can send one, so this state says nothing about delivery.
-     */
-    EMAILED,
-    /** Filing failed for good; it waits in Needs action, and the admin email has carried it. */
+    /** Not on GitHub: it stays saved for the admins in the console. It says nothing about mail, which nothing can prove. */
+    SAVED,
+    /** Filing failed for good; it waits in Needs action. */
     STOPPED;
 
     boolean claimable() {

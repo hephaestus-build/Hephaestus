@@ -7,7 +7,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * Decides where a report goes. Code decides; the model's draft is only an input. A report becomes public only when
  * every condition holds. Any other report becomes a private issue when a private repository is set, and otherwise goes
- * to the admin email. The first failing condition names the reason, in the order of {@link FilingReason}.
+ * to the admins. The first failing condition names the reason, in the order of {@link FilingReason}.
  */
 final class RoutingGate {
     private RoutingGate() {}
@@ -34,7 +34,7 @@ final class RoutingGate {
                 || (draft != null && (draft.disposition() == Draft.Disposition.SECURITY || draft.aboutNamedPerson()));
         FilingReason reason = reason(in, draft);
         if (reason == FilingReason.NONE) return new Decision(FilingRoute.PUBLIC, reason, latch);
-        return new Decision(in.privateRepository() ? FilingRoute.PRIVATE : FilingRoute.EMAIL, reason, latch);
+        return new Decision(in.privateRepository() ? FilingRoute.PRIVATE : FilingRoute.ADMINS, reason, latch);
     }
 
     private static FilingReason reason(Inputs in, @Nullable Draft draft) {

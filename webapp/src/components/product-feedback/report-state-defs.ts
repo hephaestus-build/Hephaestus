@@ -5,7 +5,7 @@ import type { StatusDefs } from "@/components/common/status-def";
 
 /** Where one of the person's reports is, as Your product feedback badges it. */
 export const REPORT_STATE_DEFS: StatusDefs<MyProductFeedback["state"]> = {
-	SENT_TO_ADMINS: {
+	SAVED_FOR_ADMINS: {
 		label: "Saved for admins",
 		icon: Inbox,
 		badgeVariant: "secondary",
@@ -15,7 +15,7 @@ export const REPORT_STATE_DEFS: StatusDefs<MyProductFeedback["state"]> = {
 		label: "Drafting",
 		icon: PenLine,
 		badgeVariant: "outline",
-		description: "An AI model drafts the issue from your report.",
+		description: "Hephaestus prepares the issue from your report.",
 	},
 	HELD: {
 		label: "Waiting",
@@ -36,10 +36,10 @@ export const REPORT_STATE_DEFS: StatusDefs<MyProductFeedback["state"]> = {
 		description: "It is an issue on GitHub.",
 	},
 	STOPPED: {
-		label: "Not filed",
+		label: "Needs attention",
 		icon: CircleAlert,
 		badgeVariant: "warning",
 		description:
-			"We could not file it on GitHub. It is saved for the admins of this instance, who can try again.",
+			"We could not confirm that it reached GitHub. It is saved for the admins of this instance, who can try again.",
 	},
 };

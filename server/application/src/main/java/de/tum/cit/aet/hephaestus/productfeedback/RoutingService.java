@@ -79,6 +79,7 @@ class RoutingService {
             try {
                 if (!Boolean.TRUE.equals(transactions.execute(status -> routeOne()))) return;
             } catch (RuntimeException failed) {
+                meters.failed(failed);
                 log.warn(
                         "Product feedback routing failed: error={}",
                         failed.getClass().getSimpleName());
@@ -147,8 +148,8 @@ class RoutingService {
         filing.setNextAttemptAt(now);
         filing.setUpdatedAt(now);
         meters.route(decision.route(), decision.reason());
-        if (decision.route() == FilingRoute.EMAIL) {
-            filing.setState(FilingState.QUEUED);
+        if (decision.route() == FilingRoute.ADMINS) {
+            filing.apply(FilingLifecycle.Event.ROUTED_TO_FILE);
             return;
         }
         String target = decision.route() == FilingRoute.PUBLIC
@@ -156,8 +157,8 @@ class RoutingService {
                 : destination.getPrivateRepository();
         ProductFeedbackIssues.Repository repository = freeze(Objects.requireNonNull(target), decision.route());
         if (repository == null) {
-            filing.setState(FilingState.QUEUED);
-            filing.setRoute(FilingRoute.EMAIL);
+            filing.apply(FilingLifecycle.Event.ROUTED_TO_FILE);
+            filing.setRoute(FilingRoute.ADMINS);
             filing.setReason(FilingReason.DESTINATION_UNAVAILABLE);
             return;
         }
@@ -166,10 +167,10 @@ class RoutingService {
         filing.setRepositoryNodeId(repository.nodeId());
         filing.setInstallationId(repository.installationId());
         if (decision.route() == FilingRoute.PUBLIC) {
-            filing.setState(FilingState.HELD);
+            filing.apply(FilingLifecycle.Event.ROUTED_TO_HOLD);
             if (filing.getFiledAfter() == null) filing.setFiledAfter(now.plus(DraftingService.HOLD));
         } else {
-            filing.setState(FilingState.QUEUED);
+            filing.apply(FilingLifecycle.Event.ROUTED_TO_FILE);
             filing.setFiledAfter(null);
         }
     }

@@ -5,7 +5,7 @@ import { expectSettledVisible } from "@/stories/overlay";
 
 import {
 	closedPublicIssue,
-	emailedReport,
+	savedReport,
 	heldReport,
 	myReports,
 	privateIssue,
@@ -111,9 +111,9 @@ export const PrivateIssue: Story = {
 };
 
 export const NotOnGitHub: Story = {
-	args: { state: { status: "ready", reports: [stoppedReport, emailedReport] } },
+	args: { state: { status: "ready", reports: [stoppedReport, savedReport] } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Not filed")).toBeVisible();
+		await expect(canvas.getByText("Needs attention")).toBeVisible();
 		await expect(
 			canvas.getByText(
 				"Your report is saved on this instance for its admins. They can move it to GitHub as a private issue.",

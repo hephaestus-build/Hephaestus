@@ -15,7 +15,7 @@ enum FilingReason {
     LOW_CONFIDENCE("low confidence"),
     ABUSE("abuse"),
     NO_DRAFT("no draft"),
-    /** A destination changed while the report waited; it goes to the admin email. */
+    /** A destination changed while the report waited; it stays saved for the admins. */
     DESTINATION_CHANGED("destination changed"),
     /** GitHub refused the repository or the write; the report waits in Needs action. */
     DESTINATION_UNAVAILABLE("destination unavailable"),

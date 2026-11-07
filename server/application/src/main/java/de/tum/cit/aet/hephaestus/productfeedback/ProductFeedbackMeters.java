@@ -8,6 +8,8 @@ import static de.tum.cit.aet.hephaestus.productfeedback.metrics.ProductFeedbackM
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicLong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -16,6 +18,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 class ProductFeedbackMeters {
+    private static final Logger log = LoggerFactory.getLogger(ProductFeedbackMeters.class);
+
     private final MeterRegistry registry;
     private final AtomicLong oldestWaitingSeconds = new AtomicLong();
 
@@ -24,7 +28,7 @@ class ProductFeedbackMeters {
         registry.gauge(OLDEST_WAITING, oldestWaitingSeconds);
     }
 
-    /** The age of the oldest report not yet on GitHub or in the admin email; 0 when none waits. */
+    /** The age of the oldest report not yet on GitHub or saved for the admins; 0 when none waits. */
     void oldestWaiting(long seconds) {
         oldestWaitingSeconds.set(seconds);
     }
@@ -44,5 +48,17 @@ class ProductFeedbackMeters {
 
     void promotion(String outcome) {
         registry.counter(PROMOTIONS, "outcome", outcome).increment();
+    }
+
+    /** Called by a broad catch: a refused move is a defect in the code, and must not read as an outage. */
+    void failed(RuntimeException failure) {
+        if (failure instanceof FilingLifecycle.IllegalTransition refused) {
+            step("transition", "refused");
+            log.error(
+                    "Product feedback refused a move: feedbackId={}, from={}, event={}",
+                    refused.feedbackId(),
+                    refused.from(),
+                    refused.event());
+        }
     }
 }

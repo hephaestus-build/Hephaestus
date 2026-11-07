@@ -83,7 +83,7 @@ class FeedbackService {
                     request.userAgent(),
                     appVersion));
             ProductFeedbackFiling filing = reports.open(saved, request.share(), clock.instant());
-            if (filing.getState() == FilingState.EMAILED) {
+            if (filing.getState() == FilingState.SAVED) {
                 events.publishEvent(new ProductFeedbackSubmittedEvent(
                         saved.getId(),
                         Objects.requireNonNull(saved.getCreatedAt()),
@@ -93,11 +93,11 @@ class FeedbackService {
                             case FEEDBACK -> ProductFeedbackSubmittedEvent.Kind.FEEDBACK;
                         }));
                 return new FilingDTOs.FeedbackReceiptDTO(
-                        saved.getId(), FilingDTOs.ReportRoute.EMAIL, FilingDTOs.ReportState.SENT_TO_ADMINS, null);
+                        saved.getId(), FilingDTOs.ReportRoute.ADMINS, FilingDTOs.ReportState.SAVED_FOR_ADMINS, null);
             }
             FilingDTOs.ReportRoute route = filing.isAllowPublic()
                     ? FilingDTOs.ReportRoute.PUBLIC
-                    : destinationHasPrivate() ? FilingDTOs.ReportRoute.PRIVATE : FilingDTOs.ReportRoute.EMAIL;
+                    : destinationHasPrivate() ? FilingDTOs.ReportRoute.PRIVATE : FilingDTOs.ReportRoute.ADMINS;
             return new FilingDTOs.FeedbackReceiptDTO(
                     saved.getId(), route, FilingDTOs.ReportState.DRAFTING, filing.getFiledAfter());
         } catch (DataIntegrityViolationException exception) {
@@ -126,7 +126,7 @@ class FeedbackService {
         // The console lists only reports that GitHub will not get; one that is filed, or on its way, is worked on
         // there.
         boolean onGitHub = filings.lock(id)
-                .map(filing -> filing.getState() != FilingState.EMAILED && filing.getState() != FilingState.STOPPED)
+                .map(filing -> !FilingLifecycle.waitsForAdmin(filing.getState()))
                 .orElse(false);
         if (onGitHub)
             throw new ResponseStatusException(

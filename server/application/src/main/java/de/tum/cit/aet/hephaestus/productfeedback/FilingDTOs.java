@@ -21,13 +21,13 @@ final class FilingDTOs {
     enum ReportRoute {
         PUBLIC,
         PRIVATE,
-        EMAIL
+        ADMINS
     }
 
     /** A report's state, as the person sees it. */
     enum ReportState {
-        /** It is saved for the instance admins, in the admin console; it is not on GitHub. No email is implied. */
-        SENT_TO_ADMINS,
+        /** It is saved for the instance admins, in the admin console; it is not on GitHub. */
+        SAVED_FOR_ADMINS,
         /** A model drafts the issue. */
         DRAFTING,
         /** A public report waits for its hold to end. */
@@ -131,7 +131,7 @@ final class FilingDTOs {
      * @param llmModelId the instance model that drafts issues, or null for none (reports then go private undrafted)
      * @param draftsToday drafts made since midnight UTC, against {@code dailyDraftLimit}
      * @param reportsToMove saved reports that the private repository can take now; 0 without one or while paused
-     * @param oldestWaitingSince the oldest report not yet on GitHub or in the admin email
+     * @param oldestWaitingSince the oldest report not yet on GitHub or saved for the admins
      */
     record ProductFeedbackDestinationsDTO(
             @Nullable String publicRepository,

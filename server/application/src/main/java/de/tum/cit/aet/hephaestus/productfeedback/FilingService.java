@@ -32,7 +32,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Files routed reports on GitHub, one at a time per instance. The target and the payload are frozen before each
  * write, and a write with an unclear result is reconciled by the marker before anything is written again. A report
- * that is not on GitHub always reaches the admins by email.
+ * that is not on GitHub stays saved for the admins.
  */
 @Service
 @ConditionalOnServerRole
@@ -108,6 +108,7 @@ class FilingService {
         try {
             write = transactions.execute(status -> claim());
         } catch (RuntimeException failed) {
+            meters.failed(failed);
             log.warn(
                     "Product feedback filing claim failed: error={}",
                     failed.getClass().getSimpleName());
@@ -128,8 +129,9 @@ class FilingService {
     private @Nullable Write claim() {
         Instant now = clock.instant();
         if (!filings.tryPaceLock(PACE_LOCK)) return null;
-        if (filings.countFiledSince(now.minus(Duration.ofHours(1))) >= HOURLY_LIMIT) return null;
-        UUID id = filings.claimableFiling(now).orElse(null);
+        // The limit is about GitHub: a report bound for the admins must not wait behind it, or they cannot see it.
+        boolean atLimit = filings.countFiledSince(now.minus(Duration.ofHours(1))) >= HOURLY_LIMIT;
+        UUID id = (atLimit ? filings.claimableForAdmins(now) : filings.claimableFiling(now)).orElse(null);
         if (id == null) return null;
         ProductFeedbackFiling filing = filings.lock(id).orElseThrow();
         ProductFeedback report = feedback.findById(id).orElseThrow();
@@ -141,8 +143,8 @@ class FilingService {
             return new Write(id, filing.getAttempt(), frozen, null, filing.getFirstAttemptAt());
         }
         ProductFeedbackDestination destination = destinations.current();
-        if (destination.isPaused() || !destination.configured() || filing.getRoute() == FilingRoute.EMAIL) {
-            toEmail(filing, report, filing.getRoute() == FilingRoute.EMAIL ? filing.getReason() : null, now);
+        if (destination.isPaused() || !destination.configured() || filing.getRoute() == FilingRoute.ADMINS) {
+            keepForAdmins(filing, report, filing.getRoute() == FilingRoute.ADMINS ? filing.getReason() : null, now);
             return null;
         }
         if (filing.publicRoute() && !consentCurrent(filing, destination)) {
@@ -160,7 +162,7 @@ class FilingService {
         }
         String target = isPublic ? destination.getPublicRepository() : destination.getPrivateRepository();
         if (target == null || (filing.getRepository() != null && !target.equalsIgnoreCase(filing.getRepository()))) {
-            toEmail(filing, report, FilingReason.DESTINATION_CHANGED, now);
+            keepForAdmins(filing, report, FilingReason.DESTINATION_CHANGED, now);
             return null;
         }
         ProductFeedbackIssues.Repository repository = frozen;
@@ -199,7 +201,7 @@ class FilingService {
 
     private static void lease(ProductFeedbackFiling filing, Instant now) {
         filing.setAttempt(filing.getAttempt() + 1);
-        filing.setState(FilingState.FILING);
+        filing.apply(FilingLifecycle.Event.FILING_CLAIMED);
         filing.setLeaseUntil(now.plus(WRITE_DEADLINE.multipliedBy(2)));
         filing.setUpdatedAt(now);
     }
@@ -228,6 +230,7 @@ class FilingService {
         } catch (RuntimeException unclear) {
             // Unknown, or anything else after the request may have left: the lease expires, and the next claim
             // reconciles by the marker before it writes again.
+            meters.failed(unclear);
             meters.step("file", "unknown");
             transactions.executeWithoutResult(status -> filings.lock(write.feedbackId())
                     .filter(filing -> filing.getState() == FilingState.FILING && filing.getAttempt() == write.attempt())
@@ -254,7 +257,7 @@ class FilingService {
                 .filter(filing -> filing.getState() == FilingState.FILING && filing.getAttempt() == write.attempt())
                 .ifPresent(filing -> {
                     Instant now = clock.instant();
-                    filing.setState(FilingState.QUEUED);
+                    filing.apply(FilingLifecycle.Event.FILING_REQUEUED);
                     filing.setLeaseUntil(null);
                     filing.setNextAttemptAt(now);
                     filing.setUpdatedAt(now);
@@ -276,7 +279,7 @@ class FilingService {
                         now);
                 return;
             }
-            filing.setState(FilingState.FILED);
+            filing.apply(FilingLifecycle.Event.FILED);
             filing.setIssueNumber(issue.number());
             filing.setIssueNodeId(issue.nodeId());
             filing.setIssueUrl(issue.url());
@@ -328,12 +331,12 @@ class FilingService {
     private void reroutePrivate(
             ProductFeedbackFiling filing, ProductFeedback report, ProductFeedbackDestination destination, Instant now) {
         if (destination.getPrivateRepository() == null) {
-            toEmail(filing, report, FilingReason.OPTED_OUT, now);
+            keepForAdmins(filing, report, FilingReason.OPTED_OUT, now);
             return;
         }
         filing.setRoute(FilingRoute.PRIVATE);
         filing.setReason(FilingReason.OPTED_OUT);
-        filing.setState(FilingState.QUEUED);
+        filing.apply(FilingLifecycle.Event.REROUTED_PRIVATE);
         filing.setFiledAfter(null);
         filing.setRepository(null);
         filing.setRepositoryId(null);
@@ -343,27 +346,28 @@ class FilingService {
         meters.route(FilingRoute.PRIVATE, FilingReason.OPTED_OUT);
     }
 
-    /** The report goes to the admins by email, as it did before product feedback reached GitHub. */
-    void toEmail(ProductFeedbackFiling filing, ProductFeedback report, @Nullable FilingReason reason, Instant now) {
-        filing.setState(FilingState.EMAILED);
-        filing.setRoute(FilingRoute.EMAIL);
+    /** The report stays saved for the admins, and the admin email announces it if the instance can send one. */
+    void keepForAdmins(
+            ProductFeedbackFiling filing, ProductFeedback report, @Nullable FilingReason reason, Instant now) {
+        filing.apply(FilingLifecycle.Event.SAVED);
+        filing.setRoute(FilingRoute.ADMINS);
         if (reason != null) filing.setReason(reason);
         filing.setLeaseUntil(null);
         filing.setUpdatedAt(now);
-        adminEmail(report);
+        notifyAdmins(report);
     }
 
     private void stop(ProductFeedbackFiling filing, ProductFeedback report, FilingReason reason, Instant now) {
-        filing.setState(FilingState.STOPPED);
+        filing.apply(FilingLifecycle.Event.STOPPED);
         filing.setReason(reason);
         filing.setLeaseUntil(null);
         filing.setUpdatedAt(now);
         meters.step("file", "stopped");
         log.warn("Product feedback filing stopped: feedbackId={}, reason={}", filing.getFeedbackId(), reason.tag());
-        adminEmail(report);
+        notifyAdmins(report);
     }
 
-    private void adminEmail(ProductFeedback report) {
+    private void notifyAdmins(ProductFeedback report) {
         events.publishEvent(new ProductFeedbackSubmittedEvent(
                 report.getId(),
                 Objects.requireNonNull(report.getCreatedAt()),
@@ -410,7 +414,7 @@ class FilingService {
             // The wait that the stuck alert measures starts here, not when the report was saved.
             filing.setCreatedAt(now);
             filing.setAnswer(null);
-            filing.setState(drafted ? FilingState.DRAFT_QUEUED : FilingState.ANSWERED);
+            filing.apply(drafted ? FilingLifecycle.Event.MOVED_DRAFTED : FilingLifecycle.Event.MOVED_UNDRAFTED);
             filing.setNextAttemptAt(now);
             filing.setUpdatedAt(now);
             return true;
@@ -442,16 +446,16 @@ class FilingService {
                     filing.setUpdatedAt(now);
                     if (filing.getFirstAttemptAt() != null && filing.getRepositoryId() != null) {
                         // A write may have reached GitHub: the next claim reconciles by the marker before it writes.
-                        filing.setState(FilingState.FILING);
+                        filing.apply(FilingLifecycle.Event.RETRIED_RECONCILE);
                         filing.setLeaseUntil(now);
                     } else if (filing.getDraft() == null) {
-                        filing.setState(FilingState.DRAFT_QUEUED);
+                        filing.apply(FilingLifecycle.Event.RETRIED_DRAFT);
                     } else {
                         filing.setRepository(null);
                         filing.setRepositoryId(null);
                         filing.setRepositoryNodeId(null);
                         filing.setInstallationId(null);
-                        filing.setState(FilingState.ANSWERED);
+                        filing.apply(FilingLifecycle.Event.RETRIED_ROUTE);
                         filing.setAnswer(null);
                     }
                     return true;

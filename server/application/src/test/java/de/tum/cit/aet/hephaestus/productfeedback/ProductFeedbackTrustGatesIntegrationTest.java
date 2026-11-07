@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,13 +20,18 @@ import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfigurati
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbackDestinationsDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafting;
+import de.tum.cit.aet.hephaestus.productfeedback.metrics.ProductFeedbackMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Random;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
@@ -76,6 +82,12 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private MyReportsService reports;
+
+    @Autowired
+    private FeedbackAccountErasureAdapter feedbackErasure;
+
+    @Autowired
+    private MeterRegistry meters;
 
     @Autowired
     private ProductFeedbackDrafting drafting;
@@ -234,7 +246,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
         target.fileDue();
 
-        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.EMAILED);
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.SAVED);
         verify(issues, never()).create(any(), anyString(), anyString(), any());
     }
 
@@ -256,7 +268,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
                 .thenReturn(new ProductFeedbackIssues.Issue(
                         90, "I_90", "https://github.com/acme/feedback-private/issues/90"));
         ProductFeedbackFiling queued = filings.findById(id).orElseThrow();
-        queued.setState(FilingState.QUEUED);
+        ReflectionTestUtils.setField(queued, "state", FilingState.QUEUED);
         queued.setRoute(FilingRoute.PRIVATE);
         queued.setReason(FilingReason.OPTED_OUT);
         queued.setDraft(routing.write(new Draft(
@@ -304,7 +316,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
     private UUID savedReport(boolean allowPublic) {
         UUID id = report();
         jdbc.update(
-                "UPDATE product_feedback_filing SET state = 'EMAILED', route = 'EMAIL', allow_public = ?,"
+                "UPDATE product_feedback_filing SET state = 'SAVED', route = 'ADMINS', allow_public = ?,"
                         + " prompt_input = NULL WHERE feedback_id = ?",
                 allowPublic,
                 id);
@@ -353,7 +365,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
         assertThat(filing.fileSaved(id, admin)).isFalse();
 
-        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.EMAILED);
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.SAVED);
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM auth_event WHERE event_type = 'PRODUCT_FEEDBACK_FILED_BY_ADMIN'"
                                 + " AND details::text LIKE ?",
@@ -389,16 +401,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
     void shouldFileAPrivateIssueWhenTheReporterKeepsAHeldReportPrivate() {
         Account reporter = newReporter();
         UUID id = send(reporter, true);
-        jdbc.update(
-                "UPDATE product_feedback_filing SET state = 'HELD', route = 'PUBLIC', reason = 'NONE', draft = ?,"
-                        + " repository = ?, repository_id = ?, repository_node_id = ?, installation_id = ?"
-                        + " WHERE feedback_id = ?",
-                routing.write(Fallback.of(ProductFeedback.Kind.BUG, "The list jumps")),
-                PUBLIC_REPOSITORY.fullName(),
-                PUBLIC_REPOSITORY.id(),
-                PUBLIC_REPOSITORY.nodeId(),
-                PUBLIC_REPOSITORY.installationId(),
-                id);
+        heldForPublic(id);
 
         reports.keepPrivate(Objects.requireNonNull(reporter.getId()), id);
         when(issues.isPrivate(any())).thenReturn(Optional.of(true));
@@ -551,7 +554,7 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         destinationRows.save(destination);
 
         assertThat(filing.fileSaved(id, Objects.requireNonNull(admin.getId()))).isFalse();
-        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.EMAILED);
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.SAVED);
     }
 
     @Test
@@ -796,6 +799,49 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldKeepAReportForTheAdminsEvenWhenTheHourlyGitHubLimitIsFull() {
+        for (int i = 0; i < FilingService.HOURLY_LIMIT; i++)
+            jdbc.update(
+                    "UPDATE product_feedback_filing SET state = 'FILED', first_attempt_at = now() WHERE feedback_id = ?",
+                    report());
+        UUID id = report();
+        jdbc.update("UPDATE product_feedback_filing SET state = 'QUEUED', route = 'ADMINS' WHERE feedback_id = ?", id);
+
+        fileWhatIsDue(id);
+
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.SAVED);
+    }
+
+    @Test
+    void shouldKeepTheClosedPrivateIssueWithinReachOfErasureAfterAPromotion() {
+        Account reporter = newReporter();
+        UUID id = send(reporter, true, null);
+        filedPrivately(id);
+        jdbc.update(
+                "UPDATE product_feedback_filing SET repository = ?, repository_id = ?, installation_id = ?"
+                        + " WHERE feedback_id = ?",
+                PRIVATE_REPOSITORY.fullName(),
+                PRIVATE_REPOSITORY.id(),
+                PRIVATE_REPOSITORY.installationId(),
+                id);
+        ProductFeedbackFiling filing = filings.findById(id).orElseThrow();
+        filing.keepPredecessor();
+        filing.setRepository(PUBLIC_REPOSITORY.fullName());
+        filing.setRepositoryId(PUBLIC_REPOSITORY.id());
+        filing.setRoute(FilingRoute.PUBLIC);
+        filing.setIssueNumber(44L);
+        filings.save(filing);
+
+        feedbackErasure.eraseAccount(Objects.requireNonNull(reporter.getId()));
+
+        assertThat(jdbc.queryForList(
+                        "SELECT issue_number FROM product_feedback_cleanup WHERE marker = ? ORDER BY issue_number",
+                        Long.class,
+                        id))
+                .containsExactly(12L, 44L);
+    }
+
+    @Test
     void shouldKeepThePageOffEveryPublicRouteWhenNothingWasTicked() {
         UUID id = send(newReporter(), false, "/w/$workspaceSlug/activity");
         backdate("next_attempt_at", id, DraftingService.EXPIRY.plusMinutes(1));
@@ -817,6 +863,155 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         assertThat(reports.mine(account, false).getFirst().issueUrl()).isNull();
         assertThat(reports.mine(account, true).getFirst().issueUrl())
                 .isEqualTo("https://github.com/acme/feedback-private/issues/12");
+    }
+
+    private void heldForPublic(UUID id) {
+        jdbc.update(
+                "UPDATE product_feedback_filing SET state = 'HELD', route = 'PUBLIC', reason = 'NONE', draft = ?,"
+                        + " repository = ?, repository_id = ?, repository_node_id = ?, installation_id = ?"
+                        + " WHERE feedback_id = ?",
+                routing.write(Fallback.of(ProductFeedback.Kind.BUG, "The list jumps")),
+                PUBLIC_REPOSITORY.fullName(),
+                PUBLIC_REPOSITORY.id(),
+                PUBLIC_REPOSITORY.nodeId(),
+                PUBLIC_REPOSITORY.installationId(),
+                id);
+    }
+
+    private void fileWhatIsDue(UUID id) {
+        jdbc.update(
+                "UPDATE product_feedback_filing SET next_attempt_at = ?, filed_after = ?, lease_until = ?"
+                        + " WHERE feedback_id = ?",
+                Timestamp.from(Instant.EPOCH),
+                Timestamp.from(Instant.EPOCH),
+                Timestamp.from(Instant.EPOCH),
+                id);
+        FilingService target = AopTestUtils.getUltimateTargetObject(filing);
+        ReflectionTestUtils.setField(target, "lastWrite", Instant.EPOCH);
+        target.fileDue();
+    }
+
+    private double refusedMoves() {
+        var counter = meters.find(ProductFeedbackMetrics.STEPS)
+                .tags("step", "transition", "outcome", "refused")
+                .counter();
+        return counter == null ? 0 : counter.count();
+    }
+
+    private void destinationIs(boolean paused, boolean hasPublic) {
+        ProductFeedbackDestination destination = destination();
+        destination.setPaused(paused);
+        destination.setPublicRepository(hasPublic ? PUBLIC_REPOSITORY.fullName() : null);
+        destinationRows.save(destination);
+    }
+
+    /** A person's action that does not fit the state is refused: the row must simply stay as it was. */
+    private static boolean done(Runnable action) {
+        try {
+            action.run();
+            return true;
+        } catch (ResponseStatusException refused) {
+            return false;
+        }
+    }
+
+    /** Real services, a seeded GitHub that refuses and loses answers, and the promises {@code FilingLifecycle} makes. */
+    @Test
+    void shouldKeepEveryPromiseThroughRandomEventSequences() {
+        jdbc.update("DELETE FROM product_feedback");
+        var random = new Random(20261107L);
+        var written = new ArrayList<ProductFeedbackIssues.Repository>();
+        var found = new ArrayList<ProductFeedbackIssues.Issue>();
+        when(issues.isPrivate(any()))
+                .thenAnswer(call -> Optional.of(
+                        call.<ProductFeedbackIssues.Repository>getArgument(0).isPrivate()));
+        when(issues.issueTypes(any())).thenReturn(List.of());
+        when(issues.create(any(), anyString(), anyString(), any())).thenAnswer(call -> {
+            int outcome = random.nextInt(4);
+            if (outcome == 0) throw new ProductFeedbackIssues.Refused("refused");
+            ProductFeedbackIssues.Repository repository = call.getArgument(0);
+            var issue = new ProductFeedbackIssues.Issue(
+                    written.size() + 1L,
+                    "I_" + written.size(),
+                    "https://github.com/" + repository.fullName() + "/issues/1");
+            written.add(repository);
+            found.add(issue);
+            if (outcome == 1) throw new ProductFeedbackIssues.Unknown("answer lost", null);
+            return issue;
+        });
+        when(issues.findByMarker(any(), anyString(), any()))
+                .thenAnswer(call -> found.stream().findFirst());
+        var statesSeen = EnumSet.noneOf(FilingState.class);
+        double refusedBefore = refusedMoves();
+        for (int sequence = 0; sequence < 40; sequence++) {
+            written.clear();
+            found.clear();
+            destinationIs(false, true);
+            Account reporter = newReporter();
+            long account = Objects.requireNonNull(reporter.getId());
+            boolean ticked = random.nextBoolean();
+            UUID id = send(reporter, ticked, null);
+            if (ticked) heldForPublic(id);
+            boolean mayBePublic = ticked;
+            boolean paused = false;
+            boolean hasPublic = true;
+            for (int step = 0; step < 14; step++) {
+                switch (random.nextInt(8)) {
+                    case 0 -> {
+                        backdate("next_attempt_at", id, DraftingService.EXPIRY.plusMinutes(1));
+                        routing.routeAnswered();
+                    }
+                    case 1 -> fileWhatIsDue(id);
+                    case 2 -> {
+                        // Once kept private, a report gets no public issue unless the person allows it again.
+                        if (done(() -> reports.keepPrivate(account, id)) && written.isEmpty()) mayBePublic = false;
+                    }
+                    case 3 -> {
+                        boolean allow = random.nextBoolean();
+                        try {
+                            reports.allowPublic(account, id, allow);
+                            mayBePublic |= allow;
+                        } catch (ResponseStatusException refused) {
+                            assertThat(filings.findById(id)).isPresent();
+                        }
+                    }
+                    case 4 -> {
+                        paused = !paused;
+                        destinationIs(paused, hasPublic);
+                    }
+                    case 5 -> {
+                        hasPublic = !hasPublic;
+                        destinationIs(paused, hasPublic);
+                    }
+                    case 6 -> filing.retry(id);
+                    default -> done(() -> filing.fileSaved(id, Objects.requireNonNull(admin.getId())));
+                }
+                ProductFeedbackFiling row = filings.findById(id).orElseThrow();
+                statesSeen.add(row.getState());
+                String at = "sequence " + sequence + ", step " + step + ", state " + row.getState();
+                assertThat(written).as("No report has two issues: %s", at).hasSizeLessThanOrEqualTo(1);
+                if (!mayBePublic)
+                    assertThat(written)
+                            .as("No private report is public: %s", at)
+                            .allMatch(ProductFeedbackIssues.Repository::isPrivate);
+                if (row.getState() == FilingState.FILED) {
+                    assertThat(row.getIssueNumber()).as(at).isNotNull();
+                    assertThat(written).as(at).hasSize(1);
+                }
+            }
+            feedbackErasure.eraseAccount(account);
+            assertThat(filings.findById(id)).as("Erasure wins from any state").isEmpty();
+        }
+        assertThat(statesSeen)
+                .as("The sequences reached every place a report can wait")
+                .contains(
+                        FilingState.HELD,
+                        FilingState.QUEUED,
+                        FilingState.FILED,
+                        FilingState.SAVED,
+                        FilingState.STOPPED);
+        verify(issues, atLeastOnce()).findByMarker(any(), anyString(), any());
+        assertThat(refusedMoves()).as("No sweeper hit a move the table refuses").isEqualTo(refusedBefore);
     }
 
     /** A saved report that may go public, waiting for its draft. */

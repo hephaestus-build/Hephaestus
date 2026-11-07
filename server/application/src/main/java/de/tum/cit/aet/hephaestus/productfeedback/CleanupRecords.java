@@ -22,6 +22,7 @@ public class CleanupRecords {
         Instant now = clock.instant();
         for (ProductFeedbackFiling filing : erased) {
             keepPromotion(filing, now);
+            keepPredecessor(filing, now);
             // Any report a write may have reached GitHub for: filed, filing now, or stopped after an attempt.
             boolean mayExist = filing.getState() == FilingState.FILED
                     || filing.getState() == FilingState.FILING
@@ -62,6 +63,27 @@ public class CleanupRecords {
                 now);
         Instant lease = filing.getLeaseUntil();
         if (lease != null && lease.isAfter(now)) record.setNextAttemptAt(lease.plusSeconds(60));
+        cleanups.save(record);
+    }
+
+    /** The private issue that a promotion closed still holds the report's text. */
+    private void keepPredecessor(ProductFeedbackFiling filing, Instant now) {
+        String repository = filing.getPredecessorRepository();
+        Long repositoryId = filing.getPredecessorRepositoryId();
+        Long installationId = filing.getPredecessorInstallationId();
+        Long number = filing.getPredecessorIssueNumber();
+        Instant first = filing.getFirstAttemptAt();
+        if (repository == null || repositoryId == null || installationId == null || number == null) return;
+        var record = new ProductFeedbackCleanup(
+                repository,
+                repositoryId,
+                installationId,
+                filing.getFeedbackId(),
+                number,
+                false,
+                first == null ? now.minusSeconds(3600) : first,
+                now);
+        record.setIssueNodeId(filing.getPredecessorIssueNodeId());
         cleanups.save(record);
     }
 
