@@ -32,6 +32,7 @@ import io.fabric8.kubernetes.client.KubernetesClientTimeoutException;
 import io.fabric8.kubernetes.client.RequestConfigBuilder;
 import java.io.IOException;
 import java.io.Reader;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -198,7 +199,7 @@ public class KubernetesPods {
     private static ResourceRequirements side(long memoryRequest) {
         return new ResourceRequirementsBuilder()
                 .withLimits(Map.of(
-                        "cpu", new Quantity("1"),
+                        "cpu", new Quantity("500m"),
                         "memory", bytes(768 * MIB),
                         "ephemeral-storage", bytes(SandboxLayout.SCRATCH_BYTES + SIDE_LOG_BYTES)))
                 .withRequests(Map.of(
@@ -641,6 +642,30 @@ public class KubernetesPods {
                         "ephemeral-storage",
                         bytes(size.diskRequest())))
                 .build();
+    }
+
+    /**
+     * What a review Pod holds at most: its loop and both of its sides. A sidecar runs beside the loop, so a quota adds them
+     * up. A review that runs no program holds less, and room is counted for the larger one.
+     */
+    static ResourceRequirements reviewPodResources(ResourceLimits limits) {
+        ResourceRequirements loop = resources(limits, REVIEW);
+        return new ResourceRequirementsBuilder()
+                .withLimits(added(loop.getLimits(), TOOLS_RESOURCES.getLimits(), PROGRAMS_RESOURCES.getLimits()))
+                .withRequests(
+                        added(loop.getRequests(), TOOLS_RESOURCES.getRequests(), PROGRAMS_RESOURCES.getRequests()))
+                .build();
+    }
+
+    @SafeVarargs
+    private static Map<String, Quantity> added(Map<String, Quantity>... parts) {
+        Map<String, BigDecimal> total = new TreeMap<>();
+        for (Map<String, Quantity> part : parts) {
+            part.forEach((name, amount) -> total.merge(name, amount.getNumericalAmount(), BigDecimal::add));
+        }
+        Map<String, Quantity> quantities = new TreeMap<>();
+        total.forEach((name, amount) -> quantities.put(name, new Quantity(amount.toPlainString())));
+        return quantities;
     }
 
     /** A probe Pod requests the memory it is given and writes nothing but its line of output. */

@@ -494,8 +494,8 @@ class KubernetesSandboxLiveTest {
         CompletableFuture<List<Pod>> terminated = client.pods()
                 .inNamespace(namespace())
                 .withLabel(KubernetesWorker.JOB_ID, jobId.toString())
-                .informOnCondition(candidates -> candidates.stream()
-                        .anyMatch(pod -> KubernetesPods.exitCode(pod, KubernetesPods.LOOP) != null));
+                .informOnCondition(candidates ->
+                        candidates.stream().anyMatch(pod -> KubernetesPods.exitCode(pod, KubernetesPods.LOOP) != null));
         try {
             // External buffers touch anonymous pages without exhausting the JavaScript heap first.
             assertThatThrownBy(() -> reviews.execute(review(

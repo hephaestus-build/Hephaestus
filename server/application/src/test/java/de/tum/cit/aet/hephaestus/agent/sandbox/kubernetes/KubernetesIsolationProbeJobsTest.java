@@ -131,9 +131,9 @@ class KubernetesIsolationProbeJobsTest {
         assertThat(proof.passed()).isFalse();
         assertThat(worker.isolated()).isFalse();
         assertThat(proof.failures())
-                .hasSize(2)
+                .hasSize(3)
                 .allSatisfy(failure -> assertThat(failure).contains("did not start: CreateContainerError"));
-        assertThat(created).hasSize(2);
+        assertThat(created).hasSize(3);
         assertThat(created.values()).allSatisfy(job -> {
             assertThat(job.getSpec().getBackoffLimit()).isZero();
             assertThat(job.getSpec().getTtlSecondsAfterFinished())
@@ -144,6 +144,7 @@ class KubernetesIsolationProbeJobsTest {
         assertThat(created.values().stream().map(KubernetesIsolationProbeJobsTest::memory))
                 .containsExactlyInAnyOrder(
                         quantity(KubernetesIsolationProbe.TRIAL_MEMORY),
+                        quantity(KubernetesIsolationProbe.PROBE_MEMORY),
                         quantity(KubernetesIsolationProbe.PROBE_MEMORY));
         assertThat(api.batch().v1().jobs().inNamespace(SANDBOXES).list().getItems())
                 .as("the probe deletes each of its Jobs, also when its Pod did not run")
@@ -213,7 +214,7 @@ class KubernetesIsolationProbeJobsTest {
             controller.join();
         }
 
-        assertThat(refused).hasSize(2);
+        assertThat(refused).hasSize(3);
         if (previousProof) {
             assertThat(proof)
                     .as("a quota without room proves nothing about isolation")

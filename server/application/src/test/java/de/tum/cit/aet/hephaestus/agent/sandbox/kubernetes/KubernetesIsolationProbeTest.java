@@ -213,7 +213,7 @@ class KubernetesIsolationProbeTest {
                     .hasMessageContaining("must support user namespaces");
             assertThat(worker.isolated()).isFalse();
             assertThat(Objects.requireNonNull(worker.proof()).failures())
-                    .hasSize(2)
+                    .hasSize(3)
                     .anySatisfy(failure -> assertThat(failure).contains("no private user mapping"));
         }
     }

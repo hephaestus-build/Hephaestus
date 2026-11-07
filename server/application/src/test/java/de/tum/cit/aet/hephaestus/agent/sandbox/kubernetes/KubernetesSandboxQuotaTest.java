@@ -45,10 +45,10 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
     void shouldAdmitAsManyReviewsAsTheTightestResourceHolds() {
         var quota = quota(
                 Map.of("requests.memory", "16Gi", "limits.cpu", "12", "pods", "12"),
-                Map.of("requests.memory", "4Gi", "limits.cpu", "10500m", "pods", "3"));
+                Map.of("requests.memory", "4Gi", "limits.cpu", "10", "pods", "3"));
 
         assertThat(KubernetesSandboxQuota.fits(List.of(quota), REVIEW, REVIEWS))
-                .as("1.5 free CPUs hold one review's CPU limit, though 12 GiB would hold nineteen")
+                .as("2 free CPUs hold one review's CPU limit, though 12 GiB would hold nineteen")
                 .isEqualTo(1);
     }
 
@@ -162,13 +162,13 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
     @Test
     void shouldChargeTheRuntimeClassOverheadToRequestsAndLimits() {
         var quota = quota(
-                Map.of("requests.memory", "2560Mi", "limits.memory", "2560Mi"),
+                Map.of("requests.memory", "5632Mi", "limits.memory", "5632Mi"),
                 Map.of("requests.memory", "0", "limits.memory", "0"));
         var withOverhead = KubernetesSandboxQuota.footprint(LIMITS, Map.of("memory", new Quantity("512Mi")));
 
         assertThat(KubernetesSandboxQuota.fits(List.of(quota), REVIEW, REVIEWS)).isEqualTo(2);
         assertThat(KubernetesSandboxQuota.fits(List.of(quota), withOverhead, REVIEWS))
-                .as("2.5 GiB of limits hold one Pod limited to 1.75 GiB")
+                .as("5.5 GiB of limits hold one Pod limited to 3.25 GiB")
                 .isEqualTo(1);
     }
 

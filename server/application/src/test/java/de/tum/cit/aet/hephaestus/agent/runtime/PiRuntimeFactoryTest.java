@@ -299,7 +299,7 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
     class CommandAssembly {
 
         @Test
-        @DisplayName("Practice profile permits native tools without the permission model")
+        @DisplayName("Practice profile runs the loop under the permission model, with no child process")
         void runtimeFlagsForPractice() {
             String body =
                     factory.build(spec("openai-completions", "gpt-x")).command().get(2);
@@ -307,8 +307,9 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
             int scriptIdx = body.indexOf(SandboxLayout.RUNNER_SCRIPT_FILENAME);
 
             assertThat(body.substring(nodeIdx, scriptIdx))
-                    .contains("--max-old-space-size=256")
-                    .doesNotContain("--permission", "--allow-child-process", "--allow-fs-");
+                    .contains("--max-old-space-size=256", "--permission", "--allow-worker")
+                    .contains("--allow-fs-read=/opt/practice-scripts", "--allow-fs-write=/workspace/work/review-input")
+                    .doesNotContain("--allow-child-process", "--allow-addons");
             int lastAmp = body.lastIndexOf("&&", nodeIdx);
             int sliceStart = lastAmp >= 0 ? lastAmp + 2 : 0;
             assertThat(body.substring(sliceStart, nodeIdx)).isBlank();

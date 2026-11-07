@@ -123,7 +123,6 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
                 .isEqualTo(disk);
     }
 
-    /** What a quota charges for a Pod's request: its containers together, or its largest init container when more. */
     /** A Pod's request as Kubernetes counts it: a native sidecar adds to everything that runs after it starts. */
     private static BigDecimal effective(Pod pod, String resource) {
         BigDecimal running = pod.getSpec().getContainers().stream()
