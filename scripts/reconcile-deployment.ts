@@ -813,6 +813,8 @@ async function prepareDeployment(
 
 export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	const config = hostConfig(process.env);
+	// kubectl and Helm use client-go discovery data; release trees must stay immutable.
+	process.env.KUBECACHEDIR = path.join(config.stateDirectory, "kubernetes-cache");
 	const appliedFile = path.join(config.stateDirectory, "applied.json");
 	const applied = await readApplied(appliedFile);
 	const startedAt = new Date();
@@ -1412,9 +1414,9 @@ export async function ensureReleaseTree(
  * Removes the release trees nothing needs after an apply, then the lock of every release left without
  * a tree. Kept are the releases in `kept`, the tree the tooling link names, a tree locked with
  * `git worktree lock` — how anything else working in a tree says so — and a tree holding anything its
- * release does not, such as ignored local operator files.
- * That file is ignored, and `git worktree remove` refuses only untracked and modified content, so the
- * check here includes ignored files. The next apply finishes a prune that stopped partway.
+ * release does not, such as ignored local operator files. Untracked kubectl discovery cache is
+ * disposable and removed before that check. The check includes ignored files because
+ * `git worktree remove` can delete them without force. The next apply finishes an interrupted prune.
  */
 async function pruneReleases(
 	config: HostConfig,
@@ -1443,6 +1445,13 @@ async function pruneReleases(
 			continue;
 		}
 		const lock = lines.find((line) => line === "locked" || line.startsWith("locked "));
+		if (lock === undefined) {
+			// kubectl discovery data is disposable. Git keeps tracked files and does not follow symlinks.
+			await succeeds("git", ["clean", "-fdx", "--", ".kube/cache"], {
+				cwd: tree,
+				stdout: "ignore",
+			});
+		}
 		const reason = (
 			lock ?? (await output("git", ["status", "--porcelain=v1", "--ignored"], { cwd: tree }))
 		).trimEnd();
