@@ -291,17 +291,19 @@ export class EvidenceReader {
 	 * reads only its assigned file and context, so its searches prove nothing about the rest of the tree and get no
 	 * receipt. A pattern longer than a receipt holds gets none either.
 	 */
-	#searchReceipt(
+	async #searchReceipt(
 		record: boolean,
 		truncated: boolean,
-		{ pattern, glob }: { pattern: string; glob?: string },
-	): void {
+		{ pattern, glob, fixedString }: { pattern: string; glob?: string; fixedString?: boolean },
+		matches: readonly GrepMatch[],
+	): Promise<void> {
 		if (
 			!record ||
 			truncated ||
 			glob !== undefined ||
 			this.#sources.permittedPaths !== undefined ||
-			pattern.length > CANDIDATE_LIMITS.warrantFieldChars
+			pattern.length > CANDIDATE_LIMITS.warrantFieldChars ||
+			!(await this.#searchStands({ pattern, fixedString }, matches))
 		) {
 			return;
 		}
@@ -447,8 +449,7 @@ export class EvidenceReader {
 					signal,
 				);
 				const truncated = matches.length > maxResults;
-				const stands = truncated || (await this.#searchStands(request, matches));
-				this.#searchReceipt(recordReceipt && stands, truncated, request);
+				await this.#searchReceipt(recordReceipt, truncated, request, matches);
 				return { matches: matches.slice(0, maxResults), truncated };
 			}
 			case "record": {

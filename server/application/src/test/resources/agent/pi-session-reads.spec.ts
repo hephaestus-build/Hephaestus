@@ -919,7 +919,7 @@ function checkout(): string {
 	return root;
 }
 
-void test("codemode's whole-checkout searches and complete reads leave receipts that prove them, searches first", () => {
+void test("codemode's whole-checkout searches and complete reads leave receipts that prove them, searches first", async () => {
 	const root = checkout();
 	try {
 		const reads = new SessionReads(root, {}, undefined, [], TREE);
@@ -929,6 +929,7 @@ void test("codemode's whole-checkout searches and complete reads leave receipts 
 		treeTool(reads, "grep", "grep", { pattern: "ControllerAdvice" });
 		treeTool(reads, "rooted", "grep", { pattern: "ExceptionHandler", path: "repos/reviewed" });
 
+		await reads.proveSearches(async (_root, claims) => claims.map(() => true));
 		const { receipts } = reads.coverage();
 		assert.deepEqual(
 			receipts.map((receipt) => [receipt.status, receipt.path, receipt.pattern]),
