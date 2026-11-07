@@ -13,12 +13,13 @@
 # read it: HEPHAESTUS_AUTH_STATE_COOKIE_KEY, or WEBHOOK_ROUTING_SECRET with its previous value.
 #
 # It uses the current kubectl context. It creates the Secret, or adds only the keys that the Secret
-# lacks, and it never changes a key that exists. It prints key names, never a value.
+# lacks. An explicitly supplied GitHub OAuth client secret replaces its stored value.
+# It prints key names, never a value.
 # k3s-install.sh runs it on every install; on another cluster, run it once before the first
 # `helm upgrade --install`, also when Git holds the rest of the release.
 #
 # Values that it cannot generate come from the environment, and only when they are set:
-#   GITHUB_OAUTH_CLIENT_SECRET          stored when it differs from the Secret.
+#   GITHUB_OAUTH_CLIENT_SECRET          stored when it differs; seeds only a missing login provider.
 #   DATABASE_USERNAME, DATABASE_PASSWORD the login of your PostgreSQL, with --external-database.
 #                                       New encryption keys for that database need --new-keys.
 #   NATS_USERNAME, NATS_PASSWORD        the login of your NATS broker, with --external-nats.
@@ -259,7 +260,7 @@ if [ -n "$client_secret" ]; then
 	current=$(printf '%s' "$secret_json" | jq -r '.data.GITHUB_OAUTH_CLIENT_SECRET // empty | @base64d' | tr -d '\r')
 	if [ "$current" != "$client_secret" ]; then
 		add GITHUB_OAUTH_CLIENT_SECRET "$client_secret"
-		# The server copies the client secret at its start, so a running server needs a restart.
+		# Existing login providers keep their database value. This supplies the startup seed for a missing login provider.
 		[ -z "$secret_json" ] || changed=GITHUB_OAUTH_CLIENT_SECRET
 	fi
 elif ! has GITHUB_OAUTH_CLIENT_SECRET; then
@@ -282,3 +283,8 @@ for key in $added; do
 	fi
 done
 [ -n "$added" ] || echo "The Secret $NAMESPACE/$SECRET has every key: nothing changed"
+
+if [ -n "$changed" ]; then
+	warn "GITHUB_OAUTH_CLIENT_SECRET changed in Kubernetes. A login provider that already exists keeps its database credential."
+	warn "for an existing provider, use Instance administration / Login providers: https://docs.hephaestus.build/admin/secret-custody#login-provider-secrets"
+fi

@@ -625,7 +625,7 @@ helm upgrade --install hephaestus "$HERE/chart-$VERSION/hephaestus" -n "$NAMESPA
 	"$@" -f "$HERE/k3s-values.yaml" -f "$HERE/site.yaml" \
 	--rollback-on-failure --wait=watcher --wait-for-jobs --timeout 20m
 if [ "$oauth_changed" = true ]; then
-	# A changed client secret reaches the server only at its start.
+	# Startup seeds a missing provider. An existing provider keeps its database credential.
 	kubectl -n "$NAMESPACE" rollout restart deployment/hephaestus-server >/dev/null
 fi
 

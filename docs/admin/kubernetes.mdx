@@ -1128,7 +1128,9 @@ sudo install -m 0600 -o "$(id -u)" -g "$(id -g)" \
 
 Then pass `--certificates ./saved-certificates.yaml`. This preserves the existing issuer, including a staging issuer.
 
-A new `GITHUB_OAUTH_CLIENT_SECRET` replaces the stored one and restarts the server.
+A new `GITHUB_OAUTH_CLIENT_SECRET` updates the Kubernetes Secret and restarts the server to seed a missing login provider.
+An existing login provider keeps its database value, including after a restart.
+Use [Login provider secrets](./secret-custody#login-provider-secrets) to rotate the credential used for sign-in.
 
 ### Certificate renewal
 
