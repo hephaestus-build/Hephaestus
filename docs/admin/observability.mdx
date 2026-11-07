@@ -26,6 +26,7 @@ The alert or the objective tells the operator when the answer needs work.
 | Do review attempts fail, and where? | `agent_job_total`, `agent_job_infra_retry_requeued_total`, `agent_job_orphan_failed_total` | `HephaestusAgentJobsFailing` and the other review alerts |
 | How long does each stage of a review take? | `agent_job_stage_duration_seconds`, by `stage` and `outcome`. Admission: `http_server_requests_seconds` on the two [admission routes](#agent-job-metrics) | None |
 | Which statements take the most database time, and do tables collect dead rows? | `pg_stat_statements_seconds_total` by `queryid`, `pg_stat_user_tables_n_dead_tup`, `pg_long_running_transactions_oldest_timestamp_seconds`, with the [database metrics](#database-metrics) on | `HephaestusDatabaseDeadlocks`, `HephaestusDatabaseTransactionOpenLong`, `HephaestusDatabaseDeadRowsHigh`, `HephaestusDatabaseTransactionIdAgeHigh` |
+| How long does a provider event wait for its handling, and how long does the handling take? | `integration_message_lag_seconds`, `integration_message_process_duration_seconds`, by `kind`, with retries in `integration_consumer_nak_total` and dead letters in `integration_consumer_poison_total` | `HephaestusEventsDelayed` |
 | Does work wait for a worker? | `agent_queue_oldest_age_seconds`, `agent_job_duration_seconds` with `phase="queue"` | `HephaestusAgentQueueStalled` |
 | Do model calls wait for their pool? | `llm_pool_permit_wait_seconds`, `llm_pool_upstream_throttled_total` | `HephaestusConversationModelWaitLong`, `HephaestusReviewModelWaitLong` |
 | Did a worker lose its model calls in flight? | `llm_pool_permits_expired_total`, `llm_pool_lease_renewal_failures_total` | `HephaestusModelPermitsExpired`, `HephaestusModelPermitRenewalFailing` |
@@ -51,13 +52,10 @@ The alert or the objective tells the operator when the answer needs work.
 
 These questions have no signal yet. The most important is first.
 
-1. How long does an event wait in the broker, and how long does its handler take?
-   `integration_consumer_nak_total` and `integration_consumer_poison_total` count retries and dead letters.
-   No histogram measures the wait or the handling.
-2. What does a reader wait for on a page?
+1. What does a reader wait for on a page?
    When does the browser show the first word of an answer?
    No signal exists.
-3. Does feedback earn trust: the outcomes of each practice, corrections and disagreement?
+2. Does feedback earn trust: the outcomes of each practice, corrections and disagreement?
    These are only in the database.
    A practice is not a metric label, because each workspace can add practices.
 
@@ -319,6 +317,7 @@ For the volume rules, change their name patterns.
 | `HephaestusStreamBacklog` | `webhook_stream_consumer_pending`: events that the broker did not deliver to a consumer | Under steady load, a few events wait between two fetches. A backlog above that level at each evaluation for 15 minutes shows consumers that fall behind or do not fetch. At its bound, the stream removes its oldest message, also when a consumer still needs it. The gauge counts an event once for each consumer that it matches |
 | `HephaestusWebhookRetentionBelowAgeBound` | `webhook_stream_oldest_message_age_seconds` under 90 % of `webhook_stream_age_bound_seconds` while `webhook_stream_bytes_utilization` is above 0.9 | A stream at its byte bound is normal. It matters only when that bound holds less than the age bound promises. A young stream does not fire |
 | `HephaestusWebhookStreamPastAgeBound` | `webhook_stream_oldest_message_age_seconds` above 110 % of `webhook_stream_age_bound_seconds` | A stream holds deliveries longer than its setting allows, usually because startup withholds a shorter age. On Slack and Outline, this is personal content past its horizon |
+| `HephaestusEventsDelayed` | `integration_message_lag_seconds`, per `kind` | The backlog alerts count events. This one measures the wait: more than 10 % of at least 20 events in 10 minutes wait over 5 minutes, for 15 minutes. A catch-up after a restart stays silent, and so does an instance with fewer events |
 | `HephaestusStreamConsumerStopped` | `webhook_stream_consumer_pending` above 0 for 6 hours without a pause | The backlog alert needs more than 50 events, so it stays silent on a quiet stream. Events that outlive the stream's retention are lost |
 | `HephaestusWebhookPublishFailing` | `webhook_publish_total{outcome="failure"}` | GitHub redelivery covers a short stall of the broker, not a long one |
 | `HephaestusWebhookReceiverBusy` | `webhook_rejected_total{reason="busy"}` | Large deliveries arrive faster than the receiver's memory holds them. A short burst recovers by itself |
@@ -1416,6 +1415,11 @@ Thus, one trace shows the webhook request, the handling of the event, and the ca
 The consumer span records `messaging.system`, `messaging.operation.type` and `messaging.destination.name`, the message subject.
 A subject names the provider's owner and repository, as the URL of a provider call does.
 A message that a release before this one stored has no trace context, so its handling starts a new trace.
+
+| Prometheus name | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `integration_message_lag_seconds` | Histogram | `kind` | How long an event waited in its stream before its first handling. A retry has no sample |
+| `integration_message_process_duration_seconds` | Histogram | `kind`, `outcome` | How long the handling of one delivery took. `outcome` is `completed` or `failed` |
 
 Framework HTTP spans describe the transport. Prompts, tool results, request bodies,
 headers and tokens used for authentication are not span attributes.

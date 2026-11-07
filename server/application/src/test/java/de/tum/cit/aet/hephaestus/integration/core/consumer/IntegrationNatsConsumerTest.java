@@ -20,11 +20,13 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider.NatsSubscriptionInfo;
 import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider.StreamSubscription;
 import de.tum.cit.aet.hephaestus.integration.core.sync.activity.ConnectionActivityRecorder;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.nats.client.ConsumerContext;
 import io.nats.client.Message;
 import io.nats.client.StreamContext;
 import io.nats.client.api.DeliverPolicy;
 import java.io.IOException;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -84,7 +86,8 @@ class IntegrationNatsConsumerTest {
                 new IntegrationConsumerStats(),
                 mock(ConnectionActivityRecorder.class),
                 List.of(),
-                NatsTraceContexts.none());
+                NatsTraceContexts.none(),
+                NatsTraceContexts.messageMeters());
         try {
             consumer.stopConsumingScopeForPurge(7L);
             consumer.startConsumingScope(7L);
@@ -112,7 +115,8 @@ class IntegrationNatsConsumerTest {
                         new IntegrationConsumerStats(),
                         mock(ConnectionActivityRecorder.class),
                         List.of(),
-                        NatsTraceContexts.none()) {
+                        NatsTraceContexts.none(),
+                        NatsTraceContexts.messageMeters()) {
                     @Override
                     void ensureNatsConnectionEstablished() {}
 
@@ -228,6 +232,7 @@ class IntegrationNatsConsumerTest {
         private final IntegrationPoisonHandler poisonHandler = mock(IntegrationPoisonHandler.class);
         private final IntegrationMessageHandler handler = mock(IntegrationMessageHandler.class);
         private final Message message = mock(Message.class);
+        private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
 
         private IntegrationNatsConsumer consumer(RouteAdmission admission) {
             when(message.getSubject()).thenReturn(SUBJECT);
@@ -246,7 +251,8 @@ class IntegrationNatsConsumerTest {
                     new IntegrationConsumerStats(),
                     mock(ConnectionActivityRecorder.class),
                     List.of(admission),
-                    NatsTraceContexts.none());
+                    NatsTraceContexts.none(),
+                    new IntegrationMessageMeters(meters, Clock.systemUTC()));
         }
 
         @Test
@@ -265,6 +271,24 @@ class IntegrationNatsConsumerTest {
             verify(handler, never()).onMessage(message);
             verify(message, never()).ack();
             verify(poisonHandler).handleFailure(eq(5L), eq(message), any());
+        }
+
+        @Test
+        void shouldTimeEachHandlingByItsOutcome() {
+            consumer(new FixedAdmission(false, null)).handleMessage(5L, message);
+            consumer(new FixedAdmission(true, new IllegalStateException("database unavailable")))
+                    .handleMessage(5L, message);
+
+            assertThat(meters.get("integration.message.process.duration")
+                            .tags("kind", "gitlab", "outcome", "completed")
+                            .timer()
+                            .count())
+                    .isEqualTo(1);
+            assertThat(meters.get("integration.message.process.duration")
+                            .tags("kind", "gitlab", "outcome", "failed")
+                            .timer()
+                            .count())
+                    .isEqualTo(1);
         }
 
         @Test
@@ -321,7 +345,8 @@ class IntegrationNatsConsumerTest {
                     new IntegrationConsumerStats(),
                     activityRecorder,
                     List.of(),
-                    NatsTraceContexts.none());
+                    NatsTraceContexts.none(),
+                    NatsTraceContexts.messageMeters());
         }
 
         @Test
@@ -572,7 +597,8 @@ class IntegrationNatsConsumerTest {
                         new IntegrationConsumerStats(),
                         mock(ConnectionActivityRecorder.class),
                         List.of(),
-                        NatsTraceContexts.none());
+                        NatsTraceContexts.none(),
+                        NatsTraceContexts.messageMeters());
                 this.failingStreams = new ConcurrentSkipListSet<>(failingStreams);
                 this.subscribedStreams = subscribedStreams;
             }

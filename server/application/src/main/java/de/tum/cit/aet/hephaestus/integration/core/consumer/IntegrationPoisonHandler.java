@@ -229,7 +229,7 @@ public class IntegrationPoisonHandler {
         return ThreadLocalRandom.current().nextLong(Math.max(1, cap / 2), Math.max(2, cap + 1));
     }
 
-    private static String kindTag(@Nullable Message msg) {
+    static String kindTag(@Nullable Message msg) {
         if (msg == null) {
             return UNKNOWN_KIND_TAG;
         }
