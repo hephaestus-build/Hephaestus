@@ -480,6 +480,19 @@ class KubernetesSandboxLiveTest {
     }
 
     @Test
+    void shouldStartTheProgramSideOfAReviewThatStagesAProgram() throws Exception {
+        SandboxResult result = reviews.execute(review(
+                UUID.randomUUID(),
+                "for i in $(seq 60); do [ -S /run/programs/programs.sock ] && exit 0; sleep 0.5; done; exit 9",
+                Map.of(SandboxLayout.PRACTICE_SCRIPT_PRACTICES_PREFIX + "a-practice.ts", synthetic(64)),
+                Duration.ofMinutes(5)));
+
+        assertThat(result.exitCode())
+                .as("the loop sees the socket of the program side")
+                .isZero();
+    }
+
+    @Test
     void shouldRecordAKernelOomKillOfAReviewInsteadOfAnEviction() throws Exception {
         UUID jobId = UUID.randomUUID();
         double killed = meters.get(AgentMetrics.SANDBOX_EXITS)
