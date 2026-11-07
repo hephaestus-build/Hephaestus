@@ -480,12 +480,17 @@ class KubernetesSandboxLiveTest {
     }
 
     @Test
-    void shouldStartTheProgramSideOfAReviewThatStagesAProgram() throws Exception {
-        SandboxResult result = reviews.execute(review(
+    void shouldStartTheProgramSideOfAReviewThatStagesAProgram(@TempDir Path staging) throws Exception {
+        // Job preparation stages a program on disk, so the spec holds it as a file on disk.
+        Path program = Files.write(staging.resolve("a-practice.ts"), synthetic(64));
+        var review = review(
                 UUID.randomUUID(),
                 "for i in $(seq 60); do [ -S /run/programs/programs.sock ] && exit 0; sleep 0.5; done; exit 9",
-                Map.of(SandboxLayout.PRACTICE_SCRIPT_PRACTICES_PREFIX + "a-practice.ts", synthetic(64)),
-                Duration.ofMinutes(5)));
+                Map.of(),
+                limits(Duration.ofMinutes(5)),
+                Map.of(SandboxLayout.PRACTICE_SCRIPT_PRACTICES_PREFIX + "a-practice.ts", program));
+
+        SandboxResult result = reviews.execute(review);
 
         assertThat(result.exitCode())
                 .as("the loop sees the socket of the program side")
@@ -1529,6 +1534,15 @@ class KubernetesSandboxLiveTest {
     }
 
     private SandboxSpec review(UUID jobId, String script, Map<String, byte[]> files, ResourceLimits limits) {
+        return review(jobId, script, files, limits, Map.of());
+    }
+
+    private SandboxSpec review(
+            UUID jobId,
+            String script,
+            Map<String, byte[]> files,
+            ResourceLimits limits,
+            Map<String, Path> filesOnDisk) {
         return new SandboxSpec(
                 jobId,
                 0,
@@ -1539,7 +1553,7 @@ class KubernetesSandboxLiveTest {
                 limits,
                 null,
                 files,
-                Map.of(),
+                filesOnDisk,
                 List.of());
     }
 
