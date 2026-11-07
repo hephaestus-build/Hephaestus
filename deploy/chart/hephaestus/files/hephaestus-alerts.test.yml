@@ -2715,6 +2715,60 @@ tests:
               summary: The kernel killed a container for its memory
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: a commit link queue that stops shrinking fires while a shrinking queue stays quiet
+    interval: 1m
+    input_series:
+      - series: 'commit_identity_pending{job="hephaestus"}'
+        values: "100-1x60 40+0x900"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HephaestusCommitIdentityResolutionStalled
+        exp_alerts: []
+      - eval_time: 9h
+        alertname: HephaestusCommitIdentityResolutionStalled
+        exp_alerts:
+          - exp_labels:
+              job: hephaestus
+              severity: warning
+            exp_annotations:
+              summary: Commit link correction made no progress for 6 hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: emails that run out of attempts fire while answered emails keep the alert quiet
+    interval: 1h
+    input_series:
+      - series: 'commit_identity_resolutions_total{job="hephaestus",outcome="resolved"}'
+        values: "0 50 100 150 200 200 200 200 200 200 200 200 200 200 200"
+      - series: 'commit_identity_resolutions_total{job="hephaestus",outcome="unanswered"}'
+        values: "0 1 2 3 4 4 4 4 4 54 104 154 204 254 304"
+    alert_rule_test:
+      - eval_time: 4h
+        alertname: HephaestusCommitIdentityResolutionUnanswered
+        exp_alerts: []
+      - eval_time: 14h
+        alertname: HephaestusCommitIdentityResolutionUnanswered
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Commit link correction lost more emails than it answered in 6 hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: emails that run out of attempts fire when nothing was ever answered
+    interval: 1h
+    input_series:
+      - series: 'commit_identity_resolutions_total{job="hephaestus",outcome="unanswered"}'
+        values: "0 0 50 100 150 200 250 300"
+    alert_rule_test:
+      - eval_time: 6h
+        alertname: HephaestusCommitIdentityResolutionUnanswered
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Commit link correction lost more emails than it answered in 6 hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: repeated inbox cleanup failures fire while one failure stays quiet
     interval: 1h
     input_series:

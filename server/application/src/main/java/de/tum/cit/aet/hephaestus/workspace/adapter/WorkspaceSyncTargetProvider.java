@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsum
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -41,7 +42,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
-public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
+public class WorkspaceSyncTargetProvider implements SyncTargetProvider, RepositoryScopeProvider {
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceSyncTargetProvider.class);
 
@@ -161,6 +162,16 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                 .findById(scopeId)
                 .map(ws -> ws.getStatus() == WorkspaceStatus.ACTIVE && !credentialRefused(ws.getId()))
                 .orElse(false);
+    }
+
+    @Override
+    public List<Long> getActiveScopesForRepository(long repositoryNativeId, long providerId) {
+        return repositoryToMonitorRepository.findByNativeIdOnSourceProvider(repositoryNativeId, providerId).stream()
+                .map(RepositoryToMonitor::getWorkspace)
+                .filter(Objects::nonNull)
+                .map(Workspace::getId)
+                .filter(this::isScopeActiveForSync)
+                .toList();
     }
 
     @Override

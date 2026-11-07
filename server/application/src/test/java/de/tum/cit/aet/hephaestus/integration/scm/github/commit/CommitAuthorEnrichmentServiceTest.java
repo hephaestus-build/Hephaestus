@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
@@ -25,17 +26,21 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.graphql.ResponseError;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.GraphQlClient;
@@ -46,6 +51,9 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
 
     @Mock
     private CommitRepository commitRepository;
+
+    @Mock
+    private CommitIdentityResolutionRepository identityResolutions;
 
     @Mock
     private CommitAuthorResolver authorResolver;
@@ -71,6 +79,7 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
     void setUp() {
         service = new CommitAuthorEnrichmentService(
                 commitRepository,
+                identityResolutions,
                 authorResolver,
                 graphQlClientProvider,
                 graphQlSyncCoordinator,
@@ -81,6 +90,109 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
     }
 
     // Tests
+
+    @Nested
+    class CommitActors {
+
+        private static final String SHA = "a".repeat(40);
+
+        private Map<String, List<CommitAuthorEnrichmentService.CommitActor>> read(
+                Map<String, Object> commit, List<ResponseError> errors) {
+            var client = mock(HttpGraphQlClient.class);
+            var request = mock(GraphQlClient.RequestSpec.class);
+            var response = mock(ClientGraphQlResponse.class);
+            var field = mock(ClientResponseField.class);
+            when(graphQlClientProvider.forScope(1L)).thenReturn(client);
+            when(client.document(anyString())).thenReturn(request);
+            when(request.execute()).thenReturn(Mono.just(response));
+            when(response.isValid()).thenReturn(true);
+            when(response.getErrors()).thenReturn(errors);
+            lenient().when(response.field("repository.commit0")).thenReturn(field);
+            lenient().doReturn(commit).when(field).getValue();
+            lenient()
+                    .doReturn(commit)
+                    .when(field)
+                    .toEntity(ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any());
+            return service.fetchCommitActors("owner/repo", 1L, List.of(SHA));
+        }
+
+        private static Map<String, Object> actor(String email, Map<String, Object> rest) {
+            Map<String, Object> actor = new HashMap<>(rest);
+            actor.put("email", email);
+            return actor;
+        }
+
+        private static Map<String, Object> noUser() {
+            Map<String, Object> rest = new HashMap<>();
+            rest.put("user", null);
+            return rest;
+        }
+
+        @Test
+        void shouldReadAnExplicitNullUserAsAnAnswerAndTheCoAuthorsToo() {
+            var actors = read(
+                    Map.of(
+                            "author",
+                            actor("a@example.com", noUser()),
+                            "authors",
+                            Map.of(
+                                    "nodes",
+                                    List.of(actor(
+                                            "b@example.com", Map.of("user", Map.of("login", "b", "databaseId", 2)))))),
+                    List.of());
+
+            assertThat(actors.get(SHA)).hasSize(2);
+            assertThat(Objects.requireNonNull(actors.get(SHA)).get(0).answered())
+                    .isTrue();
+            assertThat(Objects.requireNonNull(actors.get(SHA)).get(0).user()).isNull();
+            assertThat(Objects.requireNonNull(Objects.requireNonNull(actors.get(SHA))
+                                    .get(1)
+                                    .user())
+                            .getDatabaseId())
+                    .isEqualTo(2L);
+        }
+
+        @Test
+        void shouldNotReadAMissingUserAsAnAnswer() {
+            var actors = read(Map.of("author", actor("a@example.com", Map.of())), List.of());
+
+            assertThat(Objects.requireNonNull(actors.get(SHA)).getFirst().answered())
+                    .isFalse();
+        }
+
+        @Test
+        void shouldNotReadAUserWithoutAnAccountIdAsAnAnswer() {
+            var actors =
+                    read(Map.of("author", actor("a@example.com", Map.of("user", Map.of("login", "a")))), List.of());
+
+            assertThat(Objects.requireNonNull(actors.get(SHA)).getFirst().answered())
+                    .isFalse();
+        }
+
+        @Test
+        void shouldDropTheBatchWhenTheResponseCarriesAnError() {
+            var actors = read(Map.of("author", actor("a@example.com", noUser())), List.of(mock(ResponseError.class)));
+
+            assertThat(actors).isEmpty();
+        }
+    }
+
+    @Nested
+    class NoAccountAnswers {
+
+        @Test
+        void shouldNotLinkThroughAStoredEmailThatGitHubSaysNoAccountOwns() {
+            when(commitRepository.findDistinctUnresolvedAuthorEmailsByRepositoryId(1L))
+                    .thenReturn(List.of("gone@example.com"));
+            when(commitRepository.findDistinctUnresolvedCommitterEmailsByRepositoryId(1L))
+                    .thenReturn(List.of("gone@example.com"));
+            when(identityResolutions.findNoAccountEmails(1L)).thenReturn(List.of("gone@example.com"));
+
+            service.enrichCommitAuthors(1L, "owner/repo", null, 1L, null);
+
+            verify(authorResolver, never()).resolveByEmail(any(), any());
+        }
+    }
 
     @Nested
     class SkipConditions {

@@ -214,6 +214,7 @@ With your own Prometheus, use the queries in these files.
 | Question | Query | Healthy |
 | --- | --- | --- |
 | Which reads did a broad tenancy exemption let through? | `sum by (type) (increase(tenancy_bypassed_violation_total{job="hephaestus"}[1d]))` | No result, or 0 for each `type`. `type` is the code that holds the exemption |
+| Does commit link correction make progress? | `commit_identity_pending{job="hephaestus"}` and `sum by (outcome) (increase(commit_identity_resolutions_total{job="hephaestus"}[1d]))` | The queue shrinks while the job is enabled. `commit_identity_link_changes_total` counts the changed links. |
 | Did tenancy report or refuse a read? | `sum by (table, mode) (increase(tenancy_violation_total{job="hephaestus"}[1d]))` | No result |
 
 ### Alert rules

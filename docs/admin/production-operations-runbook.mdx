@@ -488,6 +488,28 @@ Normal job-folder retention stays unchanged:
 - Ended attempts have a one-hour cleanup grace.
 - Restart cleanup removes abandoned folders.
 
+## Correct commit links from GitHub
+
+A commit's author, committer, or contributor link can disagree with GitHub, whatever the age of the commit.
+The commit link correction job asks GitHub for each email on each repository.
+It is off by default. It asks about 50 emails every 5 minutes, and it stops when the rate limit is near.
+
+1. Set `config.commitIdentityResolutionEnabled` to `true` in your Helm values.
+2. Read `commit_identity_pending` to see the queue. It shrinks as GitHub answers.
+3. Read `commit_identity_resolutions_total` by `outcome`:
+   - `resolved`: GitHub named an account, and the links now follow it.
+   - `no_account`: GitHub says that no account owns the email, so the links are cleared.
+   - `erased`: GitHub named an erased account, so no link changed.
+   - `retry` and `unanswered`: no answer came. No link changed. After 5 attempts, the email leaves the queue.
+
+`commit_identity_change` records each changed link for 90 days, with the old and new user ids.
+To undo a wrong correction, run one conditional `UPDATE` on the table and column named in `target`.
+Set the column to `old_user_id`, and match `id` to `row_id` and the column `IS NOT DISTINCT FROM new_user_id`.
+If the update changes no row, the link changed again, so leave it.
+To ask again after a provider outage, set `state` to `PENDING` and `attempts` to 0 on the `UNANSWERED` rows of `commit_identity_resolution`.
+
+GitLab repositories are not in the queue.
+
 ## Un-deliver external feedback, then purge
 
 Deleting in-app data does not delete a provider comment. If external copies must be scrubbed,
@@ -607,6 +629,7 @@ The signal names the alerts of the shipped rules that it answers.
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `HephaestusPersonErasureInterrupted` | Read `person_data.erasure.failed`, then follow [An erasure store fails](#an-erasure-store-fails). If `person_data.failure_recorded=false`, restore database availability first. | The request reaches `COMPLETE`. No new count of `person_data_erasure_failures_total`. |
 | Poison events / repeated consumer failures (`HephaestusConsumerPoison`, `HephaestusConsumerRetryStalled`) | Preserve stream sequence, kind, reason and delivery count, not raw payloads in logs. Temporary failures retry without a delivery limit and block later events in that workspace and stream. Permanent failures and exhausted unknown failures stop retrying only after their dead-letter record commits. Use [Replay a failed webhook event](./webhook-replay.mdx) to inspect and replay that record. | Reproduce with a sanitized fixture, fix the cause, replay one controlled event under silence, then reconcile the bounded gap. Healthy subsequent events continue.                               |
+| Commit link correction stops or loses emails (`HephaestusCommitIdentityResolutionStalled`, `HephaestusCommitIdentityResolutionUnanswered`) | Read `commit_identity_resolutions_total` by `outcome`. No `resolved` count with a growing `retry` count means no provider answer: check the connection that monitors the repository and the provider rate limit. Near the end of a run, a few emails that GitHub never answers can also fire `HephaestusCommitIdentityResolutionUnanswered`. | A missing answer changes no link. An email that used its 5 attempts leaves the queue: see [Correct commit links from GitHub](#correct-commit-links-from-github) to ask again. To stop the job, set `config.commitIdentityResolutionEnabled` to `false`. |
 | Delivery inbox cleanup fails (`HephaestusInboxRetentionFailing`) | Check the server log for `Inbox retention failed`, the broker's finite age limits and reachability, and the database connection, migration state, locks and permissions. Keep delivery keys while you repair cleanup. They prevent a retained event from applying committed writes again. | The next scheduled cleanup succeeds and the counter stops increasing. Keys older than the longest live or configured stream retention plus one day can be removed. |
 | Dead-letter alert from deployment tooling           | Identify which system owns the queue. For integration events, use [Replay a failed webhook event](./webhook-replay.mdx). Preserve IDs/configuration and restrict payload access.                                                                                                                                                                                                           | Redrive only after fixing the cause, with a bounded batch and verified delivery idempotency. Record irrecoverable events.                                                                       |
 | Rising oldest queue age, stale sampler, failed jobs (`HephaestusAgentQueueStalled`, `HephaestusAgentJobsFailing`) | Check eligible/held/running separately, worker availability, readiness, model assignments, database and provider health. Do not delete jobs or reset leases manually.                                                                                                                                                                                        | Oldest age falls and new work completes. Held work is explained rather than silently counted as healthy.                                                                                        |

@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributorRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ResilienceConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
@@ -66,6 +67,9 @@ class CommitEnrichmentCircuitPermitTest extends BaseUnitTest {
 
     @Mock
     private CommitContributorRepository contributorRepository;
+
+    @Mock
+    private CommitIdentityResolutionRepository identityResolutions;
 
     @Mock
     private CommitAuthorResolver authorResolver;
@@ -197,6 +201,7 @@ class CommitEnrichmentCircuitPermitTest extends BaseUnitTest {
     void shouldCloseTheBreakerAfterRefusedAuthorBatches() {
         var service = new CommitAuthorEnrichmentService(
                 commitRepository,
+                identityResolutions,
                 authorResolver,
                 provider,
                 coordinator,
@@ -322,6 +327,7 @@ class CommitEnrichmentCircuitPermitTest extends BaseUnitTest {
     private CommitAuthorEnrichmentService authorService() {
         return new CommitAuthorEnrichmentService(
                 commitRepository,
+                identityResolutions,
                 authorResolver,
                 provider,
                 coordinator,

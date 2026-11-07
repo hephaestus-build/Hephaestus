@@ -191,6 +191,8 @@ spec:
               value: {{ $config.conversationRetention | quote }}
             - name: HEPHAESTUS_RELEASE_CHECK_ENABLED
               value: {{ $config.releaseCheckEnabled | quote }}
+            - name: HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_ENABLED
+              value: {{ $config.commitIdentityResolutionEnabled | quote }}
           ports:
             - name: http
               containerPort: 8080
