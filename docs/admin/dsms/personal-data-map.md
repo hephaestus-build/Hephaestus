@@ -478,8 +478,20 @@ The contributor-link migration clears `commit_contributor.user_id` where the lin
 A cleared row stays in the mirror without a user.
 Person export and erasure of that account no longer reach the row or the commit data found through it, because they follow `user_id`.
 Capture consent no longer counts that account for the commit.
-This is the same state as any unlinked contributor, and no identity is inferred from the email.
+This is the same state as any unlinked contributor.
 The migration logs a count and no personal values.
+
+The first-author migration sets `commit_contributor.user_id` on GitHub commits where the row proves the user.
+The proof is a noreply address that holds the author's account id, or an email stored on exactly one user of that provider.
+Person export and erasure of that account then reach the row.
+The migration infers no identity from a display name, a login, or `git_commit.author_id` alone.
+It marks no row, so an administrator can clear one link by hand, and only a backup restore undoes all of them.
+It logs a count and no personal values.
+
+Earlier releases could set a commit's author or contributor without an answer from the provider.
+Person export and erasure follow those values, so they can reach a commit that the person did not write, or miss one that they did.
+This limit stays until a later release reads these values from the provider again.
+GitLab gives no answer for an email that appears in no merge request, so that value will stay.
 
 The conversation store holds no data from releases before it. The upgrade that added it deleted
 every earlier conversation, including the Hephaestus copies of Slack DMs. Slack keeps its own
