@@ -2,12 +2,17 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.identity.GitLabWorkspaceInstance;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabPreflightService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookService;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
@@ -16,8 +21,8 @@ import org.springframework.stereotype.Component;
  * GitLab connection lifecycle strategy.
  *
  * <p>A GitLab connection is provisioned when its workspace is created, which checks the instance and the
- * token first, so {@link #initiate} refuses to connect one on its own and {@link #finalizeConnect} is never
- * reached.
+ * token first. {@link #initiate} reconnects a disconnected workspace to that same group with a freshly
+ * verified token; {@link #finalizeConnect} is never reached.
  *
  * <p>{@link #prepareProviderTeardown} cannot revoke the PAT itself (GitLab PATs are revocable only from the
  * user's profile page — there is no third-party revoke API), but it DOES tear down the group
@@ -32,10 +37,24 @@ public class GitLabConnectionStrategy implements ConnectionStrategy {
 
     private final GitLabWebhookService webhookService;
     private final ScmWorkspaceContentEraser contentEraser;
+    private final ConnectionRepository connections;
+    private final WorkspaceRepository workspaces;
+    private final GitLabWorkspaceInstance instance;
+    private final GitLabPreflightService preflight;
 
-    public GitLabConnectionStrategy(GitLabWebhookService webhookService, ScmWorkspaceContentEraser contentEraser) {
+    public GitLabConnectionStrategy(
+            GitLabWebhookService webhookService,
+            ScmWorkspaceContentEraser contentEraser,
+            ConnectionRepository connections,
+            WorkspaceRepository workspaces,
+            GitLabWorkspaceInstance instance,
+            GitLabPreflightService preflight) {
         this.webhookService = webhookService;
         this.contentEraser = contentEraser;
+        this.connections = connections;
+        this.workspaces = workspaces;
+        this.instance = instance;
+        this.preflight = preflight;
     }
 
     @Override
@@ -45,7 +64,28 @@ public class GitLabConnectionStrategy implements ConnectionStrategy {
 
     @Override
     public ConnectInitiation initiate(InitiateRequest request) {
-        throw new IllegalArgumentException("You make a GitLab connection when you create a GitLab workspace.");
+        String token = request.userInput().get("personalAccessToken");
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("Enter a personal access token to reconnect GitLab.");
+        }
+        String serverUrl = instance.require(null);
+        var previous = connections
+                .findByWorkspaceIdAndKindAndInstanceKey(request.workspaceId(), IntegrationKind.GITLAB, serverUrl)
+                .filter(connection -> connection.getState() == IntegrationState.UNINSTALLED)
+                .orElseThrow(
+                        () -> new IllegalArgumentException(
+                                "This workspace has no disconnected GitLab connection. Create a GitLab workspace to connect one."));
+        if (!(previous.getConfig() instanceof ConnectionConfig.GitLabConfig config)) {
+            throw new IllegalStateException("The disconnected GitLab connection has no group configuration.");
+        }
+        var workspace = workspaces
+                .findById(request.workspaceId())
+                .orElseThrow(() -> new IllegalArgumentException("This workspace no longer exists."));
+        long groupId = preflight.resolveAccountId(token, serverUrl, workspace.getAccountLogin());
+        if (groupId != config.gitlabGroupId()) {
+            throw new IllegalArgumentException("The GitLab group has changed. Create a workspace for the new group.");
+        }
+        return new ConnectInitiation.AcceptInline(new BearerToken(token, null), serverUrl);
     }
 
     @Override

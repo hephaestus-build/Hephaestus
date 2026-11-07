@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
@@ -48,6 +49,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
@@ -513,8 +516,9 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     class DeregisterWebhookForConnection {
 
         @Test
-        void deletesByConnectionIdRegardlessOfState() {
+        void deletesTheSuspendedConnectionsWebhook() {
             var connection = mock(Connection.class);
+            when(connection.getState()).thenReturn(IntegrationState.SUSPENDED);
             when(connection.getConfig())
                     .thenReturn(new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
             when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
@@ -530,6 +534,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         @Test
         void bestEffortSwallowsAuthFailurePostPurge() {
             var connection = mock(Connection.class);
+            when(connection.getState()).thenReturn(IntegrationState.SUSPENDED);
             when(connection.getConfig())
                     .thenReturn(new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
             when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
@@ -549,6 +554,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         @Test
         void preparedDeregistrationCallsGitLabOnlyWhenRun() {
             var connection = mock(Connection.class);
+            when(connection.getState()).thenReturn(IntegrationState.SUSPENDED);
             when(connection.getConfig())
                     .thenReturn(new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
             when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
@@ -571,6 +577,18 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             webhookService.deregisterWebhookForConnection(1L, 7L);
 
             verify(webhookClientProvider, never()).getIfAvailable();
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = IntegrationState.class, names = "SUSPENDED", mode = EnumSource.Mode.EXCLUDE)
+        void shouldKeepTheWebhookForConnectionsThatAreNotSuspended(IntegrationState state) {
+            var connection = mock(Connection.class);
+            when(connection.getState()).thenReturn(state);
+            when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
+
+            webhookService.deregisterWebhookForConnection(1L, 7L);
+
+            verifyNoInteractions(webhookClientProvider, webhookClient);
         }
     }
 

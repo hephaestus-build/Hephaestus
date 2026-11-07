@@ -31,6 +31,26 @@ export const Empty: Story = {
 	},
 };
 
+export const ReconnectGitLab: Story = {
+	args: { providerLabel: "GitLab", reconnect: true },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Reconnect GitLab" })).toBeDisabled();
+		await expect(canvas.queryByText("The token expiry is not available yet.")).toBeNull();
+	},
+};
+
+export const ReconnectingGitLab: Story = {
+	args: { providerLabel: "GitLab", reconnect: true, isSaving: true },
+};
+
+export const ReconnectGitLabError: Story = {
+	args: {
+		providerLabel: "GitLab",
+		reconnect: true,
+		error: new Error("The token cannot read this group."),
+	},
+};
+
 export const Saving: Story = {
 	args: { isSaving: true },
 	play: async ({ canvas }) => {

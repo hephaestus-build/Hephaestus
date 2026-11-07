@@ -16,6 +16,7 @@ import { IntegrationCardHeading } from "./IntegrationCardHeading";
 
 interface WorkspaceScmTokenSettingsProps {
 	providerLabel: string;
+	reconnect?: boolean;
 	isSaving: boolean;
 	error: unknown;
 	tokenExpiresAt?: Date | string | null;
@@ -28,6 +29,7 @@ interface WorkspaceScmTokenSettingsProps {
 
 export function WorkspaceScmTokenSettings({
 	providerLabel,
+	reconnect = false,
 	isSaving,
 	error,
 	onSave,
@@ -38,6 +40,10 @@ export function WorkspaceScmTokenSettings({
 	tokenMetadataError,
 }: WorkspaceScmTokenSettingsProps) {
 	const id = useId();
+	let buttonLabel = isSaving ? "Replacing token…" : "Replace token";
+	if (reconnect) {
+		buttonLabel = isSaving ? "Reconnecting…" : `Reconnect ${providerLabel}`;
+	}
 	const isGitLab = providerLabel === "GitLab";
 	const expiresAt = asDate(tokenExpiresAt);
 	// Only GitLab records a checked expiry, so a missing date proves "no expiry" for GitLab alone.
@@ -69,35 +75,38 @@ export function WorkspaceScmTokenSettings({
 			<CardHeader>
 				<IntegrationCardHeading>Personal access token</IntegrationCardHeading>
 				<CardDescription>
-					Replace the token used for this workspace’s {providerLabel} connection. Existing
-					repositories and synced work are kept.
+					{reconnect
+						? `Reconnect this workspace to the same ${providerLabel} group with a new token. Hephaestus syncs the work again. If you used selected projects, select them again after reconnecting.`
+						: `Replace the token used for this workspace’s ${providerLabel} connection. Existing repositories and synced work are kept.`}
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-4">
-				<div className="space-y-3">
-					{isLoadingTokenMetadata ? (
-						<Skeleton className="h-4 w-52" />
-					) : (
-						<p className="text-sm text-muted-foreground">{expiryDescription}</p>
-					)}
-					{attentionProblem === "CREDENTIAL_REVOKED" && (
-						<Alert variant="destructive">
-							<AlertTitle>{providerLabel} no longer accepts this token</AlertTitle>
-							<AlertDescription>
-								Replace the token below to restore sync. Existing repositories and synced work are
-								kept.
-							</AlertDescription>
-						</Alert>
-					)}
-					{isGitLab && attentionProblem === "CREDENTIAL_EXPIRING" && (
-						<Alert>
-							<AlertTitle>The GitLab token is about to expire</AlertTitle>
-							<AlertDescription>
-								Hephaestus could not rotate it. Replace it below to keep sync working.
-							</AlertDescription>
-						</Alert>
-					)}
-				</div>
+				{!reconnect && (
+					<div className="space-y-3">
+						{isLoadingTokenMetadata ? (
+							<Skeleton className="h-4 w-52" />
+						) : (
+							<p className="text-sm text-muted-foreground">{expiryDescription}</p>
+						)}
+						{attentionProblem === "CREDENTIAL_REVOKED" && (
+							<Alert variant="destructive">
+								<AlertTitle>{providerLabel} no longer accepts this token</AlertTitle>
+								<AlertDescription>
+									Replace the token below to restore sync. Existing repositories and synced work are
+									kept.
+								</AlertDescription>
+							</Alert>
+						)}
+						{isGitLab && attentionProblem === "CREDENTIAL_EXPIRING" && (
+							<Alert>
+								<AlertTitle>The GitLab token is about to expire</AlertTitle>
+								<AlertDescription>
+									Hephaestus could not rotate it. Replace it below to keep sync working.
+								</AlertDescription>
+							</Alert>
+						)}
+					</div>
+				)}
 				<form
 					className="space-y-4"
 					onSubmit={(event) => {
@@ -123,13 +132,18 @@ export function WorkspaceScmTokenSettings({
 						</FieldDescription>
 						{error != null && (
 							<FieldError id={`${id}-error`}>
-								{problemDetailOf(error, "We could not replace the token. Try again.")}
+								{problemDetailOf(
+									error,
+									reconnect
+										? "We could not reconnect GitLab. Try again."
+										: "We could not replace the token. Try again.",
+								)}
 							</FieldError>
 						)}
 					</Field>
 					<Button type="submit" disabled={!token.trim() || isSaving}>
 						{isSaving && <Spinner />}
-						{isSaving ? "Replacing token…" : "Replace token"}
+						{buttonLabel}
 					</Button>
 				</form>
 			</CardContent>

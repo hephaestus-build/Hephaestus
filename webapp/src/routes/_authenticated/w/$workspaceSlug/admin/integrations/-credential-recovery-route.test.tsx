@@ -14,6 +14,7 @@ import {
 	listConnectionSyncResourcesQueryKey,
 	listSlackChannelsQueryKey,
 	getWorkspaceQueryKey,
+	readQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type {
 	ConnectionSyncStatus,
@@ -32,7 +33,12 @@ import type { Wire } from "@/lib/dates";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { type Deferred, deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	ROUTE_RENDER_WAIT,
+	renderRouteAt,
+	renderRouteAtWithRouter,
+	testQueryClient,
+} from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 30_000 });
 
@@ -97,6 +103,111 @@ function mockConnection(kind: "GITHUB" | "GITLAB", installationId?: number) {
 }
 
 describe("source-control credential recovery", () => {
+	it("reconnects a disconnected GitLab group through the credential flow and restores sync controls", async () => {
+		const { entry, workspace } = mockConnection("GITLAB");
+		const requests: unknown[] = [];
+		server.use(
+			http.get("*/workspaces/acme", () => HttpResponse.json({ ...workspace, kind: undefined })),
+			http.get("*/workspaces/acme/connections/catalog", () =>
+				HttpResponse.json([
+					{
+						...entry,
+						connected: false,
+						connectionState: "UNINSTALLED",
+						credentialsUnreadableSince: undefined,
+					},
+				]),
+			),
+			http.post("*/workspaces/acme/connections", async ({ request }) => {
+				requests.push(await request.json());
+				server.use(
+					http.get("*/workspaces/acme", () => HttpResponse.json(workspace)),
+					http.get("*/workspaces/acme/connections/catalog", () =>
+						HttpResponse.json([
+							{
+								...entry,
+								connected: true,
+								connectionState: "ACTIVE",
+								credentialsUnreadableSince: undefined,
+							},
+						]),
+					),
+					http.get("*/workspaces/acme/connections/7", () =>
+						HttpResponse.json({
+							id: 7,
+							kind: "GITLAB",
+							state: "ACTIVE",
+							tokenExpiresAt: "2031-01-02",
+							tokenExpiryCheckedAt: "2030-01-02T12:00:00Z",
+						}),
+					),
+				);
+				return HttpResponse.json({ type: "LINKED", connectionId: 7 });
+			}),
+		);
+		const queryClient = testQueryClient();
+		const connectionKey = readQueryKey({ path: { workspaceSlug: "acme", id: 7 } });
+		queryClient.setQueryDefaults(connectionKey, { staleTime: Infinity });
+		queryClient.setQueryData(connectionKey, {
+			id: 7,
+			kind: "GITLAB",
+			state: "UNINSTALLED",
+			tokenExpiresAt: new Date("2030-01-02T12:00:00Z"),
+			tokenExpiryCheckedAt: new Date("2029-01-02T12:00:00Z"),
+		});
+		renderRouteAt("/w/acme/admin/integrations/scm", queryClient);
+		const reconnect = await screen.findByRole(
+			"button",
+			{ name: "Reconnect GitLab" },
+			ROUTE_RENDER_WAIT,
+		);
+		expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
+		const user = userEvent.setup();
+		await user.type(screen.getByLabelText("New personal access token"), "  fresh-token  ");
+		await user.click(reconnect);
+		await screen.findByRole("button", { name: "Sync now" }, ROUTE_RENDER_WAIT);
+		await screen.findByText("The token expires on 2 January 2031.");
+		expect(requests).toStrictEqual([
+			{ kind: "GITLAB", userInput: { personalAccessToken: "fresh-token" } },
+		]);
+		expect(screen.queryByRole("button", { name: "Reconnect GitLab" })).toBeNull();
+	});
+
+	it("keeps the reconnect form and its token when GitLab refuses the group", async () => {
+		const { entry, workspace } = mockConnection("GITLAB");
+		server.use(
+			http.get("*/workspaces/acme", () => HttpResponse.json({ ...workspace, kind: undefined })),
+			http.get("*/workspaces/acme/connections/catalog", () =>
+				HttpResponse.json([
+					{
+						...entry,
+						connected: false,
+						connectionState: "UNINSTALLED",
+						credentialsUnreadableSince: undefined,
+					},
+				]),
+			),
+			http.post("*/workspaces/acme/connections", () =>
+				HttpResponse.json(
+					{ status: 422, title: "Token refused", detail: "Check the token access to this group." },
+					{ status: 422 },
+				),
+			),
+		);
+		renderRouteAt("/w/acme/admin/integrations/scm");
+		const reconnect = await screen.findByRole(
+			"button",
+			{ name: "Reconnect GitLab" },
+			ROUTE_RENDER_WAIT,
+		);
+		const input = screen.getByLabelText("New personal access token");
+		const user = userEvent.setup();
+		await user.type(input, "refused-token");
+		await user.click(reconnect);
+		await screen.findByText("Check the token access to this group.");
+		expect(input).toHaveProperty("value", "refused-token");
+		expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
+	});
 	it.each(["GITHUB", "GITLAB"] as const)(
 		"replaces an unreadable %s token and restores sync controls",
 		async (kind) => {

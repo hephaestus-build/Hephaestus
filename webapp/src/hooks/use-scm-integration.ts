@@ -10,13 +10,19 @@ import {
 	getRepositoriesToMonitorOptions,
 	getStoppedGitLabProjectsOptions,
 	getWorkspaceOptions,
+	initiateMutation,
 	removeRepositoryToMonitorMutation,
 	removeStoppedGitLabProjectMutation,
 	readOptions,
 	updateGitLabRepositorySelectionMutation,
 	updateTokenMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { GitLabRepositorySelection, GitLabStoppedProject } from "@/api/types.gen";
+import type {
+	GitLabRepositorySelection,
+	GitLabStoppedProject,
+	IntegrationCatalogEntry,
+	Workspace,
+} from "@/api/types.gen";
 import { SCM_CLASS_KEYS } from "@/components/admin/integrations/SyncResourcesTable";
 import type { WorkspaceGitLabProjectSelection } from "@/components/admin/integrations/WorkspaceGitLabProjectSelection";
 import type { WorkspaceRepositoriesSettings } from "@/components/admin/integrations/WorkspaceRepositoriesSettings";
@@ -33,6 +39,20 @@ function refreshRetryable(query: { isRefetchError: boolean; error: unknown }) {
 	return query.isRefetchError && queryErrorIsRetryable(query.error);
 }
 
+function workspaceScmProvider(
+	workspace: Workspace | undefined,
+	catalog: IntegrationCatalogEntry[] | undefined,
+) {
+	const disconnectedGitLab = catalog?.find(isDisconnectedGitLab);
+	return scmProviderOf(
+		workspace == null ? undefined : (workspace.kind ?? disconnectedGitLab?.kind),
+	);
+}
+
+function isDisconnectedGitLab(entry: IntegrationCatalogEntry | undefined) {
+	return entry?.kind === "GITLAB" && entry.connectionState === "UNINSTALLED";
+}
+
 export function useScmIntegration(workspaceSlug: string) {
 	const queryClient = useQueryClient();
 
@@ -41,8 +61,6 @@ export function useScmIntegration(workspaceSlug: string) {
 	useQueryReadRefusal(workspaceQueryOptions.queryKey, workspaceQuery.isError, workspaceQuery.error);
 	const workspaceData =
 		!workspaceQuery.isError || refreshRetryable(workspaceQuery) ? workspaceQuery.data : undefined;
-	const { kind, label } = scmProviderOf(workspaceData?.kind);
-	const isAppInstallationWorkspace = kind === "GITHUB" && workspaceData?.installationId != null;
 
 	const catalogQueryOptions = getIntegrationCatalogOptions({ path: { workspaceSlug } });
 	const catalogQuery = useQuery(catalogQueryOptions);
@@ -51,12 +69,17 @@ export function useScmIntegration(workspaceSlug: string) {
 	// nothing the connection owns stays actionable. An outage keeps it, with the failure in the header.
 	const catalog =
 		!catalogQuery.isError || refreshRetryable(catalogQuery) ? catalogQuery.data : undefined;
-	const entry = kind ? catalog?.find((e) => e.kind === kind) : undefined;
+	const { kind, label } = workspaceScmProvider(workspaceData, catalog);
+	const isAppInstallationWorkspace = kind === "GITHUB" && workspaceData?.installationId != null;
+	const entry = catalog?.find((e) => e.kind === kind);
 	const hasConnection = entry?.connected === true;
 	const isConnectionActive = entry?.connectionState === "ACTIVE";
+	const canReconnectGitLab = isDisconnectedGitLab(entry);
 	const connectionId = hasConnection ? entry.connectionId : undefined;
 
-	const connectionQueryOptions = readOptions({ path: { workspaceSlug, id: connectionId ?? -1 } });
+	const connectionQueryOptions = readOptions({
+		path: { workspaceSlug, id: entry?.connectionId ?? -1 },
+	});
 	const connectionQuery = useQuery({
 		...connectionQueryOptions,
 		enabled: kind === "GITLAB" && connectionId != null,
@@ -185,11 +208,33 @@ export function useScmIntegration(workspaceSlug: string) {
 			toast.success("Personal access token replaced");
 		},
 	});
+	const reconnectGitLab = useMutation({
+		...initiateMutation(),
+		gcTime: 0,
+		onSuccess: async () => {
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: workspaceQueryOptions.queryKey }),
+				queryClient.invalidateQueries({ queryKey: catalogQueryOptions.queryKey }),
+				queryClient.invalidateQueries({ queryKey: connectionQueryOptions.queryKey }),
+			]);
+			invalidateRepositorySet();
+			toast.success("GitLab reconnected");
+		},
+	});
+	const tokenWrite = canReconnectGitLab ? reconnectGitLab : replaceToken;
 
 	const handleReplaceToken = async (personalAccessToken: string) => {
 		try {
-			await replaceToken.mutateAsync({ path: { workspaceSlug }, body: { personalAccessToken } });
-			replaceToken.reset();
+			if (canReconnectGitLab) {
+				await reconnectGitLab.mutateAsync({
+					path: { workspaceSlug },
+					body: { kind: "GITLAB", userInput: { personalAccessToken } },
+				});
+				reconnectGitLab.reset();
+			} else {
+				await replaceToken.mutateAsync({ path: { workspaceSlug }, body: { personalAccessToken } });
+				replaceToken.reset();
+			}
 			return true;
 		} catch {
 			return false;
@@ -202,6 +247,7 @@ export function useScmIntegration(workspaceSlug: string) {
 		isAppInstallationWorkspace,
 		hasConnection,
 		isConnectionActive,
+		canReconnectGitLab,
 		connectionState: entry?.connectionState,
 		credentialsUnreadableSince: entry?.credentialsUnreadableSince,
 		providerCleanupUnconfirmed: entry?.attentionProblem === "PROVIDER_CLEANUP_UNCONFIRMED",
@@ -231,13 +277,14 @@ export function useScmIntegration(workspaceSlug: string) {
 		jobHistoryProps: sync.jobHistoryProps,
 		tokenSettingsProps: {
 			providerLabel: label,
+			reconnect: canReconnectGitLab,
 			tokenExpiresAt: connectionQuery.data?.tokenExpiresAt,
 			tokenExpiryCheckedAt: connectionQuery.data?.tokenExpiryCheckedAt,
 			attentionProblem: connectionQuery.data?.attentionProblem,
 			isLoadingTokenMetadata: connectionQuery.isLoading,
 			tokenMetadataError: connectionQuery.error,
-			isSaving: replaceToken.isPending,
-			error: replaceToken.error,
+			isSaving: tokenWrite.isPending,
+			error: tokenWrite.error,
 			onSave: handleReplaceToken,
 		} satisfies ComponentProps<typeof WorkspaceScmTokenSettings>,
 		repositoriesSettingsProps: {
