@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.practices.metrics.PracticeTrustMeters;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.model.ResultMark;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
@@ -27,6 +29,7 @@ public class ResultMarkService {
     private final ReviewRepository reviews;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final PracticeTrustMeters trust;
 
     @Transactional(readOnly = true)
     public List<ResultMark> list(long workspaceId, UUID resultId) {
@@ -53,6 +56,7 @@ public class ResultMarkService {
                 .build());
         events.publishEvent(
                 new ResultMarkChanged(mark.getId(), workspaceId, resultId, kind, false, mark.getCreatedAt()));
+        TransactionCallbacks.afterCommit(() -> trust.marked(kind, false));
         return mark;
     }
 
@@ -69,6 +73,8 @@ public class ResultMarkService {
         var at = clock.instant();
         mark.remove(actorId, validated, at);
         events.publishEvent(new ResultMarkChanged(markId, workspaceId, resultId, mark.getKind(), true, at));
+        var kind = mark.getKind();
+        TransactionCallbacks.afterCommit(() -> trust.marked(kind, true));
         return mark;
     }
 

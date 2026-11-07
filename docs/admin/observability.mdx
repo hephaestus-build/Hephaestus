@@ -27,6 +27,7 @@ The alert or the objective tells the operator when the answer needs work.
 | How long does each stage of a review take? | `agent_job_stage_duration_seconds`, by `stage` and `outcome`. Admission: `http_server_requests_seconds` on the two [admission routes](#agent-job-metrics) | None |
 | Which statements take the most database time, and do tables collect dead rows? | `pg_stat_statements_seconds_total` by `queryid`, `pg_stat_user_tables_n_dead_tup`, `pg_long_running_transactions_oldest_timestamp_seconds`, with the [database metrics](#database-metrics) on | `HephaestusDatabaseDeadlocks`, `HephaestusDatabaseTransactionOpenLong`, `HephaestusDatabaseDeadRowsHigh`, `HephaestusDatabaseTransactionIdAgeHigh` |
 | How long does a provider event wait for its handling, and how long does the handling take? | `integration_message_lag_seconds`, `integration_message_process_duration_seconds`, by `kind`, with retries in `integration_consumer_nak_total` and dead letters in `integration_consumer_poison_total` | `HephaestusEventsDelayed` |
+| Does feedback earn trust? | `practice_result_recorded_total`, `practice_result_marked_total`, `practice_feedback_response_total`, and the [query by practice](#feedback-trust) | `HephaestusResultsMarkedIncorrect` |
 | Does work wait for a worker? | `agent_queue_oldest_age_seconds`, `agent_job_duration_seconds` with `phase="queue"` | `HephaestusAgentQueueStalled` |
 | Do model calls wait for their pool? | `llm_pool_permit_wait_seconds`, `llm_pool_upstream_throttled_total` | `HephaestusConversationModelWaitLong`, `HephaestusReviewModelWaitLong` |
 | Did a worker lose its model calls in flight? | `llm_pool_permits_expired_total`, `llm_pool_lease_renewal_failures_total` | `HephaestusModelPermitsExpired`, `HephaestusModelPermitRenewalFailing` |
@@ -55,9 +56,6 @@ These questions have no signal yet. The most important is first.
 1. What does a reader wait for on a page?
    When does the browser show the first word of an answer?
    No signal exists.
-2. Does feedback earn trust: the outcomes of each practice, corrections and disagreement?
-   These are only in the database.
-   A practice is not a metric label, because each workspace can add practices.
 
 ### Objectives for 1.0
 
@@ -336,6 +334,7 @@ For the volume rules, change their name patterns.
 | `HephaestusModelPermitRenewalFailing` | `llm_pool_lease_renewal_failures_total` | Three in 15 minutes. A worker renews each permit several times per lease, so one failure is a passing error |
 | `HephaestusPrivacyJobFailing` | `privacy_job_completed_total` with `failure` or `incomplete`, per `exported_job` | Twice in 26 hours: an hourly sweep failed twice, or a daily job failed on two days. Erasure is a legal duty, so two are enough |
 | `HephaestusPrivacyJobNotRunning` | No `privacy_job_completed_total` of `account_erasure` or `export_retention` in four hours, for 90 minutes | Both sweep each hour, so four hours are more than one missed run. The 90 minutes let a new install reach its first run |
+| `HephaestusResultsMarkedIncorrect` | `practice_result_marked_total{kind="incorrect"}`, set less removed, over `practice_result_recorded_total` with `met` or `not_met`, in seven days | A wrong claim costs more trust than a missing one. More than 5 %, with at least 5 marks. The ratio compares mark events with recorded results: a mark on an older result also counts |
 | `HephaestusReviewSandboxFailing` | `agent_job_infra_retry_requeued_total{cause="sandbox"}` | The sandbox could not start, initialize or finish, and the attempt runs again. Three in one hour point to the cluster: the sandbox namespace, its quota, the agent image or the nodes. The alert stays up for up to one hour after the last failure |
 | `HephaestusSandboxGatewayRefusing` | `sandbox_gateway_refused_total`, per `reason`, without `attempt_ended` | The sandbox gateway refused 60 requests for one reason in ten minutes. `source_limit`, `principal_limit`, `unauthenticated`, `forbidden`, `oversized`, `body_budget` and `unknown_route` each name what it refused. An attempt that ended gets `attempt_ended`, which is normal and does not count |
 | `HephaestusSandboxGatewayConnectionsHigh` | `sandbox_gateway_connections` over `sandbox_gateway_connections_limit` | A sandbox gateway held more than 80 percent of its connections for 5 minutes. At the limit, new model calls wait |
@@ -699,6 +698,31 @@ Each record has an `event.name` and `workspace.id`.
 | `mentor.turn.ended` | An attempt of a conversation turn ends | `turn.id`, `turn.attempt`, `turn.outcome` |
 
 `practice_review.stage.ended` has no `review.id`. It takes `workspace.id`, `job.id` and the trace ID from the log context of its attempt, so join it by `job.id`.
+
+## Feedback trust
+
+| Prometheus name | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `practice_result_recorded_total` | Counter | `outcome` | Results that a review recorded: `met`, `not_met`, `does_not_apply` or `could_not_determine` |
+| `practice_result_marked_total` | Counter | `kind`, `change` | Marks that people set or removed. `kind` is `incorrect` or `accepted`, and `change` is `set` or `removed` |
+| `practice_feedback_response_total` | Counter | `resolution` | Answers of developers to feedback, when the resolution changes: `addressed`, `disagree` or `not_applicable`. A new comment or a usefulness alone does not count |
+
+A practice is not a label, because each workspace can add practices.
+To compare practices, read the database.
+This query reads all workspaces, and the results of each workspace stay apart:
+
+```sql
+SELECT r.workspace_id, p.slug, r.outcome,
+       count(*) AS results,
+       count(m.id) AS marked_incorrect
+FROM result r
+JOIN practice p ON p.workspace_id = r.workspace_id AND p.id = r.practice_id
+LEFT JOIN result_mark m ON m.workspace_id = r.workspace_id AND m.result_id = r.id
+  AND m.kind = 'INCORRECT' AND m.removed_at IS NULL
+WHERE r.recorded_at > now() - interval '7 days'
+GROUP BY r.workspace_id, p.slug, r.outcome
+ORDER BY marked_incorrect DESC, results DESC;
+```
 
 ## Agent-job metrics
 

@@ -14,11 +14,15 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponse;
 import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponseRepository;
+import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
+import de.tum.cit.aet.hephaestus.practices.metrics.PracticeTrustMeters;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackUsefulness;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -42,8 +46,15 @@ class FeedbackResponseServiceTest {
     final CurrentDeveloperLookup current = mock(CurrentDeveloperLookup.class);
     final PersonDataWriteFence privacy = mock(PersonDataWriteFence.class);
     final Instant now = Instant.parse("2026-10-14T00:00:00Z");
+    final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     final FeedbackResponseService service = new FeedbackResponseService(
-            responses, feedback, visibility, current, Clock.fixed(now, ZoneOffset.UTC), privacy);
+            responses,
+            feedback,
+            visibility,
+            current,
+            Clock.fixed(now, ZoneOffset.UTC),
+            privacy,
+            new PracticeTrustMeters(meters));
     final UUID id = UUID.randomUUID();
 
     @BeforeEach
@@ -75,6 +86,29 @@ class FeedbackResponseServiceTest {
                 "The test is in the companion change.");
         assertThat(response.resolution()).isEqualTo(FeedbackResolution.DISAGREE);
         assertThat(response.createdAt()).isEqualTo(now);
+        assertThat(meters.get(PracticeMetrics.FEEDBACK_RESPONSE)
+                        .tag("resolution", "disagree")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldCountAResolutionOnceAndNotItsLaterComment() {
+        shown(now);
+        when(responses.findCurrent(1, id))
+                .thenReturn(Optional.of(FeedbackResponse.builder()
+                        .resolution(FeedbackResolution.ADDRESSED)
+                        .comment("first")
+                        .build()));
+
+        service.respond(1, id, 2, FeedbackResolution.ADDRESSED, null, "second");
+        service.respond(1, id, 2, null, FeedbackUsefulness.HELPFUL, null);
+
+        assertThat(meters.get(PracticeMetrics.FEEDBACK_RESPONSE).counters().stream()
+                        .mapToDouble(Counter::count)
+                        .sum())
+                .isZero();
     }
 
     @Test
