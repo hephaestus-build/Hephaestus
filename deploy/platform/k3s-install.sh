@@ -9,7 +9,7 @@
 # It checks the host first, then installs the pinned k3s and the platform, keeps the release Secret,
 # verifies the release chart and installs it. A second run with the same release changes nothing
 # that the first one made: it generates only the keys that the Secret lacks and keeps site.yaml.
-# It never prints a secret value. Run it with the files of a newer release to upgrade.
+# It never prints a secret value. Release changes use the stopped schema-upgrade procedure.
 set -eu
 
 RELEASE_REPOSITORY=hephaestus-build/Hephaestus
@@ -392,6 +392,19 @@ esac
 # Ask for the sudo password now, in the foreground: a later sudo runs beside the port 80 check.
 sudo -v || die "this script needs sudo rights"
 
+# An immutable release can be reapplied, but a different release can run one-way migrations.
+# Stop, restore-point verification and migration are separate operator phases, not a rollout.
+if command -v k3s >/dev/null 2>&1 || [ -f "$HERE/kubeconfig" ] || sudo test -f /etc/rancher/k3s/k3s.yaml; then
+	releases=$(sudo "$(command -v helm)" --kubeconfig /etc/rancher/k3s/k3s.yaml \
+		list --namespace "$NAMESPACE" --filter '^hephaestus$' --output json) ||
+		die "cannot read the installed release; restore cluster access before retrying; do not run an older release against a changed database"
+	printf '%s\n' "$releases" | jq -e --arg version "$VERSION" '
+		type == "array" and (length == 0 or (length == 1 and
+			.[0].status == "deployed" and .[0].chart == ("hephaestus-" + $version) and
+			.[0].app_version == $version))
+	' >/dev/null 2>&1 || die "release changes and failed or pending releases require Stopped schema upgrades: https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades; keep roles stopped after a migration failure; restore the matching backup before returning to the old release"
+fi
+
 K3S_INSTALLED=false
 if command -v k3s >/dev/null 2>&1 && systemctl is-active --quiet k3s; then K3S_INSTALLED=true; fi
 
@@ -621,6 +634,7 @@ say "Installing the release"
 profiles="$HERE/chart-$VERSION/hephaestus/profiles"
 set -- -f "$profiles/small.yaml"
 if [ "$PROFILE_16GIB" = true ]; then set -- "$@" -f "$profiles/small-16gib.yaml"; fi
+# The guard permits only a first install or the same immutable release. Rollback cannot start an older release.
 helm upgrade --install hephaestus "$HERE/chart-$VERSION/hephaestus" -n "$NAMESPACE" \
 	"$@" -f "$HERE/k3s-values.yaml" -f "$HERE/site.yaml" \
 	--rollback-on-failure --wait=watcher --wait-for-jobs --timeout 20m

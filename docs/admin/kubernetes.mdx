@@ -1102,6 +1102,7 @@ If the PostgreSQL volume exists and the Secret lacks the database login or an en
 The installer writes `site.yaml` only when the file does not exist.
 It holds the host name, the Kubernetes API endpoint, the OAuth client ID, the admin list, and `config.gitCheckoutEnabled: true`.
 Change the file to change these values, and run the installer again.
+Before a repeat run, pause deployment automation and wait for its active run to finish.
 
 Without a login provider, Hephaestus starts, but nobody can sign in.
 Thus, a first install stops when it has no GitHub OAuth client ID or client secret.
@@ -1149,8 +1150,24 @@ After applying an updated server certificate, restart PostgreSQL as [TLS certifi
 
 ### Upgrade the host
 
-1. Get the files of the new release into the same directory, as [Get the release files](#1-get-the-release-files) describes.
-2. Run the installer of the new release with the same arguments. It installs a new k3s pin, replaces the platform files, and runs the upgrade that [Upgrades](#upgrades) describes.
+1. Keep the current release directory, including its chart, profile, `k3s-values.yaml`, and `site.yaml`.
+   Get the target release files into a separate directory, as [Get the release files](#1-get-the-release-files) describes.
+   Copy your protected `site.yaml` into that directory and apply the target release's required value changes.
+2. Read the migration instructions for every release between the installed release and the target.
+3. Use [Stopped schema upgrades](#stopped-schema-upgrades) with the current and target release charts.
+   Use the current directory's chart and values in phase 1.
+   Use the target directory's files in phases 2 and 3.
+   Include `k3s-values.yaml`, `site.yaml`, and the same profile overlays as the installation in each phase.
+   Export `KUBECONFIG` to the current installation's saved kubeconfig before you use Helm or kubectl.
+
+   Before phase 2, run the target release's `hephaestus-keys.sh` and complete any platform prerequisites in its migration instructions.
+   Export the keys again with `--export-keys` and keep that copy with the restore point.
+   The installer refuses a release change: it cannot verify your restore point or complete the stopped phases for you.
+4. After the new release passes its checks, run its installer with the same arguments and an explicit certificate choice.
+   Keep deployment automation paused until this run finishes.
+   It updates the k3s pin and platform files and reapplies the installed release.
+   Automatic rollback in that installer can return only to the same release.
+   Do not run it while recovering a failed migration.
 
 ### Known limits of the one-host platform
 
@@ -1651,9 +1668,13 @@ Rehearse a restore on a copy of the instance before you need one.
 
 ## Upgrades
 
-An upgrade to a new release is one `helm upgrade`, with the new release's chart, its profile, and your own values.
-First, [verify the release chart](#verify-the-release-chart) of the new release.
-Then upgrade:
+Read the release notes and migration instructions before an upgrade.
+If any intervening release says **Stop every role**, use [Stopped schema upgrades](#stopped-schema-upgrades).
+One-host installations use that procedure for every release change.
+Do not use automatic rollback across a migration that cannot run with the previous release.
+
+For an upgrade whose schema remains compatible with the previous release, [verify the release chart](#verify-the-release-chart).
+Then apply the new chart, its profile, and your own values:
 
 ```bash
 helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
@@ -1683,8 +1704,6 @@ An attempt that was not yet admitted runs again on another worker, and an admitt
 A drained attempt spends none of the review's retries. After 3 drains, the next drain cancels the review with the message "Workers stopped this review for updates too often. It is not tried again."
 The metric `agent_job_drained_total{outcome}` counts drained reviews that run again (`requeued`) and that are cancelled (`cancelled`).
 
-Read the release notes before the upgrade.
-If the release notes say **Stop every role**, use [Stopped schema upgrades](#stopped-schema-upgrades).
 For other database maintenance, use [Database maintenance](#database-maintenance).
 
 Roll forward to fix a failed upgrade.
@@ -1749,13 +1768,14 @@ Before you change the volume of PostgreSQL, take a backup ([Backup and restore](
 
 ### Stopped schema upgrades
 
-Use this procedure when the migration guide says **Stop every role**.
+Use this procedure for a one-host release change or when the migration guide says **Stop every role**.
 It takes precedence over the normal upgrade and database-maintenance procedures.
 Do not use `--rollback-on-failure`: a rollback can restart old roles against a changed schema.
 Pause deployment automation that can change the release until this procedure is complete.
 
 Before the first phase, record the current chart, profile, site values and all three replica counts.
-Back up PostgreSQL and JetStream, verify the restore, and keep the matching signed release lock.
+Prepare PostgreSQL and JetStream backups, verify the restore, and keep the matching signed release lock and encryption keys.
+After phase 1, take and verify the final restore point while all roles are stopped, before phase 2 can change the schema.
 Verify the new release's chart before you use it.
 Each phase is a separate `helm upgrade` with that phase's chart, profile and site values:
 
@@ -1778,9 +1798,14 @@ Require its `Complete` condition: `kubectl --namespace hephaestus wait --for=con
 A failed or timed-out Job does not permit phase 3.
 Keep all roles stopped, preserve the log and failed change set before the Job's 24-hour expiry, and follow [failed-migration recovery](./upgrade#if-migration-fails).
 
+A refusal can follow earlier committed changesets.
+Before you return to the old release, restore the matching pre-upgrade backup.
+An image or Helm rollback does not undo those changes.
+
 Phase 3 creates another migration Job for the same release.
 It has no new schema changes to apply.
 Resume deployment automation only after its release and replica counts match the verified installation.
+On one host, keep it paused through the final installer run in [Upgrade the host](#upgrade-the-host).
 
 ### Planned node maintenance
 
