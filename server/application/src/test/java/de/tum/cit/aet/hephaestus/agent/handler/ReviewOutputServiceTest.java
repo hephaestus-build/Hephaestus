@@ -310,15 +310,20 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     }
 
     private static ReadReceipt searched(String version, String pattern) {
-        return searchedBytes(version, pattern, CAPTURED_CHECKOUT);
+        return searched(version, pattern, 0);
+    }
+
+    private static ReadReceipt searched(String version, String pattern, int matches) {
+        return searchedBytes(version, pattern, matches, CAPTURED_CHECKOUT);
     }
 
     /** A search of the whole checkout whose proof read bytes with this checkout digest. */
     private static ReadReceipt searchedBytes(String version, @Nullable String checkoutDigest) {
-        return searchedBytes(version, "(?i)ControllerAdvice|handler", checkoutDigest);
+        return searchedBytes(version, "ControllerAdvice|ExceptionHandler", 0, checkoutDigest);
     }
 
-    private static ReadReceipt searchedBytes(String version, String pattern, @Nullable String checkoutDigest) {
+    private static ReadReceipt searchedBytes(
+            String version, String pattern, int matches, @Nullable String checkoutDigest) {
         return new ReadReceipt(
                 TREE,
                 CHECKOUT_ROOT + ".git/HEAD",
@@ -328,7 +333,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 checkoutDigest,
                 null,
                 null,
-                pattern);
+                pattern,
+                matches);
     }
 
     /** The diff alone named as searched: the claim now rests on its words. */
@@ -509,6 +515,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 "f77392a044225e8fdda78f2e6da1b952472a1e70f854696c413a88c8ec8aeb67",
                 1,
                 41,
+                null,
                 null));
 
         prepare(job, pr50ErrorHandling(oneFile, UnaryOperator.identity())).record(job);
@@ -590,6 +597,32 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         assertWithheld(
                 CandidateRefusal.ABSENCE_NOT_SEARCHED,
                 NAMED + ", but no search of the whole checkout names what it says is absent");
+    }
+
+    @Test
+    void shouldWithholdAClaimWhoseSearchFoundMatchesItDoesNotExplain() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        var found = searched(PR50_HEAD, "ControllerAdvice|ExceptionHandler", 2);
+
+        prepare(job, pr50ErrorHandling(List.of(found), UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(
+                CandidateRefusal.ABSENCE_HITS_UNEXPLAINED,
+                NAMED + ", but the search that names it found matches, and the result does not say what they are");
+    }
+
+    @Test
+    void shouldAdmitAClaimThatExplainsTheMatchesOfItsSearch() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        var found = searched(PR50_HEAD, "ControllerAdvice|ExceptionHandler", 2);
+
+        prepare(job, pr50ErrorHandling(List.of(found), candidate -> {
+            ((ObjectNode) candidate.path("evidence").path("search")).put("hits", "Each match is a comment.");
+            return candidate;
+        }));
+
+        verify(membership, never()).withhold(anyLong(), any(), any(), any());
     }
 
     @Test

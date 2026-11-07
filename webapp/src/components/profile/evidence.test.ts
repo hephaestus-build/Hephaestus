@@ -315,6 +315,19 @@ describe("toEvidenceCheck", () => {
 		).toStrictEqual([]);
 	});
 
+	it("shows what a search found when the result says so", () => {
+		const search = {
+			lookedFor: "a changelog entry",
+			boundary: "the files this change touches",
+			consulted: [],
+			hits: "Each match is an older release's entry.",
+		};
+		expect(toEvidenceCheck({ ...NO_EVIDENCE, search }).at(-1)).toStrictEqual({
+			term: "What it found",
+			detail: "Each match is an older release's entry.",
+		});
+	});
+
 	it("names an unknown source kind generically and drops the pair when nothing was consulted", () => {
 		const search = {
 			lookedFor: "a changelog entry",

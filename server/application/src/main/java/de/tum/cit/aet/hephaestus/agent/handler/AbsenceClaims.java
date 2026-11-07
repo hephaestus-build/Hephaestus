@@ -318,6 +318,7 @@ final class AbsenceClaims {
         if (search != null) {
             texts.add(search.lookedFor());
             texts.add(search.boundary());
+            if (search.hits() != null) texts.add(search.hits());
         }
         var inapplicability = candidate.inapplicability();
         if (inapplicability != null) {

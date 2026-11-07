@@ -23,7 +23,7 @@ import {
 import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
 import { ReadRanges } from "./work/practice-scripts/lib/core/read-ranges.ts";
 
-import type { SearchClaim, SearchProof } from "./pi-search-worker.ts";
+import { checkoutMatches, type SearchClaim, type SearchProof } from "./pi-search-worker.ts";
 
 const READ_TOOLS = new Set(["read", "grep", "find", "ls", "bash"]);
 
@@ -79,10 +79,10 @@ export class SessionReads {
 	/** What each grep without a file filter that searched the whole checkout to the end looked for. */
 	readonly #searches = new Map<string, SearchClaim>();
 	/**
-	 * The searches that the loop proved, as a receipt states them, with the digest of the checkout each searched: only
-	 * these are receipts.
+	 * The searches that the loop proved, as a receipt states them, with the digest of the checkout each searched and
+	 * its matches: only these are receipts.
 	 */
-	readonly #provedPatterns = new Map<string, string>();
+	readonly #provedPatterns = new Map<string, { contentDigest: string; matches: number }>();
 
 	constructor(
 		root: string,
@@ -273,7 +273,10 @@ export class SessionReads {
 		const { proved, checkoutDigest } = await prove(path.resolve(this.#root, tree.root), open);
 		for (const [index, claim] of open.entries()) {
 			if (proved[index] === true && checkoutDigest !== null) {
-				this.#provedPatterns.set(searchedPattern(claim), checkoutDigest);
+				this.#provedPatterns.set(searchedPattern(claim), {
+					contentDigest: checkoutDigest,
+					matches: checkoutMatches(claim.found).length,
+				});
 			}
 			this.#searches.delete(searchedPattern(claim));
 		}
@@ -305,7 +308,7 @@ export class SessionReads {
 		}
 		const root = this.#key(tree.root);
 		const searches = tree.complete ? [...this.#provedPatterns] : [];
-		const receipts: ReadReceipt[] = searches.map(([pattern, contentDigest]) => ({
+		const receipts: ReadReceipt[] = searches.map(([pattern, { contentDigest, matches }]) => ({
 			sourceKind: TREE_SOURCE,
 			sourcePath: tree.sourcePath,
 			path: ".",
@@ -313,6 +316,7 @@ export class SessionReads {
 			status: "SEARCHED",
 			contentDigest,
 			pattern,
+			matches,
 		}));
 		for (const key of this.#opened) {
 			const inside = path.relative(root, key).split(path.sep);
@@ -790,6 +794,7 @@ function textsOf(submission: AbsenceCheckInput): string[] {
 		submission.example?.note ?? "",
 		search?.lookedFor ?? "",
 		search?.boundary ?? "",
+		search?.hits ?? "",
 		inapplicability?.prerequisite ?? "",
 		inapplicability?.ruledOutBy ?? "",
 		...openQuestions.flatMap((question) => [question.openQuestion, question.wouldSettleIt]),
@@ -830,7 +835,7 @@ export interface AbsenceCheckInput {
 	}[];
 	example?: { note: string };
 	evidence: {
-		search?: { consulted: readonly string[]; lookedFor: string; boundary: string };
+		search?: { consulted: readonly string[]; lookedFor: string; boundary: string; hits?: string };
 		inapplicability?: { consulted: readonly string[]; prerequisite: string; ruledOutBy: string };
 		openQuestions?: readonly { openQuestion: string; wouldSettleIt: string }[];
 	};
@@ -848,8 +853,8 @@ export interface CheckoutState {
 /** Why a submission that rests on the checkout cannot be recorded yet. */
 export interface UnreadCheckoutClaim {
 	text: string;
-	/** The session did search the checkout, but for something else. */
-	untied?: true;
+	/** The session did search the checkout, but for something else, or its search found matches. */
+	kind?: "untied" | "hits";
 }
 
 /**
@@ -867,13 +872,17 @@ export function unreadCheckoutClaim(
 		checkout,
 		ask,
 		askUntied = ask,
-	}: { checkout?: CheckoutState; ask: boolean; askUntied?: boolean },
+		askHits = ask,
+	}: { checkout?: CheckoutState; ask: boolean; askUntied?: boolean; askHits?: boolean },
 ): UnreadCheckoutClaim | undefined {
-	const searches = coverage.receipts.flatMap((receipt) =>
-		receipt.sourceKind === TREE_SOURCE && receipt.status === "SEARCHED" && receipt.path === "."
-			? [receipt.pattern ?? ""]
-			: [],
+	const receipts = coverage.receipts.filter(
+		(receipt) =>
+			receipt.sourceKind === TREE_SOURCE && receipt.status === "SEARCHED" && receipt.path === ".",
 	);
+	const searches = receipts.map((receipt) => receipt.pattern ?? "");
+	const withoutMatches = receipts
+		.filter((receipt) => receipt.matches === 0)
+		.map((receipt) => receipt.pattern ?? "");
 	// A could-not-determine result says nothing about the work.
 	if (submission.outcome === "COULD_NOT_DETERMINE") {
 		return undefined;
@@ -889,12 +898,24 @@ export function unreadCheckoutClaim(
 	}
 	if (searches.length > 0) {
 		const unsearched = unsearchedClaim(subject, textsOf(submission), searches, consulted);
-		return unsearched === undefined || !askUntied
-			? undefined
-			: {
-					untied: true,
-					text: `no search of the whole checkout names what this claim says is absent: "${unsearched}". Either reword the claim to name what you searched for, or call the grep tool with ignoreCase and a plain word that the claim holds, alternatives joined by |. A pattern with any other syntax names nothing. If you can do neither, remove the claim and keep only what the cited lines show.`,
-				};
+		if (unsearched !== undefined) {
+			return askUntied
+				? {
+						kind: "untied",
+						text: `no search of the whole checkout names what this claim says is absent: "${unsearched}". Either reword the claim to name what you searched for, or call the grep tool with ignoreCase and a plain word that the claim holds, alternatives joined by |. A pattern with any other syntax names nothing. If you can do neither, remove the claim and keep only what the cited lines show.`,
+					}
+				: undefined;
+		}
+		const unexplained = unsearchedClaim(subject, textsOf(submission), withoutMatches, consulted);
+		if (unexplained === undefined || search?.hits !== undefined || inapplicability !== undefined) {
+			return undefined;
+		}
+		return askHits
+			? {
+					kind: "hits",
+					text: `the search that names this claim found matches: "${unexplained}". A match can show that the thing exists. Read the matches, then say in evidence.search.hits what they are and why they do not show it, or remove the claim and keep only what the cited lines show.`,
+				}
+			: undefined;
 	}
 	if (!ask) {
 		return undefined;

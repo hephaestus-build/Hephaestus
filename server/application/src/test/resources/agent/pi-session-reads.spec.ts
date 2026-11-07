@@ -1034,7 +1034,12 @@ const PR50_VALIDATES_INPUTS = {
 };
 
 function hostCoverage(
-	receipts: { status: "COMPLETE" | "SEARCHED"; path: string; pattern?: string }[] = [],
+	receipts: {
+		status: "COMPLETE" | "SEARCHED";
+		path: string;
+		pattern?: string;
+		matches?: number;
+	}[] = [],
 ) {
 	return {
 		source: "host" as const,
@@ -1090,7 +1095,7 @@ void test("#50: a claim that the checkout lacks something goes back to the model
 	assert.equal(
 		unreadCheckoutClaim(
 			stored,
-			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "ControllerAdvice" }]),
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "ControllerAdvice", matches: 0 }]),
 			ASK,
 		),
 		undefined,
@@ -1099,7 +1104,7 @@ void test("#50: a claim that the checkout lacks something goes back to the model
 	assert.match(
 		unreadCheckoutClaim(
 			stored,
-			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "zzz_absent" }]),
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "zzz_absent", matches: 0 }]),
 			ASK,
 		)?.text ?? "",
 		/no search of the whole checkout names what this claim says is absent.*reword the claim.*ignoreCase/u,
@@ -1108,10 +1113,12 @@ void test("#50: a claim that the checkout lacks something goes back to the model
 
 void test("a search for something else has its own ask, once", () => {
 	const stored = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff", "scm.repository.tree"]);
-	const searched = hostCoverage([{ status: "SEARCHED", path: ".", pattern: "zzz_absent" }]);
+	const searched = hostCoverage([
+		{ status: "SEARCHED", path: ".", pattern: "zzz_absent", matches: 0 },
+	]);
 	assert.equal(
-		unreadCheckoutClaim(stored, searched, { ...ASK, ask: false, askUntied: true })?.untied,
-		true,
+		unreadCheckoutClaim(stored, searched, { ...ASK, ask: false, askUntied: true })?.kind,
+		"untied",
 	);
 	assert.equal(
 		unreadCheckoutClaim(stored, searched, { ...ASK, ask: false, askUntied: false }),
@@ -1121,6 +1128,37 @@ void test("a search for something else has its own ask, once", () => {
 	assert.match(
 		unreadCheckoutClaim(stored, hostCoverage(), ASK)?.text ?? "",
 		/: "[^"]+", but this session ran no search.*a plain word that the claim holds.*reword the claim/u,
+	);
+});
+
+void test("a claim whose search found matches must say what they are, and a clean search need not", () => {
+	const stored = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff", "scm.repository.tree"]);
+	const pattern = "(?i)ControllerAdvice|guard";
+	const found = hostCoverage([{ status: "SEARCHED", path: ".", pattern, matches: 3 }]);
+	const asked = unreadCheckoutClaim(stored, found, ASK);
+	assert.equal(asked?.kind, "hits");
+	assert.match(asked.text, /evidence\.search\.hits/u);
+	assert.equal(unreadCheckoutClaim(stored, found, { ...ASK, askHits: false }), undefined);
+	assert.equal(
+		unreadCheckoutClaim(
+			{
+				...stored,
+				evidence: {
+					search: { ...stored.evidence.search, hits: "Each match is in a comment, not in code." },
+				},
+			},
+			found,
+			ASK,
+		),
+		undefined,
+	);
+	assert.equal(
+		unreadCheckoutClaim(
+			stored,
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern, matches: 0 }]),
+			ASK,
+		),
+		undefined,
 	);
 });
 

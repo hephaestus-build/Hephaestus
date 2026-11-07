@@ -326,6 +326,7 @@ export class EvidenceReader {
 			status: "SEARCHED",
 			...(contentDigest === undefined ? {} : { contentDigest }),
 			pattern: stated,
+			matches: matches.length,
 		});
 	}
 

@@ -226,6 +226,7 @@ public class ScanReportTestData {
                                 hash,
                                 1,
                                 1,
+                                null,
                                 null)))))
                 .recordedAt(review.getCreatedAt())
                 .build());

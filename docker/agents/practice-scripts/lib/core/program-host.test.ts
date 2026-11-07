@@ -259,13 +259,14 @@ const decidesFromTheChange = (read: boolean) =>
 	);
 
 /** A search of the whole checkout for `pattern` that ran to the end. */
-const searched = (pattern: string) => ({
+const searched = (pattern: string, matches = 0) => ({
 	sourceKind: "scm.repository.tree",
 	sourcePath: "repos/reviewed/.git/HEAD",
 	path: ".",
 	version: HEAD,
 	status: "SEARCHED" as const,
 	pattern,
+	matches,
 });
 
 const searchesOf = (outcome: ProgramOutcome) =>
@@ -359,7 +360,7 @@ void describe("a practice's result", () => {
 
 	void test("a search proves an absence only for the decision that ran it", async () => {
 		const session = searched("ControllerAdvice");
-		const lead = searched("needle");
+		const lead = searched("needle", 1);
 		const ws = await workspace({
 			kept: program(
 				"definePracticeScript",

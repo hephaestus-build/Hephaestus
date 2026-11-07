@@ -287,18 +287,14 @@ public class ReviewOutputService {
                 .toList();
         var asCaptured = searches.stream()
                 .filter(searchedAsCaptured)
-                .map(ReadReceipt::pattern)
-                .filter(Objects::nonNull)
+                .filter(receipt -> receipt.pattern() != null)
                 .toList();
         String claim = named != null
                 ? "The result names " + named.value() + " as searched"
                 : "The result says the repository lacks something beyond its citations";
         if (!asCaptured.isEmpty()) {
-            if (AbsenceClaims.searchedFor(candidate, asCaptured, named != null)) return;
-            throw new CandidateEvidenceVerifier.Unverified(
-                    CandidateRefusal.ABSENCE_NOT_SEARCHED,
-                    claim + ", but no search of the whole checkout names what it says is absent",
-                    null);
+            requireSearchFor(candidate, asCaptured, claim, named != null);
+            return;
         }
         if (searchable.stream().noneMatch(captured::capturedWhole))
             throw new CandidateEvidenceVerifier.Unverified(
@@ -314,6 +310,32 @@ public class ReviewOutputService {
                 CandidateRefusal.CONSULTED_SOURCE_UNREAD,
                 claim + ", but its receipts hold no search of the whole checkout to the end",
                 null);
+    }
+
+    /**
+     * Refuses a claim that no search names, and one whose naming searches all found matches when the result does not
+     * say what those are. A match need not refute an absence, but the result must face it. A ruled-out prerequisite
+     * accounts for its search in {@code ruledOutBy}.
+     */
+    private static void requireSearchFor(
+            Candidate candidate, List<ReadReceipt> searches, String claim, boolean consulted) {
+        var patterns = searches.stream().map(ReadReceipt::pattern).toList();
+        if (!AbsenceClaims.searchedFor(candidate, patterns, consulted))
+            throw new CandidateEvidenceVerifier.Unverified(
+                    CandidateRefusal.ABSENCE_NOT_SEARCHED,
+                    claim + ", but no search of the whole checkout names what it says is absent",
+                    null);
+        var search = candidate.search();
+        if (candidate.inapplicability() != null || (search != null && search.hits() != null)) return;
+        var withoutMatches = searches.stream()
+                .filter(receipt -> Objects.equals(receipt.matches(), 0))
+                .map(ReadReceipt::pattern)
+                .toList();
+        if (!AbsenceClaims.searchedFor(candidate, withoutMatches, consulted))
+            throw new CandidateEvidenceVerifier.Unverified(
+                    CandidateRefusal.ABSENCE_HITS_UNEXPLAINED,
+                    claim + ", but the search that names it found matches, and the result does not say what they are",
+                    null);
     }
 
     /**

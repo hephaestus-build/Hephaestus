@@ -199,11 +199,14 @@ export function checkoutDigest(files: ReadonlyMap<string, string>): string {
 	return digest.digest("hex");
 }
 
+/** `rg --hidden` reads `.git`, and a receipt speaks only for the checkout's files. */
+export const checkoutMatches = (found: readonly string[]) =>
+	found.filter((location) => !/(?:^|\/)\.git\//u.test(location));
+
 /** For each claim, whether the loop and the tools side found the same matches. Past `maxBytes`, none is proved. */
 export function proved({ root, maxBytes, claims }: SearchJob): SearchProof {
 	const open: OpenClaim[] = claims.map((claim) => ({
-		// `rg --hidden` reads `.git`, and a receipt speaks only for the checkout's files.
-		found: new Set(claim.found.filter((location) => !/(?:^|\/)\.git\//u.test(location))),
+		found: new Set(checkoutMatches(claim.found)),
 		matches: matcherOf(claim),
 		holds: true,
 		confirmed: new Set(),

@@ -443,7 +443,7 @@ These behaviors matter independently of configured capacity:
   Admission withholds such a result as `absence_not_searched` when no search of the whole checkout names it.
   Many such reasons on honest results point to searches with syntax that names nothing.
   A search that is cut earns no receipt, and that reason is `consulted_source_unread`.
-  The check does not judge the matches of a search that had any.
+  A search that found matches also needs the result to say what they are, or the reason is `absence_hits_unexplained`.
 - **Background task cadences are fixed in code.**
   Their thresholds can be configurable even if their poll schedules are not.
 - **Feedback preparation recovery has a bounded window.**

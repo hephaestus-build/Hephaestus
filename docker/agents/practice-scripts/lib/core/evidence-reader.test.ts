@@ -172,6 +172,7 @@ void describe("listings and searches", () => {
 				version: HEAD,
 				status: "SEARCHED",
 				pattern: "ControllerAdvice",
+				matches: 0,
 			},
 		]);
 	});

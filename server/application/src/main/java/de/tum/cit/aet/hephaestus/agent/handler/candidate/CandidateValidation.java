@@ -88,6 +88,8 @@ final class CandidateValidation {
                 .constraint(new SizeDef().min(1).max(WARRANT_FIELD_CHARS))
                 .field("boundary")
                 .constraint(new NotNullDef())
+                .constraint(new SizeDef().min(1).max(WARRANT_FIELD_CHARS))
+                .field("hits")
                 .constraint(new SizeDef().min(1).max(WARRANT_FIELD_CHARS));
         mapping.type(InapplicabilityWarrant.class)
                 .field("consulted")
