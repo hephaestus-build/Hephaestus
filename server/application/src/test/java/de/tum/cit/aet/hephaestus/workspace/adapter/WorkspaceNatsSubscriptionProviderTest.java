@@ -22,6 +22,8 @@ import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 
 /**
@@ -52,13 +54,39 @@ class WorkspaceNatsSubscriptionProviderTest extends BaseUnitTest {
     void setUp() {
         provider = providerWithFlags(/* outlineEnabled */ true, /* slackEnabled */ true);
         when(workspaceRepository.findById(WS)).thenReturn(Optional.of(workspace));
-        when(workspace.getId()).thenReturn(WS);
+        lenient().when(workspace.getId()).thenReturn(WS);
+        lenient().when(workspace.getStatus()).thenReturn(Workspace.WorkspaceStatus.ACTIVE);
+        lenient().when(workspaceScopeFilter.isWorkspaceAllowed(workspace)).thenReturn(true);
         lenientReposAndOrg();
     }
 
     private WorkspaceNatsSubscriptionProvider providerWithFlags(boolean outlineEnabled, boolean slackEnabled) {
         return new WorkspaceNatsSubscriptionProvider(
-                workspaceRepository, workspaceScopeFilter, connectionService, outlineEnabled, slackEnabled);
+                workspaceRepository, workspaceScopeFilter, connectionService, outlineEnabled, slackEnabled, true);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = Workspace.WorkspaceStatus.class,
+            names = {"SUSPENDED", "PURGED"})
+    void shouldNotReestablishAnInactiveWorkspace(Workspace.WorkspaceStatus status) {
+        when(workspace.getStatus()).thenReturn(status);
+        assertThat(provider.getSubscriptionInfo(WS)).isEmpty();
+    }
+
+    @Test
+    void shouldNotReestablishAWorkspaceOutsideTheMonitoringFilter() {
+        when(workspaceScopeFilter.isWorkspaceAllowed(workspace)).thenReturn(false);
+        assertThat(provider.getSubscriptionInfo(WS)).isEmpty();
+    }
+
+    @Test
+    void shouldNotBindGitLabWhenItsAdapterIsDisabled() {
+        provider = new WorkspaceNatsSubscriptionProvider(
+                workspaceRepository, workspaceScopeFilter, connectionService, true, true, false);
+        when(connectionService.findActiveProviderKind(WS)).thenReturn(Optional.of(IntegrationKind.GITLAB));
+        assertThat(provider.getSubscriptionInfo(WS).orElseThrow().hasSubscriptions())
+                .isFalse();
     }
 
     private void lenientReposAndOrg() {

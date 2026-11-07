@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import static de.tum.cit.aet.hephaestus.core.TransactionCallbacks.afterCommit;
 import static de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
 
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
@@ -275,7 +276,7 @@ public class WorkspaceLifecycleService {
 
     private void startNatsForWorkspace(Workspace workspace) {
         if (shouldUseNats(workspace)) {
-            natsConsumerService.ifAvailable(svc -> svc.startConsumingScope(workspace.getId()));
+            natsConsumerService.ifAvailable(svc -> afterCommit(() -> svc.startConsumingScope(workspace.getId())));
         }
     }
 

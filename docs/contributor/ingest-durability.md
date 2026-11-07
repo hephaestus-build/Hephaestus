@@ -15,6 +15,13 @@ Capture failure always leaves the event retryable.
 Stack overflows use the unknown-failure budget.
 Other fatal JVM errors stop the local subscription and mark the consumer stopped, so reconciliation can restart it.
 
+The server reconciles active workspaces once per minute when NATS is enabled.
+It reattaches stopped subscriptions and recreates a durable that the broker removed.
+An existing durable keeps its acknowledgement position; a fresh consumer starts with new deliveries.
+Suspended, purged and filtered-out workspaces stay stopped, and disabled adapters stay unbound.
+A workspace stop keeps its restart fence until the transaction completes.
+A rollback re-arms consumption; a committed purge keeps its permanent fence.
+
 Each durable uses explicit acknowledgements, `MaxDeliver=-1` and `MaxAckPending=1`.
 The broker delivery limit stays unlimited so an outage cannot exhaust it before PostgreSQL can record the failure.
 The application applies the unknown-failure budget after each failed dispatch.

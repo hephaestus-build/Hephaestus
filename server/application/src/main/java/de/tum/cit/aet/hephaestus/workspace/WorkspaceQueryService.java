@@ -149,6 +149,10 @@ public class WorkspaceQueryService {
         return workspaceRepository.findByStatus(Workspace.WorkspaceStatus.ACTIVE);
     }
 
+    public List<Long> findActiveIds() {
+        return workspaceRepository.findIdsByStatus(Workspace.WorkspaceStatus.ACTIVE);
+    }
+
     /**
      * Returns workspaces in which the current account has a membership. An unauthenticated caller
      * receives an empty list.

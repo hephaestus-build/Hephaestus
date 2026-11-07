@@ -27,24 +27,31 @@ public class WorkspaceNatsSubscriptionProvider implements NatsSubscriptionProvid
     private final ConnectionService connectionService;
     private final boolean outlineEnabled;
     private final boolean slackEnabled;
+    private final boolean gitlabEnabled;
 
     public WorkspaceNatsSubscriptionProvider(
             WorkspaceRepository workspaceRepository,
             WorkspaceScopeFilter workspaceScopeFilter,
             ConnectionService connectionService,
             @Value("${hephaestus.integration.outline.enabled:false}") boolean outlineEnabled,
-            @Value("${hephaestus.integration.slack.enabled:false}") boolean slackEnabled) {
+            @Value("${hephaestus.integration.slack.enabled:false}") boolean slackEnabled,
+            @Value("${hephaestus.integration.gitlab.enabled:false}") boolean gitlabEnabled) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.connectionService = connectionService;
         this.outlineEnabled = outlineEnabled;
         this.slackEnabled = slackEnabled;
+        this.gitlabEnabled = gitlabEnabled;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<NatsSubscriptionInfo> getSubscriptionInfo(Long scopeId) {
-        return workspaceRepository.findById(scopeId).map(this::toSubscriptionInfo);
+        return workspaceRepository
+                .findById(scopeId)
+                .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
+                .filter(workspaceScopeFilter::isWorkspaceAllowed)
+                .map(this::toSubscriptionInfo);
     }
 
     private NatsSubscriptionInfo toSubscriptionInfo(Workspace workspace) {
@@ -66,6 +73,7 @@ public class WorkspaceNatsSubscriptionProvider implements NatsSubscriptionProvid
         if (scmKind.isEmpty()) {
             return;
         }
+        if (scmKind.get() == IntegrationKind.GITLAB && !gitlabEnabled) return;
         String streamName = ConsumerSubjectMath.streamNameFor(scmKind.get())
                 .orElseThrow(() -> new IllegalStateException("No NATS stream for SCM kind=" + scmKind.get()));
 
