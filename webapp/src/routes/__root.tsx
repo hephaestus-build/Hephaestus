@@ -18,7 +18,7 @@ import {
 	useRouter,
 } from "@tanstack/react-router";
 import { cn } from "cn";
-import { lazy, type ReactNode, Suspense, useState, useSyncExternalStore } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useState, useSyncExternalStore } from "react";
 
 import {
 	getIntegrationCatalogOptions,
@@ -49,6 +49,7 @@ import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceCreation } from "@/hooks/use-workspace-creation";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
 import { isConversationOutOfReach } from "@/lib/conversation-availability";
+import { isFeedbackShortcut, SIDEBAR_SHORTCUT_LABEL } from "@/lib/keyboard-shortcuts";
 import { stepUpChallengeOf } from "@/lib/problem-detail";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { toast } from "@/lib/toast";
@@ -224,14 +225,24 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 	const [feedbackOpen, setFeedbackOpen] = useState(false);
 	// Mounted from the first open on, so a closed dialog keeps its state as before.
 	const [composerLoaded, setComposerLoaded] = useState(false);
+	const openComposer = () => {
+		setFeedbackOpen(true);
+		setComposerLoaded(true);
+	};
+	useEffect(() => {
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (isFeedbackShortcut(event)) {
+				event.preventDefault();
+				setFeedbackOpen(true);
+				setComposerLoaded(true);
+			}
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, []);
 	return (
 		<>
-			<ProductFeedbackButton
-				onSendFeedback={() => {
-					setFeedbackOpen(true);
-					setComposerLoaded(true);
-				}}
-			/>
+			<ProductFeedbackButton onSendFeedback={openComposer} />
 			{composerLoaded && (
 				<CatchBoundary
 					getResetKey={() => 0}
@@ -336,7 +347,6 @@ function HeaderContainer() {
 
 // The sidebar answers Cmd+B and Ctrl+B on every platform. The tooltip shows the key that the reader's
 // keyboard has.
-const SIDEBAR_SHORTCUT_LABEL = /Mac|iPhone|iPad|iPod/u.test(navigator.userAgent) ? "⌘B" : "Ctrl+B";
 
 function SidebarToggle() {
 	return (

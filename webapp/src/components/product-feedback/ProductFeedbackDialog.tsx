@@ -24,6 +24,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { SEND_SHORTCUT_ARIA, SEND_SHORTCUT_LABEL } from "@/lib/keyboard-shortcuts";
 import { hasText } from "@/lib/text";
 
 import { SHARING_COPY } from "./sharing-copy";
@@ -128,6 +129,17 @@ export function ProductFeedbackDialog({
 						event.preventDefault();
 						void submit();
 					}}
+					// On the form, so that it also sends from the box and not only from the text.
+					onKeyDown={(event) => {
+						if (
+							(event.metaKey || event.ctrlKey) &&
+							!event.nativeEvent.isComposing &&
+							event.key === "Enter"
+						) {
+							event.preventDefault();
+							event.currentTarget.requestSubmit();
+						}
+					}}
 				>
 					<DialogHeader>
 						<DialogTitle>Send feedback</DialogTitle>
@@ -149,16 +161,6 @@ export function ProductFeedbackDialog({
 									aria-invalid={messageInvalid || undefined}
 									aria-describedby={`${id}-hint${messageInvalid ? ` ${id}-message-error` : ""}`}
 									placeholder="What happened, or what would you change?"
-									onKeyDown={(event) => {
-										if (
-											(event.metaKey || event.ctrlKey) &&
-											!event.nativeEvent.isComposing &&
-											event.key === "Enter"
-										) {
-											event.preventDefault();
-											event.currentTarget.form?.requestSubmit();
-										}
-									}}
 									onChange={(event) => {
 										const next = event.target.value;
 										setDraftPage((previous) =>
@@ -211,9 +213,14 @@ export function ProductFeedbackDialog({
 						)}
 					</DialogBody>
 					<DialogFooter>
-						<Button type="submit" disabled={isSubmitting}>
+						<Button type="submit" disabled={isSubmitting} aria-keyshortcuts={SEND_SHORTCUT_ARIA}>
 							{isSubmitting && <Spinner />}
 							{isSubmitting ? "Sending…" : "Send"}
+							{!isSubmitting && (
+								<span aria-hidden className="text-xs opacity-70 pointer-coarse:hidden">
+									{SEND_SHORTCUT_LABEL}
+								</span>
+							)}
 						</Button>
 					</DialogFooter>
 				</DialogForm>
