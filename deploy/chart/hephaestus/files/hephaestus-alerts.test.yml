@@ -2695,6 +2695,25 @@ tests:
               summary: The kernel killed a container for its memory
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: a commit link queue that stops shrinking fires while a shrinking queue stays quiet
+    interval: 1h
+    input_series:
+      - series: 'commit_identity_pending{job="hephaestus"}'
+        values: "20 19 18 17 16 15 14 13 12 12 12 12 12 12 12 12 12 12"
+    alert_rule_test:
+      - eval_time: 6h
+        alertname: HephaestusCommitIdentityResolutionStalled
+        exp_alerts: []
+      - eval_time: 17h
+        alertname: HephaestusCommitIdentityResolutionStalled
+        exp_alerts:
+          - exp_labels:
+              job: hephaestus
+              severity: warning
+            exp_annotations:
+              summary: Commit link correction made no progress for 6 hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: repeated inbox cleanup failures fire while one failure stays quiet
     interval: 1h
     input_series:

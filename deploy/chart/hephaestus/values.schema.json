@@ -782,6 +782,7 @@
 			"additionalProperties": false,
 			"required": [
 				"releaseCheckEnabled",
+				"commitIdentityResolutionEnabled",
 				"gitCheckoutEnabled",
 				"durableConsumerName",
 				"consumerInactiveThreshold",
@@ -808,6 +809,7 @@
 			],
 			"properties": {
 				"releaseCheckEnabled": { "type": "boolean" },
+				"commitIdentityResolutionEnabled": { "type": "boolean" },
 				"gitCheckoutEnabled": { "type": "boolean" },
 				"durableConsumerName": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
 				"consumerInactiveThreshold": { "$ref": "#/definitions/duration" },

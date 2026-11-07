@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794037493717-1" author="hephaestus">
+        <createTable tableName="commit_identity_change">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="commit_identity_changePK"/>
+            </column>
+            <column name="changed_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="new_user_id" type="BIGINT"/>
+            <column name="old_user_id" type="BIGINT"/>
+            <column name="outcome" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="row_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1794037493717-2" author="hephaestus">
+        <createTable tableName="commit_identity_resolution">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="commit_identity_resolutionPK"/>
+            </column>
+            <column name="attempts" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="finished_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="source" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="commit_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="contributor_id" type="BIGINT"/>
+            <column name="repository_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1794037493717-3" author="hephaestus">
+        <createIndex indexName="idx_commit_identity_change_changed_at" tableName="commit_identity_change">
+            <column name="changed_at"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1794037493717-4" author="hephaestus">
+        <createIndex indexName="idx_commit_identity_change_new_user" tableName="commit_identity_change">
+            <column name="new_user_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1794037493717-5" author="hephaestus">
+        <createIndex indexName="idx_commit_identity_change_old_user" tableName="commit_identity_change">
+            <column name="old_user_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1794037493717-6" author="hephaestus">
+        <createIndex indexName="idx_commit_identity_resolution_queue" tableName="commit_identity_resolution">
+            <column name="state"/>
+            <column name="attempts"/>
+            <column name="id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1794037493717-7" author="hephaestus">
+        <addForeignKeyConstraint onDelete="CASCADE" baseColumnNames="repository_id" baseTableName="commit_identity_resolution" constraintName="FKd6udiu1dapb4dekc66f4fcxk3" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="repository" validate="true"/>
+    </changeSet>
+    <changeSet id="1794037493717-8" author="hephaestus">
+        <addForeignKeyConstraint onDelete="CASCADE" baseColumnNames="commit_id" baseTableName="commit_identity_resolution" constraintName="FKe0lyki78jcrc0m3w6ms3d2bss" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="git_commit" validate="true"/>
+    </changeSet>
+    <changeSet id="1794037493717-9" author="hephaestus">
+        <addForeignKeyConstraint onDelete="CASCADE" baseColumnNames="contributor_id" baseTableName="commit_identity_resolution" constraintName="FKy7gp4dsg6yb3xivtb07fljal" deferrable="false" initiallyDeferred="false" referencedColumnNames="id" referencedTableName="commit_contributor" validate="true"/>
+    </changeSet>
+    <changeSet id="1794037493717-10" author="hephaestus">
+        <comment>Queues each email on each GitHub repository for the provider's answer. Logs how many.</comment>
+        <customChange class="de.tum.cit.aet.hephaestus.core.database.CommitIdentityResolutionSeedChange"/>
+        <rollback><sql>DELETE FROM commit_identity_resolution</sql></rollback>
+    </changeSet>
+</databaseChangeLog>
