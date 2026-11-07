@@ -1163,7 +1163,11 @@ After applying an updated server certificate, restart PostgreSQL as [TLS certifi
    Before phase 2, run the target release's `hephaestus-keys.sh` and complete any platform prerequisites in its migration instructions.
    Export the keys again with `--export-keys` and keep that copy with the restore point.
    The installer refuses a release change: it cannot verify your restore point or complete the stopped phases for you.
-4. After the new release passes its checks, run its installer with the same arguments and an explicit certificate choice.
+4. After the new release passes its checks, set `VERSION` to that completed target release.
+   Run its installer with `--version "$VERSION"`, the installation's `--host` and `--email`, and its feature flags.
+   Select certificates explicitly, as [Run the installer](#2-run-the-installer) describes.
+   Keep the target `site.yaml` as prepared in step 1.
+
    Keep deployment automation paused until this run finishes.
    It updates the k3s pin and platform files and reapplies the installed release.
    Automatic rollback in that installer can return only to the same release.
