@@ -6,8 +6,8 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -128,16 +128,27 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
         transactionTemplate.executeWithoutResult(status -> jobRepository.lease(id, LEASE_TTL_SECONDS));
         jdbc.update("UPDATE review_job SET leased_until = clock_timestamp() + interval '10 seconds' WHERE id = ?", id);
         Instant now = jobRepository.databaseClock();
-        var token = new AttemptJwt(AttemptJwt.Kind.REVIEW, id, workspace.getId(), 0, LEASE, Set.of("llm_proxy"),
-                "receipt", now, now.plusSeconds(60), now.plusSeconds(30));
+        var token = new AttemptJwt(
+                AttemptJwt.Kind.REVIEW,
+                id,
+                workspace.getId(),
+                0,
+                LEASE,
+                Set.of("llm_proxy"),
+                "receipt",
+                now,
+                now.plusSeconds(60),
+                now.plusSeconds(30));
         var leases = new ReviewAttemptLease(jobRepository);
 
-        var receipt = Objects.requireNonNull(transactionTemplate.execute(status -> leases.renew(token).orElseThrow()));
+        var receipt = Objects.requireNonNull(
+                transactionTemplate.execute(status -> leases.renew(token).orElseThrow()));
 
         assertThat(receipt.remainingMillis()).isPositive().isLessThanOrEqualTo(60_000);
         assertThat(receipt.renewAfterMillis()).isPositive().isLessThanOrEqualTo(receipt.remainingMillis());
         assertThat(jobRepository.findById(id).orElseThrow().getLeasedUntil())
-                .isAfter(now.plusSeconds(10)).isBeforeOrEqualTo(token.expiresAt());
+                .isAfter(now.plusSeconds(10))
+                .isBeforeOrEqualTo(token.expiresAt());
         assertThat(jobRepository.findById(id).orElseThrow().getLeaseId()).isEqualTo(LEASE);
 
         jdbc.update("UPDATE review_job SET leased_until = clock_timestamp() - interval '1 second' WHERE id = ?", id);
@@ -149,26 +160,82 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
     void shouldRefuseAnotherFenceOrKindWithoutChangingTheReviewsLease() {
         UUID id = runningJob(LEASE);
         transactionTemplate.executeWithoutResult(status -> jobRepository.lease(id, LEASE_TTL_SECONDS));
-        Instant before = Objects.requireNonNull(jobRepository.findById(id).orElseThrow().getLeasedUntil());
+        Instant before =
+                Objects.requireNonNull(jobRepository.findById(id).orElseThrow().getLeasedUntil());
         Instant now = jobRepository.databaseClock();
         var tokens = List.of(
-                new AttemptJwt(AttemptJwt.Kind.REVIEW, id, workspace.getId() + 1, 0, LEASE, Set.of("llm_proxy"),
-                        "wrong-workspace", now, now.plusSeconds(60), now.plusSeconds(30)),
-                new AttemptJwt(AttemptJwt.Kind.REVIEW, id, workspace.getId(), 1, LEASE, Set.of("llm_proxy"),
-                        "wrong-attempt", now, now.plusSeconds(60), now.plusSeconds(30)),
-                new AttemptJwt(AttemptJwt.Kind.REVIEW, id, workspace.getId(), 0, OTHER_LEASE, Set.of("llm_proxy"),
-                        "wrong-lease", now, now.plusSeconds(60), now.plusSeconds(30)),
-                new AttemptJwt(AttemptJwt.Kind.TURN, id, workspace.getId(), 1, LEASE, Set.of("llm_proxy"),
-                        "wrong-kind", now, now.plusSeconds(60), null),
-                new AttemptJwt(AttemptJwt.Kind.REVIEW, id, workspace.getId(), 0, LEASE, Set.of("llm_proxy"),
-                        "expired", now.minusSeconds(120), now.minusSeconds(1), now.minusSeconds(2)));
+                new AttemptJwt(
+                        AttemptJwt.Kind.REVIEW,
+                        id,
+                        workspace.getId() + 1,
+                        0,
+                        LEASE,
+                        Set.of("llm_proxy"),
+                        "wrong-workspace",
+                        now,
+                        now.plusSeconds(60),
+                        now.plusSeconds(30)),
+                new AttemptJwt(
+                        AttemptJwt.Kind.REVIEW,
+                        id,
+                        workspace.getId(),
+                        1,
+                        LEASE,
+                        Set.of("llm_proxy"),
+                        "wrong-attempt",
+                        now,
+                        now.plusSeconds(60),
+                        now.plusSeconds(30)),
+                new AttemptJwt(
+                        AttemptJwt.Kind.REVIEW,
+                        id,
+                        workspace.getId(),
+                        0,
+                        OTHER_LEASE,
+                        Set.of("llm_proxy"),
+                        "wrong-lease",
+                        now,
+                        now.plusSeconds(60),
+                        now.plusSeconds(30)),
+                new AttemptJwt(
+                        AttemptJwt.Kind.TURN,
+                        id,
+                        workspace.getId(),
+                        1,
+                        LEASE,
+                        Set.of("llm_proxy"),
+                        "wrong-kind",
+                        now,
+                        now.plusSeconds(60),
+                        null),
+                new AttemptJwt(
+                        AttemptJwt.Kind.REVIEW,
+                        id,
+                        workspace.getId(),
+                        0,
+                        LEASE,
+                        Set.of("llm_proxy"),
+                        "expired",
+                        now.minusSeconds(120),
+                        now.minusSeconds(1),
+                        now.minusSeconds(2)));
         var leases = new ReviewAttemptLease(jobRepository);
         for (var token : tokens)
-            assertThat(transactionTemplate.execute(status -> leases.renew(token))).isEmpty();
+            assertThat(transactionTemplate.execute(status -> leases.renew(token)))
+                    .isEmpty();
         assertThat(jobRepository.findById(id).orElseThrow().getLeasedUntil()).isEqualTo(before);
         jdbc.update("UPDATE review_job SET status = 'CANCELLED' WHERE id = ?", id);
-        var valid = new AttemptJwt(AttemptJwt.Kind.REVIEW, id, workspace.getId(), 0, LEASE, Set.of("llm_proxy"),
-                "cancelled", now, now.plusSeconds(60), now.plusSeconds(30));
+        var valid = new AttemptJwt(
+                AttemptJwt.Kind.REVIEW,
+                id,
+                workspace.getId(),
+                0,
+                LEASE,
+                Set.of("llm_proxy"),
+                "cancelled",
+                now,
+                now.plusSeconds(60),
+                now.plusSeconds(30));
         assertThat(transactionTemplate.execute(status -> leases.renew(valid))).isEmpty();
         assertThat(jobRepository.findById(id).orElseThrow().getLeasedUntil()).isEqualTo(before);
     }

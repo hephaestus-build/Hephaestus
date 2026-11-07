@@ -1206,12 +1206,23 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         var job = configuredJob();
         var executor = tracking(executor(mock(AsyncTaskExecutor.class)), job);
         when(sandbox.loopRunning(job.getId())).thenReturn(false);
-        when(jobs.renewLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getLeaseId(), AgentProperties.WORKER_LEASE_TTL.toSeconds()))
+        when(jobs.renewLease(
+                        job.getId(),
+                        job.getWorkspaceId(),
+                        job.getAttempt(),
+                        job.getLeaseId(),
+                        AgentProperties.WORKER_LEASE_TTL.toSeconds()))
                 .thenReturn(1);
 
         assertThat(executor.renewLeases()).isEmpty();
 
-        verify(jobs).renewLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getLeaseId(), AgentProperties.WORKER_LEASE_TTL.toSeconds());
+        verify(jobs)
+                .renewLease(
+                        job.getId(),
+                        job.getWorkspaceId(),
+                        job.getAttempt(),
+                        job.getLeaseId(),
+                        AgentProperties.WORKER_LEASE_TTL.toSeconds());
     }
 
     @Test

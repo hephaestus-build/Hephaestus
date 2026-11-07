@@ -331,12 +331,17 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         when(jwtVerifier.verify("job-token")).thenReturn(jobJwt(job, 1));
         String own = "/internal/llm/runtime/" + job.getId() + "/lease";
 
-        assertThat(answerTo(withToken(request("POST", own, GATEWAY_PORT), "job-token"))).isEqualTo(200);
-        assertThat(answerTo(withToken(request("POST", own, APPLICATION_PORT), "job-token"))).isEqualTo(404);
-        assertThat(answerTo(withToken(request("POST", "/internal/llm/runtime/" + UUID.randomUUID() + "/lease", GATEWAY_PORT), "job-token")))
+        assertThat(answerTo(withToken(request("POST", own, GATEWAY_PORT), "job-token")))
+                .isEqualTo(200);
+        assertThat(answerTo(withToken(request("POST", own, APPLICATION_PORT), "job-token")))
+                .isEqualTo(404);
+        assertThat(answerTo(withToken(
+                        request("POST", "/internal/llm/runtime/" + UUID.randomUUID() + "/lease", GATEWAY_PORT),
+                        "job-token")))
                 .isEqualTo(401);
         turnJwt(1);
-        assertThat(answerTo(withToken(request("POST", own, GATEWAY_PORT), "turn-token"))).isEqualTo(401);
+        assertThat(answerTo(withToken(request("POST", own, GATEWAY_PORT), "turn-token")))
+                .isEqualTo(401);
         assertThat(answerTo(request("POST", own, GATEWAY_PORT))).isEqualTo(401);
     }
 
@@ -346,8 +351,10 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
         when(jwtVerifier.verify("job-token")).thenReturn(jobJwt(job, 1));
         String path = "/internal/llm/runtime/" + job.getId() + "/lease";
-        assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "job-token"))).isEqualTo(200);
-        assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "job-token"))).isEqualTo(429);
+        assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "job-token")))
+                .isEqualTo(200);
+        assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "job-token")))
+                .isEqualTo(429);
         MockHttpServletRequest oversized = request("POST", path, GATEWAY_PORT);
         oversized.setContent(new byte[GATEWAY.maxRequestBytes() + 1]);
         assertThat(answerTo(withToken(oversized, "job-token"))).isEqualTo(413);

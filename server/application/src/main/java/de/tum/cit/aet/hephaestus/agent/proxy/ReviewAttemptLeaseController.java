@@ -29,6 +29,7 @@ class ReviewAttemptLeaseController {
                 || identity.job() == null
                 || !identity.job().id().equals(id)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         return leases.renew(identity.job())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, JobTokenAuthenticationFilter.ATTEMPT_ENDED));
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.CONFLICT, JobTokenAuthenticationFilter.ATTEMPT_ENDED));
     }
 }

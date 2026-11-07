@@ -829,18 +829,39 @@ class KubernetesSandboxRuntimeTest {
     void shouldObserveTheReviewLoopStartingAndEndingFromTheKubernetesWatch() {
         var reviews = backend();
         var handle = reviews.launch(new SandboxBackend.Launch(
-                SandboxBackend.Kind.REVIEW, UUID.randomUUID(), 1, IMAGE, List.of("node", "run.ts"), LIMITS,
-                Instant.now().plus(Duration.ofMinutes(7)), gateway -> Map.of()));
+                SandboxBackend.Kind.REVIEW,
+                UUID.randomUUID(),
+                1,
+                IMAGE,
+                List.of("node", "run.ts"),
+                LIMITS,
+                Instant.now().plus(Duration.ofMinutes(7)),
+                gateway -> Map.of()));
         assertThat(reviews.running(handle)).isFalse();
         String child = startChild(handle.id());
-        setStatus(SANDBOXES, child, "Pending", List.of(exited(KubernetesPods.ISOLATION, 0), exited(KubernetesPods.INITIALIZER, 0)), List.of());
+        setStatus(
+                SANDBOXES,
+                child,
+                "Pending",
+                List.of(exited(KubernetesPods.ISOLATION, 0), exited(KubernetesPods.INITIALIZER, 0)),
+                List.of());
         reviews.observe(handle, SandboxBackend.Stage.INITIALIZED, Instant.now().plusSeconds(10));
         assertThat(reviews.running(handle)).isFalse();
 
-        setStatus(SANDBOXES, child, "Running", List.of(exited(KubernetesPods.ISOLATION, 0), exited(KubernetesPods.INITIALIZER, 0)), List.of(running(KubernetesPods.RUNTIME)));
+        setStatus(
+                SANDBOXES,
+                child,
+                "Running",
+                List.of(exited(KubernetesPods.ISOLATION, 0), exited(KubernetesPods.INITIALIZER, 0)),
+                List.of(running(KubernetesPods.RUNTIME)));
         await().atMost(Duration.ofSeconds(10)).until(() -> reviews.running(handle));
 
-        setStatus(SANDBOXES, child, "Succeeded", List.of(exited(KubernetesPods.ISOLATION, 0), exited(KubernetesPods.INITIALIZER, 0)), List.of(exited(KubernetesPods.RUNTIME, 0)));
+        setStatus(
+                SANDBOXES,
+                child,
+                "Succeeded",
+                List.of(exited(KubernetesPods.ISOLATION, 0), exited(KubernetesPods.INITIALIZER, 0)),
+                List.of(exited(KubernetesPods.RUNTIME, 0)));
         await().atMost(Duration.ofSeconds(10)).until(() -> !reviews.running(handle));
     }
 
