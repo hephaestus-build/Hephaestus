@@ -166,6 +166,12 @@ export function missingPackageAssets(archive: Buffer): string[] {
 		"options.html",
 		"inline.html",
 		"action.html",
+		"LICENSE",
+		"THIRD_PARTY_NOTICES/background.md",
+		"THIRD_PARTY_NOTICES/provider.md",
+		"THIRD_PARTY_NOTICES/action+inline+options.md",
+		"THIRD_PARTY_NOTICES/wxt-LICENSE",
+		"THIRD_PARTY_NOTICES/webext-core-LICENSE",
 		...ICON_SIZES.map((size) => `icon/${size}.png`),
 	].filter((entry) => (readZipEntry(archive, entry)?.length ?? 0) === 0);
 }

@@ -25,6 +25,21 @@ export default defineConfig({
 	imports: false,
 	webExt: { disabled: true },
 	hooks: {
+		"vite:build:extendConfig": (entrypoints, config) => {
+			config.build ??= {};
+			// WXT builds entrypoint groups separately, so one filename would overwrite earlier notices.
+			const group = entrypoints
+				.map((entrypoint) => entrypoint.name)
+				.toSorted()
+				.join("+");
+			config.build.license = { fileName: `THIRD_PARTY_NOTICES/${group}.md` };
+		},
+		"build:publicAssets": (_wxt, files) => {
+			files.push({
+				relativeDest: "LICENSE",
+				contents: readFileSync(new URL("../LICENSE", import.meta.url), "utf8"),
+			});
+		},
 		"build:manifestGenerated": (wxt, manifest) => {
 			if (wxt.config.command === "serve" && manifest.manifest_version === 3) {
 				// WXT grants its dev-server origin for HMR. Chrome warns if that same host is optional.
