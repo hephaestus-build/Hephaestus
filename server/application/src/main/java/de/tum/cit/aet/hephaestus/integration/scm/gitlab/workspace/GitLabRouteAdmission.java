@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.RouteAdmission;
 import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -425,6 +426,11 @@ public class GitLabRouteAdmission implements RouteAdmission {
                         gitLabProperties.defaultServerUrl(),
                         () -> {
                             if (!holdActive(route)) return false;
+                            if (!DeliveryInbox.claim("gitlab.route.discover." + extractId(reported))) {
+                                return repositoryRepository
+                                        .findByNativeIdAndProviderId(extractId(reported), route.providerId())
+                                        .isPresent();
+                            }
                             Optional<Repository> stored = projectSyncService.persistProject(reported);
                             stored.ifPresent(repository -> monitorIfAllowed(route, repository));
                             return stored.isPresent();
@@ -440,7 +446,7 @@ public class GitLabRouteAdmission implements RouteAdmission {
                     .orElse(null);
         } catch (RepositoryNotFoundOnGitProviderException | WebClientResponseException.NotFound e) {
             transaction.executeWithoutResult(status -> {
-                if (holdActive(route)) {
+                if (holdActive(route) && DeliveryInbox.claim("gitlab.route.unavailable." + nativeId)) {
                     ownMonitors(route, nativeId).stream()
                             .filter(monitor -> read.originalMonitors().values().stream()
                                     .anyMatch(ids -> ids.contains(monitor.getId())))
@@ -454,6 +460,12 @@ public class GitLabRouteAdmission implements RouteAdmission {
         Boolean applied = transaction.execute(status -> {
             if (!holdActive(route)) {
                 return false;
+            }
+            if (!DeliveryInbox.claim("gitlab.route.project." + nativeId)) {
+                return repositoryRepository
+                        .findByNativeIdAndProviderId(nativeId, route.providerId())
+                        .filter(repository -> route.contains(repository.getNameWithOwner()))
+                        .isPresent();
             }
             // The shared row may already carry another workspace's view of the move, so this workspace's monitor is
             // found by the project's id, not by the row's current path.

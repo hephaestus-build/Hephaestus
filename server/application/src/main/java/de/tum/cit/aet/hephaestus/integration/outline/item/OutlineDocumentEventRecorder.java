@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.outline.item;
 
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FoundBy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
@@ -42,6 +43,7 @@ public class OutlineDocumentEventRecorder {
             default -> null;
         };
         if (event == null) return Optional.empty();
+        if (!DeliveryInbox.claim("outline.document.event." + document.id())) return Optional.empty();
         var item = items.upsert(new ItemRegistration(workspaceId, DocumentEvents.DOCUMENT, document.id(), null, null));
         var version = DocumentEvents.version(
                 document.title(), hash, document.archivedAt() != null, document.createdBySubject());

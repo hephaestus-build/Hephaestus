@@ -93,6 +93,17 @@ erDiagram
         TIMESTAMPTZ replayed_at
     }
 
+    ConsumerInboxStep {
+        BIGINT id PK
+        VARCHAR(255) consumer_name UK "NOT NULL"
+        TIMESTAMPTZ processed_at "NOT NULL"
+        TIMESTAMPTZ received_at UK "NOT NULL"
+        VARCHAR(200) step_name UK "NOT NULL"
+        VARCHAR(255) stream_name UK "NOT NULL"
+        BIGINT stream_sequence UK "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+    }
+
     GitCommit {
         BIGINT id PK
         VARCHAR(40) sha UK "NOT NULL"
@@ -130,6 +141,16 @@ erDiagram
         VARCHAR(10) type UK "NOT NULL"
         VARCHAR(512) server_url UK "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    InstallationInboxStep {
+        BIGINT id PK
+        VARCHAR(255) consumer_name UK "NOT NULL"
+        TIMESTAMPTZ processed_at "NOT NULL"
+        TIMESTAMPTZ received_at UK "NOT NULL"
+        VARCHAR(200) step_name UK "NOT NULL"
+        VARCHAR(255) stream_name UK "NOT NULL"
+        BIGINT stream_sequence UK "NOT NULL"
     }
 
     Issue {
@@ -633,6 +654,7 @@ erDiagram
     Connection ||--o{ ConnectionAudit : connection_id
     Workspace ||--o{ ConsumerDeadLetter : has
     Account ||--o{ ConsumerDeadLetter : references
+    Workspace ||--o{ ConsumerInboxStep : has
     User ||--o{ GitCommit : authored_by
     User ||--o{ GitCommit : references
     Repository ||--o{ GitCommit : has

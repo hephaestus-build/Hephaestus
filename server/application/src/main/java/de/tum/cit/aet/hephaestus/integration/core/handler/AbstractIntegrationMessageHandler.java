@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.handler;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import io.nats.client.Message;
@@ -138,7 +139,9 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
 
     /** Override when external preparation must run before short persistence transactions. */
     protected void dispatchEvent(T eventPayload) {
-        transactionTemplate.executeWithoutResult(status -> handleEvent(eventPayload));
+        transactionTemplate.executeWithoutResult(status -> {
+            if (DeliveryInbox.claim("handler." + key.kind() + "." + key.eventType())) handleEvent(eventPayload);
+        });
     }
 
     /**

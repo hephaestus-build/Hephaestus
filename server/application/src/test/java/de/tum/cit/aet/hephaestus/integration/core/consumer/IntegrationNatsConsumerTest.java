@@ -87,7 +87,8 @@ class IntegrationNatsConsumerTest {
                 mock(ConnectionActivityRecorder.class),
                 List.of(),
                 NatsTraceContexts.none(),
-                NatsTraceContexts.messageMeters());
+                NatsTraceContexts.messageMeters(),
+                DeliveryInboxes.passthrough());
         try {
             consumer.stopConsumingScopeForPurge(7L);
             consumer.startConsumingScope(7L);
@@ -116,7 +117,8 @@ class IntegrationNatsConsumerTest {
                         mock(ConnectionActivityRecorder.class),
                         List.of(),
                         NatsTraceContexts.none(),
-                        NatsTraceContexts.messageMeters()) {
+                        NatsTraceContexts.messageMeters(),
+                        DeliveryInboxes.passthrough()) {
                     @Override
                     void ensureNatsConnectionEstablished() {}
 
@@ -252,7 +254,8 @@ class IntegrationNatsConsumerTest {
                     mock(ConnectionActivityRecorder.class),
                     List.of(admission),
                     NatsTraceContexts.none(),
-                    new IntegrationMessageMeters(meters, Clock.systemUTC()));
+                    new IntegrationMessageMeters(meters, Clock.systemUTC()),
+                    DeliveryInboxes.passthrough());
         }
 
         @Test
@@ -346,7 +349,8 @@ class IntegrationNatsConsumerTest {
                     activityRecorder,
                     List.of(),
                     NatsTraceContexts.none(),
-                    NatsTraceContexts.messageMeters());
+                    NatsTraceContexts.messageMeters(),
+                    DeliveryInboxes.passthrough());
         }
 
         @Test
@@ -598,7 +602,8 @@ class IntegrationNatsConsumerTest {
                         mock(ConnectionActivityRecorder.class),
                         List.of(),
                         NatsTraceContexts.none(),
-                        NatsTraceContexts.messageMeters());
+                        NatsTraceContexts.messageMeters(),
+                        DeliveryInboxes.passthrough());
                 this.failingStreams = new ConcurrentSkipListSet<>(failingStreams);
                 this.subscribedStreams = subscribedStreams;
             }

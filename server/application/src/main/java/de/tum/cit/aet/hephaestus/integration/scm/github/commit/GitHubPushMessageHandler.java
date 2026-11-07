@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -226,7 +227,9 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
      * JGit already captured.
      */
     private void processCommitsViaWebhook(GitHubPushEventDTO event, Repository repository, boolean asFallback) {
-        transactions.executeWithoutResult(status -> persistWebhookCommits(event, repository, asFallback));
+        transactions.executeWithoutResult(status -> {
+            if (DeliveryInbox.claim("github.push.webhook")) persistWebhookCommits(event, repository, asFallback);
+        });
     }
 
     private void persistWebhookCommits(GitHubPushEventDTO event, Repository repository, boolean asFallback) {

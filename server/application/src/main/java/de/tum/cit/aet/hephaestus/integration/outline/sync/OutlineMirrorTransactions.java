@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.outline.sync;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
@@ -55,24 +56,27 @@ public class OutlineMirrorTransactions {
      * @return the body-free snapshot of the row as written, so the caller's diff map stays current
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public OutlineDocumentSnapshot upsertDocument(
+    public @Nullable OutlineDocumentSnapshot upsertDocument(
             long workspaceId,
             long connectionId,
             String documentId,
             @Nullable Instant sourceUpdatedAt,
             Consumer<OutlineDocument> mutator) {
-        OutlineDocument doc = documentRepository
-                .findByWorkspaceIdAndConnectionIdAndDocumentId(workspaceId, connectionId, documentId)
-                .orElseGet(() -> {
-                    OutlineDocument fresh = new OutlineDocument();
-                    fresh.setWorkspaceId(workspaceId);
-                    fresh.setConnectionId(connectionId);
-                    fresh.setDocumentId(documentId);
-                    return fresh;
-                });
+        boolean claimed = DeliveryInbox.claim("outline.document.upsert." + connectionId + "." + documentId);
+        var existing =
+                documentRepository.findByWorkspaceIdAndConnectionIdAndDocumentId(workspaceId, connectionId, documentId);
+        if (!claimed) return existing.map(OutlineDocumentSnapshot::of).orElse(null);
+        OutlineDocument doc = existing.orElseGet(() -> {
+            OutlineDocument fresh = new OutlineDocument();
+            fresh.setWorkspaceId(workspaceId);
+            fresh.setConnectionId(connectionId);
+            fresh.setDocumentId(documentId);
+            return fresh;
+        });
         if (ProviderStateVersion.isOlder(sourceUpdatedAt, doc.getOutlineUpdatedAt())) {
             return OutlineDocumentSnapshot.of(doc);
         }
+
         mutator.accept(doc);
         people.recordAuthors(doc);
         return OutlineDocumentSnapshot.of(documentRepository.saveAndFlush(doc));
@@ -113,6 +117,9 @@ public class OutlineMirrorTransactions {
                 .filter(doc -> sourceUpdatedAt == null
                         || !ProviderStateVersion.cannotReplace(sourceUpdatedAt, doc.getOutlineUpdatedAt()))
                 .map(doc -> {
+                    if (!DeliveryInbox.claim("outline.document.update." + connectionId + "." + documentId)) {
+                        return OutlineDocumentSnapshot.of(doc);
+                    }
                     mutator.accept(doc);
                     return OutlineDocumentSnapshot.of(documentRepository.saveAndFlush(doc));
                 })
@@ -126,7 +133,12 @@ public class OutlineMirrorTransactions {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void updateCollection(
-            long workspaceId, long connectionId, String collectionId, Consumer<OutlineCollection> mutator) {
+            long workspaceId,
+            long connectionId,
+            String collectionId,
+            String purpose,
+            Consumer<OutlineCollection> mutator) {
+        if (!DeliveryInbox.claim("outline.collection." + purpose + "." + connectionId + "." + collectionId)) return;
         collectionRepository
                 .findByWorkspaceIdAndConnectionIdAndCollectionId(workspaceId, connectionId, collectionId)
                 .ifPresentOrElse(
@@ -149,6 +161,7 @@ public class OutlineMirrorTransactions {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public long dropStaleTombstones(long workspaceId, Instant cutoff) {
+        if (!DeliveryInbox.claim("outline.tombstones.prune." + workspaceId)) return 0;
         return documentRepository.deleteByWorkspaceIdAndDeletedAtBefore(workspaceId, cutoff);
     }
 }

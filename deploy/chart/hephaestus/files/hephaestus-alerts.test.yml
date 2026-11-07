@@ -2609,3 +2609,21 @@ tests:
             exp_annotations:
               summary: The kernel killed a container for its memory
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: repeated inbox cleanup failures fire while one failure stays quiet
+    interval: 1h
+    input_series:
+      - series: 'integration_consumer_inbox_retention_failures_total{job="hephaestus"}'
+        values: "0 0 1 1 1 1 1 1 2 2"
+    alert_rule_test:
+      - eval_time: 4h
+        alertname: HephaestusInboxRetentionFailing
+        exp_alerts: []
+      - eval_time: 9h
+        alertname: HephaestusInboxRetentionFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Delivery inbox cleanup failed more than once in 24 hours
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response

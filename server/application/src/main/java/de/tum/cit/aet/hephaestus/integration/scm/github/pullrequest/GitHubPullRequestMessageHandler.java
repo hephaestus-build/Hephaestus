@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -100,7 +101,7 @@ public class GitHubPullRequestMessageHandler extends AbstractIntegrationMessageH
             return null;
         }
 
-        routeToProcessor(event, prDto, context);
+        if (DeliveryInbox.claim("github.pull_request.event")) routeToProcessor(event, prDto, context);
         return context;
     }
 

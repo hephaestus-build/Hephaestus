@@ -9,6 +9,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.TRANSPORT_MAX_RETRIES;
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.adaptPageSize;
 
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
@@ -795,6 +796,7 @@ public class GitHubPullRequestSyncService {
             }
             Long repositoryId = repository.getId();
             Boolean processed = transactionTemplate.execute(status -> {
+                if (!DeliveryInbox.claim("github.pull_request.refresh." + repositoryId + "." + number)) return true;
                 Repository repo = repositoryRepository.findById(repositoryId).orElse(null);
                 if (repo == null) {
                     return false;

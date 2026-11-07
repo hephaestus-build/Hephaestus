@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -305,6 +306,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
         }
 
         int created = 0;
+        RuntimeException failure = null;
         for (CommitInfo commit : commits) {
             if (commit.id() == null || commit.id().isBlank()) {
                 continue;
@@ -312,12 +314,12 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
             try {
                 Boolean written = transactions.execute(status -> {
                     if (!mayWrite(read)) return false;
-                    persistWebhookCommit(
+                    return persistWebhookCommit(
                             commit, repository, asFallback, read.connection().workspaceId());
-                    return true;
                 });
                 if (Boolean.TRUE.equals(written)) created++;
-            } catch (Exception e) {
+            } catch (RuntimeException e) {
+                if (failure == null) failure = e;
                 log.warn(
                         "Failed to upsert commit: sha={}, repoId={}, error={}",
                         commit.id(),
@@ -334,10 +336,12 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
                     commits.size(),
                     asFallback);
         }
+        if (failure != null) throw failure;
     }
 
-    private void persistWebhookCommit(CommitInfo commit, Repository repository, boolean asFallback, long scopeId) {
+    private boolean persistWebhookCommit(CommitInfo commit, Repository repository, boolean asFallback, long scopeId) {
         String sha = Objects.requireNonNull(commit.id());
+        if (!DeliveryInbox.claim("gitlab.push.webhook." + repository.getId() + "." + sha)) return false;
         Instant authoredAt = parseTimestamp(commit.timestamp());
         int changedFiles = commit.changedFilesCount();
         String authorEmail = commit.author() != null ? commit.author().email() : null;
@@ -364,6 +368,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
             persistWebhookFileChanges(sha, commit, repository);
         }
         publishCommitCreated(sha, repository, scopeId);
+        return true;
     }
 
     /**

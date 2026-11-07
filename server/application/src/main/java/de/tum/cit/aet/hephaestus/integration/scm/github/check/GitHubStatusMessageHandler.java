@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.check;
 
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -92,7 +93,7 @@ public class GitHubStatusMessageHandler extends AbstractIntegrationMessageHandle
         if (context == null || context.repository() == null) {
             return null;
         }
-        headCheckProcessor.observe(event.sha(), state, context);
+        if (DeliveryInbox.claim("github.status.event")) headCheckProcessor.observe(event.sha(), state, context);
         return context;
     }
 

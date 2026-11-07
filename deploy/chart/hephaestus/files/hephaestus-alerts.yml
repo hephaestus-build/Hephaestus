@@ -45,6 +45,13 @@ groups:
         annotations:
           summary: An integration event was stored for administrator replay
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusInboxRetentionFailing
+        expr: sum(increase(integration_consumer_inbox_retention_failures_total{job="hephaestus"}[24h])) >= 2
+        labels:
+          severity: warning
+        annotations:
+          summary: Delivery inbox cleanup failed more than once in 24 hours
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusConsumerRetryStalled
         expr: sum by (kind) (increase(integration_consumer_nak_total{job="hephaestus"}[10m])) > 0
         for: 15m

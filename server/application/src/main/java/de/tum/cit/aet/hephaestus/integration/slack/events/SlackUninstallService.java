@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -58,6 +59,7 @@ public class SlackUninstallService {
             return;
         }
         long workspaceId = workspaceOpt.get();
+        if (!DeliveryInbox.claim("slack.uninstall")) return;
         connectionService.findActive(workspaceId, IntegrationKind.SLACK).ifPresent(connection -> {
             Connection changed = connectionService.transition(
                     connection,

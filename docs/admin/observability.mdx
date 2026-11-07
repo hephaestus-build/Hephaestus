@@ -309,6 +309,7 @@ For the volume rules, change their name patterns.
 | Alert | Signal | Why this threshold |
 | --- | --- | --- |
 | `HephaestusMetricsUnavailable` | `up` | Several failed scrapes in a row, not one missed scrape |
+| `HephaestusInboxRetentionFailing` | `integration_consumer_inbox_retention_failures_total` | Cleanup runs every 6 hours. More than one failure in 24 hours leaves old delivery keys in PostgreSQL. Ingestion continues, but the tables can grow until cleanup succeeds |
 | `HephaestusConsumerPoison` | `integration_consumer_poison_total` | Each poison event is a delivery that the application stopped retrying |
 | `HephaestusStreamPollStale` | `webhook_stream_poll_age_seconds` | Three times the default 60-second monitor interval. `NaN` means a stream was never polled successfully, not an age of zero |
 | `HephaestusStreamPollMissing` | No `webhook_stream_poll_age_seconds` from a scraped receiver | The stream monitor is gone, which a failed scrape does not show |

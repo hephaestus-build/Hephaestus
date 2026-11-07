@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest;
 
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
@@ -30,6 +31,7 @@ public class HeadCheckRunsRecorder {
     /** Locks each pull request on the runs' commit, then stores the runs on it. */
     @Transactional
     public void observe(long repositoryId, HeadCheckRuns runs, ProcessingContext context) {
+        if (!DeliveryInbox.claim("checks.runs." + repositoryId + "." + runs.sha())) return;
         store(
                 pullRequestRepository.findAllForUpdateByRepositoryIdAndHeadRefOid(repositoryId, runs.sha()),
                 runs,
