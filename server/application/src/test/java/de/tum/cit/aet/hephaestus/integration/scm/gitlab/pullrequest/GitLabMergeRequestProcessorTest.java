@@ -17,8 +17,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -33,7 +31,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecisi
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
@@ -96,15 +93,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
     private LabelRepository labelRepository;
 
     @Mock
-    private RepositoryRepository repositoryRepository;
-
-    @Mock
-    private ScopeIdResolver scopeIdResolver;
-
-    @Mock
-    private RepositoryScopeFilter repositoryScopeFilter;
-
-    @Mock
     private MilestoneRepository milestoneRepository;
 
     @Mock
@@ -134,9 +122,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 issueRepository,
                 userRepository,
                 labelRepository,
-                repositoryRepository,
-                scopeIdResolver,
-                repositoryScopeFilter,
                 properties,
                 eventPublisher);
 

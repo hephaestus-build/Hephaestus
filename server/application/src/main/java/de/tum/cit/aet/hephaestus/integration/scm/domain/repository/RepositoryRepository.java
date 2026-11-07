@@ -91,13 +91,6 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
     List<Repository> findByNameWithOwnerStartingWithIgnoreCaseAndProviderId(String prefix, Long providerId);
 
     /**
-     * Finds a repository by its full name with the organization eagerly fetched.
-     */
-    @Query(
-            "SELECT r FROM Repository r LEFT JOIN FETCH r.organization LEFT JOIN FETCH r.provider WHERE r.nameWithOwner = :nameWithOwner")
-    Optional<Repository> findByNameWithOwnerWithOrganization(@Param("nameWithOwner") String nameWithOwner);
-
-    /**
      * Updates the last sync timestamp for a repository.
      * Used after successful issue sync to enable incremental sync on subsequent runs.
      *
@@ -217,6 +210,7 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
      * @param organizationId the organization ID (nullable)
      * @return whether the provider's repository with this id now has this path
      */
+    @WorkspaceAgnostic("Monitoring a repository refreshes its shared mirror row from the provider's snapshot")
     default boolean upsertFromSnapshot(
             long nativeId,
             long providerId,
@@ -233,7 +227,6 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
      * {@code visibility} is derived from {@code isPrivate} and {@code html_url} from {@code nameWithOwner}
      * inside the SQL to keep the parameter count within architecture limits.
      */
-    @WorkspaceAgnostic("Monitoring a repository refreshes its shared mirror row from the provider's snapshot")
     @Transactional
     @Modifying(flushAutomatically = true)
     @Query(value = """

@@ -1,14 +1,10 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.common;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.LabelIdUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.PostgresStringUtils;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookLabel;
@@ -64,25 +60,16 @@ public abstract class BaseGitLabProcessor {
     protected final GitLabUserService gitLabUserService;
     protected final UserRepository userRepository;
     protected final LabelRepository labelRepository;
-    protected final RepositoryRepository repositoryRepository;
-    protected final ScopeIdResolver scopeIdResolver;
-    protected final RepositoryScopeFilter repositoryScopeFilter;
     protected final GitLabProperties gitLabProperties;
 
     protected BaseGitLabProcessor(
             GitLabUserService gitLabUserService,
             UserRepository userRepository,
             LabelRepository labelRepository,
-            RepositoryRepository repositoryRepository,
-            ScopeIdResolver scopeIdResolver,
-            RepositoryScopeFilter repositoryScopeFilter,
             GitLabProperties gitLabProperties) {
         this.gitLabUserService = gitLabUserService;
         this.userRepository = userRepository;
         this.labelRepository = labelRepository;
-        this.repositoryRepository = repositoryRepository;
-        this.scopeIdResolver = scopeIdResolver;
-        this.repositoryScopeFilter = repositoryScopeFilter;
         this.gitLabProperties = gitLabProperties;
     }
 
@@ -246,47 +233,6 @@ public abstract class BaseGitLabProcessor {
                 return null;
             }
         }
-    }
-
-    // Context Resolution
-
-    /**
-     * Resolves a ProcessingContext from a project's pathWithNamespace for webhook events.
-     */
-    @Nullable
-    protected ProcessingContext resolveContext(@Nullable String pathWithNamespace, @Nullable String action) {
-        if (pathWithNamespace == null || pathWithNamespace.isBlank() || action == null) {
-            return null;
-        }
-
-        if (!repositoryScopeFilter.isRepositoryAllowed(pathWithNamespace)) {
-            log.debug("Skipped event: reason=repositoryFiltered, repoName={}", pathWithNamespace);
-            return null;
-        }
-
-        Repository repository = repositoryRepository
-                .findByNameWithOwnerWithOrganization(pathWithNamespace)
-                .orElse(null);
-        if (repository == null) {
-            log.debug("Skipped event: reason=repositoryNotFound, repoName={}", pathWithNamespace);
-            return null;
-        }
-
-        Long scopeId = resolveScopeId(repository);
-        return ProcessingContext.forWebhook(scopeId, repository, action);
-    }
-
-    private @Nullable Long resolveScopeId(Repository repository) {
-        if (repository.getOrganization() != null) {
-            String orgLogin = repository.getOrganization().getLogin();
-            Long scopeId = scopeIdResolver.findScopeIdByOrgLogin(orgLogin).orElse(null);
-            if (scopeId != null) {
-                return scopeId;
-            }
-        }
-        return scopeIdResolver
-                .findScopeIdByRepositoryName(repository.getNameWithOwner())
-                .orElse(null);
     }
 
     // Sanitization

@@ -20,7 +20,7 @@ import java.lang.annotation.Target;
  * <p><b>When to use:</b>
  *
  * <ul>
- *   <li>Lookup tables (UserRepository, LabelRepository)</li>
+ *   <li>Lookup tables (UserRepository)</li>
  *   <li>Sync operations that find by external GitHub ID</li>
  *   <li>Cross-workspace queries for admin operations</li>
  * </ul>

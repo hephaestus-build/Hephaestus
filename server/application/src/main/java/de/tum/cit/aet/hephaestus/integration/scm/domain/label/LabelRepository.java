@@ -14,12 +14,16 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Repository for label entities.
  *
- * <p>All queries filter by repository ID which inherently carries scope
- * through the Repository -> Organization relationship chain.
+ * <p>Labels are shared mirror rows of a repository. Reads key on the repository or on the label's
+ * provider identity.
  */
 @Repository
-@WorkspaceAgnostic("Labels scoped through repository_id -> repository.workspace_id")
 public interface LabelRepository extends JpaRepository<Label, Long> {
+    /** Every workspace's mirror rows. Only tests call it, to check what sync stored; production code reads by scope. */
+    @Override
+    @WorkspaceAgnostic("Reads every workspace's mirror rows; only tests call it, to check what sync stored")
+    long count();
+
     @Query("""
         SELECT l
         FROM Label l

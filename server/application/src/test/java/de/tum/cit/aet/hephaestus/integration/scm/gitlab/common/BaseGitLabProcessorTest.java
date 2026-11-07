@@ -9,13 +9,9 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookLabel;
@@ -48,15 +44,6 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
     @Mock
     private LabelRepository labelRepository;
 
-    @Mock
-    private RepositoryRepository repositoryRepository;
-
-    @Mock
-    private ScopeIdResolver scopeIdResolver;
-
-    @Mock
-    private RepositoryScopeFilter repositoryScopeFilter;
-
     private TestProcessor processor;
     private Repository testRepo;
 
@@ -69,14 +56,7 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
                 Duration.ofMillis(200),
                 Duration.ofMinutes(5));
 
-        processor = new TestProcessor(
-                gitLabUserService,
-                userRepository,
-                labelRepository,
-                repositoryRepository,
-                scopeIdResolver,
-                repositoryScopeFilter,
-                properties);
+        processor = new TestProcessor(gitLabUserService, userRepository, labelRepository, properties);
 
         IdentityProvider gitLabProvider = new IdentityProvider();
         gitLabProvider.setId(2L);
@@ -276,34 +256,6 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
     }
 
     @Nested
-    class ContextResolution {
-
-        @Test
-        void returnsNullWhenFiltered() {
-            when(repositoryScopeFilter.isRepositoryAllowed("org/repo")).thenReturn(false);
-            var ctx = processor.callResolveContext("org/repo", "open");
-            assertThat(ctx).isNull();
-        }
-
-        @Test
-        void returnsNullWhenNotFound() {
-            when(repositoryScopeFilter.isRepositoryAllowed("org/repo")).thenReturn(true);
-            when(repositoryRepository.findByNameWithOwnerWithOrganization("org/repo"))
-                    .thenReturn(Optional.empty());
-            var ctx = processor.callResolveContext("org/repo", "open");
-            assertThat(ctx).isNull();
-        }
-
-        @ParameterizedTest
-        @NullAndEmptySource
-        @ValueSource(strings = {"  "})
-        void returnsNullForNullOrBlankPath(String path) {
-            var ctx = processor.callResolveContext(path, "open");
-            assertThat(ctx).isNull();
-        }
-    }
-
-    @Nested
     class IdMapping {
 
         @ParameterizedTest(name = "toEntityId({0}) = {1}")
@@ -330,18 +282,8 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
                 GitLabUserService gitLabUserService,
                 UserRepository userRepository,
                 LabelRepository labelRepository,
-                RepositoryRepository repositoryRepository,
-                ScopeIdResolver scopeIdResolver,
-                RepositoryScopeFilter repositoryScopeFilter,
                 GitLabProperties gitLabProperties) {
-            super(
-                    gitLabUserService,
-                    userRepository,
-                    labelRepository,
-                    repositoryRepository,
-                    scopeIdResolver,
-                    repositoryScopeFilter,
-                    gitLabProperties);
+            super(gitLabUserService, userRepository, labelRepository, gitLabProperties);
         }
 
         @Nullable
@@ -367,11 +309,6 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
         @Nullable
         Label callFindOrCreateLabel(@Nullable GitLabWebhookLabel dto, Repository repository) {
             return findOrCreateLabel(dto, repository);
-        }
-
-        @Nullable
-        ProcessingContext callResolveContext(String path, String action) {
-            return resolveContext(path, action);
         }
     }
 }
