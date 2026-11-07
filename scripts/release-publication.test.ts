@@ -151,6 +151,13 @@ if (tool === 'git') {
   throw new Error('Unexpected git command');
 } else if (tool === 'gh') {
   if (args[0] === 'attestation') {
+    if (args[2].startsWith('oci://')) {
+      const source = process.env.NATIVE_SOURCE_COMMIT ?? read('manifest.json').commit;
+      const predicate = process.env.NATIVE_PREDICATE ?? 'https://slsa.dev/provenance/v1';
+      if (args.includes('--source-digest') && option('--source-digest') !== source) { console.error('source digest does not match'); process.exit(1); }
+      if (args.includes('--deny-self-hosted-runners') && process.env.NATIVE_SELF_HOSTED === 'true') { console.error('self-hosted runner refused'); process.exit(1); }
+      if ((args.includes('--predicate-type') ? option('--predicate-type') : 'https://slsa.dev/provenance/v1') !== predicate) { console.error('predicate type does not match'); process.exit(1); }
+    }
     // The chart package has no release attestation in this scenario; images keep theirs.
     if (process.env.CHART_ATTESTATION_MISSING === 'true' && args[2].endsWith('.tgz')) { console.error('no matching attestations found'); process.exit(1); }
     process.exit(0);
@@ -1422,6 +1429,33 @@ void test(
 		);
 		await json(file, { ...native, files: [] });
 		verify(/no bundled npm/u);
+	},
+);
+
+void test(
+	"native image provenance matches the release source and build policy",
+	{ skip: process.platform === "win32" },
+	async (t) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "release-native-provenance-"));
+		t.after(async () => rm(directory, { recursive: true, force: true }));
+		const { archive, environment } = await fixture(directory);
+		const verify = (overrides: Record<string, string> = {}) =>
+			spawnSync(
+				process.execPath,
+				[path.join(root, "scripts/verify-release-evidence.ts"), archive, "--verify-signatures"],
+				{ encoding: "utf8", env: { ...environment, ...overrides } },
+			);
+		const matching = verify();
+		assert.equal(matching.status, 0, matching.stderr);
+		for (const [overrides, reason] of [
+			[{ NATIVE_SOURCE_COMMIT: "d".repeat(40) }, /source digest does not match/u],
+			[{ NATIVE_SELF_HOSTED: "true" }, /self-hosted runner refused/u],
+			[{ NATIVE_PREDICATE: "https://example.invalid/predicate" }, /predicate type does not match/u],
+		] as const) {
+			const refused = verify(overrides);
+			assert.notEqual(refused.status, 0);
+			assert.match(refused.stderr, reason);
+		}
 	},
 );
 
