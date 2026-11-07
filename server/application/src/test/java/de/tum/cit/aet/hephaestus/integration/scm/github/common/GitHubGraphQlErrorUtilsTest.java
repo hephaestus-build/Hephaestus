@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlTestResponses;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
@@ -14,11 +15,43 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.graphql.ResponseError;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 
 @Tag("unit")
 class GitHubGraphQlErrorUtilsTest {
+
+    @Test
+    void shouldMatchThePullRequestPathWhenGitHubReportsNativeNotFound() {
+        var response = GitHubGraphQlTestResponses.decode("""
+                {"data":{"repository":{"pullRequest":null}},"errors":[{"type":"NOT_FOUND","path":["repository","pullRequest"],"message":"Synthetic missing parent"}]}
+                """);
+        assertThat(GitHubGraphQlErrorUtils.isNotFoundError(response, "repository.pullRequest"))
+                .isTrue();
+        assertThat(GitHubGraphQlErrorUtils.isNotFoundError(response, "repository.issue"))
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "RATE_LIMIT, RATE_LIMIT",
+        "RATE_LIMITED, RATE_LIMIT",
+        "INTERNAL_ERROR, SERVER_ERROR",
+        "SERVICE_UNAVAILABLE, SERVER_ERROR",
+        "RESOURCE_LIMITS_EXCEEDED, RESOURCE_LIMIT",
+        "MAX_NODE_LIMIT_EXCEEDED, RESOURCE_LIMIT"
+    })
+    void shouldRecognizeTransientTypesWhenTheNativeErrorHasNoMessage(
+            String type, GitHubGraphQlErrorUtils.TransientErrorType expected) {
+        var response = GitHubGraphQlTestResponses.decode("""
+                {"errors":[{"type":"%s","message":null}]}
+                """.formatted(type));
+        var result = GitHubGraphQlErrorUtils.detectTransientError(response);
+        assertNotNull(result);
+        assertThat(result.type()).isEqualTo(expected);
+    }
 
     @Nested
     class IsNotFoundError {

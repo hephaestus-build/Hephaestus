@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlErrorUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator.GraphQlClassificationContext;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryNameParser;
@@ -28,8 +29,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHReposito
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRepositoryOwner;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHUser;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -129,6 +132,22 @@ public class GitHubRepositorySyncService {
         }
     }
 
+    private static boolean isRepositoryAccessRefusal(ClientGraphQlResponse response) {
+        if (GitHubGraphQlErrorUtils.detectTransientError(response) != null) return false;
+        var errors = response.getErrors();
+        for (int index = 0; index < errors.size(); index++) {
+            String type = GitHubGraphQlErrorUtils.errorType(response, index);
+            List<Object> path = errors.get(index).getParsedPath();
+            if (type != null
+                    && Set.of("NOT_FOUND", "FORBIDDEN", "UNAUTHORIZED").contains(type)
+                    && (path.isEmpty() || path.equals(List.of("repository")))) {
+                // A pathless refusal applies to this single-repository query; it does not prove deletion.
+                return true;
+            }
+        }
+        return false;
+    }
+
     private record RepositoryIdentity(
             long id, @JsonProperty("full_name") @Nullable String fullName) {}
 
@@ -176,7 +195,8 @@ public class GitHubRepositorySyncService {
                     if ((classification.category() == GitHubExceptionClassifier.Category.NOT_FOUND
                                     || classification.category() == GitHubExceptionClassifier.Category.AUTH_ERROR)
                             && response != null
-                            && response.field("repository").getValue() == null) {
+                            && response.field("repository").getValue() == null
+                            && isRepositoryAccessRefusal(response)) {
                         throw new RepositoryNotFoundOnGitProviderException(nameWithOwner);
                     }
                     if (graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(

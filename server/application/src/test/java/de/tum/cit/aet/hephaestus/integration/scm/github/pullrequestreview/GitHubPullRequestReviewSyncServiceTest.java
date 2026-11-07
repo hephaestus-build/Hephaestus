@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
@@ -14,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionCl
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlTestResponses;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestReviewCommentConnection;
@@ -60,6 +62,32 @@ class GitHubPullRequestReviewSyncServiceTest extends BaseUnitTest {
         SyncResult result = service.syncRemainingReviews(SCOPE, pullRequest(), "after-first-page", 0);
 
         assertThat(result.status()).isNotEqualTo(SyncResult.Status.COMPLETED);
+    }
+
+    @Test
+    void shouldStopReviewPagingWithoutDeletingDataWhenGitHubReportsANativeMissingParent() {
+        when(clients.forScope(SCOPE)).thenReturn(client);
+        lenient().when(clients.getRateLimitRemaining(SCOPE)).thenReturn(5000);
+        when(properties.graphqlTimeout()).thenReturn(Duration.ofSeconds(5));
+        var spec = mock(RequestSpec.class);
+        when(client.documentName("GetPullRequestReviews")).thenReturn(spec);
+        when(spec.variable(anyString(), any())).thenReturn(spec);
+        var response = GitHubGraphQlTestResponses.decode("""
+                {"data":{"repository":{"pullRequest":null}},"errors":[{"type":"NOT_FOUND","path":["repository","pullRequest"],"message":"Synthetic missing pull request"}]}
+                """);
+        when(spec.execute()).thenReturn(Mono.just(response));
+        var processor = mock(GitHubPullRequestReviewProcessor.class);
+        var service = new GitHubPullRequestReviewSyncService(
+                clients,
+                processor,
+                properties,
+                mock(GitHubExceptionClassifier.class),
+                mock(GitHubGraphQlSyncCoordinator.class),
+                mock(PlatformTransactionManager.class));
+        var result = service.syncRemainingReviews(SCOPE, pullRequest(), "after-first-page", 0);
+        assertThat(result.status()).isEqualTo(SyncResult.Status.COMPLETED);
+        assertThat(result.count()).isZero();
+        verifyNoInteractions(processor);
     }
 
     private <T> void stub(String document, String path, Class<T> type, T entity) {

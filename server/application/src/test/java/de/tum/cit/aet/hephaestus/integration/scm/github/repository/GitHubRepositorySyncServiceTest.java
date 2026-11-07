@@ -109,6 +109,75 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"NOT_FOUND", "FORBIDDEN", "UNAUTHORIZED"})
+    void shouldReportUnavailableWhenGitHubRefusesRepositoryAccess(String type) {
+        var repositories = mock(RepositoryRepository.class);
+        var organizations = mock(OrganizationRepository.class);
+        var service = graphQlService("""
+                {"data":{"repository":null},"errors":[{"type":"%s","path":["repository"],"message":"Synthetic access refusal"}]}
+                """.formatted(type), repositories, organizations);
+        assertThatThrownBy(() -> service.syncRepository(7L, "example/repository", new IdentityProvider(), null))
+                .isInstanceOf(RepositoryNotFoundOnGitProviderException.class);
+        verifyNoInteractions(repositories, organizations);
+        assertThat(upstream.getRequestCount()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"NOT_FOUND", "FORBIDDEN"})
+    void shouldWithholdUnavailableStateWhenAChildErrorNullsItsParent(String type) {
+        var service = graphQlService(
+                """
+                {"data":{"repository":null},"errors":[{"type":"%s","path":["repository","defaultBranchRef"],"message":"Synthetic child refusal"}]}
+                """.formatted(type), mock(RepositoryRepository.class), mock(OrganizationRepository.class));
+        assertThat(service.syncRepository(7L, "example/repository", new IdentityProvider(), null))
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"NOT_FOUND", "FORBIDDEN", "UNAUTHORIZED"})
+    void shouldReportUnavailableWhenTheSingleRepositoryQueryHasAPathlessRefusal(String type) {
+        var service = graphQlService(
+                """
+                {"data":null,"errors":[{"type":"%s","message":"Synthetic access refusal"}]}
+                """.formatted(type), mock(RepositoryRepository.class), mock(OrganizationRepository.class));
+        assertThatThrownBy(() -> service.syncRepository(7L, "example/repository", new IdentityProvider(), null))
+                .isInstanceOf(RepositoryNotFoundOnGitProviderException.class);
+    }
+
+    @Test
+    void shouldWithholdUnavailableStateWhenForbiddenMeansRateLimited() {
+        var service = graphQlService("""
+                {"data":{"repository":null},"errors":[{"type":"FORBIDDEN","path":["repository"],"message":"API rate limit exceeded"}]}
+                """, mock(RepositoryRepository.class), mock(OrganizationRepository.class));
+        assertThat(service.syncRepository(7L, "example/repository", new IdentityProvider(), null))
+                .isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"NOT_FOUND", "FORBIDDEN"})
+    void shouldWithholdUnavailableStateWhenARefusalHasATransientSibling(String type) {
+        var service = graphQlService(
+                """
+                {"data":{"repository":null},"errors":[
+                  {"type":"%s","path":["repository"],"message":"Synthetic refusal"},
+                  {"type":"RATE_LIMITED","path":["repository","defaultBranchRef"],"message":null}]}
+                """.formatted(type), mock(RepositoryRepository.class), mock(OrganizationRepository.class));
+        assertThat(service.syncRepository(7L, "example/repository", new IdentityProvider(), null))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldWithholdUnavailableStateWhenOnlyAChildHasAKnownRefusal() {
+        var service = graphQlService("""
+                {"data":{"repository":null},"errors":[
+                  {"type":"SOMETHING_NEW","path":["repository"],"message":"Synthetic root failure"},
+                  {"type":"NOT_FOUND","path":["repository","defaultBranchRef"],"message":"Synthetic missing child"}]}
+                """, mock(RepositoryRepository.class), mock(OrganizationRepository.class));
+        assertThat(service.syncRepository(7L, "example/repository", new IdentityProvider(), null))
+                .isEmpty();
+    }
+
     @Test
     void shouldPersistRepositoryWhenMonitoredIdentityMatches() {
         var repositories = mock(RepositoryRepository.class);

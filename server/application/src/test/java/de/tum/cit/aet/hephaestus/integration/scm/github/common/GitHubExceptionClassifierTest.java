@@ -13,6 +13,7 @@ import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationSuspendedException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.Category;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlTestResponses;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.ConnectException;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.CannotAcquireLockException;
@@ -308,6 +310,26 @@ class GitHubExceptionClassifierTest {
     @Nested
     class GraphQlResponseClassification {
 
+        @ParameterizedTest
+        @CsvSource({
+            "NOT_FOUND, NOT_FOUND",
+            "FORBIDDEN, AUTH_ERROR",
+            "UNAUTHORIZED, AUTH_ERROR",
+            "RATE_LIMITED, RATE_LIMITED",
+            "RESOURCE_LIMITS_EXCEEDED, CLIENT_ERROR",
+            "SOMETHING_NEW, UNKNOWN"
+        })
+        void shouldClassifyErrorsWhenGitHubUsesNativeTypes(String type, Category expected) {
+            var response = GitHubGraphQlTestResponses.decode("""
+                    {"data":{"repository":null},"errors":[{"type":"%s","path":["repository"],"message":"Synthetic provider diagnostic"}]}
+                    """.formatted(type));
+            var result = classifier.classifyGraphQlResponse(response);
+            assertNotNull(result);
+            assertThat(result.category()).isEqualTo(expected);
+            assertThat(result.message()).doesNotContain("Synthetic provider diagnostic");
+            assertThat(GitHubGraphQlErrorUtils.hasAnyNotFoundError(response)).isEqualTo(type.equals("NOT_FOUND"));
+        }
+
         @Test
         @DisplayName("returns null for response without errors")
         void noErrors() {
@@ -511,6 +533,20 @@ class GitHubExceptionClassifierTest {
     /** Sync services log the summary at WARN and ERROR, so it must name the failure without quoting its inputs. */
     @Nested
     class PrivateTextNeverReachesTheSummary {
+
+        @Test
+        void shouldLogABoundedServerDiagnosticWhenTheGraphQlTypeIsUnknown() {
+            var response = GitHubGraphQlTestResponses.decode("""
+                    {"errors":[{"type":"SOMETHING_NEW","message":"Provider detail\\n%sTAIL_CANARY"}]}
+                    """.formatted("x".repeat(1500)));
+            List<String> logged = debugLines(() -> {
+                var result = classifier.classifyGraphQlResponse(response);
+                assertNotNull(result);
+                assertThat(result.message()).doesNotContain("Provider detail");
+            });
+            assertThat(logged).anyMatch(line -> line.contains("message=Provider detail_") && line.length() < 1200);
+            assertThat(logged).noneMatch(line -> line.contains("TAIL_CANARY") || line.contains("\n"));
+        }
 
         static Stream<Arguments> failures() {
             return Stream.of(
