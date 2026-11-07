@@ -252,7 +252,9 @@ public class KubernetesIsolationProbe {
                         + (closedOutcome.conclusive()
                                 ? 0
                                 : closedOutcome.failures().size())
-                        + (toolsOutcome.conclusive() ? 0 : toolsOutcome.failures().size());
+                        + (toolsOutcome.conclusive()
+                                ? 0
+                                : toolsOutcome.failures().size());
         Proof last = worker.proof();
         boolean inconclusive = !gateFailed && !failures.isEmpty();
         if (inconclusive && last != null && last.passed()) {
