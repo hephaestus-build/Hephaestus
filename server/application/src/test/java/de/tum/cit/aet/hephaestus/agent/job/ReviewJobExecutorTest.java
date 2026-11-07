@@ -1186,6 +1186,20 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         verifyNoInteractions(sandbox);
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldNotKeepARunningReviewAliveWithoutItsLoopsRenewal(boolean live) {
+        var job = configuredJob();
+        var executor = tracking(executor(mock(AsyncTaskExecutor.class)), job);
+        when(jobs.hasLiveLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getLeaseId()))
+                .thenReturn(live);
+
+        executor.stopEndedAttempts(executor.renewLeases());
+
+        verify(jobs, never()).renewLease(any(), anyLong(), anyInt(), any(), anyLong());
+        verify(sandbox, live ? never() : times(1)).cancel(job.getId());
+    }
+
     @Test
     void shouldFinishAnEmptyDrainWithoutCallingTheProvider() {
         var executor = executor(mock(AsyncTaskExecutor.class));

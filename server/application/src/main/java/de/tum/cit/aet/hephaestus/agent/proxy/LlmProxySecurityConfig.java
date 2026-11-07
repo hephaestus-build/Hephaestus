@@ -109,6 +109,7 @@ class LlmProxySecurityConfig {
                 paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}"),
                 paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/workspace"));
         RequestMatcher resultUpload = paths.matcher(HttpMethod.POST, "/internal/llm/runtime/{id}/result");
+        RequestMatcher reviewLease = paths.matcher(HttpMethod.POST, "/internal/llm/runtime/{id}/lease");
         RequestMatcher hostCommands = paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/commands");
         RequestMatcher turnTools = new OrRequestMatcher(
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/link-result"),
@@ -123,9 +124,9 @@ class LlmProxySecurityConfig {
                 paths.matcher(HttpMethod.PUT, "/internal/llm/turn/{id}/partial"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/end"));
         RequestMatcher turnEndpoints = new OrRequestMatcher(turnTools, turnBookkeeping);
-        RequestMatcher bodies = new OrRequestMatcher(modelCalls, turnEndpoints);
+        RequestMatcher bodies = new OrRequestMatcher(modelCalls, turnEndpoints, reviewLease);
         RequestMatcher capabilities =
-                new OrRequestMatcher(modelCalls, runtimeReads, resultUpload, hostCommands, turnEndpoints);
+                new OrRequestMatcher(modelCalls, runtimeReads, resultUpload, hostCommands, turnEndpoints, reviewLease);
         var limit = new AuthRateLimitProperties.Limit(gatewayProperties.requestsPerMinute(), Duration.ofMinutes(1));
         var sourceLimit =
                 new AuthRateLimitProperties.Limit(gatewayProperties.sourceRequestsPerMinute(), Duration.ofMinutes(1));

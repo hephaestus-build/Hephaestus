@@ -503,6 +503,20 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("attempt") int attempt,
             @Param("leaseId") UUID leaseId);
 
+    @Query(value = """
+            SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+                (LEAST(leased_until, :expiresAt) - clock_timestamp())) * 1000))::bigint
+              FROM review_job
+             WHERE id = :id AND workspace_id = :workspaceId AND attempt = :attempt AND lease_id = :leaseId
+               AND status = 'RUNNING' AND leased_until > clock_timestamp()
+            """, nativeQuery = true)
+    Optional<Long> remainingLeaseMillis(
+            @Param("id") UUID id,
+            @Param("workspaceId") long workspaceId,
+            @Param("attempt") int attempt,
+            @Param("leaseId") UUID leaseId,
+            @Param("expiresAt") Instant expiresAt);
+
     /** The current database time, including time spent waiting for a row lock in this transaction. */
     @WorkspaceAgnostic("Reads the database clock for attempt leases")
     @Query(value = "SELECT clock_timestamp()", nativeQuery = true)

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -118,6 +120,29 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
                 .as("an expired lease")
                 .isZero();
         assertThat(expired()).extracting(OrphanedJobRef::getJobId).containsExactly(theirs);
+    }
+
+    @Test
+    void shouldRenewTheReviewWithoutItsLaunchingWorkerAndBoundTheReceiptByTheToken() {
+        UUID id = runningJob(LEASE);
+        transactionTemplate.executeWithoutResult(status -> jobRepository.lease(id, LEASE_TTL_SECONDS));
+        jdbc.update("UPDATE review_job SET leased_until = clock_timestamp() + interval '10 seconds' WHERE id = ?", id);
+        Instant now = jobRepository.databaseClock();
+        var token = new AttemptJwt(AttemptJwt.Kind.REVIEW, id, workspace.getId(), 0, LEASE, Set.of("llm_proxy"),
+                "receipt", now, now.plusSeconds(60), now.plusSeconds(30));
+        var leases = new ReviewAttemptLease(jobRepository);
+
+        var receipt = transactionTemplate.execute(status -> leases.renew(token).orElseThrow());
+
+        assertThat(receipt).isNotNull();
+        assertThat(receipt.remainingMillis()).isPositive().isLessThanOrEqualTo(60_000);
+        assertThat(receipt.renewAfterMillis()).isPositive().isLessThan(receipt.remainingMillis());
+        assertThat(jobRepository.findById(id).orElseThrow().getLeasedUntil()).isAfter(now.plusSeconds(10));
+        assertThat(jobRepository.findById(id).orElseThrow().getLeaseId()).isEqualTo(LEASE);
+
+        jdbc.update("UPDATE review_job SET leased_until = clock_timestamp() - interval '1 second' WHERE id = ?", id);
+        assertThat(transactionTemplate.execute(status -> leases.renew(token))).isEmpty();
+        assertThat(jobRepository.hasLiveLease(id, workspace.getId(), 0, LEASE)).isFalse();
     }
 
     @Test

@@ -454,12 +454,18 @@ public class ReviewJobExecutor {
     }
 
     /**
-     * Renews the lease of each local attempt, in the caller's transaction, and returns the attempts whose lease is gone:
+     * Renews capture and composition leases, in the caller's transaction, and returns attempts whose lease is gone.
+     * A running review loop renews its own lease; supervising it must not keep a dead loop alive.
      * a cancel, a requeue or a reap ended them on the row alone, or the lease expired before this renewal.
      */
     public Map<UUID, LocalAttempt> renewLeases() {
         Map<UUID, LocalAttempt> ended = new HashMap<>();
         Map.copyOf(localRunningJobs).forEach((jobId, local) -> {
+            if (!preparingJobs.contains(jobId) && !composingJobs.contains(jobId)) {
+                if (!jobRepository.hasLiveLease(jobId, local.workspaceId(), local.attempt(), local.leaseId()))
+                    ended.put(jobId, local);
+                return;
+            }
             if (jobRepository.renewLease(
                             jobId,
                             local.workspaceId(),

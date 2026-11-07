@@ -17,7 +17,7 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 FROM dependencies AS gateway
 WORKDIR /opt/pi-sdk
 RUN pnpm install --frozen-lockfile --ignore-scripts
-COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts pi/tools-seccomp.ts ./
+COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts pi/gateway-lease.ts pi/tools-seccomp.ts ./
 COPY --from=agent-runtime tool-protocol.ts tool-client.ts tools-server.ts ./
 RUN pnpm exec tsc -p tsconfig.build.json && pnpm exec node dist/tools-seccomp.js dist
 

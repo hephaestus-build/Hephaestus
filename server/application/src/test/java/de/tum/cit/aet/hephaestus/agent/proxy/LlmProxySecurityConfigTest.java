@@ -285,7 +285,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         "POST,/internal/llm/stage-result",
         "GET,/internal/llm/runtime/{job}",
         "GET,/internal/llm/runtime/{job}/workspace",
-        "POST,/internal/llm/runtime/{job}/result"
+        "POST,/internal/llm/runtime/{job}/result",
+        "POST,/internal/llm/runtime/{job}/lease"
     })
     void shouldServeEveryCapabilityWhenTheJobsOneTokenCallsIt(String method, String path) throws Exception {
         ReviewJob job = runningJobOnAttempt(1);
