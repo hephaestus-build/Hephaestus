@@ -1159,10 +1159,16 @@ async function fakeHelm(
 	await writeFile(
 		helm,
 		`#!/usr/bin/env -S node --
-import { appendFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 const args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(calls)}, args.join(" ") + "\\n");
 ${combinedLog === undefined ? "" : `appendFileSync(${JSON.stringify(combinedLog)}, "helm " + args.join(" ") + "\\n");`}
+if (args[0] === "upgrade") {
+const cache = process.env.KUBECACHEDIR ?? ".kube/cache";
+mkdirSync(cache, {recursive:true});
+writeFileSync(path.join(cache, "discovery.json"), "API discovery");
+}
 if (args[0] === "status") {
 if (process.env.HELM_STATUS === undefined) process.exit(1);
 console.log(JSON.stringify({ info: { status: process.env.HELM_STATUS } }));
@@ -1843,9 +1849,19 @@ await test(
 			const host = await followingHost(directory);
 			const first = await host.publish();
 			host.apply();
+			assert.equal(
+				await readFile(path.join(directory, "kubernetes-cache/discovery.json"), "utf8"),
+				"API discovery",
+			);
+			await assert.rejects(readdir(path.join(host.releases, first, ".kube")), { code: "ENOENT" });
+			const cache = path.join(host.releases, first, ".kube/cache/discovery/server.json");
+			await mkdir(path.dirname(cache), { recursive: true });
+			await writeFile(cache, "discovery cache\n");
 			const second = await host.publish();
 			host.apply();
 			assert.deepEqual(await host.trees(), sorted(first, second));
+			// The rollback target is kept with its files, including its disposable cache.
+			assert.equal(await readFile(cache, "utf8"), "discovery cache\n");
 
 			const third = await host.publish();
 			const pruned = host.apply();
@@ -1856,6 +1872,9 @@ await test(
 			assert.equal(afterThird?.previous, second);
 
 			// A tree someone locked is in use, whatever the host would otherwise decide about it.
+			const lockedCache = path.join(host.releases, second, ".kube/cache/discovery/server.json");
+			await mkdir(path.dirname(lockedCache), { recursive: true });
+			await writeFile(lockedCache, "locked discovery cache\n");
 			gitIn(
 				host.checkout,
 				"worktree",
@@ -1870,6 +1889,7 @@ await test(
 				new RegExp(`Keeping .*${second}: locked copying acme\\.json`, "u"),
 			);
 			assert.deepEqual(await host.trees(), sorted(second, third, fourth));
+			assert.equal(await readFile(lockedCache, "utf8"), "locked discovery cache\n");
 
 			// An older release's certificate store is ignored by git, and a plain `git worktree remove`
 			// deletes ignored files.
@@ -1892,6 +1912,19 @@ await test(
 			assert.equal(reapplied.previous, fourth);
 			assert.deepEqual(await host.trees(), sorted(third, fourth, fifth));
 			assert.deepEqual(await host.locks(), sorted(third, fourth, fifth));
+
+			// A kubeconfig beside the cache is operator data, so it keeps the old tree.
+			const kubeconfig = path.join(host.releases, fourth, ".kube/config");
+			const discovery = path.join(host.releases, fourth, ".kube/cache/discovery/server.json");
+			await mkdir(path.dirname(discovery), { recursive: true });
+			await writeFile(kubeconfig, "operator configuration\n");
+			await writeFile(discovery, "discovery cache\n");
+			const sixth = await host.publish();
+			host.apply();
+			assert.deepEqual(await host.trees(), sorted(third, fourth, fifth, sixth));
+			assert.equal(await readFile(kubeconfig, "utf8"), "operator configuration\n");
+			await assert.rejects(readFile(discovery), { code: "ENOENT" });
+			assert.equal(await readFile(store, "utf8"), '{"letsencrypt":{}}\n');
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}

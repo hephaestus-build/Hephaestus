@@ -385,6 +385,11 @@ It keeps these worktrees:
 - A worktree locked with `git worktree lock` for manual work.
 - A worktree with files absent from its release, including modified, untracked, or ignored files.
 
+The disposable kubectl discovery cache does not keep a worktree.
+The reconciler sets `KUBECACHEDIR` to `/var/lib/hephaestus/kubernetes-cache` for kubectl and Helm.
+Before it checks for operator files, pruning removes untracked files from an old tree's `.kube/cache` directory.
+This also removes the cache from a tree that other operator files keep.
+
 The journal names each worktree the reconciler removes, and says why it keeps a locked worktree or
 one that holds files. Pruning deletes worktrees and lock files. It does not change persistent volumes or cluster Secrets.
 
