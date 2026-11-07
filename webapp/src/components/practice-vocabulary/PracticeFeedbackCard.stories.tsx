@@ -136,8 +136,8 @@ export const New: Story = {
 		const items = within(timeline).getAllByRole("listitem");
 		await expect(items.map((item) => item.textContent)).toStrictEqual([
 			"#17 (opens in a new tab)28 Aug, 28 August, needed attention, before this feedback",
-			"#20 (opens in a new tab)3 Sep, 3 September, needed attention, before this feedback",
-			"#19 (opens in a new tab)6 Sep, 6 September, needed attention, before this feedback",
+			"#20 (opens in a new tab)3 Sept, 3 September, needed attention, before this feedback",
+			"#19 (opens in a new tab)6 Sept, 6 September, needed attention, before this feedback",
 		]);
 		// The meter's sentence is its description and its tooltip, no longer a line under the row.
 		const meter = canvas.getByRole("meter", { name: "Clean work in a row" });
@@ -830,8 +830,8 @@ export const EveryOutcome: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		// Oldest first whatever order the work was given in: #16 on 24 Aug, #20 on 3 Sep, #19 on
-		// 6 Sep, #21 on 8 Sep.
+		// Oldest first whatever order the work was given in: #16 on 24 Aug, #20 on 3 Sept, #19 on
+		// 6 Sept, #21 on 8 Sept.
 		const list = canvas.getByRole("list", { name: "Where it happened" });
 		await expect(linkedWork(list)).toStrictEqual(["#16", "#20", "#19", "#21"]);
 		await expect(outcomesOnTheLine(list)).toStrictEqual(["NOT_MET", "MET", "NOT_MET", "MET"]);
