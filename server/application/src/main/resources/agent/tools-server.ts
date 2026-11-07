@@ -563,6 +563,8 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		const puts = new Map<string, Put>();
 		/** Puts that were refused: the loop may have streamed some of their archive before it read the refusal. */
 		const refusedPuts = new Set<string>();
+		/** The frames so far of each message to a program. */
+		const scriptParts = new Map<string, Buffer[]>();
 		/** In-flight calls that were cancelled before they started. */
 		const cancelled = new Set<string>();
 		/** Aborted when the connection ends: it ends the connection's extractions. */
@@ -642,6 +644,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				integer(header, "maxOutputBytes") ?? LIMITS.execStreamBytes,
 				LIMITS.execStreamBytes,
 			);
+			const uncounted = header.uncounted === true;
 			const spill = await openSpill(options.scratch, id);
 
 			// The connection ended while the call was checked: nothing would end what it starts.
@@ -739,7 +742,10 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 						waitForSpill();
 					}
 				}
-				const room = Math.min(maxStream - streamed, LIMITS.attemptStreamBytes - attemptStreamed);
+				const room = Math.min(
+					maxStream - streamed,
+					uncounted ? maxStream : LIMITS.attemptStreamBytes - attemptStreamed,
+				);
 				const part = data.subarray(0, Math.max(0, room));
 				if (part.length < data.length) {
 					truncated = true;
@@ -748,7 +754,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 					outputLost = true;
 				}
 				streamed += part.length;
-				attemptStreamed += part.length;
+				attemptStreamed += uncounted ? 0 : part.length;
 				for (let at = 0; at < part.length; at += LIMITS.bodyBytes) {
 					if (!send({ type: "out", id }, part.subarray(at, at + LIMITS.bodyBytes))) {
 						waitForSocket();
@@ -816,11 +822,21 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			});
 		}
 
-		/** A message from the loop to a running program. One that comes after the program ended goes nowhere. */
-		function scriptIn(id: string, body: Buffer): void {
+		/** A message from the loop to a running program, in frames. One that comes after the program ended goes nowhere. */
+		function scriptIn(id: string, body: Buffer, more: boolean): void {
+			const parts = scriptParts.get(id) ?? [];
+			parts.push(body);
+			if (parts.reduce((bytes, part) => bytes + part.length, 0) > LIMITS.scriptInputBytes) {
+				throw new ToolProtocolError("protocol", "a script message past its bound");
+			}
+			if (more) {
+				scriptParts.set(id, parts);
+				return;
+			}
+			scriptParts.delete(id);
 			const child = running.get(id)?.child;
 			if (child?.connected === true) {
-				child.send(parsedMessage(body));
+				child.send(parsedMessage(Buffer.concat(parts)));
 			}
 		}
 
@@ -1252,7 +1268,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				return;
 			}
 			if (header.type === "script-in") {
-				scriptIn(id, frame.body);
+				scriptIn(id, frame.body, header.more === true);
 				return;
 			}
 			if (header.type === "put-end") {

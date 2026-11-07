@@ -30,8 +30,10 @@ export const LIMITS = {
 	readFileBytes: 64 * 1024 * 1024,
 	/** The longest time that one `exec` may run. */
 	execTimeoutMs: 2 * 60 * 60 * 1000,
-	/** The most bytes of one message between a practice program and the loop: it fits one frame. */
+	/** The most bytes of one message from a practice program: it fits one frame. */
 	scriptMessageBytes: 1024 * 1024,
+	/** The most bytes of one message to a practice program, in as many frames as it takes: a whole captured record. */
+	scriptInputBytes: 32 * 1024 * 1024,
 	/** The most bytes of a practice program's stdout and stderr that the tools side streams. */
 	scriptLogBytes: 64 * 1024,
 	/** How long the loop waits for the `exit` of a cancelled call before it ends the connection. */
@@ -223,6 +225,8 @@ export interface ExecExit {
 }
 
 export type ExecRequest = ({ command: string } | { argv: string[] }) & {
+	/** The loop's own read of Git objects: it has its own bound, and model output keeps the attempt's. */
+	uncounted?: boolean;
 	cwd: string;
 	timeoutMs: number;
 	maxOutputBytes?: number;

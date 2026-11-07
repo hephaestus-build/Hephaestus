@@ -24,7 +24,7 @@ import { syncBuiltinESMExports } from "node:module";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test, { after, before, beforeEach, type TestContext } from "node:test";
+import test, { after, before, beforeEach, mock, type TestContext } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
@@ -60,6 +60,7 @@ writeFileSync(
 	if (m.kind === "exit") process.exit(m.code);
 	if (m.kind === "env") process.send(JSON.stringify(process.env));
 	if (m.kind === "size") process.send(JSON.stringify({ kind: "sized", size: m.value.size }));
+	if (m.kind === "size-of") process.send(JSON.stringify({ kind: "sized", size: m.value.length }));
 });
 `,
 );
@@ -1652,15 +1653,90 @@ void test("a job's Map reaches the program whole", async () => {
 	await channel.exit;
 });
 
+void test("a large message reaches a program whole, across frames", async () => {
+	const { channel, messages } = runningProgram();
+	channel.send({ kind: "size-of", value: "x".repeat(3 * LIMITS.bodyBytes) });
+	await until(() => messages.length === 1, "the program's answer");
+	assert.deepEqual(JSON.parse(messages[0] ?? ""), { kind: "sized", size: 3 * LIMITS.bodyBytes });
+	channel.kill();
+	await channel.exit;
+});
+
 void test("a message for a program past its bound is refused, and the connection stays", async () => {
 	const { channel, messages } = runningProgram();
 	assert.throws(() => {
-		channel.send({ kind: "echo", value: "x".repeat(LIMITS.scriptMessageBytes + 1) });
+		channel.send({ kind: "echo", value: "x".repeat(LIMITS.scriptInputBytes + 1) });
 	}, refusal("request"));
 	channel.send({ kind: "echo", value: "still here" });
 	await until(() => messages.length === 1, "the program's answer");
 	channel.kill();
 	await channel.exit;
+});
+
+void test("a side that never ends a cancelled program loses the connection, and the program's call ends", async () => {
+	const tools = await hostile(() => undefined);
+	const channel = tools.script(
+		{ execArgv: [], timeoutMs: 1000 },
+		() => undefined,
+		() => undefined,
+	);
+	const graceless = mock.timers;
+	graceless.enable({ apis: ["setTimeout"] });
+	try {
+		channel.kill();
+		graceless.tick(LIMITS.cancelGraceMs + 1);
+	} finally {
+		graceless.reset();
+	}
+	await assert.rejects(channel.exit);
+	assert.ok((await tools.ended) instanceof Error);
+});
+
+void test("a call that a side never ends fails alone, and its late reply goes unread", async () => {
+	const held: { request?: Header; socket?: Socket } = {};
+	const tools = await hostile((request, socket) => {
+		if (request.type === "exec" && held.request === undefined) {
+			held.request = request;
+			held.socket = socket;
+		} else if (request.type === "exec") {
+			socket.write(encode({ type: "exit", id: request.id, code: 0 }));
+		}
+	});
+	const clock = mock.timers;
+	clock.enable({ apis: ["setTimeout"] });
+	let stuck: Promise<unknown>;
+	try {
+		stuck = tools.exec({ command: "true", cwd: workspace, timeoutMs: 1000 }, () => undefined);
+		await until(() => held.request !== undefined, "the call");
+		clock.tick(1000 + LIMITS.cancelGraceMs + 1);
+	} finally {
+		clock.reset();
+	}
+	await assert.rejects(stuck, /did not end a call/u);
+	held.socket?.write(encode({ type: "exit", id: held.request?.id, code: 0 }));
+	const next = await tools.exec({ command: "true", cwd: workspace, timeoutMs: 1000 }, () => undefined);
+	assert.equal(next.code, 0);
+	tools.close();
+});
+
+void test("the loop's own reads leave the attempt's stream bound to model output", async () => {
+	const big = path.join(scratch, "large.bin");
+	writeFileSync(big, Buffer.alloc(LIMITS.execStreamBytes - 1024));
+	const tools = await ToolClient.open(served, nonce);
+	try {
+		for (let read = 0; read * LIMITS.execStreamBytes <= LIMITS.attemptStreamBytes + 1; read += 1) {
+			let bytes = 0;
+			await tools.exec(
+				{ argv: ["cat", big], cwd: workspace, timeoutMs: 10_000, uncounted: true },
+				(chunk) => {
+					bytes += chunk.length;
+				},
+			);
+			assert.equal(bytes, LIMITS.execStreamBytes - 1024);
+		}
+	} finally {
+		tools.close();
+	}
 });
 
 void test("a script message that does not deserialize ends the connection", async () => {
