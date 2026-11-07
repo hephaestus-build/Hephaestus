@@ -1190,6 +1190,39 @@ process.exit(args[0] === "upgrade" && process.env.FAIL_HELM === "1" ? 1 : 0);
 }
 
 await test(
+	"an unknown chart profile gives the operator a corrective action before Helm runs",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-unknown-profile-"));
+		try {
+			const fixture = await reconcilerFixture(directory, "v1.0.1");
+			const appliedFile = path.join(directory, "applied.json");
+			const before = JSON.stringify({ ...fixture.record, release: "v1.0.0" });
+			await writeFile(appliedFile, before);
+			const { helm, log } = await fakeHelm(directory);
+			const result = fixture.run({
+				cli: true,
+				environment: {
+					HEPHAESTUS_HELM: helm,
+					HEPHAESTUS_CHART_PROFILE: "small small-16gib",
+				},
+			});
+
+			assert.equal(result.status, 1, result.stderr);
+			assert.match(result.stderr, /the release has no chart profile small-16gib/u);
+			assert.match(result.stderr, /Remove or replace it in HEPHAESTUS_CHART_PROFILE/u);
+			assert.doesNotMatch(result.stderr, /^\s+at /mu);
+			assert.deepEqual(await log(), []);
+			assert.equal(await readFile(appliedFile, "utf8"), before);
+			assert.equal(await readlink(path.join(directory, "tooling")), fixture.bootstrap);
+			assert.match(await readFile(fixture.metricsFile, "utf8"), /reconcile_success[^\n]* 0/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
 	"a commit channel applies its verified image pins with one Helm upgrade",
 	reconcilerSubprocess,
 	async () => {
