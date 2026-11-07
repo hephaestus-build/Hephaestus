@@ -322,8 +322,11 @@ spec:
             {{- include "hephaestus.privateCaEnv" . | nindent 12 }}
             - name: SPRING_PROFILES_ACTIVE
               value: prod,worker
+            # A blocked socket call pins its carrier on Java 21, so the scheduler needs a carrier for each connection.
             - name: JAVA_TOOL_OPTIONS
-              value: -XX:MaxDirectMemorySize=128M
+              value: -XX:MaxDirectMemorySize=128M -Djdk.virtualThreadScheduler.maxPoolSize={{ add (int .Values.worker.sandboxGateway.maxConnections) 256 }}
+            - name: SANDBOX_API_MAX_CONNECTIONS
+              value: {{ .Values.worker.sandboxGateway.maxConnections | quote }}
             - name: AGENT_ENABLED
               value: "true"
             - name: HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX

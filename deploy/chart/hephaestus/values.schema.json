@@ -674,6 +674,7 @@
 				"gitCache",
 				"resources",
 				"sandbox",
+				"sandboxGateway",
 				"databasePool"
 			],
 			"properties": {
@@ -741,6 +742,18 @@
 				},
 				"gitCache": { "$ref": "#/definitions/cache" },
 				"resources": { "$ref": "#/definitions/resources" },
+				"sandboxGateway": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["maxConnections"],
+					"properties": {
+						"maxConnections": {
+							"description": "Connections that the sandbox gateway holds open at most.",
+							"type": "integer",
+							"minimum": 1
+						}
+					}
+				},
 				"sandbox": {
 					"type": "object",
 					"additionalProperties": false,

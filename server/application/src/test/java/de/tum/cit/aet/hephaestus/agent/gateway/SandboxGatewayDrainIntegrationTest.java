@@ -114,7 +114,8 @@ class SandboxGatewayDrainIntegrationTest {
         /** The production connector, on a port the operating system assigns. */
         @Bean
         SandboxGatewayConnector sandboxGatewayConnector() {
-            return new SandboxGatewayConfiguration().sandboxGatewayConnector(new SandboxGatewayProperties(0, 1024, 60));
+            return new SandboxGatewayConfiguration()
+                    .sandboxGatewayConnector(new SandboxGatewayProperties(0, 1024, 60, 1000, 4096));
         }
 
         @Bean

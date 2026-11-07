@@ -2,10 +2,13 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import io.github.bucket4j.Bucket;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.binder.MeterBinder;
 import java.time.Duration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -33,13 +36,31 @@ public class SandboxGatewayConfiguration {
      */
     @Bean
     SandboxGatewayConnector sandboxGatewayConnector(SandboxGatewayProperties properties) {
-        return new SandboxGatewayConnector(properties.port());
+        return new SandboxGatewayConnector(properties.port(), properties.maxConnections());
     }
 
     @Bean
     WebServerFactoryCustomizer<TomcatServletWebServerFactory> sandboxGatewayConnectorCustomizer(
             SandboxGatewayConnector gateway) {
-        return factory -> factory.addAdditionalConnectors(gateway.connector());
+        return factory -> {
+            factory.addAdditionalConnectors(gateway.connector());
+            factory.addEngineValves(new SandboxGatewayPeerValve());
+        };
+    }
+
+    @Bean
+    MeterBinder sandboxGatewayConnectionMeters(SandboxGatewayConnector gateway) {
+        return registry -> {
+            Gauge.builder(AgentMetrics.SANDBOX_GATEWAY_CONNECTIONS, gateway, SandboxGatewayConnector::connections)
+                    .description("Connections open on the sandbox gateway")
+                    .register(registry);
+            Gauge.builder(
+                            AgentMetrics.SANDBOX_GATEWAY_CONNECTIONS_LIMIT,
+                            gateway,
+                            SandboxGatewayConnector::maxConnections)
+                    .description("Connections that the sandbox gateway holds open at most")
+                    .register(registry);
+        };
     }
 
     /**

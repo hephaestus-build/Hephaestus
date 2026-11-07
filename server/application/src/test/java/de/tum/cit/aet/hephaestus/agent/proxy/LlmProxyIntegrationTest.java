@@ -94,6 +94,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -185,7 +186,11 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         SecurityContextHolder.clearContext();
         meterRegistry = new SimpleMeterRegistry();
         filter = new JobTokenAuthenticationFilter(
-                jobRepository, turnRepository, new SandboxGatewaySessions(), jwtVerifier);
+                jobRepository,
+                turnRepository,
+                new SandboxGatewaySessions(),
+                jwtVerifier,
+                Mockito.mock(ProxyAccounting.class));
         User owner = persistUser("proxy-owner");
         workspace = createWorkspace("proxy-ws", "Proxy Workspace", "proxy-org", AccountType.ORG, owner);
         for (String slug : List.of(PRACTICE, "test-coverage")) {

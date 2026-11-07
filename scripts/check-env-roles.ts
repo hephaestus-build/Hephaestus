@@ -42,6 +42,16 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 		why: "SandboxGatewayConfiguration opens the connector and LlmProxySecurityConfig matches its chains on that port; both are gated on hephaestus.runtime.worker.enabled",
 	},
 	{
+		path: "hephaestus.sandbox.gateway.source-requests-per-minute",
+		role: "worker",
+		why: "SandboxGatewaySourceLimitFilter enforces it on the gateway chain, which LlmProxySecurityConfig installs gated on the worker role",
+	},
+	{
+		path: "hephaestus.sandbox.gateway.max-connections",
+		role: "worker",
+		why: "SandboxGatewayConfiguration opens the connector that it bounds, gated on the worker role",
+	},
+	{
 		path: "hephaestus.sandbox.gateway.max-request-bytes",
 		role: "worker",
 		why: "SandboxGatewayPayloadSizeFilter enforces it on the gateway chain, which LlmProxySecurityConfig installs gated on hephaestus.runtime.worker.enabled",

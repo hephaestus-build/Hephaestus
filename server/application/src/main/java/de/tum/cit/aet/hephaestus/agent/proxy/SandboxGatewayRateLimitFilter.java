@@ -75,7 +75,7 @@ public final class SandboxGatewayRateLimitFilter extends OncePerRequestFilter {
         long retryAfterSeconds = RateLimitResponse.retryAfterSeconds(probe);
         log.warn(
                 "Sandbox gateway rate limit exceeded: principal={} retryAfterSeconds={}", principal, retryAfterSeconds);
-        accounting.recordGatewayThrottled();
+        accounting.gatewayRefused(SandboxGatewayRefusal.PRINCIPAL_LIMIT);
         RateLimitResponse.writeTooManyRequests(request, response, retryAfterSeconds, objectMapper);
     }
 }

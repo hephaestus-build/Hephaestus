@@ -262,6 +262,21 @@ groups:
         annotations:
           summary: Review sandboxes failed to start, initialize or finish at least three times in one hour
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusSandboxGatewayRefusing
+        expr: sum by (reason) (increase(sandbox_gateway_refused_total{job="hephaestus",reason!="attempt_ended"}[10m])) >= 60
+        labels:
+          severity: warning
+        annotations:
+          summary: The sandbox gateway refused at least 60 requests for one reason in ten minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusSandboxGatewayConnectionsHigh
+        expr: sandbox_gateway_connections{job="hephaestus"} / sandbox_gateway_connections_limit{job="hephaestus"} > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A sandbox gateway holds more than 80 percent of the connections it allows
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewUnreachable
         expr: >-
           sum by (cause) (increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause=~"server_unreachable|provider_unreachable"}[1h])) >= 3

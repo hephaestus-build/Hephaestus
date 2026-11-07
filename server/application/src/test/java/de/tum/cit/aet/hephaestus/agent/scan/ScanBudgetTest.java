@@ -45,7 +45,7 @@ class ScanBudgetTest extends BaseUnitTest {
     private final ScanBudget budget = new ScanBudget(
             mock(ReviewMethodVerifier.class),
             mock(ReviewJobRepository.class),
-            new SandboxGatewayProperties(8081, 4194304, 120),
+            new SandboxGatewayProperties(8081, 4194304, 120, 1000, 4096),
             runtime,
             policy,
             admission,

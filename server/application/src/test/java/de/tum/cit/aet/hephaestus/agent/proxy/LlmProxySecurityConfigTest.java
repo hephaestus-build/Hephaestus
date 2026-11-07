@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
@@ -16,6 +18,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
@@ -24,7 +27,10 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.github.bucket4j.Bucket;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -71,7 +77,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final int GATEWAY_PORT = 9081;
     private static final int APPLICATION_PORT = 9080;
-    private static final SandboxGatewayProperties GATEWAY = new SandboxGatewayProperties(GATEWAY_PORT, 16, 1);
+    private static final SandboxGatewayProperties GATEWAY =
+            new SandboxGatewayProperties(GATEWAY_PORT, 16, 1, 1000, 4096);
 
     @Mock
     private ReviewJobRepository jobRepository;
@@ -95,6 +102,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     private SandboxGatewaySessions gatewaySessions;
 
     private final Map<String, Bucket> buckets = new HashMap<>();
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private long bodyBudgetBytes = 1L << 20;
     private FilterChainProxy chains;
     private final AtomicReference<@Nullable Authentication> servedAs = new AtomicReference<>();
 
@@ -105,11 +114,16 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     }
 
     private FilterChainProxy chains(SandboxGatewaySessions sessions) throws Exception {
+        return chains(sessions, GATEWAY);
+    }
+
+    private FilterChainProxy chains(SandboxGatewaySessions sessions, SandboxGatewayProperties gateway)
+            throws Exception {
         var context = new GenericApplicationContext();
         context.refresh();
         var config = new LlmProxySecurityConfig();
         var accounting = new ProxyAccounting(
-                budgetGate, usageAccumulator, mentorTurnUsageAccumulator, new SimpleMeterRegistry(), OBJECT_MAPPER);
+                budgetGate, usageAccumulator, mentorTurnUsageAccumulator, meterRegistry, OBJECT_MAPPER);
         BucketResolver resolver = (key, configuration) -> buckets.computeIfAbsent(
                 key,
                 ignored -> Bucket.builder()
@@ -118,16 +132,20 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         return new FilterChainProxy(List.of(
                 config.llmProxyFilterChain(
                         httpSecurity(context),
-                        GATEWAY,
-                        new SandboxGatewayConnector(GATEWAY_PORT),
+                        gateway,
+                        new SandboxGatewayConnector(GATEWAY_PORT, gateway.maxConnections()),
                         jobRepository,
                         turnRepository,
                         sessions,
                         jwtVerifier,
                         resolver,
+                        new SandboxGatewayBodyBudget(bodyBudgetBytes),
                         accounting,
                         OBJECT_MAPPER),
-                config.hideNonGatewayCapabilities(httpSecurity(context), new SandboxGatewayConnector(GATEWAY_PORT)),
+                config.hideNonGatewayCapabilities(
+                        httpSecurity(context),
+                        new SandboxGatewayConnector(GATEWAY_PORT, gateway.maxConnections()),
+                        accounting),
                 config.blockLlmProxyOnOtherConnectors(httpSecurity(context))));
     }
 
@@ -501,6 +519,119 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .isEqualTo(429);
     }
 
+    /** A spent source costs nothing more: its token is not read, whether it is valid or not. */
+    @Test
+    void shouldRefuseASpentSourceBeforeItsCredentialIsRead() throws Exception {
+        chains = chains(gatewaySessions, new SandboxGatewayProperties(GATEWAY_PORT, 16, 1000, 1, 4096));
+        when(jwtVerifier.verify("forged")).thenThrow(new AttemptTokenInvalidException("forged", "kid"));
+
+        assertThat(answerToTokenCall("forged")).isEqualTo(401);
+        assertThat(answerToTokenCall("forged")).isEqualTo(429);
+
+        verify(jwtVerifier, times(1)).verify("forged");
+        assertThat(refused("source_limit")).isEqualTo(1);
+    }
+
+    @Test
+    void shouldGiveEachSourceAddressItsOwnBudget() throws Exception {
+        chains = chains(gatewaySessions, new SandboxGatewayProperties(GATEWAY_PORT, 16, 1000, 1, 4096));
+        when(jwtVerifier.verify("forged")).thenThrow(new AttemptTokenInvalidException("forged", "kid"));
+
+        assertThat(answerToTokenCall("forged")).isEqualTo(401);
+        MockHttpServletRequest other = withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), "forged");
+        other.setAttribute(SandboxGatewayConnector.PEER_ATTRIBUTE, "172.18.0.6");
+
+        assertThat(answerTo(other)).isEqualTo(401);
+    }
+
+    /** Each refusal of the gateway shows under its reason, so an operator can tell a probe from a busy review. */
+    @Test
+    void shouldCountEachRefusalUnderItsReason() throws Exception {
+        AttemptJwt turn = turnJwt(1);
+        leased(turn, false);
+        when(jwtVerifier.verify("forged")).thenThrow(new AttemptTokenInvalidException("forged", "kid"));
+
+        assertThat(answerTo("GET", "/actuator/health", GATEWAY_PORT)).isEqualTo(404);
+        assertThat(refused("unknown_route")).isEqualTo(1);
+
+        assertThat(answerTo("POST", "/internal/llm/responses", GATEWAY_PORT, new byte[GATEWAY.maxRequestBytes() + 1]))
+                .isEqualTo(413);
+        assertThat(refused("oversized")).isEqualTo(1);
+
+        assertThat(answerToTokenCall("forged")).isEqualTo(401);
+        assertThat(refused("unauthenticated")).isEqualTo(1);
+
+        assertThat(answerToTokenCall("turn-token")).isEqualTo(409);
+        assertThat(refused("attempt_ended")).isEqualTo(1);
+
+        leased(turn, true);
+        assertThat(answerToTokenCall("turn-token")).isEqualTo(200);
+        assertThat(answerToTokenCall("turn-token")).isEqualTo(429);
+        assertThat(refused("principal_limit")).isEqualTo(1);
+
+        assertThat(answerTo(withToken(request("POST", "/internal/llm/admit-results", GATEWAY_PORT), "turn-token")))
+                .isEqualTo(403);
+        assertThat(refused("forbidden")).isEqualTo(1);
+    }
+
+    /** Connections do not bound memory: a body that would pass the budget waits for the ones in flight. */
+    @Test
+    void shouldRefuseABodyPastTheBudgetAndGiveTheBudgetBackAfterACall() throws Exception {
+        bodyBudgetBytes = 1024;
+        chains = chains(gatewaySessions);
+        AttemptJwt turn = turnJwt(1);
+        leased(turn, true);
+        MockHttpServletRequest held = withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), "turn-token");
+        held.setContent(new byte[16]);
+        MockHttpServletRequest refused =
+                withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), "turn-token");
+        refused.setContent(new byte[16]);
+        var answer = new MockHttpServletResponse();
+
+        chains.doFilter(held, new MockHttpServletResponse(), (ignored, ignoredToo) -> {
+            try {
+                chains.doFilter(refused, answer, (first, second) -> {});
+            } catch (ServletException | IOException e) {
+                throw new IllegalStateException(e);
+            }
+        });
+
+        assertThat(answer.getStatus()).isEqualTo(429);
+        assertThat(answer.getHeader("Retry-After")).isNotBlank();
+        assertThat(answer.getHeader(LlmProxyService.REFUSAL_HEADER)).isEqualTo("CALLS_IN_FLIGHT");
+        assertThat(refused("body_budget")).isEqualTo(1);
+        buckets.clear();
+        assertThat(answerToTokenCall("turn-token")).isEqualTo(200);
+    }
+
+    /** A failed read in authentication lands here as an error dispatch, and that is no sandbox probing the gateway. */
+    @Test
+    void shouldNotCountAnErrorDispatchAsAnUnknownRoute() throws Exception {
+        MockHttpServletRequest failed = request("GET", "/error", GATEWAY_PORT);
+        failed.setDispatcherType(DispatcherType.ERROR);
+
+        assertThat(answerTo(failed)).isEqualTo(404);
+
+        assertThat(refused("unknown_route")).isZero();
+    }
+
+    /** A capability hidden from the application connector is no refusal of the sandbox gateway. */
+    @Test
+    void shouldNotCountARefusalOnTheApplicationConnector() throws Exception {
+        assertThat(answerTo("POST", "/internal/llm/responses", APPLICATION_PORT))
+                .isEqualTo(404);
+
+        assertThat(refused("unknown_route")).isZero();
+    }
+
+    private double refused(String reason) {
+        return meterRegistry
+                .get(AgentMetrics.SANDBOX_GATEWAY_REFUSED)
+                .tag("reason", reason)
+                .counter()
+                .count();
+    }
+
     private AttemptJwt turnJwt(int attempt) {
         return turnJwt(attempt, "llm_proxy");
     }
@@ -558,6 +689,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         MockHttpServletRequest request = new MockHttpServletRequest(method, path);
         request.setLocalPort(localPort);
         request.setRemoteAddr("172.18.0.5");
+        request.setAttribute(SandboxGatewayConnector.PEER_ATTRIBUTE, "172.18.0.5");
         // Give even an empty request a declared length: the size filter refuses a request with none,
         // which would mask every status under test.
         request.setContent(new byte[0]);

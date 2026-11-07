@@ -44,17 +44,20 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
             ReviewJobRepository jobs,
             MentorTurnRepository turns,
             SandboxGatewaySessions sessions,
-            AttemptTokenVerifier verifier) {
+            AttemptTokenVerifier verifier,
+            ProxyAccounting accounting) {
         super(
                 new ProviderManager(new JobTokenAuthenticationProvider(jobs, turns, sessions, verifier)),
                 JobTokenAuthenticationFilter::convert);
         setSuccessHandler((request, response, authentication) -> {});
         setFailureHandler((request, response, failure) -> {
             if (failure instanceof JobTokenAuthenticationProvider.AttemptLeaseConflict) {
+                accounting.gatewayRefused(SandboxGatewayRefusal.ATTEMPT_ENDED);
                 response.setStatus(HttpServletResponse.SC_CONFLICT);
                 response.setContentType(MediaType.TEXT_PLAIN_VALUE);
                 response.getWriter().write(ATTEMPT_ENDED);
             } else {
+                accounting.gatewayRefused(SandboxGatewayRefusal.UNAUTHENTICATED);
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             }
         });

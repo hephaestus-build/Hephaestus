@@ -33,7 +33,6 @@ public class ProxyAccounting {
     // the gateway chain carries, so its meters take no capability tag.
     private final Counter gatewayRequests;
     private final DistributionSummary gatewayRequestSize;
-    private final Counter gatewayThrottled;
     private final Counter gatewayLimiterErrors;
     private final Counter practiceScriptUnattributed;
 
@@ -57,10 +56,8 @@ public class ProxyAccounting {
                 .baseUnit("bytes")
                 .tag("capability", "llm")
                 .register(meterRegistry);
-        this.gatewayThrottled = Counter.builder(AgentMetrics.SANDBOX_GATEWAY_THROTTLED)
-                .description("Sandbox gateway requests refused by the per-principal rate limit")
-                .register(meterRegistry);
         // Registered up front, so a rate of refusals starts from zero.
+        for (SandboxGatewayRefusal refusal : SandboxGatewayRefusal.values()) gatewayRefusedCounter(refusal);
         for (ReviewModelGateway.Refusal refusal : ReviewModelGateway.Refusal.values()) refusedCounter(refusal);
         this.gatewayLimiterErrors = Counter.builder(AgentMetrics.SANDBOX_GATEWAY_LIMITER_ERRORS)
                 .description("Sandbox gateway requests served without a rate-limit decision")
@@ -192,8 +189,15 @@ public class ProxyAccounting {
         gatewayRequestSize.record(requestBytes);
     }
 
-    public void recordGatewayThrottled() {
-        gatewayThrottled.increment();
+    void gatewayRefused(SandboxGatewayRefusal refusal) {
+        gatewayRefusedCounter(refusal).increment();
+    }
+
+    private Counter gatewayRefusedCounter(SandboxGatewayRefusal refusal) {
+        return Counter.builder(AgentMetrics.SANDBOX_GATEWAY_REFUSED)
+                .description("Sandbox gateway requests that the gateway refused itself")
+                .tag("reason", refusal.name().toLowerCase(Locale.ROOT))
+                .register(meterRegistry);
     }
 
     /**
