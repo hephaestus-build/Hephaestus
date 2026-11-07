@@ -814,14 +814,21 @@ void test("calls on one connection run at once", async () => {
 	assert.equal(second.exit.code, 0);
 });
 
-void test("the loop refuses a call past the in-flight bound as busy", async () => {
-	const calls = Array.from({ length: LIMITS.inFlight + 1 }, async () => run("sleep 0.3"));
-	const outcomes = await Promise.allSettled(calls);
-	const refused = outcomes.filter(
-		(outcome): outcome is PromiseRejectedResult => outcome.status === "rejected",
+void test("a call past the in-flight bound waits for a slot, and its signal ends the wait", async () => {
+	const calls = Array.from({ length: LIMITS.inFlight * 2 }, async () => run("sleep 0.1"));
+	const stop = new AbortController();
+	const stopped = client.exec(
+		{ command: "true", cwd: workspace, timeoutMs: 1000 },
+		() => undefined,
+		stop.signal,
 	);
-	assert.equal(refused.length, 1);
-	assert.ok(refusal("busy")(refused[0]?.reason));
+	stop.abort(new Error("the session ended"));
+	await assert.rejects(stopped, /the session ended/u);
+	const outcomes = await Promise.allSettled(calls);
+	assert.deepEqual(
+		outcomes.filter((outcome) => outcome.status === "rejected"),
+		[],
+	);
 });
 
 void test("a put refused as busy sends no archive, and the calls in flight go on", async () => {

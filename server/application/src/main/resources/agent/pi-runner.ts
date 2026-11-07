@@ -3315,8 +3315,11 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					return { slug, label, heading: `## Turn ${index + 1} of ${allSlugs.length}: ${slug}` };
 				});
 				const baseHeapBytes = getHeapStatistics().used_heap_size;
-				const pace = new SessionPace((running) =>
-					roomForSession({ running, scriptHeapBytes: SCRIPT_HEAP_BYTES, baseHeapBytes }),
+				// A custom program holds a slot of the program connection for as long as its session runs.
+				const pace = new SessionPace(
+					(running) =>
+						running < LIMITS.inFlight &&
+						roomForSession({ running, scriptHeapBytes: SCRIPT_HEAP_BYTES, baseHeapBytes }),
 				);
 				let sessionsAtOnce = 0;
 				// Two unanswered sessions stop new starts only: a running session that is answered keeps its work, and

@@ -90,6 +90,7 @@ export class ToolClient {
 	/** Aborted when the connection ends, so that nothing waits on it any more. */
 	readonly #ending = new AbortController();
 	readonly #ended = Promise.withResolvers<Error>();
+	#slotFreed = Promise.withResolvers<undefined>();
 	/** Calls that the loop gave up on: bounded by the calls it makes, a few per review. */
 	readonly #abandoned = new Set<string>();
 	#lastFrameAt = Date.now();
@@ -169,6 +170,10 @@ export class ToolClient {
 		onOutput: (chunk: Buffer) => void,
 		signal?: AbortSignal,
 	): Promise<ExecExit> {
+		// The sessions of a review share this connection, so a burst of their calls waits for a slot and does not fail.
+		while (this.#closed === undefined && this.#pending.size >= LIMITS.inFlight) {
+			await this.#nextSlot(signal);
+		}
 		const id = randomUUID();
 		const requestHeader = { ...request, type: "exec", id };
 		const bound = Math.min(
@@ -299,11 +304,32 @@ export class ToolClient {
 		};
 	}
 
+	#release(id: string): void {
+		this.#pending.delete(id);
+		this.#slotFreed.resolve(undefined);
+		this.#slotFreed = Promise.withResolvers();
+	}
+
+	/** Settles when a call ends, and rejects when `signal` stops the wait. */
+	async #nextSlot(signal?: AbortSignal): Promise<void> {
+		signal?.throwIfAborted();
+		const stopped = Promise.withResolvers<never>();
+		const stop = () => {
+			stopped.reject(signal?.reason);
+		};
+		signal?.addEventListener("abort", stop, { once: true });
+		try {
+			await Promise.race([this.#slotFreed.promise, stopped.promise]);
+		} finally {
+			signal?.removeEventListener("abort", stop);
+		}
+	}
+
 	/** Gives up on one call: it fails, and whatever the tools side still sends for it goes unread. */
 	#abandon(id: string): void {
 		const pending = this.#pending.get(id);
 		if (pending !== undefined) {
-			this.#pending.delete(id);
+			this.#release(id);
 			this.#abandoned.add(id);
 			this.#write({ type: "cancel", id });
 			pending.done.reject(broken("the tools side did not end a call at its time-out"));
@@ -473,7 +499,7 @@ export class ToolClient {
 		if (typeof type === "string" && pending.stream?.includes(type) === true) {
 			pending.onStream(frame);
 		} else if (type === "error") {
-			this.#pending.delete(id);
+			this.#release(id);
 			pending.done.reject(
 				new ToolProtocolError(
 					text(frame.header, "error") ?? "error",
@@ -481,7 +507,7 @@ export class ToolClient {
 				),
 			);
 		} else if (type === pending.final) {
-			this.#pending.delete(id);
+			this.#release(id);
 			pending.done.resolve(frame);
 		} else {
 			throw broken(`a ${type} frame answers a request that ends with ${pending.final}`);
@@ -509,5 +535,6 @@ export class ToolClient {
 			pending.done.reject(error);
 		}
 		this.#pending.clear();
+		this.#slotFreed.resolve(undefined);
 	}
 }
