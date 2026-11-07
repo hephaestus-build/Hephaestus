@@ -142,7 +142,10 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
 
     /** As {@code KubernetesSandboxBackend.launch} builds it: a review's or a host's size by its kind. */
     private Pod workspacePod(String kind, ResourceLimits limits, KubernetesPods.Size size) {
-        return pods.workspacePod(workload(kind), Map.of(), List.of("node"), limits, size, null);
+        // A review with a custom program is the largest: every side that a review can have.
+        KubernetesPods.Sidecars sides =
+                KubernetesWorker.KIND_REVIEW.equals(kind) ? new KubernetesPods.Sidecars("nonce", true) : null;
+        return pods.workspacePod(workload(kind), Map.of(), List.of("node"), limits, size, sides);
     }
 
     private static KubernetesPods.Workload workload(String kind) {

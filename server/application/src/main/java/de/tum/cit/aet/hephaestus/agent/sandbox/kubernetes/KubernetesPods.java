@@ -185,17 +185,28 @@ public class KubernetesPods {
     /** A socket file and nothing else: the smallest memory volume. */
     private static final long SOCKET_BYTES = MIB;
 
-    /** One side beyond the loop. Its own limit: a memory kill of the tools never takes the loop. */
-    private static final ResourceRequirements SIDECAR_RESOURCES = new ResourceRequirementsBuilder()
-            .withLimits(Map.of(
-                    "cpu", new Quantity("1"),
-                    "memory", bytes(768 * MIB),
-                    "ephemeral-storage", bytes(SandboxLayout.SCRATCH_BYTES + SIDE_LOG_BYTES)))
-            .withRequests(Map.of(
-                    "cpu", new Quantity("25m"),
-                    "memory", bytes(128 * MIB),
-                    "ephemeral-storage", bytes(SIDE_LOG_BYTES)))
-            .build();
+    /**
+     * The sides beyond the loop, from measured use. Each has its own limit, so that a memory kill of the tools never takes
+     * the loop. Their requests and the loop's add up to one review in sandbox-pod-requests.json, so a review that runs
+     * programs takes the quota that a review always took. A program process lives briefly, so the limit, not the request,
+     * holds it.
+     */
+    private static final ResourceRequirements TOOLS_RESOURCES = side(32 * MIB);
+
+    private static final ResourceRequirements PROGRAMS_RESOURCES = side(40 * MIB);
+
+    private static ResourceRequirements side(long memoryRequest) {
+        return new ResourceRequirementsBuilder()
+                .withLimits(Map.of(
+                        "cpu", new Quantity("1"),
+                        "memory", bytes(768 * MIB),
+                        "ephemeral-storage", bytes(SandboxLayout.SCRATCH_BYTES + SIDE_LOG_BYTES)))
+                .withRequests(Map.of(
+                        "cpu", new Quantity("10m"),
+                        "memory", bytes(memoryRequest),
+                        "ephemeral-storage", bytes(SIDE_LOG_BYTES)))
+                .build();
+    }
 
     /**
      * The memory that one kind of sandbox Pod requests and may use, and its local disk. Kubernetes sizes its sandbox
@@ -217,17 +228,16 @@ public class KubernetesPods {
     }
 
     /**
-     * A review: one loop and at most a few script processes, because a script ends at its review. A large change can
-     * pass the request, so the limit stays well above it. 515 MiB of disk each. Its attempt volumes and scratch places
-     * each hold one scratch size.
+     * A review's loop: its commands and programs run on the other sides. A large change can pass the request, so the
+     * limit stays well above it. Its attempt volumes and scratch places each hold one scratch size.
      */
     static final Size REVIEW = new Size(
-            384 * MIB,
+            312 * MIB,
             1280 * MIB,
-            1024 * MIB,
+            992 * MIB,
             SandboxLayout.SCRATCH_BYTES,
             ATTEMPT_VOLUMES.size() + SCRATCH_PATHS.size(),
-            50);
+            30);
 
     /** The Heph host, in the same volumes as a review. It is idle between turns, so it requests 50m of its one CPU. */
     static final Size HOST = new Size(
@@ -423,7 +433,7 @@ public class KubernetesPods {
                         mount("work", "/workspace/work", true),
                         mount(name + "-socket", socket.substring(0, socket.lastIndexOf('/')), false),
                         mount(name + "-tmp", "/tmp", false))
-                .withResources(SIDECAR_RESOURCES)
+                .withResources(TOOLS.equals(name) ? TOOLS_RESOURCES : PROGRAMS_RESOURCES)
                 .build();
     }
 
