@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
-import { withReviewLease } from "./gateway-lease.ts";
+import { GatewayUnavailableError, withReviewLease } from "./gateway-lease.ts";
+import { upload } from "./gateway-run.ts";
 
 await test("the loop renews through a replacement gateway and waits out an outage within its lease", async () => {
 	let requests = 0;
@@ -105,4 +109,87 @@ await test("an invalid lease receipt starts no review work", async (t) => {
 		),
 		/invalid lease receipt/u,
 	);
+});
+
+await test("a transient first renewal waits before starting review work", async (t) => {
+	let requests = 0;
+	t.mock.method(globalThis, "fetch", async () => {
+		requests += 1;
+		return requests === 1
+			? new Response(null, { status: 503 })
+			: Response.json({ remainingMillis: 3000, renewAfterMillis: 1000 });
+	});
+	assert.equal(
+		await withReviewLease(
+			new URL("http://gateway.invalid/lease"),
+			"test-attempt",
+			async () => "started",
+		),
+		"started",
+	);
+	assert.equal(requests, 2);
+});
+
+await test("an exhausted startup wait reports infrastructure unavailability and starts no review", async (t) => {
+	let clock = 0;
+	t.mock.method(performance, "now", () => clock);
+	t.mock.method(globalThis, "fetch", async () => {
+		clock = 30_001;
+		throw new TypeError("gateway unavailable");
+	});
+	await assert.rejects(
+		withReviewLease(new URL("http://gateway.invalid/lease"), "test-attempt", async () =>
+			assert.fail("unleased work started"),
+		),
+		GatewayUnavailableError,
+	);
+});
+
+await test("lease loss aborts an upload that is waiting for confirmation", async () => {
+	const started = Promise.withResolvers<undefined>();
+	const disconnected = Promise.withResolvers<undefined>();
+	let renewals = 0;
+	const server = createServer((request, response) => {
+		if (request.url === "/result") {
+			started.resolve(undefined);
+			response.once("close", () => disconnected.resolve(undefined));
+			request.resume();
+			return;
+		}
+		renewals += 1;
+		if (renewals === 1) {
+			response.end(JSON.stringify({ remainingMillis: 2000, renewAfterMillis: 10 }));
+		} else {
+			void started.promise
+				.then(() => {
+					response.writeHead(409).end();
+				})
+				.catch(() => {
+					response.destroy();
+				});
+		}
+	});
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	const directory = await mkdtemp(path.join(tmpdir(), "lease-upload-"));
+	try {
+		const address = server.address();
+		assert.ok(address !== null && typeof address !== "string");
+		const root = `http://127.0.0.1:${address.port}`;
+		const archive = path.join(directory, "result.tar");
+		await writeFile(archive, "bounded test output");
+		await assert.rejects(
+			withReviewLease(new URL(`${root}/lease`), "test-attempt", async (signal) =>
+				upload(new URL(`${root}/result`), "test-attempt", archive, Date.now() + 5000, signal),
+			),
+			/refused lease renewal: 409/u,
+		);
+		await disconnected.promise;
+	} finally {
+		const closed = once(server, "close");
+		server.closeAllConnections();
+		server.close();
+		await closed;
+		await rm(directory, { recursive: true, force: true });
+	}
 });

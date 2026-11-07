@@ -186,7 +186,7 @@ public class ReviewJob {
 
     /**
      * The attempt's expiry on the database clock. Its loop renews during execution and upload; a worker renews during
-     * capture and composition. An expired lease cannot be revived, and the server recovers the attempt.
+     * Pod startup and result collection too. An expired lease cannot be revived, and the server recovers the attempt.
      */
     @Column(name = "leased_until")
     private @Nullable Instant leasedUntil;

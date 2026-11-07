@@ -504,17 +504,22 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("leaseId") UUID leaseId);
 
     @Query(value = """
-            SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
-                (LEAST(leased_until, :expiresAt) - clock_timestamp())) * 1000))::bigint
-              FROM review_job
-             WHERE id = :id AND workspace_id = :workspaceId AND attempt = :attempt AND lease_id = :leaseId
-               AND status = 'RUNNING' AND leased_until > clock_timestamp()
+            WITH renewed AS (
+                UPDATE review_job
+                   SET leased_until = LEAST(clock_timestamp() + make_interval(secs => :ttlSeconds), :expiresAt)
+                 WHERE id = :id AND workspace_id = :workspaceId AND attempt = :attempt AND lease_id = :leaseId
+                   AND status = 'RUNNING' AND leased_until > clock_timestamp() AND :expiresAt > clock_timestamp()
+                RETURNING leased_until
+            )
+            SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (leased_until - clock_timestamp())) * 1000))::bigint
+              FROM renewed
             """, nativeQuery = true)
-    Optional<Long> remainingLeaseMillis(
+    Optional<Long> renewReviewLease(
             @Param("id") UUID id,
             @Param("workspaceId") long workspaceId,
             @Param("attempt") int attempt,
             @Param("leaseId") UUID leaseId,
+            @Param("ttlSeconds") long ttlSeconds,
             @Param("expiresAt") Instant expiresAt);
 
     /** The current database time, including time spent waiting for a row lock in this transaction. */

@@ -250,7 +250,10 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
         if (pod == null) {
             return false;
         }
-        Pod current = pods.get(pod);
+        // Lease heartbeats must use the watch state instead of waiting on an API-server request.
+        Pod current = cache.pods(Map.of()).stream()
+                .filter(candidate -> candidate.getMetadata().getName().equals(pod))
+                .findFirst().orElse(null);
         return current != null
                 && current.getMetadata().getDeletionTimestamp() == null
                 && KubernetesPods.running(current, KubernetesPods.LOOP);

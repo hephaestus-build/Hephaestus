@@ -9,7 +9,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { FileEntry } from "@earendil-works/pi-coding-agent";
 
 import { present } from "./gateway-capabilities.ts";
-import { withReviewLease } from "./gateway-lease.ts";
+import { GatewayUnavailableError, withReviewLease } from "./gateway-lease.ts";
 
 // The worker follows SIGTERM with SIGKILL after its stop timeout; the child gets this much of it and
 // the upload of whatever out/ holds by then gets the rest.
@@ -738,6 +738,6 @@ if (import.meta.main) {
 		await main();
 	} catch (error) {
 		console.error(error);
-		process.exitCode = 1;
+		process.exitCode = error instanceof GatewayUnavailableError ? 75 : 1;
 	}
 }
