@@ -12,7 +12,7 @@
 		"tied": true
 	},
 	{
-		"name": "any form of the word when case was ignored",
+		"name": "a search that cannot find the claim's word",
 		"patterns": [
 			"(?i)retries"
 		],
@@ -21,7 +21,7 @@
 			"The repository has no retry logic."
 		],
 		"consulted": true,
-		"tied": true
+		"tied": false
 	},
 	{
 		"name": "one alternative is enough",
@@ -188,7 +188,7 @@
 	{
 		"name": "a generic word names nothing",
 		"patterns": [
-			"(?i)code|repository"
+			"(?i)logic|repository"
 		],
 		"subject": "retry logic in the code",
 		"texts": [
@@ -226,6 +226,138 @@
 		"subject": "retry logic",
 		"texts": [
 			"The repository has no retry logic."
+		],
+		"consulted": false,
+		"tied": false
+	},
+	{
+		"name": "a word that is a prefix finds the claim's word",
+		"patterns": [
+			"(?i)auth"
+		],
+		"subject": "authentication",
+		"texts": [
+			"The repository has no authentication."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a shorter form finds the longer word",
+		"patterns": [
+			"(?i)logger|log"
+		],
+		"subject": "logging",
+		"texts": [
+			"The repository has no logging."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a plural in the claim shares the word's stem",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "retries",
+		"texts": [
+			"The repository has no retries."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a joined identifier finds the claim's words",
+		"patterns": [
+			"(?i)controlleradvice"
+		],
+		"subject": "a ControllerAdvice",
+		"texts": [
+			"The repository has no ControllerAdvice."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a joined identifier runs into the last word",
+		"patterns": [
+			"(?i)ratelimit"
+		],
+		"subject": "a rate limiter",
+		"texts": [
+			"The repository has no rate limiter."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a trailing separator finds another word",
+		"patterns": [
+			"(?i)retry_"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "words out of order find another word",
+		"patterns": [
+			"(?i)logicRetry"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a clause of its own marker words takes the subject",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "the retry helper",
+		"texts": [
+			"It is used by no other file."
+		],
+		"consulted": false,
+		"tied": true
+	},
+	{
+		"name": "a named claim need not repeat in the subject",
+		"patterns": [
+			"ControllerAdvice"
+		],
+		"subject": "an error handler",
+		"texts": [
+			"The reviewed checkout contains no ControllerAdvice."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "the plain wording of a claim counts",
+		"patterns": [
+			"(?i)zzz_absent"
+		],
+		"subject": "auth",
+		"texts": [
+			"There is no auth check in this repository."
+		],
+		"consulted": false,
+		"tied": false
+	},
+	{
+		"name": "a claim that something is missing from it counts",
+		"patterns": [
+			"(?i)zzz_absent"
+		],
+		"subject": "auth",
+		"texts": [
+			"Auth checks are missing from the repository."
 		],
 		"consulted": false,
 		"tied": false

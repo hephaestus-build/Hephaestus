@@ -20,14 +20,17 @@ import java.util.stream.Collectors;
  *
  * <p>A search of the whole checkout backs a claim only when it names what the claim says is absent, or a model could
  * search for nonsense and claim anything. The server does not run a model's pattern: it reads the words of a plain one,
- * words joined by {@code |}, and any other pattern names nothing. Each claim must hold one of those words, as a word
- * stem when the search ignored case, or as written when it did not, because {@code RETRY} does not find {@code retry}.
+ * words joined by {@code |}, and any other pattern names nothing. Each claim must hold one of those words. A search
+ * that ignored case must be able to find the claim's words: {@code auth} finds {@code authentication}, and
+ * {@code retryzzz} finds nothing. One that did not must match as written, because {@code RETRY} does not find
+ * {@code retry}. This stops a lazy or nonsense search. It does not judge the matches of a search that had any, because
+ * a match does not refute "no other file references X".
  */
 final class AbsenceClaims {
 
     static final List<String> MARKERS = List.of(
             "\\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|"
-                    + "absent)\\b[^.]{0,80}\\b(?:in|across|throughout|under) (?:the )?(?:whole |entire |"
+                    + "absent)\\b[^.]{0,80}\\b(?:in|from|across|throughout|under) (?:the |this |our )?(?:whole |entire |"
                     + "reviewed |pinned |checked-out |rest of the )?(?:repository|repo|codebase|code base|"
                     + "checkout|project|application|source tree|src)\\b(?!\\.\\w|[ -](?:code|manifest|"
                     + "inventory|policy|board|tracker)\\b)",
@@ -68,9 +71,13 @@ final class AbsenceClaims {
     /** Words that name no subject: a clause of only these says what is absent in another sentence. */
     static final List<String> GENERIC_WORDS = List.of(
             "a",
+            "across",
             "an",
             "and",
             "any",
+            "anywhere",
+            "app",
+            "application",
             "are",
             "as",
             "at",
@@ -78,19 +85,24 @@ final class AbsenceClaims {
             "be",
             "by",
             "call",
+            "caller",
             "catch",
             "check",
             "checked",
             "checkout",
+            "class",
             "code",
             "codebase",
             "commit",
             "consume",
+            "contain",
+            "declare",
             "define",
             "depend",
             "diff",
             "do",
             "does",
+            "doesn",
             "else",
             "elsewhere",
             "entire",
@@ -100,18 +112,25 @@ final class AbsenceClaims {
             "for",
             "found",
             "from",
+            "function",
             "handle",
             "has",
+            "hasn",
             "have",
+            "helper",
             "hold",
             "import",
             "in",
             "instantiate",
             "into",
             "is",
+            "isn",
             "it",
             "its",
             "lack",
+            "logic",
+            "mechanism",
+            "method",
             "missing",
             "never",
             "no",
@@ -141,16 +160,21 @@ final class AbsenceClaims {
             "source",
             "sources",
             "src",
+            "such",
             "that",
             "the",
             "there",
+            "thing",
             "this",
             "throughout",
             "to",
             "tree",
             "under",
             "use",
+            "used",
+            "using",
             "validate",
+            "value",
             "was",
             "were",
             "whole",
@@ -160,6 +184,7 @@ final class AbsenceClaims {
 
     private static final Pattern PLAIN = Pattern.compile(PLAIN_SEARCH);
     private static final Pattern WORD_BREAK = Pattern.compile("(?<=\\p{Ll})(?=\\p{Lu})|[^\\p{L}\\p{N}]+");
+    private static final Pattern WORD_EDGE = Pattern.compile("^[_-]|[_-]$");
     private static final Pattern TOKEN_BREAK = Pattern.compile("[^\\p{L}\\p{N}_-]+");
     private static final Set<String> GENERIC =
             GENERIC_WORDS.stream().map(AbsenceClaims::stem).collect(Collectors.toSet());
@@ -196,43 +221,64 @@ final class AbsenceClaims {
     static boolean searchedFor(String subject, List<String> texts, List<String> patterns, boolean consulted) {
         var terms =
                 patterns.stream().flatMap(pattern -> terms(pattern).stream()).toList();
-        return (!consulted || named(terms, subject))
-                && texts.stream()
-                        .flatMap(text -> Arrays.stream(CLAUSES.split(text)))
-                        .filter(AbsenceClaims::claimed)
-                        .allMatch(clause -> named(terms, content(clause).isEmpty() ? subject : clause));
+        var claims = texts.stream()
+                .flatMap(text -> Arrays.stream(CLAUSES.split(text)))
+                .filter(AbsenceClaims::claimed)
+                .toList();
+        if (claims.isEmpty()) return !consulted || named(terms, subject);
+        return claims.stream().allMatch(clause -> named(terms, content(clause).isEmpty() ? subject : clause));
     }
 
-    private record Term(String word, boolean ignoresCase, Set<String> stems) {}
+    private record Term(String word, boolean ignoresCase) {}
 
     private static List<Term> terms(String pattern) {
         if (!PLAIN.matcher(pattern).matches()) return List.of();
         boolean ignoresCase = pattern.startsWith("(?i)");
         return Arrays.stream(pattern.replace("(?i)", "").replace("\\b", "").split("\\|"))
-                .filter(word -> !content(word).isEmpty())
-                .map(word -> new Term(word, ignoresCase, stems(word)))
+                .filter(word ->
+                        !content(word).isEmpty() && !WORD_EDGE.matcher(word).find())
+                .map(word -> new Term(word, ignoresCase))
                 .toList();
     }
 
     private static boolean named(List<Term> terms, String text) {
-        var stems = stems(text);
-        var tokens = Set.of(TOKEN_BREAK.splitAsStream(text).distinct().toArray(String[]::new));
+        var words = words(text);
+        var tokens = TOKEN_BREAK.splitAsStream(text).collect(Collectors.toSet());
         return terms.stream()
-                .anyMatch(term -> term.ignoresCase() ? stems.containsAll(term.stems()) : tokens.contains(term.word()));
+                .anyMatch(term -> term.ignoresCase()
+                        ? finds(term.word().replaceAll("[_-]", "").toLowerCase(Locale.ROOT), words)
+                        : tokens.contains(term.word()));
+    }
+
+    /** Whether a search for {@code term} finds these words: it runs over them in order, and ends inside the last. */
+    private static boolean finds(String term, List<String> words) {
+        for (int first = 0; first < words.size(); first++) {
+            int at = 0;
+            for (int next = first; next < words.size() && at < term.length(); next++) {
+                String word = words.get(next);
+                String rest = term.substring(at);
+                boolean sameWord = rest.length() <= word.length() && stem(rest).equals(stem(word));
+                if (rest.length() >= 3 && (word.startsWith(rest) || sameWord)) return true;
+                if (!rest.startsWith(word)) break;
+                at += word.length();
+            }
+        }
+        return false;
     }
 
     private static Set<String> content(String text) {
-        return stems(text).stream()
+        return words(text).stream()
+                .map(AbsenceClaims::stem)
                 .filter(stem -> stem.length() >= 3 && !GENERIC.contains(stem))
                 .collect(Collectors.toSet());
     }
 
-    private static Set<String> stems(String text) {
+    private static List<String> words(String text) {
         return WORD_BREAK
                 .splitAsStream(text)
                 .filter(word -> !word.isEmpty())
-                .map(AbsenceClaims::stem)
-                .collect(Collectors.toSet());
+                .map(word -> word.toLowerCase(Locale.ROOT))
+                .toList();
     }
 
     /** A crude stem: it needs only to bring the forms of a word together, and a miss costs one more search. */

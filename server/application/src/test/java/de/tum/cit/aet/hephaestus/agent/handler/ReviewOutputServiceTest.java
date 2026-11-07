@@ -306,7 +306,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     private static final String CAPTURED_CHECKOUT = "5".repeat(64);
 
     private static ReadReceipt searched(String version) {
-        return searched(version, "(?i)ControllerAdvice|handler");
+        return searched(version, "ControllerAdvice|ExceptionHandler");
     }
 
     private static ReadReceipt searched(String version, String pattern) {

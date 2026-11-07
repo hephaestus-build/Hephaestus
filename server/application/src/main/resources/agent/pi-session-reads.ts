@@ -79,10 +79,10 @@ export class SessionReads {
 	/** What each grep without a file filter that searched the whole checkout to the end looked for. */
 	readonly #searches = new Map<string, SearchClaim>();
 	/**
-	 * The searches that the loop proved, each with the pattern its receipt states and the digest of the checkout it
-	 * searched: only these are receipts.
+	 * The searches that the loop proved, as a receipt states them, with the digest of the checkout each searched: only
+	 * these are receipts.
 	 */
-	readonly #provedPatterns = new Map<string, { pattern: string; contentDigest: string }>();
+	readonly #provedPatterns = new Map<string, string>();
 
 	constructor(
 		root: string,
@@ -233,12 +233,14 @@ export class SessionReads {
 			!(typeof args.glob === "string" && args.glob !== "") &&
 			this.#containsTree(target ?? "")
 		) {
-			this.#searches.set(args.pattern, {
+			const search = {
 				pattern: args.pattern,
 				literal: args.literal === true,
 				ignoreCase: args.ignoreCase === true,
 				found: this.#reported(output, target ?? ""),
-			});
+			};
+			// The same word with other flags is another search: a model that was asked to ignore case repeats its word.
+			this.#searches.set(searchedPattern(search), search);
 		}
 	}
 
@@ -263,7 +265,7 @@ export class SessionReads {
 	): Promise<void> {
 		const tree = this.#tree;
 		const open = [...this.#searches.values()].filter(
-			(claim) => !this.#provedPatterns.has(claim.pattern),
+			(claim) => !this.#provedPatterns.has(searchedPattern(claim)),
 		);
 		if (tree === undefined || !tree.complete || open.length === 0) {
 			return;
@@ -271,12 +273,9 @@ export class SessionReads {
 		const { proved, checkoutDigest } = await prove(path.resolve(this.#root, tree.root), open);
 		for (const [index, claim] of open.entries()) {
 			if (proved[index] === true && checkoutDigest !== null) {
-				this.#provedPatterns.set(claim.pattern, {
-					pattern: searchedPattern(claim),
-					contentDigest: checkoutDigest,
-				});
+				this.#provedPatterns.set(searchedPattern(claim), checkoutDigest);
 			}
-			this.#searches.delete(claim.pattern);
+			this.#searches.delete(searchedPattern(claim));
 		}
 	}
 
@@ -305,8 +304,8 @@ export class SessionReads {
 			return [];
 		}
 		const root = this.#key(tree.root);
-		const searches = tree.complete ? [...this.#provedPatterns.values()] : [];
-		const receipts: ReadReceipt[] = searches.map(({ pattern, contentDigest }) => ({
+		const searches = tree.complete ? [...this.#provedPatterns] : [];
+		const receipts: ReadReceipt[] = searches.map(([pattern, contentDigest]) => ({
 			sourceKind: TREE_SOURCE,
 			sourcePath: tree.sourcePath,
 			path: ".",
@@ -551,7 +550,7 @@ export class SessionReads {
  * claim beside it.
  */
 export const ABSENCE_MARKERS = [
-	String.raw`\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|absent)\b[^.]{0,80}\b(?:in|across|throughout|under) (?:the )?(?:whole |entire |reviewed |pinned |checked-out |rest of the )?(?:repository|repo|codebase|code base|checkout|project|application|source tree|src)\b(?!\.\w|[ -](?:code|manifest|inventory|policy|board|tracker)\b)`,
+	String.raw`\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|absent)\b[^.]{0,80}\b(?:in|from|across|throughout|under) (?:the |this |our )?(?:whole |entire |reviewed |pinned |checked-out |rest of the )?(?:repository|repo|codebase|code base|checkout|project|application|source tree|src)\b(?!\.\w|[ -](?:code|manifest|inventory|policy|board|tracker)\b)`,
 	String.raw`\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|absent)\b[^.]{0,80}\b(?:anywhere|elsewhere) (?:in|across|throughout|under) (?:the )?(?:whole |entire |reviewed |pinned |checked-out |rest of the )?(?:code|app|source|sources)\b(?![ -](?:file|files|change|diff)\b)`,
 	String.raw`\bno other files?\b(?! (?:in|of) (?:the|this) (?:change|diff|commit|pull request)\b)[^.;]{0,30}\b(?:references?|imports?|calls?|uses?|instantiates?|consumes?|wires?|depends? on|handles?|catches?|validates?)\b|\b(?:referenced|imported|called|used|instantiated|consumed|handled) (?:by|from|in) no other files?\b|\breferences from other files\b`,
 	String.raw`\b(?:the|this) (?:whole |entire |reviewed |pinned )?(?:repository|repo|codebase|code base|checkout)\b(?! (?:method|call|class|interface|layer|bean|query|lookup|result|field|object|instance|step|action|policy|settings?)s?\b)[^.]{0,40}\b(?:contains no|has no|holds no|defines no|declares no|registers no|lacks?|never|does not|doesn't)\b|\b(?:the|this) (?:project|application)\b(?![ -](?:code|manifest|inventory|policy|board|tracker)\b)[^.]{0,40}\b(?:defines no|declares no|registers no|never)\b`,
@@ -563,9 +562,13 @@ export const ABSENCE_CLAUSE_END = String.raw`(?<=[.;:])[ \t\r\n\u00A0]+|,[ \t\r\
 export const ABSENCE_PLAIN_SEARCH = String.raw`(?:\(\?i\))?(?:\\b)?[\p{L}\p{N}_-]+(?:\\b)?(?:\|(?:\\b)?[\p{L}\p{N}_-]+(?:\\b)?)*`;
 export const ABSENCE_GENERIC_WORDS = [
 	"a",
+	"across",
 	"an",
 	"and",
 	"any",
+	"anywhere",
+	"app",
+	"application",
 	"are",
 	"as",
 	"at",
@@ -573,19 +576,24 @@ export const ABSENCE_GENERIC_WORDS = [
 	"be",
 	"by",
 	"call",
+	"caller",
 	"catch",
 	"check",
 	"checked",
 	"checkout",
+	"class",
 	"code",
 	"codebase",
 	"commit",
 	"consume",
+	"contain",
+	"declare",
 	"define",
 	"depend",
 	"diff",
 	"do",
 	"does",
+	"doesn",
 	"else",
 	"elsewhere",
 	"entire",
@@ -595,18 +603,25 @@ export const ABSENCE_GENERIC_WORDS = [
 	"for",
 	"found",
 	"from",
+	"function",
 	"handle",
 	"has",
+	"hasn",
 	"have",
+	"helper",
 	"hold",
 	"import",
 	"in",
 	"instantiate",
 	"into",
 	"is",
+	"isn",
 	"it",
 	"its",
 	"lack",
+	"logic",
+	"mechanism",
+	"method",
 	"missing",
 	"never",
 	"no",
@@ -636,16 +651,21 @@ export const ABSENCE_GENERIC_WORDS = [
 	"source",
 	"sources",
 	"src",
+	"such",
 	"that",
 	"the",
 	"there",
+	"thing",
 	"this",
 	"throughout",
 	"to",
 	"tree",
 	"under",
 	"use",
+	"used",
+	"using",
 	"validate",
+	"value",
 	"was",
 	"were",
 	"whole",
@@ -677,14 +697,17 @@ function stem(word: string): string {
 }
 
 const GENERIC = new Set(ABSENCE_GENERIC_WORDS.map(stem));
-const stems = (text: string) => new Set(text.split(WORD_BREAK).filter(Boolean).map(stem));
+const wordsOf = (text: string) =>
+	text
+		.split(WORD_BREAK)
+		.filter(Boolean)
+		.map((word) => word.toLowerCase());
 const content = (text: string) =>
-	[...stems(text)].filter((word) => word.length >= 3 && !GENERIC.has(word));
+	[...new Set(wordsOf(text).map(stem))].filter((word) => word.length >= 3 && !GENERIC.has(word));
 
 interface SearchTerm {
 	word: string;
 	ignoresCase: boolean;
-	stems: Set<string>;
 }
 
 function termsOf(pattern: string): SearchTerm[] {
@@ -696,15 +719,39 @@ function termsOf(pattern: string): SearchTerm[] {
 		.replace("(?i)", "")
 		.replaceAll(String.raw`\b`, "")
 		.split("|")
-		.filter((word) => content(word).length > 0)
-		.map((word) => ({ word, ignoresCase, stems: stems(word) }));
+		.filter((word) => content(word).length > 0 && !/^[_-]|[_-]$/u.test(word))
+		.map((word) => ({ word, ignoresCase }));
+}
+
+/** Whether a search for `term` finds these words: it runs over them in order, and ends inside the last. */
+function finds(term: string, words: readonly string[]): boolean {
+	return words.some((_, first) => {
+		let at = 0;
+		for (const word of words.slice(first)) {
+			if (at >= term.length) {
+				return false;
+			}
+			const rest = term.slice(at);
+			const sameWord = rest.length <= word.length && stem(rest) === stem(word);
+			if (rest.length >= 3 && (word.startsWith(rest) || sameWord)) {
+				return true;
+			}
+			if (!rest.startsWith(word)) {
+				return false;
+			}
+			at += word.length;
+		}
+		return false;
+	});
 }
 
 function holdsTerm(terms: readonly SearchTerm[], text: string): boolean {
-	const inText = stems(text);
+	const words = wordsOf(text);
 	const tokens = new Set(text.split(TOKEN_BREAK));
 	return terms.some((term) =>
-		term.ignoresCase ? [...term.stems].every((word) => inText.has(word)) : tokens.has(term.word),
+		term.ignoresCase
+			? finds(term.word.replaceAll(/[_-]/gu, "").toLowerCase(), words)
+			: tokens.has(term.word),
 	);
 }
 
@@ -738,22 +785,23 @@ function textsOf(submission: AbsenceCheckInput): string[] {
 }
 
 /**
- * Whether the patterns of a result's searches name what it says is absent: each claim, and when the result names the
- * checkout as consulted, what it looked for. `AbsenceClaims.java` decides this at admission.
+ * The first claim that the patterns of a result's searches do not name: each clause that says something is absent, or
+ * with no such clause and the checkout named as consulted, what the result looked for. `AbsenceClaims.java` decides
+ * the same at admission.
  */
-export function searchedFor(
+export function unsearchedClaim(
 	subject: string,
 	texts: readonly string[],
 	patterns: readonly string[],
 	consulted: boolean,
-): boolean {
+): string | undefined {
 	const terms = patterns.flatMap(termsOf);
-	return (
-		(!consulted || holdsTerm(terms, subject)) &&
-		texts
-			.flatMap((text) => text.split(CLAUSE_END))
-			.filter(claimed)
-			.every((clause) => holdsTerm(terms, content(clause).length === 0 ? subject : clause))
+	const claims = texts.flatMap((text) => text.split(CLAUSE_END)).filter(claimed);
+	if (claims.length === 0) {
+		return consulted && !holdsTerm(terms, subject) ? subject : undefined;
+	}
+	return claims.find(
+		(clause) => !holdsTerm(terms, content(clause).length === 0 ? subject : clause),
 	);
 }
 
@@ -788,6 +836,8 @@ export interface CheckoutState {
 /** Why a submission that rests on the checkout cannot be recorded yet. */
 export interface UnreadCheckoutClaim {
 	text: string;
+	/** The session did search the checkout, but for something else. */
+	untied?: true;
 }
 
 /**
@@ -801,7 +851,11 @@ export interface UnreadCheckoutClaim {
 export function unreadCheckoutClaim(
 	submission: AbsenceCheckInput,
 	coverage: Coverage,
-	{ checkout, ask }: { checkout?: CheckoutState; ask: boolean },
+	{
+		checkout,
+		ask,
+		askUntied = ask,
+	}: { checkout?: CheckoutState; ask: boolean; askUntied?: boolean },
 ): UnreadCheckoutClaim | undefined {
 	const searches = coverage.receipts.flatMap((receipt) =>
 		receipt.sourceKind === TREE_SOURCE && receipt.status === "SEARCHED" && receipt.path === "."
@@ -809,7 +863,7 @@ export function unreadCheckoutClaim(
 			: [],
 	);
 	// A could-not-determine result says nothing about the work.
-	if (!ask || submission.outcome === "COULD_NOT_DETERMINE") {
+	if (submission.outcome === "COULD_NOT_DETERMINE") {
 		return undefined;
 	}
 	const { search, inapplicability } = submission.evidence;
@@ -818,21 +872,25 @@ export function unreadCheckoutClaim(
 	);
 	const byWords = !consulted && checkout !== undefined && textsOf(submission).some(claimsAbsence);
 	const subject = search?.lookedFor ?? inapplicability?.prerequisite ?? submission.summary;
-	if (
-		(!consulted && !byWords) ||
-		(searches.length > 0 && searchedFor(subject, textsOf(submission), searches, consulted))
-	) {
+	if (!consulted && !byWords) {
+		return undefined;
+	}
+	if (searches.length > 0) {
+		const unsearched = unsearchedClaim(subject, textsOf(submission), searches, consulted);
+		return unsearched === undefined || !askUntied
+			? undefined
+			: {
+					untied: true,
+					text: `no search of the whole checkout names what this claim says is absent: "${unsearched}". Either reword the claim to name what you searched for, or call the grep tool with ignoreCase and a plain word that the claim holds, alternatives joined by |. A pattern with any other syntax names nothing. If you can do neither, remove the claim and keep only what the cited lines show.`,
+				};
+	}
+	if (!ask) {
 		return undefined;
 	}
 	const claim = consulted
 		? `this result names ${TREE_SOURCE} as searched`
 		: "this result says the repository lacks something beyond the cited lines";
 	const remove = "Remove that claim and keep only what the cited lines show, then submit again.";
-	if (searches.length > 0) {
-		return {
-			text: `${claim}, but no search of the whole checkout names what it says is absent. Call the grep tool with ignoreCase and a plain word from the claim, alternatives joined by |, then submit again. A pattern with any other syntax names nothing. ${remove}`,
-		};
-	}
 	if (checkout?.root === undefined) {
 		return { text: `${claim}, but this work has no checkout to search. ${remove}` };
 	}
@@ -846,6 +904,6 @@ export function unreadCheckoutClaim(
 		: "If you cannot, remove the claim about the rest of the repository and keep only what the cited lines show.";
 	return {
 		// A grep in bash runs, but it leaves no receipt that admission can read, so the model must hear which tool counts.
-		text: `${claim}, but this session ran no search of the whole checkout. Call the grep tool, not grep in bash, with a pattern for what is missing and path "${checkout.root}", without a glob. A search in bash proves nothing to admission. Narrow the pattern until the search is not cut, then submit again. ${exit}`,
+		text: `${claim}, but this session ran no search of the whole checkout. Call the grep tool, not grep in bash, with ignoreCase, a plain word that the claim holds, alternatives joined by |, and path "${checkout.root}", without a glob. A pattern with any other syntax names nothing. A search in bash proves nothing to admission. Narrow the pattern until the search is not cut, then submit again. ${exit}`,
 	};
 }

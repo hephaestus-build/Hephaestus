@@ -19,8 +19,8 @@ import {
 import {
 	SessionReads,
 	claimsAbsence,
-	searchedFor,
 	unreadCheckoutClaim,
+	unsearchedClaim,
 } from "../../../main/resources/agent/pi-session-reads.ts";
 
 function read(
@@ -995,6 +995,29 @@ void test("a search of a checkout captured only in part proves no search", () =>
 	}
 });
 
+const proveAll = async (_: string, claims: readonly unknown[]) => ({
+	proved: claims.map(() => true),
+	checkoutDigest: "c".repeat(64),
+});
+
+void test("the same word with ignoreCase is another search, so a repair earns its own receipt", async () => {
+	const root = checkout();
+	try {
+		const reads = new SessionReads(root, {}, undefined, [], TREE);
+		treeTool(reads, "first", "grep", { pattern: "Retry" });
+		await reads.proveSearches(proveAll);
+		treeTool(reads, "repair", "grep", { pattern: "Retry", ignoreCase: true });
+		await reads.proveSearches(proveAll);
+
+		assert.deepEqual(
+			reads.coverage().receipts.map((receipt) => receipt.pattern),
+			["Retry", "(?i)Retry"],
+		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 // The error-handling problem that #50's review recorded (review 2435ae89), with its stored basis.
 const PR50_ERROR_HANDLING = {
 	summary:
@@ -1067,7 +1090,7 @@ void test("#50: a claim that the checkout lacks something goes back to the model
 	assert.equal(
 		unreadCheckoutClaim(
 			stored,
-			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "(?i)ControllerAdvice|guard" }]),
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "ControllerAdvice" }]),
 			ASK,
 		),
 		undefined,
@@ -1076,10 +1099,10 @@ void test("#50: a claim that the checkout lacks something goes back to the model
 	assert.match(
 		unreadCheckoutClaim(
 			stored,
-			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "ControllerAdvice" }]),
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "zzz_absent" }]),
 			ASK,
 		)?.text ?? "",
-		/no search of the whole checkout names what it says is absent.*ignoreCase and a plain word/u,
+		/no search of the whole checkout names what this claim says is absent.*reword the claim.*ignoreCase/u,
 	);
 });
 
@@ -1250,6 +1273,6 @@ const absenceVectors = z
 	.parse(JSON.parse(readFileSync(new URL("absence-search-vectors.json", import.meta.url), "utf8")));
 for (const { name, patterns, subject, texts, consulted, tied } of absenceVectors) {
 	void test(`an absence and its search: ${name}`, () => {
-		assert.equal(searchedFor(subject, texts, patterns, consulted), tied);
+		assert.equal(unsearchedClaim(subject, texts, patterns, consulted) === undefined, tied);
 	});
 }

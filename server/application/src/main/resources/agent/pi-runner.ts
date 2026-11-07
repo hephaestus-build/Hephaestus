@@ -1239,9 +1239,10 @@ export async function runReviewJob(): Promise<void> {
 							}
 						: undefined,
 					ask: !askedAboutCheckout.has(slug),
+					askUntied: !askedAboutCheckout.has(`${slug}:untied`),
 				});
 		if (unread !== undefined) {
-			askedAboutCheckout.add(slug);
+			askedAboutCheckout.add(unread.untied === true ? `${slug}:untied` : slug);
 			throw new UnreadEvidenceError(unread.text);
 		}
 		const parsed = parseCandidate({ ...submission, coverage });
