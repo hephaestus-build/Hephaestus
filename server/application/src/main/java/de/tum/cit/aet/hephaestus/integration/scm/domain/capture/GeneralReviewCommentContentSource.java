@@ -127,7 +127,7 @@ public class GeneralReviewCommentContentSource {
                         || body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER)
                         || (comment.getNativeId() != null && postedComments.contains(comment.getNativeId()));
             });
-            boolean truncated = pullRequestRepository.isDiscussionNotReadWhole(pullRequestId);
+            boolean truncated = !pullRequestRepository.isDiscussionReadWhole(pullRequestId);
             comments.sort(
                     Comparator.comparing(IssueComment::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
 

@@ -150,7 +150,7 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
 
     @ParameterizedTest
     @CsvSource({"79,100,true", "80,100,false", "99,100,false", "0,19,false"})
-    void shouldRestartCompletedGitLabHistoryOnlyForAMaterialProviderGap(long stored, int total, boolean restart) {
+    void shouldRestartCompletedHistoryForAMaterialGapWhenDiscussionsAreWhole(long stored, int total, boolean restart) {
         var target = completedTarget(7L);
         prepareAdminRepair(List.of(target));
         when(pullRequests.countStoredByRepositoryId(42L)).thenReturn(stored);
@@ -158,6 +158,32 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
         service.repairCompletedRepositories(SCOPE_ID, handle);
         verify(ledger).reconcileRepository(SCOPE_ID, 42L);
         verify(syncTargetProvider, times(restart ? 1 : 0)).restartCompletedBackfill(SCOPE_ID, 7L, total, stored);
+    }
+
+    @Test
+    void shouldRestartCompletedHistoryForAnUnreadDiscussionWithoutARowGap() {
+        prepareAdminRepair(List.of(completedTarget(7L)));
+        when(pullRequests.countStoredByRepositoryId(42L)).thenReturn(100L);
+        when(mergeRequests.countMergeRequests(SCOPE_ID, REPO)).thenReturn(100);
+        when(pullRequests.existsUnfinishedDiscussionRead(42L)).thenReturn(true);
+
+        service.repairCompletedRepositories(SCOPE_ID, handle);
+
+        verify(syncTargetProvider).restartCompletedBackfill(SCOPE_ID, 7L, 100, 100L);
+    }
+
+    @Test
+    void shouldWarnWhenAnUnreadDiscussionRepairRestartIsRefused() {
+        prepareAdminRepair(List.of(completedTarget(7L)));
+        when(pullRequests.countStoredByRepositoryId(42L)).thenReturn(100L);
+        when(mergeRequests.countMergeRequests(SCOPE_ID, REPO)).thenReturn(100);
+        when(pullRequests.existsUnfinishedDiscussionRead(42L)).thenReturn(true);
+        when(syncTargetProvider.restartCompletedBackfill(SCOPE_ID, 7L, 100, 100L))
+                .thenReturn(Optional.empty());
+
+        service.repairCompletedRepositories(SCOPE_ID, handle);
+
+        verify(handle).reportWarnings();
     }
 
     @Test

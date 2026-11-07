@@ -314,8 +314,9 @@ public class GitLabDiscussionSyncService {
     }
 
     /** Whether a merge request of this repository that a read since {@code since} reached is not read whole. */
-    public boolean hasUnfinishedReadSince(Repository repository, Instant since) {
-        return pullRequests.existsUnfinishedDiscussionReadSince(Objects.requireNonNull(repository.getId()), since);
+    public boolean hasUnfinishedReadSince(long workspaceId, Repository repository, Instant since) {
+        return pullRequests.existsUnfinishedDiscussionReadSince(
+                workspaceId, Objects.requireNonNull(repository.getId()), since);
     }
 
     /** A discussion's notes come as one page with no cursor of their own, so a longer discussion is read in part. */

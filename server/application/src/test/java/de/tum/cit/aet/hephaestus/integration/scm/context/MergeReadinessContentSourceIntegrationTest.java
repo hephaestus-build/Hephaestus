@@ -67,6 +67,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -969,6 +972,26 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
         monitorRepository.save(monitor);
     }
 
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(booleans = {false, true})
+    void shouldClaimWholeDiscussionListsOnlyAfterAWholeProviderRead(@Nullable Boolean whole) {
+        var mr = mergeRequest(course, 88, false, MergeStateStatus.UNSTABLE, CheckState.SUCCESS, HEAD);
+        if (whole == null) {
+            jdbcTemplate.update("UPDATE issue SET discussion_read_whole = NULL WHERE id = ?", mr.getId());
+        } else {
+            pullRequestRepository.recordDiscussionRead(mr.getId(), whole);
+        }
+        var entry = source.inspect(workspace.getId(), accountId(student), mr.getId())
+                .path("pullRequests")
+                .get(0);
+        for (String field : List.of("latestReviewsStatus", "generalNotesStatus", "threadsStatus")) {
+            assertThat(entry.path(field).asString())
+                    .as(field)
+                    .isEqualTo(Boolean.TRUE.equals(whole) ? "COMPLETE" : "TRUNCATED");
+        }
+    }
+
     private PullRequest mergeRequest(
             Repository repository,
             int number,
@@ -994,7 +1017,9 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
         mr.observeHeadChecks(checkedSha, checks, true);
         mr.setCreatedAt(Instant.now());
         mr.setUpdatedAt(Instant.now());
-        return pullRequestRepository.save(mr);
+        pullRequestRepository.saveAndFlush(mr);
+        pullRequestRepository.recordDiscussionRead(mr.getId(), true);
+        return mr;
     }
 
     private PullRequestReview review(

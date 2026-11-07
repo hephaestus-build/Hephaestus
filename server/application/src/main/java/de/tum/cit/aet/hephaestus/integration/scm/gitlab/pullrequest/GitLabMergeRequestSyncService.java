@@ -297,7 +297,7 @@ public class GitLabMergeRequestSyncService {
             result = SyncResult.abortedError(totalSynced);
         } else if (rateLimitAborted) {
             result = SyncResult.abortedRateLimit(totalSynced);
-        } else if (capped || discussionSyncService.hasUnfinishedReadSince(repository, runStart)) {
+        } else if (capped || discussionSyncService.hasUnfinishedReadSince(scopeId, repository, runStart)) {
             result = SyncResult.completedWithWarnings(totalSynced);
         } else {
             result = SyncResult.completed(totalSynced);
@@ -624,12 +624,15 @@ public class GitLabMergeRequestSyncService {
                                 ProcessingContext.forSync(scopeId, repository).withObservedAt(fetchedAt)))
                 .orElse(null);
 
-        // Sync discussions (threads + comments) for this MR when something can be there.
+        // A zero user-note count does not cover system-note history or establish a first whole discussion read.
         // Uses discussion-based sync to preserve thread structure, resolution state, and diff positions.
         if (pr != null
                 && iid != null
-                && readsDiscussions(
-                        fields.userNotesCount(), syncApprovers != null && !syncApprovers.isEmpty(), fields.state())) {
+                && (!Boolean.TRUE.equals(pr.getDiscussionReadWhole())
+                        || readsDiscussions(
+                                fields.userNotesCount(),
+                                syncApprovers != null && !syncApprovers.isEmpty(),
+                                fields.state()))) {
             try {
                 discussionSyncService.syncDiscussionsForMergeRequest(scopeId, repository, iid, pr, read);
             } catch (ConcurrencyFailureException conflict) {
@@ -644,8 +647,8 @@ public class GitLabMergeRequestSyncService {
 
     /**
      * Whether a merge request's discussions are fetched at all: the gate spares one request per
-     * untouched open MR. The review decisions — an approval's time, a request for changes, an
-     * unapproval — live in system notes, which {@code userNotesCount} does not count, so an MR with an
+     * untouched open MR whose discussion was already read whole. The review decisions — an approval's time,
+     * a request for changes, an unapproval — live in system notes, which {@code userNotesCount} does not count, so an MR with an
      * approver or one that has left the open state is read regardless. An unknown count cannot skip a read.
      */
     static boolean readsDiscussions(@Nullable Integer userNotesCount, boolean hasApprover, @Nullable String state) {

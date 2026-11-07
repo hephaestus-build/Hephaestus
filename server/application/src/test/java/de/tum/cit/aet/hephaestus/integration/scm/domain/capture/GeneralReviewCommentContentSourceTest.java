@@ -56,6 +56,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(pullRequestRepository.isDiscussionReadWhole(PR_ID)).thenReturn(true);
         lenient()
                 .when(deliveredCommentLookup.findForPullRequest(anyLong(), anyLong(), eq(ScmItemEvents.PULL_REQUEST)))
                 .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of()));

@@ -144,6 +144,17 @@ class GitHubBackfillRepairTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReportARefusedDiscussionRepairRestartToTheAdminRepositoryLoop() {
+        when(field.toEntity(Integer.class)).thenReturn(100);
+        when(pullRequests.existsUnfinishedDiscussionRead(8L)).thenReturn(true);
+        when(state.restartCompletedBackfill(3L, 7L, 100, 100L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> repair.inspect(target, true))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Historical repair restart was not admitted");
+    }
+
+    @Test
     void shouldNotTreatSharedIssueNumbersAsMissingPullRequests() {
         when(field.toEntity(Integer.class)).thenReturn(100);
         assertThat(repair.inspect(target, false)).isEqualTo(target);

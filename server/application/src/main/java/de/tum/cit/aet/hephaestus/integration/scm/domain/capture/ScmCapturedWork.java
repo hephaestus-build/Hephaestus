@@ -21,7 +21,7 @@ public record ScmCapturedWork(
         @Nullable String targetBranch,
         @Nullable Long reviewSourceId,
         @Nullable Long reviewerUserId) {
-    /** The limitation of a source whose discussion the last provider read did not reach the end of. */
+    /** The limitation of a discussion without a recorded whole provider read. */
     public static final String DISCUSSION_NOT_READ_WHOLE = "DISCUSSION_NOT_READ_WHOLE";
 
     public ScmCapturedWork {

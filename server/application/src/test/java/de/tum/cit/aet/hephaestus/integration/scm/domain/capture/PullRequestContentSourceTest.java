@@ -119,6 +119,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(pullRequestRepository.isDiscussionReadWhole(456L)).thenReturn(true);
         mirroredPullRequest = pullRequest();
         lenient()
                 .when(deliveredCommentLookup.findForPullRequest(anyLong(), anyLong(), eq(ScmItemEvents.PULL_REQUEST)))
