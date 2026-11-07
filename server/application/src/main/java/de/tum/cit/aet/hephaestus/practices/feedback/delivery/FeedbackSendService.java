@@ -30,7 +30,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class FeedbackSendService {
     private static final Logger log = LoggerFactory.getLogger(FeedbackSendService.class);
-    private static final int MAX_READBACK_ATTEMPTS = 8;
+    public static final int MAX_READBACK_ATTEMPTS = 8;
     private final FeedbackSendTransactions transactions;
     private final FeedbackTargetResolver targets;
     private final List<SummaryWriter> summaries;

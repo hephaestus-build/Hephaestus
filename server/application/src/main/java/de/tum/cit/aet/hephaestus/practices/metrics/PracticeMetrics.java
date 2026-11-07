@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.practices.metrics;
 public final class PracticeMetrics {
 
     public static final String FEEDBACK_OLDEST_WAITING = "practice.feedback.oldest.waiting";
+    public static final String FEEDBACK_SEND_ATTEMPTS = "practice.feedback.send.attempts";
+    public static final String FEEDBACK_SEND_READBACK_LIMIT = "practice.feedback.send.readback.limit";
     public static final String FEEDBACK_SETTLED = "practice.feedback.settled";
     public static final String REVIEW_FIRST_DELIVERY = "practice.review.first.delivery";
     public static final String REVIEW_ENDED = "practice.review.ended";
