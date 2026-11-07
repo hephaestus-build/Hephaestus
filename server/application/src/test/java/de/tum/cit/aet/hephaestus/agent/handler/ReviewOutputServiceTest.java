@@ -555,7 +555,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         prepare(
                 job,
                 pr50ErrorHandling(
-                        List.of(searchedBytes(PR50_HEAD, "6".repeat(64)), searched(PR50_HEAD)), UnaryOperator.identity()));
+                        List.of(searchedBytes(PR50_HEAD, "6".repeat(64)), searched(PR50_HEAD)),
+                        UnaryOperator.identity()));
 
         verify(membership, never()).withhold(anyLong(), any(), any(), any());
     }

@@ -43,7 +43,7 @@ export function resultToolSchemas(availableSourceKindValues: readonly string[]) 
 				type: "string",
 				minLength: 1,
 				description:
-					"What the matches of your search are, and why they do not show the behavior you report as absent. Required when the search that names your claim found any match.",
+					"What the matches of your search are, and why they do not show the behavior you report as absent. Required when a search that names your claim found any match.",
 			},
 		},
 	} as const;

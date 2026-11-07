@@ -34,7 +34,7 @@ final class AbsenceClaims {
                     + "absent)\\b[^.]{0,80}\\b(?:in|across|throughout|under)|\\b(?:missing|absent) from) "
                     + "(?:the |this |our )?(?:whole |entire |"
                     + "reviewed |pinned |checked-out |rest of the )?(?:repository|repo|codebase|code base|"
-                    + "checkout|project|application|source tree|src)\\b(?!\\.\\w|'s\\b|[ -](?:code|manifest|"
+                    + "checkout|project|application|source tree|src)\\b(?!\\.\\w|(?:'s)?[ -](?:code|manifest|"
                     + "inventory|policy|board|tracker|implementation|service|config|method|call|class|interface|layer|bean|query|lookup|result|field|object|instance|step|action|settings?)s?\\b)",
             "\\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|"
                     + "absent)\\b[^.]{0,80}\\b(?:anywhere|elsewhere) (?:in|across|throughout|"

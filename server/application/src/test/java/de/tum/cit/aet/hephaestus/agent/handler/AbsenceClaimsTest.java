@@ -160,6 +160,15 @@ class AbsenceClaimsTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReadAPossessiveOfTheRepositoryAsAClaim() {
+        assertThat(List.of(
+                        "There is no auth check in the project's codebase.",
+                        "No handler exists in the repository's source tree.",
+                        "Auth checks are missing from the project's dependencies."))
+                .allMatch(AbsenceClaims::claimed);
+    }
+
+    @Test
     void shouldLeaveASentenceBoundedToTheCodeItCites() {
         assertThat(List.of(
                         "No null check on the value returned from the repository.",

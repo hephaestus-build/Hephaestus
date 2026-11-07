@@ -111,8 +111,8 @@ class JobEvidenceFilesCheckoutDigestTest extends BaseUnitTest {
     @Test
     void shouldReadTheRecordedDigestForASearchOfTheWholeCheckoutOnly() {
         var job = job(Map.of(ROOT, PINNED));
-        var read =
-                new ReadReceipt(TREE, ROOT + ".git/HEAD", "b.txt", "c", ReadReceiptStatus.COMPLETE, PINNED, 1, 1, null, null);
+        var read = new ReadReceipt(
+                TREE, ROOT + ".git/HEAD", "b.txt", "c", ReadReceiptStatus.COMPLETE, PINNED, 1, 1, null, null);
         assertThat(files().capturedCheckoutDigest(job, search("."))).contains(PINNED);
         assertThat(files().capturedCheckoutDigest(job, search("a"))).isEmpty();
         assertThat(files().capturedCheckoutDigest(job, read)).isEmpty();
