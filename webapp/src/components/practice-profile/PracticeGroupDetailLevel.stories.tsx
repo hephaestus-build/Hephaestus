@@ -480,7 +480,7 @@ export const OnlyNoStandingYetPractices: Story = {
 		await expect(screen.getAllByRole("button", { name: "No standing yet" })).toHaveLength(6);
 		await expect(screen.queryByText("Not reviewed")).toBeNull();
 		// The header's trend chip says there is nothing to compare yet; the folded rows stay badge-only.
-		await expect(screen.getAllByText("No baseline yet")).toHaveLength(1);
+		await expect(screen.getAllByText("Not enough to compare")).toHaveLength(1);
 	},
 };
 

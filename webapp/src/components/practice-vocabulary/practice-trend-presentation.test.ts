@@ -17,12 +17,12 @@ const support = (overrides: Partial<TrendSupport> = {}): TrendSupport => ({
 });
 
 describe("trend comparison sentence", () => {
-	it("says the default comparison in one plain sentence", () => {
-		expect(TREND_EXPLAINED).toBe(
+	it("describes the comparison without assuming a bundle size", () => {
+		expect(TREND_EXPLAINED).toBe("Compares your recent reviewed work with the work before it.");
+		expect(trendComparison("IMPROVING", "practice", undefined)).toBe(TREND_EXPLAINED);
+		expect(trendComparison("IMPROVING", "practice", support())).toBe(
 			"Compares your last four reviewed pieces of work with the four before them.",
 		);
-		expect(trendComparison("IMPROVING", "practice", undefined)).toBe(TREND_EXPLAINED);
-		expect(trendComparison("IMPROVING", "practice", support())).toBe(TREND_EXPLAINED);
 	});
 
 	it("names the practice's own counts when they differ from the default", () => {

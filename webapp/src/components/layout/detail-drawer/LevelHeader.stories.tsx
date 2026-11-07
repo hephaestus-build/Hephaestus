@@ -7,9 +7,10 @@ import { StandingSummaryBox } from "@/components/practice-vocabulary/StandingSum
 import { DrawerBody } from "@/components/ui/drawer";
 import { withPageBehind } from "@/stories/decorators";
 import { InLevelStack } from "@/stories/level-stack";
-import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
+import { expectSettledVisible, settledDrawerPanel, settledPopup } from "@/stories/overlay";
 import { expectNoOverflowingElement, expectNoPanelOverflow } from "@/stories/reflow";
 import { precedes } from "@/test/dom";
+import { levelInfo } from "./level-info";
 
 import { LevelHeader } from "./LevelHeader";
 
@@ -39,6 +40,7 @@ const meta = {
 		title: "Describe what changed and why",
 	},
 	argTypes: {
+		info: { control: false },
 		path: { control: false },
 		mark: { control: false },
 		chips: { control: false },
@@ -221,5 +223,23 @@ export const NarrowViewport: Story = {
 		await expect(aside.getBoundingClientRect().top).toBeGreaterThan(
 			title.getBoundingClientRect().bottom,
 		);
+	},
+};
+
+/** An explanation beside the title keeps the drawer's accessible name intact. */
+export const WithInfo: Story = {
+	args: {
+		info: levelInfo({ label: "About this practice", lead: "What the practice asks of your work." }),
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(screen.getByRole("dialog")).toHaveAccessibleName("Describe what changed and why");
+		await userEvent.click(panel.getByRole("button", { name: "About this practice" }));
+		await expect(
+			within(await settledPopup()).getByText("What the practice asks of your work."),
+		).toBeVisible();
+		await expect(
+			panel.getByRole("heading", { name: "Describe what changed and why" }),
+		).toBeVisible();
 	},
 };

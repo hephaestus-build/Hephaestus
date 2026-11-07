@@ -94,9 +94,9 @@ export function TimelineItemSkeleton() {
 				<Skeleton className="h-3 w-10" />
 			</div>
 			<div className={RAIL}>
-				<span className={LINE_IN} />
+				<span data-timeline-rail-in className={LINE_IN} />
 				<span className={DOT_BOX}>
-					<span className={cn(DOT, "bg-muted-foreground/40")} />
+					<span data-timeline-dot className={cn(DOT, "bg-muted-foreground/40")} />
 				</span>
 				<span className={cn(LINE, "w-px bg-border group-last:hidden")} />
 			</div>

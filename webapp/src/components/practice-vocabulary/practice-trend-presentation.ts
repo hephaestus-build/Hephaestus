@@ -8,7 +8,7 @@ import {
 	standingDefs,
 	type StandingScope,
 } from "./practice-group-standing-defs";
-import { TREND_BUNDLE, type TrendDirection } from "./practice-trend-defs";
+import type { TrendDirection } from "./practice-trend-defs";
 
 /**
  * The direction a surface shows: one with no evidence behind it, or none at all, is "not enough to
@@ -27,13 +27,8 @@ export function shownTrendDirection(
  */
 export const LOOKBACK_DAYS = 90;
 
-/**
- * How a practice's trend compares, in one plain sentence after its direction: the last bundle of
- * reviewed work against the same amount just before it, the baseline, which moves with the work
- * (`TrendProperties` `bundleSize`). A chip's words alone ("No baseline yet") do not say they are a
- * trend.
- */
-export const TREND_EXPLAINED = `Compares your last ${TREND_BUNDLE} reviewed pieces of work with the ${TREND_BUNDLE} before them.`;
+/** How a practice's trend compares when the server supplies no counts. */
+export const TREND_EXPLAINED = "Compares your recent reviewed work with the work before it.";
 
 /**
  * The same for a group, without a number: the server pools the group's practices, each over its own
@@ -44,8 +39,8 @@ export const GROUP_TREND_EXPLAINED =
 
 /**
  * The comparison sentence a trend's tooltip ends with: the practice's own counts where the trend has
- * them and they differ from the default bundle, and what is still missing where there is no
- * direction yet (nothing where that is unknown). No day spans and no practice coverage: the tooltip stays two short sentences.
+ * them, and what is still missing where there is no direction yet (nothing where that is unknown).
+ * No day spans and no practice coverage: the tooltip stays two short sentences.
  */
 export function trendComparison(
 	direction: TrendDirection,

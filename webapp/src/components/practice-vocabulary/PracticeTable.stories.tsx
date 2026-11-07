@@ -182,11 +182,9 @@ export const OpensFromTheStandingCell: Story = {
 		await userEvent.click(badge);
 		await expect(onOpen).toHaveBeenLastCalledWith("describe-what-and-why");
 		// The chip's sentence says the direction in plain words, then what a trend compares.
-		const trend = within(row).getByRole("button", { name: "No baseline yet" });
+		const trend = within(row).getByRole("button", { name: "Not enough to compare" });
 		await expect(trend).toHaveAccessibleDescription(
-			expect.stringContaining(
-				"A trend needs eight reviewed pieces of work. So far there are fewer.",
-			),
+			expect.stringContaining("A trend needs more reviewed work. So far there is too little."),
 		);
 		await userEvent.click(trend);
 		await expect(onOpen).toHaveBeenCalledTimes(2);

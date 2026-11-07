@@ -13,7 +13,7 @@ import {
 	text,
 } from "@/components/practice-vocabulary/feedback-text";
 import { PRACTICE_GROUP_STANDING_DEFS } from "@/components/practice-vocabulary/practice-group-standing-defs";
-import type { TrendDirection } from "@/components/practice-vocabulary/practice-trend-defs";
+import { PRACTICE_TREND_DEFS } from "@/components/practice-vocabulary/practice-trend-defs";
 import { asDate, formatDay } from "@/lib/dates";
 import { capitalise, hasText } from "@/lib/text";
 
@@ -75,25 +75,18 @@ const rank = (event: ProfileEvent) => PRECEDENCE.indexOf(event.kind);
 const SENTENCE_ORDER: readonly ChangeKind[] = ["reset", "resolved", "down", "up", "first", "trend"];
 
 /** The registries' words, keyed by the enum values the wire carries. */
-const STANDING_LABELS: Record<string, string | undefined> = Object.fromEntries(
+const STANDING_LABELS = new Map(
 	Object.entries(PRACTICE_GROUP_STANDING_DEFS).map(([value, def]) => [value, def.label]),
 );
-/**
- * A trend as a sentence says it ("A and C now show an increasing baseline"), not as its chip's
- * capitalized label; each phrase keeps the chip's words, so the two read as one.
- */
-const TREND_PHRASES: Record<TrendDirection, string> = {
-	IMPROVING: "an increasing baseline",
-	DECLINING: "a decreasing baseline",
-	UNCERTAIN: "no clear baseline change",
-	INSUFFICIENT_EVIDENCE: "no baseline yet",
-};
-const TREND_LABELS: Record<string, string | undefined> = TREND_PHRASES;
+/** Quote the chip's plain words so one registry owns each direction's visible name. */
+const TREND_LABELS = new Map(
+	Object.entries(PRACTICE_TREND_DEFS).map(([value, def]) => [value, `“${def.label}”`]),
+);
 
 /** The registry's word for a standing or a trend, which the wire types as a bare string. */
 const standingLabel = (value: string | null) =>
-	value === null ? undefined : STANDING_LABELS[value];
-const trendLabel = (value: string | null) => (value === null ? undefined : TREND_LABELS[value]);
+	value === null ? undefined : STANDING_LABELS.get(value);
+const trendLabel = (value: string | null) => (value === null ? undefined : TREND_LABELS.get(value));
 
 function changeEvent(change: ProfileChange): ChangeEvent | undefined {
 	const group = change.type === "GROUP_MOVED";

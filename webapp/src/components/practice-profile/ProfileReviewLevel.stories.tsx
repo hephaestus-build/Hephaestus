@@ -319,3 +319,31 @@ export const MobileReflow: Story = {
 		await expectNoPanelOverflow(await settledReviewPanel());
 	},
 };
+
+/** Work without a provider number still links to its original URL through its title. */
+export const DocumentLink: Story = {
+	args: {
+		state: readyWith({
+			review: {
+				...review,
+				item: {
+					...review.item,
+					kind: "docs.document",
+					provider: "OUTLINE",
+					label: "Architecture notes",
+					title: "Architecture notes",
+					url: "https://example.com/documents/architecture",
+					container: null,
+				},
+			},
+		}),
+	},
+	play: async () => {
+		const panel = within(await settledReviewPanel());
+		const title = panel.getByRole("heading", { name: /^Architecture notes/u });
+		await expect(within(title).getByRole("link", { name: /^Architecture notes/u })).toHaveAttribute(
+			"href",
+			"https://example.com/documents/architecture",
+		);
+	},
+};

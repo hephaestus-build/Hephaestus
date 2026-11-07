@@ -72,8 +72,8 @@ export const Default: Story = {
 		// The group in which no practice has a standing yet waits in the fold under the table.
 		await expect(canvas.getByRole("button", { name: FOLD })).toBeVisible();
 		// A trend reads as words, and a group with none says so in the same place.
-		await expect(canvas.getByRole("button", { name: "Decreasing baseline" })).toBeVisible();
-		await expect(canvas.getAllByText("No baseline yet")).toHaveLength(2);
+		await expect(canvas.getByRole("button", { name: "Met less often" })).toBeVisible();
+		await expect(canvas.getAllByText("Not enough to compare")).toHaveLength(2);
 		const breakdowns = canvas.getAllByRole("list", { name: "Practices by standing" }).map((list) =>
 			within(list)
 				.getAllByRole("listitem")
@@ -190,7 +190,7 @@ export const OneBulletPerMove: Story = {
 		);
 		// Three trends that turned the same way are one bullet, and the verb agrees with them.
 		await expect(items[2]).toHaveTextContent(
-			"Scope the change to one concern, Write commit subjects a reviewer can follow and Keep the diff reviewable in one sitting now show an increasing baseline.",
+			"Scope the change to one concern, Write commit subjects a reviewer can follow and Keep the diff reviewable in one sitting now show “Met more often”.",
 		);
 		// Every practice in the joined bullet is its own pill, and each opens its own practice.
 		await userEvent.click(
