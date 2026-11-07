@@ -192,62 +192,17 @@ export function safeRepositoryPath(file: string): boolean {
 	);
 }
 
-/**
- * The regular file at `file` in `commit`, read whole only when Git's recorded size is within `limit`. A link, a
- * submodule or a directory is named as not a regular file; its target is never followed.
- */
-export function readPinnedBlob(
-	repository: string,
-	commit: string,
-	file: string,
-	limit: number,
-): PinnedBlob {
-	if (!isCommitId(commit) || !safeRepositoryPath(file)) {
-		return { kind: "unsafe" };
+/** Where the change view records the commit that the checkout holds. */
+export const CHECKOUT_COMMIT = `${CHANGE_ROOT}/checkout-commit`;
+
+/** The commit that the change view read before anything untrusted ran, or null when there is no checkout. */
+export function pinnedCheckout(root: string): string | null {
+	const file = path.resolve(root, CHECKOUT_COMMIT);
+	if (!existsSync(file)) {
+		return null;
 	}
-	let entry: RegExpExecArray | null;
-	try {
-		const listing = git(repository, [
-			"--literal-pathspecs",
-			"ls-tree",
-			"-l",
-			"-z",
-			"--full-tree",
-			commit,
-			"--",
-			file,
-		]).toString("utf8");
-		entry =
-			listing
-				.split("\0")
-				.map((record) =>
-					/^(?<mode>\d{6}) (?<type>\w+) (?<id>[0-9a-f]+) +(?<size>\S+)\t(?<path>.*)$/su.exec(
-						record,
-					),
-				)
-				.find((match) => match?.groups?.path === file) ?? null;
-	} catch {
-		return { kind: "unreadable" };
-	}
-	const groups = entry?.groups;
-	if (groups === undefined) {
-		return { kind: "absent" };
-	}
-	if (groups.type !== "blob" || (groups.mode !== "100644" && groups.mode !== "100755")) {
-		return { kind: "nonregular" };
-	}
-	const size = Number(groups.size);
-	if (!Number.isSafeInteger(size)) {
-		return { kind: "unreadable" };
-	}
-	if (size > limit) {
-		return { kind: "tooLarge", size };
-	}
-	try {
-		return { kind: "regular", bytes: git(repository, ["cat-file", "blob", groups.id ?? ""]) };
-	} catch {
-		return { kind: "unreadable" };
-	}
+	const commit = readFileSync(file, "utf8").trim();
+	return isCommitId(commit) ? commit : null;
 }
 
 /** The commit the checkout has checked out, or null when it cannot be read. */

@@ -6,10 +6,11 @@
 // output, and the paths it may name, which it resolves through symlinks before it compares them. A failure of one call
 // ends that call with a named refusal; only a broken frame ends the connection.
 
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, fork, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import {
+	chmodSync,
 	createWriteStream,
 	readdirSync,
 	readFileSync,
@@ -33,6 +34,7 @@ import { createServer, type Server, type Socket } from "node:net";
 import path from "node:path";
 import { finished } from "node:stream/promises";
 import { setTimeout as sleep } from "node:timers/promises";
+import { deserialize } from "node:v8";
 
 import {
 	type ToolAddress,
@@ -61,6 +63,10 @@ export interface ToolsServerOptions {
 	scratch: string;
 	/** The roots that `put` may create a directory in. */
 	putRoots: string[];
+	/** The practice program's process entry point, where this side runs `script.run`; the tools side has none. */
+	scriptEntry?: string;
+	/** Whether this side only runs practice programs: it then refuses `exec`, `read`, `put` and `reset`. */
+	programsOnly?: boolean;
 	/**
 	 * Whether this user runs nothing but the tools: then `reset` also ends processes that left their call's group.
 	 * Only the sidecar's own user does; a test shares its user with the test runner.
@@ -70,6 +76,15 @@ export interface ToolsServerOptions {
 
 /** Every process of a call carries this variable, with the call's id: it finds a process that left the call's group. */
 const CALL_MARKER = "HEPHAESTUS_TOOL_CALL";
+
+/** The sandbox's Git settings: the Pod gives them to this side, and they carry no credential. */
+function gitSettings(): NodeJS.ProcessEnv {
+	return Object.fromEntries(
+		Object.entries(process.env).filter(([name]) => name.startsWith("GIT_")),
+	);
+}
+
+const ALL_OPERATIONS = ["exec", "script.run", "read", "put", "reset"];
 
 /** Only these variables reach a program: no credential ever does. */
 const ENV = {
@@ -238,6 +253,19 @@ async function makeReadOnly(dir: string): Promise<void> {
 		}
 	}
 	await chmod(dir, 0o555);
+}
+
+/** A message for a practice program, as the loop serialized it; anything else is a broken frame. */
+function parsedMessage(body: Buffer): object {
+	try {
+		const value: unknown = deserialize(body);
+		if (typeof value === "object" && value !== null) {
+			return value;
+		}
+	} catch {
+		// Refused below.
+	}
+	throw new ToolProtocolError("protocol", "a script message that is not an object");
 }
 
 /** The tools and every command have one authority; the trusted loop is outside it (ADR 0068, trust split). */
@@ -527,7 +555,8 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		sweepTrash();
 	}
 
-	return createServer({ highWaterMark: LIMITS.bodyBytes, noDelay: true }, (socket: Socket) => {
+	const sockets = { highWaterMark: LIMITS.bodyBytes, noDelay: true };
+	const server = createServer(sockets, (socket: Socket) => {
 		const reader = frameReader();
 		/** The ids of this connection's requests that have not sent their final frame. */
 		const inFlight = new Set<string>();
@@ -535,6 +564,8 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		const puts = new Map<string, Put>();
 		/** Puts that were refused: the loop may have streamed some of their archive before it read the refusal. */
 		const refusedPuts = new Set<string>();
+		/** The frames so far of each message to a program. */
+		const scriptParts = new Map<string, Buffer[]>();
 		/** In-flight calls that were cancelled before they started. */
 		const cancelled = new Set<string>();
 		/** Aborted when the connection ends: it ends the connection's extractions. */
@@ -614,6 +645,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				integer(header, "maxOutputBytes") ?? LIMITS.execStreamBytes,
 				LIMITS.execStreamBytes,
 			);
+			const uncounted = header.uncounted === true;
 			const spill = await openSpill(options.scratch, id);
 
 			// The connection ended while the call was checked: nothing would end what it starts.
@@ -643,7 +675,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			try {
 				child = spawn(file, args, {
 					cwd,
-					env: { ...ENV, HOME: options.scratch, [CALL_MARKER]: id },
+					env: { ...ENV, ...gitSettings(), HOME: options.scratch, [CALL_MARKER]: id },
 					detached: true,
 					stdio: ["ignore", "pipe", "pipe"],
 				});
@@ -711,7 +743,10 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 						waitForSpill();
 					}
 				}
-				const room = Math.min(maxStream - streamed, LIMITS.attemptStreamBytes - attemptStreamed);
+				const room = Math.min(
+					maxStream - streamed,
+					uncounted ? maxStream : LIMITS.attemptStreamBytes - attemptStreamed,
+				);
 				const part = data.subarray(0, Math.max(0, room));
 				if (part.length < data.length) {
 					truncated = true;
@@ -720,7 +755,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 					outputLost = true;
 				}
 				streamed += part.length;
-				attemptStreamed += part.length;
+				attemptStreamed += uncounted ? 0 : part.length;
 				for (let at = 0; at < part.length; at += LIMITS.bodyBytes) {
 					if (!send({ type: "out", id }, part.subarray(at, at + LIMITS.bodyBytes))) {
 						waitForSocket();
@@ -784,6 +819,115 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				void endCall(id, child);
 			});
 			child.once("close", (code: number | null, signal: NodeJS.Signals | null) => {
+				void finish(code, signal);
+			});
+		}
+
+		/** A message from the loop to a running program, in frames. One that comes after the program ended goes nowhere. */
+		function scriptIn(id: string, body: Buffer, more: boolean): void {
+			const parts = scriptParts.get(id) ?? [];
+			parts.push(body);
+			if (parts.reduce((bytes, part) => bytes + part.length, 0) > LIMITS.scriptInputBytes) {
+				throw new ToolProtocolError("protocol", "a script message past its bound");
+			}
+			if (more) {
+				scriptParts.set(id, parts);
+				return;
+			}
+			scriptParts.delete(id);
+			const child = running.get(id)?.child;
+			if (child?.connected === true) {
+				child.send(parsedMessage(Buffer.concat(parts)));
+			}
+		}
+
+		/**
+		 * Runs a practice program and relays its channel: this side checks nothing that the program says, because the
+		 * loop treats every message as untrusted and answers only what its allowlist names.
+		 */
+		async function script(id: string, header: Header, arrivedAfter: number): Promise<void> {
+			const entry = options.scriptEntry;
+			if (entry === undefined) {
+				refuse(id, "unknown", "This tools side runs no practice programs.");
+				return;
+			}
+			const execArgv = strings(header, "execArgv");
+			const requested = integer(header, "timeoutMs");
+			if (execArgv === undefined || requested === undefined || requested <= 0) {
+				refuse(id, "request", "A script.run needs execArgv and a positive timeoutMs.");
+				return;
+			}
+			if (socket.destroyed) {
+				return;
+			}
+			if (resets !== arrivedAfter) {
+				refuse(id, "reset", "A reset ended this call before it started.");
+				return;
+			}
+			if (cancelled.has(id)) {
+				final(id, { type: "script-exit", code: null, signal: "SIGKILL" });
+				return;
+			}
+			let child: ChildProcess;
+			try {
+				child = fork(entry, [], {
+					env: { [CALL_MARKER]: id },
+					execArgv,
+					detached: true,
+					stdio: ["ignore", "pipe", "pipe", "ipc"],
+					serialization: "advanced",
+				});
+			} catch {
+				refuse(id, "spawn", "The program could not start.");
+				return;
+			}
+			const ended = Promise.withResolvers<undefined>();
+			const call: Call = { id, child, ended: ended.promise };
+			running.set(id, call);
+			calls.add(call);
+			const timer = setTimeout(
+				() => {
+					void endCall(id, child);
+				},
+				Math.min(requested, LIMITS.execTimeoutMs),
+			);
+			let logged = 0;
+			const log = (chunk: Buffer) => {
+				const room = LIMITS.scriptLogBytes - logged;
+				if (room > 0) {
+					const part = chunk.subarray(0, room);
+					logged += part.length;
+					send({ type: "script-log", id }, part);
+				}
+			};
+			child.stdout?.on("data", log);
+			child.stderr?.on("data", log);
+			child.on("message", (message: unknown) => {
+				const bytes = typeof message === "string" ? Buffer.from(message) : undefined;
+				if (bytes === undefined || bytes.length > LIMITS.scriptMessageBytes) {
+					void endCall(id, child);
+					return;
+				}
+				send({ type: "script-out", id }, bytes);
+			});
+			child.on("error", () => {
+				void endCall(id, child);
+			});
+			child.once("exit", () => {
+				void endCall(id, child);
+			});
+			const finish = async (code: number | null, signal: NodeJS.Signals | null) => {
+				try {
+					await endCall(id, child);
+					final(id, { type: "script-exit", code, signal });
+				} finally {
+					running.delete(id);
+					calls.delete(call);
+					ended.resolve(undefined);
+				}
+			};
+			child.once("close", (code: number | null, signal: NodeJS.Signals | null) => {
+				clearTimeout(timer);
 				void finish(code, signal);
 			});
 		}
@@ -1124,6 +1268,10 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				await putData(id, frame.body);
 				return;
 			}
+			if (header.type === "script-in") {
+				scriptIn(id, frame.body, header.more === true);
+				return;
+			}
 			if (header.type === "put-end") {
 				const entry = puts.get(id);
 				if (entry?.ending === true || (entry === undefined && !refusedPuts.has(id))) {
@@ -1137,7 +1285,11 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			if (inFlight.has(id)) {
 				throw new ToolProtocolError("protocol", "a request id that is already in flight");
 			}
-			if (!["exec", "read", "put", "reset"].includes(header.type)) {
+			const offered = options.programsOnly === true ? ["script.run"] : ALL_OPERATIONS;
+			if (!offered.includes(header.type)) {
+				if (header.type === "put") {
+					rememberRefusedPut(id);
+				}
 				refuse(id, "unknown", `The tools side has no operation ${header.type}.`);
 				return;
 			}
@@ -1158,6 +1310,8 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			inFlight.add(id);
 			if (header.type === "exec") {
 				void settle(id, exec(id, header, resets));
+			} else if (header.type === "script.run") {
+				void settle(id, script(id, header, resets));
 			} else if (header.type === "read") {
 				void settle(id, read(id, header));
 			} else if (header.type === "reset") {
@@ -1198,7 +1352,17 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		socket.on("error", () => {
 			socket.destroy();
 		});
-	}).listen(options.address);
+	});
+	// A program can reach this socket: a second connection would let it start a program without its permission flags.
+	if (options.programsOnly === true) {
+		server.maxConnections = 1;
+	}
+	return server.listen(options.address, () => {
+		// The loop runs as another user of the Pod's group, and a Unix connect needs write access to the socket.
+		if ("path" in options.address) {
+			chmodSync(options.address.path, 0o660);
+		}
+	});
 }
 
 function toolsPort(value: string): number {
@@ -1237,6 +1401,9 @@ if (import.meta.main) {
 		roots: ["/workspace", workspace],
 		scratch,
 		putRoots: [repos],
+		...(process.env.TOOLS_ROLE === "programs"
+			? { scriptEntry: "/opt/practice-scripts/child.ts", programsOnly: true }
+			: {}),
 		soleUser: true,
 	});
 }

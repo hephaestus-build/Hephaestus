@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import nodePath from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -33,15 +34,7 @@ import {
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
 } from "./pi-agent-sandbox.ts";
 import { assessmentCacheExtension } from "./pi-assessment-cache.ts";
-import {
-	CHANGE_ROOT,
-	checkedOutCommit,
-	readChange,
-	readDescription,
-	readPinnedBlob,
-	safeRepositoryPath,
-	writeChangeView,
-} from "./pi-change.ts";
+import { CHANGE_ROOT, pinnedCheckout, readChange, safeRepositoryPath } from "./pi-change.ts";
 import { type DiagnosticValue, diagnose, errorKind, ms } from "./pi-diagnostics.ts";
 import { errorText } from "./pi-error-text.ts";
 import {
@@ -69,6 +62,7 @@ import {
 	newModelCallTiming,
 	stopIfAttemptRefused,
 } from "./pi-model-failure.ts";
+import { PinnedHistory, pinnedText, readPinnedObject, toolObjects } from "./pi-pinned-object.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { executionReport } from "./pi-practice-scripts-report.ts";
 import { ProblemDrafts } from "./pi-problem-drafts.ts";
@@ -122,7 +116,18 @@ import {
 } from "./pi-session-reads.ts";
 import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 import { hasText, isBlank } from "./pi-text.ts";
+import {
+	loopFindTool,
+	openToolSide,
+	toolBashOperations,
+	toolGrepTool,
+	toolLines,
+} from "./pi-tool-side.ts";
 import { prepareTurnText } from "./pi-turn-context.ts";
+import { proveSearches } from "./pi-verified-search.ts";
+import type { ToolClient } from "./tool-client.ts";
+import { toolsProgram } from "./tool-program.ts";
+import { LIMITS } from "./tool-protocol.ts";
 import { parseDiff } from "./work/practice-scripts/kits/scm/diff-parser.ts";
 import { fileRecordSchema } from "./work/practice-scripts/kits/scm/records.ts";
 import type { DiffFile } from "./work/practice-scripts/kits/scm/types.ts";
@@ -194,6 +199,13 @@ interface TaskEnvelope {
 }
 
 /** The server sets every one of these; a missing one stops the runner before it does any work. */
+/** A pinned file that the loop could not prove. A failed read is not a statement about the file. */
+const UNREADABLE = Symbol("unreadable");
+const TOO_LARGE = Symbol("too large");
+
+/** The most bytes of a pinned file that the loop reads: what one `exec` streams. */
+const MAX_PINNED_BYTES = LIMITS.execStreamBytes;
+
 function requiredEnv(name: string): string {
 	const value = process.env[name];
 	if (!hasText(value)) {
@@ -677,6 +689,20 @@ export async function runReviewJob(): Promise<void> {
 
 	const taskEnvelope = readTaskEnvelope();
 	const INPUT_PATHS = resolveTaskPaths(CWD, taskEnvelope.paths);
+	/** The commit that the checkout holds, as the change view read it before anything untrusted ran. */
+	const checkoutCommit = pinnedCheckout(CWD);
+	const histories = new Map<string, PinnedHistory>();
+	/** What the capture pinned for `repository`: its head, and the change's two ends. */
+	function pinnedHistory(repository: string): PinnedHistory {
+		let history = histories.get(repository);
+		if (history === undefined) {
+			const change = readChange(INPUT_PATHS.contextRoot);
+			const pinned = [checkoutCommit, change?.head, change?.base].filter((id) => id != null);
+			history = new PinnedHistory(toolObjects(toolSide, repository), pinned);
+			histories.set(repository, history);
+		}
+		return history;
+	}
 	const OUTPUT = `${CWD}/out`;
 	const RESULT_PATH = outputPath(OUTPUT, "result.json");
 	const REVIEW_STATE_PATH = outputPath(OUTPUT, "review-state.json");
@@ -1065,10 +1091,7 @@ export async function runReviewJob(): Promise<void> {
 			sandboxRoot: CWD,
 			repositoryRoot: taskEnvelope.paths.repositoryRoot,
 			headRevision:
-				scan?.headRevision ??
-				checkedOutCommit(INPUT_PATHS.repositoryRoot) ??
-				readChange(INPUT_PATHS.contextRoot)?.head ??
-				null,
+				scan?.headRevision ?? checkoutCommit ?? readChange(INPUT_PATHS.contextRoot)?.head ?? null,
 			...(scan === null ? {} : { treeSourceFile: scan.treeSourceFile }),
 		};
 	}
@@ -1104,7 +1127,10 @@ export async function runReviewJob(): Promise<void> {
 		validateConversationAttribution(submission, assignedInputs.get(slug));
 	}
 
-	function validateProblemDraft(raw: unknown, slug: string): Problem & { key: string } {
+	async function validateProblemDraft(
+		raw: unknown,
+		slug: string,
+	): Promise<Problem & { key: string }> {
 		const notes: string[] = [];
 		const problem = normalizeProblem(raw, notes, citationSources(slug));
 		if (problem.key === undefined) {
@@ -1118,18 +1144,18 @@ export async function runReviewJob(): Promise<void> {
 			`${taskEnvelope.paths.repositoryRoot.replace(/\/+$/u, "")}/`,
 		);
 		for (const citation of problem.citations) {
-			verifySubmissionCitation(citation, notes);
+			await verifySubmissionCitation(citation, notes);
 		}
 		validateProblemClaims([problem], slug);
 		return { ...problem, key: problem.key };
 	}
 
-	function validateSubmission(
+	async function validateSubmission(
 		raw: unknown,
 		slug: string,
 		measureCoverage: (citations: readonly Citation[]) => Coverage,
 		reads: SessionReads,
-	): Validated {
+	): Promise<Validated> {
 		const notes: string[] = [];
 		const submission = normalizeSubmission(
 			raw,
@@ -1180,9 +1206,10 @@ export async function runReviewJob(): Promise<void> {
 			);
 		}
 		for (const citation of citations) {
-			verifySubmissionCitation(citation, notes);
+			await verifySubmissionCitation(citation, notes);
 		}
 		validateProblemClaims(submission.problems ?? [], slug);
+		await reads.proveSearches(proveSearches);
 		const coverage = measureCoverage(citations);
 		// A scan's search covers its assigned file, which it must read whole.
 		const unread = scan
@@ -1212,7 +1239,7 @@ export async function runReviewJob(): Promise<void> {
 		return { candidate: parsed.candidate, notes };
 	}
 
-	function verifySubmissionCitation(citation: Citation, notes: string[]): void {
+	async function verifySubmissionCitation(citation: Citation, notes: string[]): Promise<void> {
 		const slug = sessionState().activeReview?.slug;
 		const preparedInput = slug === undefined ? null : `${REVIEW_INPUT_ROOT}/${slug}.json`;
 		if (
@@ -1250,7 +1277,7 @@ export async function runReviewJob(): Promise<void> {
 		}
 		// Match admission: repository quotes use Git blobs; change quotes use the derived diff.
 		const registered = citation.sourceKind === DIFF_SOURCE ? null : capturedText(citation);
-		const content = registered ?? citedContent(citation);
+		const content = registered ?? (await citedContent(citation));
 		const resolved =
 			registered === null
 				? resolveCited(citation, content)
@@ -1348,17 +1375,27 @@ export async function runReviewJob(): Promise<void> {
 		return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
 	}
 
-	function citedContent(citation: Citation): string | typeof BINARY | null {
+	async function citedContent(
+		citation: Citation,
+	): Promise<string | typeof BINARY | typeof UNREADABLE | typeof TOO_LARGE | null> {
 		if (citation.sourceKind === TREE_SOURCE) {
 			if (citation.commit === undefined) {
 				return readCheckoutFile(citation.path, citationRepository(citation));
 			}
-			const blob = readPinnedBlob(
-				citationRepository(citation),
+			const repository = citationRepository(citation);
+			const blob = await readPinnedObject(
+				toolObjects(toolSide, repository),
+				pinnedHistory(repository),
 				citation.commit,
 				citation.path,
-				64 * 1024 * 1024,
+				MAX_PINNED_BYTES,
 			);
+			if (blob.kind === "unreadable") {
+				return UNREADABLE;
+			}
+			if (blob.kind === "tooLarge") {
+				return TOO_LARGE;
+			}
 			return blob.kind === "regular" ? asText(blob.bytes) : null;
 		}
 		if (citation.sourceKind === DIFF_SOURCE) {
@@ -1369,8 +1406,22 @@ export async function runReviewJob(): Promise<void> {
 
 	function resolveCited(
 		citation: Citation,
-		content: string | typeof BINARY | null,
+		content: string | typeof BINARY | typeof UNREADABLE | typeof TOO_LARGE | null,
 	): ReturnType<typeof resolveOnEitherSide> {
+		if (content === UNREADABLE) {
+			return {
+				mismatch:
+					`the checkout's history could not be read at commit ${citation.commit ?? "HEAD"}. ` +
+					"That says nothing about the file. Cite the checked-out text or a captured record instead",
+			};
+		}
+		if (content === TOO_LARGE) {
+			return {
+				mismatch:
+					`the tools side reports that file as larger than a review reads at commit ${citation.commit ?? "HEAD"}. ` +
+					"That says nothing about the file. Cite the checked-out text or a captured record instead",
+			};
+		}
 		if (content === null) {
 			return {
 				mismatch:
@@ -1598,7 +1649,7 @@ export async function runReviewJob(): Promise<void> {
 
 	const IDENTICAL_REFUSAL_ABORT = 2;
 
-	function record(raw: unknown): Recorded {
+	async function record(raw: unknown): Promise<Recorded> {
 		const review = sessionState().activeReview;
 		if (review === null) {
 			return {
@@ -1635,7 +1686,7 @@ export async function runReviewJob(): Promise<void> {
 		}
 		let validated: Validated;
 		try {
-			validated = validateSubmission(
+			validated = await validateSubmission(
 				raw,
 				slug,
 				(citations) => {
@@ -1799,7 +1850,7 @@ export async function runReviewJob(): Promise<void> {
 			sourceKinds: availableSourceKindValues,
 			contextRoot: taskEnvelope.paths.contextRoot,
 			drafts: () => requireOpenReview(review).problems,
-			validateProblem: (raw) => validateProblemDraft(raw, requireOpenReview(review).slug),
+			validateProblem: async (raw) => validateProblemDraft(raw, requireOpenReview(review).slug),
 			submit: async (toolCallId, params): Promise<AgentToolResult<SubmitResultDetails>> => {
 				const state = sessionState();
 				requireOpenReview(review);
@@ -1808,7 +1859,7 @@ export async function runReviewJob(): Promise<void> {
 					logRefusal("(not an object)", reason);
 					return refusal(toolCallId, `result refused — ${reason}. Nothing changed.`);
 				}
-				const outcome = record(params);
+				const outcome = await record(params);
 				const stored = outcome.kind === "stored" || outcome.kind === "revised" ? 1 : 0;
 				if (outcome.kind === "refused") {
 					logRefusal(outcome.slug, outcome.reason);
@@ -1857,18 +1908,6 @@ export async function runReviewJob(): Promise<void> {
 		usageTotals.totalCalls += report.totalCalls;
 	}
 
-	function deriveChangeView(): void {
-		const change = readChange(INPUT_PATHS.contextRoot);
-		if (change !== null) {
-			writeChangeView(
-				CWD,
-				INPUT_PATHS.repositoryRoot,
-				change,
-				readDescription(INPUT_PATHS.contextRoot),
-			);
-		}
-	}
-
 	function capturedChange(): { base: string; head: string; files: Map<string, DiffFile> } | null {
 		const change = readChange(INPUT_PATHS.contextRoot);
 		const view = `${CWD}/${CHANGE_ROOT}/diff.patch`;
@@ -1884,7 +1923,17 @@ export async function runReviewJob(): Promise<void> {
 		const change = capturedChange();
 		return {
 			repo: checkout,
-			headRevision: change?.head ?? (checkout === null ? null : checkedOutCommit(checkout)),
+			headRevision: change?.head ?? (checkout === null ? null : checkoutCommit),
+			search: toolLines(toolSide, CWD),
+			proveSearch: async (claim) => {
+				const [proved] = await proveSearches(repository, [claim]);
+				return proved === true;
+			},
+			pinnedFile: pinnedText(
+				toolObjects(toolSide, repository),
+				pinnedHistory(repository),
+				MAX_PINNED_BYTES,
+			),
 			treeSourceFile: `${taskEnvelope.paths.repositoryRoot}/.git/HEAD`,
 			contextDir: existsSync(INPUT_PATHS.contextRoot) ? INPUT_PATHS.contextRoot : null,
 			contextReference: taskEnvelope.paths.contextRoot,
@@ -1947,9 +1996,7 @@ export async function runReviewJob(): Promise<void> {
 		}
 		const { kind } = inputs;
 		const sources = capturedChange();
-		const repository = INPUT_PATHS.repositoryRoot;
-		const head =
-			sources?.head ?? (existsSync(`${repository}/.git`) ? checkedOutCommit(repository) : null);
+		const head = sources?.head ?? checkoutCommit;
 		if (
 			!["scm.pull_request", "scm.pull_request_review", "scm.file"].includes(kind) ||
 			head === null
@@ -2009,6 +2056,22 @@ export async function runReviewJob(): Promise<void> {
 	// The review staged what it could and left at least one practice without a result. The worker decides from what is
 	// staged whether another attempt continues it; the code only tells this designed end from a failure.
 	const PARTIAL_REVIEW_EXIT = 78;
+	// A side of the Pod stopped or never started before anything was staged: the failure says nothing about the work,
+	// and another attempt can run it.
+	const SIDE_LOST_EXIT = 79;
+
+	/** Dials a side of the Pod. A review cannot run without its tools: the attempt ends as a failure to capture. */
+	async function openSide(side: string, socket: string): Promise<ToolClient> {
+		try {
+			return await openToolSide({ path: socket }, requiredEnv("TOOLS_NONCE"));
+		} catch (error) {
+			diagnose("review.side_unreachable", { side, error: errorKind(error) });
+			process.exit(SIDE_LOST_EXIT);
+		}
+	}
+	const toolSide = await openSide("tools", requiredEnv("TOOLS_SOCKET"));
+	const programSocket = process.env.PROGRAMS_SOCKET;
+	const programs = programSocket === undefined ? null : await openSide("programs", programSocket);
 
 	function readTaskEnvelope(): TaskEnvelope {
 		let raw: string;
@@ -2538,7 +2601,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 
 		const allSlugs = loadPracticeSlugs();
 		practiceCoverageLedger = new PracticeCoverageLedger(PRACTICE_COVERAGE_PATH, allSlugs);
-		deriveChangeView();
 		persistRecordedNotes();
 		// One brief for each declared set: practices that declare the same sources share its bytes.
 		const briefs = new Map<string, ReturnType<typeof buildBrief>>();
@@ -2622,9 +2684,17 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		const registeredTools = new Set<string>();
 		const toolOf = (name: string) => (registeredTools.has(name) ? name : "other");
 		async function openSession(tools: string[], customTools: SessionOptions["customTools"]) {
-			const bash = reviewShellTool(CWD);
-			const sessionTools: SessionOptions["customTools"] = tools.includes("bash")
+			const bash = reviewShellTool(CWD, toolBashOperations(toolSide));
+			// `bash` and `grep` run on the tools side; `find` globs in the loop, and only the loop's reads count.
+			const evidenceTools = [
+				...(tools.includes("grep")
+					? [defineTool(toolGrepTool(toolSide, CWD, async (file) => readFile(file, "utf8")))]
+					: []),
+				...(tools.includes("find") ? [defineTool(loopFindTool(CWD))] : []),
+			];
+			const sessionTools: NonNullable<SessionOptions["customTools"]> = tools.includes("bash")
 				? [
+						...evidenceTools,
 						defineTool({
 							...bash,
 							description: `${bash.description} Use read or grep for source content you will rely on. Use bash for Git history and listings. Only simple literal single-file reads can receive exact read coverage; pipes, redirection, globs, substitutions, and compound commands keep coverage unknown.`,
@@ -2634,15 +2704,15 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						}),
 						...(customTools ?? []),
 					]
-				: customTools;
-			for (const name of [...tools, ...(sessionTools ?? []).map((tool) => tool.name)]) {
+				: [...evidenceTools, ...(customTools ?? [])];
+			for (const name of [...tools, ...sessionTools.map((tool) => tool.name)]) {
 				registeredTools.add(name);
 			}
 			const { session: fresh, extensionsResult } = await createAgentSession({
 				cwd: CWD,
 				agentDir: AGENT_DIR,
 				tools,
-				customTools: sessionTools?.map((tool) => ({
+				customTools: sessionTools.map((tool) => ({
 					...tool,
 					execute: AsyncLocalStorage.bind(async (...args: Parameters<typeof tool.execute>) =>
 						tool.execute(...args),
@@ -2748,6 +2818,19 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		const directBudget = new ModelBudget(DIRECT_MODEL_TOKENS, MODEL_CONCURRENCY);
 		let sessionStopFailure: Error | null = null;
 		const measuringEnded = new AbortController();
+		const lostSides = new Set<string>();
+		// The loop has one connection to each side: past its end no command, search or program can run.
+		const whenLost = async (side: string, client: ToolClient) => {
+			const reason = await client.ended;
+			diagnose("review.side_lost", { side, error: errorKind(reason) });
+			lostSides.add(side);
+			unreachedReason = "unavailable";
+			measuringEnded.abort(new UnratedError("unavailable", `the ${side} side stopped`));
+		};
+		void whenLost("tools", toolSide);
+		if (programs !== null) {
+			void whenLost("programs", programs);
+		}
 
 		async function runScope(
 			label: string,
@@ -3111,6 +3194,12 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						models: hostModels(boundModels, LLM_PROXY_URL, LLM_PROXY_TOKEN, slug),
 						budget: directBudget,
 						awaitModel: () => modelWait.call(),
+						start: (start) => {
+							if (programs === null) {
+								throw new Error("This Pod has no program side");
+							}
+							return toolsProgram(programs, start);
+						},
 						review: async (options, signal) =>
 							reviewPractice(slug, practiceHeading, options, signal, sessionReads),
 						signal: AbortSignal.any([stopped.signal, measuringEnded.signal]),
@@ -3232,8 +3321,11 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					return { slug, label, heading: `## Turn ${index + 1} of ${allSlugs.length}: ${slug}` };
 				});
 				const baseHeapBytes = getHeapStatistics().used_heap_size;
-				const pace = new SessionPace((running) =>
-					roomForSession({ running, scriptHeapBytes: SCRIPT_HEAP_BYTES, baseHeapBytes }),
+				// A custom program holds a slot of the program connection for as long as its session runs.
+				const pace = new SessionPace(
+					(running) =>
+						(programs === null || running < LIMITS.inFlight) &&
+						roomForSession({ running, scriptHeapBytes: SCRIPT_HEAP_BYTES, baseHeapBytes }),
 				);
 				let sessionsAtOnce = 0;
 				// Two unanswered sessions stop new starts only: a running session that is answered keeps its work, and
@@ -3337,6 +3429,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			throw stagingFailure.error;
 		}
 		if (!maybeWriteResultFile()) {
+			if (lostSides.size > 0) {
+				finalizeOutput();
+				process.exit(SIDE_LOST_EXIT);
+			}
 			if ((providerFailures > 0 || measurementReply.asked) && !measurementReply.received) {
 				diagnose("review.unreachable", { unanswered_calls: providerFailures });
 				finalizeOutput();

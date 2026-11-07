@@ -21,6 +21,7 @@ import { hostModels, ModelBudget } from "./lib/core/models-host.ts";
 import { UnratedError } from "./lib/core/practice-script.ts";
 import { runPracticeProgram, type ProgramOutcome } from "./lib/core/program-host.ts";
 import { InputReader } from "./lib/core/script-inputs.ts";
+import { forkedProgram } from "./lib/core/script-run.ts";
 import { stagePracticeScripts } from "./stage.ts";
 import {
 	chatMessage,
@@ -168,6 +169,7 @@ async function runSource(
 				models: hostModels(bound, standIn?.url ?? "http://127.0.0.1:9", TOKEN, slug),
 				budget,
 				awaitModel: () => () => undefined,
+				start: forkedProgram,
 				review: async (reviewOptions) => {
 					const leads = await resolveLeads(reviewOptions.leads ?? [], staged.sources);
 					reviews.push({ options: reviewOptions, leads });

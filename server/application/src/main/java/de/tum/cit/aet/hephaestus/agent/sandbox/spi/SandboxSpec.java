@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.spi;
 
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -7,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -55,5 +57,11 @@ public record SandboxSpec(
         inputFiles = Map.copyOf(inputFiles);
         inputFilesOnDisk = Map.copyOf(inputFilesOnDisk);
         inputDirectories = List.copyOf(inputDirectories);
+    }
+
+    /** Whether a custom practice program is staged: job preparation moves the handler's files to disk. */
+    public boolean hasPracticeProgram() {
+        return Stream.concat(inputFiles.keySet().stream(), inputFilesOnDisk.keySet().stream())
+                .anyMatch(SandboxLayout::isPracticeProgram);
     }
 }

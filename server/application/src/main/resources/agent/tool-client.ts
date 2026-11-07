@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { connect, type Socket } from "node:net";
+import { serialize } from "node:v8";
 
 import {
 	type ToolAddress,
@@ -24,10 +25,31 @@ import {
 interface Pending {
 	/** The type of the frame that ends the request. */
 	final: string;
-	/** The type of the request's stream frames, if it streams. */
-	stream?: string;
+	/** The types of the request's stream frames, if it streams. */
+	stream?: readonly string[];
 	onStream: (frame: Frame) => void;
 	done: PromiseWithResolvers<Frame>;
+}
+
+/** What starts a practice program on the tools side. */
+export interface ScriptRequest {
+	execArgv: readonly string[];
+	timeoutMs: number;
+}
+
+/** A practice program that runs on the tools side. Everything it says is untrusted. */
+export interface ScriptChannel {
+	/** Whether the program can still receive a message. */
+	connected: () => boolean;
+	/**
+	 * Sends one message to the program, as a structured clone: a job carries a `Map`. This direction only, because the
+	 * loop never deserializes what the tools side sends. Throws when the message is past its bound.
+	 */
+	send: (message: object) => void;
+	/** Ends the program; `exit` then settles. */
+	kill: () => void;
+	/** Settles when the program ended, and rejects when the connection did first. */
+	exit: Promise<{ code: number | null; signal: string | null }>;
 }
 
 /** A `put` archive: the bytes of a tar file, with the size and SHA-256 that the tools side checks before it extracts. */
@@ -35,6 +57,17 @@ export interface PutArchive {
 	bytes: AsyncIterable<Buffer>;
 	size: number;
 	sha256: string;
+}
+
+/** Clears `timer` once `ended` settles, either way: the caller of `exit` hears of a failure, and this does not. */
+async function clearWhenEnded(ended: Promise<unknown>, timer: NodeJS.Timeout): Promise<void> {
+	try {
+		await ended;
+	} catch {
+		// `ended` reports this to whoever awaits it.
+	} finally {
+		clearTimeout(timer);
+	}
 }
 
 function broken(message: string): ToolProtocolError {
@@ -56,6 +89,11 @@ export class ToolClient {
 	readonly #keepalive: NodeJS.Timeout;
 	/** Aborted when the connection ends, so that nothing waits on it any more. */
 	readonly #ending = new AbortController();
+	readonly #ended = Promise.withResolvers<Error>();
+	#slotFreed = Promise.withResolvers<undefined>();
+	#waiting = 0;
+	/** Calls that the loop gave up on: bounded by the calls it makes, a few per review. */
+	readonly #abandoned = new Set<string>();
 	#lastFrameAt = Date.now();
 	#streamedBytes = 0;
 	#closed: Error | undefined;
@@ -79,6 +117,11 @@ export class ToolClient {
 			this.#write({ type: "ping" });
 		}, LIMITS.keepaliveMs);
 		this.#keepalive.unref();
+	}
+
+	/** Settles when this connection ends, for any reason. A loop has one connection, so its tools then are gone. */
+	get ended(): Promise<Error> {
+		return this.#ended.promise;
 	}
 
 	/**
@@ -128,15 +171,40 @@ export class ToolClient {
 		onOutput: (chunk: Buffer) => void,
 		signal?: AbortSignal,
 	): Promise<ExecExit> {
+		// The sessions of a review share this connection, so a burst of their calls waits for a slot and does not fail.
+		// Nothing may be awaited between the last check and `#request`, which takes the slot.
+		if (this.#full()) {
+			if (this.#waiting >= LIMITS.waitingCalls) {
+				throw new ToolProtocolError("busy", "Too many tool calls at once.");
+			}
+			this.#waiting += 1;
+			try {
+				while (this.#full()) {
+					await this.#nextSlot(signal);
+				}
+			} finally {
+				this.#waiting -= 1;
+			}
+		}
 		const id = randomUUID();
 		const requestHeader = { ...request, type: "exec", id };
 		const bound = Math.min(
 			integer(requestHeader, "maxOutputBytes") ?? LIMITS.execStreamBytes,
 			LIMITS.execStreamBytes,
 		);
+		const counted = request.uncounted !== true;
 		let streamed = 0;
 		let outputFailed: { error: unknown } | undefined;
 		let grace: NodeJS.Timeout | undefined;
+		// The tools side ends a call at its time-out. One that keeps answering pings and never does holds no call for ever,
+		// and the connection's other calls go on.
+		const deadline = setTimeout(
+			() => {
+				this.#abandon(id);
+			},
+			Math.min(request.timeoutMs, LIMITS.execTimeoutMs) + LIMITS.cancelGraceMs,
+		);
+		deadline.unref();
 		const cancel = () => {
 			if (grace !== undefined || !this.#pending.has(id)) {
 				return;
@@ -147,9 +215,9 @@ export class ToolClient {
 			}, LIMITS.cancelGraceMs);
 			grace.unref();
 		};
-		const { reply: exit } = this.#request(id, requestHeader, FINAL.exec, "out", (frame) => {
+		const { reply: exit } = this.#request(id, requestHeader, FINAL.exec, ["out"], (frame) => {
 			streamed += frame.body.length;
-			this.#streamedBytes += frame.body.length;
+			this.#streamedBytes += counted ? frame.body.length : 0;
 			if (streamed > bound || this.#streamedBytes > LIMITS.attemptStreamBytes) {
 				throw broken("the tools side streamed more than its bound");
 			}
@@ -182,7 +250,116 @@ export class ToolClient {
 			};
 		} finally {
 			clearTimeout(grace);
+			clearTimeout(deadline);
 			signal?.removeEventListener("abort", cancel);
+		}
+	}
+
+	/**
+	 * Starts a practice program. `onMessage` receives each message it sends, and `onLog` its output, within the bounds of
+	 * {@link LIMITS}. An answer is `send`, and the caller decides whether a request deserves one.
+	 */
+	script(
+		request: ScriptRequest,
+		onMessage: (text: string) => void,
+		onLog: (chunk: Buffer) => void,
+	): ScriptChannel {
+		const id = randomUUID();
+		let open = true;
+		let streamed = 0;
+		const { reply } = this.#request(
+			id,
+			{ ...request, execArgv: [...request.execArgv], type: "script.run", id },
+			FINAL.script,
+			["script-out", "script-log"],
+			(frame) => {
+				if (frame.header.type === "script-log") {
+					streamed += frame.body.length;
+					if (streamed > LIMITS.scriptLogBytes) {
+						throw broken("the tools side streamed more than its bound");
+					}
+					onLog(frame.body);
+				} else if (frame.body.length > LIMITS.scriptMessageBytes) {
+					throw broken("the tools side sent a script message past its bound");
+				} else {
+					onMessage(frame.body.toString("utf8"));
+				}
+			},
+		);
+		const ending = async () => {
+			try {
+				const { header } = await reply;
+				return { code: integer(header, "code") ?? null, signal: text(header, "signal") ?? null };
+			} finally {
+				open = false;
+			}
+		};
+		const exit = ending();
+		return {
+			connected: () => open,
+			send: (message) => {
+				if (open) {
+					this.#sendToProgram(id, serialize(message));
+				}
+			},
+			kill: () => {
+				if (open) {
+					this.#write({ type: "cancel", id });
+					const grace = setTimeout(() => {
+						this.#close(broken("the tools side did not end a cancelled program"));
+					}, LIMITS.cancelGraceMs);
+					grace.unref();
+					void clearWhenEnded(exit, grace);
+				}
+			},
+			exit,
+		};
+	}
+
+	#release(id: string): void {
+		this.#pending.delete(id);
+		this.#slotFreed.resolve(undefined);
+		this.#slotFreed = Promise.withResolvers();
+	}
+
+	#full(): boolean {
+		return this.#closed === undefined && this.#pending.size >= LIMITS.inFlight;
+	}
+
+	/** Settles when a call ends, and rejects when `signal` stops the wait. */
+	async #nextSlot(signal?: AbortSignal): Promise<void> {
+		signal?.throwIfAborted();
+		const stopped = Promise.withResolvers<never>();
+		const stop = () => {
+			stopped.reject(signal?.reason);
+		};
+		signal?.addEventListener("abort", stop, { once: true });
+		try {
+			await Promise.race([this.#slotFreed.promise, stopped.promise]);
+		} finally {
+			signal?.removeEventListener("abort", stop);
+		}
+	}
+
+	/** Gives up on one call: it fails, and whatever the tools side still sends for it goes unread. */
+	#abandon(id: string): void {
+		const pending = this.#pending.get(id);
+		if (pending !== undefined) {
+			this.#release(id);
+			this.#abandoned.add(id);
+			this.#write({ type: "cancel", id });
+			pending.done.reject(broken("the tools side did not end a call at its time-out"));
+		}
+	}
+
+	/** One message to a program, in as many frames as it takes. */
+	#sendToProgram(id: string, bytes: Buffer): void {
+		if (bytes.length > LIMITS.scriptInputBytes) {
+			throw new ToolProtocolError("request", "A message for the program is past its bound.");
+		}
+		for (let at = 0; at === 0 || at < bytes.length; at += LIMITS.bodyBytes) {
+			const end = at + LIMITS.bodyBytes;
+			this.#write({ type: "script-in", id, more: end < bytes.length }, bytes.subarray(at, end));
 		}
 	}
 
@@ -287,7 +464,7 @@ export class ToolClient {
 		id: string,
 		header: Header,
 		final: string,
-		stream?: string,
+		stream?: readonly string[],
 		onStream: (frame: Frame) => void = () => undefined,
 	): { reply: Promise<Frame> } {
 		if (this.#closed) {
@@ -328,14 +505,17 @@ export class ToolClient {
 			return;
 		}
 		const id = type === "hello" ? "hello" : text(frame.header, "id");
+		if (id !== undefined && this.#abandoned.has(id)) {
+			return;
+		}
 		const pending = id === undefined ? undefined : this.#pending.get(id);
 		if (id === undefined || pending === undefined) {
 			throw broken(`a frame for no request in flight: ${type}`);
 		}
-		if (type === pending.stream) {
+		if (typeof type === "string" && pending.stream?.includes(type) === true) {
 			pending.onStream(frame);
 		} else if (type === "error") {
-			this.#pending.delete(id);
+			this.#release(id);
 			pending.done.reject(
 				new ToolProtocolError(
 					text(frame.header, "error") ?? "error",
@@ -343,7 +523,7 @@ export class ToolClient {
 				),
 			);
 		} else if (type === pending.final) {
-			this.#pending.delete(id);
+			this.#release(id);
 			pending.done.resolve(frame);
 		} else {
 			throw broken(`a ${type} frame answers a request that ends with ${pending.final}`);
@@ -363,6 +543,7 @@ export class ToolClient {
 			return;
 		}
 		this.#closed = error;
+		this.#ended.resolve(error);
 		clearInterval(this.#keepalive);
 		this.#ending.abort();
 		this.#socket.destroy();
@@ -370,5 +551,6 @@ export class ToolClient {
 			pending.done.reject(error);
 		}
 		this.#pending.clear();
+		this.#slotFreed.resolve(undefined);
 	}
 }

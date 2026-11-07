@@ -17,9 +17,9 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 FROM dependencies AS gateway
 WORKDIR /opt/pi-sdk
 RUN pnpm install --frozen-lockfile --ignore-scripts
-COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts ./
+COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts pi/tools-seccomp.ts ./
 COPY --from=agent-runtime tool-protocol.ts tool-client.ts tools-server.ts ./
-RUN pnpm exec tsc -p tsconfig.build.json
+RUN pnpm exec tsc -p tsconfig.build.json && pnpm exec node dist/tools-seccomp.js dist
 
 # Debian 13: its fd (>= 8.7) takes the `--no-require-git` Pi's find tool passes outside a repository.
 FROM node:${NODE_VERSION}-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a AS os-packages
@@ -120,7 +120,9 @@ RUN mkdir -p /tmp/host-check/work/practice-scripts/practices && \
 
 RUN git config --system core.hooksPath /nonexistent && \
     git config --system core.fsmonitor false && \
-    git config --system safe.directory /workspace/inputs/sources/scm/repo
+    git config --system safe.directory /workspace/inputs/sources/scm/repo && \
+    # The tools run as another user than the one that filled the workspace.
+    git config --system --add safe.directory '/workspace/repos/*'
 
 ENV HOME=/home/agent
 ENV XDG_CONFIG_HOME=/home/agent/.local/config
@@ -145,6 +147,11 @@ RUN mkdir -p /workspace/inputs/sources/scm/repo/.hidden && \
     chown -R 1000:1000 /home/agent/.local /workspace/work && \
     setpriv --reuid=1000 --regid=1000 --init-groups node --max-old-space-size=256 \
       /opt/pi-sdk/native-tools-check.ts && \
+    # Under the loop's grants (PracticeRunnerProfile), codemode still runs and a process does not start.
+    setpriv --reuid=1000 --regid=1000 --init-groups node --max-old-space-size=256 --permission \
+      --allow-fs-read=/workspace --allow-fs-read=/opt/pi-sdk --allow-fs-read=/home/agent \
+      --allow-fs-write=/workspace/work --allow-fs-write=/home/agent/.local/tmp --allow-worker \
+      /opt/pi-sdk/native-tools-check.ts && \
     rm -rf /workspace/inputs /workspace/work /opt/pi-sdk/native-tools-check.ts /home/agent/.local
 
 # The base image installs Yarn as a tree under /opt that /usr/local/bin only links to, so removing
@@ -164,7 +171,9 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
     fi
 
 COPY --from=gateway /opt/pi-sdk/dist/ /opt/pi-sdk/
+COPY pi/tools-launch.sh /opt/pi-sdk/tools-launch.sh
 # The tools program starts with no privilege on each transport, and its client gets the Pod's nonce from `hello`.
+# A review's sides start through their filter, and a command there can open no network socket.
 RUN install -d -m 1777 /tmp/tools-check && node --input-type=module <<'CHECK' && rm -rf /tmp/tools /tmp/tools-check
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -172,11 +181,11 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { ToolClient } from "/opt/pi-sdk/tool-client.js";
 
 const nonce = "image-check";
-async function hello(address, env) {
+const privilege = ["--reuid=1001", "--regid=1001", "--clear-groups", "--no-new-privs", "--bounding-set=-all", "--inh-caps=-all"];
+async function hello(address, env, program) {
   const tools = spawn(
     "setpriv",
-    ["--reuid=1001", "--regid=1001", "--clear-groups", "--no-new-privs", "--bounding-set=-all", "--inh-caps=-all",
-      "node", "/opt/pi-sdk/tools-server.js"],
+    [...privilege, ...program],
     { env: { PATH: process.env.PATH, TOOLS_NONCE: nonce, ...env }, stdio: "inherit" },
   );
   for (let attempt = 1; ; attempt += 1) {
@@ -193,14 +202,14 @@ async function hello(address, env) {
   tools.kill();
   await once(tools, "exit");
 }
-await hello({ host: "127.0.0.1", port: 7100 }, { TOOLS_PORT: "7100" });
-await hello({ path: "/tmp/tools-check/tools.sock" }, { TOOLS_SOCKET: "/tmp/tools-check/tools.sock" });
+await hello({ host: "127.0.0.1", port: 7100 }, { TOOLS_PORT: "7100" }, ["node", "/opt/pi-sdk/tools-server.js"]);
+await hello({ path: "/tmp/tools-check/tools.sock" }, { TOOLS_SOCKET: "/tmp/tools-check/tools.sock" }, ["sh", "/opt/pi-sdk/tools-launch.sh"]);
 CHECK
 RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     ln -s /opt/pi-sdk/node_modules /workspace/node_modules
 
-LABEL hephaestus.agent.runtime-contract=9
+LABEL hephaestus.agent.runtime-contract=10
 LABEL hephaestus.agent.node-version=${NODE_VERSION}
 LABEL hephaestus.agent.pi-version=${PI_VERSION}
 

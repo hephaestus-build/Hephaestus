@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
@@ -167,6 +168,26 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             assertThat(PreparedJobInputsFixtures.files(active)).containsKey("context/quote");
             assertThat(ended.filesOnDisk().get("context/quote")).doesNotExist();
             assertThat(orphan.filesOnDisk().get("context/quote")).doesNotExist();
+        }
+    }
+
+    @Test
+    void shouldHandAStagedPracticeProgramOnAsAFileOnDisk() {
+        // SandboxSpec reads this map to give a review its program side.
+        String program = SandboxLayout.PRACTICE_SCRIPT_PRACTICES_PREFIX + "a-practice.ts";
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.resolve("evidence").toString()), jobs, clock, personCopies());
+        var inputs = PreparedJobInputsFixtures.inputs(
+                new PreparedEvidence(
+                        Map.of(program, "export default {};".getBytes(StandardCharsets.UTF_8)),
+                        Map.of(),
+                        List.of(),
+                        null,
+                        List.of()),
+                null);
+
+        try (var captured = PreparedJobInputsFixtures.prepare(files, job(), inputs)) {
+            assertThat(captured.filesOnDisk()).containsKey(program);
         }
     }
 

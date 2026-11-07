@@ -235,17 +235,27 @@ public class KubernetesIsolationProbe {
                 () -> run(KubernetesWorker.KIND_REVIEW, review, PROCESS_TRIAL, PROBE_TIME));
         CompletableFuture<Outcome> closedRun =
                 CompletableFuture.supplyAsync(() -> run(CLOSED_KIND, closed, 0, PROBE_TIME));
+        // The policy admits a review's Pod to the gateway, so only the filter can stop the tools user here. It runs
+        // after
+        // the closed Pod because the sandbox quota holds two probe Pods, and a third would cost a small node its turns.
+        CompletableFuture<Outcome> toolsRun =
+                closedRun.thenApplyAsync(done -> run(KubernetesWorker.KIND_REVIEW, closed, 0, PROBE_TIME, true));
         Outcome reviewed = reviewRun.join();
         Outcome closedOutcome = closedRun.join();
+        Outcome toolsOutcome = toolsRun.join();
         failures.addAll(reviewed.failures());
         failures.addAll(closedOutcome.failures());
+        failures.addAll(toolsOutcome.failures());
         // Quota refusals and unscheduled Pods can keep the last proof; a failed gate on a node cannot.
         boolean gateFailed = failures.size()
                 > unresolved.size()
                         + (reviewed.conclusive() ? 0 : reviewed.failures().size())
                         + (closedOutcome.conclusive()
                                 ? 0
-                                : closedOutcome.failures().size());
+                                : closedOutcome.failures().size())
+                        + (toolsOutcome.conclusive()
+                                ? 0
+                                : toolsOutcome.failures().size());
         Proof last = worker.proof();
         boolean inconclusive = !gateFailed && !failures.isEmpty();
         if (inconclusive && last != null && last.passed()) {
@@ -414,12 +424,18 @@ public class KubernetesIsolationProbe {
 
     /** Runs one probe Pod. */
     private Outcome run(String kind, List<Target> targets, int processes, Duration time) {
+        return run(kind, targets, processes, time, false);
+    }
+
+    /** @param tools whether the Pod runs as a review's tools side does: as its user, under its system call filter */
+    private Outcome run(String kind, List<Target> targets, int processes, Duration time, boolean tools) {
         // A sandbox's own labels: the chart's gateway policy admits a review Pod by its kind.
         Map<String, String> labels = new LinkedHashMap<>(worker.labels(kind));
         labels.put(KubernetesWorker.PROBE, "true");
-        String name = "hephaestus-isolation-probe-" + kind + "-"
+        String role = tools ? "tools" : kind;
+        String name = "hephaestus-isolation-probe-" + role + "-"
                 + UUID.randomUUID().toString().substring(0, 8);
-        String probe = "the " + kind + " probe Pod";
+        String probe = "the " + role + " probe Pod";
         var spec = JSON.createObjectNode();
         var list = spec.putArray("targets");
         targets.forEach(target -> list.addObject()
@@ -432,10 +448,13 @@ public class KubernetesIsolationProbe {
         ResourceLimits limits = new ResourceLimits(0.5, time);
         Pod pod = pods.probePod(
                 new KubernetesPods.Workload(name, labels, image, "probe"),
-                List.of("node", "-e", SCRIPT, spec.toString()),
+                tools
+                        ? KubernetesPods.filtered(List.of("node", "-e", SCRIPT, spec.toString()))
+                        : List.of("node", "-e", SCRIPT, spec.toString()),
                 limits,
                 memory,
-                time.toSeconds());
+                time.toSeconds(),
+                tools ? KubernetesPods.TOOLS_UID : KubernetesPods.SANDBOX_UID);
         Instant end = Instant.now().plus(time);
         try {
             jobs.create(jobs.job(pod, time.toSeconds()));
@@ -455,7 +474,7 @@ public class KubernetesIsolationProbe {
                         null,
                         true);
             }
-            if (ended.timedOut() || last == null || KubernetesPods.exitCode(last, KubernetesPods.RUNTIME) == null) {
+            if (ended.timedOut() || last == null || KubernetesPods.exitCode(last, KubernetesPods.LOOP) == null) {
                 String waiting = last == null ? null : KubernetesPods.fatalWaiting(last);
                 boolean sandboxFailed = last != null
                         && last.getSpec() != null
@@ -471,7 +490,7 @@ public class KubernetesIsolationProbe {
                         null,
                         sandboxFailed);
             }
-            JsonNode result = parse(pods.logs(created, KubernetesPods.RUNTIME));
+            JsonNode result = parse(pods.logs(created, KubernetesPods.LOOP));
             if (result == null) {
                 return new Outcome(List.of(probe + " printed no result"), null, true);
             }

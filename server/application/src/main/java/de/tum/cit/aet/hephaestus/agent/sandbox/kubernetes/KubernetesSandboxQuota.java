@@ -163,13 +163,12 @@ public class KubernetesSandboxQuota {
 
     /**
      * What one review sandbox counts against a quota, by the quota's resource names: its Pod and its Job, the
-     * resources of its runtime container at the review's size ({@link KubernetesPods#resources},
-     * {@link KubernetesPods#REVIEW}), and the Pod overhead of its RuntimeClass, which a quota adds to both requests and
-     * limits. The initializer has the same resources and runs before the runtime, and the isolation gate is smaller,
-     * so the runtime's are the Pod's.
+     * resources of its loop and its sides together ({@link KubernetesPods#reviewPodResources}), and the Pod overhead of
+     * its RuntimeClass, which a quota adds to both requests and limits. The initializer has the loop's resources and runs
+     * before the sides start, and the isolation gate is smaller, so these are the Pod's.
      */
     static Map<String, Quantity> footprint(ResourceLimits limits, Map<String, Quantity> overhead) {
-        var resources = KubernetesPods.resources(limits, KubernetesPods.REVIEW);
+        var resources = KubernetesPods.reviewPodResources(limits);
         Quantity one = new Quantity("1");
         Quantity cpuRequest = plus(resources.getRequests().get("cpu"), overhead.get("cpu"));
         Quantity cpuLimit = plus(resources.getLimits().get("cpu"), overhead.get("cpu"));

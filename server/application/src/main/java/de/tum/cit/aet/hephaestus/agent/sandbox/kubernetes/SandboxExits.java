@@ -9,6 +9,7 @@ import io.fabric8.kubernetes.api.model.PodCondition;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
@@ -64,6 +65,8 @@ public class SandboxExits {
             return name().toLowerCase(Locale.ROOT);
         }
     }
+
+    private static final Set<String> SIDECARS = Set.of(KubernetesPods.TOOLS, KubernetesPods.PROGRAMS);
 
     /** A container waits for one of these and does not start on its own. */
     private static final Set<String> START_FAILURES = Set.of(
@@ -218,9 +221,17 @@ public class SandboxExits {
         }
         for (ContainerStatus container : containers) {
             ContainerStateTerminated ended = terminated(container);
-            if (ended == null) continue;
-            if ("OOMKilled".equals(ended.getReason()))
-                return new Exit(Reason.OOM_KILLED, container.getName(), ended.getExitCode(), ended.getReason());
+            boolean sidecar = SIDECARS.contains(container.getName());
+            // A sidecar restarts after a memory kill, so the kill can show only in its last state.
+            ContainerStateTerminated last = sidecar && container.getLastState() != null
+                    ? container.getLastState().getTerminated()
+                    : null;
+            for (ContainerStateTerminated run : Arrays.asList(ended, last)) {
+                if (run != null && "OOMKilled".equals(run.getReason()))
+                    return new Exit(Reason.OOM_KILLED, container.getName(), run.getExitCode(), run.getReason());
+            }
+            // A sidecar ends by a signal when the loop ends, so its exit code says nothing about the review.
+            if (ended == null || sidecar) continue;
             Integer code = ended.getExitCode();
             if (code != null && code != 0) return new Exit(Reason.ERROR, container.getName(), code, ended.getReason());
         }

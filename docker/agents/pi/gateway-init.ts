@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
-import { createWriteStream } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { createWriteStream, existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import { Transform } from "node:stream";
@@ -132,6 +132,33 @@ export async function extract(
 	await extracted.promise;
 }
 
+/** Staged for a review; a host has none. */
+const CHANGE_VIEW = "/workspace/pi-change-view.ts";
+
+/** What the change view may see of this process's environment: Git's settings, and no credential. */
+export function changeViewEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+	return Object.fromEntries(
+		Object.entries(env).filter(
+			([name]) => ["PATH", "HOME", "LANG", "TMPDIR"].includes(name) || name.startsWith("GIT_"),
+		),
+	);
+}
+
+/** Runs before the loop or the tools start: see pi-change-view.ts. A failure here is a failure to capture. */
+function deriveChangeView(): void {
+	if (!existsSync(CHANGE_VIEW)) {
+		return;
+	}
+	const view = spawnSync("node", [CHANGE_VIEW], {
+		cwd: "/workspace",
+		env: changeViewEnvironment(process.env),
+		stdio: "inherit",
+	});
+	if (view.status !== 0) {
+		throw new Error(`The change view failed: ${String(view.status ?? view.signal)}`);
+	}
+}
+
 async function main() {
 	const endpoint = process.env.SANDBOX_RUNTIME_URL;
 	const token = process.env.LLM_PROXY_TOKEN;
@@ -146,6 +173,7 @@ async function main() {
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
+	deriveChangeView();
 }
 
 if (import.meta.main) {

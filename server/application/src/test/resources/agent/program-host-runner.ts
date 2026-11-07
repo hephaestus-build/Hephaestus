@@ -15,7 +15,13 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import {
 	createBashToolDefinition,
+	createFindToolDefinition,
+	createGrepToolDefinition,
+	DEFAULT_MAX_BYTES,
 	type ExtensionFactory,
+	formatSize,
+	truncateHead,
+	truncateLine,
 	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 
@@ -31,6 +37,7 @@ import {
 	PRACTICES_DIR,
 	stageGoldenWorkspace,
 } from "./golden-review-workspace.ts";
+import { startHarnessSides } from "./harness-tool-side.ts";
 
 const LIB = nodePath.resolve(
 	import.meta.dirname,
@@ -57,6 +64,12 @@ export function codingAgentExports(
 	return {
 		defineTool: (tool: unknown) => tool,
 		createBashToolDefinition,
+		createFindToolDefinition,
+		createGrepToolDefinition,
+		DEFAULT_MAX_BYTES,
+		formatSize,
+		truncateHead,
+		truncateLine,
 		estimateTokens: (message: { content: string }) => Math.ceil(message.content.length / 4),
 		createCodemodeExtension: () => () => undefined,
 		getAgentDir: () => cwd,
@@ -829,6 +842,7 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 			};
 		},
 	});
+	await startHarnessSides(cwd);
 	const { runReviewJob } = await import("../../../main/resources/agent/pi-runner.ts");
 	await runReviewJob();
 }

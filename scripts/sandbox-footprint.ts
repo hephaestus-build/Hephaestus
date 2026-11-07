@@ -58,6 +58,8 @@ const { values: options } = parseArgs({
 		memory: { type: "string", default: "3g" },
 		cpus: { type: "string", default: "1" },
 		"tool-calls": { type: "string" },
+		/** Whole-checkout searches that the stand-in model runs, comma-separated, before its reads. */
+		searches: { type: "string", default: "" },
 		"latency-ms": { type: "string", default: "1500" },
 		"work-seconds": { type: "string", default: "1500" },
 		"budget-seconds": { type: "string", default: "1200" },
@@ -71,6 +73,7 @@ const { values: options } = parseArgs({
 const stage = path.resolve(required(options.stage, "--stage"));
 const { image } = options;
 const reviews = positiveInteger(options.reviews, "--reviews");
+const searches = options.searches === "" ? [] : options.searches.split(",");
 const latencyMs = positiveInteger(options["latency-ms"], "--latency-ms");
 const workSeconds = positiveInteger(options["work-seconds"], "--work-seconds");
 const budgetSeconds = positiveInteger(options["budget-seconds"], "--budget-seconds");
@@ -235,6 +238,10 @@ function nextStep(
 		(m) => isRecord(m) && m.role === "assistant" && Array.isArray(m.tool_calls),
 	).length;
 	const has = (name: string) => tools.includes(name);
+	const search = searches[done - 1];
+	if (search !== undefined && has("grep")) {
+		return { name: "grep", args: { pattern: search, path: REPO } };
+	}
 	if (done < toolCalls && (has("read") || has("bash"))) {
 		const pick = repoFiles[(seed + done * 7) % Math.max(1, repoFiles.length)] ?? "README.md";
 		const commands = [
@@ -656,11 +663,9 @@ interface ReviewRun {
 const containers = new Set<string>();
 const volumesCreated = new Set<string>();
 
-function environment(sessionId: string): string[] {
+/** The sandbox's Git settings, which reach every side of the Pod. */
+function gitEnvironment(): Record<string, string> {
 	const env: Record<string, string> = {};
-	for (const [key, value] of Object.entries(specEnvironment)) {
-		env[key] = String(value);
-	}
 	for (const [index, [key, value]] of GIT_SECURITY.entries()) {
 		env[`GIT_CONFIG_KEY_${index}`] = key ?? "";
 		env[`GIT_CONFIG_VALUE_${index}`] = value ?? "";
@@ -668,6 +673,15 @@ function environment(sessionId: string): string[] {
 	env.GIT_CONFIG_COUNT = String(GIT_SECURITY.length);
 	env.GIT_TERMINAL_PROMPT = "0";
 	env.GIT_ATTR_NOSYSTEM = "1";
+	return env;
+}
+
+function environment(sessionId: string): string[] {
+	const env: Record<string, string> = {};
+	for (const [key, value] of Object.entries(specEnvironment)) {
+		env[key] = String(value);
+	}
+	Object.assign(env, gitEnvironment());
 	const gateway = gatewayUrl();
 	env.LLM_PROXY_URL = `${gateway}/internal/llm`;
 	env.LLM_PROXY_TOKEN = "footprint-token";
@@ -752,11 +766,110 @@ async function container(
 	return { exit, ms };
 }
 
+/** A stage from before the tools side has one container, which the benchmark runs as a baseline. */
+const hasSides = await stat(path.join(stage, "tool-client.ts")).then(
+	() => true,
+	() => false,
+);
+
+/** Whether the stage holds a custom program: a review then gets a program side, as the worker's Pod does. */
+async function stagesPrograms(): Promise<boolean> {
+	const staged = await readdir(path.join(stage, "work/practice-scripts/practices")).catch(() => []);
+	return staged.some((name) => name.endsWith(".ts"));
+}
+
+/** A side of the review's Pod: its own user and `/tmp`, the workspace read-only, and no network at all. */
+async function side(
+	label: string,
+	name: string,
+	{
+		uid,
+		role,
+		socketVolume,
+		socket,
+		nonce,
+		volumes,
+	}: {
+		uid: number;
+		role: string;
+		socketVolume: string;
+		socket: string;
+		nonce: string;
+		volumes: string[];
+	},
+): Promise<() => Promise<void>> {
+	const git = Object.entries(gitEnvironment()).flatMap(([key, value]) => [
+		"--env",
+		`${key}=${value}`,
+	]);
+	const created = await output("docker", [
+		"create",
+		"--name",
+		name,
+		"--read-only",
+		"--cap-drop",
+		"ALL",
+		"--security-opt",
+		"no-new-privileges",
+		"--user",
+		`${String(uid)}:${String(uid)}`,
+		"--group-add",
+		"1000",
+		"--memory",
+		"768m",
+		"--memory-swap",
+		"768m",
+		"--pids-limit",
+		"256",
+		"--network",
+		"none",
+		"-w",
+		"/workspace",
+		"--mount",
+		`type=volume,src=${volumes[0] ?? ""},dst=/workspace,volume-nocopy,readonly`,
+		"--mount",
+		`type=volume,src=${volumes[1] ?? ""},dst=/workspace/work,volume-nocopy,readonly`,
+		"--mount",
+		`type=volume,src=${socketVolume},dst=${path.dirname(socket)},volume-nocopy`,
+		"--mount",
+		"type=tmpfs,dst=/tmp,tmpfs-size=1073741824,tmpfs-mode=1777",
+		...git,
+		"--env",
+		`TOOLS_NONCE=${nonce}`,
+		"--env",
+		`TOOLS_SOCKET=${socket}`,
+		"--env",
+		`TOOLS_ROLE=${role}`,
+		"--entrypoint",
+		RLIMITS[0] ?? "",
+		image,
+		...RLIMITS.slice(1),
+		"sh",
+		"/opt/pi-sdk/tools-launch.sh",
+	]);
+	const id = created.trim();
+	containers.add(id);
+	await watch(label, id);
+	await run("docker", ["start", id], { stdout: "ignore" });
+	return async () => {
+		await sleep(SAMPLE_MS * 2);
+		await writeFile(
+			path.join(work, `${name}.log`),
+			await output("sh", ["-c", `docker logs ${id} 2>&1 | tail -n 200`]).catch(() => ""),
+		);
+		await run("docker", ["rm", "-f", id], { stdout: "ignore" });
+		containers.delete(id);
+	};
+}
+
 async function review(index: number): Promise<ReviewRun> {
 	const sessionId = randomUUID();
 	sessions.add(sessionId);
 	const volumes = DISK_VOLUMES.map((_, v) => `${runId}-${index}-v${v}`);
-	for (const volume of volumes) {
+	const toolsSocket = `${runId}-${index}-tools`;
+	const programsSocket = `${runId}-${index}-programs`;
+	const socketVolumes = [toolsSocket, programsSocket];
+	for (const volume of [...volumes, ...socketVolumes]) {
 		await run("docker", ["volume", "create", volume], { stdout: "ignore" });
 		volumesCreated.add(volume);
 	}
@@ -766,12 +879,14 @@ async function review(index: number): Promise<ReviewRun> {
 		"--rm",
 		"--user",
 		"0",
-		...volumes.flatMap((v, i) => ["-v", `${v}:/v${i}`]),
+		...[...volumes, ...socketVolumes].flatMap((v, i) => ["-v", `${v}:/v${i}`]),
 		"--entrypoint",
 		"sh",
 		image,
 		"-c",
-		volumes.map((_, i) => `chown 0:1000 /v${i} && chmod 2775 /v${i}`).join(" && "),
+		[...volumes, ...socketVolumes]
+			.map((_, i) => `chown 0:1000 /v${i} && chmod 2775 /v${i}`)
+			.join(" && "),
 	]);
 	const startMs = Date.now();
 	const init = await container(`review-${index}/initialize`, `${runId}-${index}-init`, [
@@ -787,9 +902,53 @@ async function review(index: number): Promise<ReviewRun> {
 	]);
 	let runtime = { exit: NOT_STARTED, ms: 0 };
 	if (init.exit === 0) {
+		const nonce = randomUUID();
+		const programs = await stagesPrograms();
+		const sides = hasSides
+			? [
+					await side(`review-${index}/tools`, `${runId}-${index}-tools`, {
+						uid: 1001,
+						role: "tools",
+						socketVolume: toolsSocket,
+						socket: "/run/tools/tools.sock",
+						nonce,
+						volumes,
+					}),
+				]
+			: [];
+		if (hasSides && programs) {
+			sides.push(
+				await side(`review-${index}/programs`, `${runId}-${index}-programs`, {
+					uid: 1002,
+					role: "programs",
+					socketVolume: programsSocket,
+					socket: "/run/programs/programs.sock",
+					nonce,
+					volumes,
+				}),
+			);
+		}
 		runtime = await container(`review-${index}/runtime`, `${runId}-${index}-runtime`, [
 			...podFlags(`${runId}-${index}-runtime`, volumes, true),
 			...environment(sessionId),
+			...(hasSides
+				? [
+						"--mount",
+						`type=volume,src=${toolsSocket},dst=/run/tools,volume-nocopy`,
+						"--env",
+						"TOOLS_SOCKET=/run/tools/tools.sock",
+						"--env",
+						`TOOLS_NONCE=${nonce}`,
+					]
+				: []),
+			...(hasSides && programs
+				? [
+						"--mount",
+						`type=volume,src=${programsSocket},dst=/run/programs,volume-nocopy`,
+						"--env",
+						"PROGRAMS_SOCKET=/run/programs/programs.sock",
+					]
+				: []),
 			"--entrypoint",
 			RLIMITS[0] ?? "",
 			image,
@@ -799,7 +958,26 @@ async function review(index: number): Promise<ReviewRun> {
 			"/opt/pi-sdk/gateway-run.js",
 			...specCommand,
 		]);
+		for (const stop of sides) {
+			await stop();
+		}
 	}
+	// What the review left in `out/`: its result, its coverage and its reports.
+	await run("docker", [
+		"run",
+		"--rm",
+		"--user",
+		"0",
+		"-v",
+		`${volumes[DISK_VOLUMES.indexOf("/workspace/out")] ?? ""}:/out:ro`,
+		"-v",
+		`${path.resolve(work)}:/copy`,
+		"--entrypoint",
+		"sh",
+		image,
+		"-c",
+		`mkdir -p /copy/out-${String(index)} && cp -R /out/. /copy/out-${String(index)}/ && chmod -R a+rX /copy/out-${String(index)}`,
+	]).catch(() => undefined);
 	const disk: Record<string, number> = {};
 	const du = await output("docker", [
 		"run",
@@ -817,7 +995,7 @@ async function review(index: number): Promise<ReviewRun> {
 		const [bytes, mount] = line.split("\t");
 		disk[DISK_VOLUMES[Number(mount?.slice(2))] ?? String(mount)] = Number(bytes);
 	}
-	for (const volume of volumes) {
+	for (const volume of [...volumes, ...socketVolumes]) {
 		await run("docker", ["volume", "rm", "-f", volume], { stdout: "ignore" });
 		volumesCreated.delete(volume);
 	}
@@ -996,6 +1174,8 @@ try {
 			diskMiB: Object.fromEntries(Object.entries(r.diskBytes).map(([k, v]) => [k, MiB(v)])),
 			initialize: summarize(`review-${r.index}/initialize`),
 			runtime: summarize(`review-${r.index}/runtime`),
+			tools: summarize(`review-${r.index}/tools`),
+			programs: summarize(`review-${r.index}/programs`),
 		})),
 		concurrentPeakMiB: MiB(Math.max(0, ...ticks.values())),
 	};

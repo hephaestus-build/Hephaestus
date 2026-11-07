@@ -18,6 +18,7 @@ import { isJsonObject } from "./lib/core/json.ts";
 import { resolveLeads } from "./lib/core/leads.ts";
 import { hostModels, ModelBudget } from "./lib/core/models-host.ts";
 import { runPracticeProgram, type ProgramOutcome } from "./lib/core/program-host.ts";
+import { forkedProgram } from "./lib/core/script-run.ts";
 import { COMMIT, pullRequestRecord, REVIEWED } from "./run-bundled.ts";
 import { REQUESTED_PULL_REQUEST, stagePracticeScripts } from "./stage.ts";
 import { startStandIn, type StandInRequest } from "./test/proxy-stand-in.ts";
@@ -202,6 +203,7 @@ async function runLive(slug: string, source: string, bound: BoundModels): Promis
 				models: hostModels(bound, standIn.url, TOKEN, slug),
 				budget: new ModelBudget(200_000, MODEL_CONCURRENCY),
 				awaitModel: () => () => undefined,
+				start: forkedProgram,
 				// The review session is the host's, never a direct call: this fake answers it over IPC.
 				review: async (options): Promise<Candidate> => {
 					await resolveLeads(options.leads ?? [], sources);

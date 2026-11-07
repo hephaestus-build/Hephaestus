@@ -141,7 +141,8 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
                 launch.environment().at(worker.gatewayUrl()),
                 launch.command(),
                 launch.limits(),
-                review ? KubernetesPods.REVIEW : KubernetesPods.HOST);
+                review ? KubernetesPods.REVIEW : KubernetesPods.HOST,
+                review ? new KubernetesPods.Sidecars(UUID.randomUUID().toString(), launch.programs()) : null);
         if (review) {
             Instant end = launch.deadline();
             if (end == null) {
@@ -188,14 +189,14 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
             case STARTED -> {
                 KubernetesPods.Waited waited = pods.waitFor(
                         pod,
-                        candidate -> KubernetesPods.running(candidate, KubernetesPods.RUNTIME)
+                        candidate -> KubernetesPods.running(candidate, KubernetesPods.LOOP)
                                 || KubernetesPods.runtimeEnded(candidate),
                         until(deadline));
                 Pod seen = waited.pod();
                 if (waited.timedOut() || seen == null) {
                     yield new Observation(true, null);
                 }
-                yield KubernetesPods.running(seen, KubernetesPods.RUNTIME)
+                yield KubernetesPods.running(seen, KubernetesPods.LOOP)
                         ? new Observation(false, null)
                         : new Observation(false, exitOrKilled(undisrupted(seen)));
             }
@@ -204,10 +205,10 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
                 if (waited.timedOut()) {
                     Pod stopped = pods.stop(pod);
                     yield new Observation(
-                            true, stopped == null ? null : KubernetesPods.exitCode(stopped, KubernetesPods.RUNTIME));
+                            true, stopped == null ? null : KubernetesPods.exitCode(stopped, KubernetesPods.LOOP));
                 }
                 yield new Observation(
-                        false, KubernetesPods.exitCode(undisrupted(present(waited.pod())), KubernetesPods.RUNTIME));
+                        false, KubernetesPods.exitCode(undisrupted(present(waited.pod())), KubernetesPods.LOOP));
             }
         };
     }
@@ -252,7 +253,7 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
         Pod current = pods.get(pod);
         return current != null
                 && current.getMetadata().getDeletionTimestamp() == null
-                && KubernetesPods.running(current, KubernetesPods.RUNTIME);
+                && KubernetesPods.running(current, KubernetesPods.LOOP);
     }
 
     @Override
@@ -261,7 +262,7 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
         if (pod == null) {
             return "";
         }
-        return pods.logs(pod, container == Container.INITIALIZER ? KubernetesPods.INITIALIZER : KubernetesPods.RUNTIME);
+        return pods.logs(pod, container == Container.INITIALIZER ? KubernetesPods.INITIALIZER : KubernetesPods.LOOP);
     }
 
     /**
@@ -430,7 +431,7 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
 
     /** A runtime that ended: its exit, or SIGKILL's when a Pod failure left none. */
     private static int exitOrKilled(Pod pod) {
-        Integer exit = KubernetesPods.exitCode(pod, KubernetesPods.RUNTIME);
+        Integer exit = KubernetesPods.exitCode(pod, KubernetesPods.LOOP);
         return exit == null ? SandboxLayout.EXIT_KILLED : exit;
     }
 

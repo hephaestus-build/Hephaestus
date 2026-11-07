@@ -389,7 +389,7 @@ void test("a quote that is not the changed line is refused with a line of the ch
 	assert.deepEqual(result.results, []);
 });
 
-void test("a missing repository file keeps the normal citation mismatch", async () => {
+void test("a commit that the checkout does not hold says nothing about the file", async () => {
 	const result = await run(
 		{ path: "src/Missing.java", startLine: 1, quote: "missing();" },
 		false,
@@ -397,7 +397,7 @@ void test("a missing repository file keeps the normal citation mismatch", async 
 		true,
 	);
 	assert.match(result.said, /citation does not match src\/Missing\.java/u);
-	assert.match(result.said, /no such file at commit/u);
+	assert.match(result.said, /could not be read at commit/u);
 	assert.doesNotMatch(result.said, /generated practice preparation/u);
 	assert.deepEqual(result.results, []);
 });

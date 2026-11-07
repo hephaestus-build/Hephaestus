@@ -264,6 +264,12 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCountARequeueAsASandboxFailureWhenASideOfThePodWasLost() {
+        assertThat(requeuedAfterExit(SandboxLayout.EXIT_SIDE_LOST, "sandbox")).isEqualTo(1);
+        assertThat(requeued("provider_unreachable")).isZero();
+    }
+
+    @Test
     void shouldEndAnAttemptWithoutARetryWhenTheServerAnsweredItsResultsWithAnError() {
         var job = configuredJob();
         job.setStatus(ReviewJobStatus.RUNNING);

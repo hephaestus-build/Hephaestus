@@ -34,7 +34,7 @@ import {
 	type RequiredSource,
 } from "./program-host.ts";
 import { InputReader } from "./script-inputs.ts";
-import { ProgramSettlementError, RETURN_MS } from "./script-run.ts";
+import { forkedProgram, ProgramSettlementError, RETURN_MS } from "./script-run.ts";
 
 const roots: string[] = [];
 after(async () =>
@@ -209,6 +209,7 @@ async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
 			models: options.models ?? {},
 			budget: options.budget ?? new ModelBudget(10_000, MODEL_CONCURRENCY),
 			awaitModel: () => () => undefined,
+			start: forkedProgram,
 			review: async (reviewOptions, signal) => {
 				reviews.push(reviewOptions);
 				return options.review === undefined ? REVIEWED : options.review(reviewOptions, signal);
@@ -1043,6 +1044,22 @@ void describe("a program that does not stop when the host stops it", { concurren
 		assert.equal(outcome.candidate, undefined);
 	});
 
+	void test("a program that answers its abort keeps the host's reason for a lost side", async () => {
+		const cancel = new AbortController();
+		const ws = await workspace({
+			rethrows: program(
+				"definePracticeScript",
+				'{ meta: {}, async run() { await new Promise((end) => setTimeout(end, 1500)); throw new Error("stopped"); } }',
+			),
+		});
+		setTimeout(() => {
+			cancel.abort(new UnratedError("unavailable", "the tools side stopped"));
+		}, 700);
+		const { outcome } = await run(ws, "rethrows", { signal: cancel.signal });
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "unavailable");
+	});
+
 	void test("a built-in review that answers after its deadline supplies no candidate", async () => {
 		const ws = await workspace({ builtin: null });
 		const { outcome } = await run(ws, "builtin", {
@@ -1165,6 +1182,32 @@ void test("direct model calls share the attempt's budget: a later practice sees 
 	assert.equal(chat.doGenerateCalls.length, 1);
 	assert.deepEqual(second.outcome.models, [
 		{ slot: "chat", need: "required", bound: true, failures: { budget: 1 } },
+	]);
+});
+
+void test("a model call that a lost side stops counts as unavailable, not as a deadline", async () => {
+	const cancel = new AbortController();
+	const call = { prompt: [{ role: "user", content: [{ type: "text", text: "Say hi." }] }] };
+	const chat = new MockLanguageModelV4({
+		doGenerate: async ({ abortSignal }) => {
+			cancel.abort(new UnratedError("unavailable", "the tools side stopped"));
+			abortSignal?.throwIfAborted();
+			throw new Error("the host left this call running");
+		},
+	});
+	const ws = await workspace({
+		waits: program(
+			"definePracticeScript",
+			`{
+				meta: { models: { chat: "required" } },
+				async run(ctx) { await ctx.models.chat.doGenerate(${JSON.stringify(call)}); return null; },
+			}`,
+		),
+	});
+	const { outcome } = await run(ws, "waits", { models: { chat }, signal: cancel.signal });
+	assert.equal(outcome.stopReason, "unavailable");
+	assert.deepEqual(outcome.models, [
+		{ slot: "chat", need: "required", bound: true, failures: { unavailable: 1 } },
 	]);
 });
 

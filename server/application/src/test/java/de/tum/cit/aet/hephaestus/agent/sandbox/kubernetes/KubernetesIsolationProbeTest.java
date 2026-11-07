@@ -142,7 +142,7 @@ class KubernetesIsolationProbeTest {
                 .withNewStatus()
                 .withPhase("Succeeded")
                 .withContainerStatuses(new ContainerStatusBuilder()
-                        .withName(KubernetesPods.RUNTIME)
+                        .withName(KubernetesPods.LOOP)
                         .withNewState()
                         .withNewTerminated()
                         .withExitCode(0)
@@ -164,7 +164,7 @@ class KubernetesIsolationProbeTest {
                                 .withStatus("True")
                                 .endCondition()
                                 .withContainerStatuses(new ContainerStatusBuilder()
-                                        .withName(KubernetesPods.RUNTIME)
+                                        .withName(KubernetesPods.LOOP)
                                         .withNewState()
                                         .withNewWaiting()
                                         .withReason("ImagePullBackOff")
@@ -213,7 +213,7 @@ class KubernetesIsolationProbeTest {
                     .hasMessageContaining("must support user namespaces");
             assertThat(worker.isolated()).isFalse();
             assertThat(Objects.requireNonNull(worker.proof()).failures())
-                    .hasSize(2)
+                    .hasSize(3)
                     .anySatisfy(failure -> assertThat(failure).contains("no private user mapping"));
         }
     }

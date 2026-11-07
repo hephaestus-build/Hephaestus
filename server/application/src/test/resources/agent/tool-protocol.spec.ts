@@ -24,7 +24,7 @@ import { syncBuiltinESMExports } from "node:module";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test, { after, before, beforeEach, type TestContext } from "node:test";
+import test, { after, before, beforeEach, mock, type TestContext } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
@@ -48,6 +48,22 @@ execFileSync("mkdir", ["-p", path.join(workspace, "repos"), scratch, outside]);
 writeFileSync(path.join(outside, "kept.txt"), "kept\n");
 const socketPath = path.join(base, "tools.sock");
 const nonce = "pod-nonce";
+/** A practice program's process: it answers what it is told, and does what its message asks. */
+const scriptEntry = path.join(base, "program.mjs");
+writeFileSync(
+	scriptEntry,
+	`process.on("message", (m) => {
+	if (m.kind === "echo") process.send(JSON.stringify({ kind: "echoed", value: m.value }));
+	if (m.kind === "log") console.log(m.value);
+	if (m.kind === "binary") process.send({ not: "text" });
+	if (m.kind === "flood") process.send("x".repeat(${2 * 1024 * 1024}));
+	if (m.kind === "exit") process.exit(m.code);
+	if (m.kind === "env") process.send(JSON.stringify(process.env));
+	if (m.kind === "size") process.send(JSON.stringify({ kind: "sized", size: m.value.size }));
+	if (m.kind === "size-of") process.send(JSON.stringify({ kind: "sized", size: m.value.length }));
+});
+`,
+);
 const soleUser = process.env.TOOLS_TEST_SOLE_USER === "true";
 
 function trashDirectories(): string[] {
@@ -81,6 +97,7 @@ before(async () => {
 		roots: [workspace, scratch],
 		scratch,
 		putRoots: [path.join(workspace, "repos")],
+		scriptEntry,
 		soleUser,
 	});
 	await once(server, "listening");
@@ -797,14 +814,43 @@ void test("calls on one connection run at once", async () => {
 	assert.equal(second.exit.code, 0);
 });
 
-void test("the loop refuses a call past the in-flight bound as busy", async () => {
-	const calls = Array.from({ length: LIMITS.inFlight + 1 }, async () => run("sleep 0.3"));
+void test("a call past the in-flight bound waits for a slot, and its signal ends the wait", async () => {
+	const calls = Array.from({ length: LIMITS.inFlight * 2 }, async () => run("sleep 0.1"));
+	const stop = new AbortController();
+	const stopped = client.exec(
+		{ command: "true", cwd: workspace, timeoutMs: 1000 },
+		() => undefined,
+		stop.signal,
+	);
+	stop.abort(new Error("the session ended"));
+	await assert.rejects(stopped, /the session ended/u);
+	const outcomes = await Promise.allSettled(calls);
+	assert.deepEqual(
+		outcomes.filter((outcome) => outcome.status === "rejected"),
+		[],
+	);
+});
+
+void test("a call past the waiting bound fails as busy, and the calls before it run", async () => {
+	const calls = Array.from({ length: LIMITS.inFlight + LIMITS.waitingCalls + 1 }, async () =>
+		run("sleep 0.05"),
+	);
 	const outcomes = await Promise.allSettled(calls);
 	const refused = outcomes.filter(
 		(outcome): outcome is PromiseRejectedResult => outcome.status === "rejected",
 	);
 	assert.equal(refused.length, 1);
 	assert.ok(refusal("busy")(refused[0]?.reason));
+});
+
+void test("a call that waits for a slot ends when the connection closes", async () => {
+	const tools = await ToolClient.open(served, nonce);
+	const exec = async () =>
+		tools.exec({ command: "sleep 5", cwd: workspace, timeoutMs: 10_000 }, () => undefined);
+	const calls = Array.from({ length: LIMITS.inFlight + 1 }, exec);
+	tools.close();
+	const outcomes = await Promise.allSettled(calls);
+	assert.equal(outcomes.filter((outcome) => outcome.status === "rejected").length, calls.length);
 });
 
 void test("a put refused as busy sends no archive, and the calls in flight go on", async () => {
@@ -1373,6 +1419,7 @@ void test(
 async function raw(
 	frames: Buffer[],
 	done: (replies: Header[]) => boolean = () => false,
+	waitMs = 5000,
 ): Promise<{ replies: Header[]; closed: boolean }> {
 	const socket = connect(served);
 	await once(socket, "connect");
@@ -1391,7 +1438,7 @@ async function raw(
 	socket.write(Buffer.concat(frames));
 	const timer = setTimeout(() => {
 		settled.resolve(false);
-	}, 5000);
+	}, waitMs);
 	const closed = await settled.promise;
 	clearTimeout(timer);
 	socket.destroy();
@@ -1463,6 +1510,8 @@ void test("the tools side counts a burst of requests in one chunk against its in
 	const { replies } = await raw(
 		[hello, ...execs],
 		(seen) => seen.filter((reply) => reply.type !== "hello").length === 20,
+		// Only the ceiling of a loaded host: `done` ends the wait as soon as every reply came.
+		60_000,
 	);
 	const busy = replies.filter((reply) => reply.type === "error" && reply.error === "busy");
 	assert.equal(busy.length, 20 - LIMITS.inFlight);
@@ -1562,6 +1611,175 @@ async function hostile(
 	after(() => fake.close());
 	return ToolClient.open(dialAddress(fake, address), nonce);
 }
+
+/** A running practice program, and each message that it sent. */
+function runningProgram(tools: ToolClient = client) {
+	const messages: string[] = [];
+	const logs: Buffer[] = [];
+	const channel = tools.script(
+		{ execArgv: [], timeoutMs: 10_000 },
+		(message) => {
+			messages.push(message);
+		},
+		(chunk) => {
+			logs.push(chunk);
+		},
+	);
+	return { channel, messages, logs };
+}
+
+void test("a program's channel carries each message both ways, and its exit ends the call", async () => {
+	const { channel, messages } = runningProgram();
+	channel.send({ kind: "echo", value: "ping" });
+	await until(() => messages.length === 1, "the program's answer");
+	assert.deepEqual(JSON.parse(messages[0] ?? ""), { kind: "echoed", value: "ping" });
+	channel.send({ kind: "exit", code: 3 });
+	assert.deepEqual(await channel.exit, { code: 3, signal: null });
+	assert.equal(channel.connected(), false);
+});
+
+void test("a program's output reaches the loop, and it gets no variable of the tools side", async () => {
+	const { channel, messages, logs } = runningProgram();
+	channel.send({ kind: "log", value: "from the program" });
+	channel.send({ kind: "env" });
+	await until(() => messages.length === 1 && logs.length > 0, "the program's output");
+	assert.match(Buffer.concat(logs).toString(), /from the program/u);
+	assert.equal(messages[0]?.includes("HEPHAESTUS_SECRET"), false);
+	channel.kill();
+	await channel.exit;
+});
+
+void test("a cancel ends a program, and a late message goes nowhere", async () => {
+	const { channel } = runningProgram();
+	channel.kill();
+	const { signal } = await channel.exit;
+	assert.equal(signal, "SIGKILL");
+	channel.send({ kind: "echo", value: "too late" });
+	await client.reset();
+});
+
+for (const [name, kind] of [
+	["a message that is not text", "binary"],
+	["a message past its bound", "flood"],
+] as const) {
+	void test(`a program that sends ${name} ends, and nothing of it reaches the loop`, async () => {
+		const { channel, messages } = runningProgram();
+		channel.send({ kind });
+		await channel.exit;
+		assert.deepEqual(messages, []);
+	});
+}
+
+void test("a job's Map reaches the program whole", async () => {
+	const { channel, messages } = runningProgram();
+	channel.send({ kind: "echo", value: [...new Map([["a.ts", "added"]])] });
+	await until(() => messages.length === 1, "the program's answer");
+	assert.deepEqual(JSON.parse(messages[0] ?? ""), { kind: "echoed", value: [["a.ts", "added"]] });
+	channel.send({ kind: "size", value: new Map([["a.ts", "added"]]) });
+	await until(() => messages.length === 2, "the program's answer");
+	assert.deepEqual(JSON.parse(messages[1] ?? ""), { kind: "sized", size: 1 });
+	channel.kill();
+	await channel.exit;
+});
+
+void test("a large message reaches a program whole, across frames", async () => {
+	const { channel, messages } = runningProgram();
+	channel.send({ kind: "size-of", value: "x".repeat(3 * LIMITS.bodyBytes) });
+	await until(() => messages.length === 1, "the program's answer");
+	assert.deepEqual(JSON.parse(messages[0] ?? ""), { kind: "sized", size: 3 * LIMITS.bodyBytes });
+	channel.kill();
+	await channel.exit;
+});
+
+void test("a message for a program past its bound is refused, and the connection stays", async () => {
+	const { channel, messages } = runningProgram();
+	assert.throws(() => {
+		channel.send({ kind: "echo", value: "x".repeat(LIMITS.scriptInputBytes + 1) });
+	}, refusal("request"));
+	channel.send({ kind: "echo", value: "still here" });
+	await until(() => messages.length === 1, "the program's answer");
+	channel.kill();
+	await channel.exit;
+});
+
+void test("a side that never ends a cancelled program loses the connection, and the program's call ends", async () => {
+	const tools = await hostile(() => undefined);
+	const channel = tools.script(
+		{ execArgv: [], timeoutMs: 1000 },
+		() => undefined,
+		() => undefined,
+	);
+	const graceless = mock.timers;
+	graceless.enable({ apis: ["setTimeout"] });
+	try {
+		channel.kill();
+		graceless.tick(LIMITS.cancelGraceMs + 1);
+	} finally {
+		graceless.reset();
+	}
+	await assert.rejects(channel.exit);
+	assert.ok((await tools.ended) instanceof Error);
+});
+
+void test("a call that a side never ends fails alone, and its late reply goes unread", async () => {
+	const held: { request?: Header; socket?: Socket } = {};
+	const tools = await hostile((request, socket) => {
+		if (request.type === "exec" && held.request === undefined) {
+			held.request = request;
+			held.socket = socket;
+		} else if (request.type === "exec") {
+			socket.write(encode({ type: "exit", id: request.id, code: 0 }));
+		}
+	});
+	const clock = mock.timers;
+	clock.enable({ apis: ["setTimeout"] });
+	let stuck: Promise<unknown>;
+	try {
+		stuck = tools.exec({ command: "true", cwd: workspace, timeoutMs: 1000 }, () => undefined);
+		await until(() => held.request !== undefined, "the call");
+		clock.tick(1000 + LIMITS.cancelGraceMs + 1);
+	} finally {
+		clock.reset();
+	}
+	await assert.rejects(stuck, /did not end a call/u);
+	held.socket?.write(encode({ type: "exit", id: held.request?.id, code: 0 }));
+	const next = await tools.exec(
+		{ command: "true", cwd: workspace, timeoutMs: 1000 },
+		() => undefined,
+	);
+	assert.equal(next.code, 0);
+	tools.close();
+});
+
+void test("the loop's own reads leave the attempt's stream bound to model output", async () => {
+	const big = path.join(scratch, "large.bin");
+	writeFileSync(big, Buffer.alloc(LIMITS.execStreamBytes - 1024));
+	const tools = await ToolClient.open(served, nonce);
+	try {
+		for (let read = 0; read * LIMITS.execStreamBytes <= LIMITS.attemptStreamBytes + 1; read += 1) {
+			let bytes = 0;
+			await tools.exec(
+				{ argv: ["cat", big], cwd: workspace, timeoutMs: 10_000, uncounted: true },
+				(chunk) => {
+					bytes += chunk.length;
+				},
+			);
+			assert.equal(bytes, LIMITS.execStreamBytes - 1024);
+		}
+	} finally {
+		tools.close();
+	}
+});
+
+void test("a script message that does not deserialize ends the connection", async () => {
+	const { replies, closed } = await raw([
+		hello,
+		encode({ type: "script.run", id: "s", execArgv: [], timeoutMs: 5000 }),
+		encode({ type: "script-in", id: "s" }, Buffer.from("not json")),
+	]);
+	assert.equal(replies[0]?.type, "hello");
+	assert.equal(closed, true);
+});
 
 void test("the loop ends the connection on a frame for no request in flight", async () => {
 	const tools = await hostile((_request, socket) => {

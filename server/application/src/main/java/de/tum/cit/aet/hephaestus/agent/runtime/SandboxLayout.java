@@ -103,6 +103,11 @@ public final class SandboxLayout {
      */
     public static final String PRACTICE_SCRIPT_PRACTICES_PREFIX = PRACTICE_SCRIPT_PREFIX + "practices/";
 
+    /** Whether a staged path is a practice's program. A built-in practice stages its inputs and no program. */
+    public static boolean isPracticeProgram(String path) {
+        return path.startsWith(PRACTICE_SCRIPT_PRACTICES_PREFIX) && path.endsWith(".ts");
+    }
+
     public static final String PRACTICE_SCRIPT_LIBRARY_LINK = PRACTICE_SCRIPT_PREFIX + "lib";
 
     public static final String PRACTICE_SCRIPT_INPUTS_SUFFIX = ".inputs.json";
@@ -214,11 +219,17 @@ public final class SandboxLayout {
      */
     public static final int EXIT_PARTIAL_REVIEW = 78;
 
+    /**
+     * Exit code emitted by the Pi runner when its tools or programs side stopped or never started, and the review staged
+     * nothing. It says nothing about the reviewed work, so the work is requeued.
+     */
+    public static final int EXIT_SIDE_LOST = 79;
+
     /** OCI label declaring the agent image runtime contract. */
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";
 
     /** Runtime contract required by the staged runners. */
-    public static final int RUNTIME_CONTRACT_VERSION = 9;
+    public static final int RUNTIME_CONTRACT_VERSION = 10;
 
     /** Node major required by the staged runners. */
     public static final int NODE_MAJOR = 24;

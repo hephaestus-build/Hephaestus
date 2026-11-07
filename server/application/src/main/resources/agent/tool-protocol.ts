@@ -14,6 +14,8 @@ export const LIMITS = {
 	bodyBytes: 1024 * 1024,
 	/** The most requests in flight on one connection: Pi runs parallel tool calls at once. */
 	inFlight: 8,
+	/** The most calls that wait for a slot of one connection: a steered model can start thousands at once. */
+	waitingCalls: 64,
 	/** The most output bytes streamed for one `exec`; the rest goes only to its spill file. */
 	execStreamBytes: 8 * 1024 * 1024,
 	/** The most output bytes streamed for one attempt, across all its calls. */
@@ -30,6 +32,12 @@ export const LIMITS = {
 	readFileBytes: 64 * 1024 * 1024,
 	/** The longest time that one `exec` may run. */
 	execTimeoutMs: 2 * 60 * 60 * 1000,
+	/** The most bytes of one message from a practice program: it fits one frame. */
+	scriptMessageBytes: 1024 * 1024,
+	/** The most bytes of one message to a practice program, in as many frames as it takes: a whole captured record. */
+	scriptInputBytes: 32 * 1024 * 1024,
+	/** The most bytes of a practice program's stdout and stderr that the tools side streams. */
+	scriptLogBytes: 64 * 1024,
 	/** How long the loop waits for the `exit` of a cancelled call before it ends the connection. */
 	cancelGraceMs: 10_000,
 	/** The longest time that the tools side extracts one `put` archive. */
@@ -45,6 +53,7 @@ export const LIMITS = {
 export const FINAL = {
 	hello: "hello",
 	exec: "exit",
+	script: "script-exit",
 	read: "read",
 	put: "put",
 	reset: "reset",
@@ -218,6 +227,8 @@ export interface ExecExit {
 }
 
 export type ExecRequest = ({ command: string } | { argv: string[] }) & {
+	/** The loop's own read of Git objects: it has its own bound, and model output keeps the attempt's. */
+	uncounted?: boolean;
 	cwd: string;
 	timeoutMs: number;
 	maxOutputBytes?: number;

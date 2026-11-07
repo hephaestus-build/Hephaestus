@@ -201,10 +201,17 @@ class KubernetesSandboxRuntimeTest {
         var manifests = new KubernetesPods(api(), unproved, 10, ImagePullPolicy.IF_NOT_PRESENT);
         var workload = new KubernetesPods.Workload("sandbox", Map.of(), IMAGE, "agent");
         assertThat(List.of(
-                        manifests.workspacePod(workload, Map.of(), List.of("node"), LIMITS, KubernetesPods.REVIEW),
-                        manifests.workspacePod(workload, Map.of(), List.of("node"), LIMITS, KubernetesPods.HOST),
+                        manifests.workspacePod(
+                                workload, Map.of(), List.of("node"), LIMITS, KubernetesPods.REVIEW, null),
+                        manifests.workspacePod(workload, Map.of(), List.of("node"), LIMITS, KubernetesPods.HOST, null),
                         manifests.turnPod(workload, LIMITS),
-                        manifests.probePod(workload, List.of("true"), LIMITS, 1024L * 1024 * 1024, 60)))
+                        manifests.probePod(
+                                workload,
+                                List.of("true"),
+                                LIMITS,
+                                1024L * 1024 * 1024,
+                                60,
+                                KubernetesPods.SANDBOX_UID)))
                 .allSatisfy(pod -> assertThat(pod.getSpec().getHostUsers()).isFalse());
     }
 
@@ -215,7 +222,8 @@ class KubernetesSandboxRuntimeTest {
                 Map.of("B", "2", "A", "1"),
                 List.of("node", "run.ts"),
                 LIMITS,
-                KubernetesPods.REVIEW);
+                KubernetesPods.REVIEW,
+                null);
 
         var spec = pod.getSpec();
         assertThat(spec.getRestartPolicy()).isEqualTo("Never");
@@ -283,24 +291,27 @@ class KubernetesSandboxRuntimeTest {
                 Map.of(),
                 List.of("node"),
                 LIMITS,
-                KubernetesPods.REVIEW);
+                KubernetesPods.REVIEW,
+                null);
         Pod hostPod = pods.workspacePod(
                 new KubernetesPods.Workload("h", host, IMAGE, "agent"),
                 Map.of(),
                 List.of("node"),
                 LIMITS,
-                KubernetesPods.HOST);
+                KubernetesPods.HOST,
+                null);
         Pod turnPod = pods.turnPod(new KubernetesPods.Workload("t", Map.of(), IMAGE, "sandbox"), LIMITS);
 
-        assertDiskBounded(reviewPod, KubernetesPods.RUNTIME, KubernetesPods.REVIEW);
-        assertDiskBounded(hostPod, KubernetesPods.RUNTIME, KubernetesPods.HOST);
+        assertDiskBounded(reviewPod, KubernetesPods.LOOP, KubernetesPods.REVIEW);
+        assertDiskBounded(hostPod, KubernetesPods.LOOP, KubernetesPods.HOST);
         assertDiskBounded(turnPod, KubernetesPods.SANDBOX, KubernetesPods.TURN);
         Pod probePod = pods.probePod(
                 new KubernetesPods.Workload("p", review, IMAGE, "agent"),
                 List.of("true"),
                 LIMITS,
                 1024L * 1024 * 1024,
-                60);
+                60,
+                KubernetesPods.SANDBOX_UID);
         for (Container each : Stream.concat(
                         probePod.getSpec().getInitContainers().stream(), probePod.getSpec().getContainers().stream())
                 .toList()) {
@@ -348,7 +359,8 @@ class KubernetesSandboxRuntimeTest {
                                 Map.of(),
                                 List.of("node"),
                                 LIMITS,
-                                KubernetesPods.REVIEW)
+                                KubernetesPods.REVIEW,
+                                null)
                         .getSpec()
                         .getPriorityClassName())
                 .isEqualTo("hephaestus-reviews");
@@ -357,7 +369,8 @@ class KubernetesSandboxRuntimeTest {
                                 Map.of(),
                                 List.of("node"),
                                 LIMITS,
-                                KubernetesPods.HOST)
+                                KubernetesPods.HOST,
+                                null)
                         .getSpec()
                         .getPriorityClassName())
                 .isEqualTo("hephaestus-conversations");
@@ -370,7 +383,8 @@ class KubernetesSandboxRuntimeTest {
                                 List.of("true"),
                                 LIMITS,
                                 1024L * 1024 * 1024,
-                                60)
+                                60,
+                                KubernetesPods.SANDBOX_UID)
                         .getSpec()
                         .getPriorityClassName())
                 .as("a probe never displaces a person's conversation")
@@ -550,7 +564,7 @@ class KubernetesSandboxRuntimeTest {
                 child,
                 "Failed",
                 List.of(exited(KubernetesPods.INITIALIZER, 0)),
-                List.of(exited(KubernetesPods.RUNTIME, SandboxLayout.EXIT_KILLED)));
+                List.of(exited(KubernetesPods.LOOP, SandboxLayout.EXIT_KILLED)));
         assertThatThrownBy(() -> execution.get(10, TimeUnit.SECONDS))
                 .hasCauseInstanceOf(SandboxCancelledException.class);
         assertThat(job(name)).isNull();
@@ -682,7 +696,7 @@ class KubernetesSandboxRuntimeTest {
                 child,
                 "Failed",
                 List.of(exited(KubernetesPods.INITIALIZER, 0)),
-                List.of(exited(KubernetesPods.RUNTIME, SandboxLayout.EXIT_UPLOAD_FAILED)));
+                List.of(exited(KubernetesPods.LOOP, SandboxLayout.EXIT_UPLOAD_FAILED)));
 
         SandboxResult result = execution.get(10, TimeUnit.SECONDS);
 
@@ -711,7 +725,7 @@ class KubernetesSandboxRuntimeTest {
                         .withReason("TerminationByKubelet")
                         .build())
                 .withInitContainerStatuses(List.of(exited(KubernetesPods.INITIALIZER, 0)))
-                .withContainerStatuses(List.of(exited(KubernetesPods.RUNTIME, 137)))
+                .withContainerStatuses(List.of(exited(KubernetesPods.LOOP, 137)))
                 .build());
         api().pods().inNamespace(SANDBOXES).resource(pod).update();
 
@@ -736,7 +750,7 @@ class KubernetesSandboxRuntimeTest {
                 child,
                 "Failed",
                 List.of(exited(KubernetesPods.INITIALIZER, 0)),
-                List.of(exited(KubernetesPods.RUNTIME, SandboxLayout.EXIT_WORK_TIMEOUT)));
+                List.of(exited(KubernetesPods.LOOP, SandboxLayout.EXIT_WORK_TIMEOUT)));
 
         SandboxResult result = execution.get(10, TimeUnit.SECONDS);
 
@@ -802,7 +816,8 @@ class KubernetesSandboxRuntimeTest {
                 List.of("node", "run.ts"),
                 LIMITS,
                 Instant.now().plus(Duration.ofMinutes(7)),
-                gateway -> Map.of()));
+                gateway -> Map.of(),
+                false));
 
         assertThat(storedJob(KubernetesSandboxBackend.jobName(jobId, 1))).isNotNull();
         assertThat(reviews.roomFor(LIMITS))
@@ -1148,7 +1163,8 @@ class KubernetesSandboxRuntimeTest {
                         List.of("node", "run.ts"),
                         LIMITS,
                         deadline,
-                        gateway -> Map.of()));
+                        gateway -> Map.of(),
+                        false));
 
         long seconds =
                 storedJob(KubernetesSandboxBackend.jobName(jobId, 1)).getSpec().getActiveDeadlineSeconds();
@@ -1225,7 +1241,8 @@ class KubernetesSandboxRuntimeTest {
                 Map.of(),
                 List.of("node", "run.ts"),
                 LIMITS,
-                KubernetesPods.REVIEW);
+                KubernetesPods.REVIEW,
+                null);
         return api().batch()
                 .v1()
                 .jobs()

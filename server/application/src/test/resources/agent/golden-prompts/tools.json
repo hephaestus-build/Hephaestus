@@ -1,1024 +1,1088 @@
 {
- "tools": [
-  "read",
-  "grep",
-  "find",
-  "ls",
-  "bash",
-  "codemode",
-  "upsert_problem",
-  "remove_problem",
-  "read_problem",
-  "submit_result"
- ],
- "customTools": [
-  {
-   "name": "bash",
-   "description": "Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last 2000 lines or 50KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds. Use read or grep for source content you will rely on. Use bash for Git history and listings. Only simple literal single-file reads can receive exact read coverage; pipes, redirection, globs, substitutions, and compound commands keep coverage unknown.",
-   "parameters": {
-    "type": "object",
-    "required": [
-     "command"
-    ],
-    "properties": {
-     "command": {
-      "type": "string",
-      "description": "Shell command to execute"
-     },
-     "timeout": {
-      "type": "number",
-      "description": "Timeout in seconds (optional, no default timeout)"
-     }
-    }
-   }
-  },
-  {
-   "name": "upsert_problem",
-   "description": "Add or replace one local problem draft by stable key. Send its complete body; an invalid replacement leaves the previous draft unchanged. Same key and body changes nothing. This does not submit a result or end review. Use submit_result with ordered problemKeys to publish the complete candidate for server admission. Prefer a single inline submit_result for simple results.",
-   "parameters": {
-    "type": "object",
-    "additionalProperties": false,
-    "required": [
-     "severity",
-     "summary",
-     "explanation",
-     "citations",
-     "basis",
-     "key"
-    ],
-    "properties": {
-     "key": {
-      "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
-      "description": "Stable short lowercase-hyphenated name, unique within this practice result."
-     },
-     "severity": {
-      "type": "string",
-      "enum": [
-       "CRITICAL",
-       "MAJOR",
-       "MINOR",
-       "TRIVIAL"
-      ],
-      "description": "From the practice's Severity section. CRITICAL — The consequence is expensive or impossible to undo once this merges — a leaked credential, data loss, a security hole. Differs from MAJOR by whether the damage can still be taken back.\nMAJOR — A real defect to fix before merging, whose consequence is contained and correctable. Differs from MINOR by whether a reader of this change would be wrong about how it behaves.\nMINOR — A craft-level improvement worth making that nobody would block a merge on. Differs from TRIVIAL by whether there is a specific edit to make.\nTRIVIAL — A real gap with trivial impact. Still a problem of a NOT_MET result; a strength is never a problem."
-     },
-     "summary": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 160,
-      "description": "One line of at most 160 characters naming this one problem, such as 'Debug print left in the request handler'."
-     },
-     "explanation": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 4000,
-      "description": "What the cited evidence establishes about this one criterion gap, including any consequence that decides its applicability, outcome or severity. Apply Grounding to the exact behavior and its language or API contract; leave an unresolved premise in evidence.openQuestions, and do not let it decide the problem. Evidence, not advice, intent, confidence, or hidden chain-of-thought."
-     },
-     "citations": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 20,
-      "items": {
-       "type": "object",
-       "additionalProperties": false,
-       "required": [
-        "path",
-        "startLine",
-        "quote"
-       ],
-       "properties": {
-        "sourceKind": {
-         "type": [
-          "string",
-          "null"
-         ],
-         "enum": [
-          "scm.pull-request.core",
-          "scm.pull-request.diff",
-          null
-         ],
-         "description": "Optional. The runner resolves the source kind from the path you read."
-        },
-        "sourcePath": {
-         "type": [
-          "string",
-          "null"
-         ],
-         "minLength": 1,
-         "maxLength": 4096,
-         "description": "Optional. The source you read, such as work/change/diff.patch or a captured record. The runner resolves its manifest identity."
-        },
-        "path": {
-         "type": "string",
-         "minLength": 1,
-         "maxLength": 4096,
-         "description": "The file you read: a repository-relative path, a sandbox path, work/change/diff.patch, or a captured record path."
-        },
-        "side": {
-         "type": [
-          "string",
-          "null"
-         ],
-         "enum": [
-          "OLD",
-          "NEW",
-          null
-         ],
-         "description": "For a diff quote, OLD selects removed lines and NEW selects added lines. Omission lets the runner resolve the side from the exact quote."
-        },
-        "commit": {
-         "type": [
-          "string",
-          "null"
-         ],
-         "minLength": 1,
-         "maxLength": 1024,
-         "description": "Optional full commit SHA for historical repository text. Omission selects the captured HEAD automatically. Do not use a branch name."
-        },
-        "startLine": {
-         "type": "integer",
-         "minimum": 1,
-         "maximum": 2147483647,
-         "description": "The 1-based line you read. For a diff, use its [L<n>] file coordinate or the physical line number of diff.patch."
-        },
-        "endLine": {
-         "type": [
-          "integer",
-          "null"
-         ],
-         "minimum": 1,
-         "maximum": 2147483647,
-         "description": "The last line of the quote, at least startLine; omitted means one line."
-        },
-        "quote": {
-         "type": "string",
-         "minLength": 1,
-         "maxLength": 4000,
-         "description": "Required verbatim text at those lines. For repository text and records, a fragment is enough. For a diff, copy each whole line. Diff markers and [L<n>] prefixes are accepted."
+  "tools": [
+    "read",
+    "grep",
+    "find",
+    "ls",
+    "bash",
+    "codemode",
+    "upsert_problem",
+    "remove_problem",
+    "read_problem",
+    "submit_result"
+  ],
+  "customTools": [
+    {
+      "name": "grep",
+      "description": "Search file contents for a pattern. Returns matching lines with file paths and line numbers. Respects .gitignore. Output is truncated to 100 matches or 50KB (whichever is hit first). Long lines are truncated to 500 chars.",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "pattern"
+        ],
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Search pattern (regex or literal string)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Directory or file to search (default: current directory)"
+          },
+          "glob": {
+            "type": "string",
+            "description": "Filter files by glob pattern, e.g. '*.ts' or '**/*.spec.ts'"
+          },
+          "ignoreCase": {
+            "type": "boolean",
+            "description": "Case-insensitive search (default: false)"
+          },
+          "literal": {
+            "type": "boolean",
+            "description": "Treat pattern as literal string instead of regex (default: false)"
+          },
+          "context": {
+            "type": "number",
+            "description": "Number of lines to show before and after each match (default: 0)"
+          },
+          "limit": {
+            "type": "number",
+            "description": "Maximum number of matches to return (default: 100)"
+          }
         }
-       }
-      },
-      "description": "The lines that show this problem."
-     },
-     "basis": {
-      "description": "All indexes are zero-based positions in THIS problem's citations array: with one citation, use 0. Why the problem belongs to this work. introduced: the change adds it (head: the index of a citation of the NEW side or the reviewed head). worsened: the change makes it worse (base: the index of the OLD side's citation, head: the NEW side's). duty: the criteria require an event that this work lacks (criterionQuote: the criteria's exact words, event: the index of the citation that shows the event). state: the problem exists in the pinned file; its citations witness that state at the reviewed version.",
-      "anyOf": [
-       {
+      }
+    },
+    {
+      "name": "find",
+      "description": "Search for files by glob pattern. Returns matching file paths relative to the search directory. Respects .gitignore. Output is truncated to 1000 results or 50KB (whichever is hit first).",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "pattern"
+        ],
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'"
+          },
+          "path": {
+            "type": "string",
+            "description": "Directory to search in (default: current directory)"
+          },
+          "limit": {
+            "type": "number",
+            "description": "Maximum number of results (default: 1000)"
+          }
+        }
+      }
+    },
+    {
+      "name": "bash",
+      "description": "Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last 2000 lines or 50KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds. Use read or grep for source content you will rely on. Use bash for Git history and listings. Only simple literal single-file reads can receive exact read coverage; pipes, redirection, globs, substitutions, and compound commands keep coverage unknown.",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Shell command to execute"
+          },
+          "timeout": {
+            "type": "number",
+            "description": "Timeout in seconds (optional, no default timeout)"
+          }
+        }
+      }
+    },
+    {
+      "name": "upsert_problem",
+      "description": "Add or replace one local problem draft by stable key. Send its complete body; an invalid replacement leaves the previous draft unchanged. Same key and body changes nothing. This does not submit a result or end review. Use submit_result with ordered problemKeys to publish the complete candidate for server admission. Prefer a single inline submit_result for simple results.",
+      "parameters": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-         "type",
-         "head",
-         "explanation"
-        ],
-        "properties": {
-         "type": {
-          "type": "string",
-          "enum": [
-           "introduced"
-          ]
-         },
-         "head": {
-          "type": "integer",
-          "minimum": 0
-         },
-         "explanation": {
-          "type": "string",
-          "minLength": 1
-         }
-        }
-       },
-       {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-         "type",
-         "base",
-         "head",
-         "explanation"
-        ],
-        "properties": {
-         "type": {
-          "type": "string",
-          "enum": [
-           "worsened"
-          ]
-         },
-         "base": {
-          "type": "integer",
-          "minimum": 0
-         },
-         "head": {
-          "type": "integer",
-          "minimum": 0
-         },
-         "explanation": {
-          "type": "string",
-          "minLength": 1
-         }
-        }
-       },
-       {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-         "type",
-         "event",
-         "criterionQuote",
-         "explanation"
-        ],
-        "properties": {
-         "type": {
-          "type": "string",
-          "enum": [
-           "duty"
-          ]
-         },
-         "event": {
-          "type": "integer",
-          "minimum": 0
-         },
-         "criterionQuote": {
-          "type": "string",
-          "minLength": 1
-         },
-         "explanation": {
-          "type": "string",
-          "minLength": 1
-         }
-        }
-       },
-       {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-         "type",
-         "explanation"
-        ],
-        "properties": {
-         "type": {
-          "type": "string",
-          "enum": [
-           "state"
-          ]
-         },
-         "explanation": {
-          "type": "string",
-          "minLength": 1
-         }
-        }
-       }
-      ]
-     },
-     "nextStep": {
-      "type": [
-       "string",
-       "null"
-      ],
-      "description": "Optional, when the criteria name a change: the one change that resolves this supported criterion gap, relying on the same established mechanism as the explanation."
-     }
-    }
-   }
-  },
-  {
-   "name": "remove_problem",
-   "description": "Remove a local problem draft by key before submitting the result. An unknown key changes nothing. This does not delete an admitted Problem or establish repair.",
-   "parameters": {
-    "type": "object",
-    "additionalProperties": false,
-    "required": [
-     "key"
-    ],
-    "properties": {
-     "key": {
-      "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
-      "description": "Stable short lowercase-hyphenated name, unique within this practice result."
-     }
-    }
-   }
-  },
-  {
-   "name": "read_problem",
-   "description": "Read one complete local problem draft by its key, for example after compaction before correcting it. The key belongs only to this practice session. This is not an admitted product Problem. A submitted result's drafts are closed.",
-   "parameters": {
-    "type": "object",
-    "additionalProperties": false,
-    "required": [
-     "key"
-    ],
-    "properties": {
-     "key": {
-      "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
-      "description": "Stable short lowercase-hyphenated name, unique within this practice result."
-     }
-    }
-   }
-  },
-  {
-   "name": "submit_result",
-   "description": "Choose one outcome and its evidence shape. MET: evidence:{} or evidence.search; NOT_MET: problems plus optional evidence.search and evidence.openQuestions; DOES_NOT_APPLY: evidence.inapplicability only; COULD_NOT_DETERMINE: evidence.openQuestions, with optional evidence.search. Omit unused fields. Each open question requires openQuestion and wouldSettleIt. Submit the one complete evidenced result of this session's practice: its outcome, the explanation, the citations it rests on, and for NOT_MET each problem with its severity, citations and basis. The host adds the coverage it measured from your reads and keeps the result for server admission after measuring. For a large NOT_MET, optionally draft individual problems with upsert_problem and select their ordered problemKeys instead of inline problems. Never supply both. A draft is not an admitted Problem. Cite the source you read; the runner resolves source kind, manifest identity and the captured revision. Citation examples: {\"path\":\"src/Auth.java\",\"startLine\":10,\"quote\":\"insecure();\"}; {\"sourcePath\":\"work/change/diff.patch\",\"path\":\"src/Auth.java\",\"side\":\"NEW\",\"startLine\":10,\"quote\":\"+ insecure();\"}; {\"path\":\"evidence/metadata.json\",\"startLine\":1,\"quote\":\"Add login\"}. Use only text you read. Examples show the shape, not evidence for this review. Evidence examples by outcome: MET: {\"evidence\":{\"search\":{\"consulted\":[\"scm.review-threads\"],\"lookedFor\":\"unanswered requests\",\"boundary\":\"Captured threads only; no private discussion.\"}}}; DOES_NOT_APPLY: {\"evidence\":{\"inapplicability\":{\"consulted\":[\"scm.pull-request.diff\"],\"prerequisite\":\"UI changes\",\"ruledOutBy\":\"Only a server test changed.\"}}}; COULD_NOT_DETERMINE: {\"evidence\":{\"openQuestions\":[{\"openQuestion\":\"Did the named check pass?\",\"wouldSettleIt\":\"The check report linked in the description.\"}]}}; NOT_MET: {\"evidence\":{},\"problems\":[{\"severity\":\"MAJOR\",\"summary\":\"Required check is skipped\",\"explanation\":\"The captured event skips the required check.\",\"citations\":[{\"path\":\"context/events.json\",\"startLine\":2,\"quote\":\"check skipped\"}],\"basis\":{\"type\":\"duty\",\"event\":0,\"criterionQuote\":\"Run the check\",\"explanation\":\"The cited event skips the required check.\"}}]}. MET may use evidence:{} when cited positive evidence decides it. Search warrants also apply to absence claims in NOT_MET and COULD_NOT_DETERMINE. Never turn a capture failure into an outcome.",
-   "parameters": {
-    "type": "object",
-    "additionalProperties": false,
-    "required": [
-     "outcome",
-     "summary",
-     "explanation",
-     "citations",
-     "evidence"
-    ],
-    "properties": {
-     "outcome": {
-      "type": "string",
-      "enum": [
-       "MET",
-       "NOT_MET",
-       "DOES_NOT_APPLY",
-       "COULD_NOT_DETERMINE"
-      ],
-      "description": "MET — The work meets the practice in the captured evidence, and your reads covered everything the criteria ask about. Cite the evidence. A MET never rests on 'the search returned nothing' alone: an absence claim needs a bounded, complete search in evidence.search. Do not infer mastery or unseen work.\nNOT_MET — The work does not meet the practice. Submit one result for the practice and list each distinct gap in problems, each with its severity, summary, explanation, citations and basis. The problems carry the citations, so the result itself may cite nothing. Only problems carry severity.\nDOES_NOT_APPLY — A concrete fact rules out the practice's prerequisite applicability. Record the prerequisite and the exclusion in evidence.inapplicability. This is not missing or incomplete evidence.\nCOULD_NOT_DETERMINE — Relevant evidence was captured and read, but it does not settle whether the work meets the practice. Record each open question in evidence.openQuestions: the question, what would settle it, and a citation where it is located. A capture failure is a review readiness failure, not a result. Use these exact values. Case variants, NOT_APPLICABLE for DOES_NOT_APPLY, and UNDETERMINED for COULD_NOT_DETERMINE are accepted."
-     },
-     "summary": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 160,
-      "description": "A short phrase of at most 160 characters identifying the specific behavior whose conformance to the practice standard you assess, such as 'Debug print left in the request handler'. Never a single word and never the practice's own name; the reasons, titles and quotes go in explanation. A longer summary is refused, not shortened."
-     },
-     "explanation": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 10000,
-      "description": "A concise explanation a developer can read: the source facts that decide whether this work holds this criterion's subject and applicability, then, when it does, how the cited evidence meets or falls short of what this criterion judges, leaving to other practices what it assigns to them. Describe evidence, not advice, intent, confidence, or hidden chain-of-thought."
-     },
-     "citations": {
-      "type": "array",
-      "maxItems": 50,
-      "items": {
-       "type": "object",
-       "additionalProperties": false,
-       "required": [
-        "path",
-        "startLine",
-        "quote"
-       ],
-       "properties": {
-        "sourceKind": {
-         "type": [
-          "string",
-          "null"
-         ],
-         "enum": [
-          "scm.pull-request.core",
-          "scm.pull-request.diff",
-          null
-         ],
-         "description": "Optional. The runner resolves the source kind from the path you read."
-        },
-        "sourcePath": {
-         "type": [
-          "string",
-          "null"
-         ],
-         "minLength": 1,
-         "maxLength": 4096,
-         "description": "Optional. The source you read, such as work/change/diff.patch or a captured record. The runner resolves its manifest identity."
-        },
-        "path": {
-         "type": "string",
-         "minLength": 1,
-         "maxLength": 4096,
-         "description": "The file you read: a repository-relative path, a sandbox path, work/change/diff.patch, or a captured record path."
-        },
-        "side": {
-         "type": [
-          "string",
-          "null"
-         ],
-         "enum": [
-          "OLD",
-          "NEW",
-          null
-         ],
-         "description": "For a diff quote, OLD selects removed lines and NEW selects added lines. Omission lets the runner resolve the side from the exact quote."
-        },
-        "commit": {
-         "type": [
-          "string",
-          "null"
-         ],
-         "minLength": 1,
-         "maxLength": 1024,
-         "description": "Optional full commit SHA for historical repository text. Omission selects the captured HEAD automatically. Do not use a branch name."
-        },
-        "startLine": {
-         "type": "integer",
-         "minimum": 1,
-         "maximum": 2147483647,
-         "description": "The 1-based line you read. For a diff, use its [L<n>] file coordinate or the physical line number of diff.patch."
-        },
-        "endLine": {
-         "type": [
-          "integer",
-          "null"
-         ],
-         "minimum": 1,
-         "maximum": 2147483647,
-         "description": "The last line of the quote, at least startLine; omitted means one line."
-        },
-        "quote": {
-         "type": "string",
-         "minLength": 1,
-         "maxLength": 4000,
-         "description": "Required verbatim text at those lines. For repository text and records, a fragment is enough. For a diff, copy each whole line. Diff markers and [L<n>] prefixes are accepted."
-        }
-       }
-      },
-      "description": "The lines that decide the outcome. Required for MET, DOES_NOT_APPLY and COULD_NOT_DETERMINE; a NOT_MET result may leave it empty, since each problem cites its own lines."
-     },
-     "problems": {
-      "anyOf": [
-       {
-        "type": "array",
-        "minItems": 1,
-        "maxItems": 50,
-        "items": {
-         "type": "object",
-         "additionalProperties": false,
-         "required": [
           "severity",
           "summary",
           "explanation",
           "citations",
-          "basis"
-         ],
-         "properties": {
-          "key": {
-           "type": [
-            "string",
-            "null"
-           ],
-           "description": "Optional: a short lowercase-hyphenated name for this problem, unique within the result."
-          },
-          "severity": {
-           "type": "string",
-           "enum": [
-            "CRITICAL",
-            "MAJOR",
-            "MINOR",
-            "TRIVIAL"
-           ],
-           "description": "From the practice's Severity section. CRITICAL — The consequence is expensive or impossible to undo once this merges — a leaked credential, data loss, a security hole. Differs from MAJOR by whether the damage can still be taken back.\nMAJOR — A real defect to fix before merging, whose consequence is contained and correctable. Differs from MINOR by whether a reader of this change would be wrong about how it behaves.\nMINOR — A craft-level improvement worth making that nobody would block a merge on. Differs from TRIVIAL by whether there is a specific edit to make.\nTRIVIAL — A real gap with trivial impact. Still a problem of a NOT_MET result; a strength is never a problem."
-          },
-          "summary": {
-           "type": "string",
-           "minLength": 1,
-           "maxLength": 160,
-           "description": "One line of at most 160 characters naming this one problem, such as 'Debug print left in the request handler'."
-          },
-          "explanation": {
-           "type": "string",
-           "minLength": 1,
-           "maxLength": 4000,
-           "description": "What the cited evidence establishes about this one criterion gap, including any consequence that decides its applicability, outcome or severity. Apply Grounding to the exact behavior and its language or API contract; leave an unresolved premise in evidence.openQuestions, and do not let it decide the problem. Evidence, not advice, intent, confidence, or hidden chain-of-thought."
-          },
-          "citations": {
-           "type": "array",
-           "minItems": 1,
-           "maxItems": 20,
-           "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-             "path",
-             "startLine",
-             "quote"
-            ],
-            "properties": {
-             "sourceKind": {
-              "type": [
-               "string",
-               "null"
-              ],
-              "enum": [
-               "scm.pull-request.core",
-               "scm.pull-request.diff",
-               null
-              ],
-              "description": "Optional. The runner resolves the source kind from the path you read."
-             },
-             "sourcePath": {
-              "type": [
-               "string",
-               "null"
-              ],
-              "minLength": 1,
-              "maxLength": 4096,
-              "description": "Optional. The source you read, such as work/change/diff.patch or a captured record. The runner resolves its manifest identity."
-             },
-             "path": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 4096,
-              "description": "The file you read: a repository-relative path, a sandbox path, work/change/diff.patch, or a captured record path."
-             },
-             "side": {
-              "type": [
-               "string",
-               "null"
-              ],
-              "enum": [
-               "OLD",
-               "NEW",
-               null
-              ],
-              "description": "For a diff quote, OLD selects removed lines and NEW selects added lines. Omission lets the runner resolve the side from the exact quote."
-             },
-             "commit": {
-              "type": [
-               "string",
-               "null"
-              ],
-              "minLength": 1,
-              "maxLength": 1024,
-              "description": "Optional full commit SHA for historical repository text. Omission selects the captured HEAD automatically. Do not use a branch name."
-             },
-             "startLine": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 2147483647,
-              "description": "The 1-based line you read. For a diff, use its [L<n>] file coordinate or the physical line number of diff.patch."
-             },
-             "endLine": {
-              "type": [
-               "integer",
-               "null"
-              ],
-              "minimum": 1,
-              "maximum": 2147483647,
-              "description": "The last line of the quote, at least startLine; omitted means one line."
-             },
-             "quote": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 4000,
-              "description": "Required verbatim text at those lines. For repository text and records, a fragment is enough. For a diff, copy each whole line. Diff markers and [L<n>] prefixes are accepted."
-             }
-            }
-           },
-           "description": "The lines that show this problem."
-          },
-          "basis": {
-           "description": "All indexes are zero-based positions in THIS problem's citations array: with one citation, use 0. Why the problem belongs to this work. introduced: the change adds it (head: the index of a citation of the NEW side or the reviewed head). worsened: the change makes it worse (base: the index of the OLD side's citation, head: the NEW side's). duty: the criteria require an event that this work lacks (criterionQuote: the criteria's exact words, event: the index of the citation that shows the event). state: the problem exists in the pinned file; its citations witness that state at the reviewed version.",
-           "anyOf": [
-            {
-             "type": "object",
-             "additionalProperties": false,
-             "required": [
-              "type",
-              "head",
-              "explanation"
-             ],
-             "properties": {
-              "type": {
-               "type": "string",
-               "enum": [
-                "introduced"
-               ]
-              },
-              "head": {
-               "type": "integer",
-               "minimum": 0
-              },
-              "explanation": {
-               "type": "string",
-               "minLength": 1
-              }
-             }
-            },
-            {
-             "type": "object",
-             "additionalProperties": false,
-             "required": [
-              "type",
-              "base",
-              "head",
-              "explanation"
-             ],
-             "properties": {
-              "type": {
-               "type": "string",
-               "enum": [
-                "worsened"
-               ]
-              },
-              "base": {
-               "type": "integer",
-               "minimum": 0
-              },
-              "head": {
-               "type": "integer",
-               "minimum": 0
-              },
-              "explanation": {
-               "type": "string",
-               "minLength": 1
-              }
-             }
-            },
-            {
-             "type": "object",
-             "additionalProperties": false,
-             "required": [
-              "type",
-              "event",
-              "criterionQuote",
-              "explanation"
-             ],
-             "properties": {
-              "type": {
-               "type": "string",
-               "enum": [
-                "duty"
-               ]
-              },
-              "event": {
-               "type": "integer",
-               "minimum": 0
-              },
-              "criterionQuote": {
-               "type": "string",
-               "minLength": 1
-              },
-              "explanation": {
-               "type": "string",
-               "minLength": 1
-              }
-             }
-            },
-            {
-             "type": "object",
-             "additionalProperties": false,
-             "required": [
-              "type",
-              "explanation"
-             ],
-             "properties": {
-              "type": {
-               "type": "string",
-               "enum": [
-                "state"
-               ]
-              },
-              "explanation": {
-               "type": "string",
-               "minLength": 1
-              }
-             }
-            }
-           ]
-          },
-          "nextStep": {
-           "type": [
-            "string",
-            "null"
-           ],
-           "description": "Optional, when the criteria name a change: the one change that resolves this supported criterion gap, relying on the same established mechanism as the explanation."
-          }
-         }
-        }
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "description": "NOT_MET requires a nonempty array: each problem has severity, summary, explanation, citations and basis. For every other outcome, omit problems or use null or []."
-     },
-     "example": {
-      "anyOf": [
-       {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-         "citation",
-         "note"
+          "basis",
+          "key"
         ],
         "properties": {
-         "citation": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-           "path",
-           "startLine",
-           "quote"
-          ],
-          "properties": {
-           "sourceKind": {
-            "type": [
-             "string",
-             "null"
-            ],
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+            "description": "Stable short lowercase-hyphenated name, unique within this practice result."
+          },
+          "severity": {
+            "type": "string",
             "enum": [
-             "scm.pull-request.core",
-             "scm.pull-request.diff",
-             null
+              "CRITICAL",
+              "MAJOR",
+              "MINOR",
+              "TRIVIAL"
             ],
-            "description": "Optional. The runner resolves the source kind from the path you read."
-           },
-           "sourcePath": {
-            "type": [
-             "string",
-             "null"
-            ],
-            "minLength": 1,
-            "maxLength": 4096,
-            "description": "Optional. The source you read, such as work/change/diff.patch or a captured record. The runner resolves its manifest identity."
-           },
-           "path": {
+            "description": "From the practice's Severity section. CRITICAL \u2014 The consequence is expensive or impossible to undo once this merges \u2014 a leaked credential, data loss, a security hole. Differs from MAJOR by whether the damage can still be taken back.\nMAJOR \u2014 A real defect to fix before merging, whose consequence is contained and correctable. Differs from MINOR by whether a reader of this change would be wrong about how it behaves.\nMINOR \u2014 A craft-level improvement worth making that nobody would block a merge on. Differs from TRIVIAL by whether there is a specific edit to make.\nTRIVIAL \u2014 A real gap with trivial impact. Still a problem of a NOT_MET result; a strength is never a problem."
+          },
+          "summary": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 4096,
-            "description": "The file you read: a repository-relative path, a sandbox path, work/change/diff.patch, or a captured record path."
-           },
-           "side": {
-            "type": [
-             "string",
-             "null"
-            ],
-            "enum": [
-             "OLD",
-             "NEW",
-             null
-            ],
-            "description": "For a diff quote, OLD selects removed lines and NEW selects added lines. Omission lets the runner resolve the side from the exact quote."
-           },
-           "commit": {
-            "type": [
-             "string",
-             "null"
-            ],
-            "minLength": 1,
-            "maxLength": 1024,
-            "description": "Optional full commit SHA for historical repository text. Omission selects the captured HEAD automatically. Do not use a branch name."
-           },
-           "startLine": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 2147483647,
-            "description": "The 1-based line you read. For a diff, use its [L<n>] file coordinate or the physical line number of diff.patch."
-           },
-           "endLine": {
-            "type": [
-             "integer",
-             "null"
-            ],
-            "minimum": 1,
-            "maximum": 2147483647,
-            "description": "The last line of the quote, at least startLine; omitted means one line."
-           },
-           "quote": {
+            "maxLength": 160,
+            "description": "One line of at most 160 characters naming this one problem, such as 'Debug print left in the request handler'."
+          },
+          "explanation": {
             "type": "string",
             "minLength": 1,
             "maxLength": 4000,
-            "description": "Required verbatim text at those lines. For repository text and records, a fragment is enough. For a diff, copy each whole line. Diff markers and [L<n>] prefixes are accepted."
-           }
-          }
-         },
-         "note": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 280
-         }
-        }
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "description": "Optional, MET or NOT_MET only: one place of this work that shows the practice as the criteria ask, when the evidence holds one; never on the lines of a problem. null otherwise."
-     },
-     "evidence": {
-      "type": "object",
-      "additionalProperties": false,
-      "description": "An object with only these outcome-specific fields. MET: optional search warrant; DOES_NOT_APPLY: required inapplicability; COULD_NOT_DETERMINE: required openQuestions and optional search; NOT_MET: optional search and openQuestions. Put consulted, lookedFor and boundary inside search, never directly inside evidence. Omit unused fields; empty values in unused fields are treated as omitted.",
-      "properties": {
-       "search": {
-        "anyOf": [
-         {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-           "consulted",
-           "lookedFor",
-           "boundary"
-          ],
-          "properties": {
-           "consulted": {
+            "description": "What the cited evidence establishes about this one criterion gap, including any consequence that decides its applicability, outcome or severity. Apply Grounding to the exact behavior and its language or API contract; leave an unresolved premise in evidence.openQuestions, and do not let it decide the problem. Evidence, not advice, intent, confidence, or hidden chain-of-thought."
+          },
+          "citations": {
             "type": "array",
             "minItems": 1,
+            "maxItems": 20,
             "items": {
-             "type": "string",
-             "enum": [
-              "scm.pull-request.core",
-              "scm.pull-request.diff"
-             ]
-            },
-            "description": "Evidence source kinds you actually searched, e.g. scm.review-threads. Name scm.repository.tree only after a grep of the whole checkout that was not cut."
-           },
-           "lookedFor": {
-            "type": "string",
-            "minLength": 1,
-            "description": "The specific behavior whose absence you report, matching the behavior assessed in the summary and explanation."
-           },
-           "boundary": {
-            "type": "string",
-            "minLength": 1,
-            "description": "What this search did NOT cover, so a reader can judge how far the absence reaches."
-           }
-          }
-         },
-         {
-          "type": "null"
-         }
-        ]
-       },
-       "inapplicability": {
-        "anyOf": [
-         {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-           "consulted",
-           "prerequisite",
-           "ruledOutBy"
-          ],
-          "properties": {
-           "consulted": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-             "type": "string",
-             "enum": [
-              "scm.pull-request.core",
-              "scm.pull-request.diff"
-             ]
-            },
-            "description": "Evidence source kinds you read to reach this conclusion, e.g. scm.pull-request.diff."
-           },
-           "prerequisite": {
-            "type": "string",
-            "minLength": 1,
-            "description": "The subject this practice's criteria judge."
-           },
-           "ruledOutBy": {
-            "type": "string",
-            "minLength": 1,
-            "description": "The fact about THIS work that rules out that subject."
-           }
-          }
-         },
-         {
-          "type": "null"
-         }
-        ]
-       },
-       "openQuestions": {
-        "anyOf": [
-         {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 20,
-          "items": {
-           "type": "object",
-           "additionalProperties": false,
-           "required": [
-            "openQuestion",
-            "wouldSettleIt"
-           ],
-           "properties": {
-            "openQuestion": {
-             "type": "string",
-             "minLength": 1,
-             "description": "The question the evidence you actually read left open, in one sentence."
-            },
-            "wouldSettleIt": {
-             "type": "string",
-             "minLength": 1,
-             "description": "The EVIDENCE that would have decided it — something that already exists and you could not read, named concretely: 'the body of issue #7', 'the test file the description says covers this'. NOT what the author should have written: advice belongs to a later step, and answering with it leaves nobody any wiser about which source this practice is missing."
-            },
-            "citation": {
-             "anyOf": [
-              {
-               "type": "object",
-               "additionalProperties": false,
-               "required": [
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
                 "path",
                 "startLine",
                 "quote"
-               ],
-               "properties": {
+              ],
+              "properties": {
                 "sourceKind": {
-                 "type": [
-                  "string",
-                  "null"
-                 ],
-                 "enum": [
-                  "scm.pull-request.core",
-                  "scm.pull-request.diff",
-                  null
-                 ],
-                 "description": "Optional. The runner resolves the source kind from the path you read."
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "scm.pull-request.core",
+                    "scm.pull-request.diff",
+                    null
+                  ],
+                  "description": "Optional. The runner resolves the source kind from the path you read."
                 },
                 "sourcePath": {
-                 "type": [
-                  "string",
-                  "null"
-                 ],
-                 "minLength": 1,
-                 "maxLength": 4096,
-                 "description": "Optional. The source you read, such as work/change/diff.patch or a captured record. The runner resolves its manifest identity."
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 4096,
+                  "description": "Optional. The source you read, such as work/change/diff.patch or a captured record. The runner resolves its manifest identity."
                 },
                 "path": {
-                 "type": "string",
-                 "minLength": 1,
-                 "maxLength": 4096,
-                 "description": "The file you read: a repository-relative path, a sandbox path, work/change/diff.patch, or a captured record path."
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096,
+                  "description": "The file you read: a repository-relative path, a sandbox path, work/change/diff.patch, or a captured record path."
                 },
                 "side": {
-                 "type": [
-                  "string",
-                  "null"
-                 ],
-                 "enum": [
-                  "OLD",
-                  "NEW",
-                  null
-                 ],
-                 "description": "For a diff quote, OLD selects removed lines and NEW selects added lines. Omission lets the runner resolve the side from the exact quote."
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "OLD",
+                    "NEW",
+                    null
+                  ],
+                  "description": "For a diff quote, OLD selects removed lines and NEW selects added lines. Omission lets the runner resolve the side from the exact quote."
                 },
                 "commit": {
-                 "type": [
-                  "string",
-                  "null"
-                 ],
-                 "minLength": 1,
-                 "maxLength": 1024,
-                 "description": "Optional full commit SHA for historical repository text. Omission selects the captured HEAD automatically. Do not use a branch name."
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 1024,
+                  "description": "Optional full commit SHA for historical repository text. Omission selects the captured HEAD automatically. Do not use a branch name."
                 },
                 "startLine": {
-                 "type": "integer",
-                 "minimum": 1,
-                 "maximum": 2147483647,
-                 "description": "The 1-based line you read. For a diff, use its [L<n>] file coordinate or the physical line number of diff.patch."
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 2147483647,
+                  "description": "The 1-based line you read. For a diff, use its [L<n>] file coordinate or the physical line number of diff.patch."
                 },
                 "endLine": {
-                 "type": [
-                  "integer",
-                  "null"
-                 ],
-                 "minimum": 1,
-                 "maximum": 2147483647,
-                 "description": "The last line of the quote, at least startLine; omitted means one line."
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 2147483647,
+                  "description": "The last line of the quote, at least startLine; omitted means one line."
                 },
                 "quote": {
-                 "type": "string",
-                 "minLength": 1,
-                 "maxLength": 4000,
-                 "description": "Required verbatim text at those lines. For repository text and records, a fragment is enough. For a diff, copy each whole line. Diff markers and [L<n>] prefixes are accepted."
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000,
+                  "description": "Required verbatim text at those lines. For repository text and records, a fragment is enough. For a diff, copy each whole line. Diff markers and [L<n>] prefixes are accepted."
                 }
-               }
+              }
+            },
+            "description": "The lines that show this problem."
+          },
+          "basis": {
+            "description": "All indexes are zero-based positions in THIS problem's citations array: with one citation, use 0. Why the problem belongs to this work. introduced: the change adds it (head: the index of a citation of the NEW side or the reviewed head). worsened: the change makes it worse (base: the index of the OLD side's citation, head: the NEW side's). duty: the criteria require an event that this work lacks (criterionQuote: the criteria's exact words, event: the index of the citation that shows the event). state: the problem exists in the pinned file; its citations witness that state at the reviewed version.",
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "type",
+                  "head",
+                  "explanation"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "introduced"
+                    ]
+                  },
+                  "head": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "explanation": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
               },
               {
-               "type": "null"
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "type",
+                  "base",
+                  "head",
+                  "explanation"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "worsened"
+                    ]
+                  },
+                  "base": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "head": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "explanation": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "type",
+                  "event",
+                  "criterionQuote",
+                  "explanation"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "duty"
+                    ]
+                  },
+                  "event": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "criterionQuote": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "explanation": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "type",
+                  "explanation"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "state"
+                    ]
+                  },
+                  "explanation": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
               }
-             ],
-             "description": "Where the question arises, when one place of the work does."
-            }
-           }
+            ]
+          },
+          "nextStep": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional, when the criteria name a change: the one change that resolves this supported criterion gap, relying on the same established mechanism as the explanation."
           }
-         },
-         {
-          "type": "null"
-         }
-        ]
-       }
+        }
       }
-     },
-     "problemKeys": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 50,
-      "uniqueItems": true,
-      "items": {
-       "type": "string",
-       "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
-       "description": "Stable short lowercase-hyphenated name, unique within this practice result."
-      },
-      "description": "NOT_MET only: ordered keys of local problem drafts to include instead of inline problems. Never supply both. Unselected drafts are not submitted."
-     }
+    },
+    {
+      "name": "remove_problem",
+      "description": "Remove a local problem draft by key before submitting the result. An unknown key changes nothing. This does not delete an admitted Problem or establish repair.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+            "description": "Stable short lowercase-hyphenated name, unique within this practice result."
+          }
+        }
+      }
+    },
+    {
+      "name": "read_problem",
+      "description": "Read one complete local problem draft by its key, for example after compaction before correcting it. The key belongs only to this practice session. This is not an admitted product Problem. A submitted result's drafts are closed.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+            "description": "Stable short lowercase-hyphenated name, unique within this practice result."
+          }
+        }
+      }
+    },
+    {
+      "name": "submit_result",
+      "description": "Choose one outcome and its evidence shape. MET: evidence:{} or evidence.search; NOT_MET: problems plus optional evidence.search and evidence.openQuestions; DOES_NOT_APPLY: evidence.inapplicability only; COULD_NOT_DETERMINE: evidence.openQuestions, with optional evidence.search. Omit unused fields. Each open question requires openQuestion and wouldSettleIt. Submit the one complete evidenced result of this session's practice: its outcome, the explanation, the citations it rests on, and for NOT_MET each problem with its severity, citations and basis. The host adds the coverage it measured from your reads and keeps the result for server admission after measuring. For a large NOT_MET, optionally draft individual problems with upsert_problem and select their ordered problemKeys instead of inline problems. Never supply both. A draft is not an admitted Problem. Cite the source you read; the runner resolves source kind, manifest identity and the captured revision. Citation examples: {\"path\":\"src/Auth.java\",\"startLine\":10,\"quote\":\"insecure();\"}; {\"sourcePath\":\"work/change/diff.patch\",\"path\":\"src/Auth.java\",\"side\":\"NEW\",\"startLine\":10,\"quote\":\"+ insecure();\"}; {\"path\":\"evidence/metadata.json\",\"startLine\":1,\"quote\":\"Add login\"}. Use only text you read. Examples show the shape, not evidence for this review. Evidence examples by outcome: MET: {\"evidence\":{\"search\":{\"consulted\":[\"scm.review-threads\"],\"lookedFor\":\"unanswered requests\",\"boundary\":\"Captured threads only; no private discussion.\"}}}; DOES_NOT_APPLY: {\"evidence\":{\"inapplicability\":{\"consulted\":[\"scm.pull-request.diff\"],\"prerequisite\":\"UI changes\",\"ruledOutBy\":\"Only a server test changed.\"}}}; COULD_NOT_DETERMINE: {\"evidence\":{\"openQuestions\":[{\"openQuestion\":\"Did the named check pass?\",\"wouldSettleIt\":\"The check report linked in the description.\"}]}}; NOT_MET: {\"evidence\":{},\"problems\":[{\"severity\":\"MAJOR\",\"summary\":\"Required check is skipped\",\"explanation\":\"The captured event skips the required check.\",\"citations\":[{\"path\":\"context/events.json\",\"startLine\":2,\"quote\":\"check skipped\"}],\"basis\":{\"type\":\"duty\",\"event\":0,\"criterionQuote\":\"Run the check\",\"explanation\":\"The cited event skips the required check.\"}}]}. MET may use evidence:{} when cited positive evidence decides it. Search warrants also apply to absence claims in NOT_MET and COULD_NOT_DETERMINE. Never turn a capture failure into an outcome.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "outcome",
+          "summary",
+          "explanation",
+          "citations",
+          "evidence"
+        ],
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "MET",
+              "NOT_MET",
+              "DOES_NOT_APPLY",
+              "COULD_NOT_DETERMINE"
+            ],
+            "description": "MET \u2014 The work meets the practice in the captured evidence, and your reads covered everything the criteria ask about. Cite the evidence. A MET never rests on 'the search returned nothing' alone: an absence claim needs a bounded, complete search in evidence.search. Do not infer mastery or unseen work.\nNOT_MET \u2014 The work does not meet the practice. Submit one result for the practice and list each distinct gap in problems, each with its severity, summary, explanation, citations and basis. The problems carry the citations, so the result itself may cite nothing. Only problems carry severity.\nDOES_NOT_APPLY \u2014 A concrete fact rules out the practice's prerequisite applicability. Record the prerequisite and the exclusion in evidence.inapplicability. This is not missing or incomplete evidence.\nCOULD_NOT_DETERMINE \u2014 Relevant evidence was captured and read, but it does not settle whether the work meets the practice. Record each open question in evidence.openQuestions: the question, what would settle it, and a citation where it is located. A capture failure is a review readiness failure, not a result. Use these exact values. Case variants, NOT_APPLICABLE for DOES_NOT_APPLY, and UNDETERMINED for COULD_NOT_DETERMINE are accepted."
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160,
+            "description": "A short phrase of at most 160 characters identifying the specific behavior whose conformance to the practice standard you assess, such as 'Debug print left in the request handler'. Never a single word and never the practice's own name; the reasons, titles and quotes go in explanation. A longer summary is refused, not shortened."
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10000,
+            "description": "A concise explanation a developer can read: the source facts that decide whether this work holds this criterion's subject and applicability, then, when it does, how the cited evidence meets or falls short of what this criterion judges, leaving to other practices what it assigns to them. Describe evidence, not advice, intent, confidence, or hidden chain-of-thought."
+          },
+          "citations": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "startLine",
+                "quote"
+              ],
+              "properties": {
+                "sourceKind": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "scm.pull-request.core",
+                    "scm.pull-request.diff",
+                    null
+                  ],
+                  "description": "Optional. The runner resolves the source kind from the path you read."
+                },
+                "sourcePath": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 4096,
+                  "description": "Optional. The source you read, such as work/change/diff.patch or a captured record. The runner resolves its manifest identity."
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096,
+                  "description": "The file you read: a repository-relative path, a sandbox path, work/change/diff.patch, or a captured record path."
+                },
+                "side": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "OLD",
+                    "NEW",
+                    null
+                  ],
+                  "description": "For a diff quote, OLD selects removed lines and NEW selects added lines. Omission lets the runner resolve the side from the exact quote."
+                },
+                "commit": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 1,
+                  "maxLength": 1024,
+                  "description": "Optional full commit SHA for historical repository text. Omission selects the captured HEAD automatically. Do not use a branch name."
+                },
+                "startLine": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 2147483647,
+                  "description": "The 1-based line you read. For a diff, use its [L<n>] file coordinate or the physical line number of diff.patch."
+                },
+                "endLine": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1,
+                  "maximum": 2147483647,
+                  "description": "The last line of the quote, at least startLine; omitted means one line."
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000,
+                  "description": "Required verbatim text at those lines. For repository text and records, a fragment is enough. For a diff, copy each whole line. Diff markers and [L<n>] prefixes are accepted."
+                }
+              }
+            },
+            "description": "The lines that decide the outcome. Required for MET, DOES_NOT_APPLY and COULD_NOT_DETERMINE; a NOT_MET result may leave it empty, since each problem cites its own lines."
+          },
+          "problems": {
+            "anyOf": [
+              {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 50,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "severity",
+                    "summary",
+                    "explanation",
+                    "citations",
+                    "basis"
+                  ],
+                  "properties": {
+                    "key": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Optional: a short lowercase-hyphenated name for this problem, unique within the result."
+                    },
+                    "severity": {
+                      "type": "string",
+                      "enum": [
+                        "CRITICAL",
+                        "MAJOR",
+                        "MINOR",
+                        "TRIVIAL"
+                      ],
+                      "description": "From the practice's Severity section. CRITICAL \u2014 The consequence is expensive or impossible to undo once this merges \u2014 a leaked credential, data loss, a security hole. Differs from MAJOR by whether the damage can still be taken back.\nMAJOR \u2014 A real defect to fix before merging, whose consequence is contained and correctable. Differs from MINOR by whether a reader of this change would be wrong about how it behaves.\nMINOR \u2014 A craft-level improvement worth making that nobody would block a merge on. Differs from TRIVIAL by whether there is a specific edit to make.\nTRIVIAL \u2014 A real gap with trivial impact. Still a problem of a NOT_MET result; a strength is never a problem."
+                    },
+                    "summary": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 160,
+                      "description": "One line of at most 160 characters naming this one problem, such as 'Debug print left in the request handler'."
+                    },
+                    "explanation": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4000,
+                      "description": "What the cited evidence establishes about this one criterion gap, including any consequence that decides its applicability, outcome or severity. Apply Grounding to the exact behavior and its language or API contract; leave an unresolved premise in evidence.openQuestions, and do not let it decide the problem. Evidence, not advice, intent, confidence, or hidden chain-of-thought."
+                    },
+                    "citations": {
+                      "type": "array",
+                      "minItems": 1,
+                      "maxItems": 20,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "path",
+                          "startLine",
+                          "quote"
+                        ],
+                        "properties": {
+                          "sourceKind": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "enum": [
+                              "scm.pull-request.core",
+                              "scm.pull-request.diff",
+                              null
+                            ],
+                            "description": "Optional. The runner resolves the source kind from the path you read."
+                          },
+                          "sourcePath": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "description": "Optional. The source you read, such as work/change/diff.patch or a captured record. The runner resolves its manifest identity."
+                          },
+                          "path": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4096,
+                            "description": "The file you read: a repository-relative path, a sandbox path, work/change/diff.patch, or a captured record path."
+                          },
+                          "side": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "enum": [
+                              "OLD",
+                              "NEW",
+                              null
+                            ],
+                            "description": "For a diff quote, OLD selects removed lines and NEW selects added lines. Omission lets the runner resolve the side from the exact quote."
+                          },
+                          "commit": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "minLength": 1,
+                            "maxLength": 1024,
+                            "description": "Optional full commit SHA for historical repository text. Omission selects the captured HEAD automatically. Do not use a branch name."
+                          },
+                          "startLine": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 2147483647,
+                            "description": "The 1-based line you read. For a diff, use its [L<n>] file coordinate or the physical line number of diff.patch."
+                          },
+                          "endLine": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ],
+                            "minimum": 1,
+                            "maximum": 2147483647,
+                            "description": "The last line of the quote, at least startLine; omitted means one line."
+                          },
+                          "quote": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 4000,
+                            "description": "Required verbatim text at those lines. For repository text and records, a fragment is enough. For a diff, copy each whole line. Diff markers and [L<n>] prefixes are accepted."
+                          }
+                        }
+                      },
+                      "description": "The lines that show this problem."
+                    },
+                    "basis": {
+                      "description": "All indexes are zero-based positions in THIS problem's citations array: with one citation, use 0. Why the problem belongs to this work. introduced: the change adds it (head: the index of a citation of the NEW side or the reviewed head). worsened: the change makes it worse (base: the index of the OLD side's citation, head: the NEW side's). duty: the criteria require an event that this work lacks (criterionQuote: the criteria's exact words, event: the index of the citation that shows the event). state: the problem exists in the pinned file; its citations witness that state at the reviewed version.",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "type",
+                            "head",
+                            "explanation"
+                          ],
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "introduced"
+                              ]
+                            },
+                            "head": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "explanation": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "type",
+                            "base",
+                            "head",
+                            "explanation"
+                          ],
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "worsened"
+                              ]
+                            },
+                            "base": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "head": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "explanation": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "type",
+                            "event",
+                            "criterionQuote",
+                            "explanation"
+                          ],
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "duty"
+                              ]
+                            },
+                            "event": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "criterionQuote": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "explanation": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "type",
+                            "explanation"
+                          ],
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "state"
+                              ]
+                            },
+                            "explanation": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "nextStep": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Optional, when the criteria name a change: the one change that resolves this supported criterion gap, relying on the same established mechanism as the explanation."
+                    }
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "NOT_MET requires a nonempty array: each problem has severity, summary, explanation, citations and basis. For every other outcome, omit problems or use null or []."
+          },
+          "example": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "citation",
+                  "note"
+                ],
+                "properties": {
+                  "citation": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "path",
+                      "startLine",
+                      "quote"
+                    ],
+                    "properties": {
+                      "sourceKind": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "enum": [
+                          "scm.pull-request.core",
+                          "scm.pull-request.diff",
+                          null
+                        ],
+                        "description": "Optional. The runner resolves the source kind from the path you read."
+                      },
+                      "sourcePath": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 1,
+                        "maxLength": 4096,
+                        "description": "Optional. The source you read, such as work/change/diff.patch or a captured record. The runner resolves its manifest identity."
+                      },
+                      "path": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096,
+                        "description": "The file you read: a repository-relative path, a sandbox path, work/change/diff.patch, or a captured record path."
+                      },
+                      "side": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "enum": [
+                          "OLD",
+                          "NEW",
+                          null
+                        ],
+                        "description": "For a diff quote, OLD selects removed lines and NEW selects added lines. Omission lets the runner resolve the side from the exact quote."
+                      },
+                      "commit": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "minLength": 1,
+                        "maxLength": 1024,
+                        "description": "Optional full commit SHA for historical repository text. Omission selects the captured HEAD automatically. Do not use a branch name."
+                      },
+                      "startLine": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2147483647,
+                        "description": "The 1-based line you read. For a diff, use its [L<n>] file coordinate or the physical line number of diff.patch."
+                      },
+                      "endLine": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "minimum": 1,
+                        "maximum": 2147483647,
+                        "description": "The last line of the quote, at least startLine; omitted means one line."
+                      },
+                      "quote": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000,
+                        "description": "Required verbatim text at those lines. For repository text and records, a fragment is enough. For a diff, copy each whole line. Diff markers and [L<n>] prefixes are accepted."
+                      }
+                    }
+                  },
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 280
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional, MET or NOT_MET only: one place of this work that shows the practice as the criteria ask, when the evidence holds one; never on the lines of a problem. null otherwise."
+          },
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "An object with only these outcome-specific fields. MET: optional search warrant; DOES_NOT_APPLY: required inapplicability; COULD_NOT_DETERMINE: required openQuestions and optional search; NOT_MET: optional search and openQuestions. Put consulted, lookedFor and boundary inside search, never directly inside evidence. Omit unused fields; empty values in unused fields are treated as omitted.",
+            "properties": {
+              "search": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "consulted",
+                      "lookedFor",
+                      "boundary"
+                    ],
+                    "properties": {
+                      "consulted": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "scm.pull-request.core",
+                            "scm.pull-request.diff"
+                          ]
+                        },
+                        "description": "Evidence source kinds you actually searched, e.g. scm.review-threads. Name scm.repository.tree only after a grep of the whole checkout that was not cut."
+                      },
+                      "lookedFor": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The specific behavior whose absence you report, matching the behavior assessed in the summary and explanation."
+                      },
+                      "boundary": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "What this search did NOT cover, so a reader can judge how far the absence reaches."
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "inapplicability": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "consulted",
+                      "prerequisite",
+                      "ruledOutBy"
+                    ],
+                    "properties": {
+                      "consulted": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "scm.pull-request.core",
+                            "scm.pull-request.diff"
+                          ]
+                        },
+                        "description": "Evidence source kinds you read to reach this conclusion, e.g. scm.pull-request.diff."
+                      },
+                      "prerequisite": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The subject this practice's criteria judge."
+                      },
+                      "ruledOutBy": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The fact about THIS work that rules out that subject."
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "openQuestions": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "openQuestion",
+                        "wouldSettleIt"
+                      ],
+                      "properties": {
+                        "openQuestion": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "The question the evidence you actually read left open, in one sentence."
+                        },
+                        "wouldSettleIt": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "The EVIDENCE that would have decided it \u2014 something that already exists and you could not read, named concretely: 'the body of issue #7', 'the test file the description says covers this'. NOT what the author should have written: advice belongs to a later step, and answering with it leaves nobody any wiser about which source this practice is missing."
+                        },
+                        "citation": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "path",
+                                "startLine",
+                                "quote"
+                              ],
+                              "properties": {
+                                "sourceKind": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "enum": [
+                                    "scm.pull-request.core",
+                                    "scm.pull-request.diff",
+                                    null
+                                  ],
+                                  "description": "Optional. The runner resolves the source kind from the path you read."
+                                },
+                                "sourcePath": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "minLength": 1,
+                                  "maxLength": 4096,
+                                  "description": "Optional. The source you read, such as work/change/diff.patch or a captured record. The runner resolves its manifest identity."
+                                },
+                                "path": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 4096,
+                                  "description": "The file you read: a repository-relative path, a sandbox path, work/change/diff.patch, or a captured record path."
+                                },
+                                "side": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "enum": [
+                                    "OLD",
+                                    "NEW",
+                                    null
+                                  ],
+                                  "description": "For a diff quote, OLD selects removed lines and NEW selects added lines. Omission lets the runner resolve the side from the exact quote."
+                                },
+                                "commit": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "minLength": 1,
+                                  "maxLength": 1024,
+                                  "description": "Optional full commit SHA for historical repository text. Omission selects the captured HEAD automatically. Do not use a branch name."
+                                },
+                                "startLine": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 2147483647,
+                                  "description": "The 1-based line you read. For a diff, use its [L<n>] file coordinate or the physical line number of diff.patch."
+                                },
+                                "endLine": {
+                                  "type": [
+                                    "integer",
+                                    "null"
+                                  ],
+                                  "minimum": 1,
+                                  "maximum": 2147483647,
+                                  "description": "The last line of the quote, at least startLine; omitted means one line."
+                                },
+                                "quote": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 4000,
+                                  "description": "Required verbatim text at those lines. For repository text and records, a fragment is enough. For a diff, copy each whole line. Diff markers and [L<n>] prefixes are accepted."
+                                }
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Where the question arises, when one place of the work does."
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "problemKeys": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+              "description": "Stable short lowercase-hyphenated name, unique within this practice result."
+            },
+            "description": "NOT_MET only: ordered keys of local problem drafts to include instead of inline problems. Never supply both. Unselected drafts are not submitted."
+          }
+        }
+      }
     }
-   }
-  }
- ]
+  ]
 }

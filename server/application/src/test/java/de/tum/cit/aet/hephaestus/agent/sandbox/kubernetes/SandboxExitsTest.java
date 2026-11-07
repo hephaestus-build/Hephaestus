@@ -33,23 +33,75 @@ class SandboxExitsTest extends BaseUnitTest {
     @Test
     void shouldNameTheContainerThatRanOutOfMemoryWithItsExitCode() {
         var exit = SandboxExits.exit(pod(
-                null,
-                ended(KubernetesPods.INITIALIZER, 0, "Completed"),
-                ended(KubernetesPods.RUNTIME, 137, "OOMKilled")));
+                null, ended(KubernetesPods.INITIALIZER, 0, "Completed"), ended(KubernetesPods.LOOP, 137, "OOMKilled")));
 
-        assertThat(exit).isEqualTo(new SandboxExits.Exit(SandboxExits.Reason.OOM_KILLED, "runtime", 137, "OOMKilled"));
+        assertThat(exit)
+                .isEqualTo(
+                        new SandboxExits.Exit(SandboxExits.Reason.OOM_KILLED, KubernetesPods.LOOP, 137, "OOMKilled"));
+    }
+
+    @Test
+    void shouldNotReadTheSignalThatEndsASidecarAsAFailedReview() {
+        SandboxExits.Exit exit = SandboxExits.exit(pod(
+                null,
+                ended(KubernetesPods.TOOLS, 143, "Error"),
+                ended(KubernetesPods.PROGRAMS, 137, "Error"),
+                ended(KubernetesPods.LOOP, 0, "Completed")));
+
+        assertThat(exit.reason()).isEqualTo(SandboxExits.Reason.COMPLETED);
+    }
+
+    @Test
+    void shouldNameASidecarThatRanOutOfMemoryThoughItRestarted() {
+        ContainerStatus restarted = new ContainerStatusBuilder()
+                .withName(KubernetesPods.TOOLS)
+                .withNewLastState()
+                .withNewTerminated()
+                .withExitCode(137)
+                .withReason("OOMKilled")
+                .endTerminated()
+                .endLastState()
+                .build();
+
+        assertThat(SandboxExits.exit(pod(null, restarted, ended(KubernetesPods.LOOP, 0, "Completed"))))
+                .isEqualTo(
+                        new SandboxExits.Exit(SandboxExits.Reason.OOM_KILLED, KubernetesPods.TOOLS, 137, "OOMKilled"));
+    }
+
+    @Test
+    void shouldNameASidecarThatRanOutOfMemoryAndDidNotRestart() {
+        assertThat(SandboxExits.exit(pod(
+                        null,
+                        ended(KubernetesPods.TOOLS, 137, "OOMKilled"),
+                        ended(KubernetesPods.LOOP, 0, "Completed"))))
+                .isEqualTo(
+                        new SandboxExits.Exit(SandboxExits.Reason.OOM_KILLED, KubernetesPods.TOOLS, 137, "OOMKilled"));
+    }
+
+    @Test
+    void shouldNameASidecarThatCouldNotStart() {
+        ContainerStatus waiting = new ContainerStatusBuilder()
+                .withName(KubernetesPods.TOOLS)
+                .withNewState()
+                .withNewWaiting()
+                .withReason("ImagePullBackOff")
+                .endWaiting()
+                .endState()
+                .build();
+
+        assertThat(SandboxExits.exit(pod(null, waiting)).reason()).isEqualTo(SandboxExits.Reason.START_FAILED);
     }
 
     @Test
     void shouldTellAnErrorAnEvictionAStartThatFailedAndACompletedRun() {
-        assertThat(SandboxExits.exit(pod(null, ended(KubernetesPods.RUNTIME, 1, "Error")))
+        assertThat(SandboxExits.exit(pod(null, ended(KubernetesPods.LOOP, 1, "Error")))
                         .reason())
                 .isEqualTo(SandboxExits.Reason.ERROR);
         assertThat(SandboxExits.exit(pod("Evicted")).reason()).isEqualTo(SandboxExits.Reason.EVICTED);
         assertThat(SandboxExits.exit(pod(
                                 null,
                                 new ContainerStatusBuilder()
-                                        .withName(KubernetesPods.RUNTIME)
+                                        .withName(KubernetesPods.LOOP)
                                         .withNewState()
                                         .withNewWaiting()
                                         .withReason("ImagePullBackOff")
@@ -58,7 +110,7 @@ class SandboxExitsTest extends BaseUnitTest {
                                         .build()))
                         .reason())
                 .isEqualTo(SandboxExits.Reason.START_FAILED);
-        assertThat(SandboxExits.exit(pod(null, ended(KubernetesPods.RUNTIME, 0, "Completed")))
+        assertThat(SandboxExits.exit(pod(null, ended(KubernetesPods.LOOP, 0, "Completed")))
                         .reason())
                 .isEqualTo(SandboxExits.Reason.COMPLETED);
     }
@@ -89,7 +141,7 @@ class SandboxExitsTest extends BaseUnitTest {
     @Test
     void shouldNeverReadTheOutputOfAHephHostThatFailed() {
         var pods = mock(KubernetesPods.class);
-        when(pods.get("hephaestus-host-1")).thenReturn(pod(null, ended(KubernetesPods.RUNTIME, 1, "Error")));
+        when(pods.get("hephaestus-host-1")).thenReturn(pod(null, ended(KubernetesPods.LOOP, 1, "Error")));
 
         new SandboxExits(pods, new SimpleMeterRegistry()).record(SandboxExits.Kind.HOST, "hephaestus-host-1");
 
@@ -160,7 +212,7 @@ class SandboxExitsTest extends BaseUnitTest {
     @Test
     void shouldNeverWriteAToolResultOrAProviderMessageOfAnOlderRuntimeIntoTheLog() {
         var pods = mock(KubernetesPods.class);
-        when(pods.get("hephaestus-review-2")).thenReturn(pod(null, ended(KubernetesPods.RUNTIME, 1, "Error")));
+        when(pods.get("hephaestus-review-2")).thenReturn(pod(null, ended(KubernetesPods.LOOP, 1, "Error")));
         when(pods.tail(anyString(), anyString(), anyInt(), anyInt())).thenReturn(OLD_RUNTIME_LOG);
         Logger logger = (Logger) LoggerFactory.getLogger(SandboxExits.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -195,7 +247,7 @@ class SandboxExitsTest extends BaseUnitTest {
         var meters = new SimpleMeterRegistry();
         var pods = mock(KubernetesPods.class);
         when(pods.get("hephaestus-review-3"))
-                .thenReturn(pod(null, ended(KubernetesPods.RUNTIME, SandboxLayout.EXIT_PARTIAL_REVIEW, "Error")));
+                .thenReturn(pod(null, ended(KubernetesPods.LOOP, SandboxLayout.EXIT_PARTIAL_REVIEW, "Error")));
         when(pods.tail(anyString(), anyString(), anyInt(), anyInt()))
                 .thenReturn(String.join(
                         "\n",
@@ -236,8 +288,8 @@ class SandboxExitsTest extends BaseUnitTest {
 
     @Test
     void shouldKeepTheOtherExitsOfAReviewAndThePartialCodeOfAnotherSandboxAnError() {
-        var partialHost = pod(null, ended(KubernetesPods.RUNTIME, SandboxLayout.EXIT_PARTIAL_REVIEW, "Error"));
-        var failedReview = pod(null, ended(KubernetesPods.RUNTIME, 1, "Error"));
+        var partialHost = pod(null, ended(KubernetesPods.LOOP, SandboxLayout.EXIT_PARTIAL_REVIEW, "Error"));
+        var failedReview = pod(null, ended(KubernetesPods.LOOP, 1, "Error"));
 
         assertThat(SandboxExits.exit(SandboxExits.Kind.REVIEW, partialHost).reason())
                 .isEqualTo(SandboxExits.Reason.PARTIAL);

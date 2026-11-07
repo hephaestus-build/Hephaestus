@@ -480,6 +480,27 @@ class KubernetesSandboxLiveTest {
     }
 
     @Test
+    void shouldStartTheProgramSideOfAReviewThatStagesAProgram(@TempDir Path staging) throws Exception {
+        // Job preparation stages a program on disk, so the spec holds it as a file on disk.
+        Path program = Files.write(staging.resolve("a-practice.ts"), synthetic(64));
+        var review = review(
+                UUID.randomUUID(),
+                "for i in $(seq 60); do [ -S /run/programs/programs.sock ] && break; sleep 0.5; done; "
+                        + "node --input-type=module -e \"const { ToolClient } = await import('/opt/pi-sdk/tool-client.js');"
+                        + " const side = await ToolClient.open({ path: '/run/programs/programs.sock' },"
+                        + " process.env.TOOLS_NONCE); side.close();\"",
+                Map.of(),
+                limits(Duration.ofMinutes(5)),
+                Map.of(SandboxLayout.PRACTICE_SCRIPT_PRACTICES_PREFIX + "a-practice.ts", program));
+
+        SandboxResult result = reviews.execute(review);
+
+        assertThat(result.exitCode())
+                .as("the loop connects to the program side and it answers")
+                .isZero();
+    }
+
+    @Test
     void shouldRecordAKernelOomKillOfAReviewInsteadOfAnEviction() throws Exception {
         UUID jobId = UUID.randomUUID();
         double killed = meters.get(AgentMetrics.SANDBOX_EXITS)
@@ -494,8 +515,8 @@ class KubernetesSandboxLiveTest {
         CompletableFuture<List<Pod>> terminated = client.pods()
                 .inNamespace(namespace())
                 .withLabel(KubernetesWorker.JOB_ID, jobId.toString())
-                .informOnCondition(candidates -> candidates.stream()
-                        .anyMatch(pod -> KubernetesPods.exitCode(pod, KubernetesPods.RUNTIME) != null));
+                .informOnCondition(candidates ->
+                        candidates.stream().anyMatch(pod -> KubernetesPods.exitCode(pod, KubernetesPods.LOOP) != null));
         try {
             // External buffers touch anonymous pages without exhausting the JavaScript heap first.
             assertThatThrownBy(() -> reviews.execute(review(
@@ -508,7 +529,7 @@ class KubernetesSandboxLiveTest {
                     .hasRootCauseInstanceOf(IllegalStateException.class)
                     .hasRootCauseMessage("Sandbox exited without uploading its result");
             assertThat(terminated.get(COMMAND.toMillis(), TimeUnit.MILLISECONDS))
-                    .extracting(pod -> KubernetesPods.exitCode(pod, KubernetesPods.RUNTIME))
+                    .extracting(pod -> KubernetesPods.exitCode(pod, KubernetesPods.LOOP))
                     .containsExactly(137);
         } finally {
             terminated.cancel(true);
@@ -590,12 +611,12 @@ class KubernetesSandboxLiveTest {
             String jobUid = job.getMetadata().getUid();
             Pod pod = awaitPodOf(
                     job,
-                    candidate -> KubernetesPods.running(candidate, KubernetesPods.RUNTIME)
+                    candidate -> KubernetesPods.running(candidate, KubernetesPods.LOOP)
                             || KubernetesPods.terminal(candidate),
                     running);
             log.info("TIMING review Job created to its Pod's runtime running: {} ms", millis(started));
             requireControlledBy(pod, job);
-            assertThat(KubernetesPods.running(pod, KubernetesPods.RUNTIME))
+            assertThat(KubernetesPods.running(pod, KubernetesPods.LOOP))
                     .as("the runtime runs")
                     .isTrue();
             requireCustody(pod, KubernetesWorker.KIND_REVIEW);
@@ -603,9 +624,8 @@ class KubernetesSandboxLiveTest {
                     .containsEntry(KubernetesWorker.JOB_ID, jobId.toString())
                     .containsEntry(KubernetesWorker.JOB_ATTEMPT, "0");
             requireHardened(pod);
-            requireBounds(
-                    container(pod.getSpec().getContainers(), KubernetesPods.RUNTIME), limits, KubernetesPods.REVIEW);
-            requirePinnedImageRan(pod, KubernetesPods.RUNTIME);
+            requireBounds(container(pod.getSpec().getContainers(), KubernetesPods.LOOP), limits, KubernetesPods.REVIEW);
+            requirePinnedImageRan(pod, KubernetesPods.LOOP);
             assertThat(pod.getStatus().getQosClass())
                     .as("its whole memory requested, a share of CPU")
                     .isEqualTo("Burstable");
@@ -646,7 +666,7 @@ class KubernetesSandboxLiveTest {
             Future<SandboxResult> running =
                     executor.submit(() -> reviews.execute(review(jobId, "sleep 600", Map.of(), limits)));
             Job job = awaitJob(name, running);
-            Pod pod = awaitPodOf(job, candidate -> KubernetesPods.running(candidate, KubernetesPods.RUNTIME), running);
+            Pod pod = awaitPodOf(job, candidate -> KubernetesPods.running(candidate, KubernetesPods.LOOP), running);
 
             new KubernetesSandboxBackend(
                             pods,
@@ -818,8 +838,7 @@ class KubernetesSandboxLiveTest {
             assertThat(pod.getMetadata().getLabels())
                     .containsEntry(KubernetesWorker.SESSION_ID, host.id().toString());
             requireHardened(pod);
-            requireBounds(
-                    container(pod.getSpec().getContainers(), KubernetesPods.RUNTIME), limits, KubernetesPods.HOST);
+            requireBounds(container(pod.getSpec().getContainers(), KubernetesPods.LOOP), limits, KubernetesPods.HOST);
             assertThat(hosts.isRunning(host)).isTrue();
             // The host API returns no output: the Pod's log is where its process reports.
             assertThat(awaitLog(name, expected, Duration.ofMinutes(1)))
@@ -1295,7 +1314,8 @@ class KubernetesSandboxLiveTest {
                 Map.of(),
                 List.of("sh", "-c", script),
                 limits(Duration.ofMinutes(5)),
-                KubernetesPods.REVIEW);
+                KubernetesPods.REVIEW,
+                null);
         // The initializer stays, so that it makes the runtime's mount points, but fills nothing.
         Pod runtimeOnly = new PodBuilder(reviewPod)
                 .editSpec()
@@ -1357,10 +1377,10 @@ class KubernetesSandboxLiveTest {
     /** The container's log once it holds {@code expected}, or as it is at the timeout. */
     private String awaitLog(String name, String expected, Duration timeout) throws InterruptedException {
         long deadline = System.nanoTime() + timeout.toNanos();
-        String text = pods.logs(name, KubernetesPods.RUNTIME);
+        String text = pods.logs(name, KubernetesPods.LOOP);
         while (!text.contains(expected) && System.nanoTime() < deadline) {
             Thread.sleep(200);
-            text = pods.logs(name, KubernetesPods.RUNTIME);
+            text = pods.logs(name, KubernetesPods.LOOP);
         }
         return text;
     }
@@ -1517,6 +1537,15 @@ class KubernetesSandboxLiveTest {
     }
 
     private SandboxSpec review(UUID jobId, String script, Map<String, byte[]> files, ResourceLimits limits) {
+        return review(jobId, script, files, limits, Map.of());
+    }
+
+    private SandboxSpec review(
+            UUID jobId,
+            String script,
+            Map<String, byte[]> files,
+            ResourceLimits limits,
+            Map<String, Path> filesOnDisk) {
         return new SandboxSpec(
                 jobId,
                 0,
@@ -1527,7 +1556,7 @@ class KubernetesSandboxLiveTest {
                 limits,
                 null,
                 files,
-                Map.of(),
+                filesOnDisk,
                 List.of());
     }
 

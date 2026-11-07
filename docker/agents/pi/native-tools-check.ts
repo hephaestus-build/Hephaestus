@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { Worker } from "node:worker_threads";
 
 import {
 	createAgentSession,
@@ -10,6 +12,7 @@ import {
 	createReadTool,
 	createFindTool,
 	createGrepTool,
+	createLsTool,
 	createWriteTool,
 	createEditTool,
 	DefaultResourceLoader,
@@ -172,5 +175,28 @@ async function checkCodemode() {
 	}
 }
 
-await checkNativeTools();
+/**
+ * The review loop's grants: it reads, lists and runs workers, and starts no process. `grep`, `bash` and `find` do not run
+ * here: the loop's own forms of them need no process, and the tools side has the rest.
+ */
+async function checkLoopGrants() {
+	const cwd = "/workspace/inputs/sources/scm/repo";
+	const read = await createReadTool(cwd).execute("read", { path: "tracked.txt" });
+	assert.match(JSON.stringify(read.content), /searchable/u);
+	const ls = await createLsTool(cwd).execute("ls", {});
+	assert.match(JSON.stringify(ls.content), /tracked.txt/u);
+	assert.throws(() => spawnSync("true"), { code: "ERR_ACCESS_DENIED" });
+	const worker = new Worker("require('node:worker_threads').parentPort.postMessage('ran')", {
+		eval: true,
+	});
+	assert.deepEqual(await once(worker, "message"), ["ran"]);
+	await worker.terminate();
+}
+
+// `@types/node` declares the permission API always present; without `--permission` it is undefined.
+if ((process.permission as NodeJS.ProcessPermission | undefined) === undefined) {
+	await checkNativeTools();
+} else {
+	await checkLoopGrants();
+}
 await checkCodemode();

@@ -81,7 +81,8 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
                 List.of("node"),
                 new ResourceLimits(0.5, time),
                 memory,
-                time.toSeconds());
+                time.toSeconds(),
+                KubernetesPods.SANDBOX_UID);
 
         assertCounts(
                 "isolationProbe",
@@ -121,15 +122,21 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
                 .isEqualTo(disk);
     }
 
-    /** What a quota charges for a Pod's request: its containers together, or its largest init container when more. */
+    /** A Pod's request as Kubernetes counts it: a native sidecar adds to everything that runs after it starts. */
     private static BigDecimal effective(Pod pod, String resource) {
         BigDecimal running = pod.getSpec().getContainers().stream()
                 .map(container -> request(container, resource))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal init = pod.getSpec().getInitContainers().stream()
-                .map(container -> request(container, resource))
-                .reduce(BigDecimal.ZERO, BigDecimal::max);
-        return running.max(init);
+        BigDecimal sidecars = BigDecimal.ZERO;
+        BigDecimal init = BigDecimal.ZERO;
+        for (var container : pod.getSpec().getInitContainers()) {
+            if ("Always".equals(container.getRestartPolicy())) {
+                sidecars = sidecars.add(request(container, resource));
+            } else {
+                init = init.max(sidecars.add(request(container, resource)));
+            }
+        }
+        return running.add(sidecars).max(init);
     }
 
     private static BigDecimal request(Container container, String resource) {
@@ -140,7 +147,10 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
 
     /** As {@code KubernetesSandboxBackend.launch} builds it: a review's or a host's size by its kind. */
     private Pod workspacePod(String kind, ResourceLimits limits, KubernetesPods.Size size) {
-        return pods.workspacePod(workload(kind), Map.of(), List.of("node"), limits, size);
+        // A review with a custom program is the largest: every side that a review can have.
+        KubernetesPods.Sidecars sides =
+                KubernetesWorker.KIND_REVIEW.equals(kind) ? new KubernetesPods.Sidecars("nonce", true) : null;
+        return pods.workspacePod(workload(kind), Map.of(), List.of("node"), limits, size, sides);
     }
 
     private static KubernetesPods.Workload workload(String kind) {

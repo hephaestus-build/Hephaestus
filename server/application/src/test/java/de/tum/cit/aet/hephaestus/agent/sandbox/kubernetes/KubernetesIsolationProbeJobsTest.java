@@ -22,6 +22,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -101,10 +102,13 @@ class KubernetesIsolationProbeJobsTest {
         worker.proved(new KubernetesIsolationProbe.Proof(Instant.EPOCH, List.of(), true, "", 248));
         Map<String, Job> created = new ConcurrentHashMap<>();
         AtomicBoolean running = new AtomicBoolean(true);
+        AtomicInteger mostAtOnce = new AtomicInteger();
         Thread controller = Thread.ofPlatform().start(() -> {
             while (running.get()) {
-                for (Job job :
-                        api.batch().v1().jobs().inNamespace(SANDBOXES).list().getItems()) {
+                List<Job> jobs =
+                        api.batch().v1().jobs().inNamespace(SANDBOXES).list().getItems();
+                mostAtOnce.accumulateAndGet(jobs.size(), Math::max);
+                for (Job job : jobs) {
                     if (created.putIfAbsent(job.getMetadata().getName(), job) == null) {
                         api.pods()
                                 .inNamespace(SANDBOXES)
@@ -131,9 +135,12 @@ class KubernetesIsolationProbeJobsTest {
         assertThat(proof.passed()).isFalse();
         assertThat(worker.isolated()).isFalse();
         assertThat(proof.failures())
-                .hasSize(2)
+                .hasSize(3)
                 .allSatisfy(failure -> assertThat(failure).contains("did not start: CreateContainerError"));
-        assertThat(created).hasSize(2);
+        assertThat(created).hasSize(3);
+        assertThat(mostAtOnce.get())
+                .as("never more than two probe Pods at once")
+                .isLessThanOrEqualTo(2);
         assertThat(created.values()).allSatisfy(job -> {
             assertThat(job.getSpec().getBackoffLimit()).isZero();
             assertThat(job.getSpec().getTtlSecondsAfterFinished())
@@ -144,6 +151,7 @@ class KubernetesIsolationProbeJobsTest {
         assertThat(created.values().stream().map(KubernetesIsolationProbeJobsTest::memory))
                 .containsExactlyInAnyOrder(
                         quantity(KubernetesIsolationProbe.TRIAL_MEMORY),
+                        quantity(KubernetesIsolationProbe.PROBE_MEMORY),
                         quantity(KubernetesIsolationProbe.PROBE_MEMORY));
         assertThat(api.batch().v1().jobs().inNamespace(SANDBOXES).list().getItems())
                 .as("the probe deletes each of its Jobs, also when its Pod did not run")
@@ -213,7 +221,7 @@ class KubernetesIsolationProbeJobsTest {
             controller.join();
         }
 
-        assertThat(refused).hasSize(2);
+        assertThat(refused).hasSize(3);
         if (previousProof) {
             assertThat(proof)
                     .as("a quota without room proves nothing about isolation")
@@ -265,7 +273,7 @@ class KubernetesIsolationProbeJobsTest {
                 .withNewStatus()
                 .withPhase("Pending")
                 .withContainerStatuses(new ContainerStatusBuilder()
-                        .withName(KubernetesPods.RUNTIME)
+                        .withName(KubernetesPods.LOOP)
                         .withNewState()
                         .withNewWaiting()
                         .withReason("CreateContainerError")

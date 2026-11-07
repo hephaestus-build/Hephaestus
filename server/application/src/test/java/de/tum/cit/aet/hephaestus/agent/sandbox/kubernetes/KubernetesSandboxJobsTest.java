@@ -242,7 +242,8 @@ class KubernetesSandboxJobsTest {
                 Map.of(),
                 List.of("node", "run.ts"),
                 LIMITS,
-                KubernetesPods.REVIEW);
+                KubernetesPods.REVIEW,
+                null);
     }
 
     /** The Pod that the Job controller creates for the Job of the name. */
@@ -256,7 +257,7 @@ class KubernetesSandboxJobsTest {
                 .endMetadata()
                 .withNewSpec()
                 .addNewContainer()
-                .withName(KubernetesPods.RUNTIME)
+                .withName(KubernetesPods.LOOP)
                 .withImage("agent")
                 .endContainer()
                 .endSpec()

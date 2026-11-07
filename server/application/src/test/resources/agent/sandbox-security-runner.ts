@@ -1,6 +1,6 @@
 /** Runs inside the agent image. Only the HTTP model and admission responses are scripted. */
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { chmodSync, cpSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -193,6 +193,37 @@ await once(server, "listening");
 const address = server.address();
 assert.ok(address !== null && typeof address !== "string");
 cpSync("/workspace/AGENTS.md", "/workspace/.pi/AGENTS.md");
+const git = {
+	GIT_CONFIG_COUNT: "1",
+	GIT_CONFIG_KEY_0: "safe.directory",
+	GIT_CONFIG_VALUE_0: "/workspace/repos/primary",
+};
+// As the workspace initializer does, before anything untrusted runs.
+const view = spawnSync(process.execPath, ["/workspace/pi-change-view.ts"], {
+	cwd: "/workspace",
+	env: { PATH: process.env.PATH, ...git },
+	stdio: "inherit",
+});
+assert.equal(view.status, 0);
+const toolsSocket = "/tmp/tools.sock";
+const toolsNonce = "security-nonce";
+// The leaky network control breaks the isolation on purpose, so it runs without the filter that would hide its leak.
+const tools = spawn(
+	...((process.env.SECURITY_SURFACE === "leaky-network"
+		? [process.execPath, ["/opt/pi-sdk/tools-server.js"]]
+		: ["sh", ["/opt/pi-sdk/tools-launch.sh"]]) as [string, string[]]),
+	{
+		cwd: "/workspace",
+		env: {
+			PATH: process.env.PATH,
+			TOOLS_SOCKET: toolsSocket,
+			TOOLS_NONCE: toolsNonce,
+			TOOLS_ROLE: "tools",
+			...git,
+		},
+		stdio: "ignore",
+	},
+);
 const child = spawn(process.execPath, ["--max-old-space-size=256", "/workspace/pi-runner.ts"], {
 	cwd: "/workspace",
 	env: {
@@ -205,11 +236,14 @@ const child = spawn(process.execPath, ["--max-old-space-size=256", "/workspace/p
 		PI_DIRECT_MODEL_TOKENS: "200000",
 		LLM_PROXY_URL: `http://127.0.0.1:${address.port}/v1`,
 		LLM_PROXY_TOKEN: "synthetic-attempt",
-		GIT_CONFIG_COUNT: "1",
-		GIT_CONFIG_KEY_0: "safe.directory",
-		GIT_CONFIG_VALUE_0: "/workspace/repos/primary",
+		TOOLS_SOCKET: toolsSocket,
+		TOOLS_NONCE: toolsNonce,
+		...git,
 	},
 	stdio: ["ignore", "pipe", "pipe"],
+});
+child.once("close", () => {
+	tools.kill("SIGKILL");
 });
 const output: Buffer[] = [];
 child.stdout.on("data", (chunk: Buffer) => {

@@ -994,11 +994,12 @@ public class ReviewJobExecutor {
                             : result.timedOut() ? ReviewStopReason.DEADLINE : ReviewStopReason.EXECUTION_INCOMPLETE);
         }
 
-        // Two exits say the run could not reach something it needed, rather than anything about the
+        // Three exits say the run could not reach something it needed, rather than anything about the
         // reviewed work: the review finished and could not admit it, because the sandbox holds an
-        // address the server has since moved away from; or no practice was reached at all because
-        // every model call went unanswered. Neither leaves anything to deliver, and neither is a
-        // fact a second attempt would repeat. Past the retry cap both fall through and terminalize.
+        // address the server has since moved away from; no practice was reached at all because
+        // every model call went unanswered; or a side of the Pod stopped before anything was staged.
+        // None leaves anything to deliver, and none is a fact a second attempt would repeat. Past
+        // the retry cap they fall through and terminalize.
         RequeueCause unreachable = unreachableReason(result.exitCode());
         if (unreachable != null && requeueForAnotherAttempt(job, true, unreachable)) {
             log.warn(
@@ -1552,6 +1553,9 @@ public class ReviewJobExecutor {
         }
         if (exitCode == SandboxLayout.EXIT_PROVIDER_UNREACHABLE) {
             return RequeueCause.PROVIDER_UNREACHABLE;
+        }
+        if (exitCode == SandboxLayout.EXIT_SIDE_LOST) {
+            return RequeueCause.SANDBOX;
         }
         return null;
     }

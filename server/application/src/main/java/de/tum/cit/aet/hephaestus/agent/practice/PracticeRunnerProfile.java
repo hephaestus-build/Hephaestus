@@ -19,6 +19,15 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-tool-arguments.ts",
             "pi-tool-validation.ts",
             "pi-change.ts",
+            "pi-change-view.ts",
+            "pi-glob-worker.ts",
+            "pi-pinned-object.ts",
+            "pi-search-worker.ts",
+            "pi-tool-side.ts",
+            "pi-verified-search.ts",
+            "tool-client.ts",
+            "tool-program.ts",
+            "tool-protocol.ts",
             "pi-declared-sources.ts",
             "pi-diagnostics.ts",
             "pi-diagnostics.json",
@@ -54,13 +63,24 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
         return SIDECARS;
     }
 
+    /** Where the runner writes the prepared input of a practice program's review. */
+    private static final String REVIEW_INPUT_DIRECTORY =
+            SandboxLayout.WORKSPACE_ROOT + "/" + SandboxLayout.WORK_PREFIX + "review-input";
+
     /** The runner's heap. Its sessions live in it, so it also bounds how many run at once. */
     public static final int HEAP_MIB = 256;
 
     @Override
     public List<String> runtimeFlags() {
-        // Subprocesses bypass Node permissions; read-only mounts and container isolation protect evidence.
-        return List.of("--max-old-space-size=" + HEAP_MIB);
+        // The loop starts no process: its tools run on the other sides of the Pod (ADR 0068). A worker runs codemode,
+        // and the loop's own proof of a search.
+        return Stream.concat(
+                        BASE_RUNTIME_FLAGS.stream(),
+                        Stream.of(
+                                "--allow-fs-read=" + SandboxLayout.PRACTICE_SCRIPT_IMAGE_ROOT,
+                                "--allow-fs-write=" + REVIEW_INPUT_DIRECTORY,
+                                "--allow-worker"))
+                .toList();
     }
 
     @Override
@@ -72,8 +92,11 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
     public List<String> setupCommands() {
         return Stream.concat(
                         PiRunnerProfile.super.setupCommands().stream(),
-                        Stream.of("ln -sfn " + SandboxLayout.PRACTICE_SCRIPT_KITS_TARGET + " "
-                                + SandboxLayout.WORKSPACE_ROOT + "/" + SandboxLayout.PRACTICE_SCRIPT_KITS_LINK))
+                        Stream.of(
+                                "ln -sfn " + SandboxLayout.PRACTICE_SCRIPT_KITS_TARGET + " "
+                                        + SandboxLayout.WORKSPACE_ROOT + "/" + SandboxLayout.PRACTICE_SCRIPT_KITS_LINK,
+                                // A write grant holds only for a directory that exists when Node starts.
+                                "mkdir -p " + REVIEW_INPUT_DIRECTORY))
                 .toList();
     }
 }
