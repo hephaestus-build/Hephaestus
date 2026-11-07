@@ -292,6 +292,8 @@ registry storage metadata. Only publishing jobs and their reusable-workflow call
 [Vulnerability remediation](./vulnerability-remediation.mdx) is the normative policy for blocking
 findings, scheduled rescans, and exceptions.
 
+[Release artifact provenance](./release-artifact-provenance) gives the per-artifact Build assessment and consumer checks.
+
 ### Nothing may fail for the first time at a release
 
 Pre-merge validation covers the same image subjects and shared evidence checks as release publication.
@@ -558,7 +560,7 @@ Only review stops an early `release-1-0-0`: it decides when 1.0 ships.
 2. Enter prerelease mode as described in [Release candidates](#release-candidates).
 3. In one pull request, add the changeset `release-1-0-0` with `"hephaestus": major`.
    Its summary states what 1.0 promises.
-   Its `**Operators:**` line points to [Upgrade from 0.x to 1.0](/admin/upgrade-to-1-0).
+   Its `**Operators:**` line points to [Upgrade to 1.0](/admin/upgrade-to-1-0).
 4. In the same pull request, add the migration fragment `release-1-0-0` with the `#### 🔴 …` entry that points to the same page.
 5. In the same pull request, replace each pre-1.0 statement with the 1.x statement.
    Find them with `git grep -n -i 'pre-1\.0\|before 1\.0'`.
@@ -643,3 +645,5 @@ For the running release, follow the [runtime identity handoff](/admin/release-im
 Renovate policy is in [Supply-chain security in CI](./supply-chain-security.md). `Verify changesets`
 skips bot-authored pull requests. When a dependency bump is user-facing, a maintainer adds the
 changeset.
+
+For a release that is already published, use [Recover from a bad published release](./recover-a-published-release).

@@ -68,6 +68,33 @@ gh attestation verify "$LOCK" \
 Continue with [Verify the release chart](./kubernetes#verify-the-release-chart) to authenticate and inspect the chart that the lock names.
 Do not use the lock contents before signature verification succeeds.
 
+## Image build provenance
+
+First authenticate the joint lock with [Independent verification](#independent-verification).
+Run the following commands in the directory that holds the verified `$LOCK` file:
+
+```bash
+set -euo pipefail
+COMMIT=$(jq -er '.commit' "$LOCK")
+jq -er '.images[] | select(.provenance == "first-party") | "\(.repository)@\(.indexDigest)"' "$LOCK" |
+while IFS= read -r image; do
+  gh attestation verify "oci://$image" --bundle-from-oci \
+    --repo hephaestus-build/Hephaestus \
+    --signer-workflow hephaestus-build/Hephaestus/.github/workflows/reusable-docker-build.yml \
+    --source-digest "$COMMIT" \
+    --predicate-type https://slsa.dev/provenance/v1 \
+    --deny-self-hosted-runners
+done
+```
+
+Every first-party image must pass.
+The command checks its index digest, source repository, source commit, signer workflow, and hosted-runner identity.
+A reused image can keep its merge-group build provenance while a later `main` run signs the same digest.
+This does not describe a second build.
+
+These commands do not assign a Build level to upstream images or to the chart.
+[Release artifact provenance](/contributor/release-artifact-provenance) gives the assessment and its limits.
+
 ## Rollback
 
 Follow [Rollback](./upgrade#rollback).

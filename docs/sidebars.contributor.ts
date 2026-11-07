@@ -106,6 +106,8 @@ const sidebars: SidebarsConfig = {
 				"add-a-ci-service",
 				"recover-the-chromatic-baseline",
 				"release-management",
+				"recover-a-published-release",
+				"release-artifact-provenance",
 				"delivery-metrics",
 				"vulnerability-remediation",
 			],
