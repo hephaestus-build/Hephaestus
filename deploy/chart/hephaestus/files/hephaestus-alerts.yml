@@ -365,6 +365,13 @@ groups:
         annotations:
           summary: A review failed because its workers stopped during every attempt
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusReviewFeedbackUnconfirmed
+        expr: sum(increase(agent_job_composition_stopped_total{job="hephaestus",outcome="unrecorded"}[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: A review closed as partial because every attempt ended before it confirmed where its feedback went
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusAgentQueueStalled
         expr: max(agent_queue_oldest_age_seconds{job="hephaestus"}) > 3600
         for: 5m

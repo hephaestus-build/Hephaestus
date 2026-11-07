@@ -1092,7 +1092,7 @@ public class ReviewJobExecutor {
 
     /**
      * Hands the attempt on as recovery hands on a lost one. If that fails too, the attempt stays RUNNING here: the
-     * sweepers settle it, and an admitted review is never failed for its feedback.
+     * sweepers settle it, and an admitted review keeps its results whatever happens to its feedback.
      */
     private void handOn(ReviewJob job, ConfigSnapshot snapshot, byte @Nullable [] scriptReport) {
         try {

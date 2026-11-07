@@ -509,6 +509,20 @@ class WorkerFeedbackComposerTest {
     }
 
     @Test
+    void shouldHandTheAttemptOnWhenTheServerRefusesAWithholding() {
+        job.setAttempt(MAX_RETRIES);
+        doThrow(new PublicationContextRefusedException(FeedbackStopReason.PUBLIC_HISTORY_CHANGED))
+                .when(admission)
+                .publishPackage(any(), any());
+
+        assertThatThrownBy(() -> composer().composeAfterMeasurement(job, LEASE, Instant.now()))
+                .isInstanceOfSatisfying(
+                        CompositionHandedOnException.class,
+                        handedOn -> assertThat(handedOn.stop()).isEqualTo(CompositionStop.DEADLINE));
+        assertThat(stops("deadline", "refused")).isEqualTo(4);
+    }
+
+    @Test
     void shouldLeaveAFailedWithholdingToTheExecutorToHandOn() {
         doThrow(new IllegalStateException("database unavailable"))
                 .when(admission)

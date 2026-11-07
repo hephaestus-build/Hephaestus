@@ -392,6 +392,17 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("now") Instant now,
             @Param("output") JsonNode output);
 
+    /** Ends an admitted attempt whose decisions nothing confirmed. Its output tells settlement why; its results stay. */
+    @WorkspaceAgnostic("ID-based fenced terminal write; caller holds the attempt's lease and attempt")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(EVIDENCE_REFUSAL_TRANSITION)
+    int failCompositionUnconfirmed(
+            @Param("id") UUID id,
+            @Param("leaseId") UUID leaseId,
+            @Param("attempt") int attempt,
+            @Param("now") Instant now,
+            @Param("output") JsonNode output);
+
     /**
      * Poll-loop candidates, id-only because {@link #findByIdQueuedForUpdateSkipLocked} re-checks and
      * locks each one; a stale read here costs at most a skipped candidate.
@@ -519,22 +530,6 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("id") UUID id, @Param("leaseId") UUID leaseId, @Param("request") CompositionRequeue request);
 
     record CompositionRequeue(int attempt, int maxRetries, Instant availableAt) {}
-
-    /**
-     * Ends an owned admitted attempt as completed, with its results kept: a lost composition never fails a review whose
-     * results were admitted.
-     */
-    @WorkspaceAgnostic("ID-based fenced terminal write; caller is @WorkspaceAgnostic sweeper or worker-local drain")
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("UPDATE ReviewJob j SET j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.COMPLETED, "
-            + "j.completedAt = :now "
-            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.leaseId = :leaseId AND j.attempt = :attempt "
-            + "AND NOT (" + NOT_ADMITTED + ")")
-    int completeAdmittedOwnedBy(
-            @Param("id") UUID id,
-            @Param("leaseId") UUID leaseId,
-            @Param("attempt") int attempt,
-            @Param("now") Instant now);
 
     /**
      * The sandbox runtime had no room: the job waits in the queue until {@code availableAt}. The next attempt gets its

@@ -732,6 +732,26 @@ tests:
         alertname: HephaestusReviewPreparationFailing
         exp_alerts: []
 
+  - name: a review with unconfirmed feedback fires, other composition stops do not
+    interval: 1m
+    input_series:
+      - series: 'agent_job_composition_stopped_total{job="hephaestus",instance="server:9090",cause="retries_exhausted",outcome="unrecorded"}'
+        values: "0 0 1x10"
+      - series: 'agent_job_composition_stopped_total{job="hephaestus",instance="server:9090",cause="deadline",outcome="withheld"}'
+        values: "0 5 9x10"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusReviewFeedbackUnconfirmed
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HephaestusReviewFeedbackUnconfirmed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A review closed as partial because every attempt ended before it confirmed where its feedback went
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: a review failed by lost workers fires, a constant count does not
     interval: 1m
     input_series:

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,7 +39,12 @@ class ReviewJobRecoveryTest {
         when(jobs.requeueOrphan(eq(job.getId()), eq(lease), any(Integer.class), any(Instant.class)))
                 .thenAnswer(call -> job.spentAttempts() < call.getArgument(2, Integer.class) ? 1 : 0);
         var recovery = new ReviewJobRecovery(
-                jobs, properties, new JsonMapper(), mock(ReviewAttemptUsageService.class), Optional.of(continuation));
+                jobs,
+                properties,
+                new JsonMapper(),
+                mock(ReviewAttemptUsageService.class),
+                Optional.of(continuation),
+                new SimpleMeterRegistry());
 
         assertThat(recovery.retryUnadmitted(job, lease, false)).isEqualTo(staged);
 

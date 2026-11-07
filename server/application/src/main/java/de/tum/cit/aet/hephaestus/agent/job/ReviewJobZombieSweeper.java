@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
@@ -14,6 +15,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -53,7 +55,6 @@ public class ReviewJobZombieSweeper {
     private final Counter zombieReaped;
     private final Counter orphanRequeued;
     private final Counter orphanFailed;
-    private final Counter compositionUnrecorded;
     private final Counter snapshotUnreadable;
     private final ReviewJobTelemetry jobTelemetry;
     private final Duration renewEvery;
@@ -106,11 +107,6 @@ public class ReviewJobZombieSweeper {
         this.orphanFailed = Counter.builder(AgentMetrics.AGENT_JOB_ORPHAN_FAILED)
                 .description("Orphaned jobs that hit the retry cap and were failed")
                 .register(meterRegistry);
-        this.compositionUnrecorded = Counter.builder(AgentMetrics.AGENT_JOB_COMPOSITION_STOPPED)
-                .description("Destinations of an admitted review left without a recorded reason")
-                .tag("cause", "retries_exhausted")
-                .tag("outcome", "unrecorded")
-                .register(meterRegistry);
         this.snapshotUnreadable = Counter.builder(AgentMetrics.AGENT_JOB_SNAPSHOT_UNREADABLE)
                 .description("Terminal accounting events whose config snapshot could not be read; billed UNPRICED")
                 .register(meterRegistry);
@@ -135,7 +131,7 @@ public class ReviewJobZombieSweeper {
         // the jobs the batch already reaped (and their ledger events) at commit time.
         for (ReviewJob job : staleJobs) {
             try {
-                ReviewJob reaped = transactionTemplate.execute(status -> reapIfStale(job.getId()));
+                ReviewJob reaped = transactionTemplate.execute(status -> reapIfStale(job));
                 if (reaped != null) {
                     // Scheduler threads have no job trace context; restore it with a fresh span.
                     MDC.put(StructuredLogKeys.TRACE_ID, reaped.getTraceId());
@@ -156,17 +152,27 @@ public class ReviewJobZombieSweeper {
         }
     }
 
-    private @Nullable ReviewJob reapIfStale(UUID jobId) {
-        ReviewJob lockedJob = jobRepository.lockById(jobId).orElse(null);
-        if (lockedJob == null || lockedJob.getStatus() != ReviewJobStatus.RUNNING) return null;
-        int timeoutSeconds = getTimeoutFromSnapshot(lockedJob);
-        Duration maxLifetime = Duration.ofSeconds(timeoutSeconds).plus(RUNNING_BUFFER);
-        Instant deadlineAnchor = lockedJob.getExecutionStartedAt() != null
-                ? lockedJob.getExecutionStartedAt()
-                : lockedJob.getStartedAt();
-        if (deadlineAnchor != null && deadlineAnchor.plus(maxLifetime).isAfter(clock.instant())) {
+    private boolean pastItsLifetime(ReviewJob job) {
+        Duration maxLifetime = Duration.ofSeconds(getTimeoutFromSnapshot(job)).plus(RUNNING_BUFFER);
+        Instant deadlineAnchor = job.getExecutionStartedAt() != null ? job.getExecutionStartedAt() : job.getStartedAt();
+        return deadlineAnchor == null || !deadlineAnchor.plus(maxLifetime).isAfter(clock.instant());
+    }
+
+    private @Nullable ReviewJob reapIfStale(ReviewJob stale) {
+        UUID jobId = stale.getId();
+        UUID leaseId = stale.getLeaseId();
+        // An admitted review still owes each destination a decision, which only a next attempt can record. Recovery
+        // takes the copy fence before the row, so this reaches it unlocked; it fences on the lease and the attempt.
+        if (ResultAdmissionService.isAdmitted(stale) && leaseId != null) {
+            if (pastItsLifetime(stale))
+                count(recovery.recover(jobId, leaseId, stale.getAttempt(), null), jobId, stale.getAttempt());
             return null;
         }
+        ReviewJob lockedJob = jobRepository.lockById(jobId).orElse(null);
+        if (lockedJob == null
+                || lockedJob.getStatus() != ReviewJobStatus.RUNNING
+                || ResultAdmissionService.isAdmitted(lockedJob)
+                || !pastItsLifetime(lockedJob)) return null;
 
         int updated = jobRepository.transitionStatus(
                 jobId,
@@ -226,24 +232,26 @@ public class ReviewJobZombieSweeper {
                         transactionTemplate.execute(s -> stillExpired(orphan.getJobId(), cutoff)
                                 ? recovery.recover(orphan.getJobId(), orphan.getLeaseId(), orphan.getAttempt(), null)
                                 : ReviewJobRecovery.Outcome.NONE);
-                if (outcome == ReviewJobRecovery.Outcome.REQUEUED) {
-                    orphanRequeued.increment();
-                    log.warn("Requeued orphaned job {} (retry {})", orphan.getJobId(), orphan.getAttempt() + 1);
-                } else if (outcome == ReviewJobRecovery.Outcome.COMPLETED) {
-                    // The attempt after the retry limit was lost too: the review completes with what is still open
-                    // left without a recorded reason.
-                    compositionUnrecorded.increment();
-                    log.warn("Orphaned job {} completed with its open feedback unrecorded", orphan.getJobId());
-                } else if (outcome == ReviewJobRecovery.Outcome.FAILED) {
-                    orphanFailed.increment();
-                    log.warn("Orphaned job {} failed at attempt {}", orphan.getJobId(), orphan.getAttempt());
-                }
+                count(Objects.requireNonNull(outcome), orphan.getJobId(), orphan.getAttempt());
             } catch (Exception e) {
                 log.warn(
                         "Failed to recover orphaned job {}: errorType={}",
                         orphan.getJobId(),
                         e.getClass().getName());
             }
+        }
+    }
+
+    private void count(ReviewJobRecovery.Outcome outcome, UUID jobId, int attempt) {
+        if (outcome == ReviewJobRecovery.Outcome.REQUEUED) {
+            orphanRequeued.increment();
+            log.warn("Requeued orphaned job {} (retry {})", jobId, attempt + 1);
+        } else if (outcome == ReviewJobRecovery.Outcome.UNCONFIRMED) {
+            // Every attempt after the retry limit was lost too: the review closes as partial, with its own stop reason.
+            log.warn("Orphaned job {} ended with its feedback decisions unconfirmed", jobId);
+        } else if (outcome == ReviewJobRecovery.Outcome.FAILED) {
+            orphanFailed.increment();
+            log.warn("Orphaned job {} failed at attempt {}", jobId, attempt);
         }
     }
 

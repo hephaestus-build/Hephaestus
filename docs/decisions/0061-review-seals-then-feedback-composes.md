@@ -85,3 +85,10 @@ Revisit when composition needs tools or untrusted input that requires isolation,
 ADR 0069 D16 answers it: the composer holds no provider token, and its writes run on the server.
 The composer is a model in a bounded loop. It also sees its own earlier feedback on the work, and it checks, publishes and corrects through tools.
 Its writes run through the server's send path. Composition stays a worker step of the same review job, and the seal and the retry rules here stand.
+
+## Update — 2026-11-06
+
+This update supersedes the first item of Consequences.
+A composition failure still never changes a result.
+If every attempt of an admitted review ends before it confirms a decision for each destination, the job fails and the review closes as Partial with `COMPOSITION_UNCONFIRMED`.
+Before this update, such a review read as Complete with destinations undecided.

@@ -2,11 +2,14 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
@@ -28,7 +31,7 @@ public class ReviewJobRecovery {
     enum Outcome {
         NONE,
         REQUEUED,
-        COMPLETED,
+        UNCONFIRMED,
         FAILED,
         CANCELLED
     }
@@ -39,18 +42,25 @@ public class ReviewJobRecovery {
     private final ObjectMapper mapper;
     private final ReviewAttemptUsageService usage;
     private final Optional<ReviewCompositionContinuation> continuation;
+    private final Counter compositionUnconfirmed;
 
     public ReviewJobRecovery(
             ReviewJobRepository jobs,
             AgentProperties properties,
             ObjectMapper mapper,
             ReviewAttemptUsageService usage,
-            Optional<ReviewCompositionContinuation> continuation) {
+            Optional<ReviewCompositionContinuation> continuation,
+            MeterRegistry meters) {
         this.jobs = jobs;
         this.properties = properties;
         this.mapper = mapper;
         this.usage = usage;
         this.continuation = continuation;
+        this.compositionUnconfirmed = Counter.builder(AgentMetrics.AGENT_JOB_COMPOSITION_STOPPED)
+                .description("Admitted reviews whose attempts all ended before they confirmed each destination")
+                .tag("cause", "retries_exhausted")
+                .tag("outcome", "unrecorded")
+                .register(meters);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -84,15 +94,16 @@ public class ReviewJobRecovery {
         int changed = owned.spentAttempts() < retryAllowance
                 ? jobs.requeueOrphan(jobId, leaseId, retryAllowance, availableAt)
                 : 0;
-        // An admitted review is handed on even at the retry limit: the attempt after it composes nothing and only
-        // withholds what is still open.
+        // An admitted review is handed on past the retry limit: those attempts compose nothing and make no model call.
+        // They only withhold what is still open, so each one more is cheap and can record a reason.
         if (changed == 0 && admitted && continuation.isPresent()) {
             changed = continuation
                     .get()
                     .requeue(
                             owned,
                             leaseId,
-                            new ReviewJobRepository.CompositionRequeue(attempt, properties.maxRetries(), availableAt));
+                            new ReviewJobRepository.CompositionRequeue(
+                                    attempt, properties.maxRetries() + WITHHOLD_ATTEMPTS - 1, availableAt));
         }
         if (changed > 0) {
             bill(owned, counts);
@@ -100,7 +111,13 @@ public class ReviewJobRecovery {
         }
         if (!admitted && owned.spentAttempts() < properties.maxRetries()) return Outcome.NONE;
         if (admitted) {
-            changed = jobs.completeAdmittedOwnedBy(jobId, leaseId, attempt, now);
+            // Its results stay. Settlement closes the review as partial: nothing confirms each destination's decision.
+            changed = jobs.failCompositionUnconfirmed(
+                    jobId,
+                    leaseId,
+                    attempt,
+                    now,
+                    mapper.createObjectNode().put("outcome", RefusalOutcome.COMPOSITION_UNCONFIRMED.name()));
         } else if (cancellation != null) {
             changed = jobs.transitionToCancelledOwnedBy(
                     jobId, now, "The worker stopped this attempt.", cancellation, leaseId, attempt);
@@ -115,7 +132,10 @@ public class ReviewJobRecovery {
         }
         if (changed == 0) return Outcome.NONE;
         bill(owned, counts);
-        if (admitted) return Outcome.COMPLETED;
+        if (admitted) {
+            compositionUnconfirmed.increment();
+            return Outcome.UNCONFIRMED;
+        }
         return cancellation != null ? Outcome.CANCELLED : Outcome.FAILED;
     }
 
@@ -151,6 +171,9 @@ public class ReviewJobRecovery {
         if (changed > 0 && bill) bill(locked, counts);
         return changed > 0;
     }
+
+    /** How many attempts past the retry limit may withhold what an admitted review still has open. */
+    static final int WITHHOLD_ATTEMPTS = 3;
 
     /** The error of a review that workers' drains stopped more often than {@link ReviewJob#MAX_DRAINS}. */
     static final String DRAINED_TOO_OFTEN = "Workers stopped this review for updates too often. It is not tried again.";

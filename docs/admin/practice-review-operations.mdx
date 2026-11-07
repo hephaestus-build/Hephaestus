@@ -136,7 +136,7 @@ Feedback that the worker cannot write is withheld with the most specific reason:
   For example, the budget ran out, or the model decided nothing.
 
 These causes withhold at once, because another attempt would meet them again.
-A review whose results were admitted never fails because of its feedback.
+A review whose results were admitted keeps them, whatever happens to its feedback.
 The `agent.job.composition.stopped` metric below counts each cause.
 
 A passing cause withholds nothing. Examples are a provider outage, an unexpected failure, or the composition timeout.
@@ -145,7 +145,8 @@ Under load, the model calls wait for the shared call limit, so the time can run 
 A new attempt of the same job then writes only the feedback that is still open.
 It starts no sandbox and uses the job's retry limit with its usual backoff.
 The attempt at the retry limit withholds what a passing cause leaves open.
-If that attempt is lost too, one more attempt only withholds what is open.
+If that attempt is lost too, up to three attempts after the limit only withhold what is open.
+If those end too, the review closes as Partial with Composition unconfirmed.
 A handed-on attempt that the developer's AI choice, the budget or a missing model would refuse also only withholds, with that reason.
 
 A sandbox that cannot prepare its workspace runs again in a new attempt, within the same shared retry limit.
@@ -255,8 +256,8 @@ Use them for alerts instead of application logs.
 - **`agent.job.delivery.recovered`** — deliveries stopped by an executor crash and successfully retried.
 - **`agent.job.composition.stopped`** — destinations whose feedback the worker did not write, tagged by `cause` and `outcome`.
   `withheld` counts a recorded withholding, and `handed_on` counts an attempt handed on to compose again.
-  `refused` counts a withholding that the server refused, which leaves its destination without a recorded reason.
-  `unrecorded` counts a review whose last attempt was lost as well, so it completed with open destinations.
+  `refused` counts a withholding that the server refused. The attempt is handed on to record it again.
+  `unrecorded` counts a review whose attempts all ended before they confirmed each destination, so it closed as Partial.
   The causes that withhold at once are `no_ai`, `budget`, `deadline`, `model_refused`, `context_window`, `publication_refused`, `no_decision`, `inputs_gone`, `inputs_erased` and `retries_exhausted`.
   The passing causes are `provider`, `routing_unavailable` and `unexpected`.
 - **`agent.job.retention.stripped`** / **`agent.job.retention.deleted`** — rows pruned by the retention sweep.
