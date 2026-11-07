@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794024900000-1" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="commit_contributor" columnName="user_id"/>
+            <columnExists tableName="commit_contributor" columnName="role"/>
+            <columnExists tableName="commit_contributor" columnName="ordinal"/>
+            <columnExists tableName="commit_contributor" columnName="email"/>
+            <columnExists tableName="git_commit" columnName="author_id"/>
+            <columnExists tableName="git_commit" columnName="author_email"/>
+            <columnExists tableName="repository" columnName="provider_id"/>
+            <columnExists tableName="user" columnName="provider_id"/>
+            <columnExists tableName="identity_provider" columnName="type"/>
+        </preConditions>
+        <comment>A commit's unlinked first author stays unlinked, because enrichment reads only commits with no contributors. On GitHub, links it where a noreply address holds the author's account id, or the email is stored on exactly one user. Logs how many.</comment>
+        <customChange class="de.tum.cit.aet.hephaestus.core.database.CommitContributorAuthorRelinkChange"/>
+        <rollback><stop>Restore the verified pre-upgrade backup to undo the added links.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>
