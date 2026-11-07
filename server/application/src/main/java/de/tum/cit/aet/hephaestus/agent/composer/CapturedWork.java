@@ -630,6 +630,7 @@ final class CapturedWork {
             statement.put(
                     "origin", entry.path("bot").isBoolean() && entry.path("bot").asBoolean() ? "AUTOMATED" : "UNKNOWN");
             statement.put("body", entry.path("body").asString());
+            if (entry.path("quotesHephaestusMarker").asBoolean(false)) statement.put("quotesHephaestusMarker", true);
             statement.put("statedAt", statedAt);
             statement.put("updatedAt", updatedAt);
             if (observedAt != null) statement.put("observedAt", observedAt);

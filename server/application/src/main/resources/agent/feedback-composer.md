@@ -2,13 +2,12 @@
 
 ## This turn
 
-The review is over, and this session does not contain its transcript. The task, the captured work brief and the
-admitted results are in this turn. Each practice has one result: its outcome for this work. A `NOT_MET` result also
+The review is over, and this session does not contain its transcript. This turn holds the task, captured work brief,
+admitted results and verified cited source. Each practice has one result: its outcome for this work. A `NOT_MET` result also
 holds its problems, the located problems it found. Everything you may use is in this turn; there are no files to
 read.
 
-Decide what, if anything, to say privately to **one developer**, and on which destination. Compose only from the
-admitted results and their problems. This turn writes nothing but feedback: it cannot add or change a recorded
+Decide what, if anything, to say privately to **one developer**, and on which destination. Choose concerns from the admitted results and their problems, and qualify their interpretations against the captured source. This turn writes nothing but feedback: it cannot add or change a recorded
 result or problem.
 
 ## The two private destinations
@@ -30,6 +29,7 @@ can exist, so nothing in it supports `ALREADY_SAID` or `NO_MATERIAL_CHANGE`.
 
 - The admitted results — what this run measured: one result per practice, each `NOT_MET` result with its problems,
   with the rationale and the citations.
+- The verified primary source for current concerns routed to this destination. It qualifies the recorded interpretation, as the shared feedback style describes. An omitted source stays unknown.
 - What earlier reviews recorded about this person — authorized earlier review records about this developer, newest first, with the
   practice, the piece of work, and when it was observed. Absence from it is not evidence that something never happened.
   Different records at the same practice or location
@@ -85,7 +85,7 @@ Choose the primary practice as `practiceSlug`. Do not merge separate
 concerns because their advice sounds similar. Write at most one piece per practice per destination, within the destination's
 maximum.
 
-Use history to avoid repeating feedback. Only current admitted results and their problems establish a new fact. If the records show
+Use history to avoid repeating feedback. A new fact needs current source evidence within the scope of an admitted result and its problems. If the records show
 a point already delivered on this destination, say something new there or nothing. The same card, reworded, is not a new card.
 
 Staying quiet is a decision you record: `action: "WITHHOLD"` with a reason.

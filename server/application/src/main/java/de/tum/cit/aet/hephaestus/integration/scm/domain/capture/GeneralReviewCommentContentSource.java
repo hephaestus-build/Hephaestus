@@ -118,13 +118,12 @@ public class GeneralReviewCommentContentSource {
             Set<Long> postedComments = deliveredCommentLookup
                     .findForPullRequest(workspaceId, pullRequestId, ScmItemEvents.PULL_REQUEST)
                     .general();
-            List<IssueComment> comments = new ArrayList<>(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(
-                    pullRequestId, WorkspaceScmProjection.HEPHAESTUS_MARKER, Pageable.unpaged()));
+            List<IssueComment> comments = new ArrayList<>(
+                    issueCommentRepository.findRecentByIssueIdWithAuthor(pullRequestId, Pageable.unpaged()));
             comments.removeIf(comment -> {
                 String body = comment == null ? null : comment.getBody();
                 return body == null
                         || body.isBlank()
-                        || body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER)
                         || (comment.getNativeId() != null && postedComments.contains(comment.getNativeId()));
             });
             boolean truncated = !pullRequestRepository.isDiscussionReadWhole(pullRequestId);
@@ -164,6 +163,7 @@ public class GeneralReviewCommentContentSource {
             node.put("authorId", c.getAuthor().getNativeId());
         }
         node.put("body", body);
+        if (body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER)) node.put("quotesHephaestusMarker", true);
         if (c.getCreatedAt() != null) {
             node.put("createdAt", c.getCreatedAt().toString());
         }

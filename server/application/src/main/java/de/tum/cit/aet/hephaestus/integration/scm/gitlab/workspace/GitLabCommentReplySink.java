@@ -25,7 +25,7 @@ public class GitLabCommentReplySink implements ScmCommentReplySink {
     private static final Duration GRAPHQL_TIMEOUT = Duration.ofSeconds(10);
     private static final Pattern ADDRESS =
             Pattern.compile("(gid://gitlab/MergeRequest/\\d+) (gid://gitlab/Discussion/[0-9a-f]+)");
-    // Its own notes stay out of captured evidence, as all of Hephaestus's notes do.
+    // Status replies have no feedback-copy receipt; capture retains their marker with uncertain authorship.
     static final String MARKER = WorkspaceScmProjection.HEPHAESTUS_MARKER + "-request-answer -->";
 
     private final GitLabGraphQlClientProvider gitLab;

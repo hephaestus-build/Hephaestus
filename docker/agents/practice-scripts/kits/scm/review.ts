@@ -43,6 +43,8 @@ export interface ReviewComment {
 	author?: string;
 	/** The provider classified the author as automation (an access token, an app, a service user). */
 	bot: boolean;
+	/** The text may be a Hephaestus copy or a quote; its authorship is not established. */
+	quotesHephaestusMarker?: boolean;
 	createdAt?: string;
 	/** The line of `comments.json` that holds the comment's `body`; 0 when it is not known. */
 	recordLine: number;
@@ -52,6 +54,7 @@ export interface GeneralComment {
 	body: string;
 	author?: string;
 	bot: boolean;
+	quotesHephaestusMarker?: boolean;
 	createdAt?: string;
 	/** The line of `general_comments.json` that holds the comment's `body`; 0 when it is not known. */
 	recordLine: number;
@@ -73,6 +76,7 @@ export interface ReviewDecision {
 	state: string;
 	author?: string;
 	bot: boolean;
+	quotesHephaestusMarker?: boolean;
 	submittedAt?: string;
 	/** When Hephaestus read a retained decision; not the provider's submission time. */
 	observedAt?: string;
@@ -101,6 +105,7 @@ const commentSchema = z.object({
 	body: z.string(),
 	author: z.string().optional(),
 	bot: z.boolean().optional(),
+	quotesHephaestusMarker: z.boolean().optional(),
 	createdAt: z.string().optional(),
 	created_at: z.string().optional(),
 });
@@ -141,6 +146,7 @@ const reviewThreadsSchema = z.object({
 			state: z.enum(["APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED"]),
 			author: z.string().optional(),
 			bot: z.boolean().optional(),
+			quotesHephaestusMarker: z.boolean().optional(),
 			submittedAt: z.string().optional(),
 			observedAt: z.string().optional(),
 			body: z.string().optional(),
@@ -258,6 +264,9 @@ export async function readReviewComments(
 		body: comment.body,
 		author: comment.author,
 		bot: comment.bot === true,
+		...(comment.quotesHephaestusMarker === undefined
+			? {}
+			: { quotesHephaestusMarker: comment.quotesHephaestusMarker }),
 		createdAt: comment.created_at ?? comment.createdAt,
 		recordLine: record.bodyLines[index] ?? 0,
 	}));
@@ -275,6 +284,9 @@ export async function readGeneralComments(
 		body: comment.body,
 		author: comment.author,
 		bot: comment.bot === true,
+		...(comment.quotesHephaestusMarker === undefined
+			? {}
+			: { quotesHephaestusMarker: comment.quotesHephaestusMarker }),
 		createdAt: comment.createdAt ?? comment.created_at,
 		recordLine: record.bodyLines[index] ?? 0,
 	}));

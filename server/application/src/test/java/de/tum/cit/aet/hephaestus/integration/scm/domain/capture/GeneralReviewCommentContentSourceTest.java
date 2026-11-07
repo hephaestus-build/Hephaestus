@@ -30,6 +30,8 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.springframework.dao.DataAccessResourceFailureException;
 import tools.jackson.databind.JsonNode;
@@ -59,14 +61,14 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         lenient().when(pullRequestRepository.isDiscussionReadWhole(PR_ID)).thenReturn(true);
         lenient()
                 .when(deliveredCommentLookup.findForPullRequest(anyLong(), anyLong(), eq(ScmItemEvents.PULL_REQUEST)))
-                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of()));
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(), Set.of()));
         lenient()
                 .when(pullRequestRepository.existsByIdAndDeletedAtIsNull(PR_ID))
                 .thenReturn(true);
         provider = new GeneralReviewCommentContentSource(
                 objectMapper, issueCommentRepository, pullRequestRepository, deliveredCommentLookup);
         lenient()
-                .when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+                .when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any()))
                 .thenReturn(List.of());
     }
 
@@ -102,8 +104,8 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         human.setNativeId(82L);
         IssueComment unknownId = comment("other-reviewer", advice, Instant.parse("2025-06-01T11:00:00Z"));
         when(deliveredCommentLookup.findForPullRequest(99L, PR_ID, ScmItemEvents.PULL_REQUEST))
-                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(81L), Set.of(82L)));
-        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(81L), Set.of(82L), Set.of()));
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any()))
                 .thenReturn(List.of(own, human, unknownId));
 
         var capture = provider.capture(request(metadataWithPr()), provider.sourceKinds());
@@ -117,14 +119,31 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldFlagAnUnmatchedCopyInAnotherWorkspaceWithoutDiscardingIt() throws Exception {
+        IssueComment copy =
+                comment("reviewer", "Advice <!-- hephaestus-diff-note -->", Instant.parse("2025-06-01T09:00:00Z"));
+        copy.setNativeId(81L);
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any())).thenReturn(List.of(copy));
+        when(deliveredCommentLookup.findForPullRequest(100L, PR_ID, ScmItemEvents.PULL_REQUEST))
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(81L), Set.of(), Set.of()));
+        var other = provider.capture(request(metadataWithPr()), provider.sourceKinds());
+        var retained = objectMapper.readTree(other.files().get(FILE_KEY)).path("comments");
+        assertThat(retained).hasSize(1);
+        assertThat(retained.get(0).path("body").asString()).isEqualTo(copy.getBody());
+        assertThat(retained.get(0).path("quotesHephaestusMarker").asBoolean()).isTrue();
+        var owner = provider.capture(ScmCaptureFixtures.context(metadataWithPr(), 100L, false), provider.sourceKinds());
+        assertThat(objectMapper.readTree(owner.files().get(FILE_KEY)).path("comments"))
+                .isEmpty();
+    }
+
+    @Test
     void shouldKeepCompleteEmptyCaptureWhenOnlyRecordedMarkerlessFeedbackExists() throws Exception {
         IssueComment own =
                 comment("provider-bot", "Explain how to try the timer.", Instant.parse("2025-06-01T09:00:00Z"));
         own.setNativeId(81L);
         when(deliveredCommentLookup.findForPullRequest(99L, PR_ID, ScmItemEvents.PULL_REQUEST))
-                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(81L), Set.of()));
-        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
-                .thenReturn(List.of(own));
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(81L), Set.of(), Set.of()));
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any())).thenReturn(List.of(own));
 
         var capture = provider.capture(request(metadataWithPr()), provider.sourceKinds());
 
@@ -152,7 +171,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         IssueComment automated =
                 comment("group_12_bot_9f3a", "Pipeline passed.", Instant.parse("2025-06-01T10:00:00Z"));
         automated.getAuthor().setType(User.Type.BOT);
-        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any()))
                 .thenReturn(List.of(
                         automated, comment("reviewer-a", "Looks right.", Instant.parse("2025-06-01T11:00:00Z"))));
 
@@ -174,7 +193,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         recorded.setNativeId(81L);
         recorded.getAuthor().setNativeId(82L);
         recorded.setUpdatedAt(Instant.parse("2025-06-01T10:30:00Z"));
-        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any()))
                 .thenReturn(List.of(
                         recorded,
                         comment(
@@ -200,12 +219,16 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
 
     @Test
     void contribute_excludesHephaestusOwnComments() throws Exception {
-        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+        var posted = comment(
+                "bot",
+                "<!-- hephaestus:practice-review:abc --> 2 issues to fix before merging",
+                Instant.parse("2025-06-01T09:00:00Z"));
+        posted.setNativeId(83L);
+        when(deliveredCommentLookup.findForPullRequest(99L, PR_ID, ScmItemEvents.PULL_REQUEST))
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(83L), Set.of(), Set.of()));
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any()))
                 .thenReturn(List.of(
-                        comment(
-                                "bot",
-                                "<!-- hephaestus:practice-review:abc --> 2 issues to fix" + " before merging",
-                                Instant.parse("2025-06-01T09:00:00Z")),
+                        posted,
                         comment(
                                 "reviewer-b",
                                 "Nit: split persistence out so each unit is testable",
@@ -221,8 +244,8 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void contribute_onlyHephaestusComments_stagesAnEmptyCommentList() {
-        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+    void contribute_emptyDiscussion_stagesAnEmptyCommentList() {
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any()))
                 .thenReturn(List.of(comment(
                         "bot",
                         "<!-- hephaestus:practice-review:abc --> summary",
@@ -241,8 +264,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
     @Test
     void shouldPropagateDatabaseFailureWithoutCallingItACaptureRefusal() {
         var failure = new DataAccessResourceFailureException("Database unavailable");
-        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
-                .thenThrow(failure);
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any())).thenThrow(failure);
 
         Map<String, byte[]> files = new HashMap<>();
         assertThatThrownBy(() -> files.putAll(provider.capture(request(metadataWithPr()), provider.sourceKinds())
@@ -260,8 +282,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
             comments.add(comment("reviewer-" + i, "comment-" + i, base.plusSeconds(i)));
         }
         Collections.reverse(comments);
-        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
-                .thenReturn(comments);
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any())).thenReturn(comments);
 
         Map<String, byte[]> files = new HashMap<>();
         files.putAll(provider.capture(request(metadataWithPr()), provider.sourceKinds())
@@ -277,7 +298,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
 
     @Test
     void contribute_underCap_flagsNotTruncated() throws Exception {
-        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any()))
                 .thenReturn(List.of(comment("reviewer-a", "looks good", Instant.parse("2025-06-01T10:00:00Z"))));
 
         Map<String, byte[]> files = new HashMap<>();
@@ -290,7 +311,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
 
     @Test
     void contribute_nullAuthor_omitsAuthorKey() throws Exception {
-        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any()))
                 .thenReturn(List.of(comment(null, "anonymous note", Instant.parse("2025-06-01T10:00:00Z"))));
 
         Map<String, byte[]> files = new HashMap<>();
@@ -306,7 +327,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
 
     @Test
     void contribute_nullCreatedAt_omitsCreatedAtKey() throws Exception {
-        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any()))
                 .thenReturn(List.of(comment("reviewer-a", "no timestamp", null)));
 
         Map<String, byte[]> files = new HashMap<>();
@@ -321,7 +342,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
 
     @Test
     void contribute_blankBody_isSkipped() throws Exception {
-        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any()))
                 .thenReturn(List.of(
                         comment("reviewer-a", "   ", Instant.parse("2025-06-01T09:00:00Z")),
                         comment("reviewer-b", "real feedback", Instant.parse("2025-06-01T10:00:00Z"))));
@@ -335,18 +356,16 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         assertThat(out.get("comments").get(0).get("author").asString()).isEqualTo("reviewer-b");
     }
 
-    @Test
-    void contribute_diffNotePostedAsAConversationComment_isExcluded() throws Exception {
-        // A diff note whose line falls outside the hunk is posted as a conversation comment and
-        // keeps the
-        // diff-note marker; staged, it would read as unanswered automated feedback.
-        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+    @ParameterizedTest
+    @ValueSource(strings = {"<!-- hephaestus-diff-note -->", "<!-- hephaestus-request-answer -->"})
+    void shouldKeepAQuotedFeedbackOrStatusMarkerWithoutADeliveryReceipt(String marker) throws Exception {
+        when(issueCommentRepository.findRecentByIssueIdWithAuthor(any(), any()))
                 .thenReturn(List.of(
                         comment(
                                 "group_328643_bot_1",
                                 "**`App/WeatherViewModel.swift:13`**\n\n"
                                         + "Add result support so the view refreshes.\n"
-                                        + "<!-- hephaestus-diff-note -->\n"
+                                        + marker + "\n"
                                         + "<!-- hephaestus-diff-note-ck=abc -->",
                                 Instant.parse("2025-06-01T09:00:00Z")),
                         comment(
@@ -359,8 +378,12 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
                 .files());
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        assertThat(out.get("comments")).hasSize(1);
-        assertThat(out.get("comments").get(0).get("author").asString()).isEqualTo("reviewer-a");
+        assertThat(out.get("comments")).hasSize(2);
+        assertThat(out.get("comments").get(0).get("author").asString()).isEqualTo("group_328643_bot_1");
+        assertThat(out.path("comments").get(0).path("quotesHephaestusMarker").asBoolean())
+                .isTrue();
+        assertThat(out.path("comments").get(1).has("quotesHephaestusMarker")).isFalse();
+        assertThat(out.get("comments").get(1).get("author").asString()).isEqualTo("reviewer-a");
     }
 
     @Test

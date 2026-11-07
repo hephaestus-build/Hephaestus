@@ -78,22 +78,13 @@ public interface PullRequestReviewCommentRepository extends JpaRepository<PullRe
     List<PullRequestReviewComment> findByPullRequestIdWithAuthorOrderByCreatedAt(
             @Param("pullRequestId") Long pullRequestId);
 
-    /**
-     * The newest review comments people wrote on a pull request, with the author, the thread and the
-     * parent comment fetched so a read outside a transaction can name them. A comment carrying
-     * {@code excludedMarker} is Hephaestus's own posted note and is left out at the query, as
-     * {@link de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository#findRecentHumanByIssueIdWithAuthor}
-     * leaves out the conversation's.
-     */
+    /** The newest comments with their author, thread and parent. The caller applies delivery provenance. */
     @Query("SELECT prrc FROM PullRequestReviewComment prrc LEFT JOIN FETCH prrc.author "
             + "LEFT JOIN FETCH prrc.thread LEFT JOIN FETCH prrc.inReplyTo "
             + "WHERE prrc.pullRequest.id = :pullRequestId "
-            + "AND prrc.body NOT LIKE CONCAT('%', :excludedMarker, '%') "
             + "ORDER BY prrc.createdAt DESC, prrc.id DESC")
-    List<PullRequestReviewComment> findRecentHumanByPullRequestIdWithAuthor(
-            @Param("pullRequestId") Long pullRequestId,
-            @Param("excludedMarker") String excludedMarker,
-            Pageable pageable);
+    List<PullRequestReviewComment> findRecentWithContextByPullRequestId(
+            @Param("pullRequestId") Long pullRequestId, Pageable pageable);
 
     @Query("""
         SELECT prrc

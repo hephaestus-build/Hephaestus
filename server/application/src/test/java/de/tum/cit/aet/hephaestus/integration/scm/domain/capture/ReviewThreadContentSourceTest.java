@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.capture;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -15,8 +16,9 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
-import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
@@ -64,13 +66,19 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
     @Mock
     private PullRequestReviewRepository reviewRepository;
 
+    @Mock
+    private DeliveredPullRequestCommentLookup deliveredComments;
+
     private ReviewThreadContentSource provider;
 
     @BeforeEach
     void setUp() {
         lenient().when(pullRequestRepository.isDiscussionReadWhole(PR_ID)).thenReturn(true);
-        provider =
-                new ReviewThreadContentSource(objectMapper, pullRequestRepository, threadRepository, reviewRepository);
+        provider = new ReviewThreadContentSource(
+                objectMapper, pullRequestRepository, threadRepository, reviewRepository, deliveredComments);
+        lenient()
+                .when(deliveredComments.findForPullRequest(anyLong(), anyLong(), any()))
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(), Set.of()));
         lenient().when(pullRequestRepository.findById(any())).thenReturn(Optional.of(new PullRequest()));
         lenient()
                 .when(threadRepository.findRecentIdsByPullRequestId(any(), any()))
@@ -330,7 +338,10 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
     void shouldLeaveHephaestusOwnPostedReviewOutOfTheDecisions() throws Exception {
         PullRequestReview posted =
                 review(PullRequestReview.State.COMMENTED, "hephaestus", Instant.parse("2025-06-01T10:00:00Z"));
-        posted.setBody("The feedback. " + WorkspaceScmProjection.HEPHAESTUS_MARKER);
+        posted.setNativeId(87L);
+        posted.setBody("Edited feedback without a marker.");
+        when(deliveredComments.findForPullRequest(1L, PR_ID, ScmItemEvents.PULL_REQUEST))
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(), Set.of(87L)));
         when(reviewRepository.findRecentByPullRequestIdWithAuthor(any(), any(), any()))
                 .thenReturn(List.of(posted));
 
@@ -339,6 +350,20 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
 
         assertThat(objectMapper.readTree(files.get(FILE_KEY)).path("reviewDecisions"))
                 .isEmpty();
+    }
+
+    @Test
+    void shouldKeepAMarkerQuotedInAHumanReviewWhenNoDeliveryReceiptNamesIt() throws Exception {
+        var human = review(PullRequestReview.State.COMMENTED, "reviewer", Instant.parse("2025-06-01T10:00:00Z"));
+        human.setNativeId(89L);
+        human.setBody("The comment contains <!-- hephaestus-diff-note --> as an example.");
+        when(reviewRepository.findRecentByPullRequestIdWithAuthor(any(), any(), any()))
+                .thenReturn(List.of(human));
+        var captured = provider.capture(request(metadataWithPr()), provider.sourceKinds());
+        var decisions = objectMapper.readTree(captured.files().get(FILE_KEY)).path("reviewDecisions");
+        assertThat(decisions).hasSize(1);
+        assertThat(decisions.get(0).path("body").asString()).isEqualTo(human.getBody());
+        assertThat(decisions.get(0).path("quotesHephaestusMarker").asBoolean()).isTrue();
     }
 
     @Test
@@ -451,14 +476,17 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
 
     @Test
     void contribute_hephaestusOwnThread_excludedFromThreads() throws Exception {
-        // The root comment can be absent, so the comments identify a thread containing only our note.
+        // The provider mirror can lack the root relation; the receipt still identifies the delivered note.
         PullRequestReviewThread botThread = thread(PullRequestReviewThread.State.UNRESOLVED, "src/Foo.swift", 10, null);
-        botThread.setComments(
-                Set.of(comment(null, "Add a unit test for encodeDepth.\n" + "<!-- hephaestus-diff-note -->")));
+        var posted = comment(null, "Edited note without a marker.");
+        posted.setNativeId(88L);
+        botThread.setComments(Set.of(posted));
+        when(deliveredComments.findForPullRequest(1L, PR_ID, ScmItemEvents.PULL_REQUEST))
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(88L), Set.of()));
 
         PullRequestReviewThread humanThread =
                 thread(PullRequestReviewThread.State.UNRESOLVED, "src/Bar.swift", 5, null);
-        humanThread.setComments(Set.of(comment("reviewer-a", "This force-unwrap will crash — can we guard it?")));
+        humanThread.setComments(Set.of(comment("reviewer-a", "Quoted <!-- hephaestus-diff-note --> in my review.")));
 
         stubThreads(List.of(botThread, humanThread));
 

@@ -18,10 +18,12 @@ import java.util.TreeMap;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Each scenario's turns and tool schemas equal the golden files beside its inputs. Run with
@@ -89,6 +91,38 @@ class ComposerGoldenTest {
                                         WorkerFeedbackComposer.practiceSlugs(practiceIndex), request),
                                 2)
                         + "\n");
+    }
+
+    @Test
+    void shouldKeepUnmatchedMarkerProvenanceInTheComposersDiscussion() throws Exception {
+        Path scenario = scenario("pull-request");
+        var inputs = workspace(scenario.resolve("workspace"));
+        JsonNode comments = mapper.readTree(Objects.requireNonNull(inputs.get("context/comments.json")));
+        ((ObjectNode) comments.get(0)).put("quotesHephaestusMarker", true);
+        ((ObjectNode) comments.get(0))
+                .put("body", comments.get(0).path("body").asString() + " <!-- hephaestus-diff-note -->");
+        inputs.put("context/comments.json", mapper.writeValueAsBytes(comments));
+        var captured = new CapturedWork(new ComposerFiles(inputs), mapper);
+        var history = captured.publicReviewHistory(
+                json(scenario.resolve("workspace/INDEX.json")), new CapturedWork.Framing(null, null));
+        JsonNode first = history.path("statements").get(0);
+        assertThat(first.path("body").asString())
+                .isEqualTo(comments.get(0).path("body").asString());
+        assertThat(first.path("quotesHephaestusMarker").asBoolean()).isTrue();
+        assertThat(first.path("origin").asString()).isEqualTo("UNKNOWN");
+        var state = Admission.of(json(scenario.resolve("admission.json")), Map.of());
+        var request = PrivateFeedback.Request.of(
+                        mapper.readTree(Objects.requireNonNull(inputs.get(SandboxLayout.FEEDBACK_COMPOSITION_PATH))))
+                .orElseThrow();
+        var routes = PrivateFeedback.closeUnrouted(request, state, new ArrayList<>());
+        String privateInput = WorkerFeedbackComposer.sharedStyle() + "\n\n"
+                + WorkerFeedbackComposer.privateTurn(
+                        new ComposerFiles(inputs), captured, request, state, null, routes, List.of());
+        assertThat(privateInput)
+                .contains(
+                        "neither authorship nor an independent human observation",
+                        comments.get(0).path("body").asString())
+                .containsPattern("\"quotesHephaestusMarker\"\\s*:\\s*true");
     }
 
     private static void golden(String scenario, String file, String rendered) throws IOException, URISyntaxException {

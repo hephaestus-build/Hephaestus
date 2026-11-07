@@ -34,7 +34,7 @@ public interface PullRequestReviewThreadRepository extends JpaRepository<PullReq
      * (plus their authors) eagerly fetched so the cross-context provider can attribute who resolved each
      * thread AND tell whether the thread is Hephaestus's own posted note — without an N+1 lazy load.
      * (The {@code rootComment} FK is not populated by the sync, so the comment set is the reliable source
-     * for the marker check.) Read-only context materialisation; the caller establishes workspace scope.
+     * for the delivered-copy lookup.) Read-only context materialisation; the caller establishes workspace scope.
      *
      * <p>Ordered because the caller materialises the result into a CAPPED context file: without it the plan's
      * arbitrary order would vary both which threads the review sees and in what order — and so would the

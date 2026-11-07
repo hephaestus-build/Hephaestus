@@ -115,7 +115,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     private @Nullable PullRequest mirroredPullRequest;
     private List<PullRequestReviewComment> mirroredComments = List.of();
     private DeliveredPullRequestCommentLookup.CommentIds deliveredComments =
-            new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of());
+            new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(), Set.of());
 
     @BeforeEach
     void setUp() {
@@ -128,7 +128,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                 .when(pullRequestRepository.findByIdForReviewContext(456L))
                 .thenAnswer(invocation -> Optional.ofNullable(mirroredPullRequest));
         lenient()
-                .when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
+                .when(reviewCommentRepository.findRecentWithContextByPullRequestId(eq(456L), any()))
                 .thenAnswer(invocation -> mirroredComments);
         provider = new PullRequestContentSource(
                 objectMapper,
@@ -577,7 +577,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             human.setBody(own.getBody());
             PullRequestReviewComment unknownId = new PullRequestReviewComment();
             unknownId.setBody(own.getBody());
-            deliveredComments = new DeliveredPullRequestCommentLookup.CommentIds(Set.of(82L), Set.of(81L));
+            deliveredComments = new DeliveredPullRequestCommentLookup.CommentIds(Set.of(82L), Set.of(81L), Set.of());
             mirroredComments = List.of(own, human, unknownId);
 
             var captured = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
@@ -594,7 +594,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             PullRequestReviewComment own = new PullRequestReviewComment();
             own.setNativeId(81L);
             own.setBody("Explain how to try the timer.");
-            deliveredComments = new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(81L));
+            deliveredComments = new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(81L), Set.of());
             mirroredComments = List.of(own);
 
             var captured = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
@@ -859,7 +859,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         void shouldNameDeliveredFeedbackAsTheReasonAReplysParentIsLeftOut() throws Exception {
             PullRequestReviewComment delivered = comment(1L, 81L, "Throw instead of returning zero.", "hephaestus-app");
             PullRequestReviewComment answer = reply(2L, 82L, delivered);
-            deliveredComments = new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(81L));
+            deliveredComments = new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(81L), Set.of());
             mirroredComments = List.of(answer, delivered);
 
             JsonNode comments = capturedComments();
@@ -875,17 +875,18 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldNameTheFeedbackMarkerAsTheReasonWhenTheQueryLeftTheParentOut() throws Exception {
+        void shouldKeepAMarkedParentWithoutADeliveryReceipt() throws Exception {
             PullRequestReviewComment marked =
                     comment(1L, 81L, "Throw instead.\n" + WorkspaceScmProjection.HEPHAESTUS_MARKER + " -->", "someone");
             PullRequestReviewComment answer = reply(2L, 82L, marked);
-            // The repository query leaves marked bodies out; only the reply comes back.
-            mirroredComments = List.of(answer);
-
-            JsonNode kept = capturedComments().get(0);
-
+            mirroredComments = List.of(marked, answer);
+            var comments = capturedComments();
+            assertThat(comments).hasSize(2);
+            assertThat(comments.get(0).path("quotesHephaestusMarker").asBoolean())
+                    .isTrue();
+            JsonNode kept = comments.get(1);
             assertThat(kept.path("in_reply_to").asLong()).isEqualTo(1L);
-            assertThat(kept.path("in_reply_to_omitted_reason").asString()).isEqualTo("FEEDBACK_MARKER");
+            assertThat(kept.has("in_reply_to_omitted_reason")).isFalse();
             assertThat(kept.path("author").asString()).isEqualTo("author");
         }
 
@@ -897,7 +898,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             User bot = user("ci-helper");
             bot.setType(User.Type.BOT);
             answer.setAuthor(bot);
-            deliveredComments = new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(81L));
+            deliveredComments = new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(81L), Set.of());
             mirroredComments = List.of(answer);
 
             JsonNode kept = capturedComments().get(0);
@@ -907,19 +908,20 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldStateOnlyTheMarkerPolicyWhenAPersonQuotedTheMarkerInTheParent() throws Exception {
-            // The marker in a body says which policy left it out; it does not prove Hephaestus wrote it.
+        void shouldKeepAPersonsQuotedMarkerAndTheirReply() throws Exception {
             PullRequestReviewComment quoting = comment(
                     1L,
                     91L,
                     "Our bot writes `" + WorkspaceScmProjection.HEPHAESTUS_MARKER + "` here; please drop the cast.",
                     "reviewer");
             PullRequestReviewComment answer = reply(2L, 92L, quoting);
-            mirroredComments = List.of(answer);
-
-            JsonNode kept = capturedComments().get(0);
-
-            assertThat(kept.path("in_reply_to_omitted_reason").asString()).isEqualTo("FEEDBACK_MARKER");
+            mirroredComments = List.of(quoting, answer);
+            var comments = capturedComments();
+            assertThat(comments).hasSize(2);
+            assertThat(comments.get(0).path("quotesHephaestusMarker").asBoolean())
+                    .isTrue();
+            JsonNode kept = comments.get(1);
+            assertThat(kept.has("in_reply_to_omitted_reason")).isFalse();
             assertThat(kept.path("body").asString()).isEqualTo("Confirmed with the boundary probe.");
         }
 
@@ -928,7 +930,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             PullRequestReviewComment review = comment(1L, 71L, "This catch hides the parse failure.", "reviewer");
             PullRequestReviewComment answer = reply(2L, 72L, review);
             PullRequestReviewComment standalone = comment(3L, 73L, "Why zero here?", "reviewer");
-            deliveredComments = new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(81L));
+            deliveredComments = new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(81L), Set.of());
             mirroredComments = List.of(standalone, answer, review);
 
             JsonNode comments = capturedComments();

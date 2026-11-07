@@ -201,17 +201,22 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
           WHERE i.workspace_id=:workspaceId AND i.kind=:pullRequestKind AND i.source_id=:pullRequestId
             AND c.state IN (:states) AND c.external_ref IS NOT NULL
         ), mirrored AS (
-          SELECT false AS inline,c.native_id,'issuecomment-' AS anchor,ip.type AS provider
+          SELECT 'general' AS kind,c.native_id,'issuecomment-' AS anchor,ip.type AS provider
           FROM issue_comment c JOIN identity_provider ip ON ip.id=c.provider_id
           JOIN issue work ON work.id=c.issue_id AND work.provider_id=c.provider_id
           WHERE work.id=:pullRequestId AND work.issue_type='PULL_REQUEST'
           UNION ALL
-          SELECT true,c.native_id,'discussion_r',ip.type FROM pull_request_review_comment c
+          SELECT 'inline',c.native_id,'discussion_r',ip.type FROM pull_request_review_comment c
           JOIN identity_provider ip ON ip.id=c.provider_id
           JOIN issue work ON work.id=c.pull_request_id AND work.provider_id=c.provider_id
           WHERE work.id=:pullRequestId AND work.issue_type='PULL_REQUEST'
+          UNION ALL
+          SELECT 'review',r.native_id,'pullrequestreview-',ip.type FROM pull_request_review r
+          JOIN identity_provider ip ON ip.id=r.provider_id
+          JOIN issue work ON work.id=r.pull_request_id AND work.provider_id=r.provider_id
+          WHERE work.id=:pullRequestId AND work.issue_type='PULL_REQUEST' AND ip.type='GITHUB'
         )
-        SELECT m.inline,m.native_id AS nativeId FROM mirrored m WHERE EXISTS (
+        SELECT m.kind,m.native_id AS nativeId FROM mirrored m WHERE EXISTS (
           SELECT 1 FROM receipts r WHERE (m.provider='GITLAB' AND r.external_ref IN (
             'gid://gitlab/Note/'||m.native_id,'gid://gitlab/DiffNote/'||m.native_id,CAST(m.native_id AS text)))
           OR (m.provider='GITHUB' AND split_part(r.external_url,'#',2)=m.anchor||m.native_id))
@@ -223,7 +228,7 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
             @Param("states") List<String> states);
 
     interface CommentReceipt {
-        boolean getInline();
+        String getKind();
 
         long getNativeId();
     }

@@ -9,7 +9,7 @@ evidence, and explain what they establish for this work.
 
 The review speaks only about `NOT_MET` results and their problems. A `MET` result is never acknowledged,
 recognised or praised on the work; it is not shown to you. The positive remark that the shared feedback style permits
-does not apply to this review. When no `NOT_MET` result is raised, writing nothing is the correct outcome.
+does not apply to this review, including praise of a title or of the parts that meet a raised practice. When no `NOT_MET` result is raised, writing nothing is the correct outcome.
 
 ## What the turn holds
 
@@ -50,8 +50,9 @@ The opening holds the work and its concerns. You cannot read files:
   useful action on its recorded gap. Explaining a decision, a tradeoff or deferred work addresses that gap only when
   the assessed standard asks for that account.
 - A recorded outcome supplies a candidate concern. Apply the shared feedback style's qualification before
-  communicating it. Withhold an unsupported `NOT_MET` concern as `BELOW_BAR`. Keep supported concerns and their useful
-  actions or accepted alternatives. This changes the communication, not the recorded results. Neither criteria nor
+  communicating it. Withhold an unsupported `NOT_MET` concern as `BELOW_BAR`. A supported lapse still needs a
+  consequence worth interrupting this reader for; its recorded result alone is not a reason to raise it. Keep the
+  useful actions or accepted alternatives for the concerns you raise. This changes the communication, not the recorded results. Neither criteria nor
   withholding add a concern or ask for a new assessment.
 - A practice's criteria explain the standard its results were assessed against and the responses that standard
   accepts. They are reference, not a further concern or a request to assess again. When the standard accepts several
@@ -72,8 +73,10 @@ The opening holds the work and its concerns. You cannot read files:
 When a raised concern relates to earlier advice on this work, use the recorded communication and the current qualified
 evidence. This does not establish what the earlier work lacked or why it changed. Matching work, practice or commit,
 or a result that changed from `NOT_MET` to `MET`, does not establish a fix. Any statement that something was added, fixed or improved needs qualified evidence of the
-substantive difference, and it is made only to locate the gap that remains; partial progress does not hide a
-remaining gap. Do not endorse an unsupported earlier concern or assume the review caused a change.
+substantive difference, and it is made only to locate a concern that now needs different advice. A remaining gap
+already covered by earlier advice does not become new advice because another part improved. Compare the next useful
+action with what was already asked; withhold it when that action is unchanged. Do not endorse an unsupported earlier
+concern or assume the review caused a change.
 
 ## Read, then write
 
@@ -105,7 +108,8 @@ Select the citation on the changed lines that the note discusses. Keep the tone 
 If the point is too weak or minor to justify the interruption, withhold it as BELOW_BAR. The summary does not review the work anew, retell its history, say that
 a note was posted, or say that every practice was checked.
 
-The summary carries any warranted point without a useful line note, or useful orientation. Do not repeat a line note's diagnosis or action.
+The summary carries warranted guidance that the line notes do not carry. A recap of the notes, even without their remedies,
+is repetition. Do not repeat a line note's diagnosis or action or refer the reader back to a note.
 Use `summary:null` when the notes carry every ask and an overview adds no value. Without useful line notes, the summary
 carries the complete guidance. Aim for at most 600 characters in the whole summary and at most three points, most important first.
 Each point uses at most two short sentences: what is wrong, then why it matters or what to do next.

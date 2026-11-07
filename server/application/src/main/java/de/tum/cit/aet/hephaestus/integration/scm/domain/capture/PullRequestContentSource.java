@@ -445,8 +445,8 @@ public class PullRequestContentSource {
         Set<Long> postedComments = deliveredCommentLookup
                 .findForPullRequest(workspaceId, pullRequestId, ScmItemEvents.PULL_REQUEST)
                 .inline();
-        var comments = new ArrayList<>(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(
-                pullRequestId, WorkspaceScmProjection.HEPHAESTUS_MARKER, Pageable.unpaged()));
+        var comments = new ArrayList<>(
+                reviewCommentRepository.findRecentWithContextByPullRequestId(pullRequestId, Pageable.unpaged()));
         comments.removeIf(comment -> comment.getNativeId() != null && postedComments.contains(comment.getNativeId()));
         boolean complete = pullRequestRepository.isDiscussionReadWhole(pullRequestId);
         comments.sort(Comparator.comparing(
@@ -493,6 +493,9 @@ public class PullRequestContentSource {
                 commentNode.put("commit_id", reviewedRevision);
             }
             commentNode.put("body", comment.getBody());
+            String body = comment.getBody();
+            if (body != null && body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER))
+                commentNode.put("quotesHephaestusMarker", true);
             if (comment.getCreatedAt() != null) {
                 commentNode.put("created_at", comment.getCreatedAt().toString());
             }
@@ -511,16 +514,9 @@ public class PullRequestContentSource {
         return commentsArray;
     }
 
-    /**
-     * Why the capture left a reply's parent out, by the rule that left it out: the delivered-feedback ledger
-     * first, then the feedback marker that the repository query filters on. A person can quote the marker, so
-     * that reason names the rule, not who wrote the parent. A parent that no rule left out has no reason.
-     */
+    /** A retained parent relation can name a delivered copy that the capture correctly omitted. */
     private static @Nullable String omittedParentReason(PullRequestReviewComment parent, Set<Long> delivered) {
-        if (parent.getNativeId() != null && delivered.contains(parent.getNativeId())) return "DELIVERED_FEEDBACK";
-        String body = parent.getBody();
-        if (body != null && body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER)) return "FEEDBACK_MARKER";
-        return null;
+        return parent.getNativeId() != null && delivered.contains(parent.getNativeId()) ? "DELIVERED_FEEDBACK" : null;
     }
 
     private record CommentCapture(List<PullRequestReviewComment> comments, Set<Long> delivered, boolean complete) {}
