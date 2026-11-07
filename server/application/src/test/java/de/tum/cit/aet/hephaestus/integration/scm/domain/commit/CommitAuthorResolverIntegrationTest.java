@@ -74,18 +74,35 @@ class CommitAuthorResolverIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldResolveAGitHubNoreplyAddressOnGitHub() {
+    void shouldResolveAGitHubNoreplyAddressByItsAccountId() {
         long user = user(github, "login" + mark, "Some Name", null);
 
-        assertThat(resolver.resolveByEmail("1+login" + mark + "@users.noreply.github.com", github))
+        assertThat(resolver.resolveByEmail(nativeIdOf(user) + "+renamed@users.noreply.github.com", github))
                 .isEqualTo(user);
     }
 
     @Test
-    void shouldResolveNobodyWhenAGitHubNoreplyAddressIsOnGitLab() {
-        user(gitlab, "login" + mark, "Some Name", null);
+    void shouldResolveNobodyWhenTheLoginInANoreplyAddressBelongsToAnotherAccount() {
+        long user = user(github, "login" + mark, "Some Name", null);
 
-        assertThat(resolver.resolveByEmail("login" + mark + "@users.noreply.github.com", gitlab))
+        assertThat(resolver.resolveByEmail(
+                        (nativeIdOf(user) + 1) + "+login" + mark + "@users.noreply.github.com", github))
+                .isNull();
+    }
+
+    @Test
+    void shouldResolveNobodyWhenANoreplyAddressHoldsNoAccountId() {
+        user(github, "login" + mark, "Some Name", null);
+
+        assertThat(resolver.resolveByEmail("login" + mark + "@users.noreply.github.com", github))
+                .isNull();
+    }
+
+    @Test
+    void shouldResolveNobodyWhenAGitHubNoreplyAddressIsOnGitLab() {
+        long user = user(gitlab, "login" + mark, "Some Name", null);
+
+        assertThat(resolver.resolveByEmail(nativeIdOf(user) + "+login@users.noreply.github.com", gitlab))
                 .isNull();
     }
 
@@ -105,6 +122,10 @@ class CommitAuthorResolverIntegrationTest extends BaseIntegrationTest {
                 .isNull();
     }
 
+    private long nativeIdOf(long user) {
+        return users.findById(user).orElseThrow().getNativeId();
+    }
+
     private long provider(IdentityProviderType type, String serverUrl) {
         return Objects.requireNonNull(providers
                 .findByTypeAndServerUrl(type, serverUrl)
@@ -114,7 +135,7 @@ class CommitAuthorResolverIntegrationTest extends BaseIntegrationTest {
 
     private long user(long providerId, String login, String name, @Nullable String email) {
         var user = new User();
-        user.setNativeId(ThreadLocalRandom.current().nextLong(1_000_000_000L, Long.MAX_VALUE));
+        user.setNativeId(ThreadLocalRandom.current().nextLong(1_000_000_000L, 1_000_000_000_000_000_000L));
         user.setLogin(login);
         user.setName(name);
         if (email != null) user.setEmail(email);

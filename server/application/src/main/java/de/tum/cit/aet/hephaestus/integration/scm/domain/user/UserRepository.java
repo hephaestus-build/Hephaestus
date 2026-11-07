@@ -75,11 +75,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("""
             SELECT u.id
             FROM User u
-            WHERE LOWER(u.login) = LOWER(:login)
+            WHERE u.nativeId = :nativeId
               AND u.provider.id = :providerId
               AND u.provider.type = de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.GITHUB
         """)
-    Optional<Long> findGitHubUserIdByLogin(@Param("login") String login, @Param("providerId") Long providerId);
+    Optional<Long> findGitHubUserIdByNativeId(@Param("nativeId") Long nativeId, @Param("providerId") Long providerId);
 
     @Query("""
             SELECT u

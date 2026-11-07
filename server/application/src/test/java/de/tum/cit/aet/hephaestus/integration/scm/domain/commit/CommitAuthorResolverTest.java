@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.commit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -38,52 +37,52 @@ class CommitAuthorResolverTest extends BaseUnitTest {
         return user;
     }
 
-    // extractLoginFromNoreply (static, no mocks needed)
+    // extractNativeIdFromNoreply (static, no mocks needed)
 
     @Nested
-    class ExtractLoginFromNoreply {
+    class ExtractNativeIdFromNoreply {
 
         @Test
-        void shouldExtractLoginFromSimpleNoreply() {
-            String login = CommitAuthorResolver.extractLoginFromNoreply("username@users.noreply.github.com");
-            assertThat(login).isEqualTo("username");
-        }
-
-        @Test
-        void shouldExtractLoginFromIdPrefixedNoreply() {
-            String login = CommitAuthorResolver.extractLoginFromNoreply("12345+username@users.noreply.github.com");
-            assertThat(login).isEqualTo("username");
-        }
-
-        @Test
-        void shouldHandleLargeNumericIdPrefix() {
-            String login =
-                    CommitAuthorResolver.extractLoginFromNoreply("123456789+FelixTJDietrich@users.noreply.github.com");
-            assertThat(login).isEqualTo("FelixTJDietrich");
-        }
-
-        @Test
-        void shouldReturnNullForRegularEmail() {
-            String login = CommitAuthorResolver.extractLoginFromNoreply("user@example.com");
-            assertThat(login).isNull();
-        }
-
-        @Test
-        void shouldReturnNullForPersonalEmail() {
-            String login = CommitAuthorResolver.extractLoginFromNoreply("max_muster@example.com");
-            assertThat(login).isNull();
+        void shouldExtractTheAccountId() {
+            assertThat(CommitAuthorResolver.extractNativeIdFromNoreply("12345+username@users.noreply.github.com"))
+                    .isEqualTo(12345L);
         }
 
         @Test
         void shouldBeCaseInsensitiveForDomain() {
-            String login = CommitAuthorResolver.extractLoginFromNoreply("user@Users.Noreply.GitHub.com");
-            assertThat(login).isEqualTo("user");
+            assertThat(CommitAuthorResolver.extractNativeIdFromNoreply("12345+user@Users.Noreply.GitHub.com"))
+                    .isEqualTo(12345L);
+        }
+
+        @Test
+        void shouldReturnNullWhenTheAddressHoldsNoAccountId() {
+            assertThat(CommitAuthorResolver.extractNativeIdFromNoreply("username@users.noreply.github.com"))
+                    .isNull();
+        }
+
+        @Test
+        void shouldReturnNullForRegularEmail() {
+            assertThat(CommitAuthorResolver.extractNativeIdFromNoreply("1+user@example.com"))
+                    .isNull();
         }
 
         @Test
         void shouldReturnNullForPartialNoreplyMatch() {
-            String login = CommitAuthorResolver.extractLoginFromNoreply("user@noreply.github.com");
-            assertThat(login).isNull();
+            assertThat(CommitAuthorResolver.extractNativeIdFromNoreply("1+user@noreply.github.com"))
+                    .isNull();
+        }
+
+        @Test
+        void shouldReturnNullWhenTheIdHasALeadingZero() {
+            assertThat(CommitAuthorResolver.extractNativeIdFromNoreply("012345+user@users.noreply.github.com"))
+                    .isNull();
+        }
+
+        @Test
+        void shouldReturnNullWhenTheIdCannotBeAnAccountId() {
+            assertThat(CommitAuthorResolver.extractNativeIdFromNoreply(
+                            "99999999999999999999999+user@users.noreply.github.com"))
+                    .isNull();
         }
     }
 
@@ -123,10 +122,10 @@ class CommitAuthorResolverTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldResolveTheLoginWhenTheEmailIsAGitHubNoreplyAddress() {
+        void shouldResolveTheAccountIdWhenTheEmailIsAGitHubNoreplyAddress() {
             String email = "12345+octocat@users.noreply.github.com";
             when(userRepository.findAllByEmailAndProviderId(email, PROVIDER)).thenReturn(List.of());
-            when(userRepository.findGitHubUserIdByLogin("octocat", PROVIDER)).thenReturn(Optional.of(3L));
+            when(userRepository.findGitHubUserIdByNativeId(12345L, PROVIDER)).thenReturn(Optional.of(3L));
 
             assertThat(resolver.resolveByEmail(email, PROVIDER)).isEqualTo(3L);
         }
@@ -137,7 +136,7 @@ class CommitAuthorResolverTest extends BaseUnitTest {
                     .thenReturn(List.of());
 
             assertThat(resolver.resolveByEmail("ab12cde@mytum.de", PROVIDER)).isNull();
-            verify(userRepository, never()).findGitHubUserIdByLogin(anyString(), anyLong());
+            verify(userRepository, never()).findGitHubUserIdByNativeId(anyLong(), anyLong());
         }
     }
 
