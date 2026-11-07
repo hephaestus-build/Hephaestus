@@ -743,10 +743,31 @@ function describeAvailableSources(sourceKinds: ReadonlySet<string>): string {
 	return sourceKinds.size === 0 ? "(none)" : [...sourceKinds].toSorted().join(", ");
 }
 
+/** The checkout has its own rule: a search of it can still run to the end. A could-not-determine result claims nothing. */
+function requireWholeSources(
+	submission: NormalizedSubmission,
+	consulted: Iterable<string>,
+	partialSourceKinds: ReadonlySet<string>,
+): void {
+	if (submission.outcome === "COULD_NOT_DETERMINE") {
+		return;
+	}
+	for (const sourceKind of consulted) {
+		if (sourceKind !== TREE_SOURCE && partialSourceKinds.has(sourceKind)) {
+			throw new Error(
+				`consulted source '${sourceKind}' was captured only in part, so it cannot show that something ` +
+					"is absent. Remove it from consulted and keep only what its cited lines show, or record " +
+					"COULD_NOT_DETERMINE with what would settle it",
+			);
+		}
+	}
+}
+
 export function validateSearchScope(
 	submission: NormalizedSubmission,
 	exhaustiveSourceKinds: ReadonlySet<string>,
 	availableSourceKinds: ReadonlySet<string>,
+	partialSourceKinds: ReadonlySet<string> = new Set(),
 ): void {
 	const { search } = submission.evidence;
 	if (!search) {
@@ -769,6 +790,7 @@ export function validateSearchScope(
 			);
 		}
 	}
+	requireWholeSources(submission, consulted, partialSourceKinds);
 	const unsearched = [...exhaustiveSourceKinds]
 		.filter((sourceKind) => !consulted.has(sourceKind))
 		.toSorted();
@@ -784,6 +806,7 @@ export function validateSearchScope(
 export function validateInapplicabilityScope(
 	submission: NormalizedSubmission,
 	availableSourceKinds: ReadonlySet<string>,
+	partialSourceKinds: ReadonlySet<string> = new Set(),
 ): void {
 	if (submission.outcome !== "DOES_NOT_APPLY") {
 		return;
@@ -800,6 +823,7 @@ export function validateInapplicabilityScope(
 			);
 		}
 	}
+	requireWholeSources(submission, inapplicability.consulted, partialSourceKinds);
 }
 
 export const CONVERSATION_THREAD = "context/conversation_thread.json";

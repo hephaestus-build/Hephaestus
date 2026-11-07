@@ -39,6 +39,8 @@ export function folderCitationIndex(value: unknown): {
 	availableSourceKinds: Set<string>;
 	/** Sources captured whole: only a search of one of these can show that it lacks something. */
 	completeSourceKinds: Set<string>;
+	/** Sources that the capture marks as less than whole. A source known only from its files is not one. */
+	partialSourceKinds: Set<string>;
 	sourceFileSources: Map<string, string>;
 	citationCapabilities: Map<string, CitationCapabilities>;
 } {
@@ -61,6 +63,7 @@ export function folderCitationIndex(value: unknown): {
 		.parse(value);
 	const availableSourceKinds = new Set<string>();
 	const completeSourceKinds = new Set<string>();
+	const partialSourceKinds = new Set<string>();
 	const sourceFileSources = new Map<string, string>();
 	const citationCapabilities = new Map<string, CitationCapabilities>();
 	for (const source of manifest.sources) {
@@ -69,6 +72,8 @@ export function folderCitationIndex(value: unknown): {
 			availableSourceKinds.add(source.kind);
 			if (source.state.completeness === "COMPLETE") {
 				completeSourceKinds.add(source.kind);
+			} else if (source.state.completeness !== undefined) {
+				partialSourceKinds.add(source.kind);
 			}
 		}
 	}
@@ -83,5 +88,11 @@ export function folderCitationIndex(value: unknown): {
 		sourceFileSources.set(entry.file.path, entry.kind);
 		availableSourceKinds.add(entry.kind);
 	}
-	return { availableSourceKinds, completeSourceKinds, sourceFileSources, citationCapabilities };
+	return {
+		availableSourceKinds,
+		completeSourceKinds,
+		partialSourceKinds,
+		sourceFileSources,
+		citationCapabilities,
+	};
 }
