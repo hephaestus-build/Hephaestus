@@ -23,6 +23,16 @@ The Scans page lists scans and their reports.
 
 The schedule scans repositories in the workspace review scope.
 Each scheduled check shares the budget across its repository scans.
+
+When that run uses its cap, **Run limit reached** appears beside the schedule.
+That run ends. Repositories it did not reach are not scanned in that run.
+The next scheduled check starts a new run from the first repository.
+
+Raise the schedule's budget if later repositories repeatedly remain unreached.
+A run with no remaining repositories finishes even when its budget is spent.
+A monthly funding shortage or an unknown cost pauses the run instead.
+Unknown costs can need operator correction. The run does not always resume automatically.
+
 For an immediate scan, send a `POST /workspaces/{slug}/practices/scans` request.
 The request requires the workspace Admin role or Owner role.
 

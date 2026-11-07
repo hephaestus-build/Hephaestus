@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794082974414-1" author="hephaestus">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="review_batch"/>
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conrelid = 'review_batch'::regclass AND conname = 'ck_review_batch_status'</sqlCheck>
+        </preConditions>
+        <sql>ALTER TABLE review_batch DROP CONSTRAINT ck_review_batch_status;
+ALTER TABLE review_batch ADD CONSTRAINT ck_review_batch_status CHECK (status IN ('AWAITING_CONFIRMATION', 'RUNNING', 'PAUSED', 'COMPLETED', 'CANCELLED', 'BUDGET_EXHAUSTED'));</sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM review_batch WHERE status = 'BUDGET_EXHAUSTED') THEN
+        RAISE EXCEPTION 'Cannot remove a status used by existing scheduled runs. Restore a verified backup before downgrading.';
+    END IF;
+END $$;
+ALTER TABLE review_batch DROP CONSTRAINT ck_review_batch_status;
+ALTER TABLE review_batch ADD CONSTRAINT ck_review_batch_status CHECK (status IN ('AWAITING_CONFIRMATION', 'RUNNING', 'PAUSED', 'COMPLETED', 'CANCELLED'));
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

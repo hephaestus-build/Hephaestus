@@ -22038,6 +22038,7 @@ components:
           - PAUSED
           - COMPLETED
           - CANCELLED
+          - BUDGET_EXHAUSTED
         submittedCount:
           type: integer
           format: int32
@@ -26184,6 +26185,7 @@ components:
           - PAUSED
           - COMPLETED
           - CANCELLED
+          - BUDGET_EXHAUSTED
       required:
       - status
     UpdateSilentModeRequest:

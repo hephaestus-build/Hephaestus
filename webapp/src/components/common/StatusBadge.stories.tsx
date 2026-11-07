@@ -5,6 +5,7 @@ import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-s
 import { FEEDBACK_DESTINATION_DEFS } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { PROFILE_VISIBILITY_DEFS } from "@/components/practice-vocabulary/profile-visibility-defs";
+import { REVIEW_BATCH_STATUS_DEFS } from "@/components/practice-vocabulary/review-batch-status-defs";
 import {
 	REVIEW_STATUS_DEFS,
 	REVIEW_JOB_PROCESSING_DEFS,
@@ -78,6 +79,7 @@ export const EveryRegistry: Story = {
 			<Gallery heading="Outcome" defs={OUTCOME_DEFS} />
 			<Gallery heading="Severity" defs={SEVERITY_DEFS} />
 			<Gallery heading="Review status" defs={REVIEW_STATUS_DEFS} />
+			<Gallery heading="Review batch" defs={REVIEW_BATCH_STATUS_DEFS} />
 			<Gallery heading="Job processing" defs={REVIEW_JOB_PROCESSING_DEFS} />
 			<section className="space-y-2">
 				<h3 className="text-sm font-semibold">Selected in Controls</h3>

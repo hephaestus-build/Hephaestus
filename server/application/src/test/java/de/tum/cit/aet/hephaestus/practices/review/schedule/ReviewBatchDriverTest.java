@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -25,6 +26,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentMatchers;
 
 class ReviewBatchDriverTest extends BaseUnitTest {
@@ -69,6 +72,89 @@ class ReviewBatchDriverTest extends BaseUnitTest {
         lenient().when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
         lenient().when(readiness.hasRunnableAgent(1L)).thenReturn(true);
         lenient().when(budget.canRequest(1, ReviewKind.ITEM, null)).thenReturn(true);
+        lenient().when(scope.next(1, batch.getId(), null, 2)).thenReturn(List.of(1L));
+    }
+
+    @Test
+    void shouldEndAScheduledRunWhenItsFixedCapIsSpent() {
+        batch.setOrigin(ReviewBatchOrigin.SCHEDULE);
+        batch.setKind("scm.repository");
+        batch.setBudgetUsd(BigDecimal.ONE);
+        when(spend.remaining(batch)).thenReturn(new ReviewBatchSpend.Snapshot(BigDecimal.ZERO, true));
+        when(scope.next(1, batch.getId(), null, 1)).thenReturn(List.of(6L));
+
+        driver.advance(batch);
+
+        assertThat(batch.getStatus()).isEqualTo(ReviewBatchStatus.BUDGET_EXHAUSTED);
+        assertThat(batch.getPauseReason()).isNull();
+        assertThat(batch.getFinishedAt()).isEqualTo(now);
+        assertThat(batch.getCursorItemId()).isNull();
+        verifyNoInteractions(submitter);
+    }
+
+    @Test
+    void shouldEndAnExistingScheduledBudgetPauseOnTheNextTick() {
+        batch.setOrigin(ReviewBatchOrigin.SCHEDULE);
+        batch.setKind("scm.repository");
+        when(scope.next(1, batch.getId(), null, 1)).thenReturn(List.of(6L));
+        batch.setStatus(ReviewBatchStatus.PAUSED);
+        batch.setPauseReason(ReviewBatchPauseReason.BUDGET_EXHAUSTED);
+        batch.setBudgetUsd(BigDecimal.ONE);
+        when(spend.remaining(batch)).thenReturn(new ReviewBatchSpend.Snapshot(BigDecimal.ZERO, true));
+
+        driver.advance(batch);
+
+        assertThat(batch.getStatus()).isEqualTo(ReviewBatchStatus.BUDGET_EXHAUSTED);
+        assertThat(batch.getPauseReason()).isNull();
+        assertThat(batch.getFinishedAt()).isEqualTo(now);
+    }
+
+    @ParameterizedTest
+    @EnumSource(ReviewBatchOrigin.class)
+    void shouldCompleteAnEmptyScopeEvenWhenNoBudgetRemains(ReviewBatchOrigin origin) {
+        batch.setOrigin(origin);
+        batch.setStatus(ReviewBatchStatus.PAUSED);
+        batch.setPauseReason(ReviewBatchPauseReason.BUDGET_EXHAUSTED);
+        when(scope.next(1, batch.getId(), null, 2)).thenReturn(List.of());
+        lenient().when(budget.canRequest(1, ReviewKind.ITEM, null)).thenReturn(false);
+
+        driver.advance(batch);
+
+        assertThat(batch.getStatus()).isEqualTo(ReviewBatchStatus.COMPLETED);
+        assertThat(batch.getPauseReason()).isNull();
+        assertThat(batch.getFinishedAt()).isEqualTo(now);
+        verifyNoInteractions(spend, budget, submitter);
+    }
+
+    @Test
+    void shouldKeepUnpricedScheduledUsagePausedUntilItsCostIsKnown() {
+        batch.setOrigin(ReviewBatchOrigin.SCHEDULE);
+        batch.setKind("scm.repository");
+        batch.setBudgetUsd(BigDecimal.ONE);
+        when(scope.next(1, batch.getId(), null, 1)).thenReturn(List.of(6L));
+        when(spend.remaining(batch)).thenReturn(new ReviewBatchSpend.Snapshot(null, false));
+
+        driver.advance(batch);
+
+        assertThat(batch.getStatus()).isEqualTo(ReviewBatchStatus.PAUSED);
+        assertThat(batch.getPauseReason()).isEqualTo(ReviewBatchPauseReason.BUDGET_EXHAUSTED);
+        assertThat(batch.getFinishedAt()).isNull();
+    }
+
+    @Test
+    void shouldKeepAScheduledRunPausedWhenOnlyWorkspaceFundingIsUnavailable() {
+        batch.setOrigin(ReviewBatchOrigin.SCHEDULE);
+        batch.setKind("scm.repository");
+        batch.setBudgetUsd(BigDecimal.ONE);
+        when(scope.next(1, batch.getId(), null, 1)).thenReturn(List.of(6L));
+        when(spend.remaining(batch)).thenReturn(new ReviewBatchSpend.Snapshot(BigDecimal.ONE, true));
+        when(budget.canRequest(1, ReviewKind.SCAN, BigDecimal.ONE)).thenReturn(false);
+
+        driver.advance(batch);
+
+        assertThat(batch.getStatus()).isEqualTo(ReviewBatchStatus.PAUSED);
+        assertThat(batch.getPauseReason()).isEqualTo(ReviewBatchPauseReason.BUDGET_EXHAUSTED);
+        assertThat(batch.getFinishedAt()).isNull();
     }
 
     @Test

@@ -182,3 +182,12 @@ export const Error: Story = {
 		await expect(canvas.getByRole("button", { name: "Estimate this review" })).toBeDisabled();
 	},
 };
+
+export const EndedScheduledRunStaysWithItsSchedule: Story = {
+	args: { batches: [batch({ origin: "SCHEDULE", status: "BUDGET_EXHAUSTED", scheduleId: "s-1" })] },
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByText("Reviewing past work")).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("button", { name: "Resume" })).not.toBeInTheDocument();
+		await expect(canvas.getByRole("button", { name: "Estimate this review" })).toBeVisible();
+	},
+};
