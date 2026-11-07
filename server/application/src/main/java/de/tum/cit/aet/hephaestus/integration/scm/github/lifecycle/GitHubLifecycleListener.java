@@ -412,19 +412,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     }
 
     /**
-     * Used when an installation is deleted, to stop the NATS consumer before monitors are removed.
-     *
-     * @param installationId the GitHub App installation ID
-     */
-    public void stopNatsForInstallation(long installationId) {
-        workspaceRepository.findByInstallationId(installationId).ifPresent(workspace -> {
-            if (shouldUseNats(workspace)) {
-                natsConsumerService.ifAvailable(svc -> svc.stopConsumingScope(workspace.getId()));
-            }
-        });
-    }
-
-    /**
      * Used when an installation is unsuspended, to resume webhook processing.
      *
      * @param installationId the GitHub App installation ID

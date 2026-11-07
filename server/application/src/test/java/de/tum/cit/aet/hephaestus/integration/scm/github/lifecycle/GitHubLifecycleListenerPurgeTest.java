@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener.AccountKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
@@ -25,11 +28,15 @@ import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
 
@@ -58,10 +65,16 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
 
     private GitHubLifecycleListener listener;
 
+    @Mock
+    private NatsConnectionProperties natsProperties;
+
+    @Mock
+    private IntegrationNatsConsumer consumers;
+
     @BeforeEach
     void setUp() {
         listener = new GitHubLifecycleListener(
-                mock(),
+                natsProperties,
                 workspaceRepository,
                 mock(),
                 repositoryRepository,
@@ -70,7 +83,8 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
                 mock(),
                 mock(),
                 mock(),
-                mock(),
+                new StaticListableBeanFactory(Map.of("consumers", consumers))
+                        .getBeanProvider(IntegrationNatsConsumer.class),
                 gitHubAppTokenService,
                 mock(),
                 connectionService,
@@ -78,6 +92,27 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
                 mock(),
                 mock(),
                 mock());
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = Workspace.WorkspaceStatus.class,
+            names = {"SUSPENDED", "ACTIVE"})
+    void statusTransitionStopsConsumptionOnlyForSuspension(Workspace.WorkspaceStatus status) {
+        Workspace workspace = workspace(11L, "acme");
+        workspace.setStatus(
+                status == Workspace.WorkspaceStatus.ACTIVE
+                        ? Workspace.WorkspaceStatus.SUSPENDED
+                        : Workspace.WorkspaceStatus.ACTIVE);
+        when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
+        when(workspaceRepository.save(workspace)).thenReturn(workspace);
+        lenient().when(natsProperties.enabled()).thenReturn(true);
+
+        assertThat(listener.updateWorkspaceStatus(INSTALLATION_ID, status)).contains(workspace);
+
+        assertThat(workspace.getStatus()).isEqualTo(status);
+        if (status == Workspace.WorkspaceStatus.SUSPENDED) verify(consumers).stopConsumingScope(11L);
+        else verifyNoInteractions(consumers);
     }
 
     @Test
