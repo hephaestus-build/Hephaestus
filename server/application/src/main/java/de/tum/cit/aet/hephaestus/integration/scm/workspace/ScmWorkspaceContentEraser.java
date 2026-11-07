@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.ScmMirrorErasedEvent;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
@@ -33,7 +32,6 @@ import org.springframework.transaction.annotation.Transactional;
  * and instance-global identity rows are retained.
  */
 @Component
-@WorkspaceAgnostic("Erases instance-global SCM rows the workspace is the last tenant to monitor")
 public class ScmWorkspaceContentEraser {
 
     private static final Logger log = LoggerFactory.getLogger(ScmWorkspaceContentEraser.class);
