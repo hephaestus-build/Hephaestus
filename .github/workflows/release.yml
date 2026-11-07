@@ -601,6 +601,10 @@ jobs:
           mkdir "$RUNNER_TEMP/installed-chart"
           node scripts/prepare-release-chart.ts "$TAG_NAME" "$RELEASE_SHA" \
             "$RUNNER_TEMP/installed-chart" helm security/release-images.json
+          # A host verifies this release with the tooling of the release before it.
+          mkdir -p "$RUNNER_TEMP/previous-chart"
+          node scripts/check-previous-verifier.ts "$TAG_NAME" "$RELEASE_SHA" \
+            "$RUNNER_TEMP/previous-chart" security/release-images.json
           node scripts/verify-release-evidence.ts evidence --verify-signatures
           gh attestation verify "evidence/$lock" \
             --bundle "evidence/release-${TAG_NAME}.intoto.jsonl" \
