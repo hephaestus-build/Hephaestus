@@ -408,7 +408,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                     .name();
         }
         var manager = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 1, 1L << 20),
+                new GitRepositoryProperties(true, 1, 1L << 20, 1L << 40),
                 new GitRepositoryLockManager(),
                 layout,
                 GitTransportFixtures.guarded());

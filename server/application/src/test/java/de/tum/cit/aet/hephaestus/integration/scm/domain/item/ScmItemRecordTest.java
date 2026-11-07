@@ -149,7 +149,7 @@ class ScmItemRecordTest extends BaseUnitTest {
         var source = RepositoryTreeContentSource.KIND;
         var key = new RepositoryKey(1, 3);
         var manager = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 2, 64 * 1024 * 1024),
+                new GitRepositoryProperties(true, 2, 64 * 1024 * 1024, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(root.resolve("fabric").toString()),
                 GitTransportFixtures.guarded());

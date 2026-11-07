@@ -140,7 +140,7 @@ class ScmRepositoryCheckoutsIntegrationTest extends BaseIntegrationTest {
         when(tokens.serverUrl(anyLong())).thenReturn(Optional.of(SERVER_URL));
         when(tokens.accessToken(anyLong())).thenReturn(Optional.of(TOKEN));
         var mirrors = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 1, 1024 * 1024),
+                new GitRepositoryProperties(true, 1, 1024 * 1024, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded());

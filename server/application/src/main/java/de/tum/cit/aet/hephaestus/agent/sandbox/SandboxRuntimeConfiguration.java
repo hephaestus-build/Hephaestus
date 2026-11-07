@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -29,8 +30,8 @@ public class SandboxRuntimeConfiguration {
     private static final Logger log = LoggerFactory.getLogger(SandboxRuntimeConfiguration.class);
 
     @Bean
-    public SandboxWorkspaceManager sandboxWorkspaceManager() {
-        return new SandboxWorkspaceManager();
+    public SandboxWorkspaceManager sandboxWorkspaceManager(FabricLayout layout) {
+        return new SandboxWorkspaceManager(layout.root());
     }
 
     @Bean

@@ -119,6 +119,10 @@ const APPLICATION_IMAGE = applicationImage;
  */
 const PER_CONTAINER = new Map<string, string>([
 	["SPRING_PROFILES_ACTIVE", "the profile list is how a container selects the slice it boots"],
+	[
+		"GIT_MAX_CACHE_BYTES",
+		"the server and each worker have their own Git cache volume, with its own size",
+	],
 	[ROLE_FLAGS.server, "the role flags are the split itself"],
 	[ROLE_FLAGS.worker, "the role flags are the split itself"],
 	[ROLE_FLAGS.webhook, "the role flags are the split itself"],

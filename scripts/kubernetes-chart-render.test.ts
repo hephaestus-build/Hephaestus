@@ -2021,6 +2021,19 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 		assert.equal(env(workload(resources, "webhook"), "AGENT_ENABLED"), undefined, name);
 		// A worker without git checkout reports itself out of service, so its Deployment never rolls out.
 		assert.equal(envValue(workload(resources, "worker"), "GIT_CHECKOUT_ENABLED"), "true", name);
+		// Each role evicts mirrors against the volume that the kubelet bounds, so the two sizes are one value.
+		for (const role of ["server", "worker"]) {
+			const cache = list(get(podSpec(workload(resources, role)), "volumes")).find(
+				(volume) => get(volume, "name") === "git-cache",
+			);
+			const size = String(get(cache, "emptyDir", "sizeLimit"));
+			assert.match(size, /^\d+Gi$/u, `${name} ${role}`);
+			assert.equal(
+				envValue(workload(resources, role), "GIT_MAX_CACHE_BYTES"),
+				String(Number.parseInt(size, 10) * 1024 ** 3),
+				`${name} ${role}`,
+			);
+		}
 	}
 	// CPU-based auto is resolved once for the worker and server. Explicit counts remain overrides.
 	const capacities = (layers: readonly Layer[]) => {

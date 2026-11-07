@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -161,13 +162,16 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
                     5001L, List.of(new ProvisioningListener.RepositoryRemoval(9001L, SHARED_REPO)));
 
         for (Path root : roots) {
+            var properties = new GitRepositoryProperties(true, 1, 1024, 1L << 40);
             var retention = new GitMirrorRetention(
                     new GitRepositoryManager(
-                            new GitRepositoryProperties(true, 1, 1024),
+                            properties,
                             new GitRepositoryLockManager(),
                             new FabricLayout(root.toString()),
                             GitTransportFixtures.guarded()),
-                    repositoryRepository);
+                    repositoryRepository,
+                    properties,
+                    new SimpleMeterRegistry());
             assertThat(retention.removeUnretainedMirrors()).isEqualTo(1);
             assertThat(retention.removeUnretainedMirrors())
                     .as("a retry finds nothing left")
@@ -194,13 +198,16 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
                 workspaceId,
                 repositoryId);
         repositoryToMonitorRepository.deleteAllByWorkspaceId(workspaceId);
+        var properties = new GitRepositoryProperties(true, 1, 1024, 1L << 40);
         var retention = new GitMirrorRetention(
                 new GitRepositoryManager(
-                        new GitRepositoryProperties(true, 1, 1024),
+                        properties,
                         new GitRepositoryLockManager(),
                         new FabricLayout(mirrorRoot.toString()),
                         GitTransportFixtures.guarded()),
-                repositoryRepository);
+                repositoryRepository,
+                properties,
+                new SimpleMeterRegistry());
 
         assertThat(retention.removeUnretainedMirrors()).isZero();
         assertThat(mirror).isDirectory();

@@ -172,7 +172,7 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
     void shouldExposeTheRealTransportCauseWhenGitLabHasNoGitEndpoint() {
         upstream.enqueue(new MockResponse.Builder().code(404).build());
         var git = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 1, 1024 * 1024),
+                new GitRepositoryProperties(true, 1, 1024 * 1024, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded());
@@ -188,7 +188,7 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
     void shouldKeepDescriptionAndDiscussionWhenGitLabCannotSupplyGitObjects() throws Exception {
         upstream.enqueue(new MockResponse.Builder().code(404).build());
         var git = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 1, 1024 * 1024),
+                new GitRepositoryProperties(true, 1, 1024 * 1024, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
                 GitTransportFixtures.guarded());

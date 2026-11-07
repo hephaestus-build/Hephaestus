@@ -643,6 +643,13 @@ The Git mirrors are caches.
 A restarted server or worker clones them again, so they use node storage and no volume claim.
 The node needs that much free ephemeral storage, and the container limits include it.
 
+The same volume holds review checkouts and the archives that wait for their sandbox.
+Above 80 percent of `gitCache.sizeLimit`, a role deletes the mirrors that a capture used longest ago.
+It keeps a mirror that a capture used in the last 10 minutes.
+Each one costs a full fetch at its next capture.
+Thus, repositories that outgrow the volume slow captures before the kubelet evicts the Pod.
+Mirrors are all it can delete: review checkouts that fill the volume alone still evict the Pod, and `HephaestusGitCacheNearlyFull` warns first.
+
 The bundled NATS is one JetStream server, and every stream has one replica.
 The application has no setting for more replicas.
 A lost NATS volume loses each provider delivery that the broker accepted and the server had not yet processed.

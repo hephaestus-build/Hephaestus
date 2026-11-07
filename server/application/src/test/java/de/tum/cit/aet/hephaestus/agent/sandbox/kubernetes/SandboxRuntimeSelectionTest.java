@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.okhttp.OkHttpClientImpl;
@@ -69,6 +70,7 @@ class SandboxRuntimeSelectionTest {
             .withBean(
                     SandboxGatewayProperties.class,
                     () -> new SandboxGatewayProperties(8081, 4_194_304, 120, 1000, 4096))
+            .withBean(FabricLayout.class, () -> new FabricLayout("/tmp/hephaestus-fabric"))
             .withBean(SandboxGatewaySessions.class, SandboxGatewaySessions::new)
             .withBean(ReviewJobRepository.class, () -> mock(ReviewJobRepository.class))
             .withBean(WorkerRegistryRepository.class, () -> mock(WorkerRegistryRepository.class))
