@@ -14,12 +14,13 @@ function transient(error: unknown): boolean {
 export async function withReviewLease<T>(
 	endpoint: URL,
 	token: string,
+	startDeadline: number,
 	run: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
 	const stopped = new AbortController();
 	const isStopped = () => stopped.signal.aborted;
-	// No review work starts without a receipt. A brief startup outage gets one bounded wait.
-	let expires = performance.now() + 30_000;
+	// No review work starts without a receipt. Startup waits only within the existing work deadline.
+	let expires = performance.now() + Math.max(0, startDeadline - Date.now());
 
 	async function renew(): Promise<number> {
 		const started = performance.now();

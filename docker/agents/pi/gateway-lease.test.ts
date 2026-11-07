@@ -33,6 +33,7 @@ await test("the loop renews through a replacement gateway and waits out an outag
 		const answer = await withReviewLease(
 			new URL(`http://127.0.0.1:${address.port}/lease`),
 			"test-attempt",
+			Date.now() + 30_000,
 			async (signal) => {
 				await renewed.promise;
 				signal.throwIfAborted();
@@ -69,6 +70,7 @@ await test("the loop stops at the last confirmed lease when the gateway does not
 			withReviewLease(
 				new URL(`http://127.0.0.1:${address.port}/lease`),
 				"test-attempt",
+				Date.now() + 30_000,
 				async (signal) => {
 					await once(signal, "abort");
 					signal.throwIfAborted();
@@ -90,9 +92,14 @@ for (const status of [401, 403, 409, 500]) {
 		t.mock.method(globalThis, "fetch", async () => new Response(null, { status }));
 		let ran = false;
 		await assert.rejects(
-			withReviewLease(new URL("http://gateway.invalid/lease"), "test-attempt", async () => {
-				ran = true;
-			}),
+			withReviewLease(
+				new URL("http://gateway.invalid/lease"),
+				"test-attempt",
+				Date.now() + 30_000,
+				async () => {
+					ran = true;
+				},
+			),
 			/refused lease renewal/u,
 		);
 		assert.equal(ran, false);
@@ -104,8 +111,11 @@ await test("an invalid lease receipt starts no review work", async (t) => {
 		Response.json({ remainingMillis: "300000", renewAfterMillis: 1000 }),
 	);
 	await assert.rejects(
-		withReviewLease(new URL("http://gateway.invalid/lease"), "test-attempt", async () =>
-			assert.fail("invalid lease started work"),
+		withReviewLease(
+			new URL("http://gateway.invalid/lease"),
+			"test-attempt",
+			Date.now() + 30_000,
+			async () => assert.fail("invalid lease started work"),
 		),
 		/invalid lease receipt/u,
 	);
@@ -123,6 +133,7 @@ await test("a transient first renewal waits before starting review work", async 
 		await withReviewLease(
 			new URL("http://gateway.invalid/lease"),
 			"test-attempt",
+			Date.now() + 30_000,
 			async () => "started",
 		),
 		"started",
@@ -138,8 +149,11 @@ await test("an exhausted startup wait reports infrastructure unavailability and 
 		throw new TypeError("gateway unavailable");
 	});
 	await assert.rejects(
-		withReviewLease(new URL("http://gateway.invalid/lease"), "test-attempt", async () =>
-			assert.fail("unleased work started"),
+		withReviewLease(
+			new URL("http://gateway.invalid/lease"),
+			"test-attempt",
+			Date.now() + 30_000,
+			async () => assert.fail("unleased work started"),
 		),
 		GatewayUnavailableError,
 	);
@@ -179,8 +193,12 @@ await test("lease loss aborts an upload that is waiting for confirmation", async
 		const archive = path.join(directory, "result.tar");
 		await writeFile(archive, "bounded test output");
 		await assert.rejects(
-			withReviewLease(new URL(`${root}/lease`), "test-attempt", async (signal) =>
-				upload(new URL(`${root}/result`), "test-attempt", archive, Date.now() + 5000, signal),
+			withReviewLease(
+				new URL(`${root}/lease`),
+				"test-attempt",
+				Date.now() + 30_000,
+				async (signal) =>
+					upload(new URL(`${root}/result`), "test-attempt", archive, Date.now() + 5000, signal),
 			),
 			/refused lease renewal: 409/u,
 		);

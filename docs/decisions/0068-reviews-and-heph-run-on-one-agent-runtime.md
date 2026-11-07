@@ -772,5 +772,6 @@ A worker renews before the loop starts and after it exits, including capture and
 The Kubernetes watch identifies whether the loop container runs, without an API request on each heartbeat.
 The worker checks a running loop's lease without extending it.
 A loop that cannot renew stops when its last confirmed lease expires.
+
 This closes the lease-renewal tie in decision F.
 Durable completion and portable composition remain separate changes, so the long drain stays.

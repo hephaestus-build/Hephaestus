@@ -152,7 +152,8 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
         assertThat(jobRepository.findById(id).orElseThrow().getLeaseId()).isEqualTo(LEASE);
 
         jdbc.update("UPDATE review_job SET leased_until = clock_timestamp() - interval '1 second' WHERE id = ?", id);
-        assertThat(transactionTemplate.execute(status -> leases.renew(token))).isEmpty();
+        var expired = transactionTemplate.execute(status -> leases.renew(token));
+        assertThat(expired).isEmpty();
         assertThat(jobRepository.hasLiveLease(id, workspace.getId(), 0, LEASE)).isFalse();
     }
 
@@ -220,9 +221,10 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
                         now.minusSeconds(1),
                         now.minusSeconds(2)));
         var leases = new ReviewAttemptLease(jobRepository);
-        for (var token : tokens)
-            assertThat(transactionTemplate.execute(status -> leases.renew(token)))
-                    .isEmpty();
+        for (var token : tokens) {
+            var refused = transactionTemplate.execute(status -> leases.renew(token));
+            assertThat(refused).isEmpty();
+        }
         assertThat(jobRepository.findById(id).orElseThrow().getLeasedUntil()).isEqualTo(before);
         jdbc.update("UPDATE review_job SET status = 'CANCELLED' WHERE id = ?", id);
         var valid = new AttemptJwt(
@@ -236,7 +238,8 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
                 now,
                 now.plusSeconds(60),
                 now.plusSeconds(30));
-        assertThat(transactionTemplate.execute(status -> leases.renew(valid))).isEmpty();
+        var cancelled = transactionTemplate.execute(status -> leases.renew(valid));
+        assertThat(cancelled).isEmpty();
         assertThat(jobRepository.findById(id).orElseThrow().getLeasedUntil()).isEqualTo(before);
     }
 
