@@ -83,7 +83,7 @@ async function report(
 	const identity = { owner: "owner", repo: "repo", run_id: 42, attempt_number: 2 };
 	const listJobs = Symbol("listJobsForWorkflowRunAttempt");
 	const completed: unknown = runInNewContext(`(async () => { ${String(script)} })()`, {
-		core: { summary: output },
+		core: { summary: output, notice: (message: string) => rendered.push(message) },
 		context: {
 			runId: 999,
 			payload: { workflow_run: options.upstream ?? run },
@@ -169,11 +169,7 @@ void test("the report selects the upstream attempt with jobs that omit an attemp
 	for (const invalid of [{ id: 42 }, { id: 0, run_attempt: 2 }, { id: 42, run_attempt: 0 }]) {
 		await assert.rejects(report({ upstream: invalid }));
 	}
-	for (const invalid of [
-		{ ...job, run_id: 999 },
-		{ ...job, status: "in_progress" },
-		{ ...job, name: "Other" },
-	]) {
+	for (const invalid of [{ ...job, run_id: 999 }]) {
 		await assert.rejects(report({ jobs: [invalid] }));
 	}
 	await assert.rejects(report({ jobs: [] }));
@@ -217,4 +213,15 @@ void test("job and step names are escaped and skips are not assigned invented ti
 	assert.ok(text.includes("&lt;step&gt;"));
 	assert.ok(text.includes("skipped"));
 	assert.ok(text.includes("Unavailable"));
+});
+
+void test("partial reruns and cancelled runs report unavailable verdicts without false failures", async () => {
+	const partial = await report({
+		jobs: [{ ...job, status: "queued", conclusion: null, completed_at: null }],
+	});
+	assert.ok(partial.includes('["Attempt-to-gate time","Unavailable"]'));
+	const cancelled = await report({
+		jobs: [{ ...job, name: "Cancelled worker", conclusion: "cancelled" }],
+	});
+	assert.ok(cancelled.includes('["Required gate conclusion","Unavailable"]'));
 });

@@ -14,6 +14,8 @@ import {
 	renderFlakes,
 	reportArtifacts,
 	rerunsOf,
+	runOutcomes,
+	completedRuns,
 } from "./report-flakes.ts";
 
 const job = (
@@ -233,4 +235,45 @@ void test("the report ranks tests and jobs by how often they flaked", () => {
 	assert.match(rendered, /\| 2 \| 2026-10-22 \| A > b \| 11, 12 \|/u);
 	assert.match(rendered, /\| 2 \| 2026-10-22 \| Integration \| Run integration tests \|/u);
 	assert.match(rendered, /\| 1 \| 2026-10-23 \| Windows \\\| Gates \| Quality gates \|/u);
+});
+
+void test("a job that fails again after a successful attempt is not reported as flaky", () => {
+	assert.deepEqual(
+		flakyJobs(
+			new Map([
+				[1, [job("Stories", "failure")]],
+				[2, [job("Stories", "success")]],
+				[3, [job("Stories", "failure")]],
+			]),
+		),
+		[],
+	);
+});
+
+void test("merge queue cancellations are counted separately from flaky jobs", () => {
+	const runs = completedRuns([
+		page(
+			{ id: 1, event: "merge_group", conclusion: "cancelled", run_attempt: 1 },
+			{ id: 2, event: "merge_group", conclusion: "success", run_attempt: 2 },
+		),
+		page({ id: 1, event: "merge_group", conclusion: "cancelled", run_attempt: 1 }),
+	]);
+	assert.deepEqual(
+		runOutcomes(runs).find((row) => row.event === "merge_group"),
+		{ event: "merge_group", total: 2, cancelled: 1 },
+	);
+});
+
+void test("repeated runs of the same commit count once per flaky test and job", () => {
+	const entry = {
+		runId: 1,
+		sha: "a",
+		event: "merge_group",
+		createdAt: "2026-10-22T10:00:00Z",
+		jobs: [{ attempt: 1, job: job("Stories", "failure") }],
+		failedTests: ["A > b"],
+	};
+	const report = renderFlakes([entry, { ...entry, runId: 2 }], 14);
+	assert.match(report, /\| 1 \| 2026-10-22 \| A > b \| 1, 2 \|/u);
+	assert.match(report, /\| 1 \| 2026-10-22 \| Stories \|/u);
 });

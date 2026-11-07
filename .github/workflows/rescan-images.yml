@@ -89,10 +89,10 @@ jobs:
             jq -r --arg title "$title" \
               '[.[] | select(.title == $title and .author.login == "app/github-actions")][0].number // empty')
           if [ -n "$number" ]; then
-            gh issue comment "$number" -R "$REPOSITORY" --body "The rescan failed again: $RUN_URL"
+            gh issue comment "$number" -R "$REPOSITORY" --body "@hephaestus-build/maintainer: the rescan failed again: $RUN_URL"
           else
             gh issue create -R "$REPOSITORY" --title "$title" \
-              --body "The rescan of main's images stopped before it could report its findings: $RUN_URL. The run's log names the step. Close this issue when a run passes."
+              --body "@hephaestus-build/maintainer: the rescan of main's images stopped before it could report its findings: $RUN_URL. The run's log names the step. Close this issue when a run passes."
           fi
 
   release:

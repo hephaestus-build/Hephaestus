@@ -540,6 +540,7 @@ The required checks are job names, so a display name does not change them.
 | `platform-pins.yml` | PR touching platform pins or their validator | Verifies the installer checksum and the images that both upstream charts render |
 | `rescan-images.yml`                   | Daily, manual                                                                | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings. A second job rescans the latest published release's images and reports drift on the vulnerability response issue|
 | `ci-diagnostics.yml`                  | Completed CI/CD runs                                                          | Reports exact-attempt job and step timings without changing the required CI verdict                                                                                                                                              |
+| `scheduled-failures.yml` | Completed scheduled workflows | Notifies maintainers once per failed attempt and covers unavailable specific reporters |
 | `ci-profile.yml`                      | Weekly, manual                                                                | Reports advisory performance budgets and profiles server test tiers                                                                                                                                                              |
 | `delivery-metrics.yml`                | Weekly, manual                                                                | Reports lead time, deployment frequency, and change fail, recovery and rework proxies. See [Delivery Metrics](./delivery-metrics.mdx)                                                                                                 |
 | `ci-server-clean-reference.yml`       | Weekly, manual                                                                | Records cold server phases and compares generated JARs                                                                                                                                                                           |
@@ -1145,11 +1146,28 @@ A local summary write failure does not change the verdict.
 After CI finishes, `CI / Diagnostics` reads that run's exact attempt with read-only Actions permissions.
 It reports the completed verdict, job times, and step times in a separate workflow summary.
 
+Partial reruns can leave incomplete job metadata. Those timings and a missing gate remain unavailable.
+A partial record does not fail the diagnostics workflow. API errors and unrelated run records still fail it.
+Cancelled CI runs allocate no diagnostics runner.
+
 Attempt-to-gate time starts when that attempt starts, so it excludes earlier attempts.
 Creation-to-start time includes dependency waiting.
 Missing timestamps remain unavailable.
 A reporting failure cannot change CI, Version PR maintenance, or release eligibility.
 JUnit results appear as `Test Results - …` check runs.
+
+### Scheduled failures
+
+`CI / Scheduled failures` reports failed scheduled workflows from trusted run metadata.
+It executes no upstream source or artifacts and installs no dependencies.
+One issue per workflow notifies the maintainer team. Each later failed attempt adds one comment.
+Replays of an already reported attempt add no notification.
+
+The Kubernetes nightly and image rescan workflows keep their specific reports and notify the same team.
+The shared reporter checks those attempts and reports a failure only when the specific owner did not notify maintainers.
+This also covers job timeouts, which can prevent an in-job report step from running.
+A test checks that every scheduled workflow has a report owner.
+Manual runs and pull request runs do not enter the shared reporter.
 
 ### Full-verification latency
 
@@ -1230,10 +1248,12 @@ The rescan also reads the selected k3s release's complete image list.
 ### Flaky tests
 
 `CI / Flaky test report` runs every Monday and on dispatch.
-It covers the CI/CD runs of the last 14 days.
+It covers the CI/CD runs of the last 14 days, including merge groups.
+The report counts cancelled runs separately by event. A cancellation is not a flaky test.
+Each test and job count includes a commit once, even if several runs repeat that commit.
 It lists the jobs and tests that failed in one attempt of a run and then passed in a later attempt.
 
-A test that fails again in the run's last attempt is a real failure, so the report leaves it out.
+A job or test that fails again in the run's last attempt is a real failure, so the report leaves it out.
 If a job that never passed does not fail again in the last attempt's own rerun, the run's tests stay unknown.
 
 The report reads run attempts and the retained JUnit reports, and it retains `flakes.json` for 90 days.

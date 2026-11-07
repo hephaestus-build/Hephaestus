@@ -189,7 +189,7 @@ jobs:
         run: |
           set -euo pipefail
           report() {
-            local title=$1 body=$2 number
+            local title=$1 body="@hephaestus-build/maintainer: $2" number
             number=$(gh issue list -R "$REPOSITORY" --state open --search "\"$title\" in:title" --json number,title |
               jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')
             if [ -n "$number" ]; then
