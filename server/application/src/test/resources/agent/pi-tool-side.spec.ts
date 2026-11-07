@@ -16,6 +16,7 @@ import {
 	openToolSide,
 	toolBashOperations,
 	toolGrepTool,
+	toolLines,
 } from "../../../main/resources/agent/pi-tool-side.ts";
 import { ToolClient } from "../../../main/resources/agent/tool-client.ts";
 import { startToolsServer } from "../../../main/resources/agent/tools-server.ts";
@@ -138,6 +139,24 @@ void test("bash keeps the runner's variables out of a command", async () => {
 		},
 	});
 	assert.equal(Buffer.concat(chunks).toString().includes("must-not-leak"), false);
+});
+
+void test("a repository search runs on the tools side, and stops when it has enough", async () => {
+	const seen: string[] = [];
+	await toolLines(client, source)(["sh", "-c", String.raw`printf 'one\ntwo\nthree\n'`], (line) => {
+		seen.push(line);
+		return seen.length < 2;
+	});
+	assert.deepEqual(seen, ["one", "two"]);
+});
+
+void test("a search that finds nothing is no failure, and one that breaks is", async () => {
+	const none = toolLines(client, source)(["sh", "-c", "exit 1"], () => true);
+	await assert.doesNotReject(none);
+	await assert.rejects(
+		toolLines(client, source)(["sh", "-c", "exit 2"], () => true),
+		/grep exited with status 2/u,
+	);
 });
 
 void test("a path that the answer names outside the root is not shown or read", async () => {

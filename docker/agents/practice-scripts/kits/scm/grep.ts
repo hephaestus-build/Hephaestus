@@ -16,6 +16,8 @@ export interface GrepOptions {
 	maxResults?: number;
 	fixedString?: boolean;
 	paths?: readonly string[];
+	/** How the search runs; a child of this process unless the sandbox gives another way. */
+	run?: LineRunner;
 }
 
 const GLOB_GREP_BATCH_SIZE = 256;
@@ -35,14 +37,19 @@ function parseGrepLine(line: string, dir: string): GrepMatch | null {
 	};
 }
 
-async function collectGrepMatches(
-	args: string[],
-	dir: string,
-	maxResults: number,
+/**
+ * Runs a search and hands over each line of its output until `onLine` says stop. In the sandbox the search runs on the
+ * tools side, so this may be another process's answer: a line is parsed and bounded like any other.
+ */
+export type LineRunner = (
+	argv: readonly string[],
+	onLine: (line: string) => boolean,
 	signal?: AbortSignal,
-): Promise<GrepMatch[]> {
-	signal?.throwIfAborted();
-	const [command, ...commandArgs] = args;
+) => Promise<void>;
+
+/** The search as a child of this process. */
+export const spawnedLines: LineRunner = async (argv, onLine, signal) => {
+	const [command, ...commandArgs] = argv;
 	if (command === undefined || command === "") {
 		throw new Error("grep command is empty");
 	}
@@ -65,18 +72,12 @@ async function collectGrepMatches(
 			completed.reject(new Error(`grep exited with status ${String(code)}`));
 		}
 	});
-	const matches: GrepMatch[] = [];
 	const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
 
 	const collected = (async () => {
 		try {
 			for await (const line of lines) {
-				const match = parseGrepLine(line, dir);
-				if (!match) {
-					continue;
-				}
-				matches.push(match);
-				if (matches.length >= maxResults) {
+				if (!onLine(line)) {
 					stoppedEarly = true;
 					child.kill();
 					break;
@@ -87,7 +88,28 @@ async function collectGrepMatches(
 		}
 	})();
 	await Promise.all([collected, completed.promise]);
+};
 
+async function collectGrepMatches(
+	args: string[],
+	dir: string,
+	maxResults: number,
+	run: LineRunner,
+	signal?: AbortSignal,
+): Promise<GrepMatch[]> {
+	signal?.throwIfAborted();
+	const matches: GrepMatch[] = [];
+	await run(
+		args,
+		(line) => {
+			const match = parseGrepLine(line, dir);
+			if (match) {
+				matches.push(match);
+			}
+			return matches.length < maxResults;
+		},
+		signal,
+	);
 	return matches.slice(0, maxResults);
 }
 
@@ -97,6 +119,7 @@ async function collectMatchesForGlob(
 	grepArgs: string[],
 	glob: string,
 	maxResults: number,
+	run: LineRunner,
 	signal?: AbortSignal,
 	permittedPaths?: readonly string[],
 ): Promise<GrepMatch[]> {
@@ -118,7 +141,13 @@ async function collectMatchesForGlob(
 
 		const remaining = maxResults - matches.length;
 		matches.push(
-			...(await collectGrepMatches([...grepArgs, "--", pattern, ...batch], dir, remaining, signal)),
+			...(await collectGrepMatches(
+				[...grepArgs, "--", pattern, ...batch],
+				dir,
+				remaining,
+				run,
+				signal,
+			)),
 		);
 		if (matches.length >= maxResults) {
 			return matches.slice(0, maxResults);
@@ -136,7 +165,13 @@ async function collectMatchesForGlob(
 	}
 
 	matches.push(
-		...(await collectGrepMatches([...grepArgs, "--", pattern, ...batch], dir, remaining, signal)),
+		...(await collectGrepMatches(
+			[...grepArgs, "--", pattern, ...batch],
+			dir,
+			remaining,
+			run,
+			signal,
+		)),
 	);
 	return matches.slice(0, maxResults);
 }
@@ -157,7 +192,7 @@ export async function grep(
 	signal?: AbortSignal,
 ): Promise<GrepMatch[]> {
 	signal?.throwIfAborted();
-	const { glob, maxResults = 500, fixedString = false } = opts;
+	const { glob, maxResults = 500, fixedString = false, run = spawnedLines } = opts;
 	if (maxResults <= 0) {
 		return [];
 	}
@@ -179,6 +214,7 @@ export async function grep(
 			grepArgs,
 			recursiveGlob,
 			maxResults,
+			run,
 			signal,
 			opts.paths,
 		);
@@ -188,6 +224,7 @@ export async function grep(
 		["grep", "-r", "--exclude-dir=.git", ...grepArgs.slice(1), "--", pattern, dir],
 		dir,
 		maxResults,
+		run,
 		signal,
 	);
 }

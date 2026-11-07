@@ -72,6 +72,18 @@ export function toolObjects(tools: ToolClient, repository: string): ObjectSource
 	};
 }
 
+/** A file's text at a commit, for the program host: null unless the walk proves it. */
+export function pinnedText(
+	source: ObjectSource,
+	history: PinnedHistory,
+	limit: number,
+): (commit: string, file: string) => Promise<string | null> {
+	return async (commit, file) => {
+		const blob = await readPinnedObject(source, history, commit, file, limit);
+		return blob.kind === "regular" ? blob.bytes.toString("utf8") : null;
+	};
+}
+
 /** The hash that names a Git object: SHA-1 for a 40-character id, SHA-256 for a 64-character one. */
 function objectId(type: ObjectType, content: Buffer, idLength: number): string {
 	return createHash(idLength === 64 ? "sha256" : "sha1")

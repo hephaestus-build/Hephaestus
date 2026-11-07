@@ -9,7 +9,7 @@ import path from "node:path";
 import { DIFF_SOURCE, TREE_SOURCE } from "../../kits/scm/sources.ts";
 
 import { globFilesSync } from "../../kits/scm/files.ts";
-import { grep } from "../../kits/scm/grep.ts";
+import { grep, type LineRunner } from "../../kits/scm/grep.ts";
 import type { DiffFile } from "../../kits/scm/types.ts";
 import {
 	CANDIDATE_LIMITS,
@@ -53,6 +53,10 @@ export interface EvidenceSources {
 	/** The source kind of a captured sourceFile, by its workspace path; undefined for one not captured. */
 	sourceKindOf: (sourcePath: string) => string | undefined;
 	permittedPaths?: ReadonlySet<string>;
+	/** How a repository search runs. Its answer is text to look at; a citation still reads the file. */
+	search?: LineRunner;
+	/** The text of a file at another commit than the head, or null when it cannot be proved. */
+	pinnedFile?: (commit: string, file: string, signal?: AbortSignal) => Promise<string | null>;
 }
 
 const isMissing = (error: unknown) =>
@@ -409,6 +413,7 @@ export class EvidenceReader {
 						glob: request.glob,
 						maxResults: maxResults + 1,
 						fixedString: request.fixedString,
+						run: this.#sources.search,
 						paths:
 							this.#sources.permittedPaths === undefined
 								? undefined

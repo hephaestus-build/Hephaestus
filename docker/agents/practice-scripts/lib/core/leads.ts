@@ -61,6 +61,31 @@ async function fileInside(root: string, relative: string): Promise<string | unde
 	}
 }
 
+/** A file at a commit, from Git in this process; the sandbox gives `pinnedFile` instead. */
+function localPinnedFile(repo: string): NonNullable<EvidenceSources["pinnedFile"]> {
+	return async (commit, file, signal) => {
+		try {
+			const { stdout } = await git(
+				"git",
+				["-C", repo, "show", "--end-of-options", `${commit}:${file}`],
+				{
+					env: GIT_ENV,
+					maxBuffer: MAX_READ_BYTES,
+					encoding: "utf8",
+					signal,
+				},
+			);
+			return stdout;
+		} catch (error) {
+			signal?.throwIfAborted();
+			if (error instanceof UnratedError) {
+				throw error;
+			}
+			return null;
+		}
+	};
+}
+
 async function quoteOf(
 	at: EvidenceLocation,
 	sources: EvidenceSources,
@@ -88,25 +113,12 @@ async function quoteOf(
 			return undefined;
 		}
 		if (at.commit !== undefined && at.commit !== sources.headRevision) {
-			try {
-				const { stdout } = await git(
-					"git",
-					["-C", sources.repo, "show", "--end-of-options", `${at.commit}:${at.file}`],
-					{
-						env: GIT_ENV,
-						maxBuffer: MAX_READ_BYTES,
-						encoding: "utf8",
-						signal,
-					},
-				);
-				return quotedLines(stdout, at.line, end);
-			} catch (error) {
-				signal?.throwIfAborted();
-				if (error instanceof UnratedError) {
-					throw error;
-				}
-				return undefined;
-			}
+			const text = await (sources.pinnedFile ?? localPinnedFile(sources.repo))(
+				at.commit,
+				at.file,
+				signal,
+			);
+			return text === null ? undefined : quotedLines(text, at.line, end);
 		}
 		const file = await fileInside(sources.repo, at.file);
 		return file === undefined

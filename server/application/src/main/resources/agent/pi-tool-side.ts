@@ -16,6 +16,8 @@ import {
 	truncateLine,
 } from "@earendil-works/pi-coding-agent";
 
+import type { LineRunner } from "./work/practice-scripts/kits/scm/grep.ts";
+
 import { ToolClient } from "./tool-client.ts";
 import { LIMITS, type ToolAddress } from "./tool-protocol.ts";
 
@@ -24,6 +26,9 @@ const OPEN_WAIT_MS = 60_000;
 const OPEN_RETRY_MS = 200;
 
 const DEFAULT_GREP_LIMIT = 100;
+
+/** How long one repository search of a program may take. */
+const SEARCH_TIMEOUT_MS = 60_000;
 
 /** Pi truncates a `grep` line here and does not export the number; the parity test holds the two together. */
 const GREP_MAX_LINE_LENGTH = 500;
@@ -62,6 +67,38 @@ export function toolBashOperations(tools: Pick<ToolClient, "exec">): BashOperati
 }
 
 type GrepInput = Parameters<ReturnType<typeof createGrepToolDefinition>["execute"]>[1];
+
+/** A repository search on the tools side, for the program host: it stops as soon as `onLine` has seen enough. */
+export function toolLines(tools: Pick<ToolClient, "exec">, cwd: string): LineRunner {
+	return async (argv, onLine, signal) => {
+		const stop = new AbortController();
+		let pending = "";
+		const take = (line: string) => {
+			if (!stop.signal.aborted && !onLine(line)) {
+				stop.abort();
+			}
+		};
+		const exit = await tools.exec(
+			{ argv: [...argv], cwd, timeoutMs: SEARCH_TIMEOUT_MS },
+			(chunk) => {
+				pending += chunk.toString("utf8");
+				const lines = pending.split("\n");
+				pending = lines.pop() ?? "";
+				for (const line of lines) {
+					take(line);
+				}
+			},
+			signal === undefined ? stop.signal : AbortSignal.any([signal, stop.signal]),
+		);
+		if (pending !== "") {
+			take(pending);
+		}
+		signal?.throwIfAborted();
+		if (!stop.signal.aborted && exit.code !== 0 && exit.code !== 1) {
+			throw new Error(`grep exited with status ${String(exit.code)}`);
+		}
+	};
+}
 
 interface Match {
 	file: string;
