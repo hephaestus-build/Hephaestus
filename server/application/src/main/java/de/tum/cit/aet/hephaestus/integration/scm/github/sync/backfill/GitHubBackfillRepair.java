@@ -89,6 +89,7 @@ public class GitHubBackfillRepair {
                         total);
                 return restarted.get();
             }
+            if (manual) throw new IllegalStateException("Historical repair restart was not admitted");
         } catch (RuntimeException e) {
             if (manual) throw e;
             log.warn(

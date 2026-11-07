@@ -65,8 +65,9 @@ import tools.jackson.databind.node.ObjectNode;
  * under read-committed a row could slip past the offset unread.
  *
  * <p>It is the stored copy, not a live read: GitHub and GitLab sync incrementally and webhooks update single
- * fields, so no stored timestamp proves merge state, checks or approvals are current. A {@code COMPLETE} list is
- * everything stored, not everything on the provider: a failed note or discussion sync is logged, not recorded.
+ * fields, so no stored timestamp proves merge state, checks or approvals are current. A discussion list is
+ * {@code COMPLETE} only after a whole provider read and when its local caps permit it. A whole read does not
+ * establish current provider state.
  * Not cached, so every stored note, approval and pipeline change reaches the next turn without an eviction per
  * event.
  */
@@ -266,8 +267,8 @@ public class MergeReadinessContentSource implements ContentSource {
      *     does
      */
     private ObjectNode describe(long workspaceId, long developerId, long providerId, PullRequest pr, boolean change) {
-        // A read that stopped short leaves lists that cannot show what is absent.
-        boolean notReadWhole = Boolean.FALSE.equals(pr.getDiscussionReadWhole());
+        // Only a whole provider read can establish what is absent from a discussion.
+        boolean notReadWhole = !Boolean.TRUE.equals(pr.getDiscussionReadWhole());
         ObjectNode node = objectMapper.createObjectNode();
         node.put("pullRequestId", pr.getId());
         node.put("resource", resourceOf(pr.getId()));

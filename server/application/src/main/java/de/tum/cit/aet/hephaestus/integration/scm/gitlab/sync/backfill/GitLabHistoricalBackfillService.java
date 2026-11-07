@@ -127,10 +127,13 @@ public class GitLabHistoricalBackfillService {
                 if (mergeRequests == null) continue;
                 int total = mergeRequests.countMergeRequests(workspaceId, target.repositoryNameWithOwner());
                 long stored = pullRequests.countStoredByRepositoryId(repo.getId());
-                if (BackfillRestartProvider.hasMaterialGap(stored, total))
-                    admission.runWrite(
-                            read,
-                            () -> syncTargetProvider.restartCompletedBackfill(workspaceId, target.id(), total, stored));
+                if (BackfillRestartProvider.hasMaterialGap(stored, total)
+                        || pullRequests.existsUnfinishedDiscussionRead(repo.getId()))
+                    admission.runWrite(read, () -> {
+                        if (syncTargetProvider
+                                .restartCompletedBackfill(workspaceId, target.id(), total, stored)
+                                .isEmpty()) handle.reportWarnings();
+                    });
             } catch (RuntimeException e) {
                 log.warn(
                         "Repository history repair failed: workspaceId={}, syncTargetId={}",

@@ -448,7 +448,7 @@ public class PullRequestContentSource {
         var comments = new ArrayList<>(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(
                 pullRequestId, WorkspaceScmProjection.HEPHAESTUS_MARKER, Pageable.unpaged()));
         comments.removeIf(comment -> comment.getNativeId() != null && postedComments.contains(comment.getNativeId()));
-        boolean complete = !pullRequestRepository.isDiscussionNotReadWhole(pullRequestId);
+        boolean complete = pullRequestRepository.isDiscussionReadWhole(pullRequestId);
         comments.sort(Comparator.comparing(
                 PullRequestReviewComment::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
         return new CommentCapture(comments, postedComments, complete);

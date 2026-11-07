@@ -123,7 +123,8 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
         pr.setCreatedAt(Instant.now());
         pr.setUpdatedAt(Instant.parse("2026-10-01T12:00:00.123Z"));
         pr.setHeadRefOid(HEAD);
-        pullRequest = pullRequests.save(pr);
+        pullRequest = pullRequests.saveAndFlush(pr);
+        pullRequests.recordDiscussionRead(pullRequest.getId(), true);
         var workspace = WorkspaceTestFixtures.persistGitLabWorkspace(
                 workspaces, connectionRows, WorkspaceTestFixtures.gitLabPatWorkspace("owner"), serverUrl);
         var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, "owner/repo", repository.getNativeId());

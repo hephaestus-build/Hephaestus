@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -37,9 +38,21 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.item.Item;
+import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.GeneralReviewCommentContentSource;
@@ -49,6 +62,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewThreadCont
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCaptureContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCaptureFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturedApplicability;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -56,6 +70,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRe
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.AppliesWhen;
@@ -91,6 +107,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -105,6 +123,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import tools.jackson.databind.json.JsonMapper;
@@ -170,6 +189,24 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
 
     @Autowired
     MeterRegistry meters;
+
+    @Autowired
+    PullRequestRepository mirroredPullRequests;
+
+    @Autowired
+    RepositoryRepository repositories;
+
+    @Autowired
+    IdentityProviderRepository providers;
+
+    @Autowired
+    ItemRepository items;
+
+    @Autowired
+    ConnectionRepository connections;
+
+    @Autowired
+    RepositoryToMonitorRepository monitors;
 
     private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
     private final WorkspaceContextBuilder context = mock(WorkspaceContextBuilder.class);
@@ -302,22 +339,73 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
         });
     }
 
-    private DefaultReviewExecutionHandler bundledHandler(ReviewJob job, boolean inlineCommentPresent) {
-        return bundledHandler(job, inlineCommentPresent, null);
+    private ReviewAdmissionData.Pending pendingScm(
+            PracticeDefinition definition, IdentityProviderType providerType, @Nullable Boolean whole) {
+        var scenario = data.scenario(definition);
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(providerType, "https://" + UUID.randomUUID() + ".example.com"));
+        var repository = new Repository();
+        repository.setProvider(provider);
+        repository.setNativeId(1L);
+        repository.setName("repo");
+        repository.setNameWithOwner("example/repo");
+        repository.setHtmlUrl("https://example.com/repo");
+        repository.setPushedAt(Instant.now());
+        repository.setVisibility(Repository.Visibility.PUBLIC);
+        repositories.saveAndFlush(repository);
+        var pullRequest = new PullRequest();
+        pullRequest.setProvider(provider);
+        pullRequest.setNativeId(1L);
+        pullRequest.setRepository(repository);
+        pullRequest.setNumber(1);
+        pullRequest.setState(Issue.State.OPEN);
+        pullRequest.setTitle("Explain the branch");
+        mirroredPullRequests.saveAndFlush(pullRequest);
+        long sourceId = Objects.requireNonNull(pullRequest.getId());
+        if (whole != null) mirroredPullRequests.recordDiscussionRead(sourceId, whole);
+        var parent = new Item();
+        parent.setWorkspaceId(scenario.workspace().getId());
+        parent.setKind(new ItemKind("scm.repository"));
+        parent.setSourceId(repository.getId());
+        parent.setCreatedAt(Instant.now());
+        items.saveAndFlush(parent);
+        var item = new Item();
+        item.setWorkspaceId(scenario.workspace().getId());
+        item.setKind(scenario.item().getKind());
+        item.setSourceId(sourceId);
+        item.setParentId(parent.getId());
+        item.setCreatedAt(Instant.now());
+        items.saveAndFlush(item);
+        return pending(new ReviewIntegrationData.Scenario(
+                scenario.workspace(), scenario.account(), scenario.practice(), item));
     }
 
-    private DefaultReviewExecutionHandler bundledHandler(
-            ReviewJob job, boolean inlineCommentPresent, @Nullable Boolean discussionReadWhole) {
+    private void monitorScm(ReviewAdmissionData.Pending pending) {
+        var work = mirroredPullRequests
+                .findByIdForReviewContext(
+                        Objects.requireNonNull(pending.scenario().item().getSourceId()))
+                .orElseThrow();
+        var repository = Objects.requireNonNull(work.getRepository());
+        var provider = repository.getProvider();
+        var kind = IntegrationKind.valueOf(provider.getType().name());
+        ConnectionConfig config = provider.getType() == IdentityProviderType.GITHUB
+                ? new ConnectionConfig.GitHubPatConfig("example", provider.getServerUrl(), Set.of())
+                : new ConnectionConfig.GitLabConfig(provider.getServerUrl(), 1L, null, Set.of(), null);
+        var connection = new Connection(pending.scenario().workspace(), kind, "pat", config);
+        connection.setState(IntegrationState.ACTIVE);
+        connections.saveAndFlush(connection);
+        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
+                pending.scenario().workspace(), repository.getNameWithOwner(), repository.getNativeId()));
+    }
+
+    private DefaultReviewExecutionHandler bundledHandler(ReviewJob job, boolean inlineCommentPresent) {
         var assignment = assignments.load(job).getFirst();
-        var pullRequests = mock(PullRequestRepository.class);
+        var pullRequests = mirroredPullRequests;
         var inlineComments = mock(PullRequestReviewCommentRepository.class);
         var delivered = mock(DeliveredPullRequestCommentLookup.class);
-        var pullRequest = new PullRequest();
         long sourceId = Objects.requireNonNull(assignment.item().sourceId());
-        when(pullRequests.findByIdForReviewContext(sourceId)).thenReturn(Optional.of(pullRequest));
-        when(pullRequests.findById(sourceId)).thenReturn(Optional.of(pullRequest));
-        when(pullRequests.existsByIdAndDeletedAtIsNull(sourceId)).thenReturn(true);
-        when(pullRequests.isDiscussionNotReadWhole(sourceId)).thenReturn(Boolean.FALSE.equals(discussionReadWhole));
+        var pullRequest = pullRequests.findByIdForReviewContext(sourceId).orElseThrow();
+        var repository = Objects.requireNonNull(pullRequest.getRepository());
         when(delivered.findForPullRequest(anyLong(), eq(sourceId), any()))
                 .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of()));
         var comment = new PullRequestReviewComment();
@@ -345,11 +433,16 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                 mapper, mock(IssueCommentRepository.class), pullRequests, delivered);
         var metadata = mapper.createObjectNode()
                 .put("pull_request_id", sourceId)
-                .put("repository_id", 1L)
+                .put("repository_id", repository.getId())
                 .put("title", "Explain the branch")
                 .put("body", "Describe the change.");
         var fixture = ScmCaptureFixtures.context(metadata, assignment.item().workspaceId(), false);
         var snapshot = ItemFixtures.snapshot(assignment.item(), Map.of())
+                .integration(new IntegrationRef(
+                        IntegrationKind.valueOf(
+                                repository.getProvider().getType().name()),
+                        assignment.item().workspaceId(),
+                        null))
                 .version(assignment.version())
                 .build();
         when(source.supports(assignment.item())).thenReturn(true);
@@ -373,19 +466,39 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
     }
 
     /** A mirror that a sync left unfinished shows no comments, which is no proof that nobody commented. */
-    @Test
-    void shouldStopWithItsReasonInsteadOfDoesNotApplyWhenTheDiscussionWasNotReadWhole() {
+    @ParameterizedTest
+    @CsvSource({"GITHUB,false", "GITHUB,", "GITLAB,false", "GITLAB,"})
+    void shouldStopWithItsReasonInsteadOfDoesNotApplyWhenTheDiscussionWasNotReadWhole(
+            IdentityProviderType providerType, @Nullable Boolean whole) {
         var definition = bundled.catalog().practices().stream()
                 .filter(p -> p.slug().equals("engaging-with-inline-review-comments"))
                 .findFirst()
                 .orElseThrow()
                 .definition()
                 .definition();
-        var pending = pending(definition);
+        var pending = pendingScm(definition, providerType, whole);
         var job = jobs.findById(pending.jobId()).orElseThrow();
-        var handler = bundledHandler(job, false, false);
+        var handler = bundledHandler(job, false);
 
-        assertThatThrownBy(() -> handler.prepareInputs(job)).isInstanceOf(InsufficientEvidenceException.class);
+        var failure = catchThrowable(() -> {
+            try (var prepared = handler.prepareInputs(job)) {
+                assertThat(prepared.folderIndex()).isNotNull();
+                new ReviewOutputService(
+                                assignments,
+                                mock(CandidateEvidenceVerifier.class),
+                                store,
+                                mapper,
+                                files,
+                                catalogs,
+                                members)
+                        .seal(job, List.of());
+            }
+        });
+        assertThat(results.findByWorkspaceIdAndReviewIdOrderByRecordedAtAscIdAsc(
+                        job.getWorkspaceId(), job.getReviewId()))
+                .extracting(result -> result.getOutcome())
+                .isEmpty();
+        assertThat(failure).isInstanceOf(InsufficientEvidenceException.class);
 
         var practice = practices
                 .findByWorkspaceIdAndReviewIdAndPracticeId(
@@ -393,7 +506,24 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                         job.getReviewId(),
                         pending.scenario().practice().getId())
                 .orElseThrow();
+        assertThat(practice.getStatus()).isEqualTo(ReviewPracticeStatus.WITHHELD);
         assertThat(practice.getReason()).isEqualTo("readiness_refused");
+        var manifest = Objects.requireNonNull(mapper.treeToValue(
+                Objects.requireNonNull(job.getCapture()).path("manifest"), JobFolderIndex.Retained.class));
+        var kinds = Set.of(
+                ReviewThreadContentSource.KIND,
+                PullRequestContentSource.COMMENTS,
+                GeneralReviewCommentContentSource.KIND);
+        var discussions = manifest.sources().stream()
+                .filter(capture -> kinds.contains(capture.kind()))
+                .toList();
+        assertThat(discussions)
+                .hasSize(3)
+                .allSatisfy(capture -> assertThat(capture.state())
+                        .isInstanceOfSatisfying(SourceCaptureState.Available.class, available -> {
+                            assertThat(available.completeness()).isEqualTo(SourceCompleteness.PARTIAL);
+                            assertThat(available.limitations()).containsExactly("DISCUSSION_NOT_READ_WHOLE");
+                        }));
         assertThat(Objects.requireNonNull(practice.getCaptureDecision())
                         .path("reasonCodes")
                         .toString())
@@ -404,15 +534,16 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void shouldEvaluateTheBundledCommentPracticeThroughCapture(boolean inlineCommentPresent) {
+    @CsvSource({"GITHUB,false", "GITHUB,true", "GITLAB,false", "GITLAB,true"})
+    void shouldEvaluateTheBundledCommentPracticeThroughCapture(
+            IdentityProviderType providerType, boolean inlineCommentPresent) {
         var definition = bundled.catalog().practices().stream()
                 .filter(p -> p.slug().equals("engaging-with-inline-review-comments"))
                 .findFirst()
                 .orElseThrow()
                 .definition()
                 .definition();
-        var pending = pending(definition);
+        var pending = pendingScm(definition, providerType, true);
         var job = jobs.findById(pending.jobId()).orElseThrow();
         try (var prepared = bundledHandler(job, inlineCommentPresent).prepareInputs(job)) {
             assertThat(prepared.folderIndex()).isNotNull();
@@ -436,6 +567,8 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                 var output = new ReviewOutputService(
                         assignments, mock(CandidateEvidenceVerifier.class), store, mapper, files, catalogs, members);
                 var receipt = output.seal(job, List.of());
+                assertThat(receipt.withheldItems()).isEmpty();
+                assertThat(receipt.resultIds()).hasSize(1);
                 ((ObjectNode) Objects.requireNonNull(job.getCapture())).set("admission", mapper.valueToTree(receipt));
                 var resultId = Objects.requireNonNull(job.getCapture())
                         .path("admission")
@@ -449,6 +582,54 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                                 Objects.requireNonNull(definition.appliesWhen()).otherwise());
             }
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"GITHUB,", "GITHUB,false", "GITHUB,true", "GITLAB,", "GITLAB,false", "GITLAB,true"})
+    void shouldIncludeUnreadDiscussionsInRepositoryRepairChecks(
+            IdentityProviderType providerType, @Nullable Boolean whole) {
+        var pending = pendingScm(DefinitionTestFixtures.definition(), providerType, whole);
+        monitorScm(pending);
+        var mirror = mirroredPullRequests
+                .findByIdForReviewContext(
+                        Objects.requireNonNull(pending.scenario().item().getSourceId()))
+                .orElseThrow();
+        Instant readAt = Instant.now();
+        mirror.setLastSyncAt(readAt);
+        mirroredPullRequests.saveAndFlush(mirror);
+        long id = Objects.requireNonNull(mirror.getId());
+        long repositoryId = Objects.requireNonNull(
+                Objects.requireNonNull(mirror.getRepository()).getId());
+        boolean recordedWhole = Boolean.TRUE.equals(whole);
+        assertThat(mirroredPullRequests.isDiscussionReadWhole(id)).isEqualTo(recordedWhole);
+        assertThat(mirroredPullRequests.existsUnfinishedDiscussionRead(repositoryId))
+                .isEqualTo(!recordedWhole);
+        assertThat(mirroredPullRequests.existsUnfinishedDiscussionReadSince(
+                        pending.scenario().workspace().getId(), repositoryId, readAt.minusSeconds(1)))
+                .isEqualTo(!recordedWhole);
+        assertThat(mirroredPullRequests.existsUnfinishedDiscussionReadSince(
+                        pending.scenario().workspace().getId(), repositoryId, readAt.plusSeconds(1)))
+                .isFalse();
+        long unrelatedWorkspace =
+                data.scenario(DefinitionTestFixtures.definition()).workspace().getId();
+        assertThat(mirroredPullRequests.existsUnfinishedDiscussionReadSince(
+                        unrelatedWorkspace, repositoryId, readAt.minusSeconds(1)))
+                .isFalse();
+        var otherProvider =
+                providerType == IdentityProviderType.GITHUB ? IdentityProviderType.GITLAB : IdentityProviderType.GITHUB;
+        var other = pendingScm(DefinitionTestFixtures.definition(), otherProvider, whole);
+        monitorScm(other);
+        long otherProviderWorkspace = other.scenario().workspace().getId();
+        assertThat(mirroredPullRequests.existsUnfinishedDiscussionReadSince(
+                        otherProviderWorkspace, repositoryId, readAt.minusSeconds(1)))
+                .isFalse();
+        mirror.setDeletedAt(readAt);
+        mirroredPullRequests.saveAndFlush(mirror);
+        assertThat(mirroredPullRequests.existsUnfinishedDiscussionRead(repositoryId))
+                .isFalse();
+        assertThat(mirroredPullRequests.existsUnfinishedDiscussionReadSince(
+                        pending.scenario().workspace().getId(), repositoryId, readAt.minusSeconds(1)))
+                .isFalse();
     }
 
     @Test

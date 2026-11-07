@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -20,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -28,11 +30,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhook
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.GitLabIssueCommentProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.GitLabPullRequestReviewThreadProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.GraphQlResponses;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -47,6 +52,9 @@ import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -216,6 +224,81 @@ class GitLabDiscussionSyncServiceIntegrationTest extends BaseIntegrationTest {
                         at.toString(),
                         at.toString(),
                         null));
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(booleans = {false})
+    void shouldReadAnUnprovedDiscussionEvenWhenTheMergeRequestHasNoUserNotes(@Nullable Boolean whole) {
+        fixture(IdentityProviderType.GITLAB);
+        long id = issue("PULL_REQUEST", 1, null);
+        if (whole != null) pullRequests.recordDiscussionRead(id, whole);
+        var pr = pullRequests.findByIdForReviewContext(id).orElseThrow();
+        var repository = Objects.requireNonNull(pr.getRepository());
+        var clients = mock(GitLabGraphQlClientProvider.class);
+        var client = mock(HttpGraphQlClient.class);
+        when(clients.forScope(workspaceId)).thenReturn(client);
+        when(clients.getRateLimitRemaining(workspaceId)).thenReturn(5000);
+        Map<String, Object> node = Map.of(
+                "id",
+                "gid://gitlab/MergeRequest/1",
+                "iid",
+                "1",
+                "state",
+                "opened",
+                "userNotesCount",
+                0,
+                "approvedBy",
+                Map.of("nodes", List.of()),
+                "title",
+                "Work",
+                "createdAt",
+                at.toString(),
+                "updatedAt",
+                at.toString());
+        var listing = GraphQlResponses.of(
+                Map.of(
+                        "project",
+                        Map.of(
+                                "mergeRequests",
+                                Map.of("nodes", List.of(node), "pageInfo", Map.of("hasNextPage", false)))),
+                List.of());
+        var discussion = GraphQlResponses.of(
+                Map.of(
+                        "project",
+                        Map.of(
+                                "mergeRequest",
+                                Map.of(
+                                        "discussions",
+                                        Map.of("nodes", List.of(), "pageInfo", Map.of("hasNextPage", false))))),
+                List.of());
+        for (var page : Map.of("GetProjectMergeRequests", listing, "GetMergeRequestDiscussions", discussion)
+                .entrySet()) {
+            var request = mock(RequestSpec.class);
+            when(client.documentName(page.getKey())).thenReturn(request);
+            when(request.variable(anyString(), any())).thenReturn(request);
+            when(request.execute()).thenReturn(Mono.just(page.getValue()));
+        }
+        var properties = new GitLabProperties(
+                "https://example.com",
+                Duration.ofSeconds(3),
+                Duration.ofSeconds(3),
+                Duration.ZERO,
+                Duration.ofMinutes(5));
+        var responses = new GitLabGraphQlResponseHandler(mock(GitLabExceptionClassifier.class));
+        var discussions = new GitLabDiscussionSyncService(
+                clients, responses, mock(), mock(), mock(), mock(), properties, projectAdmission, pullRequests);
+        var processor = mock(GitLabMergeRequestProcessor.class);
+        when(processor.processFromSync(any(), any())).thenReturn(pr);
+        var sync = new GitLabMergeRequestSyncService(
+                clients, responses, processor, discussions, mock(), properties, mock(), projectAdmission);
+
+        assertThat(sync.syncMergeRequests(workspaceId, repository, null).status())
+                .isEqualTo(SyncResult.Status.COMPLETED);
+
+        verify(client).documentName("GetMergeRequestDiscussions");
+        assertThat(jdbc.queryForObject("SELECT discussion_read_whole FROM issue WHERE id = ?", Boolean.class, id))
+                .isTrue();
     }
 
     @Test

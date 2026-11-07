@@ -94,7 +94,7 @@ public class PullRequest extends Issue {
     /**
      * Whether the last read of this work from the provider reached the end of its threads, reviews and comments: false
      * when it did not, null when no such read happened. {@link PullRequestRepository#recordDiscussionRead} writes it, so
-     * that no stale entity can overwrite it. A source that shows this discussion is not whole while this is false.
+     * that no stale entity can overwrite it. A source that shows this discussion is whole only while this is true.
      */
     @Column(name = "discussion_read_whole", insertable = false, updatable = false)
     @Nullable

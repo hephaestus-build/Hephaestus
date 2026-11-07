@@ -146,7 +146,7 @@ public class ReviewThreadContentSource {
             root.set("reviewDecisions", decisionArray);
             // A withdrawn or replaced decision may be gone, so this list is no event history.
             root.put("decisionHistoryComplete", false);
-            root.put("truncated", pullRequestRepository.isDiscussionNotReadWhole(pullRequestId));
+            root.put("truncated", !pullRequestRepository.isDiscussionReadWhole(pullRequestId));
 
             log.info(
                     "ReviewThreads: prId={} threads={} decisions={}",

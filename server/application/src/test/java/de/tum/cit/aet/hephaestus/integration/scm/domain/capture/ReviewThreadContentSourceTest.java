@@ -68,6 +68,7 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(pullRequestRepository.isDiscussionReadWhole(PR_ID)).thenReturn(true);
         provider =
                 new ReviewThreadContentSource(objectMapper, pullRequestRepository, threadRepository, reviewRepository);
         lenient().when(pullRequestRepository.findById(any())).thenReturn(Optional.of(new PullRequest()));
@@ -180,7 +181,7 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
 
     @Test
     void shouldReportAPartialCaptureWhenTheDiscussionWasNotReadWhole() {
-        when(pullRequestRepository.isDiscussionNotReadWhole(PR_ID)).thenReturn(true);
+        when(pullRequestRepository.isDiscussionReadWhole(PR_ID)).thenReturn(false);
 
         var contribution = provider.capture(request(metadataWithPr()), Set.of(ReviewThreadContentSource.KIND));
 
@@ -191,8 +192,8 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldReportAWholeCaptureWhenNoReadOfTheProviderIsRecorded() {
-        when(pullRequestRepository.isDiscussionNotReadWhole(PR_ID)).thenReturn(false);
+    void shouldReportAWholeCaptureAfterAWholeProviderRead() {
+        when(pullRequestRepository.isDiscussionReadWhole(PR_ID)).thenReturn(true);
 
         var contribution = provider.capture(request(metadataWithPr()), Set.of(ReviewThreadContentSource.KIND));
 

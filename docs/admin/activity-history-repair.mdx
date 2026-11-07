@@ -101,6 +101,12 @@ WHERE i.repository_id = :repository_id
 ORDER BY i.id
 LIMIT 100;
 
+SELECT discussion_read_whole, count(*)
+FROM issue
+WHERE repository_id = :repository_id
+  AND issue_type = 'PULL_REQUEST' AND deleted_at IS NULL
+GROUP BY discussion_read_whole;
+
 SELECT event_type, count(*), min(occurred_at)
 FROM activity_event
 WHERE workspace_id = :workspace_id AND repository_id = :repository_id
@@ -123,10 +129,13 @@ Stored tombstones and erased work remain in the comparison count.
 Provider failures leave the checkpoint unchanged.
 Automatic provider probes have a one-hour cooldown per repository and server process.
 
-For GitHub, a manual repair also restarts a completed scan when the repository holds a pull request not read whole.
+For GitHub and GitLab, a manual repair also restarts a completed scan when the repository holds a pull or merge request not read whole.
 The gap in rows does not matter then.
 This covers a pull request that a sync or an earlier version stopped reading at its first page of threads, reviews or comments.
-The practices that need the whole discussion withhold their results on such a pull request until a read finishes it.
+It also covers work for which no whole discussion read is recorded, such as work first received through a webhook.
+The practices that need the whole discussion withhold their results on such work.
+After the repair records a whole read, request a new review.
+A withheld review does not restart automatically.
 
 ## Run the repair
 
@@ -152,8 +161,8 @@ An active job is reused instead of starting a duplicate.
 
 For GitHub, the action repairs the stored ledger even for completed repositories.
 For GitHub and GitLab, repair restarts completed history when at least 20 rows are missing.
-A GitHub pull request that is not read whole also restarts it, as described above.
 Stored coverage must also be less than 80 percent of the provider total.
+A GitHub pull request or GitLab merge request that is not read whole also restarts it, as described above.
 
 The server records the provider count of each repair restart in the repository monitor.
 It does not restart the same gap again, including after a server restart.
@@ -161,7 +170,12 @@ Before another restart, the stored row count must reach the provider total recor
 A later gap must still meet the same size and coverage thresholds.
 
 A repository that cannot be read or repaired adds a job warning.
+A refused restart also adds a warning; it does not establish a whole discussion read.
 The job continues with the other repositories.
+A repair reads repository history again, including work whose discussions were already read whole.
+If a provider limit still prevents a whole discussion read, the affected practices remain withheld.
+In the discussion coverage query, null means unknown and false means a partial read.
+Check those counts after the job finishes before requesting a new review.
 Scheduled GitLab scans do not use the GitHub-specific incomplete-scan heuristic.
 Rate limits, cancellation, and provider error cooldowns still apply.
 Recent-sync timestamps are unchanged.
