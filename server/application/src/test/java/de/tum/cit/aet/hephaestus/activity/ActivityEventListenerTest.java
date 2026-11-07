@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.activity;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.dao.TransientDataAccessResourceException;
 
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ActivityEventListenerTest extends BaseUnitTest {
@@ -97,6 +99,17 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(1L));
             verify(userRepository).getReferenceById(100L);
             verify(repositoryRepository).getReferenceById(200L);
+        }
+
+        @Test
+        void shouldLetARecordingFailureReachDurableDelivery() {
+            var failure = new TransientDataAccessResourceException("database unavailable");
+            when(activityEventService.record(anyLong(), any(), any(), any(), any(), any(), anyLong()))
+                    .thenThrow(failure);
+            var event = new ScmDomainEvent.PullRequestCreated(
+                    createPullRequestData(createPullRequest(1L)), createContext());
+
+            assertThatThrownBy(() -> listener.onPullRequestCreated(event)).isSameAs(failure);
         }
 
         @Test

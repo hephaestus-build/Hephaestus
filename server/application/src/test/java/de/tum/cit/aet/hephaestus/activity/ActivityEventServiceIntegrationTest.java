@@ -8,8 +8,10 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
@@ -25,8 +27,10 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -34,6 +38,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.modulith.events.FailedEventPublications;
+import org.springframework.modulith.events.ResubmissionOptions;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -59,6 +67,18 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IdentityProviderRepository gitProviderRepository;
+
+    @Autowired
+    private ApplicationEventPublisher publisher;
+
+    @Autowired
+    private FailedEventPublications publications;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Autowired
+    private PullRequestRepository pullRequests;
 
     private Workspace testWorkspace;
     private IdentityProvider gitProvider;
@@ -112,6 +132,101 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
         testRepository.setUpdatedAt(Instant.now());
         testRepository.setProvider(gitProvider);
         testRepository = repositoryRepository.save(testRepository);
+    }
+
+    @Nested
+    class DurableDelivery {
+        private static final String FAILURE_CONSTRAINT = "test_activity_record_failure";
+
+        @Test
+        void shouldRetainAFailedPublicationAndRecordItOnceAfterRecovery() {
+            var event = event();
+            long targetId = event.pullRequest().id();
+            jdbc.execute("ALTER TABLE activity_event ADD CONSTRAINT " + FAILURE_CONSTRAINT + " CHECK (target_id <> "
+                    + targetId + ")");
+            try {
+                publish(event);
+
+                assertThat(rows(targetId)).isZero();
+                assertThat(pending()).isEqualTo(1L);
+                jdbc.execute("ALTER TABLE activity_event DROP CONSTRAINT " + FAILURE_CONSTRAINT);
+
+                resubmit(event);
+
+                assertThat(rows(targetId)).isEqualTo(1L);
+                assertThat(pending()).isZero();
+                publish(event);
+                assertThat(rows(targetId)).isEqualTo(1L);
+            } finally {
+                jdbc.execute("ALTER TABLE activity_event DROP CONSTRAINT IF EXISTS " + FAILURE_CONSTRAINT);
+            }
+        }
+
+        @Test
+        void shouldEndAPendingPublicationWhenItsWorkspaceIsDeleted() {
+            var event = event();
+            long targetId = event.pullRequest().id();
+            jdbc.execute("ALTER TABLE activity_event ADD CONSTRAINT " + FAILURE_CONSTRAINT + " CHECK (target_id <> "
+                    + targetId + ")");
+            try {
+                publish(event);
+                assertThat(pending()).isEqualTo(1L);
+                jdbc.execute("ALTER TABLE activity_event DROP CONSTRAINT " + FAILURE_CONSTRAINT);
+                workspaceRepository.deleteById(testWorkspace.getId());
+
+                resubmit(event);
+
+                assertThat(rows(targetId)).isZero();
+                assertThat(pending()).isZero();
+            } finally {
+                jdbc.execute("ALTER TABLE activity_event DROP CONSTRAINT IF EXISTS " + FAILURE_CONSTRAINT);
+            }
+        }
+
+        private ScmDomainEvent.PullRequestCreated event() {
+            var pull = new PullRequest();
+            pull.setNativeId(95001L);
+            pull.setNumber(31);
+            pull.setTitle("Durable activity");
+            pull.setState(Issue.State.OPEN);
+            pull.setAuthor(testUser);
+            pull.setRepository(testRepository);
+            pull.setProvider(gitProvider);
+            pull.setHeadRefOid("a".repeat(40));
+            pull.setBaseRefOid("b".repeat(40));
+            pull.setCreatedAt(Instant.now());
+            pull.setUpdatedAt(Instant.now());
+            pull = pullRequests.saveAndFlush(pull);
+            return new ScmDomainEvent.PullRequestCreated(
+                    ScmEventPayload.PullRequestData.from(pull),
+                    EventContext.from(ProcessingContext.forWebhook(testWorkspace.getId(), testRepository, "opened")));
+        }
+
+        private void publish(ScmDomainEvent.PullRequestCreated event) {
+            new TransactionTemplate(transactionManager).executeWithoutResult(ignored -> publisher.publishEvent(event));
+        }
+
+        private void resubmit(ScmDomainEvent.PullRequestCreated event) {
+            publications.resubmit(ResubmissionOptions.defaults()
+                    .withMinAge(Duration.ZERO)
+                    .withFilter(publication -> publication.getEvent()
+                                    instanceof ScmDomainEvent.PullRequestCreated stored
+                            && stored.context().eventId().equals(event.context().eventId())));
+        }
+
+        private Long rows(long targetId) {
+            return Objects.requireNonNull(jdbc.queryForObject(
+                    "SELECT count(*) FROM activity_event WHERE workspace_id=? AND target_id=? AND event_type='PULL_REQUEST_OPENED'",
+                    Long.class,
+                    testWorkspace.getId(),
+                    targetId));
+        }
+
+        private Long pending() {
+            return Objects.requireNonNull(jdbc.queryForObject(
+                    "SELECT count(*) FROM event_publication WHERE listener_id LIKE '%ActivityEventListener.onPullRequestCreated%' AND completion_date IS NULL",
+                    Long.class));
+        }
     }
 
     @Nested
