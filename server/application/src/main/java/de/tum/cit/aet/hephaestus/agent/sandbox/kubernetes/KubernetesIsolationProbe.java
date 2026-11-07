@@ -38,9 +38,10 @@ import tools.jackson.databind.json.JsonMapper;
  * <ul>
  *   <li><b>Restricted Pod Security.</b> The API server refuses, in a dry run, a Pod that the Baseline standard admits
  *       and the Restricted one does not.
- *   <li><b>Egress to the gateway only.</b> A Pod with a review sandbox's labels reaches this worker's gateway, which is
- *       the control, and none of: this worker's management port, the Kubernetes API, the cluster DNS server. A Pod of no
- *       sandbox kind, which the policies treat as a turn sandbox, does not reach the gateway either.
+ *   <li><b>Egress to the gateway only.</b> A Pod with a review sandbox's labels reaches this worker's gateway, directly
+ *       and through a Service, which is the control, and none of: this worker's management port, the Kubernetes API, the
+ *       cluster DNS server. A Pod of no sandbox kind, which the policies treat as a turn sandbox, reaches the gateway by
+ *       neither route.
  *   <li><b>No service account token, a read-only root and a non-root user</b> inside these Pods.
  *   <li><b>User namespaces.</b> A Pod without host users gets a user namespace of its own.
  *   <li><b>The RuntimeClass</b>, when one is named: a class that the cluster does not have runs no probe Pod.
@@ -82,7 +83,7 @@ public class KubernetesIsolationProbe {
 
     /**
      * The probe's script, which runs after the Pod's isolation init container. Argument: what to reach and how many
-     * processes to start. A target counts as reached once a TCP connection opens; every target has a listener, so a
+     * processes to start. A target counts as reached once a TCP connection opens; every target is meant to have a listener, so a
      * refused or silent one is a denied one. A target that must be reached gets ten seconds: the worker's ingress
      * policy can admit a new Pod a moment after the Pod's own policy is in force.
      */
@@ -223,10 +224,13 @@ public class KubernetesIsolationProbe {
     Proof probe(boolean firstStart) {
         List<String> failures = new ArrayList<>();
         refusesUnrestrictedPods().ifPresent(failures::add);
-        Target gateway = new Target("gateway", worker.properties().podIp(), worker.gatewayPort(), true);
-        List<Target> review = new ArrayList<>(denied());
-        review.addFirst(gateway);
-        List<Target> closed = List.of(new Target(gateway.name(), gateway.host(), gateway.port(), false));
+        String service = worker.properties().gatewayProbeService();
+        Optional<String> serviceAddress = service.isEmpty() ? Optional.empty() : address(service);
+        List<String> unresolved = unresolvedRoute(service, serviceAddress);
+        failures.addAll(unresolved);
+        List<Target> review = new ArrayList<>(gateways(serviceAddress, true));
+        review.addAll(denied());
+        List<Target> closed = gateways(serviceAddress, false);
         CompletableFuture<Outcome> reviewRun = CompletableFuture.supplyAsync(
                 () -> run(KubernetesWorker.KIND_REVIEW, review, PROCESS_TRIAL, PROBE_TIME));
         CompletableFuture<Outcome> closedRun =
@@ -237,7 +241,8 @@ public class KubernetesIsolationProbe {
         failures.addAll(closedOutcome.failures());
         // Quota refusals and unscheduled Pods can keep the last proof; a failed gate on a node cannot.
         boolean gateFailed = failures.size()
-                > (reviewed.conclusive() ? 0 : reviewed.failures().size())
+                > unresolved.size()
+                        + (reviewed.conclusive() ? 0 : reviewed.failures().size())
                         + (closedOutcome.conclusive()
                                 ? 0
                                 : closedOutcome.failures().size());
@@ -245,14 +250,14 @@ public class KubernetesIsolationProbe {
         boolean inconclusive = !gateFailed && !failures.isEmpty();
         if (inconclusive && last != null && last.passed()) {
             log.warn(
-                    "The sandbox isolation probe could not run its Pods, so the proof of {} stands: {}",
+                    "The sandbox isolation probe proved nothing in this run, so the proof of {} stands: {}",
                     last.at(),
                     String.join("; ", failures));
             return last;
         }
         if (inconclusive && firstStart) {
             log.warn(
-                    "The sandbox isolation probe could not run its Pods yet, so this worker is not ready and tries"
+                    "The sandbox isolation probe proved nothing in this run, so this worker is not ready and tries"
                             + " again in {}: {}",
                     START_RETRY,
                     String.join("; ", failures));
@@ -338,6 +343,25 @@ public class KubernetesIsolationProbe {
             return Optional.of("the dry run of an unrestricted Pod ended with HTTP " + e.getCode()
                     + ", not with a Restricted Pod Security refusal");
         }
+    }
+
+    /**
+     * Every route to this worker's gateway. Policy behind a Service's address translation differs by network plugin, so
+     * the probe proves it rather than a document.
+     */
+    List<Target> gateways(Optional<String> serviceAddress, boolean reachable) {
+        List<Target> routes = new ArrayList<>();
+        routes.add(new Target("gateway", worker.properties().podIp(), worker.gatewayPort(), reachable));
+        serviceAddress.ifPresent(
+                address -> routes.add(new Target("gateway Service", address, worker.gatewayPort(), reachable)));
+        return routes;
+    }
+
+    /** A worker that cannot resolve the name has proved nothing about the boundary, so this keeps the last proof. */
+    static List<String> unresolvedRoute(String service, Optional<String> address) {
+        return service.isEmpty() || address.isPresent()
+                ? List.of()
+                : List.of("the gateway Service " + service + " does not resolve");
     }
 
     /**

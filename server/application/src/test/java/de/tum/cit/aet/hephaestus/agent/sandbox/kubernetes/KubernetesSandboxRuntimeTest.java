@@ -168,7 +168,8 @@ class KubernetesSandboxRuntimeTest {
                 "",
                 "hephaestus-conversations",
                 "hephaestus-reviews",
-                Duration.ofMinutes(15));
+                Duration.ofMinutes(15),
+                "");
         worker = new KubernetesWorker(properties, WORKER_ID, 8081);
         worker.proved(passed());
         WorkerRegistryRepository registry = mock(WorkerRegistryRepository.class);
@@ -750,7 +751,7 @@ class KubernetesSandboxRuntimeTest {
     void shouldUseTheClustersDefaultRuntimeAndRuntimeDefaultSeccompWhenNoneIsNamed() {
         var defaults = new KubernetesWorker(
                 new KubernetesSandboxProperties(
-                        SANDBOXES, workerName, "10.42.0.7", "", "", "", "", "", "", Duration.ofMinutes(15)),
+                        SANDBOXES, workerName, "10.42.0.7", "", "", "", "", "", "", Duration.ofMinutes(15), ""),
                 WORKER_ID,
                 8081);
         Pod pod = new KubernetesPods(api(), defaults, 10, ImagePullPolicy.IF_NOT_PRESENT)

@@ -1280,6 +1280,34 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 	);
 	assert.equal(env(worker, "HEPHAESTUS_SANDBOX_KUBERNETES_POD_PIDS_LIMIT"), undefined);
 	assert.equal(envValue(worker, "SANDBOX_API_PORT"), "8081");
+	const service = (name: string) =>
+		resources.find((resource) => kindOf(resource) === "Service" && nameOf(resource) === name);
+	// Callers reach only workers that hold their proof; only the probe reaches one that does not yet.
+	assert.equal(get(service("heph-sandbox-gateway"), "spec", "publishNotReadyAddresses"), undefined);
+	assert.equal(
+		get(service("heph-sandbox-gateway-probe"), "spec", "publishNotReadyAddresses"),
+		true,
+	);
+	for (const name of ["heph-sandbox-gateway", "heph-sandbox-gateway-probe"]) {
+		assert.equal(get(service(name), "spec", "type"), "ClusterIP", name);
+		assert.equal(get(service(name), "spec", "selector", "app.kubernetes.io/component"), "worker");
+		assert.equal(get(service(name), "spec", "ports", 0, "port"), 8081, name);
+	}
+	assert.match(
+		String(envValue(worker, "HEPHAESTUS_SANDBOX_KUBERNETES_GATEWAY_PROBE_SERVICE")),
+		/^heph-sandbox-gateway-probe\.[a-z0-9-]+\.svc$/u,
+	);
+	const workerPolicy = resources.find(
+		(resource) => kindOf(resource) === "NetworkPolicy" && nameOf(resource) === "heph-worker",
+	);
+	assert.ok(
+		list(get(workerPolicy, "spec", "ingress")).some(
+			(rule) =>
+				get(rule, "from", 0, "podSelector", "matchLabels", "app.kubernetes.io/component") ===
+					"conversation-loop" && get(rule, "ports", 0, "port") === 8081,
+		),
+		"the conversation loop reaches the gateway port",
+	);
 	assert.ok(
 		list(get(container(worker), "ports")).some(
 			(port) => get(port, "name") === "sandbox-gateway" && get(port, "containerPort") === 8081,

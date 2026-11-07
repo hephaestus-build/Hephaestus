@@ -102,6 +102,10 @@ Thus, this limit and the body limit above bound the calls in flight at this conn
 The model call pool can still make a call wait.
 A caller that stays silent for 30 seconds loses its connection.
 
+The Service `<release>-sandbox-gateway` selects every ready worker on this port.
+The Service `<release>-sandbox-gateway-probe` also selects a worker that is not ready, and only the isolation probe calls it.
+Through it, the probe checks that a review sandbox reaches the gateway and that a Pod of another kind does not.
+
 To deploy a worker pod:
 
 1. Set `SPRING_PROFILES_ACTIVE=prod,worker`.

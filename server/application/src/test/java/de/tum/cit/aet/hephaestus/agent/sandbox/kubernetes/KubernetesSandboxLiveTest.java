@@ -282,7 +282,21 @@ class KubernetesSandboxLiveTest {
                 "the Pod's service account CA is mounted");
 
         Binder binder = Binder.get(shippedEnvironment());
-        properties = validated(binder.bindOrCreate("hephaestus.sandbox.kubernetes", KubernetesSandboxProperties.class));
+        KubernetesSandboxProperties bound =
+                validated(binder.bindOrCreate("hephaestus.sandbox.kubernetes", KubernetesSandboxProperties.class));
+        // This JVM runs its own gateway, so the chart's Service, which selects the worker Pods, is no route to it.
+        properties = new KubernetesSandboxProperties(
+                bound.namespace(),
+                bound.podName(),
+                bound.podIp(),
+                bound.runtimeClassName(),
+                bound.seccompProfile(),
+                bound.nodeSelector(),
+                bound.tolerations(),
+                bound.conversationPriorityClass(),
+                bound.reviewPriorityClass(),
+                bound.probeInterval(),
+                "");
         SandboxProperties sandbox = validated(binder.bindOrCreate("hephaestus.sandbox", SandboxProperties.class));
         SandboxGatewayProperties gatewayProperties =
                 validated(binder.bindOrCreate("hephaestus.sandbox.gateway", SandboxGatewayProperties.class));

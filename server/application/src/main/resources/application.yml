@@ -629,6 +629,7 @@ hephaestus:
             node-selector: ${HEPHAESTUS_SANDBOX_KUBERNETES_NODE_SELECTOR:}
             tolerations: ${HEPHAESTUS_SANDBOX_KUBERNETES_TOLERATIONS:}
             probe-interval: ${HEPHAESTUS_SANDBOX_KUBERNETES_PROBE_INTERVAL:15m}
+            gateway-probe-service: ${HEPHAESTUS_SANDBOX_KUBERNETES_GATEWAY_PROBE_SERVICE:}
         max-concurrent-containers: ${SANDBOX_MAX_CONCURRENT:5}
         container-stop-timeout-seconds: ${SANDBOX_STOP_TIMEOUT:10}
         reconciliation-interval-seconds: ${SANDBOX_RECONCILIATION_INTERVAL:60}
