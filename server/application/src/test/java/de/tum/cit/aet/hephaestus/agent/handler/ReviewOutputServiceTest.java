@@ -609,7 +609,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
 
         assertWithheld(
                 CandidateRefusal.ABSENCE_HITS_UNEXPLAINED,
-                NAMED + ", but the search that names it found matches, and the result does not say what they are");
+                NAMED + ", but a search that names it found matches, and the result does not say what they are");
     }
 
     @Test

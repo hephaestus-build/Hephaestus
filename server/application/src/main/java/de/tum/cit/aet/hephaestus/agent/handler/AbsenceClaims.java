@@ -23,8 +23,9 @@ import java.util.stream.Collectors;
  * words joined by {@code |}, and any other pattern names nothing. Each claim must hold one of those words. A search
  * that ignored case must be able to find the claim's words: {@code auth} finds {@code authentication}, and
  * {@code retryzzz} finds nothing. One that did not must match as written, because {@code RETRY} does not find
- * {@code retry}. This stops a lazy or nonsense search. It does not judge the matches of a search that had any, because
- * a match does not refute "no other file references X".
+ * {@code retry}. A match does not refute "no other file references X", so a search with matches can back a claim, but
+ * the result must then say what the matches are. This stops a lazy or nonsense search, and it puts on the record what
+ * a steered one ignored. It does not judge whether that account is true.
  */
 final class AbsenceClaims {
 
@@ -33,8 +34,8 @@ final class AbsenceClaims {
                     + "absent)\\b[^.]{0,80}\\b(?:in|across|throughout|under)|\\b(?:missing|absent) from) "
                     + "(?:the |this |our )?(?:whole |entire |"
                     + "reviewed |pinned |checked-out |rest of the )?(?:repository|repo|codebase|code base|"
-                    + "checkout|project|application|source tree|src)\\b(?!\\.\\w|[ -](?:code|manifest|"
-                    + "inventory|policy|board|tracker|method|call|class|interface|layer|bean|query|lookup|result|field|object|instance|step|action|settings?)s?\\b)",
+                    + "checkout|project|application|source tree|src)\\b(?!\\.\\w|'s\\b|[ -](?:code|manifest|"
+                    + "inventory|policy|board|tracker|implementation|service|config|method|call|class|interface|layer|bean|query|lookup|result|field|object|instance|step|action|settings?)s?\\b)",
             "\\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|"
                     + "absent)\\b[^.]{0,80}\\b(?:anywhere|elsewhere) (?:in|across|throughout|"
                     + "under) (?:the )?(?:whole |entire |reviewed |pinned |checked-out |"
@@ -44,7 +45,7 @@ final class AbsenceClaims {
                     + "consumes?|wires?|depends? on|handles?|catches?|validates?)\\b|\\b(?:referenced|"
                     + "imported|called|used|instantiated|consumed|handled) (?:by|from|in) no other files?\\b|"
                     + "\\breferences from other files\\b",
-            "\\b(?:the|this) (?:whole |entire |reviewed |pinned )?(?:repository|repo|codebase|"
+            "(?<!from )\\b(?:the|this) (?:whole |entire |reviewed |pinned )?(?:repository|repo|codebase|"
                     + "code base|checkout)\\b(?! (?:method|call|class|interface|layer|bean|query|lookup|"
                     + "result|field|object|instance|step|action|policy|"
                     + "settings?)s?\\b)[^.]{0,40}\\b(?:contains no|has no|holds no|defines no|declares no|"
@@ -211,23 +212,44 @@ final class AbsenceClaims {
      * the checkout as consulted, what it looked for.
      */
     static boolean searchedFor(Candidate candidate, List<String> patterns, boolean consulted) {
+        return searchedFor(subject(candidate), texts(candidate), patterns, consulted);
+    }
+
+    private static String subject(Candidate candidate) {
         var search = candidate.search();
         var inapplicability = candidate.inapplicability();
-        String subject = search != null
+        return search != null
                 ? search.lookedFor()
                 : inapplicability != null ? inapplicability.prerequisite() : candidate.summary();
-        return searchedFor(subject, texts(candidate), patterns, consulted);
     }
 
     static boolean searchedFor(String subject, List<String> texts, List<String> patterns, boolean consulted) {
-        var terms =
-                patterns.stream().flatMap(pattern -> terms(pattern).stream()).toList();
-        var claims = texts.stream()
+        var terms = terms(patterns);
+        return claims(subject, texts, consulted).stream().allMatch(claim -> named(terms, claim));
+    }
+
+    /** Whether a search that found matches names any claim of the result: the result must then say what they are. */
+    static boolean hitsOwed(Candidate candidate, List<String> patternsWithMatches, boolean consulted) {
+        return hitsOwed(subject(candidate), texts(candidate), patternsWithMatches, consulted);
+    }
+
+    static boolean hitsOwed(String subject, List<String> texts, List<String> patternsWithMatches, boolean consulted) {
+        var terms = terms(patternsWithMatches);
+        return claims(subject, texts, consulted).stream().anyMatch(claim -> named(terms, claim));
+    }
+
+    /** The text of each claim: a clause that names its own subject, or else what the result looked for. */
+    private static List<String> claims(String subject, List<String> texts, boolean consulted) {
+        var clauses = texts.stream()
                 .flatMap(text -> Arrays.stream(CLAUSES.split(text)))
                 .filter(AbsenceClaims::claimed)
+                .map(clause -> content(clause).isEmpty() ? subject : clause)
                 .toList();
-        if (claims.isEmpty()) return !consulted || named(terms, subject);
-        return claims.stream().allMatch(clause -> named(terms, content(clause).isEmpty() ? subject : clause));
+        return clauses.isEmpty() && consulted ? List.of(subject) : clauses;
+    }
+
+    private static List<Term> terms(List<String> patterns) {
+        return patterns.stream().flatMap(pattern -> terms(pattern).stream()).toList();
     }
 
     private record Term(String word, boolean ignoresCase, boolean bounded) {}
@@ -245,7 +267,12 @@ final class AbsenceClaims {
     private static boolean named(List<Term> terms, String text) {
         var words = words(text);
         var tokens = TOKEN_BREAK.splitAsStream(text).collect(Collectors.toSet());
-        return terms.stream().anyMatch(term -> term.ignoresCase() ? finds(term, words) : tokens.contains(term.word()));
+        var folded =
+                tokens.stream().map(token -> token.toLowerCase(Locale.ROOT)).collect(Collectors.toSet());
+        return terms.stream()
+                .anyMatch(term -> term.ignoresCase()
+                        ? folded.contains(term.word().toLowerCase(Locale.ROOT)) || finds(term, words)
+                        : tokens.contains(term.word()));
     }
 
     /**

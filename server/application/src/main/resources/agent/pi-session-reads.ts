@@ -554,10 +554,10 @@ export class SessionReads {
  * claim beside it.
  */
 export const ABSENCE_MARKERS = [
-	String.raw`(?:\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|absent)\b[^.]{0,80}\b(?:in|across|throughout|under)|\b(?:missing|absent) from) (?:the |this |our )?(?:whole |entire |reviewed |pinned |checked-out |rest of the )?(?:repository|repo|codebase|code base|checkout|project|application|source tree|src)\b(?!\.\w|[ -](?:code|manifest|inventory|policy|board|tracker|method|call|class|interface|layer|bean|query|lookup|result|field|object|instance|step|action|settings?)s?\b)`,
+	String.raw`(?:\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|absent)\b[^.]{0,80}\b(?:in|across|throughout|under)|\b(?:missing|absent) from) (?:the |this |our )?(?:whole |entire |reviewed |pinned |checked-out |rest of the )?(?:repository|repo|codebase|code base|checkout|project|application|source tree|src)\b(?!\.\w|'s\b|[ -](?:code|manifest|inventory|policy|board|tracker|implementation|service|config|method|call|class|interface|layer|bean|query|lookup|result|field|object|instance|step|action|settings?)s?\b)`,
 	String.raw`\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|absent)\b[^.]{0,80}\b(?:anywhere|elsewhere) (?:in|across|throughout|under) (?:the )?(?:whole |entire |reviewed |pinned |checked-out |rest of the )?(?:code|app|source|sources)\b(?![ -](?:file|files|change|diff)\b)`,
 	String.raw`\bno other files?\b(?! (?:in|of) (?:the|this) (?:change|diff|commit|pull request)\b)[^.;]{0,30}\b(?:references?|imports?|calls?|uses?|instantiates?|consumes?|wires?|depends? on|handles?|catches?|validates?)\b|\b(?:referenced|imported|called|used|instantiated|consumed|handled) (?:by|from|in) no other files?\b|\breferences from other files\b`,
-	String.raw`\b(?:the|this) (?:whole |entire |reviewed |pinned )?(?:repository|repo|codebase|code base|checkout)\b(?! (?:method|call|class|interface|layer|bean|query|lookup|result|field|object|instance|step|action|policy|settings?)s?\b)[^.]{0,40}\b(?:contains no|has no|holds no|defines no|declares no|registers no|lacks?|never|does not|doesn't)\b|\b(?:the|this) (?:project|application)\b(?![ -](?:code|manifest|inventory|policy|board|tracker)\b)[^.]{0,40}\b(?:defines no|declares no|registers no|never)\b`,
+	String.raw`(?<!from )\b(?:the|this) (?:whole |entire |reviewed |pinned )?(?:repository|repo|codebase|code base|checkout)\b(?! (?:method|call|class|interface|layer|bean|query|lookup|result|field|object|instance|step|action|policy|settings?)s?\b)[^.]{0,40}\b(?:contains no|has no|holds no|defines no|declares no|registers no|lacks?|never|does not|doesn't)\b|\b(?:the|this) (?:project|application)\b(?![ -](?:code|manifest|inventory|policy|board|tracker)\b)[^.]{0,40}\b(?:defines no|declares no|registers no|never)\b`,
 	String.raw`\b(?:nothing else|nothing in the (?:project|application|code ?base|repository|repo|checkout)|no (?:other )?(?:code|callers?)(?! path| (?:in|of)\b)|none of (?:the|its) callers)\b[^.]{0,60}\b(?:catch(?:es)?|handles?)\b(?!\()`,
 ];
 export const ABSENCE_DISCLAIMER = String.raw`\b(?:did|does|do|could|can|would)(?: not|n't) (?:\w+ ){0,1}?(?:establish|inspect|examine|search|judge)\w*\b|\bnot (?:established|inspected|examined|searched|judged)\b|\bwithout (?:establishing|inspecting|examining|searching|judging)\b|\bnot that\b|\b(?:was|were) not (?:examined|inspected|judged)\b|\bno (?:[\w-]+ ){0,8}?(?:was|were) (?:examined|inspected|judged)\b`;
@@ -767,8 +767,13 @@ function finds(term: SearchTerm, words: readonly string[]): boolean {
 
 function holdsTerm(terms: readonly SearchTerm[], text: string): boolean {
 	const words = wordsOf(text);
-	const tokens = new Set(text.split(TOKEN_BREAK));
-	return terms.some((term) => (term.ignoresCase ? finds(term, words) : tokens.has(term.word)));
+	const tokens = text.split(TOKEN_BREAK);
+	const folded = new Set(tokens.map((token) => token.toLowerCase()));
+	return terms.some((term) =>
+		term.ignoresCase
+			? folded.has(term.word.toLowerCase()) || finds(term, words)
+			: tokens.includes(term.word),
+	);
 }
 
 const claimed = (clause: string) =>
@@ -813,13 +818,27 @@ export function unsearchedClaim(
 	consulted: boolean,
 ): string | undefined {
 	const terms = patterns.flatMap(termsOf);
-	const claims = texts.flatMap((text) => text.split(CLAUSE_END)).filter(claimed);
-	if (claims.length === 0) {
-		return consulted && !holdsTerm(terms, subject) ? subject : undefined;
-	}
-	return claims.find(
-		(clause) => !holdsTerm(terms, content(clause).length === 0 ? subject : clause),
-	);
+	return claimsOf(subject, texts, consulted).find((claim) => !holdsTerm(terms, claim));
+}
+
+/** The first claim that a search with matches names: the result must then say what they are. */
+export function claimWithHits(
+	subject: string,
+	texts: readonly string[],
+	patternsWithMatches: readonly string[],
+	consulted: boolean,
+): string | undefined {
+	const terms = patternsWithMatches.flatMap(termsOf);
+	return claimsOf(subject, texts, consulted).find((claim) => holdsTerm(terms, claim));
+}
+
+/** The text of each claim: a clause that names its own subject, or else what the result looked for. */
+function claimsOf(subject: string, texts: readonly string[], consulted: boolean): string[] {
+	const clauses = texts
+		.flatMap((text) => text.split(CLAUSE_END))
+		.filter(claimed)
+		.map((clause) => (content(clause).length === 0 ? subject : clause));
+	return clauses.length === 0 && consulted ? [subject] : clauses;
 }
 
 /** The texts and warrants of a submission that the absence check reads, as the candidate carries them. */
@@ -862,7 +881,7 @@ export interface UnreadCheckoutClaim {
  * needs a search of the whole checkout in this session: a complete read of one file is a complete source of that file,
  * not of the tree (ADR 0064 § Absence). A submission of a review that reads a checkout, whose words say the repository
  * lacks something, needs the same. Without a checkout captured whole, no search can show it. The session is asked once
- * per practice (`ask`), and once more when its search names something else (`askUntied`); a resubmission goes to admission, which withholds such a result, so a session that cannot
+ * per practice (`ask`), once more when its search names something else (`askUntied`), and once more when that search found matches (`askHits`); a resubmission goes to admission, which withholds such a result, so a session that cannot
  * repair it does not spend the practice's refusals.
  */
 export function unreadCheckoutClaim(
@@ -880,8 +899,8 @@ export function unreadCheckoutClaim(
 			receipt.sourceKind === TREE_SOURCE && receipt.status === "SEARCHED" && receipt.path === ".",
 	);
 	const searches = receipts.map((receipt) => receipt.pattern ?? "");
-	const withoutMatches = receipts
-		.filter((receipt) => receipt.matches === 0)
+	const withMatches = receipts
+		.filter((receipt) => receipt.matches !== 0)
 		.map((receipt) => receipt.pattern ?? "");
 	// A could-not-determine result says nothing about the work.
 	if (submission.outcome === "COULD_NOT_DETERMINE") {
@@ -906,14 +925,14 @@ export function unreadCheckoutClaim(
 					}
 				: undefined;
 		}
-		const unexplained = unsearchedClaim(subject, textsOf(submission), withoutMatches, consulted);
+		const unexplained = claimWithHits(subject, textsOf(submission), withMatches, consulted);
 		if (unexplained === undefined || search?.hits !== undefined || inapplicability !== undefined) {
 			return undefined;
 		}
 		return askHits
 			? {
 					kind: "hits",
-					text: `the search that names this claim found matches: "${unexplained}". A match can show that the thing exists. Read the matches, then say in evidence.search.hits what they are and why they do not show it, or remove the claim and keep only what the cited lines show.`,
+					text: `a search that names this claim found matches: "${unexplained}". A match can show that the thing exists. Read the matches, then add evidence.search with consulted, lookedFor, boundary and hits, where hits says what the matches are and why they do not show the thing. Or remove the claim and keep only what the cited lines show.`,
 				}
 			: undefined;
 	}

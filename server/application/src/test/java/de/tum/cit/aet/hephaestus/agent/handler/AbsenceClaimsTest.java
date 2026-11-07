@@ -166,7 +166,10 @@ class AbsenceClaimsTest extends BaseUnitTest {
                         "The new code calls get() without a check on the result from the repository.",
                         "The controller has no timeout on the request from the application.",
                         "No fallback is given for values from the project configuration.",
-                        "There is no null check in this repository method."))
+                        "There is no null check in this repository method.",
+                        "The result from the repository has no null check.",
+                        "There is no check in the repository's method.",
+                        "The result has no null check in the repository implementation."))
                 .noneMatch(AbsenceClaims::claimed);
     }
 
@@ -183,6 +186,15 @@ class AbsenceClaimsTest extends BaseUnitTest {
                             vector.path("consulted").asBoolean()))
                     .as(vector.path("name").asString())
                     .isEqualTo(vector.path("tied").asBoolean());
+            if (vector.has("patternsWithMatches")) {
+                assertThat(AbsenceClaims.hitsOwed(
+                                vector.path("subject").asString(),
+                                strings(vector.path("texts")),
+                                strings(vector.path("patternsWithMatches")),
+                                vector.path("consulted").asBoolean()))
+                        .as(vector.path("name").asString())
+                        .isEqualTo(vector.path("owesHits").asBoolean());
+            }
         }
     }
 

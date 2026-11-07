@@ -9,7 +9,11 @@
 			"Nothing in the repository retries a failed call."
 		],
 		"consulted": true,
-		"tied": true
+		"tied": true,
+		"patternsWithMatches": [
+			"(?i)retry"
+		],
+		"owesHits": true
 	},
 	{
 		"name": "a search that cannot find the claim's word",
@@ -33,7 +37,11 @@
 			"The repository has no retry logic."
 		],
 		"consulted": true,
-		"tied": true
+		"tied": true,
+		"patternsWithMatches": [
+			"(?i)zzz"
+		],
+		"owesHits": false
 	},
 	{
 		"name": "a word boundary changes nothing",
@@ -75,7 +83,11 @@
 			"No other file references it."
 		],
 		"consulted": false,
-		"tied": true
+		"tied": true,
+		"patternsWithMatches": [
+			"(?i)retry"
+		],
+		"owesHits": true
 	},
 	{
 		"name": "several claims, each named",
@@ -87,7 +99,11 @@
 			"The repository has no retry logic; the repository has no timeout setting."
 		],
 		"consulted": false,
-		"tied": true
+		"tied": true,
+		"patternsWithMatches": [
+			"(?i)timeout"
+		],
+		"owesHits": true
 	},
 	{
 		"name": "a limit of the review is no claim",
@@ -456,6 +472,30 @@
 			"The repository has no IndexOutOfBoundsException."
 		],
 		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "an identifier that ends in a generic word counts as a whole token",
+		"patterns": [
+			"(?i)UserRepository"
+		],
+		"subject": "the UserRepository",
+		"texts": [
+			"No other file references UserRepository."
+		],
+		"consulted": false,
+		"tied": true
+	},
+	{
+		"name": "an identifier that starts with a generic word counts as a whole token",
+		"patterns": [
+			"(?i)handleError"
+		],
+		"subject": "handleError",
+		"texts": [
+			"No other file calls handleError."
+		],
+		"consulted": false,
 		"tied": true
 	}
 ]

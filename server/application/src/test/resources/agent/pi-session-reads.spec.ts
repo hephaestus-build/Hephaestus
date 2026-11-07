@@ -19,6 +19,7 @@ import {
 import {
 	SessionReads,
 	claimsAbsence,
+	claimWithHits,
 	unreadCheckoutClaim,
 	unsearchedClaim,
 } from "../../../main/resources/agent/pi-session-reads.ts";
@@ -1137,7 +1138,7 @@ void test("a claim whose search found matches must say what they are, and a clea
 	const found = hostCoverage([{ status: "SEARCHED", path: ".", pattern, matches: 3 }]);
 	const asked = unreadCheckoutClaim(stored, found, ASK);
 	assert.equal(asked?.kind, "hits");
-	assert.match(asked.text, /evidence\.search\.hits/u);
+	assert.match(asked.text, /add evidence\.search with .* hits/u);
 	assert.equal(unreadCheckoutClaim(stored, found, { ...ASK, askHits: false }), undefined);
 	assert.equal(
 		unreadCheckoutClaim(
@@ -1324,11 +1325,20 @@ const absenceVectors = z
 			texts: z.array(z.string()),
 			consulted: z.boolean(),
 			tied: z.boolean(),
+			patternsWithMatches: z.array(z.string()).optional(),
+			owesHits: z.boolean().optional(),
 		}),
 	)
 	.parse(JSON.parse(readFileSync(new URL("absence-search-vectors.json", import.meta.url), "utf8")));
-for (const { name, patterns, subject, texts, consulted, tied } of absenceVectors) {
+for (const vector of absenceVectors) {
+	const { name, patterns, subject, texts, consulted, tied } = vector;
 	void test(`an absence and its search: ${name}`, () => {
 		assert.equal(unsearchedClaim(subject, texts, patterns, consulted) === undefined, tied);
+		if (vector.patternsWithMatches !== undefined) {
+			assert.equal(
+				claimWithHits(subject, texts, vector.patternsWithMatches, consulted) !== undefined,
+				vector.owesHits,
+			);
+		}
 	});
 }

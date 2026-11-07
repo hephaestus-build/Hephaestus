@@ -313,9 +313,9 @@ public class ReviewOutputService {
     }
 
     /**
-     * Refuses a claim that no search names, and one whose naming searches all found matches when the result does not
-     * say what those are. A match need not refute an absence, but the result must face it. A ruled-out prerequisite
-     * accounts for its search in {@code ruledOutBy}.
+     * Refuses a claim that no search names, and one that a search with matches names when the result does not say what
+     * those are. A match need not refute an absence, but the result must face it. A ruled-out prerequisite accounts for
+     * its search in {@code ruledOutBy}.
      */
     private static void requireSearchFor(
             Candidate candidate, List<ReadReceipt> searches, String claim, boolean consulted) {
@@ -327,14 +327,14 @@ public class ReviewOutputService {
                     null);
         var search = candidate.search();
         if (candidate.inapplicability() != null || (search != null && search.hits() != null)) return;
-        var withoutMatches = searches.stream()
-                .filter(receipt -> Objects.equals(receipt.matches(), 0))
+        var withMatches = searches.stream()
+                .filter(receipt -> !Objects.equals(receipt.matches(), 0))
                 .map(ReadReceipt::pattern)
                 .toList();
-        if (!AbsenceClaims.searchedFor(candidate, withoutMatches, consulted))
+        if (AbsenceClaims.hitsOwed(candidate, withMatches, consulted))
             throw new CandidateEvidenceVerifier.Unverified(
                     CandidateRefusal.ABSENCE_HITS_UNEXPLAINED,
-                    claim + ", but the search that names it found matches, and the result does not say what they are",
+                    claim + ", but a search that names it found matches, and the result does not say what they are",
                     null);
     }
 
