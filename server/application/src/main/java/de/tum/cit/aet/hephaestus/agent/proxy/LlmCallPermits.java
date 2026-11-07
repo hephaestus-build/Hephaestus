@@ -240,13 +240,12 @@ public class LlmCallPermits {
                     pendingRelease.put(id, poolId);
                     // In this order: the delete waits for another worker's grant of this request, which the release
                     // then sees and closes. The other way round, the grant would stay open with no one to close it.
-                    transactions.executeWithoutResult(status -> {
+                    Boolean freed = transactions.execute(status -> {
                         rows.abandon(id, workerId);
-                        rows.release(id, workerId);
-                        notifyPool(poolId);
+                        return releaseRow(id, poolId);
                     });
                     pendingRelease.remove(id);
-                    released(poolId);
+                    if (Boolean.TRUE.equals(freed)) released(poolId);
                 } catch (RuntimeException failed) {
                     log.warn(
                             "Queued model request awaits cleanup: poolId={}, error={}",
@@ -353,6 +352,12 @@ public class LlmCallPermits {
             if (rows.grant(head.getId(), tokenBound(pool)) != 1) return granted;
             granted = true;
         }
+    }
+
+    private boolean releaseRow(UUID id, long poolId) {
+        if (rows.release(id, workerId) != 1) return false;
+        notifyPool(poolId);
+        return true;
     }
 
     private void released(long poolId) {
@@ -468,12 +473,9 @@ public class LlmCallPermits {
             for (var release : Map.copyOf(pendingRelease).entrySet()) {
                 UUID id = release.getKey();
                 long poolId = release.getValue();
-                transactions.executeWithoutResult(status -> {
-                    rows.release(id, workerId);
-                    notifyPool(poolId);
-                });
+                Boolean freed = transactions.execute(status -> releaseRow(id, poolId));
                 pendingRelease.remove(id);
-                released(poolId);
+                if (Boolean.TRUE.equals(freed)) released(poolId);
             }
             if (ids.isEmpty()) return;
             long attempted = System.nanoTime();
@@ -814,14 +816,13 @@ public class LlmCallPermits {
             if (held.remove(id, this)) meters.pool(pool).active(callClass).decrementAndGet();
             pendingRelease.put(id, poolId);
             try {
-                transactions.executeWithoutResult(status -> {
+                Boolean freed = transactions.execute(status -> {
                     // First, in the order every grant takes these locks.
                     if (served) learn(this);
-                    rows.release(id, workerId);
-                    notifyPool(poolId);
+                    return releaseRow(id, poolId);
                 });
                 pendingRelease.remove(id);
-                released(poolId);
+                if (Boolean.TRUE.equals(freed)) released(poolId);
             } catch (RuntimeException failed) {
                 log.warn(
                         "Closed model call awaits permit release: pool={}, error={}",

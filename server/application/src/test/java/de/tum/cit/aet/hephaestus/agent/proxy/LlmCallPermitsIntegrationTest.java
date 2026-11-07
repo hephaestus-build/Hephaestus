@@ -624,6 +624,30 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldNotSendAReleaseHintWhenAWaitingRequestAbandons() throws Exception {
+        long pool = pool(1);
+        var notifications = new LlmPoolNotifications(dataSource);
+        var received = new LinkedBlockingQueue<Long>();
+        var listening = new CompletableFuture<Void>();
+        try (var active = admit(workerA, pool, LlmCallClass.REQUEST, 1)) {
+            assertThat(active.isRevoked()).isFalse();
+            notifications.subscribe(received::add, () -> listening.complete(null));
+            listening.get(5, TimeUnit.SECONDS);
+
+            assertThat(probe(workerB, pool, LlmCallClass.REQUEST, 2)).isNull();
+            // Commit order makes this a barrier: an abandon hint would be delivered before it.
+            transactions.executeWithoutResult(
+                    status -> rows.notifyPool(LlmPoolNotifications.CHANNEL, Long.toString(Long.MAX_VALUE)));
+
+            assertThat(received.poll(5, TimeUnit.SECONDS)).isEqualTo(Long.MAX_VALUE);
+            assertThat(received).isEmpty();
+            assertThat(rows.countActive(pool)).isEqualTo(1);
+        } finally {
+            notifications.destroy();
+        }
+    }
+
+    @Test
     void shouldHandOffARemoteGrantAfterReleaseWithDatabaseNotifications(TestReporter reporter) throws Exception {
         var first = new LlmPoolNotifications(dataSource);
         var second = new LlmPoolNotifications(dataSource);
