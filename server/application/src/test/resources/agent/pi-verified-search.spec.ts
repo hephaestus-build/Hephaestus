@@ -183,6 +183,13 @@ writeFileSync(
 	Buffer.concat([Buffer.from([0xff, 0xfe, 0xff, 0xfe]), utf16("import os\n")]),
 );
 writeFileSync(
+	path.join(texts, "doubled-big.txt"),
+	Buffer.concat([
+		Buffer.from([0xfe, 0xff, 0xfe, 0xff]),
+		Buffer.from(utf16("import be\n")).swap16(),
+	]),
+);
+writeFileSync(
 	path.join(texts, "odd.txt"),
 	Buffer.concat([Buffer.from([0xff, 0xfe]), utf16("evil"), Buffer.from([0x41])]),
 );
@@ -202,6 +209,7 @@ const searches: [pattern: string, flags: readonly string[]][] = [
 	["ΣΑΣ", ["--ignore-case", "--fixed-strings"]],
 	["hidden", []],
 	["^import os", []],
+	["^import be", []],
 	["evil.", []],
 	["a.c", ["--fixed-strings"]],
 ];
@@ -258,16 +266,20 @@ for (const [pattern, flags] of searches) {
 	);
 }
 
-// In this file each pattern matches for `rg`, and JavaScript's reading of it would find nothing to hide.
+// In this file each pattern matches for `rg`, so a loop that read it and found less would earn a false receipt.
 const apart = mkdtempSync(path.join(tmpdir(), "verified-search-apart-"));
-writeFileSync(path.join(apart, "a.txt"), "x\r\nab&\nab~\naA\n[]\n");
+writeFileSync(path.join(apart, "a.txt"), "x\r\n&\n~\naA\n[]\nZ\n5\n \n");
 for (const [pattern, ignoreCase] of [
 	["(?-s:x.)$", false],
 	["^[^a&&b]$", false],
 	["^[^a~~b]$", false],
+	["^[^!--b]$", false],
+	[String.raw`^[^\W]$`, false],
+	[String.raw`^[^\D]$`, false],
+	[String.raw`^[^\S]$`, false],
 	[String.raw`^a[^\P{Lu}]$`, true],
 	["[]A-[]", false],
-	["[^]A-[]", false],
+	["[^]A-[x]", false],
 ] as const) {
 	void test(`a pattern that rg and the loop read apart proves nothing: ${pattern}`, async () => {
 		assert.deepEqual(await proveSearches(apart, [claim({ pattern, ignoreCase })]), [false]);

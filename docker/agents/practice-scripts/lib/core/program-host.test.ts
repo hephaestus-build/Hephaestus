@@ -1185,6 +1185,32 @@ void test("direct model calls share the attempt's budget: a later practice sees 
 	]);
 });
 
+void test("a model call that a lost side stops counts as unavailable, not as a deadline", async () => {
+	const cancel = new AbortController();
+	const call = { prompt: [{ role: "user", content: [{ type: "text", text: "Say hi." }] }] };
+	const chat = new MockLanguageModelV4({
+		doGenerate: async ({ abortSignal }) => {
+			cancel.abort(new UnratedError("unavailable", "the tools side stopped"));
+			abortSignal?.throwIfAborted();
+			throw new Error("the host left this call running");
+		},
+	});
+	const ws = await workspace({
+		waits: program(
+			"definePracticeScript",
+			`{
+				meta: { models: { chat: "required" } },
+				async run(ctx) { await ctx.models.chat.doGenerate(${JSON.stringify(call)}); return null; },
+			}`,
+		),
+	});
+	const { outcome } = await run(ws, "waits", { models: { chat }, signal: cancel.signal });
+	assert.equal(outcome.stopReason, "unavailable");
+	assert.deepEqual(outcome.models, [
+		{ slot: "chat", need: "required", bound: true, failures: { unavailable: 1 } },
+	]);
+});
+
 void describe("a program that gives no result", () => {
 	void test("one that throws an unrated error fails with its reason", async () => {
 		const ws = await workspace({

@@ -139,7 +139,7 @@ class KubernetesIsolationProbeJobsTest {
                 .allSatisfy(failure -> assertThat(failure).contains("did not start: CreateContainerError"));
         assertThat(created).hasSize(3);
         assertThat(mostAtOnce.get())
-                .as("the sandbox quota holds two probe Pods")
+                .as("never more than two probe Pods at once")
                 .isLessThanOrEqualTo(2);
         assertThat(created.values()).allSatisfy(job -> {
             assertThat(job.getSpec().getBackoffLimit()).isZero();
