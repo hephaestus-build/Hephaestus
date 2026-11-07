@@ -2,6 +2,7 @@
 // Each case names what a compromised tools side tries, and what it must not reach.
 
 import assert from "node:assert/strict";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { once } from "node:events";
 import { mkdtempSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { Server } from "node:net";
@@ -108,7 +109,7 @@ after(() => {
 	server.close();
 });
 
-async function attempt(slug: string) {
+async function attempt(slug: string, onReview: () => void = () => undefined) {
 	writeFileSync(seen, "");
 	const reviews: unknown[] = [];
 	const services: ProgramServices = {
@@ -130,6 +131,7 @@ async function attempt(slug: string) {
 		awaitModel: () => () => undefined,
 		review: async (options) => {
 			reviews.push(options);
+			onReview();
 			return REVIEWED;
 		},
 		signal: new AbortController().signal,
@@ -218,6 +220,24 @@ void test("a program gets one session, however many it asks for", async () => {
 	const { reviews, outcome } = await attempt("second-review");
 	assert.equal(reviews.length, 1);
 	assert.equal(outcome.calls.review, 1);
+});
+
+void test("each program's requests stay in the context that started it, on one shared socket", async () => {
+	const practice = new AsyncLocalStorage<string>();
+	const seen = await Promise.all(
+		["first", "second", "third"].map(async (name) =>
+			practice.run(name, async () => {
+				const reviews: (string | undefined)[] = [];
+				await attempt("review", () => {
+					reviews.push(practice.getStore());
+				});
+				return { name, reviews };
+			}),
+		),
+	);
+	for (const { name, reviews } of seen) {
+		assert.deepEqual(reviews, [name]);
+	}
 });
 
 void test("nothing of a session reaches the program", async () => {

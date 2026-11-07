@@ -35,7 +35,9 @@ class SandboxExitsTest extends BaseUnitTest {
         var exit = SandboxExits.exit(pod(
                 null, ended(KubernetesPods.INITIALIZER, 0, "Completed"), ended(KubernetesPods.LOOP, 137, "OOMKilled")));
 
-        assertThat(exit).isEqualTo(new SandboxExits.Exit(SandboxExits.Reason.OOM_KILLED, KubernetesPods.LOOP, 137, "OOMKilled"));
+        assertThat(exit)
+                .isEqualTo(
+                        new SandboxExits.Exit(SandboxExits.Reason.OOM_KILLED, KubernetesPods.LOOP, 137, "OOMKilled"));
     }
 
     @Test

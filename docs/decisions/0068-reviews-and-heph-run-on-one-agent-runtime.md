@@ -208,12 +208,16 @@ Each review attempt is one Job with one Pod:
 
 - An **isolation init** container waits until the NetworkPolicy holds.
 - A **workspace init** container downloads the captured archive from the gateway.
+- After it fills the workspace, the same init container derives the change view, with no credential in its environment. Only the image's code and the repository's data exist then, so Git's answers can be trusted. A diff has no hash to prove it, and it can exceed what one tool call streams.
 - The **tools** container is a native sidecar. It runs under its own user ID, with no credential and `/workspace` read-only. It runs bash, git, rg, fd and the practice-script host. It writes only `/tmp` and its spill directory. It serves tool protocol v1 on a Unix socket.
 - The **loop** container is trusted. It runs the review program and holds the attempt token in memory.
   It runs Node with `--permission`: a read grant on `/workspace`, a worker grant for codemode ([decision H](#h-codemode-stays-in-the-review-loop-as-quickjs)), and no child-process grant.
   It owns `work/notes`, the sessions and `out/`. The tools side never writes them.
   The loop's own git calls run on the tools side. The loop checks each git output that it treats as authoritative against files that it reads itself.
-- The Pod has egress to the gateway only. The two containers do not share a PID namespace.
+- The **programs** container is a native sidecar too, in a Pod whose practices include a custom program, and only there. It has the same image and its own user ID, and it serves `script.run` alone on its own socket.
+  A custom program may return a result that its code decided, so a command must not reach it. It runs apart from the tools because they share nothing it needs: a program has no shell and no tools, and everything it reads goes through the loop. The boundary is the missing mount. `fsGroup` is Pod-wide, so file modes cannot separate these sockets, and the tools container does not mount this one.
+- The tools and program sides can open only Unix sockets, by a system call filter that `setpriv` loads before they start. A command thus has no route to the gateway, although it shares the Pod's network. The filter also refuses `io_uring`, which opens a socket without the `socket` call.
+- The Pod has egress to the gateway only. The containers do not share a PID namespace.
 - Each container has its own memory limit. An out-of-memory kill of the tools never takes the loop. The attempt then ends with a named capture failure, never with a claim about the work.
 
 ### Tool placement
@@ -226,11 +230,12 @@ Coverage, admission and uploads come only from bytes that the loop read or verif
 | `read` of captured inputs | The loop. It counts for coverage. | Documents (`INDEX.md`, `FIELDS.md`, `inputs/context/**`): the attempt's memory in the loop. Repositories: the tools Pod. |
 | `read` of scratch and spill files (`/tmp/**`) | The tools side. It never counts for coverage. | The tools Pod |
 | `ls`, `find` | The loop, over captured inputs, with a Node glob | The tools Pod, through `bash` |
-| `grep` | The tools side, as `rg`. It counts for coverage only when the loop verifies the bytes against the pinned file. | `bash` with `rg` |
+| `grep` | The tools side, as `rg`. A search proves an absence only when the loop searches the same files itself, on a worker that it can end, and finds no match that the tools side left out. No hash can show a missing match. Anything it cannot settle in time proves nothing. | `bash` with `rg` |
 | `bash` | The tools side, streamed | The tools Pod |
-| git for the change basis and pinned blobs | The tools side. The loop re-checks each authoritative output. | — |
+| git for the change basis | The workspace init container, before anything untrusted runs. | — |
+| git for pinned blobs | The tools side. The loop walks the hashes from a commit that the capture pinned, parent by parent, then tree by tree. A commit id that a citation names counts only when that walk reaches it: a hash proves only that bytes match their id. | — |
 | codemode | The loop, as Pi's QuickJS interpreter ([decision H](#h-codemode-stays-in-the-review-loop-as-quickjs)). Its stubs call the tools of this table. | Never |
-| Practice scripts | The tools side, `script.run` | — |
+| Practice scripts | The program side, `script.run` | — |
 | Result, draft, admission and link tools, and `search_conversation` | The loop | The loop |
 
 ### The tools Pod
@@ -287,7 +292,10 @@ One framing, over a Unix socket in the review agent Pod and over TCP to a tools 
   - `reset` ends every process of the tools user but the tools program, and clears `/tmp`.
     It finds them by user id in `/proc`. A process cannot leave the tools user, so `reset` also ends one that cleared its environment.
     A review uses `reset` after a restart of the tools side or a stall. Heph deletes the Job instead.
-  - `script.run {id, slug, inputs}`, for reviews only. Its one callback is `model.call`, under the checks of [ADR 0055](0055-practice-scripts-use-one-result-contract.md).
+  - `script.run {id, slug, inputs}`, for reviews with a custom program, on the program side only. It has exactly three callbacks, and the loop answers each of them: `model.call`, under the checks of [ADR 0055](0055-practice-scripts-use-one-result-contract.md), `read`, from the captured inputs, and `review`.
+    An earlier form of this decision named `model.call` alone. That cannot run a practice: a program ends at `ctx.review`, and a session stays in the loop because it holds the token and owns coverage.
+    `review` is bounded. It ends the program, so a program gets one session. It spends the practice's budget. Its options enter the prompt as data, and the session has the tools and the read scope of a built-in practice. No byte of the session returns to the program.
+    A built-in practice runs in the loop and needs none of this.
 - **Limits, on both sides.** At most 8 MiB streamed for each `exec`, with the rest in the spill file. At most 64 MiB streamed for each attempt.
   A spill file holds at most 256 MiB, and the call waits while the disk catches up. The `/tmp` volume's `sizeLimit` (`SandboxLayout.SCRATCH_BYTES`, 1 GiB) bounds all spill files and scratch of an attempt together. A Pod past it is evicted, and the attempt ends with a named capture failure. `put` streams with backpressure up to the checkout bound. The loop bounds the bytes that it buffers for each connection.
 
@@ -383,11 +391,11 @@ Each layer updates the [threat model](../admin/threat-model.mdx) when it ships. 
 | Entry | Change |
 |---|---|
 | SB-1: privilege escalation and host escape | Every sandbox Pod runs in a user namespace (`hostUsers: false`), so its root is no user of the node ([decision C](#c-user-namespaces-are-required)). gVisor is optional hardening against the shared kernel ([decision E](#e-gvisor-is-optional-hardening)). It does not separate two containers of one Pod, because they share one gVisor kernel. |
-| SB-2: secret theft and proxy abuse | One `AttemptJwt` for each attempt, fenced on its lease. A cap on model calls in flight for each attempt. The tools container of a review agent Pod and every Heph tools Pod hold no credential. The Heph loop's assignment credential is a Secret in the release namespace, mounted only in the Heph loop and the worker. |
+| SB-2: secret theft and proxy abuse | One `AttemptJwt` for each attempt, fenced on its lease. A cap on model calls in flight for each attempt. The tools container of a review agent Pod and every Heph tools Pod hold no credential. The Heph loop's assignment credential is a Secret in the release namespace, mounted only in the Heph loop and the worker. A worker holds more than any sandbox: the database login, every stored credential and each workspace's rows. Tenancy is an application check, so code execution in the worker reaches all of them. This decision keeps that process out of reach of a sandbox; it does not limit what it holds. |
 | SB-3: exfiltration and cross-execution access | A Heph tools Pod has no egress. It accepts ingress only from the Heph loop, on the tools port. A review agent Pod keeps gateway-only egress. The only way out of an attempt is the delivered text, bounded by admission and by composition from admitted records. An injection canary evaluation measures it. |
 | SB-4: persistence after execution | One cleanup rule: a Pod whose attempt holds no lease goes. Each Job has a deadline and a TTL. The worker deletes a Pod at the end, on `ContextChanged` and on an erasure, so person data leaves the node disk with the Pod. |
 | SB-6: tampered transport | Tool protocol v1 is a trust boundary. The loop caps frames, forwards only allowlisted callbacks for its own attempt, and uploads nothing that the tools side can write. A tools Pod proves its binding with a nonce. |
-| SB-7: a cluster that does not hold the boundary | `pods/exec` leaves the worker's Role. The probe checks the tools Pod policy: ingress from the Heph loop only, and no egress. The probe also checks that no sandbox Pod reaches the assignment path. A probe step runs as the user of the review's tools container. An unauthenticated gateway path gets `401`. Every other address and DNS fail. Nothing listens on loopback. User namespaces are required, so the probe no longer reports them as a tier. |
+| SB-7: a cluster that does not hold the boundary | `pods/exec` leaves the worker's Role. The probe checks the tools Pod policy: ingress from the Heph loop only, and no egress. The probe also checks that no sandbox Pod reaches the assignment path. A probe step runs as the user of the review's tools container: it gets no connection to the gateway, and the program socket does not exist for it. An unauthenticated gateway path gets `401` from any other caller. Every other address and DNS fail. Nothing listens on loopback. User namespaces are required, so the probe no longer reports them as a tier. |
 | New: a confused deputy | The loop acts with a token on bytes from the tools side. The callback allowlist bounds what tools can make it do. Coverage comes only from bytes that the loop read or verified. A hostile tools server test proves both on both transports. |
 | New: codemode in the review loop | Model-written code runs in Pi's QuickJS interpreter inside the review loop's process, beside the attempt token ([decision H](#h-codemode-stays-in-the-review-loop-as-quickjs)). The interpreter has no file, process or network binding, and a heap cap of 256 MiB. Its only exits are tool stubs. The cost: an escape from QuickJS and then from V8's WebAssembly sandbox gives the attacker that review's token. The token reaches only its own attempt, under the cap on model calls in flight. |
 | New: output floods | A tools side that streams without end cannot stop a loop: each `exec`, each attempt and each archive has a byte bound. |

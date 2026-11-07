@@ -391,11 +391,22 @@ public class KubernetesPods {
      * so the attempt's credential never reaches it. It mounts the workspace read-only and has its own {@code
      * /tmp}; the loop's {@code out}, {@code .pi} and {@code .sessions} are not mounted at all.
      */
-    private Container sidecar(Workload workload, String name, long uid, String socket, String nonce, String role) {
+    private Container sidecar(
+            Workload workload,
+            String name,
+            long uid,
+            String socket,
+            String nonce,
+            String role,
+            List<EnvVar> gitSettings) {
+        List<EnvVar> env = new ArrayList<>(gitSettings);
+        env.add(variable("TOOLS_NONCE", nonce));
+        env.add(variable("TOOLS_SOCKET", socket));
+        env.add(variable("TOOLS_ROLE", role));
         return base(name, workload.image(), uid)
                 .withRestartPolicy("Always")
                 .withCommand(limited(TOOLS_COMMAND))
-                .withEnv(variable("TOOLS_NONCE", nonce), variable("TOOLS_SOCKET", socket), variable("TOOLS_ROLE", role))
+                .withEnv(env)
                 .withVolumeMounts(
                         mount("workspace", WORKSPACE, true),
                         mount("work", "/workspace/work", true),

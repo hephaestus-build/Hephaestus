@@ -120,7 +120,9 @@ RUN mkdir -p /tmp/host-check/work/practice-scripts/practices && \
 
 RUN git config --system core.hooksPath /nonexistent && \
     git config --system core.fsmonitor false && \
-    git config --system safe.directory /workspace/inputs/sources/scm/repo
+    git config --system safe.directory /workspace/inputs/sources/scm/repo && \
+    # The tools run as another user than the one that filled the workspace.
+    git config --system --add safe.directory '/workspace/repos/*'
 
 ENV HOME=/home/agent
 ENV XDG_CONFIG_HOME=/home/agent/.local/config
@@ -202,7 +204,7 @@ RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions 
     chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     ln -s /opt/pi-sdk/node_modules /workspace/node_modules
 
-LABEL hephaestus.agent.runtime-contract=9
+LABEL hephaestus.agent.runtime-contract=10
 LABEL hephaestus.agent.node-version=${NODE_VERSION}
 LABEL hephaestus.agent.pi-version=${PI_VERSION}
 
