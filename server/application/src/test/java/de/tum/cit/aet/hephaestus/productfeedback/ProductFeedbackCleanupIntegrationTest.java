@@ -565,6 +565,32 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
         return receipt.id();
     }
 
+    @Test
+    void shouldAnswerARetryOfAStoppedReportWithNoContent() {
+        var receipt = feedbackService.add(
+                new FeedbackRequestDTO(ProductFeedback.Kind.BUG, "stopped-report-content", null, null, null),
+                Objects.requireNonNull(account(Account.AppRole.USER).getId()),
+                null,
+                false);
+        ProductFeedbackFiling filing = filings.findById(receipt.id()).orElseThrow();
+        ReflectionTestUtils.setField(filing, "state", FilingState.STOPPED);
+        filings.save(filing);
+
+        retry(receipt.id(), account(Account.AppRole.USER)).expectStatus().isForbidden().expectBody(Void.class);
+        retry(UUID.randomUUID(), admin).expectStatus().isNotFound().expectBody(Void.class);
+        retry(receipt.id(), admin).expectStatus().isNoContent().expectBody().isEmpty();
+
+        assertThat(filings.findById(receipt.id()).orElseThrow().getState()).isNotEqualTo(FilingState.STOPPED);
+    }
+
+    private WebTestClient.ResponseSpec retry(UUID id, Account actor) {
+        return webTestClient
+                .post()
+                .uri("/admin/product-feedback/" + id + "/retry")
+                .headers(as(actor))
+                .exchange();
+    }
+
     private WebTestClient.ResponseSpec confirm(UUID id, Account actor) {
         return webTestClient
                 .post()

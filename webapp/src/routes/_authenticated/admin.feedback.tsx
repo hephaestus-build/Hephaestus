@@ -55,15 +55,20 @@ const FILE_KEY = ["fileSavedProductFeedback"];
 const CONFIRM_KEY = ["confirmProductFeedbackCleanup"];
 
 const STATUS_OPTIONS: { value: FeedbackStatusFilter; label: string }[] = [
-	{ value: "OPEN", label: "Open" },
-	{ value: "RESOLVED", label: "Resolved" },
+	{ value: "OPEN", label: "Needs you" },
+	{ value: "IN_FLIGHT", label: "On its way" },
+	{ value: "ON_GITHUB", label: "On GitHub" },
+	{ value: "RESOLVED", label: "Closed" },
 	{ value: "ALL", label: "All" },
 ];
 
 export const Route = createFileRoute("/_authenticated/admin/feedback")({
 	head: instanceAdminHead("Product feedback"),
 	validateSearch: z.object({
-		status: z.enum(["OPEN", "RESOLVED", "ALL"]).optional().catch(undefined),
+		status: z
+			.enum(["OPEN", "IN_FLIGHT", "ON_GITHUB", "RESOLVED", "ALL"])
+			.optional()
+			.catch(undefined),
 		page: z.coerce.number().int().min(0).optional().catch(undefined),
 	}),
 	component: AdminProductFeedbackPage,
@@ -275,7 +280,7 @@ function AdminProductFeedbackPage() {
 			</Section>
 
 			<Section
-				title="Reports that wait for you"
+				title="Reports"
 				description={
 					emailStatus.data?.configured === false
 						? "This instance cannot send email, so no one is told about new reports. The sidebar count is the only signal. Marking one resolved does not notify the sender."

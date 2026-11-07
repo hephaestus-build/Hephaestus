@@ -23,8 +23,12 @@ final class IssueRenderer {
             @Nullable String browser,
             boolean drafted) {}
 
-    /** One rendered issue. */
-    record Rendered(String title, String body) {}
+    /**
+     * One rendered issue.
+     *
+     * @param shown what the reporter may read: the sections, without the footer, the reason or the marker
+     */
+    record Rendered(String title, String body, String shown) {}
 
     private static final Pattern MENTION = Pattern.compile("(?<![\\w`])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))");
     private static final Pattern REFERENCE = Pattern.compile("(?<![\\w`/])((?:[\\w.-]+/[\\w.-]+)?\\\\#\\d+)");
@@ -63,6 +67,7 @@ final class IssueRenderer {
         var body = new StringBuilder();
         if (privateReason != null)
             body.append("**Private because:** ").append(privateReason).append("\n\n");
+        int sections = body.length();
         if (draft.type() == Draft.Type.BUG) {
             section(
                     body,
@@ -83,6 +88,7 @@ final class IssueRenderer {
                     .append("/issues/")
                     .append(draft.related())
                     .append("\n\n");
+        String shown = body.substring(sections).strip();
         body.append("---\n");
         body.append(
                         context.drafted()
@@ -93,7 +99,7 @@ final class IssueRenderer {
         if (mention != null) body.append(" Reported by @").append(mention).append('.');
         if (reportId != null) body.append("\nReport ").append(code(reportId)).append(" in the instance admin console.");
         body.append("\n\n<!-- ").append(MARKER_PREFIX).append(marker).append(" -->\n");
-        return new Rendered(title(draft.title()), body.toString());
+        return new Rendered(title(draft.title()), body.toString(), shown);
     }
 
     /** A title is plain text on GitHub; dropping the {@code @} keeps a name from reading as a mention. */

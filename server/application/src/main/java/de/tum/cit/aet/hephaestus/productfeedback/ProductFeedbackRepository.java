@@ -26,21 +26,32 @@ interface ProductFeedbackRepository extends JpaRepository<ProductFeedback, UUID>
 
     void deleteAllByAccountId(long accountId);
 
-    /** The reports the admins still work on here: those not on GitHub, because none was filed or filing stopped. */
+    /** One slice of every report. The slices partition them: a resolved report is closed, whatever its filing says. */
     @WorkspaceAgnostic("Instance administrators read product feedback from every workspace and from none")
     @Query(value = """
                     SELECT p.* FROM product_feedback p LEFT JOIN product_feedback_filing f ON f.feedback_id = p.id
-                    WHERE (f.feedback_id IS NULL OR f.state IN ('SAVED', 'STOPPED'))
-                      AND (:status = 'ALL' OR (:status = 'OPEN' AND p.resolved_at IS NULL)
-                           OR (:status = 'RESOLVED' AND p.resolved_at IS NOT NULL))
-                    ORDER BY CASE WHEN :status = 'RESOLVED' THEN p.resolved_at ELSE p.created_at END DESC
+                    WHERE :status = 'ALL'
+                       OR (:status = 'RESOLVED'
+                           AND (p.resolved_at IS NOT NULL OR (f.state = 'FILED' AND f.issue_open = false)))
+                       OR (p.resolved_at IS NULL AND (
+                           (:status = 'OPEN' AND (f.feedback_id IS NULL OR f.state IN ('SAVED', 'STOPPED')))
+                           OR (:status = 'IN_FLIGHT' AND f.state IN
+                               ('DRAFT_QUEUED', 'DRAFTING', 'ANSWERED', 'HELD', 'QUEUED', 'FILING'))
+                           OR (:status = 'ON_GITHUB' AND f.state = 'FILED' AND f.issue_open IS DISTINCT FROM false)))
+                    ORDER BY CASE WHEN :status = 'RESOLVED' THEN COALESCE(p.resolved_at, p.created_at)
+                             ELSE p.created_at END DESC
                     """, countQuery = """
                     SELECT count(*) FROM product_feedback p LEFT JOIN product_feedback_filing f ON f.feedback_id = p.id
-                    WHERE (f.feedback_id IS NULL OR f.state IN ('SAVED', 'STOPPED'))
-                      AND (:status = 'ALL' OR (:status = 'OPEN' AND p.resolved_at IS NULL)
-                           OR (:status = 'RESOLVED' AND p.resolved_at IS NOT NULL))
+                    WHERE :status = 'ALL'
+                       OR (:status = 'RESOLVED'
+                           AND (p.resolved_at IS NOT NULL OR (f.state = 'FILED' AND f.issue_open = false)))
+                       OR (p.resolved_at IS NULL AND (
+                           (:status = 'OPEN' AND (f.feedback_id IS NULL OR f.state IN ('SAVED', 'STOPPED')))
+                           OR (:status = 'IN_FLIGHT' AND f.state IN
+                               ('DRAFT_QUEUED', 'DRAFTING', 'ANSWERED', 'HELD', 'QUEUED', 'FILING'))
+                           OR (:status = 'ON_GITHUB' AND f.state = 'FILED' AND f.issue_open IS DISTINCT FROM false)))
                     """, nativeQuery = true)
-    Page<ProductFeedback> findNotOnGitHub(@Param("status") String status, Pageable pageable);
+    Page<ProductFeedback> findForAdmin(@Param("status") String status, Pageable pageable);
 
     List<ProductFeedback> findAllByAccountIdOrderByCreatedAtDesc(long accountId);
 

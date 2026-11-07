@@ -29,6 +29,9 @@ const bugReport = {
 	pagePath: "/w/acme/practices/code-review",
 	appVersion: "0.71.0",
 	createdAt: "2026-09-11T09:00:00.000Z",
+	canTriage: true,
+	state: "SAVED_FOR_ADMINS",
+	route: "ADMINS",
 	canFile: false,
 	savedBeforeDisclosure: false,
 } satisfies Wire<FeedbackItem>;
@@ -41,6 +44,9 @@ const resolvedNote = {
 	createdAt: "2026-08-30T09:00:00.000Z",
 	resolvedAt: "2026-09-01T09:00:00.000Z",
 	resolvedBy: { id: 1, displayName: "Ada Lovelace" },
+	canTriage: true,
+	state: "SAVED_FOR_ADMINS",
+	route: "ADMINS",
 	canFile: false,
 	savedBeforeDisclosure: false,
 } satisfies Wire<FeedbackItem>;
@@ -296,7 +302,7 @@ describe("instance product feedback route", () => {
 		);
 		expect(screen.queryByText(resolvedNote.message)).toBeNull();
 
-		await user.click(screen.getByRole("button", { name: "Resolved" }));
+		await user.click(screen.getByRole("button", { name: "Closed" }));
 		await screen.findByText(resolvedNote.message);
 		expect(requested.at(-1)).toBe("RESOLVED");
 		expect(screen.queryByText(bugReport.message)).toBeNull();

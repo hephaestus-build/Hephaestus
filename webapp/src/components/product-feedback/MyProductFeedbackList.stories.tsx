@@ -73,7 +73,7 @@ export const PublicIssue: Story = {
 		);
 		await expect(canvas.getByText(/Closed as done/u)).toBeVisible();
 		const [first] = canvas.getAllByRole("button", { name: "Make private" });
-		await expect(first).toHaveAccessibleDescription(publicIssue.excerpt);
+		await expect(first).toHaveAccessibleDescription(publicIssue.message);
 		if (first !== undefined) {
 			await userEvent.click(first);
 		}

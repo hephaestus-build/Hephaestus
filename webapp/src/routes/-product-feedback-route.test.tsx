@@ -170,7 +170,7 @@ describe("product feedback that can become a public GitHub issue", () => {
 		return {
 			id: REPORT_ID,
 			kind: "FEEDBACK",
-			excerpt: "Pin a practice.",
+			message: "Pin a practice.",
 			createdAt: "2026-09-11T09:00:00.000Z",
 			state: "HELD",
 			route: "PUBLIC",

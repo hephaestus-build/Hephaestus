@@ -35,6 +35,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { hasText } from "@/lib/text";
 
+import { FiledIssue } from "./FiledIssue";
 import { ProductFeedbackDraftForm } from "./ProductFeedbackDraftForm";
 import { REPORT_STATE_DEFS } from "./report-state-defs";
 import {
@@ -156,7 +157,7 @@ function MyProductFeedbackRow({
 			</CardHeader>
 			<CardContent className="flex flex-col gap-2">
 				<p id={`${id}-excerpt`} className="break-words whitespace-pre-wrap">
-					{report.excerpt}
+					{report.message}
 				</p>
 				{hasText(report.issueUrl) && (
 					<p>
@@ -172,6 +173,9 @@ function MyProductFeedbackRow({
 					</p>
 				)}
 				{where !== undefined && <p className="text-muted-foreground">{where}</p>}
+				{hasText(report.issueTitle) && hasText(report.issueText) && (
+					<FiledIssue title={report.issueTitle} text={report.issueText} />
+				)}
 				{report.state === "HELD" && report.filedAfter !== undefined && (
 					<p className="text-muted-foreground">
 						Unless a check keeps it private, it becomes a public issue{" "}

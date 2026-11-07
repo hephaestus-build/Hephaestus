@@ -29,7 +29,6 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @ConditionalOnServerRole
 class MyReportsService {
-    private static final int EXCERPT = 140;
 
     private final ProductFeedbackFilingRepository filings;
     private final ProductFeedbackRepository feedback;
@@ -316,15 +315,16 @@ class MyReportsService {
     private MyProductFeedbackDTO dto(
             ProductFeedback report, @Nullable ProductFeedbackFiling filing, boolean instanceAdmin) {
         String message = report.getMessage().strip();
-        String excerpt = message.length() <= EXCERPT ? message : message.substring(0, EXCERPT - 1) + "…";
         if (filing == null)
             return new MyProductFeedbackDTO(
                     report.getId(),
                     report.getKind(),
-                    excerpt,
+                    message,
                     Objects.requireNonNull(report.getCreatedAt()),
                     ReportState.SAVED_FOR_ADMINS,
                     ReportRoute.ADMINS,
+                    null,
+                    null,
                     null,
                     null,
                     null,
@@ -348,10 +348,11 @@ class MyReportsService {
         boolean showsIssue = isPublicIssue || (instanceAdmin && filing.getState() == FilingState.FILED);
         FilingReason reason = filing.getReason();
         boolean held = filing.getState() == FilingState.HELD;
+        boolean filed = filing.getState() == FilingState.FILED;
         return new MyProductFeedbackDTO(
                 report.getId(),
                 report.getKind(),
-                excerpt,
+                message,
                 Objects.requireNonNull(report.getCreatedAt()),
                 state,
                 shown,
@@ -360,6 +361,8 @@ class MyReportsService {
                 showsIssue ? filing.getIssueUrl() : null,
                 showsIssue ? filing.getIssueNumber() : null,
                 Boolean.FALSE.equals(filing.getIssueOpen()) ? filing.getIssueStateReason() : null,
+                filed ? filing.getIssueTitle() : null,
+                filed ? filing.getIssueText() : null,
                 filing.getRemoved(),
                 draft == null || filing.getDraftedAt() == null ? null : draft.title(),
                 draft == null || !held ? null : draft.type() == Draft.Type.BUG ? draft.observed() : draft.problem(),
