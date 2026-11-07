@@ -369,7 +369,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         log.info("Falling back to group API for token validation: serverUrl={}, groupPath={}", serverUrl, groupPath);
         GitLabGroupResponse groupInfo = gitlabClient
                 .get()
-                .uri(serverUrl + "/api/v4/groups/{groupPath}", groupPath)
+                .uri(serverUrl + "/api/v4/groups/{groupPath}?with_projects=false", groupPath)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + patToken)
                 .retrieve()
                 .bodyToMono(GitLabGroupResponse.class)
