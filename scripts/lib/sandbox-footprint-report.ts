@@ -280,3 +280,19 @@ export function positiveInteger(value: string, option: string): number {
 	}
 	return parsed;
 }
+
+/** Reserve one model call to submit the result and one to finish the session. */
+export function footprintReadCalls(modelCalls: string, requested?: string): number {
+	const available = positiveInteger(modelCalls, "PI_PRACTICE_MODEL_CALLS") - 2;
+	if (available < 1) {
+		throw new Error("The footprint needs at least 3 model calls per practice");
+	}
+	const reads =
+		requested === undefined ? Math.min(12, available) : positiveInteger(requested, "--tool-calls");
+	if (reads > available) {
+		throw new Error(
+			`--tool-calls must be at most ${available} to leave room for result submission and completion`,
+		);
+	}
+	return reads;
+}

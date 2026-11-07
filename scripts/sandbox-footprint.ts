@@ -13,11 +13,12 @@
  * uses the same counters on Docker and Kubernetes. Placement and node overhead require a cluster run.
  *
  *   node scripts/sandbox-footprint.ts --stage <dir> [--image <ref>] [--reviews <n>] [--memory 3g]
- *     [--tool-calls 12] [--latency-ms 1500] [--node-options "--max-old-space-size=256"]
+ *     [--tool-calls <n>] [--latency-ms 1500] [--node-options "--max-old-space-size=256"]
  *     [--work <dir>] [--out <file>]
  *
  * The work directory receives the container logs, `samples.jsonl` and, without `--out`,
  * `footprint.json`. The run exits 1 unless its verdict shows that every review was measured.
+ * Reads default to at most 12 calls, leaving two staged model calls for submission and completion.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -37,6 +38,7 @@ import { asRecord, asString, asStringArray, isRecord, parseJson } from "./lib/js
 import { exitStatus, output, run, succeeds } from "./lib/process.ts";
 import {
 	BUDGETS,
+	footprintReadCalls,
 	largest,
 	NOT_STARTED,
 	parseSample,
@@ -55,7 +57,7 @@ const { values: options } = parseArgs({
 		reviews: { type: "string", default: "1" },
 		memory: { type: "string", default: "3g" },
 		cpus: { type: "string", default: "1" },
-		"tool-calls": { type: "string", default: "12" },
+		"tool-calls": { type: "string" },
 		"latency-ms": { type: "string", default: "1500" },
 		"work-seconds": { type: "string", default: "1500" },
 		"budget-seconds": { type: "string", default: "1200" },
@@ -69,7 +71,6 @@ const { values: options } = parseArgs({
 const stage = path.resolve(required(options.stage, "--stage"));
 const { image } = options;
 const reviews = positiveInteger(options.reviews, "--reviews");
-const toolCalls = positiveInteger(options["tool-calls"], "--tool-calls");
 const latencyMs = positiveInteger(options["latency-ms"], "--latency-ms");
 const workSeconds = positiveInteger(options["work-seconds"], "--work-seconds");
 const budgetSeconds = positiveInteger(options["budget-seconds"], "--budget-seconds");
@@ -116,6 +117,10 @@ function required(value: string | undefined, name: string): string {
 const spec = asRecord(parseJson(await readFile(`${stage}.spec.json`, "utf8")), "spec");
 const specCommand = asStringArray(spec.command, "spec.command");
 const specEnvironment = asRecord(spec.environment, "spec.environment");
+const toolCalls = footprintReadCalls(
+	asString(specEnvironment.PI_PRACTICE_MODEL_CALLS, "PI_PRACTICE_MODEL_CALLS"),
+	options["tool-calls"],
+);
 const change = asRecord(
 	parseJson(await readFile(path.join(stage, "context/change.json"), "utf8")),
 	"change",
