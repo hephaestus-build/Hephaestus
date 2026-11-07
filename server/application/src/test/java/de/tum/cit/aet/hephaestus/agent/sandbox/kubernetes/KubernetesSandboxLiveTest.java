@@ -495,7 +495,7 @@ class KubernetesSandboxLiveTest {
                 .inNamespace(namespace())
                 .withLabel(KubernetesWorker.JOB_ID, jobId.toString())
                 .informOnCondition(candidates -> candidates.stream()
-                        .anyMatch(pod -> KubernetesPods.exitCode(pod, KubernetesPods.RUNTIME) != null));
+                        .anyMatch(pod -> KubernetesPods.exitCode(pod, KubernetesPods.LOOP) != null));
         try {
             // External buffers touch anonymous pages without exhausting the JavaScript heap first.
             assertThatThrownBy(() -> reviews.execute(review(
@@ -508,7 +508,7 @@ class KubernetesSandboxLiveTest {
                     .hasRootCauseInstanceOf(IllegalStateException.class)
                     .hasRootCauseMessage("Sandbox exited without uploading its result");
             assertThat(terminated.get(COMMAND.toMillis(), TimeUnit.MILLISECONDS))
-                    .extracting(pod -> KubernetesPods.exitCode(pod, KubernetesPods.RUNTIME))
+                    .extracting(pod -> KubernetesPods.exitCode(pod, KubernetesPods.LOOP))
                     .containsExactly(137);
         } finally {
             terminated.cancel(true);
