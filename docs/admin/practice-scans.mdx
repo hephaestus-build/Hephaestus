@@ -124,6 +124,11 @@ Pause stops new targets and cancels active scan work through its normal cancella
 Resume continues the uncreated targets in the frozen batch.
 A schedule with referenced batches cannot be deleted until those references are gone.
 
+A batch paused because its workspace or review model is unavailable is checked again automatically.
+It continues from its saved position when the workspace is active, a runnable review model is bound, and funds permit another review.
+This applies to scheduled batches and reviews of past work.
+A batch that an administrator pauses still requires **Resume**.
+
 ## Export SARIF
 
 1. Open the terminal scan report.
