@@ -51,9 +51,14 @@ class DraftingService implements ProductFeedbackDrafting {
 
     @Override
     public Optional<DraftWork> claim(String workerId) {
-        while (true) {
-            var outcome = transactions.execute(status -> claimOne(workerId));
-            if (outcome == null || outcome.done()) return outcome == null ? Optional.empty() : outcome.work();
+        try {
+            while (true) {
+                var outcome = transactions.execute(status -> claimOne(workerId));
+                if (outcome == null || outcome.done()) return outcome == null ? Optional.empty() : outcome.work();
+            }
+        } catch (FilingLifecycle.IllegalTransition refused) {
+            meters.failed(refused);
+            throw refused;
         }
     }
 
@@ -75,7 +80,7 @@ class DraftingService implements ProductFeedbackDrafting {
             return new Claim(false, Optional.empty());
         }
         filing.setAttempt(filing.getAttempt() + 1);
-        filing.setState(FilingState.DRAFTING);
+        filing.apply(FilingLifecycle.Event.DRAFT_CLAIMED);
         filing.setClaimedBy(workerId);
         filing.setLeaseUntil(now.plus(LEASE));
         filing.setUpdatedAt(now);
@@ -110,30 +115,40 @@ class DraftingService implements ProductFeedbackDrafting {
 
     @Override
     public void complete(UUID feedbackId, int attempt, String answer, long inputTokens, long outputTokens) {
-        transactions.executeWithoutResult(status -> {
+        reportingRefusals(() -> transactions.executeWithoutResult(status -> {
             ProductFeedbackFiling filing = current(feedbackId, attempt);
             if (filing == null) return;
             count(filing, inputTokens, outputTokens);
             filing.setDraftedAt(clock.instant());
             meters.draft("answered");
             answered(filing, answer, clock.instant());
-        });
+        }));
+    }
+
+    /** The worker's adapter sees only a failed call, so the refusal is counted here, where the report is known. */
+    private void reportingRefusals(Runnable work) {
+        try {
+            work.run();
+        } catch (FilingLifecycle.IllegalTransition refused) {
+            meters.failed(refused);
+            throw refused;
+        }
     }
 
     @Override
     public void fail(UUID feedbackId, int attempt, Failure failure, long inputTokens, long outputTokens) {
-        transactions.executeWithoutResult(status -> {
+        reportingRefusals(() -> transactions.executeWithoutResult(status -> {
             ProductFeedbackFiling filing = current(feedbackId, attempt);
             if (filing == null) return;
             count(filing, inputTokens, outputTokens);
             meters.draft(failure.name().toLowerCase(Locale.ROOT));
             answered(filing, null, clock.instant());
-        });
+        }));
     }
 
     private static void answered(ProductFeedbackFiling filing, @Nullable String answer, Instant now) {
         filing.setAnswer(answer);
-        filing.setState(FilingState.ANSWERED);
+        filing.apply(FilingLifecycle.Event.DRAFT_ENDED);
         filing.setClaimedBy(null);
         filing.setLeaseUntil(null);
         filing.setNextAttemptAt(now);

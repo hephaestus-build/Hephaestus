@@ -164,6 +164,7 @@ Product feedback is filed in GitHub automatically, and it is worked on there.
    - The app cannot delete an issue or its edit history. That step goes to a maintainer as an action item.
    - A cleanup record stays until its steps are done or an admin confirms the manual step.
 9. **Durability.** One row per report holds a state machine. Sweepers claim rows with leases (ADR 0025).
+   - One table in code owns the states and the allowed moves. Every status derives from the state, so a status cannot claim what did not happen.
    - Each GitHub write freezes its target and payload and has a deadline.
    - A marker in the body lets a retry find an issue that an earlier attempt created.
    - An unclear lookup counts as unknown, never as absent.

@@ -15444,11 +15444,11 @@ components:
           enum:
           - PUBLIC
           - PRIVATE
-          - EMAIL
+          - ADMINS
         state:
           type: string
           enum:
-          - SENT_TO_ADMINS
+          - SAVED_FOR_ADMINS
           - DRAFTING
           - HELD
           - FILING
@@ -17754,11 +17754,11 @@ components:
           enum:
           - PUBLIC
           - PRIVATE
-          - EMAIL
+          - ADMINS
         state:
           type: string
           enum:
-          - SENT_TO_ADMINS
+          - SAVED_FOR_ADMINS
           - DRAFTING
           - HELD
           - FILING
@@ -20318,7 +20318,7 @@ components:
         oldestWaitingSince:
           type: string
           format: date-time
-          description: the oldest report not yet on GitHub or in the admin email
+          description: the oldest report not yet on GitHub or saved for the admins
         paused:
           type: boolean
         privateCheck:
@@ -20395,7 +20395,7 @@ components:
           enum:
           - PUBLIC
           - PRIVATE
-          - EMAIL
+          - ADMINS
         stoppedAt:
           type: string
           format: date-time

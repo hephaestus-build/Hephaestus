@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794025894359-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <columnExists tableName="product_feedback_filing" columnName="state"/>
+            <columnExists tableName="product_feedback_filing" columnName="route"/>
+        </preConditions>
+        <comment>A stored state must not claim a delivery that nothing can prove: EMAILED becomes SAVED, and the route EMAIL becomes ADMINS.</comment>
+        <sql>UPDATE product_feedback_filing SET state = 'SAVED' WHERE state = 'EMAILED'</sql>
+        <sql>UPDATE product_feedback_filing SET route = 'ADMINS' WHERE route = 'EMAIL'</sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup. The previous release cannot read the renamed rows.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794025894359-2" author="hephaestus">
+        <addColumn tableName="product_feedback_filing">
+            <column name="predecessor_repository" type="VARCHAR(200)"/>
+            <column name="predecessor_repository_id" type="BIGINT"/>
+            <column name="predecessor_installation_id" type="BIGINT"/>
+            <column name="predecessor_issue_number" type="BIGINT"/>
+            <column name="predecessor_issue_node_id" type="VARCHAR(100)"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

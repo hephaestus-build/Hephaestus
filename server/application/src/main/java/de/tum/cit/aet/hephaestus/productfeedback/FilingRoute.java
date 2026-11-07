@@ -4,5 +4,6 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 enum FilingRoute {
     PUBLIC,
     PRIVATE,
-    EMAIL
+    /** It stays saved for the instance admins. */
+    ADMINS
 }

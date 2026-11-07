@@ -1588,8 +1588,8 @@ export type FeedbackReceipt = {
     /**
      * where the report is going now; it can still change while the state is DRAFTING or HELD
      */
-    route: 'PUBLIC' | 'PRIVATE' | 'EMAIL';
-    state: 'SENT_TO_ADMINS' | 'DRAFTING' | 'HELD' | 'FILING' | 'FILED' | 'STOPPED';
+    route: 'PUBLIC' | 'PRIVATE' | 'ADMINS';
+    state: 'SAVED_FOR_ADMINS' | 'DRAFTING' | 'HELD' | 'FILING' | 'FILED' | 'STOPPED';
 };
 
 export type FeedbackRequest = {
@@ -2946,8 +2946,8 @@ export type MyProductFeedback = {
      * what redaction removed, in words
      */
     removed?: string;
-    route: 'PUBLIC' | 'PRIVATE' | 'EMAIL';
-    state: 'SENT_TO_ADMINS' | 'DRAFTING' | 'HELD' | 'FILING' | 'FILED' | 'STOPPED';
+    route: 'PUBLIC' | 'PRIVATE' | 'ADMINS';
+    state: 'SAVED_FOR_ADMINS' | 'DRAFTING' | 'HELD' | 'FILING' | 'FILED' | 'STOPPED';
 };
 
 export type NotReviewedScanReportItem = {
@@ -4138,7 +4138,7 @@ export type ProductFeedbackDestinations = {
     needsAction: number;
     noticeVersion: number;
     /**
-     * the oldest report not yet on GitHub or in the admin email
+     * the oldest report not yet on GitHub or saved for the admins
      */
     oldestWaitingSince?: Date;
     paused: boolean;
@@ -4169,7 +4169,7 @@ export type ProductFeedbackNeedsAction = {
     kind: 'IDEA' | 'BUG' | 'FEEDBACK';
     reason: string;
     repository?: string;
-    route: 'PUBLIC' | 'PRIVATE' | 'EMAIL';
+    route: 'PUBLIC' | 'PRIVATE' | 'ADMINS';
     stoppedAt: Date;
 };
 

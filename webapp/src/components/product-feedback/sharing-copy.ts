@@ -57,7 +57,7 @@ export function receiptLine(route: FeedbackReceipt["route"], canGoPublic: boolea
 				? "Your report is saved. It becomes a private GitHub issue for the Hephaestus maintainers. To ask for a public issue, open Your reports."
 				: "Your report is saved. It becomes a private GitHub issue for the Hephaestus maintainers.";
 		}
-		case "EMAIL": {
+		case "ADMINS": {
 			return "It is saved for the admins of this instance. It is not on GitHub.";
 		}
 	}

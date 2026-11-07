@@ -51,6 +51,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.AopTestUtils;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -376,7 +377,7 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
                 null,
                 false);
         ProductFeedbackFiling filing = filings.findById(receipt.id()).orElseThrow();
-        filing.setState(FilingState.FILED);
+        ReflectionTestUtils.setField(filing, "state", FilingState.FILED);
         filing.setRoute(FilingRoute.PUBLIC);
         filing.setRepository("acme/feedback");
         filing.setRepositoryId(40L);

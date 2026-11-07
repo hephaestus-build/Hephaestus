@@ -102,14 +102,14 @@ export const securityReport = {
 	reason: "security",
 } satisfies MyProductFeedback;
 
-export const emailedReport = {
+export const savedReport = {
 	...base,
 	id: "b1b1b1b1-0000-0000-0000-000000000008",
 	kind: "FEEDBACK",
 	excerpt: "Thanks for the new onboarding.",
 	createdAt: daysBefore(20),
-	state: "SENT_TO_ADMINS",
-	route: "EMAIL",
+	state: "SAVED_FOR_ADMINS",
+	route: "ADMINS",
 } satisfies MyProductFeedback;
 
 export const stoppedReport = {
@@ -132,5 +132,5 @@ export const myReports: MyProductFeedback[] = [
 	securityReport,
 	stoppedReport,
 	closedPublicIssue,
-	emailedReport,
+	savedReport,
 ];

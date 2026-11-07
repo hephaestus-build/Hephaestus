@@ -11,8 +11,8 @@ import { useProductFeedbackSharing, useSubmitProductFeedback } from "./use-produ
 
 const RECEIPT = {
 	id: "a1a1a1a1-0000-0000-0000-000000000001",
-	route: "EMAIL",
-	state: "SENT_TO_ADMINS",
+	route: "ADMINS",
+	state: "SAVED_FOR_ADMINS",
 } satisfies Wire<FeedbackReceipt>;
 
 function setup() {

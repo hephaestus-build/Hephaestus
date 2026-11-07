@@ -275,7 +275,7 @@ function AdminFeedbackInboxPage() {
 			</Section>
 
 			<Section
-				title="Reports not on GitHub"
+				title="Reports that wait for you"
 				description={
 					emailStatus.data?.configured === false
 						? "This instance cannot send email, so no one is told about new reports. The sidebar count is the only signal. Marking one resolved does not notify the sender."

@@ -222,6 +222,8 @@ class FollowService {
             updates.close(plan.privateRepository(), plan.privateNumber(), "completed");
             transactions.executeWithoutResult(status -> filings.lock(feedbackId).ifPresent(filing -> {
                 Instant now = clock.instant();
+                filing.keepPredecessor();
+                filing.apply(FilingLifecycle.Event.ROUTE_CHANGED_ON_GITHUB);
                 filing.setRoute(FilingRoute.PUBLIC);
                 filing.setReason(FilingReason.NONE);
                 filing.setRepository(recipient.fullName());
@@ -244,6 +246,7 @@ class FollowService {
             meters.promotion("published");
         } catch (RuntimeException failed) {
             // The lease expires and the next tick reconciles in the frozen recipient before it writes again.
+            meters.failed(failed);
             meters.promotion("failed");
             log.warn(
                     "Product feedback promotion failed: feedbackId={}, error={}",

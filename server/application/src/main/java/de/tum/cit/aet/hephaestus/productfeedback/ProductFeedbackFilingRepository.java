@@ -50,6 +50,14 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
                     """, nativeQuery = true)
     Optional<UUID> claimableAnswer(@Param("expired") Instant expired);
 
+    /** A routed report that goes to no repository, so the hourly GitHub limit does not hold it back. */
+    @Query(value = """
+                    SELECT feedback_id FROM product_feedback_filing
+                    WHERE state = 'QUEUED' AND route = 'ADMINS' AND next_attempt_at <= :now
+                    ORDER BY next_attempt_at LIMIT 1 FOR UPDATE SKIP LOCKED
+                    """, nativeQuery = true)
+    Optional<UUID> claimableForAdmins(@Param("now") Instant now);
+
     /** A routed report due for filing, a held one whose hold ended, or one whose filing lease expired. */
     @Query(value = """
                     SELECT feedback_id FROM product_feedback_filing
@@ -107,7 +115,7 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
     @WorkspaceAgnostic("Instance administrators read the open reports of every workspace")
     @Query(value = """
                     SELECT f.feedback_id FROM product_feedback_filing f JOIN product_feedback p ON p.id = f.feedback_id
-                    WHERE f.state = 'EMAILED' AND p.resolved_at IS NULL
+                    WHERE f.state = 'SAVED' AND p.resolved_at IS NULL
                     ORDER BY p.created_at LIMIT :limit
                     """, nativeQuery = true)
     List<UUID> savedForAdmins(@Param("limit") int limit);
@@ -115,7 +123,7 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
     @WorkspaceAgnostic("Instance administrators count the open reports of every workspace")
     @Query(value = """
                     SELECT count(*) FROM product_feedback_filing f JOIN product_feedback p ON p.id = f.feedback_id
-                    WHERE f.state = 'EMAILED' AND p.resolved_at IS NULL
+                    WHERE f.state = 'SAVED' AND p.resolved_at IS NULL
                     """, nativeQuery = true)
     long countSavedForAdmins();
 

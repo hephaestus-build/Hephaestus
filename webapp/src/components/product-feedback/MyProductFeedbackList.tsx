@@ -292,7 +292,7 @@ function issueLine(report: MyProductFeedback): string | undefined {
 	if (report.state === "FILED" && !hasText(report.issueUrl)) {
 		return "The Hephaestus maintainers have it as a private GitHub issue.";
 	}
-	if (report.state === "SENT_TO_ADMINS") {
+	if (report.state === "SAVED_FOR_ADMINS") {
 		return "Your report is saved on this instance for its admins. They can move it to GitHub as a private issue.";
 	}
 	return undefined;

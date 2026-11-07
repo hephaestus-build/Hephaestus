@@ -59,23 +59,51 @@ They record the claimant, lease deadline, and attempt before network work starts
 Network calls run outside the transaction.
 Compare-and-set transitions reject stale results after an attempt or state changes.
 
+`FilingLifecycle` is the one definition of the machine.
+It names every state, every event, and every allowed move.
+`ProductFeedbackFiling.apply` is the only way to change a state, and it refuses a move that the table does not hold.
+The status that a reporter sees derives from the state and the route.
+Thus a status cannot claim something that did not happen.
+A new state does not compile until it has a status, because `reporterState` is an exhaustive switch.
+
 ```mermaid
 stateDiagram-v2
     accTitle: Product feedback filing states
-    accDescr: Reports draft and route to a held public issue, a private issue, or email. Stopped filing retries before manual action.
-    [*] --> RECEIVED
-    RECEIVED --> DRAFTING: Worker claims
-    DRAFTING --> ROUTED: Draft or no draft
-    ROUTED --> HELD: Public route
-    ROUTED --> FILING: Private route
-    ROUTED --> EMAILED: No destination or paused
-    HELD --> FILING: Hold ends and gate passes
-    HELD --> DRAFTING: Edit restarts hold
-    HELD --> ROUTED: Keep private or withdrawal
-    FILING --> FILED: Created or reconciled
-    FILING --> STOPPED: Destination unavailable or GitHub refusal
-    STOPPED --> FILING: Backoff or admin Retry
+    accDescr: Reports draft and route to a held public issue, a private issue, or a saved report for admins. Stopped filing retries. Saved reports move to GitHub later.
+    [*] --> DRAFT_QUEUED
+    [*] --> SAVED: No destination or paused
+    DRAFT_QUEUED --> DRAFTING: DRAFT_CLAIMED
+    DRAFTING --> ANSWERED: DRAFT_ENDED
+    ANSWERED --> HELD: ROUTED_TO_HOLD
+    ANSWERED --> QUEUED: ROUTED_TO_FILE
+    HELD --> DRAFT_QUEUED: EDITED
+    HELD --> QUEUED: KEPT_PRIVATE
+    HELD --> FILING: FILING_CLAIMED
+    QUEUED --> FILING: FILING_CLAIMED
+    QUEUED --> SAVED: SAVED
+    FILING --> QUEUED: FILING_REQUEUED
+    FILING --> FILED: FILED
+    FILING --> STOPPED: STOPPED
+    FILED --> FILED: ROUTE_CHANGED_ON_GITHUB
+    STOPPED --> FILING: RETRIED_RECONCILE
+    STOPPED --> DRAFT_QUEUED: RETRIED_DRAFT
+    STOPPED --> ANSWERED: RETRIED_ROUTE
+    SAVED --> DRAFT_QUEUED: MOVED_DRAFTED
+    SAVED --> ANSWERED: MOVED_UNDRAFTED
 ```
+
+The diagram shows the main moves. The table in `FilingLifecycle` holds all of them.
+Erasure is not a state: it deletes the row from any state, and a cleanup record continues the work.
+Withdrawal and promotion are moves of a filed issue, so the state stays `FILED` and the route changes.
+
+`FilingLifecycleTest` checks every pair of a state and an event against a second, hand-written table.
+`FilingLifecycleModelTest` searches every reachable state of one report and its world.
+That world includes Pause, a repository that changes, a lost write answer, and erasure.
+It asserts the invariants: no private report is public, no report has two issues, erasure is always open, and every report can come to rest.
+
+The model test fails if the search leaves any move of the table untaken.
+When you add a state or an event, change both tests on purpose.
+A refused move keeps the row as it was. The sweepers count it, log the report ID, and raise `HephaestusProductFeedbackMoveRefused`.
 
 An expired lease returns work to its previous waiting state with backoff.
 An expired or ambiguous GitHub attempt requires reconciliation before a new write or cleanup step.

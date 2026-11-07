@@ -13,6 +13,6 @@ public final class ProductFeedbackMetrics {
     /** {@code /publish} commands, by outcome. */
     public static final String PROMOTIONS = "product_feedback_promotions";
 
-    /** The age of the oldest report not yet on GitHub or in the admin email. */
+    /** The age of the oldest report not yet on GitHub or saved for the admins. */
     public static final String OLDEST_WAITING = "product_feedback_oldest_waiting_seconds";
 }

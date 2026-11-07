@@ -9,6 +9,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -31,8 +32,10 @@ public class ProductFeedbackFiling {
     @Column(name = "feedback_id")
     private UUID feedbackId;
 
+    /** Changes only through {@link #apply}, so that {@link FilingLifecycle} sees every move. */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
+    @Setter(AccessLevel.NONE)
     private FilingState state;
 
     @Enumerated(EnumType.STRING)
@@ -93,6 +96,22 @@ public class ProductFeedbackFiling {
 
     @Column(name = "publish_requested_at")
     private @Nullable Instant publishRequestedAt;
+
+    /** The private issue a promotion closed. It keeps its text, so erasure must still reach it. */
+    @Column(name = "predecessor_repository", length = 200)
+    private @Nullable String predecessorRepository;
+
+    @Column(name = "predecessor_repository_id")
+    private @Nullable Long predecessorRepositoryId;
+
+    @Column(name = "predecessor_installation_id")
+    private @Nullable Long predecessorInstallationId;
+
+    @Column(name = "predecessor_issue_number")
+    private @Nullable Long predecessorIssueNumber;
+
+    @Column(name = "predecessor_issue_node_id", length = 100)
+    private @Nullable String predecessorIssueNodeId;
 
     /** The public repository a promotion writes to, frozen before its first write so a retry reconciles there. */
     @Column(name = "promotion_repository", length = 200)
@@ -193,13 +212,28 @@ public class ProductFeedbackFiling {
         this.updatedAt = now;
     }
 
+    /** Call it before the row takes on the public issue: the private locator would be gone after that. */
+    void keepPredecessor() {
+        predecessorRepository = repository;
+        predecessorRepositoryId = repositoryId;
+        predecessorInstallationId = installationId;
+        predecessorIssueNumber = issueNumber;
+        predecessorIssueNodeId = issueNodeId;
+    }
+
+    /** The only way a state changes. An event the lifecycle does not allow from here throws and changes nothing. */
+    void apply(FilingLifecycle.Event event) {
+        state = FilingLifecycle.next(state, event)
+                .orElseThrow(() -> new FilingLifecycle.IllegalTransition(feedbackId, state, event));
+    }
+
     boolean publicRoute() {
         return route == FilingRoute.PUBLIC;
     }
 
     /** Whether an admin can send this saved report to GitHub now. An admin's action only ever files privately. */
     boolean canFileAt(ProductFeedbackDestination destination) {
-        return state == FilingState.EMAILED && !destination.isPaused() && destination.getPrivateRepository() != null;
+        return state == FilingState.SAVED && !destination.isPaused() && destination.getPrivateRepository() != null;
     }
 
     /** Forgets the repository routing froze, so the next claim freezes the one the report's route now names. */

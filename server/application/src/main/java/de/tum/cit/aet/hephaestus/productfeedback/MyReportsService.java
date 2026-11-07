@@ -117,13 +117,13 @@ class MyReportsService {
 
     /**
      * Opens a report's filing at submission. Returns the route it is heading for. Without a destination, or while
-     * paused, the report goes to the admin email as before.
+     * paused, the report stays saved for the admins.
      *
      * @param share the composer's box for this report; null keeps the remembered choice, and without one it is private
      */
     ProductFeedbackFiling open(ProductFeedback report, @Nullable Boolean share, Instant now) {
         ProductFeedbackDestination destination = destinations.current();
-        if (!destination.configured() || destination.isPaused()) return filings.save(emailed(report, now));
+        if (!destination.configured() || destination.isPaused()) return filings.save(savedForAdmins(report, now));
         boolean publicDestination = destination.getPublicRepository() != null;
         ProductFeedbackConsent consent = currentConsent(report.getAccountId());
         boolean allowPublic = publicDestination && (share != null ? share : consent != null && consent.isAllowPublic());
@@ -151,9 +151,9 @@ class MyReportsService {
                 accountId, true, current != null && current.isMention(), destination.getNoticeVersion(), now));
     }
 
-    private static ProductFeedbackFiling emailed(ProductFeedback report, Instant now) {
-        var filing = new ProductFeedbackFiling(report.getId(), FilingState.EMAILED, false, now);
-        filing.setRoute(FilingRoute.EMAIL);
+    private static ProductFeedbackFiling savedForAdmins(ProductFeedback report, Instant now) {
+        var filing = new ProductFeedbackFiling(report.getId(), FilingState.SAVED, false, now);
+        filing.setRoute(FilingRoute.ADMINS);
         return filing;
     }
 
@@ -189,11 +189,11 @@ class MyReportsService {
         filing.setMentionLogin(null);
         if (filing.getState() == FilingState.HELD) {
             ProductFeedbackDestination destination = destinations.current();
-            filing.setRoute(destination.getPrivateRepository() != null ? FilingRoute.PRIVATE : FilingRoute.EMAIL);
+            filing.setRoute(destination.getPrivateRepository() != null ? FilingRoute.PRIVATE : FilingRoute.ADMINS);
             filing.setReason(FilingReason.OPTED_OUT);
             // Routing froze the public repository. Left in place, filing would read it as a changed destination.
             filing.clearRecipient();
-            filing.setState(FilingState.QUEUED);
+            filing.apply(FilingLifecycle.Event.KEPT_PRIVATE);
             filing.setNextAttemptAt(now);
             meters.route(Objects.requireNonNull(filing.getRoute()), FilingReason.OPTED_OUT);
         }
@@ -214,7 +214,7 @@ class MyReportsService {
                 filing,
                 report,
                 request.title().strip() + "\n\n" + request.description().strip());
-        filing.setState(FilingState.DRAFT_QUEUED);
+        filing.apply(FilingLifecycle.Event.EDITED);
         filing.setFiledAfter(now.plus(DraftingService.HOLD));
         filing.setNextAttemptAt(now);
         filing.setUpdatedAt(now);
@@ -271,6 +271,7 @@ class MyReportsService {
             ProductFeedback report = owned(accountId, id);
             ProductFeedbackFiling filing = filings.lock(id).orElseThrow();
             Instant now = clock.instant();
+            filing.apply(FilingLifecycle.Event.ROUTE_CHANGED_ON_GITHUB);
             filing.setRoute(FilingRoute.PRIVATE);
             filing.setReason(FilingReason.OPTED_OUT);
             filing.setAllowPublic(false);
@@ -319,8 +320,8 @@ class MyReportsService {
                     report.getKind(),
                     excerpt,
                     Objects.requireNonNull(report.getCreatedAt()),
-                    ReportState.SENT_TO_ADMINS,
-                    ReportRoute.EMAIL,
+                    ReportState.SAVED_FOR_ADMINS,
+                    ReportRoute.ADMINS,
                     null,
                     null,
                     null,
@@ -334,14 +335,7 @@ class MyReportsService {
                     false,
                     false,
                     false);
-        ReportState state = switch (filing.getState()) {
-            case DRAFT_QUEUED, DRAFTING, ANSWERED -> ReportState.DRAFTING;
-            case HELD -> ReportState.HELD;
-            case QUEUED, FILING -> ReportState.FILING;
-            case FILED -> ReportState.FILED;
-            case EMAILED -> ReportState.SENT_TO_ADMINS;
-            case STOPPED -> ReportState.STOPPED;
-        };
+        ReportState state = FilingLifecycle.reporterState(filing.getState(), filing.getRoute());
         FilingRoute route = filing.getRoute();
         ReportRoute shown = route == null
                 ? (filing.isAllowPublic() ? ReportRoute.PUBLIC : ReportRoute.PRIVATE)

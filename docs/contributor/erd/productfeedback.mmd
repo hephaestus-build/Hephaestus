@@ -110,6 +110,11 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at "NOT NULL"
         BOOLEAN file_disclosed "NOT NULL"
+        VARCHAR(200) predecessor_repository
+        BIGINT predecessor_repository_id
+        BIGINT predecessor_installation_id
+        BIGINT predecessor_issue_number
+        VARCHAR(100) predecessor_issue_node_id
     }
 
     Account["Account · Core"]
