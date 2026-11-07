@@ -81,12 +81,13 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
                 List.of("node"),
                 new ResourceLimits(0.5, time),
                 memory,
-                time.toSeconds());
+                time.toSeconds(), KubernetesPods.SANDBOX_UID);
 
         assertCounts(
                 "isolationProbe",
                 List.of(
                         probe.apply(KubernetesIsolationProbe.TRIAL_MEMORY),
+                        probe.apply(KubernetesIsolationProbe.PROBE_MEMORY),
                         probe.apply(KubernetesIsolationProbe.PROBE_MEMORY)));
     }
 

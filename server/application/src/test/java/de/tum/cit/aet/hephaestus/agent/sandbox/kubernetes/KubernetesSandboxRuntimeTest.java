@@ -205,7 +205,7 @@ class KubernetesSandboxRuntimeTest {
                                 workload, Map.of(), List.of("node"), LIMITS, KubernetesPods.REVIEW, null),
                         manifests.workspacePod(workload, Map.of(), List.of("node"), LIMITS, KubernetesPods.HOST, null),
                         manifests.turnPod(workload, LIMITS),
-                        manifests.probePod(workload, List.of("true"), LIMITS, 1024L * 1024 * 1024, 60)))
+                        manifests.probePod(workload, List.of("true"), LIMITS, 1024L * 1024 * 1024, 60, KubernetesPods.SANDBOX_UID)))
                 .allSatisfy(pod -> assertThat(pod.getSpec().getHostUsers()).isFalse());
     }
 
@@ -304,7 +304,7 @@ class KubernetesSandboxRuntimeTest {
                 List.of("true"),
                 LIMITS,
                 1024L * 1024 * 1024,
-                60);
+                60, KubernetesPods.SANDBOX_UID);
         for (Container each : Stream.concat(
                         probePod.getSpec().getInitContainers().stream(), probePod.getSpec().getContainers().stream())
                 .toList()) {
@@ -376,7 +376,7 @@ class KubernetesSandboxRuntimeTest {
                                 List.of("true"),
                                 LIMITS,
                                 1024L * 1024 * 1024,
-                                60)
+                                60, KubernetesPods.SANDBOX_UID)
                         .getSpec()
                         .getPriorityClassName())
                 .as("a probe never displaces a person's conversation")

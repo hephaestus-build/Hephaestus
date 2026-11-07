@@ -311,6 +311,17 @@ public class KubernetesPods {
     /** What waiting for a Pod saw: its last state, or null when it is gone. */
     public record Waited(boolean timedOut, @Nullable Pod pod) {}
 
+    /** The command under the system call filter of a review's tools side (see tools-launch.sh). */
+    static List<String> filtered(List<String> command) {
+        List<String> argv = new ArrayList<>(List.of(
+                "sh",
+                "-c",
+                "exec setpriv --no-new-privs --seccomp-filter \"/opt/pi-sdk/tools-seccomp-$(uname -m).bpf\" \"$@\"",
+                "filter"));
+        argv.addAll(command);
+        return List.copyOf(argv);
+    }
+
     /** The command, started through {@link #RLIMITS}: each argument stays one argument. */
     static List<String> limited(List<String> command) {
         List<String> argv = new ArrayList<>(RLIMITS.size() + command.size());
@@ -472,9 +483,10 @@ public class KubernetesPods {
             List<String> command,
             ResourceLimits limits,
             long memoryBytes,
-            long activeDeadlineSeconds) {
+            long activeDeadlineSeconds,
+            long uid) {
         Size size = probeSize(limits, memoryBytes);
-        Container probe = base(LOOP, workload.image(), SANDBOX_UID)
+        Container probe = base(LOOP, workload.image(), uid)
                 .withCommand(command)
                 .withVolumeMounts(scratchMounts())
                 .withResources(resources(limits, size))
