@@ -33,6 +33,7 @@ public class GitHubBackfillRepair {
     private final ActivityLedgerRepair ledger;
     private final WorkspaceActorSelector actors;
     private final GitHubIssueCommentSyncService comments;
+    // Tracks the cooldown for automatic provider probes. Manual repair bypasses it.
     private final Cache<Long, Boolean> inspections = Caffeine.newBuilder()
             .maximumSize(10000)
             .expireAfterWrite(Duration.ofHours(1))

@@ -133,6 +133,7 @@ For GitHub and GitLab, a manual repair also restarts a completed scan when the r
 The gap in rows does not matter then.
 This covers a pull request that a sync or an earlier version stopped reading at its first page of threads, reviews or comments.
 It also covers work for which no whole discussion read is recorded, such as work first received through a webhook.
+
 The practices that need the whole discussion withhold their results on such work.
 After the repair records a whole read, request a new review.
 A withheld review does not restart automatically.
@@ -170,12 +171,16 @@ Before another restart, the stored row count must reach the provider total recor
 A later gap must still meet the same size and coverage thresholds.
 
 A repository that cannot be read or repaired adds a job warning.
-A refused restart also adds a warning; it does not establish a whole discussion read.
+A refused restart also adds a warning.
+It does not establish a whole discussion read.
 The job continues with the other repositories.
+
 A repair reads repository history again, including work whose discussions were already read whole.
 If a provider limit still prevents a whole discussion read, the affected practices remain withheld.
+
 In the discussion coverage query, null means unknown and false means a partial read.
 Check those counts after the job finishes before requesting a new review.
+
 Scheduled GitLab scans do not use the GitHub-specific incomplete-scan heuristic.
 Rate limits, cancellation, and provider error cooldowns still apply.
 Recent-sync timestamps are unchanged.

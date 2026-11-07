@@ -161,6 +161,7 @@ Completeness comes from what the mirror knows about its own reads.
 `discussion_read_whole` on a pull request is false when the last provider read did not reach the end of its threads, reviews or comments.
 The review-thread, inline-comment and general-comment sources are then `PARTIAL`, with the limitation `DISCUSSION_NOT_READ_WHOLE`.
 `appliesWhen` stays undecided on a partial source, and a practice that declares such a source `COMPLETE` records a readiness refusal.
+
 A null value means that no provider discussion read is recorded, as for work known only from webhooks.
 It has the same partial limitation: absence stays undecided until a whole provider read is recorded.
 Only a true value permits these sources to report complete discussion coverage.
