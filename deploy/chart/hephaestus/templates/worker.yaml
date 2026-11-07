@@ -305,6 +305,11 @@ spec:
   # 0 stops every worker and keeps this Deployment and the policies; it does not show that their
   # sandboxes are gone.
   replicas: {{ include "hephaestus.replicas" (dict "root" . "replicas" .Values.worker.replicas) }}
+  {{- if eq .Values.worker.rolloutStrategy "Recreate" }}
+  # At least the drain, the shutdown and the start: with an earlier rollout unfinished, a shorter
+  # deadline fails the upgrade while the old worker stops.
+  progressDeadlineSeconds: {{ add $drain 120 300 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "hephaestus.selectorLabels" (dict "root" . "component" "worker") | nindent 6 }}

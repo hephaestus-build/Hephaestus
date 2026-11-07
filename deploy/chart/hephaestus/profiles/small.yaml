@@ -50,6 +50,9 @@ worker:
   # Drain the old worker before its replacement starts so the node holds 32 resident turns.
   # Reviews and conversations pause during the drain and replacement.
   rolloutStrategy: Recreate
+  # The upgrade's Helm timeout must cover this drain, the shutdown and the new worker's start: past
+  # it, Helm rolls the release back. A chart test compares the three with the documented 20 minutes.
+  drainTimeoutSeconds: 600
   sandbox:
     # Five reviews of 384 MiB. Each review beyond them takes 50m of CPU from the 32 resident turns
     # while a backup runs.

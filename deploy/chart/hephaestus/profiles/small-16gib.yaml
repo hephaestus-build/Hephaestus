@@ -5,5 +5,3 @@ worker:
   # The worker stops before its replacement starts, so each upgrade is a planned outage of reviews and conversations.
   # 16 GiB cannot hold a second worker beside its conversation host and turn pool.
   rolloutStrategy: Recreate
-  # An upgrade waits for the drain, so the outage stays short.
-  drainTimeoutSeconds: 600
