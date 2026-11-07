@@ -7,6 +7,19 @@ description: Keep the data, keys and release identity needed to recover a Helm i
 The [Kubernetes guide](./kubernetes#backup-and-restore) owns the backup and restore commands.
 The [operations runbook](./production-operations-runbook#backup-restore-and-postgresql--jetstream) owns the recovery gates and broker procedure.
 
+## Backup policy for 1.0
+
+Scheduled off-host backups and recovery-time qualification are deferred for the 1.0 release.
+The chart leaves `postgresql.backup.enabled` false by default.
+It then takes no scheduled database backup and does not archive WAL.
+Loss of the database volume can lose all application data.
+1.0 makes no measured recovery-point or recovery-time promise.
+
+The procedures below remain available for operators who configure backups.
+Each upgrade still requires a verified recovery point.
+If backups are off, first configure the [chart backup procedure](./kubernetes#backup-and-restore) and verify an isolated restore.
+Do not start the upgrade without that proof.
+
 ## What to back up
 
 | Data                                | Recovery requirement                                                                                                                                                                                         |
@@ -15,11 +28,24 @@ The [operations runbook](./production-operations-runbook#backup-restore-and-post
 | Encryption keys and configuration   | Keep the keys and required Secret values outside the cluster as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes. The database alone cannot recover encrypted values. |
 | NATS JetStream                      | Keep the matching broker snapshot or cold copy. Choose the [broker recovery strategy](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers) before consumers start. |
 | Signed release lock and site values | Restore the release and configuration that match the database. Verify its chart and image digests.                                                                                                           |
-| Platform recovery material          | Keep the k3s token and state, required certificates and storage configuration as the operations runbook describes.                                                                                           |
+| Platform recovery material          | Keep the k3s token, datastore, manifests, certificates, and storage configuration as [Platform recovery material](#platform-recovery-material) describes.                                                                                           |
 
 Repository mirrors and inputs for active attempts are disposable.
 The roles rebuild them from PostgreSQL and the upstream provider.
 Do not use copied attempt folders to resume an in-flight review.
+
+## Platform recovery material
+
+The application backup does not contain the Kubernetes datastore or persistent volume contents.
+Keep the k3s configuration, the installed platform manifests, and the storage layout with the recovery record.
+Keep the server token outside the host, with restricted access.
+The token decrypts confidential data in the k3s datastore.
+
+Follow the [k3s datastore backup procedure](https://docs.k3s.io/datastore/backup-restore) for the actual datastore type.
+SQLite and embedded etcd use different procedures.
+A datastore backup does not replace the PostgreSQL and JetStream recovery set.
+Before relying on host recovery, rehearse both on an isolated replacement host.
+No replacement-host recovery time is qualified for 1.0.
 
 ## Automated off-host backup
 
@@ -30,7 +56,7 @@ Keep the repository passphrase outside the cluster.
 A configured schedule is not proof of a usable recovery point.
 Check WAL archival, completed backups and repository access.
 Rehearse an [isolated restore](./kubernetes#isolated-restore-drill), including clone lockdown, before relying on the backup.
-The operations runbook defines the recovery-time and recovery-point acceptance criteria.
+For an installation that uses backups, define recovery objectives with the [operations runbook](./production-operations-runbook#backup-restore-and-postgresql--jetstream).
 
 ### Backup retention
 

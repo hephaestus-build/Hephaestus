@@ -230,8 +230,7 @@ Other workspace endpoints require sign-in and workspace access.
 
 Every response carries `Cache-Control: no-store`, so no browser or shared cache keeps a page.
 The existing shared rate limiter defaults to 60 anonymous requests per minute per client IP across workspace slugs.
-Set `HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_CAPACITY` and `HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_PERIOD` to adjust this bucket.
-They supply `hephaestus.auth.rate-limit.public-activity.capacity` and `.period`.
+The Helm chart exposes no value to change this rate limit.
 Signed-in requests do not consume this anonymous IP budget.
 It refuses requests if its rate-limit backend is unavailable.
 Proxy trust comes from the servlet container, not a second parser for forwarded headers.
