@@ -34,6 +34,7 @@ public class ResultVisibilityPolicy {
     private final PracticeRepository practices;
     private final PracticeVersionRepository versions;
     private final ResultSourceAuthorization sources;
+    private final ResultFreshness freshness;
 
     /**
      * The rows a standing may be read off at {@code at}, out of rows the standing reader already selected. Unlike
@@ -137,14 +138,15 @@ public class ResultVisibilityPolicy {
                 purpose);
     }
 
-    public static Currentness currentness(Result result, @Nullable PracticeVersion pinned, PracticeVersion current) {
+    public static Currentness currentness(
+            Result result, @Nullable PracticeVersion pinned, PracticeVersion current, Currentness sourceCurrentness) {
         if (result.isMigratedHistory()) return Currentness.UNVERIFIABLE;
         if (result.getEndedAt() != null) {
             return Currentness.STALE;
         }
         if (!verifiable(result, pinned)) return Currentness.UNVERIFIABLE;
         Objects.requireNonNull(pinned);
-        return pinned.getReviewDigest().equals(current.getReviewDigest()) ? Currentness.CURRENT : Currentness.STALE;
+        return pinned.getReviewDigest().equals(current.getReviewDigest()) ? sourceCurrentness : Currentness.STALE;
     }
 
     private static boolean verifiable(Result result, @Nullable PracticeVersion pinned) {
@@ -213,6 +215,7 @@ public class ResultVisibilityPolicy {
                         owned.stream().map(Result::getPracticeId).distinct().toList())
                 .stream()
                 .collect(Collectors.toMap(practice -> Objects.requireNonNull(practice.getId()), Function.identity()));
+        var sourceStates = freshness.states(workspaceId, owned);
         List<Result> eligible = owned.stream()
                 .filter(result -> {
                     Practice practice = current.get(result.getPracticeId());
@@ -220,7 +223,8 @@ public class ResultVisibilityPolicy {
                             && currentness(
                                             result,
                                             pinned.get(result.getPracticeVersionId()),
-                                            practice.getCurrentVersion())
+                                            practice.getCurrentVersion(),
+                                            Objects.requireNonNull(sourceStates.get(result.getId())))
                                     == Currentness.CURRENT;
                 })
                 .toList();

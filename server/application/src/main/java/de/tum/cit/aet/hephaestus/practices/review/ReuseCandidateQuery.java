@@ -3,8 +3,10 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
@@ -12,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReadReceiptStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -23,11 +26,17 @@ import tools.jackson.databind.json.JsonMapper;
 public class ReuseCandidateQuery {
     private final ReviewAssignmentQuery assignments;
     private final ResultRepository results;
+    private final ResultFreshness freshness;
     private final EvidenceAuthorization authorization;
     private final ResultSourceAuthorization sourceAuthorization;
     private final JsonMapper json;
 
     record ReusableResult(Result result, HistoryCustody custody) {}
+
+    Optional<ReusableResult> findWithCapture(long workspaceId, ReviewAssignmentId id) {
+        return find(workspaceId, id)
+                .filter(candidate -> freshness.sameCapture(workspaceId, candidate.result(), id.reviewId()));
+    }
 
     Optional<ReusableResult> find(long workspaceId, ReviewAssignmentId id) {
         var assignment = assignments.find(workspaceId, id).orElseThrow();
@@ -44,6 +53,8 @@ public class ReuseCandidateQuery {
         if (!(ResultCoverage.stored(json, result.getCoverage()) instanceof HostCoverage host)
                 || !trusted(host)
                 || !authorization.permits(workspaceId, result, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+            return Optional.empty();
+        if (freshness.states(workspaceId, List.of(result)).get(result.getId()) != Currentness.CURRENT)
             return Optional.empty();
         var captured = sourceAuthorization.custody(result);
         if (!captured.complete()) return Optional.empty();

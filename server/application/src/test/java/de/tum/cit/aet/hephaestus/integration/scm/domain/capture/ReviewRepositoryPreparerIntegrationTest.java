@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
@@ -176,7 +177,8 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryProperties(true, 1, 1024 * 1024, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
-                GitTransportFixtures.guarded());
+                GitTransportFixtures.guarded(),
+                mock(RepositoryRefState.class));
         var realPreparer = new ReviewRepositoryPreparer(git, pullRequests, connections, List.of(tokens), repositories);
 
         assertThatThrownBy(() -> realPreparer.prepare(context))
@@ -192,7 +194,8 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryProperties(true, 1, 1024 * 1024, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
-                GitTransportFixtures.guarded());
+                GitTransportFixtures.guarded(),
+                mock(RepositoryRefState.class));
         var realPreparer = new ReviewRepositoryPreparer(git, pullRequests, connections, List.of(tokens), repositories);
         var content =
                 new PullRequestContentSource(new JsonMapper(), git, pullRequests, comments, realPreparer, delivered);

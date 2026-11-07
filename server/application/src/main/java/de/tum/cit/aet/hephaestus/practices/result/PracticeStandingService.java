@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.practices.result.trend.PracticeTrendService;
 import de.tum.cit.aet.hephaestus.practices.result.trend.WorkResolution;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewOrder;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
@@ -304,6 +305,11 @@ public class PracticeStandingService {
     private StandingAccess readable(
             Long workspaceId, List<ResultView> window, StandingRows rows, Instant edge, SourceReadAudience audience) {
         Set<UUID> quotable = visibilityPolicy.permitsAt(workspaceId, rowsOf(window), purpose(audience), edge);
+        var currentSources = window.stream()
+                .filter(view -> view.sourceCurrentness() == Currentness.CURRENT)
+                .map(view -> view.result().getId())
+                .collect(Collectors.toSet());
+        quotable = quotable.stream().filter(currentSources::contains).collect(Collectors.toSet());
         return new StandingAccess(
                 quotable,
                 audience == SourceReadAudience.PROCESSING ? quotable : standingAccess(workspaceId, rows, edge));

@@ -5,13 +5,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewLookupData;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -20,7 +24,11 @@ import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class GitHubPushRepositoryIdentityIntegrationTest extends BaseIntegrationTest {
 
@@ -57,6 +65,43 @@ class GitHubPushRepositoryIdentityIntegrationTest extends BaseIntegrationTest {
                 IdentityProviderType.GITLAB, "https://" + UUID.randomUUID() + ".gitlab.example.test"));
         path = "p-" + UUID.randomUUID() + "/target";
         nativeId = 100_000_000L + Integer.toUnsignedLong(UUID.randomUUID().hashCode()) % 900_000_000L;
+    }
+
+    @Autowired
+    RepositoryRefState refs;
+
+    @Autowired
+    ReviewIntegrationData data;
+
+    @Autowired
+    ReviewLookupData lookup;
+
+    @Autowired
+    IssueRepository issues;
+
+    @Autowired
+    JsonMapper mapper;
+
+    @ParameterizedTest
+    @ValueSource(strings = {"refs/heads/deleted-branch", "refs/tags/v1"})
+    void shouldInvalidateStoredRefsBeforeSkippingADeletedOrEmptyPush(String refName) {
+        var scenario = data.scenario();
+        var item = lookup.work(scenario.workspace(), IdentityProviderType.GITHUB, true);
+        var repositoryId = Objects.requireNonNull(issues.findById(Objects.requireNonNull(item.sourceId()))
+                        .orElseThrow()
+                        .getRepository())
+                .getId();
+        var repository = repositories.findByIdWithOrganization(repositoryId).orElseThrow();
+        path = repository.getNameWithOwner();
+        var read = refs.begin(item.workspaceId(), repositoryId);
+        refs.record(item.workspaceId(), repositoryId, read, "a".repeat(64));
+        ObjectNode payload = mapper.valueToTree(push(repository.getNativeId(), commitSha()));
+        payload.put("ref", refName).put("deleted", refName.startsWith("refs/heads/"));
+        payload.set("commits", mapper.createArrayNode());
+        handler.handleEvent(mapper.treeToValue(payload, GitHubPushEventDTO.class));
+        assertThat(refs.current(item.workspaceId(), repositoryId)).isEmpty();
+        refs.record(item.workspaceId(), repositoryId, read, "a".repeat(64));
+        assertThat(refs.current(item.workspaceId(), repositoryId)).isEmpty();
     }
 
     @Test

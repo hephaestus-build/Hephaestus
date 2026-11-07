@@ -262,6 +262,11 @@ if (scenario !== undefined && scenario !== "") {
 		assert.ok(typeof init?.body === "string");
 		const posted: unknown = JSON.parse(init.body);
 		assert.ok(typeof posted === "object" && posted !== null);
+		if (String(input).endsWith("/start-practice")) {
+			const practiceSlug: unknown = Reflect.get(posted, "practiceSlug");
+			assert.ok(typeof practiceSlug === "string");
+			return Response.json({ practiceSlug, current: true });
+		}
 		if (String(input).endsWith("/stage-result")) {
 			const results: unknown = Reflect.get(posted, "results");
 			assert.ok(Array.isArray(results));

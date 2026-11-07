@@ -63,14 +63,6 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
 
     List<Result> findByWorkspaceIdAndItemIdAndEndedAtIsNull(long workspaceId, long itemId);
 
-    /** Of these practice versions, those with a result on the item at this version that has not ended. */
-    @Query("""
-        SELECT DISTINCT r.practiceVersionId FROM Result r WHERE r.workspaceId = :workspaceId AND r.itemId = :itemId
-        AND r.itemVersion = :itemVersion AND r.endedAt IS NULL AND r.practiceVersionId IN :practiceVersionIds
-        """)
-    List<Long> currentPracticeVersionIds(
-            long workspaceId, long itemId, String itemVersion, Collection<Long> practiceVersionIds);
-
     List<Result> findByWorkspaceIdAndItemIdInAndEndedAtIsNullAndDeveloperIdIsNull(
             long workspaceId, Collection<Long> itemIds);
 
@@ -113,8 +105,11 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
           AND prior_method.practice_id = r.practice_id AND prior_method.workspace_id = r.workspace_id
         JOIN review_practice requested_method ON requested_method.review_id = :reviewId
           AND requested_method.practice_id = r.practice_id AND requested_method.workspace_id = r.workspace_id
+        JOIN review prior_review ON prior_review.id=r.review_id AND prior_review.workspace_id=r.workspace_id
+        JOIN review requested_review ON requested_review.id=:reviewId AND requested_review.workspace_id=r.workspace_id
         WHERE r.workspace_id = :workspaceId AND r.practice_id = :practiceId AND r.item_id = :itemId
-          AND r.practice_version_id = :practiceVersionId AND r.item_version = :itemVersion
+          AND r.practice_version_id = :practiceVersionId
+          AND ((prior_review.kind='ITEM' AND requested_review.kind='ITEM') OR r.item_version=:itemVersion)
           AND r.developer_id IS NOT DISTINCT FROM :developerId
           AND r.evidence_version = 1 AND r.ended_at IS NULL
           AND r.summary IS NOT NULL AND r.explanation IS NOT NULL AND r.evidence IS NOT NULL AND r.coverage IS NOT NULL

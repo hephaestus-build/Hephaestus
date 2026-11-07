@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
@@ -146,10 +147,28 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
     }
 
     @Test
+    void shouldWithholdUnavailableCurrentProofWithoutClaimingTheWorkChanged() {
+        var result = resultWithStateFilter("state", "open");
+        supportOnWorkFeedback(result);
+        doReturn(Map.of()).when(productItems).fingerprints(eq(supportedItem), any());
+        var check = check();
+        assertThat(check.allowed()).isFalse();
+        assertThat(check.reason()).isEqualTo(FeedbackStopReason.UNCORROBORATED);
+        assertThat(check.facts().currentVersion()).isFalse();
+        assertThat(results.findById(result.getId()).orElseThrow().getEndedAt()).isNull();
+        assertThat(feedback.findById(Objects.requireNonNull(supportedFeedback).getId())
+                        .orElseThrow()
+                        .getState())
+                .isEqualTo(FeedbackState.READY);
+    }
+
+    @Test
     void shouldRefuseChangedWorkAndClosedWorkAgainstThePersistedStateFilter() {
         supportOnWorkFeedback();
         when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, "open", "v2")));
+        doReturn(Map.of(CORE, "b".repeat(64))).when(productItems).fingerprints(eq(supportedItem), any());
         assertThat(check().reason()).isEqualTo(FeedbackStopReason.REVIEWED_VERSION_CHANGED);
+        doReturn(CURRENT_SOURCES).when(productItems).fingerprints(eq(supportedItem), any());
         when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, "closed", "v1")));
         var check = check();
         assertThat(check.reason()).isEqualTo(FeedbackStopReason.ITEM_STATE_INELIGIBLE);

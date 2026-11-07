@@ -9,7 +9,7 @@ public record ReviewCaptureDecision(
         @Nullable String reason,
         JsonNode facts) {
     /** The fact that holds the digest of what the practice's capture read, so that a later request can compare it. */
-    public static final String SOURCES_DIGEST = "sourcesDigest";
+    public static final String SOURCE_FINGERPRINTS = "sourceFingerprints";
 
     public ReviewCaptureDecision {
         facts = facts.deepCopy();

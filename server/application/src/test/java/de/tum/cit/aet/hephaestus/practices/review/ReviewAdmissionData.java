@@ -54,6 +54,7 @@ public class ReviewAdmissionData {
     private final JsonMapper json;
     private final JdbcClient jdbc;
     private final PracticeVersionService versions;
+    private final ReviewIntegrationData resultData;
 
     public record Pending(
             ReviewIntegrationData.Scenario scenario,
@@ -103,6 +104,7 @@ public class ReviewAdmissionData {
                 .practiceId(scenario.practice().getId())
                 .practiceVersionId(scenario.practice().getCurrentVersion().getId())
                 .status(ReviewPracticeStatus.READY)
+                .captureDecision(resultData.capturedSources(scenario))
                 .itemsListed(1)
                 .listingComplete(true)
                 .method(new ReviewMethod(1, digest, slots))

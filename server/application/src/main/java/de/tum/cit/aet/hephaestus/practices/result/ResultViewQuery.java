@@ -31,6 +31,7 @@ public class ResultViewQuery {
     private final ReviewRepository reviews;
     private final ProductReferenceQuery references;
     private final ResultRepository results;
+    private final ResultFreshness freshness;
 
     public Optional<ResultView> latestForDeveloper(long workspaceId, long developerId) {
         return results.findFirstByWorkspaceIdAndDeveloperIdOrderByRecordedAtDescIdDesc(workspaceId, developerId)
@@ -68,13 +69,15 @@ public class ResultViewQuery {
                 .collect(Collectors.toMap(Review::getId, Function.identity()));
         var itemById = references.items(
                 workspaceId, results.stream().map(Result::getItemId).distinct().toList());
+        var sourceStates = freshness.states(workspaceId, results);
         return results.stream()
                 .map(result -> new ResultView(
                         result,
                         Objects.requireNonNull(practiceById.get(result.getPracticeId())),
                         versionById.get(result.getPracticeVersionId()),
                         Objects.requireNonNull(reviewById.get(result.getReviewId())),
-                        Objects.requireNonNull(itemById.get(result.getItemId()))))
+                        Objects.requireNonNull(itemById.get(result.getItemId())),
+                        Objects.requireNonNull(sourceStates.get(result.getId()))))
                 .toList();
     }
 }

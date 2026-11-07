@@ -5,6 +5,8 @@ import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.StageResponseDTO;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
@@ -27,6 +29,13 @@ public class ResultAdmissionController {
 
     public ResultAdmissionController(ResultAdmissionService admission) {
         this.admission = admission;
+    }
+
+    @PostMapping("/start-practice")
+    @WorkspaceAgnostic("The worker credential supplies the workspace and exact job attempt")
+    public PracticeStartResponseDTO startPractice(
+            @Valid @RequestBody PracticeStartRequestDTO request, Authentication authentication) {
+        return checked(() -> admission.start(attemptOf(authentication), request));
     }
 
     @PostMapping("/admit-results")

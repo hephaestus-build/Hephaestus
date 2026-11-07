@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackVisibilityService;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultAdmissionPolicy;
 import de.tum.cit.aet.hephaestus.practices.result.ResultCommunicationRepository;
+import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
 import de.tum.cit.aet.hephaestus.practices.result.ResultMarkRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
@@ -23,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -72,6 +74,8 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
             ReviewPracticeRepository.class,
             PracticeVersionRepository.class,
             ProductItemQuery.class,
+            ReviewFreshness.class,
+            ResultFreshness.class,
             PracticeItemOptions.class,
             ItemEventService.class);
 

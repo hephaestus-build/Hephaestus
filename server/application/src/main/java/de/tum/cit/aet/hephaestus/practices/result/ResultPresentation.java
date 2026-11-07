@@ -60,7 +60,7 @@ public class ResultPresentation {
 
     public Currentness currentness(ResultView view) {
         return ResultVisibilityPolicy.currentness(
-                view.result(), view.version(), view.practice().getCurrentVersion());
+                view.result(), view.version(), view.practice().getCurrentVersion(), view.sourceCurrentness());
     }
 
     public @Nullable Instant markedAt(Result result, ResultMarkKind kind) {

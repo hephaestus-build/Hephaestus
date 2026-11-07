@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
@@ -32,8 +33,10 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeSnapshot;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -100,6 +103,12 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
     @Autowired
     JsonMapper json;
 
+    @MockitoSpyBean
+    ProductItemQuery productItems;
+
+    private static final SourceKind CORE = new SourceKind("scm.pull-request.core");
+    private static final SourceKind COMMENTS = new SourceKind("scm.pull-request.comments");
+
     private ReviewIntegrationData.Scenario scenario;
     private Result earlier;
 
@@ -110,6 +119,7 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
         databaseTestUtils.cleanDatabase();
         when(authorization.permits(anyLong(), any(), any())).thenReturn(true);
         scenario = data.scenario();
+        doReturn(Map.of(CORE, SAME)).when(productItems).fingerprints(any(), any());
         var recordedAt = Instant.now().minusSeconds(120);
         earlier = data.result(
                 scenario,
@@ -136,15 +146,17 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
         jdbc.update("UPDATE review_item SET job_id=? WHERE review_id=?", data.job(earlier), earlier.getReviewId());
         jdbc.update(
                 "UPDATE review_practice SET capture_decision=CAST(? AS jsonb) WHERE review_id=?",
-                json.createObjectNode()
-                        .put(ReviewCaptureDecision.SOURCES_DIGEST, SAME)
-                        .toString(),
+                json.writeValueAsString(Map.of(ReviewCaptureDecision.SOURCE_FINGERPRINTS, Map.of(CORE.value(), SAME))),
                 earlier.getReviewId());
     }
 
     private ReviewAdmissionData.Pending requested(ReviewOrigin origin) {
-        var pending = admissions.pending(
-                scenario, Instant.now(), scenario.account().getId(), Objects.requireNonNull(earlier.getItemVersion()));
+        return requested(origin, Objects.requireNonNull(earlier.getItemVersion()));
+    }
+
+    private ReviewAdmissionData.Pending requested(ReviewOrigin origin, String version) {
+        var pending =
+                admissions.pending(scenario, Instant.now(), scenario.account().getId(), version);
         admissions.running(pending, 0);
         when(runtime.runtime(pending.review().getWorkspaceId(), pending.review().getId()))
                 .thenReturn(Optional.of(new ReviewRuntimeSnapshot(List.of(new ReviewJobSnapshot(
@@ -176,8 +188,13 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
     }
 
     private Set<Long> capture(ReviewAdmissionData.Pending pending, @Nullable String digest) {
+        return captureSources(pending, digest == null ? Map.of() : Map.of(CORE, digest));
+    }
+
+    private Set<Long> captureSources(ReviewAdmissionData.Pending pending, Map<SourceKind, String> sources) {
         var facts = json.createObjectNode();
-        if (digest != null) facts.put(ReviewCaptureDecision.SOURCES_DIGEST, digest);
+        var fingerprints = facts.putObject(ReviewCaptureDecision.SOURCE_FINGERPRINTS);
+        sources.forEach((kind, value) -> fingerprints.put(kind.value(), value));
         return store.capture(
                 pending.review().getWorkspaceId(),
                 pending.review().getId(),
@@ -232,12 +249,71 @@ class RequestedReviewReuseIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldMeasureAgainWhenASourceChangedAtTheSameVersion() {
         var pending = requested(ReviewOrigin.REQUEST);
-
+        doReturn(Map.of(CORE, "b".repeat(64))).when(productItems).fingerprints(any(), any());
         assertMeasures(pending, capture(pending, "b".repeat(64)));
     }
 
     @Test
-    void shouldMeasureAgainWhenTheEarlierCaptureRecordedNoDigest() {
+    void shouldMeasureAgainWhenAnAdditionalReadableSourceChanged() {
+        jdbc.update(
+                "UPDATE review_practice SET capture_decision=?::jsonb WHERE review_id=?",
+                json.writeValueAsString(Map.of(
+                        ReviewCaptureDecision.SOURCE_FINGERPRINTS,
+                        Map.of(CORE.value(), SAME, COMMENTS.value(), "b".repeat(64)))),
+                earlier.getReviewId());
+        doReturn(Map.of(CORE, SAME, COMMENTS, "c".repeat(64)))
+                .when(productItems)
+                .fingerprints(any(), any());
+        var pending = requested(ReviewOrigin.REQUEST);
+        assertMeasures(pending, capture(pending, SAME));
+        assertThat(jdbc.queryForObject(
+                        "SELECT ended_at FROM result WHERE workspace_id=? AND id=?",
+                        Timestamp.class,
+                        earlier.getWorkspaceId(),
+                        earlier.getId()))
+                .isNull();
+    }
+
+    @Test
+    void shouldMeasureAgainWhenCurrentProofIsUnavailable() {
+        doReturn(Map.of()).when(productItems).fingerprints(any(), any());
+        var pending = requested(ReviewOrigin.REQUEST);
+        assertMeasures(pending, capture(pending, SAME));
+    }
+
+    @Test
+    void shouldMeasureAgainWhenTheRequestedCaptureCanReadAnAdditionalSource() {
+        var pending = requested(ReviewOrigin.REQUEST);
+        assertMeasures(pending, captureSources(pending, Map.of(CORE, SAME, COMMENTS, "b".repeat(64))));
+    }
+
+    @Test
+    void shouldMeasureAgainWhenTheRequestedCaptureDiffersFromTheStoredCurrentObservation() {
+        var pending = requested(ReviewOrigin.REQUEST);
+        assertMeasures(pending, capture(pending, "b".repeat(64)));
+    }
+
+    @Test
+    void shouldMeasureAgainWhenTheRequestedCaptureHasNoReadableProof() {
+        var pending = requested(ReviewOrigin.REQUEST);
+        assertMeasures(pending, capture(pending, null));
+    }
+
+    @Test
+    void shouldKeepAnUnchangedFootprintAtADifferentItemVersion() {
+        var pending = requested(ReviewOrigin.REQUEST, "another-version");
+        assertThat(capture(pending, SAME)).containsExactly(scenario.practice().getId());
+        assertThat(memberships
+                        .findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(
+                                pending.review().getWorkspaceId(),
+                                pending.review().getId())
+                        .getFirst()
+                        .getResultId())
+                .isEqualTo(earlier.getId());
+    }
+
+    @Test
+    void shouldMeasureAgainWhenTheEarlierCaptureRecordedNoFingerprints() {
         jdbc.update("UPDATE review_practice SET capture_decision='{}'::jsonb WHERE review_id=?", earlier.getReviewId());
         var pending = requested(ReviewOrigin.REQUEST);
 

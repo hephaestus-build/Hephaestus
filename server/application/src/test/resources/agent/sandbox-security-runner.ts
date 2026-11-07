@@ -163,6 +163,11 @@ const server = createServer((request, response) => {
 					`data: ${JSON.stringify({ ...data, choices: [{ index: 0, delta: {}, finish_reason: step === undefined ? "stop" : "tool_calls" }], usage: { prompt_tokens: 100, completion_tokens: 30, total_tokens: 130 } })}\n\n`,
 				);
 				response.end("data: [DONE]\n\n");
+			} else if (request.url === "/v1/start-practice") {
+				const practiceSlug: unknown = Reflect.get(body, "practiceSlug");
+				assert.ok(typeof practiceSlug === "string");
+				response.writeHead(200, { "content-type": "application/json" });
+				response.end(JSON.stringify({ practiceSlug, current: true }));
 			} else if (request.url === "/v1/stage-result") {
 				staged += 1;
 				response

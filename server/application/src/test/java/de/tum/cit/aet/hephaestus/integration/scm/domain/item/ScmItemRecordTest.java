@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -152,7 +153,8 @@ class ScmItemRecordTest extends BaseUnitTest {
                 new GitRepositoryProperties(true, 2, 64 * 1024 * 1024, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(root.resolve("fabric").toString()),
-                GitTransportFixtures.guarded());
+                GitTransportFixtures.guarded(),
+                mock(RepositoryRefState.class));
         var gitTree = new ScmGitTree(manager);
         var versions = new ScmFileVersions(mapper);
         ReflectionTestUtils.setField(service, "tree", gitTree);

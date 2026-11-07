@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.practices.result.trend.TrendProperties;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewTestData;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
@@ -267,7 +268,8 @@ class PracticesAcrossWorkspaceServiceTest {
                 .practiceVersionId(practice.getCurrentVersion().getId())
                 .developerId(developer)
                 .build();
-        data.add(new ResultView(row, practice, practice.getCurrentVersion(), base.review(), base.item()));
+        data.add(new ResultView(
+                row, practice, practice.getCurrentVersion(), base.review(), base.item(), Currentness.CURRENT));
     }
 
     private static PracticeGroup group(String slug, int position) {

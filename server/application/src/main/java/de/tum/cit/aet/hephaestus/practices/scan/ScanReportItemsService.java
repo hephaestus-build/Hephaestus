@@ -3,16 +3,11 @@ package de.tum.cit.aet.hephaestus.practices.scan;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
-import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
-import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
-import de.tum.cit.aet.hephaestus.practices.model.Practice;
-import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
-import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ResultListDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
@@ -39,6 +34,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -67,8 +63,6 @@ public class ScanReportItemsService {
     private final ReviewRepository membershipQuery;
     private final ReviewItemRepository members;
     private final ResultViewQuery views;
-    private final PracticeRepository practices;
-    private final PracticeVersionRepository versions;
     private final ProblemRepository problems;
     private final JsonMapper json;
 
@@ -101,38 +95,23 @@ public class ScanReportItemsService {
         proofRows.addAll(claims);
         var permitted = eligibility.permitted(review, proofRows);
         var unmarked = eligibility.unmarked(review, claims);
+        var allRows = new LinkedHashMap<>(resultsById);
+        claims.forEach(result -> allRows.putIfAbsent(result.getId(), result));
+        var allViews = views.views(workspaceId, new ArrayList<>(allRows.values())).stream()
+                .collect(Collectors.toMap(view -> view.result().getId(), Function.identity()));
         var previous = presentation
                 .lists(
                         workspaceId,
-                        views.views(
-                                workspaceId,
-                                claims.stream()
-                                        .filter(c -> permitted.contains(c.getId()) && unmarked.contains(c.getId()))
-                                        .toList()),
+                        claims.stream()
+                                .filter(result ->
+                                        permitted.contains(result.getId()) && unmarked.contains(result.getId()))
+                                .map(result -> Objects.requireNonNull(allViews.get(result.getId())))
+                                .toList(),
                         permitted)
                 .stream()
-                .collect(Collectors.toMap(v -> v.id(), Function.identity()));
+                .collect(Collectors.toMap(value -> value.id(), Function.identity()));
         var claimsByKey = claims.stream()
                 .collect(Collectors.toMap(c -> new Key(c.getPracticeId(), c.getItemId()), c -> c.getId()));
-        var current = practices
-                .findByWorkspaceIdAndIdIn(
-                        workspaceId,
-                        page.stream()
-                                .map(k -> k.cursor().practiceId())
-                                .distinct()
-                                .toList())
-                .stream()
-                .collect(Collectors.toMap(Practice::getId, Function.identity()));
-        var pinnedVersions = versions
-                .findByWorkspaceIdAndIdIn(
-                        workspaceId,
-                        resultsById.values().stream()
-                                .map(Result::getPracticeVersionId)
-                                .filter(Objects::nonNull)
-                                .distinct()
-                                .toList())
-                .stream()
-                .collect(Collectors.toMap(PracticeVersion::getId, Function.identity()));
         var content = page.stream()
                 .map(key -> {
                     var member = Objects.requireNonNull(membersByKey.get(
@@ -143,13 +122,8 @@ public class ScanReportItemsService {
                             Objects.requireNonNull(pinned.get(key.cursor().practiceId())),
                             key.problemCount());
                     var result = resultsById.get(member.getResultId());
-                    var practice = current.get(member.getPracticeId());
-                    var currentness = result == null || practice == null
-                            ? null
-                            : ResultVisibilityPolicy.currentness(
-                                    result,
-                                    pinnedVersions.get(result.getPracticeVersionId()),
-                                    practice.getCurrentVersion());
+                    var view = result == null ? null : allViews.get(result.getId());
+                    var currentness = view == null ? null : presentation.currentness(view);
                     return item(
                             review,
                             row,

@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -38,12 +39,18 @@ class ResultVisibilityPolicyTest {
     private final PracticeRepository practices = mock(PracticeRepository.class);
     private final PracticeVersionRepository versions = mock(PracticeVersionRepository.class);
     private final ResultSourceAuthorization sources = mock(ResultSourceAuthorization.class);
+    private final ResultFreshness freshness = mock(ResultFreshness.class);
     private final ResultVisibilityPolicy policy =
-            new ResultVisibilityPolicy(authorization, marks, practices, versions, sources);
+            new ResultVisibilityPolicy(authorization, marks, practices, versions, sources, freshness);
     private final Practice practice = ReviewTestData.practice(1, 1, "test-practice");
 
     @BeforeEach
     void catalog() {
+        when(freshness.states(ArgumentMatchers.eq(1L), ArgumentMatchers.anyCollection()))
+                .thenAnswer(call -> {
+                    Collection<Result> rows = call.getArgument(1);
+                    return rows.stream().collect(Collectors.toMap(Result::getId, row -> Currentness.CURRENT));
+                });
         when(practices.findByWorkspaceIdAndIdIn(ArgumentMatchers.eq(1L), ArgumentMatchers.anyCollection()))
                 .thenReturn(List.of(practice));
         when(versions.findByWorkspaceIdAndIdIn(ArgumentMatchers.eq(1L), ArgumentMatchers.any()))
@@ -73,12 +80,14 @@ class ResultVisibilityPolicyTest {
     void archivedProofIsUnverifiableForNewClaims() {
         var r = result();
         r = resultBuilder(r).evidenceVersion((short) 0).build();
-        assertThat(ResultVisibilityPolicy.currentness(r, practice.getCurrentVersion(), practice.getCurrentVersion()))
+        assertThat(ResultVisibilityPolicy.currentness(
+                        r, practice.getCurrentVersion(), practice.getCurrentVersion(), Currentness.CURRENT))
                 .isEqualTo(Currentness.UNVERIFIABLE);
         assertThat(policy.permitsAll(1L, List.of(r), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isEmpty();
         r.end(ResultEndReason.REPLACED, r.getRecordedAt().plusSeconds(1));
-        assertThat(ResultVisibilityPolicy.currentness(r, practice.getCurrentVersion(), practice.getCurrentVersion()))
+        assertThat(ResultVisibilityPolicy.currentness(
+                        r, practice.getCurrentVersion(), practice.getCurrentVersion(), Currentness.CURRENT))
                 .isEqualTo(Currentness.UNVERIFIABLE);
     }
 
@@ -88,7 +97,7 @@ class ResultVisibilityPolicyTest {
         var old = new PracticeVersion(
                 practice, 1, new JsonMapper().valueToTree(DefinitionTestFixtures.definition()), null);
         ReflectionTestUtils.setField(old, "reviewDigest", "v6:" + "b".repeat(64));
-        assertThat(ResultVisibilityPolicy.currentness(r, old, practice.getCurrentVersion()))
+        assertThat(ResultVisibilityPolicy.currentness(r, old, practice.getCurrentVersion(), Currentness.CURRENT))
                 .isEqualTo(Currentness.STALE);
     }
 

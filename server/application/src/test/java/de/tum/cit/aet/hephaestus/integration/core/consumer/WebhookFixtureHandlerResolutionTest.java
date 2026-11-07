@@ -116,8 +116,6 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
             "feature-flag toggles — outside the mirrored SCM domain.",
             "release",
             "GitLab releases are not mirrored yet (GitLabEventType javadoc: add a handler when needed).",
-            "tag_push",
-            "tag pushes are not mirrored — only branch pushes drive sync; TAG_PUSH has no handler by design.",
             "wiki_page",
             "wiki pages are not part of the mirrored SCM domain.");
 

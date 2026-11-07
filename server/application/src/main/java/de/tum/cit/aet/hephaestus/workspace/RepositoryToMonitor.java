@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -68,6 +69,15 @@ public class RepositoryToMonitor {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "generated_paths", nullable = false, columnDefinition = "jsonb")
     private List<String> generatedPaths = List.of();
+
+    /** Last complete provider-ref observation. The read id fences concurrent fetches and invalidations. */
+    @Nullable
+    @Column(length = 64, updatable = false)
+    private String gitRefsFingerprint;
+
+    @Nullable
+    @Column(updatable = false)
+    private UUID gitRefsReadId;
 
     private Instant repositorySyncedAt;
 

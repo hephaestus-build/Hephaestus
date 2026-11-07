@@ -16,6 +16,29 @@ class PracticeV1ConstraintDatabaseTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"prod", "dev"})
+    void shouldKeepTheProducingVersionWhenAnItemReviewReusesItsResultAfterUpgrade(String context) throws Exception {
+        var database = NativePracticeFixture.resultParentAfterUpgrade(context);
+        PracticeMigrationFixture.execute(database, NativePracticeFixture.insertResult("MET", "'{}'"));
+        PracticeMigrationFixture.execute(database, """
+            INSERT INTO review(id,workspace_id,item_id,kind,item_version,origin,status,ordered_at)
+            SELECT '00000000-0000-0000-0000-000000978012',workspace_id,item_id,'ITEM','native-v2',origin,status,now()
+            FROM review WHERE id='00000000-0000-0000-0000-000000978011';
+            INSERT INTO review_practice(review_id,workspace_id,practice_id,practice_version_id,status)
+            VALUES('00000000-0000-0000-0000-000000978012',978001,978004,978005,'READY');
+            INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,item_version,state,result_id)
+            VALUES('00000000-0000-0000-0000-000000978012',978001,978004,978006,'native-v2','REUSED',
+              '00000000-0000-0000-0000-000000978021');
+            """);
+        assertThat(PracticeMigrationFixture.column(database, """
+            SELECT a.state || '|' || a.item_version || '|' || r.item_version || '|' || r.review_id
+            FROM review_item a JOIN result r ON r.id=a.result_id AND r.workspace_id=a.workspace_id
+            WHERE a.review_id='00000000-0000-0000-0000-000000978012'
+            """))
+                .containsExactly("REUSED|native-v2|native-v1|00000000-0000-0000-0000-000000978011");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"prod", "dev"})
     void shouldEnforceCompleteChildrenAndRestoreTheSeverityCacheOnRollback(String context) throws Exception {
         var database = NativePracticeFixture.resultParent(context);
         assertThatThrownBy(() -> PracticeMigrationFixture.execute(

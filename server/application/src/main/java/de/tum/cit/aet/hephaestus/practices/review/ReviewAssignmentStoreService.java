@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
-import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
@@ -183,21 +182,11 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
      */
     private Optional<ReuseCandidateQuery.ReusableResult> reusable(
             long workspaceId, Review review, ReviewCaptureDecision decision, long itemId) {
-        String digest =
-                decision.facts().path(ReviewCaptureDecision.SOURCES_DIGEST).asString(null);
-        if (digest == null
-                || review.getKind() != ReviewKind.ITEM
+        if (review.getKind() != ReviewKind.ITEM
                 || review.getOrigin() != ReviewOrigin.REQUEST
                 || decision.status() != ReviewPracticeStatus.READY) return Optional.empty();
-        return reuseCandidates
-                .find(workspaceId, new ReviewAssignmentId(review.getId(), decision.practiceId(), itemId))
-                .filter(candidate -> practices
-                        .findByWorkspaceIdAndReviewIdAndPracticeId(
-                                workspaceId, candidate.result().getReviewId(), decision.practiceId())
-                        .map(ReviewPractice::getCaptureDecision)
-                        .map(facts -> digest.equals(
-                                facts.path(ReviewCaptureDecision.SOURCES_DIGEST).asString(null)))
-                        .orElse(false));
+        return reuseCandidates.findWithCapture(
+                workspaceId, new ReviewAssignmentId(review.getId(), decision.practiceId(), itemId));
     }
 
     @Override

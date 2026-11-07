@@ -6,6 +6,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
@@ -33,6 +35,7 @@ public class ReviewStartService implements ReviewStart {
     private final ItemEventService events;
     private final Clock clock;
     private final FeedbackRepair repairs;
+    private final ReviewFreshness membership;
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
@@ -63,8 +66,7 @@ public class ReviewStartService implements ReviewStart {
                 && repairs.pending(workspaceId, reviewId);
     }
 
-    // A person's request stays: they asked for this review. An immediate occasion keeps waiting for it, as does one at
-    // the same version, which leaves the review's input as it was.
+    // A person's request stays. Only a newer waiting occasion with changed readable sources replaces an event review.
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean replaceByNewerOccasion(long workspaceId, UUID reviewId) {
@@ -77,12 +79,11 @@ public class ReviewStartService implements ReviewStart {
         if (kind.isEmpty()) return false;
         boolean moved = events.open(workspaceId, review.getItemId()).stream()
                 .anyMatch(waiting -> waiting.itemVersion() != null
-                        && !waiting.itemVersion().equals(review.getItemVersion())
                         && waiting.occurredAt().isAfter(review.getOrderedAt())
                         && itemOptions
                                 .occasion(kind.orElseThrow(), waiting.name())
                                 .joinsWindow());
-        if (!moved) return false;
+        if (!moved || membership.capturedCurrentness(workspaceId, reviewId) != Currentness.STALE) return false;
         var now = clock.instant();
         String reason = ReviewStopReason.REPLACED.name();
         for (var member :

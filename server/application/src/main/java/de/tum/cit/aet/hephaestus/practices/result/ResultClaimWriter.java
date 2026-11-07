@@ -57,7 +57,7 @@ public class ResultClaimWriter {
                 .coverage(json.valueToTree(c.coverage()))
                 .recordedAt(at)
                 .build();
-        var stale = currentness.prepareClaim(ws, c.itemId(), c.itemVersion(), at);
+        var stale = currentness.prepareClaim(ws, result, at);
         if (stale != null) result.end(stale, at);
         var current = stale == null
                 ? results.findCurrentClaim(ws, c.practiceId(), c.itemId(), c.developerId())

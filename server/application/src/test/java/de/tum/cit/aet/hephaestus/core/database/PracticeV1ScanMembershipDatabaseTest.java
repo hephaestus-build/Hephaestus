@@ -68,6 +68,23 @@ class PracticeV1ScanMembershipDatabaseTest {
             INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,item_version,state,result_id)
             VALUES('00000000-0000-0000-0000-000000999812',978001,978004,999841,'file-a-head','REUSED','00000000-0000-0000-0000-000000999851');
             """);
+        PracticeMigrationFixture.execute(database, """
+            UPDATE review SET status='PARTIAL',stop_reason='DEADLINE',completed_at=now()
+            WHERE id='00000000-0000-0000-0000-000000999812';
+            INSERT INTO review(id,workspace_id,item_id,kind,item_version,origin,status,budget_usd,ordered_at)
+            SELECT '00000000-0000-0000-0000-000000999813',workspace_id,item_id,'SCAN','repository-head-v2',
+              origin,'QUEUED',budget_usd,now() FROM review
+            WHERE id='00000000-0000-0000-0000-000000999811';
+            INSERT INTO review_practice(review_id,workspace_id,practice_id,practice_version_id,status)
+            VALUES('00000000-0000-0000-0000-000000999813',978001,978004,999831,'READY');
+            """);
+        assertThatThrownBy(() -> PracticeMigrationFixture.execute(database, """
+            INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,item_version,state,result_id)
+            VALUES('00000000-0000-0000-0000-000000999813',978001,978004,999841,'file-a-head-v2','REUSED',
+              '00000000-0000-0000-0000-000000999851')
+            """))
+                .hasRootCauseInstanceOf(SQLException.class)
+                .hasMessageContaining("assignment result differs from frozen work/practice");
         assertThat(PracticeMigrationFixture.column(
                         database,
                         "SELECT (job_id IS NULL)::text || '|' || state FROM review_item WHERE"

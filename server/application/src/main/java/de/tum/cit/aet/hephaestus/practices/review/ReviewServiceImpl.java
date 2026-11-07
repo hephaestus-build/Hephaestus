@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CapturedApplicability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemChecks;
@@ -18,16 +19,20 @@ import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
+import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCancellationRequested;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompleted;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompletion;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
@@ -67,6 +72,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -105,6 +111,8 @@ public class ReviewServiceImpl implements ReviewService {
     private final ScanReportService reports;
     private final PracticeItemOptions itemOptions;
     private final ResultRepository results;
+    private final ResultFreshness freshness;
+    private final List<CapturedApplicability> applicability;
     private final ItemEventService itemEvents;
     private final ReviewOutcomeMeters outcomes;
 
@@ -291,6 +299,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .createdAt(now)
                 .checks(checks)
                 .build());
+        var queuedSources = request.kind() == ReviewKind.ITEM ? queuedSources(pinned, planned) : null;
         for (var plan : planned) {
             var practice = plan.practice();
             var version = plan.version();
@@ -299,6 +308,7 @@ public class ReviewServiceImpl implements ReviewService {
                     .workspaceId(request.workspaceId())
                     .practiceId(practice.getId())
                     .practiceVersionId(version.getId())
+                    .captureDecision(plan.reason() == null ? queuedSources : null)
                     .method(method)
                     .build());
             if (request.kind() == ReviewKind.ITEM) {
@@ -374,11 +384,12 @@ public class ReviewServiceImpl implements ReviewService {
         if (occasions.stream()
                 .anyMatch(name -> itemOptions.occasion(pinned.item().kind(), name) == OccasionKind.MILESTONE))
             return selected;
-        var current = Set.copyOf(results.currentPracticeVersionIds(
-                workspaceId,
-                itemId,
-                pinned.version().value(),
-                selected.stream().map(p -> p.getCurrentVersion().getId()).toList()));
+        var claims = results.findByWorkspaceIdAndItemIdAndEndedAtIsNull(workspaceId, itemId);
+        var states = freshness.states(workspaceId, claims);
+        var current = claims.stream()
+                .filter(result -> states.get(result.getId()) == Currentness.CURRENT)
+                .map(Result::getPracticeVersionId)
+                .collect(Collectors.toSet());
         var pending = selected.stream()
                 .filter(p -> !current.contains(p.getCurrentVersion().getId()))
                 .toList();
@@ -451,6 +462,31 @@ public class ReviewServiceImpl implements ReviewService {
         return authoredWork && !holders.isEmpty() && holders.stream().allMatch(RoleHolder::bot)
                 ? role == AboutRole.REVIEWER ? "BOT_REVIEWER" : "BOT_AUTHOR"
                 : "ROLE_UNAVAILABLE";
+    }
+
+    private JsonNode queuedSources(ItemSnapshot item, List<SelectedPractice> plans) {
+        var kinds = new HashSet<SourceKind>();
+        for (var plan : plans) {
+            if (plan.reason() != null) continue;
+            var definition = json.treeToValue(plan.version().getDefinition(), PracticeDefinition.class);
+            definition.reads().sources().forEach(read -> kinds.add(read.source()));
+            var conditions = definition.appliesWhen();
+            if (conditions == null) continue;
+            var clauses = conditions.anyOf().stream()
+                    .map(condition -> new CapturedApplicability.Condition(
+                            condition.changedPath(),
+                            condition.diffContains(),
+                            condition.hasItems(),
+                            Boolean.TRUE.equals(condition.merged())))
+                    .toList();
+            for (var adapter : applicability)
+                adapter.evaluate(item.item().kind(), clauses, List.of(), Map.of())
+                        .forEach(clause -> kinds.add(clause.readFrom()));
+        }
+        var facts = json.createObjectNode();
+        var fingerprints = facts.putObject(ReviewCaptureDecision.SOURCE_FINGERPRINTS);
+        items.fingerprints(item.item(), kinds).forEach((kind, value) -> fingerprints.put(kind.value(), value));
+        return facts;
     }
 
     private record SelectedPractice(

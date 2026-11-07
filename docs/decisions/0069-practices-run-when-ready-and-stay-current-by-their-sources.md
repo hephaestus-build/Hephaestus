@@ -226,7 +226,21 @@ A result R of practice P on item I is **current** when all of these hold:
 **A result depends on every source that its session could read.** That one rule decides which fingerprints a result records.
 The source contract of each kind computes its [source fingerprint](../contributor/practice-review-glossary.mdx#review-terms), next to the capture renderer.
 
-- **Git sources** use content addresses. `tree` is the head object ID.
+An unavailable source supplies no content proof. If it becomes readable later, that alone does not change a result based on the other sources.
+A requested review reuses a result only when its own stored capture has the same readable fingerprints as the producing capture.
+A newly readable source therefore makes that request measure again.
+
+- **Git sources** use content addresses.
+  `tree` includes the head object ID and each readable ref name and object ID.
+  An annotated tag contributes its own object ID.
+  The checkout exposes provider branches and tags. Private retention refs stay in the mirror.
+  Capture reads the checkout's refs and records the fingerprint in PostgreSQL.
+  A complete fetch records the provider-ref fingerprint in the monitored repository's source record.
+  A ref event or a new fetch invalidates that record until the complete read succeeds.
+  Reads compare stored fingerprints. They do not open another role's local mirror.
+  Both fingerprints use only ref names and object IDs.
+  These facts describe the last complete read. A provider can omit a bulk ref event. A later fetch detects it.
+  The [pipeline guide](../contributor/practice-review-pipeline.mdx#select-a-review) states this limit.
   `diff` is the review base, the head object ID and the renderer version.
   The target tip is not part of it. A merge to the target that keeps the review base ends no diff result.
 - **Record sources** use the SHA-256 of a canonical form of the rendered content, from the renderer that capture uses.
@@ -237,7 +251,7 @@ The source contract of each kind computes its [source fingerprint](../contributo
   Hephaestus's own posted comments are already excluded from these bytes, so its own feedback changes no fingerprint.
 - **CI gets its own source kind**, `scm.pull-request.checks`, not a field of the core source. Otherwise a CI rerun ends every core reader.
 - Capture records the fingerprint of each captured kind.
-  The runner reports which kinds each session could read. Admission copies the fingerprints of those kinds onto the result.
+  Capture records these facts in the existing capture decision. Admission and reads use the fingerprints of every kind the session could read.
 - Today `bash` in a session can read every captured file, so a result records every captured kind.
   ADR 0068 moves captured files to a volume that only the loop mounts. Then `bash` sees only the checkout, and the same rule records the declared kinds, `diff` and `tree`.
 - The server computes the current fingerprints from synced rows, with no sandbox. Each source-change domain event of the item reconciles its results.
@@ -430,6 +444,9 @@ The loop ends with a stop on the composition row. The new values extend `Composi
 **The trace.** Each tool call, its arguments and its result are stored on the composition row, for audit and for the eval set.
 
 **Freshness at send.** The check refuses an entry whose result is no longer current. A package with no current result is withheld with `REVIEWED_VERSION_CHANGED`.
+
+Missing current proof withholds feedback as `UNCORROBORATED`. It does not establish a source change.
+
 At the seal, a staged result that is already stale is admitted and ended at once as `WORK_CHANGED`. It is never delivered.
 
 **Destinations.**
@@ -602,8 +619,9 @@ The read tool refuses undeclared context files. Admission refuses undeclared cit
 
 **Decision: adopted.**
 **Consequence:** while `bash` can read every captured file, a result records every captured kind. When ADR 0068 moves captured files to the loop's volume, freshness narrows to the declared kinds, `diff` and `tree`, with no change to this rule.
+
 Then a description edit keeps diff results current, and comments and CI reruns make only their readers stale. Practices that rely on undeclared context must declare it, so the first layer audits the 52 `reads` blocks.
-The freshness layer adds the migration for `result.read_fingerprints`.
+The freshness layer stores these fingerprints in the existing capture decision. It adds no result column.
 
 ### D9. Merged and submitted reviews go to private destinations
 
@@ -666,7 +684,7 @@ Its result is recorded here before the layer that depends on it merges.
 | GH-REVIEW | `updatePullRequestReview` edits a submitted review body. A reply with a pending review ID, then a submit, gives one notification. A crash leaves a pending review that a retry can adopt by its marker. | The same test organization | L13 | Schema: both mutations exist. The live write is open. |
 | GH-FORK | The suite and run state of a first-time contributor's fork workflow before approval | Public fork pull requests | L6, L10 | Done. Gated suites are `COMPLETED` with `ACTION_REQUIRED` and 0 runs. The rollup can still be SUCCESS. |
 | GL-PUBLISH | A bulk publish of a general note, line notes and a reply sends one email. `updateNote` without new mentions sends none. One resolve sends none. | A GitLab test project with two users and mail capture | D4, L13 | Source read: one email for each publish, none for an edit without new mentions. A resolve that leaves every thread resolved sends one email. The live run is open. |
-| F-FP | Equal fingerprint means equal captured bytes, for every source kind | `SourceFingerprintPropertyTest` over the fixture corpus and random edits | L7 | Code read: sound with the rules in [Freshness](#freshness-by-source-fingerprints). The test is open. |
+| F-FP | Equal fingerprint means equal captured bytes, for every source kind | `SourceFingerprintTest` and source capture integration tests | L7 | Focused fingerprints and row tests exist. The full source corpus proof is open. |
 | M-WINDOW | Push and edit inter-arrival times | The p50 and p90 gap within a burst, from staging and course `item_event` rows | D2 defaults | open |
 | M-FOOT | Memory of the real model at a concurrency of 6 | The footprint benchmark | D10 | open |
 
@@ -820,7 +838,7 @@ L9 and L10 ship together, because the window's edge is where readiness is derive
 - **Window membership is derived.** The window is the item's open occasions that join windows. Their `decided_at` records when each began to wait, so the cap needs no column.
   The older occasions are withheld with `COALESCED` at the edge, not when a newer one joins. A refusal that can pass keeps the whole window waiting, so the retry selects the union.
 
-Until L7 ships, `current(p)` is an unended result of p's current version at the pinned item version. L7 replaces it with the fingerprint predicate.
+`current(p)` is an unended result of p's current criteria whose readable sources still have the captured fingerprints. See [Freshness](#freshness-by-source-fingerprints).
 The item kind declares, for each event name, whether it is a milestone, a continuing occasion or immediate.
 An opened issue and a published document are milestones. A closed or deleted issue and an archived document are immediate.
 

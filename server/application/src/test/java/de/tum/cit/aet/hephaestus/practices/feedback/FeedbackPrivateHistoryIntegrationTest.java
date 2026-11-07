@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -24,6 +25,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticePageSupportDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateFeedbackHistoryDTO;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -38,6 +40,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
+import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationDecision;
@@ -86,6 +89,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
+    @MockitoSpyBean
+    ProductItemQuery productItems;
+
     private static final Path FABRIC_ROOT = temporaryDirectory();
     private static final UUID WORKER_LEASE = UUID.fromString("3e9b7c41-58d2-4a6f-b0e1-7c2d9a4f6b18");
     private static final String ADMISSION_DIGEST = "a".repeat(64);
@@ -192,6 +198,9 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                 .thenAnswer(call -> Optional.of(ItemFixtures.snapshot(call.getArgument(0), Map.of())
                         .version(new ItemVersion(ITEM_VERSION, null))
                         .build()));
+        doReturn(Map.of(new SourceKind("scm.pull-request.core"), "a".repeat(64)))
+                .when(productItems)
+                .fingerprints(any(), any());
         scenario = data.scenario();
         jdbc.update(
                 "UPDATE practice SET feedback_mode='AUTOMATIC' WHERE workspace_id=? AND id=?",

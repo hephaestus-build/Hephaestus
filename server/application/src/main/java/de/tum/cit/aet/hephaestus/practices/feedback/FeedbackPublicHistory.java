@@ -110,6 +110,7 @@ public class FeedbackPublicHistory {
 
     /** Whether the claim a piece of feedback rests on still holds: its least current supporting result decides. */
     public Currentness currentness(long workspaceId, List<Result> support) {
+        if (support.isEmpty()) return Currentness.UNVERIFIABLE;
         var currentness = views.views(workspaceId, support).stream()
                 .map(presentation::currentness)
                 .toList();

@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -80,7 +82,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 new GitRepositoryProperties(enabled, 2, maxSnapshotBytes, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(fabric.toString()),
-                GitTransportFixtures.guarded());
+                GitTransportFixtures.guarded(),
+                mock(RepositoryRefState.class));
     }
 
     @Test
@@ -300,6 +303,104 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 assertThat(log.waitFor()).isZero();
             }
             assertThat(staging).doesNotExist();
+        }
+    }
+
+    @Test
+    void shouldKeepCaptureAndCurrentRefFingerprintsEqualUntilAReadableRefChanges() throws Exception {
+        try (Git git = repository()) {
+            String head = Objects.requireNonNull(git.getRepository().resolve(Constants.HEAD))
+                    .name();
+            prepare();
+            try (var snapshot = manager.readTreeSnapshot(KEY, head)) {
+                var captured = GitRepositoryManager.treeIdentity(snapshot);
+                try (var unchanged = manager.readTreeSnapshot(KEY, head)) {
+                    assertThat(GitRepositoryManager.treeIdentity(unchanged)).isEqualTo(captured);
+                }
+                prepare();
+                try (var unchanged = manager.readTreeSnapshot(KEY, head)) {
+                    assertThat(GitRepositoryManager.treeIdentity(unchanged)).isEqualTo(captured);
+                }
+                git.branchCreate().setName("other-work").setStartPoint(head).call();
+                prepare();
+                assertThat(manager.resolveBranchHead(KEY, "main")).isEqualTo(head);
+
+                assertThat(GitRepositoryManager.treeIdentity(snapshot)).isEqualTo(captured);
+                try (var next = manager.readTreeSnapshot(KEY, head)) {
+                    assertThat(GitRepositoryManager.treeIdentity(next)).isNotEqualTo(captured);
+                }
+            }
+        }
+    }
+
+    @Test
+    void shouldExportTheSameProviderRefsFromMirrorsWithDifferentPrivatePins() throws Exception {
+        try (Git git = repository()) {
+            String main = Objects.requireNonNull(git.getRepository().resolve(Constants.HEAD))
+                    .name();
+            prepare();
+            git.checkout().setCreateBranch(true).setName("temporary-review").call();
+            Files.writeString(source.resolve("private.txt"), "Retained by the old review only.\n");
+            String retained = commit(git, "Retained review");
+            manager.fetchRemoteCommit(KEY, source.toUri().toString(), "refs/heads/temporary-review", retained, null);
+            git.checkout().setName("main").call();
+            git.branchDelete().setBranchNames("temporary-review").setForce(true).call();
+            prepare();
+            var other = new GitRepositoryManager(
+                    new GitRepositoryProperties(true, 2, LIMIT, 1L << 40),
+                    new GitRepositoryLockManager(),
+                    new FabricLayout(fabric.resolve("other-role").toString()),
+                    GitTransportFixtures.guarded(),
+                    mock(RepositoryRefState.class));
+            other.ensureRepository(KEY, source.toUri().toString(), null);
+            try (var first = manager.readTreeSnapshot(KEY, main);
+                    var second = other.readTreeSnapshot(KEY, main);
+                    var exported = Git.open(first.stagingDir().toFile())) {
+                assertThat(GitRepositoryManager.treeIdentity(first))
+                        .isEqualTo(GitRepositoryManager.treeIdentity(second));
+                assertThat(exported.getRepository().getRefDatabase().getRefsByPrefix(GitRepositoryManager.REVIEW_REFS))
+                        .isEmpty();
+            }
+            try (var retainedCapture = manager.readTreeSnapshot(KEY, retained);
+                    var exported = Git.open(retainedCapture.stagingDir().toFile())) {
+                assertThat(exported.getRepository().resolve(Constants.HEAD)).isEqualTo(ObjectId.fromString(retained));
+                assertThat(exported.getRepository().getRefDatabase().getRefsByPrefix(GitRepositoryManager.REVIEW_REFS))
+                        .isEmpty();
+            }
+        }
+    }
+
+    @Test
+    void shouldFingerprintAnAnnotatedTagsObjectRatherThanOnlyItsPeeledCommit() throws Exception {
+        try (Git git = repository()) {
+            String head = Objects.requireNonNull(git.getRepository().resolve(Constants.HEAD))
+                    .name();
+            git.tag()
+                    .setName("v1")
+                    .setMessage("Initial release note")
+                    .setSigned(false)
+                    .call();
+            prepare();
+            try (var snapshot = manager.readTreeSnapshot(KEY, head)) {
+                var captured = GitRepositoryManager.treeIdentity(snapshot);
+                String marker =
+                        Files.readString(snapshot.stagingDir().resolve(".git/" + GitRepositoryManager.CAPTURED_REFS));
+                git.tagDelete().setTags("v1").call();
+                git.tag()
+                        .setName("v1")
+                        .setMessage("Revised release note")
+                        .setSigned(false)
+                        .call();
+                prepare();
+                assertThat(manager.resolveBranchHead(KEY, "main")).isEqualTo(head);
+
+                try (var next = manager.readTreeSnapshot(KEY, head)) {
+                    assertThat(Files.readString(
+                                    next.stagingDir().resolve(".git/" + GitRepositoryManager.CAPTURED_REFS)))
+                            .isEqualTo(marker);
+                    assertThat(GitRepositoryManager.treeIdentity(next)).isNotEqualTo(captured);
+                }
+            }
         }
     }
 
