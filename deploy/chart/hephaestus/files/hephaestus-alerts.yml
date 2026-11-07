@@ -45,6 +45,25 @@ groups:
         annotations:
           summary: An integration event was stored for administrator replay
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # The gauge exists only while the job is enabled. A queue that does not shrink means provider answers stopped.
+      - alert: HephaestusCommitIdentityResolutionStalled
+        expr: commit_identity_pending{job="hephaestus"} > 0 and delta(commit_identity_pending{job="hephaestus"}[6h]) >= 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: Commit link correction made no progress for 6 hours
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # An email leaves the queue after its last attempt, so an outage shrinks the queue and the alert above stays quiet.
+      - alert: HephaestusCommitIdentityResolutionUnanswered
+        expr: >-
+          sum(increase(commit_identity_resolutions_total{job="hephaestus",outcome="unanswered"}[6h]))
+          > (sum(increase(commit_identity_resolutions_total{job="hephaestus",outcome=~"resolved|no_account|erased"}[6h])) or vector(0))
+        labels:
+          severity: warning
+        annotations:
+          summary: Commit link correction lost more emails than it answered in 6 hours
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusInboxRetentionFailing
         expr: sum(increase(integration_consumer_inbox_retention_failures_total{job="hephaestus"}[24h])) >= 2
         labels:

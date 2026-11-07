@@ -30,6 +30,27 @@ erDiagram
         BIGINT commit_id FK "NOT NULL"
     }
 
+    CommitIdentityChange {
+        BIGINT id PK
+        TIMESTAMPTZ changed_at "NOT NULL"
+        BIGINT new_user_id
+        BIGINT old_user_id
+        VARCHAR(16) outcome "NOT NULL"
+        BIGINT row_id "NOT NULL"
+        VARCHAR(64) target "NOT NULL"
+    }
+
+    CommitIdentityResolution {
+        BIGINT id PK
+        INTEGER attempts "NOT NULL"
+        TIMESTAMPTZ finished_at
+        VARCHAR(16) source "NOT NULL"
+        VARCHAR(16) state "NOT NULL"
+        BIGINT commit_id FK "NOT NULL"
+        BIGINT contributor_id FK
+        BIGINT repository_id FK "NOT NULL"
+    }
+
     CommitPullRequest {
         BIGINT commit_id PK,FK
         BIGINT pull_request_id PK,FK
@@ -648,6 +669,9 @@ erDiagram
     GitCommit ||--o{ CommitContributor : has
     User ||--o{ CommitContributor : has
     GitCommit ||--o{ CommitFileChange : has
+    Repository ||--o{ CommitIdentityResolution : has
+    GitCommit ||--o{ CommitIdentityResolution : has
+    CommitContributor ||--o{ CommitIdentityResolution : has
     Workspace ||--o{ Connection : has
     Connection ||--o{ ConnectionAudit : connection_id
     Account ||--o{ ConnectionAudit : has

@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -32,6 +33,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -96,11 +98,16 @@ public class CommitAuthorEnrichmentService {
      */
     private static final Set<String> UNRESOLVABLE_EMAILS = Set.of("noreply@github.com");
 
+    /** Co-authors from Co-authored-by trailers. GitHub returns at most this many. */
+    private static final String ALL_AUTHORS_FIELD =
+            "        authors(first: 100) { nodes { email user { login databaseId name email avatarUrl url createdAt updatedAt } } }\n";
+
     /** Type reference for deserializing GraphQL fields as {@code Map<String, Object>} without unchecked casts. */
     private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE_REF =
             new ParameterizedTypeReference<>() {};
 
     private final CommitRepository commitRepository;
+    private final CommitIdentityResolutionRepository identityResolutions;
     private final CommitAuthorResolver authorResolver;
     private final GitHubGraphQlClientProvider graphQlClientProvider;
     private final GitHubGraphQlSyncCoordinator graphQlSyncCoordinator;
@@ -155,9 +162,18 @@ public class CommitAuthorEnrichmentService {
                 unresolvedAuthorEmails.size(),
                 unresolvedCommitterEmails.size());
 
-        // Phase 2: First pass — try resolving by email using existing DB users
-        int enrichedByEmail =
-                enrichByEmail(repositoryId, unresolvedAuthorEmails, unresolvedCommitterEmails, providerId);
+        // Phase 2: First pass — try resolving by email using existing DB users. GitHub said that no account owns
+        // some emails: a stored email must not link them again, so only GitHub's own answer in phase 4 can.
+        Set<@Nullable String> noAccount = new HashSet<>(identityResolutions.findNoAccountEmails(repositoryId));
+        int enrichedByEmail = enrichByEmail(
+                repositoryId,
+                unresolvedAuthorEmails.stream()
+                        .filter(e -> !noAccount.contains(e))
+                        .toList(),
+                unresolvedCommitterEmails.stream()
+                        .filter(e -> !noAccount.contains(e))
+                        .toList(),
+                providerId);
 
         // Phase 3: Re-check which emails are still unresolved after email pass
         List<String> stillUnresolvedAuthorEmails =
@@ -400,9 +416,11 @@ public class CommitAuthorEnrichmentService {
                 }
             }
 
-            Map<String, String> batchResult =
-                    fetchBatch(owner, repoName, scopeId, batch, shaToEmail, nameWithOwner, usersToUpsert);
-            emailToLogin.putAll(batchResult);
+            fetchBatch(
+                    buildBatchQuery(owner, repoName, batch, ""),
+                    scopeId,
+                    nameWithOwner,
+                    response -> extractLoginsFromResponse(response, batch, shaToEmail, emailToLogin, usersToUpsert));
         }
 
         upsertUsers(usersToUpsert, nameWithOwner, providerId);
@@ -414,20 +432,9 @@ public class CommitAuthorEnrichmentService {
      * Fetches a single batch of commit SHAs via GraphQL with full error handling.
      * Follows the gold standard pattern: transport retry, GraphQL error classification,
      * rate limit tracking, and exception classification.
-     *
-     * @return map from email to GitHub login for commits in this batch
      */
-    private Map<String, String> fetchBatch(
-            String owner,
-            String repoName,
-            Long scopeId,
-            List<String> batch,
-            Map<String, String> shaToEmail,
-            String nameWithOwner,
-            Map<Long, GitHubUserDTO> usersToUpsert) {
-        Map<String, String> emailToLogin = new HashMap<>();
-        String queryString = buildBatchQuery(owner, repoName, batch);
-
+    private void fetchBatch(
+            String queryString, Long scopeId, String nameWithOwner, Consumer<ClientGraphQlResponse> onResponse) {
         int retryAttempt = 0;
         while (retryAttempt <= MAX_RETRY_ATTEMPTS) {
             boolean pendingPermit = false;
@@ -488,7 +495,7 @@ public class CommitAuthorEnrichmentService {
                 graphQlClientProvider.recordSuccess();
 
                 // Extract results from aliased fields
-                extractLoginsFromResponse(response, batch, shaToEmail, emailToLogin, usersToUpsert);
+                onResponse.accept(response);
                 break; // Success — exit retry loop
             } catch (Exception e) {
                 if (pendingPermit) {
@@ -511,8 +518,79 @@ public class CommitAuthorEnrichmentService {
                 break;
             }
         }
+    }
 
-        return emailToLogin;
+    /**
+     * Reads every actor of the given commits, for callers that need GitHub's answer for an email.
+     * It stops before a batch when the rate limit is near, and the remaining SHAs have no entry. A rate limit
+     * response to a batch that has started can still wait, as it does for every batch of this class.
+     *
+     * @return the actors per SHA; a SHA has no entry when GitHub gave no answer for that commit
+     */
+    public Map<String, List<CommitActor>> fetchCommitActors(String nameWithOwner, Long scopeId, List<String> shas) {
+        Map<String, List<CommitActor>> actors = new HashMap<>();
+        String[] parts = nameWithOwner.split("/", 2);
+        if (parts.length != 2) {
+            return actors;
+        }
+        List<String> valid =
+                shas.stream().filter(sha -> SHA_PATTERN.matcher(sha).matches()).toList();
+        for (int start = 0; start < valid.size(); start += BATCH_SIZE) {
+            if (graphQlClientProvider.isRateLimitCritical(scopeId)) {
+                break;
+            }
+            List<String> batch = valid.subList(start, Math.min(start + BATCH_SIZE, valid.size()));
+            fetchBatch(
+                    buildBatchQuery(parts[0], parts[1], batch, ALL_AUTHORS_FIELD),
+                    scopeId,
+                    nameWithOwner,
+                    response -> extractActors(response, batch, actors));
+        }
+        return actors;
+    }
+
+    private void extractActors(
+            ClientGraphQlResponse response, List<String> batch, Map<String, List<CommitActor>> actors) {
+        // A partial error can leave a null user in valid data. That null is a failure, not GitHub's "no account".
+        if (!response.getErrors().isEmpty()) {
+            return;
+        }
+        for (int i = 0; i < batch.size(); i++) {
+            ClientResponseField field = response.field("repository.commit" + i);
+            if (field.getValue() == null) {
+                continue;
+            }
+            Map<String, Object> commitData = field.toEntity(MAP_TYPE_REF);
+            if (commitData == null) {
+                continue;
+            }
+            List<Object> found = new ArrayList<>();
+            found.add(commitData.get("author"));
+            found.add(commitData.get("committer"));
+            if (commitData.get("authors") instanceof Map<?, ?> authors
+                    && authors.get("nodes") instanceof List<?> nodes) {
+                found.addAll(nodes);
+            }
+            actors.put(
+                    batch.get(i),
+                    found.stream()
+                            .<CommitActor>mapMulti((actor, sink) -> {
+                                if (actor instanceof Map<?, ?> map && map.get("email") instanceof String email) {
+                                    sink.accept(actorOf(email, map));
+                                }
+                            })
+                            .toList());
+        }
+    }
+
+    /** Only an explicit {@code user: null} says that no account owns the email. Anything unreadable is no answer. */
+    private CommitActor actorOf(String email, Map<?, ?> actor) {
+        if (actor.containsKey("user") && actor.get("user") == null) {
+            return new CommitActor(email, null, true);
+        }
+        UserSnapshot snapshot = snapshotOf(actor);
+        GitHubUserDTO user = snapshot == null ? null : snapshot.user();
+        return new CommitActor(email, user, user != null);
     }
 
     /**
@@ -522,7 +600,7 @@ public class CommitAuthorEnrichmentService {
      * syntactic (cannot use variables for alias names). SHA validation is performed
      * before calling this method to prevent injection.
      */
-    private String buildBatchQuery(String owner, String repoName, List<String> shas) {
+    private String buildBatchQuery(String owner, String repoName, List<String> shas, String extraCommitField) {
         StringBuilder sb = new StringBuilder();
         sb.append("query {\n");
         sb.append("  rateLimit { cost limit remaining resetAt }\n");
@@ -544,6 +622,7 @@ public class CommitAuthorEnrichmentService {
                     "        author { email user { login databaseId name email avatarUrl url createdAt updatedAt } }\n");
             sb.append(
                     "        committer { email user { login databaseId name email avatarUrl url createdAt updatedAt } }\n");
+            sb.append(extraCommitField);
             sb.append("      }\n");
             sb.append("    }\n");
         }
@@ -626,9 +705,13 @@ public class CommitAuthorEnrichmentService {
      */
     @Nullable
     private UserSnapshot extractUserSnapshot(Map<String, Object> commitData, String role) {
+        return snapshotOf(commitData.get(role));
+    }
+
+    @Nullable
+    private UserSnapshot snapshotOf(@Nullable Object actor) {
         try {
-            Object roleObj = commitData.get(role);
-            if (!(roleObj instanceof Map<?, ?> roleMap)) {
+            if (!(actor instanceof Map<?, ?> roleMap)) {
                 return null;
             }
             Object userObj = roleMap.get("user");
@@ -656,7 +739,7 @@ public class CommitAuthorEnrichmentService {
 
             return new UserSnapshot(login, user);
         } catch (Exception e) {
-            log.debug("Failed to extract {} login: error={}", role, e.getClass().getSimpleName());
+            log.debug("Failed to extract actor login: error={}", e.getClass().getSimpleName());
             return null;
         }
     }
@@ -710,4 +793,12 @@ public class CommitAuthorEnrichmentService {
     }
 
     private record UserSnapshot(String login, @Nullable GitHubUserDTO user) {}
+
+    /**
+     * One actor of a commit.
+     *
+     * @param user the account, or null
+     * @param answered false when the response could not be read: a null {@code user} then says nothing
+     */
+    public record CommitActor(String email, @Nullable GitHubUserDTO user, boolean answered) {}
 }

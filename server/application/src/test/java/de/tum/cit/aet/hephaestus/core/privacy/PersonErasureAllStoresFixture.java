@@ -582,6 +582,20 @@ final class PersonErasureAllStoresFixture {
                 CANARY,
                 "ordinal",
                 0);
+        row(
+                "commit_identity_change",
+                "target",
+                "git_commit.author_id",
+                "row_id",
+                base + 9,
+                "old_user_id",
+                user,
+                "new_user_id",
+                user,
+                "outcome",
+                "resolved",
+                "changed_at",
+                Timestamp.from(Instant.now()));
         row("commit_file_change", "commit_id", base + 9, "filename", CANARY, "change_type", "MODIFIED");
     }
 
