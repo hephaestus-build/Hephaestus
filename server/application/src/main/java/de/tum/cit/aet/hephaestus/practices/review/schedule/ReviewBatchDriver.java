@@ -42,9 +42,10 @@ public class ReviewBatchDriver {
     @SchedulerLock(name = "review-batch-driver", lockAtMostFor = "PT10M", lockAtLeastFor = "PT30S")
     public void tick() {
         var running = batches.findByStatusOrderByUpdatedAtAscIdAsc(ReviewBatchStatus.RUNNING, PageRequest.ofSize(5));
-        var budgetPaused = batches.findByStatusAndPauseReasonOrderByUpdatedAtAscIdAsc(
-                ReviewBatchStatus.PAUSED, ReviewBatchPauseReason.BUDGET_EXHAUSTED, PageRequest.ofSize(5));
-        for (var batch : Stream.concat(running.stream(), budgetPaused.stream()).toList()) {
+        var automaticallyPaused = batches.findByStatusAndPauseReasonNotOrderByUpdatedAtAscIdAsc(
+                ReviewBatchStatus.PAUSED, ReviewBatchPauseReason.PAUSED_BY_ADMIN, PageRequest.ofSize(5));
+        for (var batch :
+                Stream.concat(running.stream(), automaticallyPaused.stream()).toList()) {
             try {
                 advance(batch);
             } catch (RuntimeException failure) {
@@ -58,9 +59,9 @@ public class ReviewBatchDriver {
     }
 
     void advance(ReviewBatch batch) {
-        boolean budgetPaused = batch.getStatus() == ReviewBatchStatus.PAUSED
-                && batch.getPauseReason() == ReviewBatchPauseReason.BUDGET_EXHAUSTED;
-        if (batch.getStatus() != ReviewBatchStatus.RUNNING && !budgetPaused) return;
+        boolean automaticallyPaused = batch.getStatus() == ReviewBatchStatus.PAUSED
+                && batch.getPauseReason() != ReviewBatchPauseReason.PAUSED_BY_ADMIN;
+        if (batch.getStatus() != ReviewBatchStatus.RUNNING && !automaticallyPaused) return;
         var workspace = workspaces.findById(batch.getWorkspaceId()).orElse(null);
         boolean scan = batch.getKind().equals("scm.repository");
         if (scan

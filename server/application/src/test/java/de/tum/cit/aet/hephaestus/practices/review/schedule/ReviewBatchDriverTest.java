@@ -25,6 +25,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentMatchers;
 
 class ReviewBatchDriverTest extends BaseUnitTest {
@@ -91,6 +93,35 @@ class ReviewBatchDriverTest extends BaseUnitTest {
         when(scope.next(1, batch.getId(), 5L, 2)).thenReturn(List.of(6L));
         when(submitter.offer(batch, 6, null)).thenReturn(new ReviewBatchSubmitter.SubmissionOutcome.Submitted());
         driver.advance(batch);
+        assertThat(batch.getStatus()).isEqualTo(ReviewBatchStatus.RUNNING);
+        assertThat(batch.getPauseReason()).isNull();
+        assertThat(batch.getCursorItemId()).isEqualTo(6L);
+        assertThat(batch.getSubmittedCount()).isOne();
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ReviewBatchPauseReason.class,
+            names = {"REVIEW_MODEL_UNBOUND", "WORKSPACE_UNAVAILABLE"})
+    void shouldContinueFromTheStoredCursorWhenAPrerequisiteRecovers(ReviewBatchPauseReason reason) {
+        batch.setCursorItemId(5L);
+        when(scope.next(1, batch.getId(), 5L, 2)).thenReturn(List.of(6L));
+        if (reason == ReviewBatchPauseReason.REVIEW_MODEL_UNBOUND) {
+            when(readiness.hasRunnableAgent(1L)).thenReturn(false);
+        } else {
+            workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+        }
+        driver.advance(batch);
+        assertThat(batch.getStatus()).isEqualTo(ReviewBatchStatus.PAUSED);
+        assertThat(batch.getPauseReason()).isEqualTo(reason);
+        assertThat(batch.getCursorItemId()).isEqualTo(5L);
+
+        when(readiness.hasRunnableAgent(1L)).thenReturn(true);
+        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        when(submitter.offer(batch, 6, null)).thenReturn(new ReviewBatchSubmitter.SubmissionOutcome.Submitted());
+
+        driver.advance(batch);
+
         assertThat(batch.getStatus()).isEqualTo(ReviewBatchStatus.RUNNING);
         assertThat(batch.getPauseReason()).isNull();
         assertThat(batch.getCursorItemId()).isEqualTo(6L);
