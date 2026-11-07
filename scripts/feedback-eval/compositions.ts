@@ -65,11 +65,22 @@ export interface GateFile {
 }
 /** One composer run, checked by main's acceptance check, with the case's own ids. */
 export interface RunFile {
+	privateCases?: {
+		id: string;
+		servedModels?: string[];
+		accepted: boolean;
+		firstAccepted?: boolean | null;
+		failure?: string | null;
+		errors: string[];
+		review: unknown;
+	}[];
 	version: 1;
+	commit?: string;
 	model: unknown;
 	runner: unknown;
 	cases: {
 		id: string;
+		servedModels?: string[];
 		accepted: boolean;
 		firstAccepted?: boolean | null;
 		failure?: string | null;
@@ -80,6 +91,9 @@ export interface RunFile {
 /** A labeller's labels of one run's reviews, by case id. */
 export interface RunLabels {
 	version: 1;
+	source?: "ai-drafted" | "human";
+	runSha256?: string;
+	labeller?: { model: string; rubricSha256: string };
 	labels: ({ caseId: string } & Label)[];
 }
 
@@ -121,10 +135,20 @@ const texts = (review: Review): { kind: "summary" | "note"; body: string }[] => 
 
 /** The rubric codes that a review's words carry mechanically: Q6 length and Q9 formatting. */
 export function mechanicalCodes(review: Review): Code[] {
+	return mechanicalTextCodes(
+		texts(review).map((text) => ({
+			body: text.body,
+			target: text.kind === "summary" ? SUMMARY_TARGET : NOTE_TARGET,
+		})),
+	);
+}
+
+/** Mechanical rubric checks shared by each destination's prose fields. */
+export function mechanicalTextCodes(fields: { body: string; target: number }[]): Code[] {
 	const codes = new Set<Code>();
-	for (const text of texts(review)) {
+	for (const text of fields) {
 		const prose = text.body.replaceAll(/`[^`]*`/gu, " ");
-		if (text.body.length > (text.kind === "summary" ? SUMMARY_TARGET : NOTE_TARGET)) {
+		if (text.body.length > text.target) {
 			codes.add("Q6");
 		}
 		if (FORMATTING.test(prose)) {
@@ -264,7 +288,7 @@ function gateSummary(set: CompositionSet, gate: GateFile) {
 }
 
 /** A run's decisions by result id. A refused review can have any shape; only an accepted one has main's. */
-function composedDecisions(review: unknown): Map<string, string> {
+export function composedDecisions(review: unknown): Map<string, string> {
 	const decisions: unknown =
 		typeof review === "object" && review !== null && "decisions" in review ? review.decisions : [];
 	const listed: unknown[] = Array.isArray(decisions) ? decisions : [];
@@ -287,7 +311,7 @@ function outputFailure(output: RunFile["cases"][number] | undefined): string | n
 	if (!output) {
 		return "no output";
 	}
-	if (!output.accepted) {
+	if (!output.accepted || (output.failure !== undefined && output.failure !== null)) {
 		return `refused by main's check: ${output.failure ?? output.errors.join("; ")}`;
 	}
 	const codes = output.review === null ? [] : mechanicalCodes(output.review);
@@ -343,7 +367,7 @@ function runSummary(set: CompositionSet, run: RunFile, labels: RunLabels | undef
 		runner: run.runner,
 		cases: run.cases.length,
 		accepted: run.cases.filter((output) => output.accepted).length,
-		firstAccepted: run.cases.filter((output) => output.firstAccepted !== false && output.accepted)
+		firstAccepted: run.cases.filter((output) => output.firstAccepted === true && output.accepted)
 			.length,
 		raise: measure(
 			raised.filter((row) => row.expected === "RAISE").length,

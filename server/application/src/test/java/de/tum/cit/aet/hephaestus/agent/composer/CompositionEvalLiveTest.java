@@ -23,6 +23,8 @@ import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -34,7 +36,8 @@ import tools.jackson.databind.node.ObjectNode;
  * {@code WorkerFeedbackComposer}'s review session: the same call bound, one finish reminder, the nudge before the bound,
  * and main's answer to a refused review. It writes each case's final review and main's check of it to
  * {@code COMPOSITION_EVAL_CHECKED} after each case. A rerun with the same model settings and requests resumes from that
- * file. The test asserts nothing about quality: the feedback-eval script scores the file against the labels.
+ * file. The eval stops at validated drafts, before publication or delivery. The test asserts nothing about semantic
+ * quality: the release-eval script scores the file against the labels.
  */
 @LiveLlmTest
 class CompositionEvalLiveTest {
@@ -55,56 +58,123 @@ class CompositionEvalLiveTest {
         var settings = new ModelSession.Settings(
                 LlmApiProtocol.OPENAI_COMPLETIONS, creds.model(), ReasoningEffort.valueOf(effort), maxTokens, null);
         var transport = new Transport(creds);
-        String system = CompositionEvalCases.system();
-        var scenarios = CompositionEvalCases.load();
+        var sourceScenarios = CompositionEvalCases.load();
+        var scenarios = new ArrayList<LiveCase>();
+        for (var scenario : sourceScenarios)
+            scenarios.add(new LiveCase(
+                    scenario.id(),
+                    scenario.turn().text(),
+                    scenario.turn().toolParameters(),
+                    ReviewOnWork.TOOL_DESCRIPTION,
+                    CompositionEvalCases.system(),
+                    raw -> CompositionEvalCases.check(scenario, raw),
+                    scenario::fromModel,
+                    ReviewOnWork.finishText(
+                            scenario.turn().restable().keySet().stream().toList()),
+                    ReviewOnWork.NUDGE));
+        for (var scenario : CompositionEvalCases.privateScenarios(sourceScenarios))
+            scenarios.add(new LiveCase(
+                    scenario.id(),
+                    scenario.turn(),
+                    scenario.toolParameters(),
+                    PrivateFeedback.TOOL_DESCRIPTION,
+                    WorkerFeedbackComposer.sharedStyle() + "\n\n"
+                            + WorkerFeedbackComposer.prompt("feedback-composer.md"),
+                    scenario::check,
+                    UnaryOperator.identity(),
+                    "Decide every eligible practice with check_package.",
+                    PrivateFeedback.NUDGE));
         String only = System.getenv("COMPOSITION_EVAL_CASES");
 
         var model = JSON.objectNode()
                 .put("id", creds.model())
                 .put("reasoningEffort", effort)
-                .put("maxOutputTokens", maxTokens);
-        String requests = requestsDigest(system, scenarios);
-        var file = JSON.objectNode().put("version", 1);
+                .put("maxOutputTokens", maxTokens)
+                .put(
+                        "endpointSha256",
+                        HexFormat.of()
+                                .formatHex(MessageDigest.getInstance("SHA-256")
+                                        .digest(creds.baseUrl()
+                                                .replaceAll("/+$", "")
+                                                .getBytes(StandardCharsets.UTF_8))));
+        String requests = requestsDigest(scenarios);
+        var revision = new ProcessBuilder("git", "rev-parse", "HEAD").start();
+        String commit = new String(revision.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+        assertThat(revision.waitFor()).isZero();
+        var file = JSON.objectNode().put("version", 1).put("commit", commit);
         file.set("model", model);
         file.put("requestsSha256", requests);
         file.put("runner", "CompositionEvalLiveTest (main's ModelSession, OPENAI_COMPLETIONS)");
         var cases = file.putArray("cases");
+        var privateCases = file.putArray("privateCases");
         var done = new HashSet<String>();
         Path existing = Path.of(checkedFile);
         if (Files.exists(existing)) {
             JsonNode earlier = MAPPER.readTree(Files.readAllBytes(existing));
             // The liveTest task stops after 20 minutes. A rerun resumes only the same measurement.
+            assertThat(earlier.path("commit").asString()).isEqualTo(commit);
             assertThat(earlier.path("model"))
                     .as("%s holds another model's run; use another file", checkedFile)
                     .isEqualTo(model);
             assertThat(earlier.path("requestsSha256").asString())
                     .as("%s was composed from other requests; use another file", checkedFile)
                     .isEqualTo(requests);
-            for (JsonNode entry : earlier.path("cases")) {
+            var earlierCases = new ArrayList<JsonNode>();
+            earlier.path("cases").forEach(earlierCases::add);
+            earlier.path("privateCases").forEach(earlierCases::add);
+            for (JsonNode entry : earlierCases) {
                 // An endpoint failure measures the endpoint, not the model, so the rerun composes that case again.
                 var failure = entry.path("failure");
-                if (failure.isString() && List.of("PROVIDER", "CAPACITY").contains(failure.asString())) continue;
-                cases.add(entry);
+                if (failure.isString()
+                        && List.of("PROVIDER", "CAPACITY").contains(failure.asString())
+                        && (only == null
+                                || List.of(only.split(",", -1))
+                                        .contains(entry.path("id").asString()))) continue;
+                (entry.path("id").asString().contains("/") ? privateCases : cases).add(entry);
                 done.add(entry.path("id").asString());
             }
         }
         for (var scenario : scenarios) {
             if (only != null && !List.of(only.split(",", -1)).contains(scenario.id())) continue;
             if (done.contains(scenario.id())) continue;
-            cases.add(compose(scenario, transport, settings, system));
+            transport.servedModels.clear();
+            (scenario.id().contains("/") ? privateCases : cases).add(compose(scenario, transport, settings));
             CompositionEvalCases.write(checkedFile, file);
         }
-        assertThat(cases.size()).isPositive();
+        var selected = scenarios.stream()
+                .filter(scenario -> only == null || List.of(only.split(",", -1)).contains(scenario.id()))
+                .map(LiveCase::id)
+                .toList();
+        var completed = new ArrayList<JsonNode>();
+        cases.forEach(completed::add);
+        privateCases.forEach(completed::add);
+        completed.removeIf(entry -> !selected.contains(entry.path("id").asString()));
+        assertThat(completed).hasSize(selected.size());
+        assertThat(completed).isNotEmpty().allSatisfy(entry -> {
+            assertThat(entry.path("failure").isNull())
+                    .as("%s completed", entry.path("id").asString())
+                    .isTrue();
+            assertThat(entry.path("accepted").asBoolean())
+                    .as("%s accepted", entry.path("id").asString())
+                    .isTrue();
+        });
     }
 
+    private record LiveCase(
+            String id,
+            String turn,
+            ObjectNode parameters,
+            String description,
+            String system,
+            Function<JsonNode, CompositionEvalCases.Checked> check,
+            UnaryOperator<JsonNode> output,
+            String finish,
+            String nudge) {}
+
     private static ObjectNode compose(
-            CompositionEvalCases.Scenario scenario,
-            ModelSession.Transport transport,
-            ModelSession.Settings settings,
-            String system) {
-        var tool = new ModelSession.Tool(
-                "check_package", ReviewOnWork.TOOL_DESCRIPTION, scenario.turn().toolParameters());
-        var session = new ModelSession(transport, MAPPER, settings, system, List.of(tool));
+            LiveCase scenario, ModelSession.Transport transport, ModelSession.Settings settings) {
+        var tool = new ModelSession.Tool("check_package", scenario.description(), scenario.parameters());
+        var session = new ModelSession(transport, MAPPER, settings, scenario.system(), List.of(tool));
         int bound = Math.min(COMPOSITION_CALLS, PRACTICE_MODEL_CALLS);
         long started = System.nanoTime();
         Boolean firstAccepted = null;
@@ -113,7 +183,7 @@ class CompositionEvalLiveTest {
         String failure = null;
         boolean askedOnceMore = false;
         boolean nudged = false;
-        var reply = session.send(scenario.turn().text());
+        var reply = session.send(scenario.turn());
         while (true) {
             boolean room = session.calls() < bound;
             var failed = reply.failure();
@@ -132,8 +202,7 @@ class CompositionEvalLiveTest {
                     break;
                 }
                 askedOnceMore = true;
-                reply = session.send(ReviewOnWork.finishText(
-                        scenario.turn().restable().keySet().stream().toList()));
+                reply = session.send(scenario.finish());
                 continue;
             }
             var results = new ArrayList<ModelSession.ToolResult>();
@@ -150,7 +219,7 @@ class CompositionEvalLiveTest {
                     continue;
                 }
                 last = call.arguments();
-                checked = CompositionEvalCases.check(scenario, last);
+                checked = scenario.check().apply(last);
                 if (firstAccepted == null) firstAccepted = checked.accepted();
                 stored = checked.accepted();
                 results.add(new ModelSession.ToolResult(
@@ -164,7 +233,7 @@ class CompositionEvalLiveTest {
             String then = null;
             if (!nudged && session.calls() >= bound - 2) {
                 nudged = true;
-                then = ReviewOnWork.NUDGE;
+                then = scenario.nudge();
             }
             reply = session.answer(results, then);
         }
@@ -177,18 +246,28 @@ class CompositionEvalLiveTest {
         else entry.putNull("firstAccepted");
         entry.put("accepted", checked != null && checked.accepted());
         entry.set("errors", CompositionEvalCases.strings(checked == null ? List.of() : checked.errors()));
-        if (last != null) entry.set("review", scenario.fromModel(ReviewOnWork.unwrapArguments(last)));
+        if (last != null) entry.set("review", scenario.output().apply(ReviewOnWork.unwrapArguments(last)));
         else entry.putNull("review");
+        if (transport instanceof Transport live)
+            entry.set(
+                    "servedModels",
+                    CompositionEvalCases.strings(
+                            live.servedModels.stream().sorted().toList()));
         return entry;
     }
 
     /** One digest over every rendered request, so a resumed file belongs to the same prompts, criteria and cases. */
-    private static String requestsDigest(String system, List<CompositionEvalCases.Scenario> scenarios)
-            throws Exception {
+    private static String requestsDigest(List<LiveCase> scenarios) throws Exception {
         var digest = MessageDigest.getInstance("SHA-256");
-        digest.update(system.getBytes(StandardCharsets.UTF_8));
-        for (var scenario : scenarios)
-            digest.update(CompositionEvalCases.request(scenario).toString().getBytes(StandardCharsets.UTF_8));
+        for (var scenario : scenarios) {
+            var request = JSON.objectNode()
+                    .put("id", scenario.id())
+                    .put("system", scenario.system())
+                    .put("turn", scenario.turn())
+                    .put("description", scenario.description());
+            request.set("parameters", scenario.parameters());
+            digest.update(request.toString().getBytes(StandardCharsets.UTF_8));
+        }
         return HexFormat.of().formatHex(digest.digest());
     }
 
@@ -198,6 +277,7 @@ class CompositionEvalLiveTest {
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
         private final LiveLlmCredentials creds;
         private @Nullable String path;
+        private final HashSet<String> servedModels = new HashSet<>();
 
         Transport(LiveLlmCredentials creds) {
             this.creds = creds;
@@ -227,6 +307,11 @@ class CompositionEvalLiveTest {
                     .build();
             try {
                 var response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                if (response.statusCode() == 200) {
+                    String served =
+                            MAPPER.readTree(response.body()).path("model").asString("");
+                    if (!served.isBlank()) servedModels.add(served);
+                }
                 return new ModelSession.Answer(response.statusCode(), response.body(), true, null);
             } catch (IOException failed) {
                 return new ModelSession.Answer(503, new byte[0], true, null);

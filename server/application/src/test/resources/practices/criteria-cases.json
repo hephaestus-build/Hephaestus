@@ -5312,5 +5312,92 @@
 		},
 		"reason": "The portrait asset name comes from `character.portraitAsset` and no asset catalog is captured. The captured files do not settle whether the portrait shows anything the name does not give, so the image's role is unknown.",
 		"workType": "pull_request"
+	},
+	{
+		"workType": "pull_request",
+		"files": {
+			"context/metadata.json": "{\"title\": \"Add a map feature\", \"state\": \"OPEN\", \"is_draft\": false, \"is_merged\": false}\n",
+			"repo/LocationModel.swift": "import CoreLocation\nfinal class LocationModel: NSObject, CLLocationManagerDelegate {\n    private let manager = CLLocationManager()\n    var lastLocation: CLLocation?\n}\n",
+			"repo/Info.plist": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict></dict></plist>\n"
+		},
+		"id": "release-permission-scaffold",
+		"expected": {
+			"declares-permissions-truthfully-at-point-of-use": "DOES_NOT_APPLY"
+		},
+		"reason": "A delegate and stored location add no protected access or authorization request."
+	},
+	{
+		"workType": "pull_request",
+		"files": {
+			"context/metadata.json": "{\"title\": \"Add a map feature\", \"state\": \"OPEN\", \"is_draft\": false, \"is_merged\": false}\n",
+			"repo/LocationModel.swift": "import CoreLocation\nimport SwiftUI\nstruct MapView: View {\n    private let manager = CLLocationManager()\n    var body: some View {\n        Button(\"Show my location on the map\") {\n            manager.requestWhenInUseAuthorization()\n            manager.startUpdatingLocation()\n        }\n    }\n}\n",
+			"repo/Info.plist": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict></dict></plist>\n"
+		},
+		"id": "release-permission-actual-access",
+		"expected": {
+			"declares-permissions-truthfully-at-point-of-use": "NOT_MET"
+		},
+		"reason": "The added protected location access requires a usage key, and the complete supplied Info.plist has none."
+	},
+	{
+		"workType": "pull_request",
+		"files": {
+			"context/metadata.json": "{\"title\": \"Add a map feature\", \"state\": \"OPEN\", \"is_draft\": false, \"is_merged\": false}\n",
+			"repo/LocationModel.swift": "import CoreLocation\nimport SwiftUI\nstruct MapView: View {\n    private let manager = CLLocationManager()\n    var body: some View {\n        Button(\"Show my location on the map\") {\n            manager.requestWhenInUseAuthorization()\n            manager.startUpdatingLocation()\n        }\n    }\n}\n",
+			"repo/Info.plist": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>NSLocationWhenInUseUsageDescription</key><string>Show your location on the map.</string></dict></plist>\n"
+		},
+		"id": "release-permission-point-of-use",
+		"expected": {
+			"declares-permissions-truthfully-at-point-of-use": "MET"
+		},
+		"reason": "The map feature requests location when opened and declares a truthful location usage description."
+	},
+	{
+		"id": "release-merge-substantive-account",
+		"workType": "pull_request",
+		"expected": {
+			"merge-confirms-the-linked-issue-outcome": "MET"
+		},
+		"reason": "The authored prose accounts for both adopted outcomes as delivered or deferred despite unchecked issue boxes.",
+		"files": {
+			"context/metadata.json": "{\"title\": \"Export saved trips as CSV\", \"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-29T10:00:00Z\", \"body\": \"Closes #12\\n\\nExports saved trips as a CSV file. Archived trips are deferred to #13.\\n\"}\n",
+			"context/description.md": "Closes #12\n\nExports saved trips as a CSV file. Archived trips are deferred to #13.\n",
+			"context/linked_work_items.json": "{\"workItems\": [{\"number\": 12, \"title\": \"Export saved trips\", \"state\": \"OPEN\", \"how\": \"closesOnMerge\", \"body\": \"## Acceptance criteria\\n- [ ] Saved trips can be exported as a CSV file\\n- [ ] Exported trips include archived trips\\n\", \"url\": \"https://example.org/team/project/issues/12\", \"labels\": [], \"createdAt\": \"2026-09-20T09:00:00Z\"}], \"unresolvedReferences\": [], \"truncated\": false}\n",
+			"context/linked_work_items/12.md": "# Export saved trips\n\nOpened 2026-09-20T09:00:00Z, state OPEN.\nThe body below is the issue text as captured; its dates do not date each line.\n\n## Acceptance criteria\n- [ ] Saved trips can be exported as a CSV file\n- [ ] Exported trips include archived trips\n",
+			"repo/export.py": "def export_trips(trips):\n    return \"name\\n\" + \"\\n\".join(trip.name for trip in trips if not trip.archived)\n"
+		}
+	},
+	{
+		"id": "release-merge-unaccounted-outcome",
+		"workType": "pull_request",
+		"expected": {
+			"merge-confirms-the-linked-issue-outcome": "NOT_MET"
+		},
+		"reason": "The merged change leaves the archived-trip outcome unticked and unaccounted for.",
+		"files": {
+			"context/metadata.json": "{\"title\": \"Export saved trips as CSV\", \"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-29T10:00:00Z\", \"body\": \"Closes #12\\n\\nExports saved trips as a CSV file.\\n\"}\n",
+			"context/description.md": "Closes #12\n\nExports saved trips as a CSV file.\n",
+			"context/linked_work_items.json": "{\"workItems\": [{\"number\": 12, \"title\": \"Export saved trips\", \"state\": \"OPEN\", \"how\": \"closesOnMerge\", \"body\": \"## Acceptance criteria\\n- [ ] Saved trips can be exported as a CSV file\\n- [ ] Exported trips include archived trips\\n\", \"url\": \"https://example.org/team/project/issues/12\", \"labels\": [], \"createdAt\": \"2026-09-20T09:00:00Z\"}], \"unresolvedReferences\": [], \"truncated\": false}\n",
+			"context/linked_work_items/12.md": "# Export saved trips\n\nOpened 2026-09-20T09:00:00Z, state OPEN.\nThe body below is the issue text as captured; its dates do not date each line.\n\n## Acceptance criteria\n- [ ] Saved trips can be exported as a CSV file\n- [ ] Exported trips include archived trips\n",
+			"repo/export.py": "def export_trips(trips):\n    return \"name\\n\" + \"\\n\".join(trip.name for trip in trips if not trip.archived)\n"
+		},
+		"expectedSeverity": {
+			"merge-confirms-the-linked-issue-outcome": "MINOR"
+		}
+	},
+	{
+		"id": "release-unmerged-outcome",
+		"workType": "pull_request",
+		"expected": {
+			"merge-confirms-the-linked-issue-outcome": "DOES_NOT_APPLY"
+		},
+		"reason": "An open unmerged change does not meet the practice occasion.",
+		"files": {
+			"context/metadata.json": "{\"title\": \"Export saved trips as CSV\", \"state\": \"OPEN\", \"is_merged\": false, \"merged_at\": null, \"body\": \"Closes #12\\n\\nExports saved trips as a CSV file.\\n\"}\n",
+			"context/description.md": "Closes #12\n\nExports saved trips as a CSV file.\n",
+			"context/linked_work_items.json": "{\"workItems\": [{\"number\": 12, \"title\": \"Export saved trips\", \"state\": \"OPEN\", \"how\": \"closesOnMerge\", \"body\": \"## Acceptance criteria\\n- [ ] Saved trips can be exported as a CSV file\\n- [ ] Exported trips include archived trips\\n\", \"url\": \"https://example.org/team/project/issues/12\", \"labels\": [], \"createdAt\": \"2026-09-20T09:00:00Z\"}], \"unresolvedReferences\": [], \"truncated\": false}\n",
+			"context/linked_work_items/12.md": "# Export saved trips\n\nOpened 2026-09-20T09:00:00Z, state OPEN.\nThe body below is the issue text as captured; its dates do not date each line.\n\n## Acceptance criteria\n- [ ] Saved trips can be exported as a CSV file\n- [ ] Exported trips include archived trips\n",
+			"repo/export.py": "def export_trips(trips):\n    return \"name\\n\" + \"\\n\".join(trip.name for trip in trips if not trip.archived)\n"
+		}
 	}
 ]

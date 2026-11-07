@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Every labelled composition case renders through main's review composer, and main's acceptance check accepts each
@@ -21,6 +22,35 @@ import tools.jackson.databind.JsonNode;
  */
 @Tag("unit")
 class CompositionEvalTest {
+
+    @Test
+    void shouldRejectPrivatePiecesOnADestinationTheTurnDoesNotRoute() throws Exception {
+        var scenarios = CompositionEvalCases.privateScenarios(CompositionEvalCases.load());
+        assertThat(scenarios).hasSize(16);
+        for (var scenario : scenarios) {
+            var feedback = JSON.objectNode().putArray("feedback");
+            for (var result : scenario.admission().results()) {
+                if (!result.path("outcome").asString().equals("NOT_MET")) continue;
+                var piece = feedback.addObject()
+                        .put("destination", scenario.destination())
+                        .put("practiceSlug", result.path("practiceSlug").asString())
+                        .put("action", "WITHHOLD")
+                        .put("withholdReason", "BELOW_BAR");
+                piece.putArray("basedOn").add(result.path("resultId").asString());
+            }
+            var packageValue = JSON.objectNode();
+            packageValue.set("feedback", feedback);
+            assertThat(scenario.check(packageValue).accepted())
+                    .as(scenario.id())
+                    .isTrue();
+            var wrongDestination = (ObjectNode) feedback.get(0);
+            wrongDestination.put(
+                    "destination", scenario.destination().equals("PRACTICE_PAGE") ? "CONVERSATION" : "PRACTICE_PAGE");
+            assertThat(scenario.check(packageValue).accepted())
+                    .as("closed destination in %s", scenario.id())
+                    .isFalse();
+        }
+    }
 
     @Test
     void shouldRenderEveryCaseAndAcceptEachReferenceComposition() throws Exception {

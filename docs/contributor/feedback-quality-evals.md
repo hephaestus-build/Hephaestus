@@ -194,7 +194,7 @@ The test fails when main's check refuses a reference composition.
 The loader fails when a label is inconsistent. A good label must have no code. Words over a length target or with a link, mention or HTML must carry that code.
 
 The cases are hand-authored, not a random sample.
-The report gives descriptive counts and rates, with no confidence interval.
+The composition report gives descriptive counts and rates. The release report also gives binomial reference intervals, with the limits below.
 The set is public, so a prompt change can overfit it. Report a prompt change against the set before and after.
 
 ### Run the composition set
@@ -213,6 +213,7 @@ The session follows the composer's review session: its call bound, one finish re
 
 ```bash
 (cd server && COMPOSITION_EVAL_CHECKED=/tmp/ev/in-house.json \
+  COMPOSITION_EVAL_CASES=gh-a-01-menu-view-does-its-own-networking \
   ./gradlew :application:liveTest --tests CompositionEvalLiveTest)
 ```
 
@@ -220,7 +221,10 @@ The session follows the composer's review session: its call bound, one finish re
 `COMPOSITION_EVAL_MAX_OUTPUT_TOKENS` sets the output allowance. The default is 32,768.
 `COMPOSITION_EVAL_CASES` selects case IDs, separated by commas.
 
-The `liveTest` task stops after 20 minutes. The run writes its file after each case, and a rerun composes only the cases that the file does not hold yet.
+The `liveTest` task stops after 20 minutes. Select a bounded set for a direct invocation.
+The release script runs the complete panel in separate invocations. Each invocation retains the same measurement file.
+A rerun composes only the selected cases that the file does not hold yet.
+
 A rerun refuses a file from another model, other settings or other rendered requests.
 The run sends requests directly to the endpoint, without the proxy that fences and bills them in production.
 
@@ -240,7 +244,7 @@ node scripts/feedback-eval.ts --compositions scripts/feedback-eval/compositions.
 ```
 
 Each `--run` and `--run-labels` pair has the form `name=file`.
-The labels file holds one human label for each composed review, with the rubric codes.
+The labels file holds one label for each composed review, with the rubric codes. State whether the labels are AI-drafted or human.
 The good rate needs a label for every composed review. With fewer labels, the report lists the unlabelled cases and gives no rate.
 Without a labels file, the report gives only the raise decisions, main's acceptance and the mechanical codes.
 
@@ -255,5 +259,68 @@ The [criteria tests](./testing.mdx#live-external-service-tests) run them with a 
   -PcriteriaCases="$(node -e 'const c=require("./application/src/test/resources/practices/criteria-cases.json");console.log(c.filter(x=>x.id.startsWith("ev-")).map(x=>x.id).join(","))')")
 ```
 
-A failed case is a mismatch with the label, not a harness failure.
-The JUnit report gives the mismatches.
+The JUnit report includes the outcome mismatches and execution failure details.
+
+## Release feedback eval
+
+Run `node scripts/release-feedback-eval.ts --output <new-directory>` on the validation host through the existing validation command.
+Load the three live-model variables inside that remote command from the protected credential file.
+Keep the credentials on that host.
+
+Use an output directory outside the checkout or in its ignored scratch directory.
+The script runs each case of `CompositionEvalLiveTest` in a separate bounded invocation on the committed checkout.
+It writes `compositions.json` and `results.json` in the output directory.
+It refuses a dirty checkout, a partial case selection and a run from another commit.
+A skipped live test cannot supply a results file.
+
+Draft labels for every composed review against the [rubric](./composition-label-rubric.md).
+Use judgment about the captured evidence. A recorded interpretation is not proof of the facts it claims.
+Keep the full outputs for inspection.
+The labels file adds `source: "ai-drafted"` and `runSha256`, the SHA-256 of `compositions.json`, beside `version` and `labels`.
+These are AI-drafted labels, not independent human judgments.
+
+Run the same script with `--output <same-directory> --labels <labels-file> --score-only` to score those outputs without another model call.
+The results file records the source commit, model settings, output and label digests, rates, reference intervals and every finding.
+The script exits with failure for incomplete evidence or any labelled defect.
+Do not remove a defect label to make the script succeed.
+A correction needs a new committed run and new labels bound to its outputs.
+
+The release owner decides what the findings permit. `no-findings-on-panel` is not release approval.
+
+The intervals use Wilson's 95% binomial formula on the fixed synthetic case panel.
+They are reference intervals, not confidence bounds for deployed feedback: the cases were selected, can be correlated and have AI-drafted labels.
+Raise precision and recall remain descriptive per-result measures. Their results can share one work item.
+The case-level decision rate requires the exact expected disposition, including a supported withholding reason.
+
+The public panel measures composition on GitHub and GitLab work.
+The private panel reuses four synthetic source cases on the practice page and in conversation notes. Each case has one or two supporting work items.
+It covers supported concerns, contradicted interpretations, capture limits and instructions in the work.
+Each private destination runs in isolation, without a prepared public review, through its own composition and acceptance check.
+Public withholding does not decide a private destination.
+
+The two-occurrence variants repeat the synthetic concern on another synthetic work item. They do not establish a real developer pattern.
+The labels must cover all 16 private outputs as well as all 60 public outputs.
+
+The occasion panel runs six controlled assessment contrasts through the practice runner, with the shipped criteria.
+They cover a permission scaffold, protected access with and without its usage key, and merged outcome accounts with complete and incomplete reporting.
+The unmerged control tests the occasion itself. The expectations are AI-drafted from the current criteria.
+The script records each actual outcome and severity before the test checks them. Missing cases remain failures.
+
+Completion and assessment accuracy have separate rates. An execution failure supplies no assessment to grade.
+
+The panel stops at validated drafts. It does not measure publication, final conversation answers in the app or Slack, or provider delivery.
+The results file lists these gaps. Slack and Outline assessment adapters are outside this panel.
+Do not use this report to claim quality for an unmeasured destination or adapter.
+
+### Evidence provenance
+
+The release script writes `execution.json` after every case.
+It records the commit, requested model settings, endpoint digest and each test's exit status.
+A scoring pass requires this record and checks it against the composition and occasion files.
+Use a new output directory when the commit, model or endpoint changes.
+Composition outputs record the model identities returned by the endpoint. Occasion rows record the model identity in the runner usage report.
+
+Run labels name an independent labeller in `labeller.model` and bind `labeller.rubricSha256` to the current composition label rubric.
+The release script refuses labels from the composing model and labels from another rubric revision.
+This provenance records a judgment process. It does not turn drafted labels into human labels.
+Private cases also have expected delivery actions, so an accepted package that withholds every useful piece does not pass.

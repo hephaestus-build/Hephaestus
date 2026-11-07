@@ -87,3 +87,23 @@ A per-practice case gives work and one expected outcome: Met, Not met, Does not 
 Label the outcome from the practice's criteria as written and the [outcome rules](./practice-feedback-language.md#observation-outcomes).
 Use Could not determine only when the case lacks a fact that the criteria need.
 Record each case that the criteria do not settle in the ambiguity list.
+
+## Private composition panel
+
+The release eval also labels practice-page drafts and conversation notes from its synthetic private panel.
+Use the trust codes above against the current results, captured source and the destination's authorized support.
+T2 means a claim outside that destination's eligible results. Public withholding does not make an eligible private result unavailable.
+A pattern claim needs the required number of distinct work items and the same evidenced concern on each.
+The two-occurrence fixtures are synthetic controls, not evidence about a real person.
+
+Label an unsupported delivery decision D1, and an unsupported withholding decision or reason D2.
+Q1 and Q2 keep their meanings. For Q4, check the private contract's grouping and destination, rather than public summary and line-note placement.
+
+Q5 uses you on the practice page and the third person in conversation notes.
+For Q6, the targets are 600 characters for a page body and 300 for its next step.
+Conversation fields have a 300-character target, except 600 for an evidence summary that locates several work items.
+Q8 compares earlier delivered feedback on the same private destination. A public comment does not veto a useful private piece.
+The other quality codes retain their meanings.
+
+Draft each label from the exact output and inputs, and state `source: "ai-drafted"`.
+Do not copy a reference label onto a fresh model output.
