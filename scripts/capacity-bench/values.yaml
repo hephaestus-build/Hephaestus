@@ -1,5 +1,5 @@
 # TEST ONLY. Use only for release bench in namespace capacity-bench-20261030.
-# Overlay small.yaml and small-16gib.yaml from the verified release chart.
+# Overlay small.yaml from the verified release chart.
 host: capacity-bench.invalid
 deploymentEnvironment: capacity-bench
 priorityClasses:

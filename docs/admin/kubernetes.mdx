@@ -40,7 +40,7 @@ A nightly run repeats them on `main`.
 
 One more run uses three nodes, Calico for network policy, and an external PostgreSQL.
 Each run starts two workers with the `dev.yaml` profile, and each worker passes its isolation probe on that cluster.
-In the merge queue, the 1.35 run on `amd64` uses `small.yaml` and `small-16gib.yaml` instead, with one worker, on a runner of 16 GiB.
+In the merge queue, the 1.35 run on `amd64` uses `small.yaml` instead, with one worker, on a runner of 16 GiB.
 
 Each upgrade must keep the PostgreSQL and NATS Pods: only a change to their own image or settings restarts them.
 On the latest minor version, the `amd64` run also backs up to an S3 server and restores to a point in time.
@@ -712,8 +712,8 @@ They request a small part of their CPU limit, because the CPU limit is a share o
 
 ## Profiles
 
-Four values files in `profiles/` set capacity for one use.
-All four use the same templates.
+Three values files in `profiles/` set capacity for one use.
+All three use the same templates.
 Each release chart contains them in `chart-$VERSION/hephaestus/profiles/` after you [verify the release chart](#verify-the-release-chart).
 Give the profile as the first `-f` file, before your own values, as [Install](#install) shows.
 If a change of profile changes a volume size, read [Change a volume size](#change-a-volume-size) before you upgrade.
@@ -723,9 +723,9 @@ If a change of profile changes a volume size, read [Change a volume size](#chang
 | `dev.yaml` | One workstation cluster | Bundled, small volumes |
 | `preview.yaml` | One pull request preview | Bundled, small volumes |
 | `small.yaml` | One small cluster, for example one k3s node | Bundled, bounded streams |
-| `small-16gib.yaml`, on top of `small.yaml` | One k3s node of 16 GiB | Bundled, bounded streams |
 
-`small.yaml` fits one node of 4 vCPU, 32 GiB and 150 GiB of disk.
+`small.yaml` supports a node of 4 vCPU, at least 16 GiB of memory, and 150 GiB of disk.
+A node of 32 GiB gives more headroom.
 Its one worker runs five reviews and up to 32 resident conversation turns at a time.
 A chart test adds up what that node holds during an upgrade, with backups on:
 
@@ -736,7 +736,7 @@ A chart test adds up what that node holds during an upgrade, with backups on:
 | The sandbox quotas: five reviews, one isolation probe, one conversation host and ten tools Pods, including up to two warm Pods | 4.3 GiB | 0.65 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
 | Total, against the node less platform reservations and the hard eviction floor | 16.2 GiB of 30.25 GiB | 2.65 of 3.5 | 69 GiB of the 110 GiB left beside images and review workspaces |
 
-The worker uses `Recreate` in both single-node profiles.
+The worker uses `Recreate` in the `small` profile.
 The old worker drains before its replacement starts, so reviews and conversations pause during each upgrade.
 The server also uses `Recreate`. The webhook role keeps its rolling update.
 Measure the deployment outage against the 99.5% availability budget.
@@ -772,19 +772,9 @@ NATS also requests its full memory limit. The chart sets its `GOMEMLIMIT` to 80 
 
 The server's and the worker's caches have a bound of 10 GiB each.
 Thus, the node does not run out of disk and evict a draining worker.
-On a node of 16 GiB, the Pods of an upgrade with `small.yaml` alone do not fit beside a running review.
-They stay pending, the previous release keeps serving, and the upgrade rolls back when its timeout ends.
-
-For one node of 16 GiB, apply `small-16gib.yaml` after `small.yaml`:
-
-```bash
---values deploy/chart/hephaestus/profiles/small.yaml \
---values deploy/chart/hephaestus/profiles/small-16gib.yaml
-```
-
-It keeps worker updates at `Recreate`.
-It admits 32 resident turns with the same tools-Pod quota as `small.yaml`.
-The worker still runs five reviews and up to 32 resident conversation turns at a time, as in `small.yaml`.
+Use `small.yaml` on a node of 16 GiB too.
+Its worker uses `Recreate`, so the old worker stops before its replacement starts.
+The worker runs five reviews and up to 32 resident conversation turns at a time.
 
 A second worker's conversation host and turn pool do not fit in 16 GiB beside the first.
 Thus, the upgrade stops reviews and conversation turns for the drain, the new worker's start and its isolation probe.
@@ -804,7 +794,7 @@ It does not qualify the peak memory of running work.
 Sandbox Pods may use more than they request, up to their limits.
 If every sandbox Pod used its limit at the same time, the node would be full.
 
-Both single-node profiles set `worker.conversationTurns: auto`.
+The single-node `small` profile sets `worker.conversationTurns: auto`.
 With their default values, the chart derives 32 resident conversation turns for the one worker.
 
 An earlier staging capture recorded these values on one node of 16 GiB with k3s 1.37.
@@ -887,7 +877,7 @@ That run differs from your install in these points:
 - A local CA issues the Gateway certificate, because `Let's Encrypt` cannot reach a CI runner. CI does not test the HTTP-01 challenge of the `Let's Encrypt` issuer.
 - It skips the DNS check, because a runner has no public host name.
 - It skips the clock check: a hosted runner takes its time from the hypervisor and can report no NTP sync.
-- A runner has 16 GiB of memory, so the installer adds the `small-16gib.yaml` profile.
+- A runner has 16 GiB of memory and uses the same `small.yaml` profile.
 - It checks the shutdown settings that the kubelet and logind use. It does not reboot the host.
 
 ### The platform files
@@ -993,8 +983,8 @@ Retain the command logs, effective configuration, pressure/OOM counters, and syn
 
 ### Requirements
 
-- A host of 4 vCPU, 32 GiB of memory, and 150 GiB of disk, as [Profiles](#profiles) gives for `small.yaml`.
-  On a host of 16 GiB, the installer adds `small-16gib.yaml`, and each upgrade stops reviews and conversations for a while.
+- A host of 4 vCPU, at least 16 GiB of memory, and 150 GiB of disk, as [Profiles](#profiles) gives for `small.yaml`.
+  Each worker upgrade pauses reviews and conversations.
 - Ubuntu 24.04 with its 6.8 GA kernel on `amd64` or `arm64`. Other OS or kernel families require explicit qualification with `--allow-unqualified-host`.
 - A DNS A record for your host name that points to the public address of the host.
 - Ports 80 and 443 open from the internet, for `Let's Encrypt`, OAuth callbacks, and provider webhooks. Keep port 6443, the Kubernetes API, and port 10250, the kubelet, closed to the internet.
@@ -1011,7 +1001,7 @@ The installer stops before it changes the host when one of these checks fails. E
 | Check | Condition |
 | --- | --- |
 | Input | The host name, the address, the OAuth client ID, and the admin list have a strict format. |
-| Size | The host has 4 CPUs and at least 15 GiB of memory. Below 30 GiB, the installer adds the `small-16gib.yaml` profile. |
+| Size | The host has 4 CPUs and at least 15 GiB of memory. The installer uses `small.yaml` for every supported host. |
 | Clock | NTP synchronizes the clock. |
 | Swap | No swap device or file is active. The kubelet also refuses swap. |
 | Ports | No other program listens on port 80 or 443. The installer checks this before k3s runs. |
@@ -1717,11 +1707,11 @@ The new Pods wait for the migrated schema, and the previous release serves until
 The timeout is longer than the 10 minutes that a new Pod waits for the schema.
 
 The server stops before its new version starts (`Recreate`).
-The webhook role rolls. In the single-node profiles, the worker drains and stops before its replacement starts.
+The webhook role rolls. In the single-node profile, the worker drains and stops before its replacement starts.
 The replacement proves the cluster with the isolation probe before it claims work.
 
 An old worker drains for up to `worker.drainTimeoutSeconds`, and Kubernetes no longer counts it while it stops.
-The value is 30 minutes by default and 10 minutes in the single-node profiles.
+The value is 30 minutes by default and 10 minutes in the single-node profile.
 
 With `Recreate`, the Helm `--timeout` must cover the drain, 2 minutes of shutdown and up to 5 minutes of start.
 Past the timeout, Helm rolls the release back. If you set a longer drain, set a longer timeout.
@@ -1872,7 +1862,7 @@ Keep PostgreSQL and NATS running until the workers have drained:
    This restores the budgets. Verify that the roles and budgets are ready before you resume reconciliation.
 
 The commands use the release and namespace `hephaestus`. Substitute your own names and allow more time if you configured a longer drain.
-The single-node profiles retain a ten-minute drain. The `small-16gib` profile retains `Recreate` updates until upgrade capacity is qualified.
+The `small` profile retains a ten-minute drain and `Recreate` updates until upgrade capacity is qualified.
 The host's five-minute kubelet shutdown budget cannot provide a full thirty-minute review drain.
 After a reboot or an interrupted drain, fenced attempts retry through durable recovery.
 

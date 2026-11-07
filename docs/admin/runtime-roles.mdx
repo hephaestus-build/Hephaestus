@@ -387,7 +387,7 @@ When `hephaestus.mentor.turn.max-follow-ups` questions wait, Hephaestus refuses 
 
 `hephaestus.worker.capacity.mentor-max` sets how many conversation turns one worker runs at once.
 The Helm chart resolves `worker.conversationTurns: auto` from the declared CPU budget, after role requests and the review reservation.
-Both single-node profiles admit 32 resident turns. An explicit count overrides the automatic value.
+The `small` profile admit 32 resident turns. An explicit count overrides the automatic value.
 The local development default outside Helm remains eight.
 
 Resident turns, model calls and tools Pods use separate resources:

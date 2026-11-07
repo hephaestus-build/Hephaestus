@@ -759,6 +759,24 @@ A draining flag and a `NOTIFY` channel would have no reader, so the layer adds n
   Its revisit trigger is now the bench at 64 reviews.
   Reopen it only if Pods or memory are still the first limit.
 
+## Update — 2026-11-07: decision F requires a stateless worker
+
+Decision F applies to reviews and conversation turns.
+Any worker must serve any attempt. No attempt state may exist only in one worker process.
+
+The attempt must renew its lease through the sandbox gateway.
+Completion must be stored in PostgreSQL under the attempt fence before a worker continues the review.
+Composition must resume from stored progress after a worker stops.
+A Pod disruption must requeue work without spending a model retry.
+
+The worker drain must cover the measured model-call duration, rather than the full review duration.
+Until those boundaries are implemented and verified, the current drain stays.
+The `small` profile owns the single-node rollout strategy and drain for both 16 GiB and 32 GiB hosts.
+It uses `Recreate`, because two workers and their workloads do not fit on the smaller node.
+
+This update also replaces the earlier `small-16gib` fit-test plan in § Order.
+That proof now applies to `small` on 16 GiB. The profile keeps `Recreate` until upgrade capacity is qualified.
+
 ## Update — 2026-11-08: review loops renew their own leases
 
 A review loop renews its lease through `POST /internal/llm/runtime/{id}/lease`.

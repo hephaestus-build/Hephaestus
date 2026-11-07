@@ -279,10 +279,10 @@ await test("a chart host installs the release tree's chart with its profiles, th
 		profiles: ["small"],
 		helm: "helm",
 	});
-	const settings = chartSettings({ HEPHAESTUS_CHART_PROFILE: "small small-16gib" });
-	assert.deepEqual(settings.profiles, ["small", "small-16gib"]);
+	const settings = chartSettings({ HEPHAESTUS_CHART_PROFILE: "small site-overlay" });
+	assert.deepEqual(settings.profiles, ["small", "site-overlay"]);
 	assert.deepEqual(
-		chartSettings({ HEPHAESTUS_CHART_PROFILE: "small,small-16gib" }).profiles,
+		chartSettings({ HEPHAESTUS_CHART_PROFILE: "small,site-overlay" }).profiles,
 		settings.profiles,
 	);
 	assert.throws(() => chartSettings({ HEPHAESTUS_CHART_PROFILE: "small ../dev" }), /PROFILE/u);
@@ -293,12 +293,12 @@ await test("a chart host installs the release tree's chart with its profiles, th
 		const profiles = path.join(tree, "deploy/chart/hephaestus/profiles");
 		await mkdir(profiles, { recursive: true });
 		await writeFile(path.join(profiles, "small.yaml"), "{}\n");
-		await assert.rejects(profileFiles(settings, tree), /no chart profile small-16gib/u);
-		await writeFile(path.join(profiles, "small-16gib.yaml"), "{}\n");
+		await assert.rejects(profileFiles(settings, tree), /no chart profile site-overlay/u);
+		await writeFile(path.join(profiles, "site-overlay.yaml"), "{}\n");
 		const files = await profileFiles(settings, tree);
 		assert.deepEqual(files, [
 			path.join(profiles, "small.yaml"),
-			path.join(profiles, "small-16gib.yaml"),
+			path.join(profiles, "site-overlay.yaml"),
 		]);
 		const argv = helmArguments(
 			settings,
@@ -315,7 +315,7 @@ await test("a chart host installs the release tree's chart with its profiles, th
 		// values, and last the lock's images, so that no site value runs an image the lock omits.
 		assert.deepEqual(values, [
 			path.join(profiles, "small.yaml"),
-			path.join(profiles, "small-16gib.yaml"),
+			path.join(profiles, "site-overlay.yaml"),
 			"/etc/hephaestus/chart.yaml",
 			"/var/lib/hephaestus/chart/abc.images.yaml",
 		]);

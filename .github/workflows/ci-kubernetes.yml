@@ -103,7 +103,7 @@ jobs:
         "1.37": "docker.io/rancher/k3s:v1.37.1-k3s1@sha256:ca7f37d993d82ef0dcdcfecb2e0e2618ea541dbaffc620c8cedebe01a82acd0d"}
       # The lowest minor on amd64 installs the profile of a 16 GiB host, which a runner is, so a
       # shipped profile that cannot start fails here. The other legs install the dev profile.
-      PROFILES: ${{ inputs.minor == '1.35' && inputs.arch == 'amd64' && '--profile small --profile small-16gib' || '--profile dev' }}
+      PROFILES: ${{ inputs.minor == '1.35' && inputs.arch == 'amd64' && '--profile small' || '--profile dev' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

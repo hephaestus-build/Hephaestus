@@ -297,11 +297,11 @@ worker:
   # Two workers on different nodes where the cluster has them: one keeps claiming while the other
   # drains. 0 stops every worker and keeps its objects.
   replicas: 2
-  # Resident turns per worker. Unprofiled clusters keep eight; the single-node profiles select auto.
+  # Resident turns per worker. Unprofiled clusters keep eight; the small profile selects auto.
   # Auto divides the declared CPU budget across workers,
   # less resident role requests and review reservations, at 50m per turn and at most 32 in total.
-  # An explicit count overrides auto, and a node larger than the single-node profiles needs one: auto
-  # counts on their budget, so many reviews leave it no room. Provider calls still need pool grants; the tools quota stays
+  # An explicit count overrides auto, and a node larger than the single-node profile needs one: auto
+  # counts on its budget, so many reviews leave it no room. Provider calls still need pool grants; the tools quota stays
   # at eight assigned plus two warm Pods per worker, independent of resident turns.
   conversationTurns: 8
   sandboxGateway:

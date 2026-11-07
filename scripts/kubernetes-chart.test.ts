@@ -273,22 +273,15 @@ await test("the chart ships no image, tag or release identity of its own", () =>
 const load = (name: string) => asRecord(parse(read(`profiles/${name}`)), name);
 
 await test("every profile installs from the same templates with only the operator's values", () => {
-	assert.deepEqual(profiles.toSorted(), [
-		"dev.yaml",
-		"preview.yaml",
-		"small-16gib.yaml",
-		"small.yaml",
-	]);
+	assert.deepEqual(profiles.toSorted(), ["dev.yaml", "preview.yaml", "small.yaml"]);
 	for (const name of profiles) {
 		const profile = load(name);
 		for (const owned of ["release", "images", "secret", "host", "trustedProxies", "route"]) {
 			assert.equal(owned in profile, false, `${name} sets ${owned}`);
 		}
-		// The 16 GiB profile goes on top of the single-node one.
-		const layers = name === "small-16gib.yaml" ? [load("small.yaml"), profile] : [profile];
-		const values = install(...layers, prepared, operator);
+		const values = install(profile, prepared, operator);
 		assert.equal(validate(values), true, `${name}: ${JSON.stringify(validate.errors)}`);
-		// The single-node profiles run reviews; the operator states the sandbox namespace and API endpoint.
+		// The small profile runs reviews; the operator states the sandbox namespace and API endpoint.
 		assert.equal(at(values, ["worker", "enabled"]), name.startsWith("small"), `${name} worker`);
 	}
 });
@@ -315,10 +308,7 @@ await test("the values that the repository shows an operator fit the schema", ()
 	const small = load("small.yaml");
 	const examples = [
 		["k3s-values.yaml", [small, prepared, operator, yaml("deploy/platform/k3s-values.yaml")]],
-		[
-			"capacity-bench/values.yaml",
-			[small, load("small-16gib.yaml"), prepared, yaml("scripts/capacity-bench/values.yaml")],
-		],
+		["capacity-bench/values.yaml", [small, prepared, yaml("scripts/capacity-bench/values.yaml")]],
 	] as const;
 	for (const [name, layers] of examples) {
 		assert.equal(validate(install(...layers)), true, `${name}: ${JSON.stringify(validate.errors)}`);
