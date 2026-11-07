@@ -12,12 +12,16 @@ import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
 import reactor.netty.resources.ConnectionProvider;
@@ -99,6 +103,52 @@ class LlmProxyWebClientConfigTest extends BaseUnitTest {
             assertThat(response).isNotNull();
             assertThat(response.getStatusCode().value()).isEqualTo(302);
             assertThat(redirected).hasValue(0);
+        } finally {
+            server.disposeNow();
+            provider.dispose();
+            loop.disposeLater().block(BLOCK);
+        }
+    }
+
+    @Test
+    void shouldReachOneProviderWithMoreThanOneHundredAdmittedCalls() throws Exception {
+        int calls = 101;
+        CountDownLatch reached = new CountDownLatch(calls);
+        Sinks.Empty<Void> release = Sinks.empty();
+        DisposableServer server = HttpServer.create()
+                .host("127.0.0.1")
+                .port(0)
+                .handle((request, response) -> {
+                    reached.countDown();
+                    return response.sendString(release.asMono().thenReturn("served"));
+                })
+                .bindNow(BLOCK);
+        LlmProxyWebClientConfig config = new LlmProxyWebClientConfig();
+        ConnectionProvider provider = config.llmProxyConnectionProvider();
+        LoopResources loop = config.llmProxyLoopResources();
+        try {
+            WebClient client = config.llmProxyWebClient(provider, loop, egressPolicy(true), WebClient.builder());
+            var completed = Flux.range(0, calls)
+                    .flatMap(
+                            ignored -> client.get()
+                                    .uri("http://127.0.0.1:" + server.port() + "/")
+                                    .retrieve()
+                                    .bodyToMono(String.class),
+                            calls)
+                    .collectList()
+                    .toFuture();
+            try {
+                assertThat(reached.await(BLOCK.toMillis(), TimeUnit.MILLISECONDS))
+                        .as("every admitted call reaches the upstream before any response ends")
+                        .isTrue();
+                release.tryEmitEmpty();
+                assertThat(completed.get(BLOCK.toMillis(), TimeUnit.MILLISECONDS))
+                        .hasSize(calls)
+                        .containsOnly("served");
+            } finally {
+                release.tryEmitEmpty();
+                completed.cancel(true);
+            }
         } finally {
             server.disposeNow();
             provider.dispose();
