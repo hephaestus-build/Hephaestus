@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+	footprintReadCalls,
 	isSample,
 	largest,
 	NOT_STARTED,
@@ -13,6 +14,15 @@ import {
 	verdict,
 	type ReviewOutcome,
 } from "./lib/sandbox-footprint-report.ts";
+
+await test("the footprint leaves calls for submission and completion within the staged budget", () => {
+	assert.equal(footprintReadCalls("12"), 10);
+	assert.equal(footprintReadCalls("36"), 12);
+	assert.equal(footprintReadCalls("12", "8"), 8);
+	assert.throws(() => footprintReadCalls("12", "12"), /leave room for result submission/u);
+	assert.throws(() => footprintReadCalls("2"), /at least 3 model calls/u);
+	assert.throws(() => footprintReadCalls("invalid"), /PI_PRACTICE_MODEL_CALLS/u);
+});
 
 const sample = {
 	t: 1,
