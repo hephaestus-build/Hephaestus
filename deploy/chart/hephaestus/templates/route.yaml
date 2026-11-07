@@ -2,7 +2,7 @@
 The platform owns the Gateway API resources, the controller, the Gateway, its TLS certificate and
 the HTTP to HTTPS redirect. This route needs two HTTPRoute filters from that controller: URLRewrite
 with ReplacePrefixMatch, and ResponseHeaderModifier for HSTS. The other security headers come from
-the responses themselves, as in Compose.
+the responses themselves.
 */}}
 {{- if and .Values.workspaceSubdomains.enabled (gt (len .Values.host) 189) }}
 {{- fail "workspace subdomains need a host of at most 189 characters" }}
@@ -45,7 +45,7 @@ spec:
       backendRefs:
         - name: {{ include "hephaestus.name" (dict "root" . "component" "webhook") }}
           port: 8080
-    # The server serves the API without the /api prefix, as behind Traefik in Compose. The auth
+    # The server serves the API without the /api prefix. The auth
     # layer adds the prefix back to the browser-facing OAuth URLs.
     - matches:
         - path:

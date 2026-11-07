@@ -136,7 +136,7 @@ postgresql:
       time: ""
     # Full backup chains to keep, each with its differential backups.
     retentionFull: 2
-    # UTC, as the Compose timers run them.
+    # Schedules use UTC.
     schedule:
       full: "15 2 * * 0"
       differential: "15 2 * * 1-6"
@@ -373,7 +373,7 @@ config:
   llmPrivateHosts: []
   # Accept http:// base URLs for the hosts in llmPrivateHosts. Every other host still needs HTTPS.
   llmPrivateHostsAllowHttp: false
-  # A private CA for a Git provider, such as a self-managed GitLab: the Secret and the key that holds
+  # A private CA for Git providers or an external TLS NATS broker: the Secret and key that hold
   # the PEM file. The public CAs stay trusted. docs/admin/kubernetes.mdx.
   privateCa:
     existingSecret: ""

@@ -151,7 +151,7 @@ another, and the chart creates no certificate, key or CA.
 {{- end -}}
 
 {{/*
-A private CA for a Git provider, such as a self-managed GitLab. The buildpack's launcher adds this file to the
+A private CA for Git providers and an external TLS NATS broker. The buildpack's launcher adds this file to the
 JVM truststore at start, so sign-in, API calls and Git fetches all trust it, and the public CAs stay trusted.
 */}}
 {{- define "hephaestus.privateCaFile" -}}
@@ -214,8 +214,7 @@ name in the release namespace, so its certificate must name exactly that host.
 {{- end -}}
 
 {{/*
-Downward-API pod address. The management listener (9090) binds to it, the counterpart of
-"$HOSTNAME.shared-network" in Compose: reachable for probes and the metrics scraper, never through a
+Downward-API pod address. The management listener (9090) binds to it: reachable for probes and the metrics scraper, never through a
 Service or the Gateway.
 */}}
 {{- define "hephaestus.env.pod" -}}

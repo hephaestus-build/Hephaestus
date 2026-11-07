@@ -1,6 +1,5 @@
 {{- /*
-pgBackRest for the bundled PostgreSQL, as the Compose backup overlay runs it
-(docs/admin/backup-restore.mdx): one S3-compatible repository, encrypted, with full and
+pgBackRest for the bundled PostgreSQL (docs/admin/backup-restore.mdx): one S3-compatible repository, encrypted, with full and
 differential backups. PostgreSQL pushes its WAL from its own Pod. The backups run in Jobs that read
 the data directory through the pgBackRest TLS server beside PostgreSQL, so that no Pod but
 PostgreSQL's mounts its volume. Mutual TLS binds that server to the backup certificate.

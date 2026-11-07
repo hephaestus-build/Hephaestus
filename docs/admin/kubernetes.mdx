@@ -505,7 +505,11 @@ Sign-in, API calls and Git fetches all use the same trust.
 
 The server and the worker add this CA at start, and the public CAs stay trusted.
 After you replace the CA, restart the server and the worker.
+If the webhook uses this bundle for an external TLS broker, restart the webhook too.
 This option does not change what GitLab trusts. If Hephaestus uses a private certificate, add its CA to the trusted certificates of your GitLab, so that GitLab can deliver webhooks.
+
+The webhook role also receives this trust bundle when `nats.external.url` uses `tls://` with `nats.bundled=false`.
+Include the broker's CA in the bundle if it uses a private CA.
 
 ### A Git provider on a private network
 
@@ -1134,21 +1138,12 @@ A new `GITHUB_OAUTH_CLIENT_SECRET` replaces the stored one and restarts the serv
 
 cert-manager renews the Gateway certificate and the PostgreSQL certificates before they expire.
 Traefik reads the renewed Gateway certificate without a restart.
-The PostgreSQL server certificate is valid for one year, and cert-manager renews it 30 days before it expires.
-PostgreSQL reads it only when it starts, as [TLS certificates](./secret-custody#tls-certificates) describes.
-The CA of the PostgreSQL certificate is valid for ten years.
 
-1. Find the time of the next renewal:
-
-   ```bash
-   kubectl --namespace hephaestus get certificate hephaestus-postgresql-tls -o jsonpath='{.status.renewalTime}'
-   ```
-
-2. After that time, restart PostgreSQL:
-
-   ```bash
-   kubectl --namespace hephaestus rollout restart statefulset/hephaestus-postgresql
-   ```
+The one-host manifest requests a ten-year lifetime for the PostgreSQL server certificate and its CA.
+The CA expiry date limits trust even when a server certificate expires later.
+Read that date with `kubectl --namespace hephaestus get certificate hephaestus-postgresql-ca -o jsonpath='{.status.notAfter}'`.
+Use [Database maintenance](#database-maintenance) when you replace the CA.
+After applying an updated server certificate, restart PostgreSQL as [TLS certificates](./secret-custody#tls-certificates) describes.
 
 ### Upgrade the host
 
