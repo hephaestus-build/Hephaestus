@@ -57,13 +57,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## `wxt` 0.21.4
+## `wxt` 0.21.5
 
-Owned from: https://github.com/wxt-dev/wxt/tree/8fea9b4837282f4ad2a0d085ced6bee1a7de08fb/packages/wxt
-Package: pkg:npm/wxt@0.21.4
+Owned from: https://registry.npmjs.org/wxt/-/wxt-0.21.5.tgz
+Package: pkg:npm/wxt@0.21.5
 License: MIT
 Changes: Reloads the tabs of a runtime content script by its registered origins, not by its declared matches.
-Files: ["wxt@0.21.4.patch"]
+Files: ["wxt@0.21.5.patch"]
 
 ### What changes and why
 

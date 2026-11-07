@@ -665,10 +665,9 @@ hephaestus:
         seed-enabled: ${HEPHAESTUS_DEV_SEED_ENABLED:false}
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # AGENT JOB QUEUE (PostgreSQL-backed)
+    # REVIEW JOB QUEUE (PostgreSQL-backed)
     # ═══════════════════════════════════════════════════════════════════════════
-    # The queue IS the agent_job table — a QUEUED insert is the enqueue, and AgentJobExecutor polls
-    # for QUEUED rows on a fixed interval. Disabled by default.
+    # ReviewJobExecutor claims queued rows from review_job. Disabled by default.
     agent:
         image:
             reference: ghcr.io/hephaestus-build/agent-pi:${spring.application.version}
@@ -683,8 +682,7 @@ hephaestus:
         # The most review attempts one worker runs at once. An attempt composes its feedback after its sandbox
         # ends and holds no sandbox slot then, so this bounds the concurrent compositions.
         max-concurrent-compositions: ${AGENT_MAX_CONCURRENT_COMPOSITIONS:16}
-        # Max orphan-requeue attempts before a RUNNING job whose owning worker was lost is failed
-        # instead of requeued again. Authoritative budget lives on agent_job.retry_count.
+        # Retry consumption excludes drains, sandbox room refusals and attempts that made progress.
         max-retries: ${AGENT_MAX_RETRIES:5}
         heartbeat-interval: 25s
         # Strip heavy job payloads after payload-retention; delete unreferenced terminal jobs after row-retention.
