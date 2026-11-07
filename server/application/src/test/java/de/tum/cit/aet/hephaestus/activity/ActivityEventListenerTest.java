@@ -106,7 +106,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldLetARecordingFailureReachDurableDelivery() {
+        void shouldRollBackSourceWhenFactPublicationFails() {
             var failure = new TransientDataAccessResourceException("database unavailable");
             doThrow(failure).when(activityFacts).record(anyLong(), any(), any(), any(), any(), any(), anyLong());
             var event = new ScmDomainEvent.PullRequestCreated(
