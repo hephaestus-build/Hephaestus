@@ -12,7 +12,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  # Only a new commit supersedes a verdict. Metadata edits on one head must complete.
+  cancel-in-progress: ${{ github.event.action == 'synchronize' }}
 
 permissions: {}
 
@@ -37,6 +38,7 @@ jobs:
             commitlint.config.ts
             package.json
             scripts/review-policy.ts
+            scripts/lib/model-attribution.ts
           sparse-checkout-cone-mode: false
 
       - name: Read title policy and validate header limits
@@ -136,7 +138,7 @@ jobs:
               repository(owner:$owner,name:$name){ pullRequest(number:$number){
                 author{ __typename login }
                 commits(first:100,after:$after){ pageInfo{hasNextPage endCursor}
-                  nodes{ commit{ abbreviatedOid authors(first:1){ nodes{ email name user{ login } } } } } } } } }`;
+                  nodes{ commit{ abbreviatedOid message authors(first:1){ nodes{ email name user{ login } } } } } } } } }`;
 
             const pull = context.payload.pull_request;
             const nodes = [];
@@ -154,6 +156,11 @@ jobs:
               nodes.push(...data.commits.nodes);
               after = data.commits.pageInfo.hasNextPage ? data.commits.pageInfo.endCursor : null;
             } while (after);
+
+            // The REST commit list stops at 250. Reuse this complete GraphQL walk for attribution.
+            await writeFile(`${process.env.RUNNER_TEMP}/commit-messages.json`, JSON.stringify(
+              nodes.map(({ commit }) => ({ sha: commit.abbreviatedOid, message: commit.message })),
+            ));
 
             // A `Bot` author's login carries no suffix while the account its commits resolve to
             // does: Renovate opens a pull request as `renovate` and signs its commits as
@@ -207,12 +214,7 @@ jobs:
         if: steps.identity.outcome == 'failure'
         run: exit 1
 
-      # AGENTS.md forbids model, agent, harness or tool attribution in a pull request title or
-      # body, and `scripts/verify-changesets.ts` enforces the same for a changeset summary. Both
-      # are prose a reader weighs the change by. A commit trailer is not: `Co-authored-by:` is
-      # git's own way to credit who or what worked on a commit, and crediting a tool there is
-      # allowed.
-      - name: "Refuse model attribution in the pull request body"
+      - name: "Refuse model attribution in pull requests and commits"
         id: attribution
         if: ${{ !cancelled() }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -220,46 +222,38 @@ jobs:
         with:
           retries: 2
           script: |
-            const { writeFile } = require("node:fs/promises");
-
-            // Mirrors `scripts/lib/model-attribution.ts`, which the sparse checkout does not include.
-            // `scripts/pull-request-workflows.test.ts` executes this policy against real descriptions.
-            const patterns = [
-              {
-                name: "a Co-Authored-By trailer naming a model or tool",
-                pattern:
-                  /^co-authored-by:.*(?:claude|codex|copilot|gpt|openai|anthropic|gemini|cursor|noreply@anthropic\.com)/im,
-              },
-              { name: "a Claude-Session trailer", pattern: /^claude-session:/im },
-              { name: 'a "Generated with" marker', pattern: /\bgenerated with\b/i },
-              { name: "a claude.ai/code or session link", pattern: /claude\.ai\/(?:code|session)/i },
+            const { readFile, writeFile } = require("node:fs/promises");
+            const { pathToFileURL } = await import("node:url");
+            const { findModelAttribution } = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/lib/model-attribution.ts`).href);
+            const pull_number = context.payload.pull_request.number;
+            // Reruns keep an old event payload. Read the current description and every commit.
+            const { data: { title, body } } = await github.rest.pulls.get({ ...context.repo, pull_number });
+            const commits = JSON.parse(await readFile(`${process.env.RUNNER_TEMP}/commit-messages.json`, 'utf8'));
+            if (!Array.isArray(commits) || commits.length === 0 || commits.some(commit =>
+              typeof commit?.sha !== 'string' || typeof commit?.message !== 'string')) {
+              throw new Error('Missing validated commit messages');
+            }
+            const violations = [
+              ...findModelAttribution(title).map((reason) => `Title: ${reason}`),
+              ...findModelAttribution(body ?? "").map((reason) => `Body: ${reason}`),
+              ...commits.flatMap(({ sha, message }) => findModelAttribution(message)
+                .map((reason) => `Commit ${sha.slice(0, 7)}: ${reason}`)),
             ];
-            const findAttribution = (text) =>
-              patterns.filter(({ pattern }) => pattern.test(text ?? "")).map(({ name }) => name);
-
-            const { data: { body } } = await github.rest.pulls.get({
-              ...context.repo, pull_number: context.payload.pull_request.number,
-            });
-            const bodyMatches = findAttribution(body);
-            if (bodyMatches.length === 0) return;
-
+            if (violations.length === 0) return;
             await writeFile(
               `${process.env.RUNNER_TEMP}/attribution-comment.md`,
               [
                 "## Attribution check failed",
                 "",
-                "This pull request's body names the model, agent, harness or tool that helped write",
-                `it: ${bodyMatches.join(", ")}. \`AGENTS.md\` § Pull requests asks for none of that in a`,
-                "title or a body, because a description is read by people deciding whether to trust",
-                "the change.",
+                "Remove model, agent, harness, or tool attribution from the title, body, and commit messages.",
+                "Human co-author trailers are welcome. AGENTS.md § Pull requests defines this policy.",
                 "",
-                "Edit the description to remove it. A commit trailer crediting a tool is fine, and a",
-                "human co-author stays welcome under the same trailer.",
+                ...violations.map((violation) => `- ${violation}`),
                 "",
               ].join("\n"),
             );
             core.setOutput("violations", "true");
-            core.setFailed("The pull request body carries model attribution.");
+            core.setFailed("The pull request or its commits carry model attribution.");
 
       - name: "Comment on PR with the attribution violations"
         uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5

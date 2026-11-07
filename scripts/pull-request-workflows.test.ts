@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFile, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -21,6 +21,7 @@ async function stepsIn(file: string, location: string[]): Promise<YAMLMap[]> {
 const identityCommit = (login: string | null) => ({
 	commit: {
 		abbreviatedOid: "abcdef0",
+		message: "fix(ci): check policy",
 		authors: {
 			nodes: [
 				{
@@ -260,7 +261,7 @@ void test("commit identity accepts only the current author or a resolved listed 
 			} };
 			const outputs = {};
 			const core = { setOutput(name, value) { outputs[name] = value; }, setFailed() { process.exitCode = 1; } };
-			(async () => { ${String(script)} })().then(() => { assert.equal(calls, pages.length); assert.deepEqual(outputs, ${JSON.stringify(entry.valid ? {} : { violations: "true" })}); }).catch(error => { console.error(error); process.exitCode = 2; });
+			(async () => { ${String(script)} })().then(() => { assert.equal(calls, pages.length); assert.equal(JSON.parse(require("node:fs").readFileSync(process.env.RUNNER_TEMP + "/commit-messages.json", "utf8")).length, pages.flat().length); assert.deepEqual(outputs, ${JSON.stringify(entry.valid ? {} : { violations: "true" })}); }).catch(error => { console.error(error); process.exitCode = 2; });
 		`,
 			],
 			{
@@ -278,7 +279,7 @@ void test("commit identity accepts only the current author or a resolved listed 
 	}
 });
 
-void test("body validation uses the current description rather than a stale rerun payload", async (t) => {
+void test("attribution checks current metadata and the complete commit list beyond the REST limit", async (t) => {
 	const steps = await stepsIn(".github/workflows/pull-request.yml", [
 		"jobs",
 		"validate-pr",
@@ -286,29 +287,43 @@ void test("body validation uses the current description rather than a stale reru
 	]);
 	const script = steps.find((step) => step.get("id") === "attribution")?.getIn(["with", "script"]);
 	assert.equal(typeof script, "string");
-	const directory = await mkdtemp(path.join(tmpdir(), "pr-body-"));
+	const directory = await mkdtemp(path.join(tmpdir(), "pr-attribution-"));
 	t.after(async () => rm(directory, { recursive: true, force: true }));
-	for (const [body, staleBody, valid] of [
-		["A clear description", "Generated with a tool", true],
-		["Generated with a tool", "A clear description", false],
-		[null, "Generated with a tool", true],
-		["Both API artifacts were regenerated with zero diff.", null, true],
-		["The client was REGENERATED WITH the updated spec.", null, true],
+	const clean = "fix(ci): check pull requests";
+	const toolTrailer = "Co-Authored-By: Codex <tool@example.com>";
+	for (const [title, body, messages, valid] of [
+		[clean, "A clear description", [clean], true],
+		[clean, null, [clean], true],
+		[clean, "Both API artifacts were regenerated with zero diff.", [clean], true],
+		[clean, "Generated with a tool", [clean], false],
+		["Generated with a tool", null, [clean], false],
+		[clean, null, [`${clean}\n\n${toolTrailer}`], false],
+		[clean, null, [`${clean}\n\nCo-authored-by: Contributor <human@example.com>`], true],
+		[clean, null, [...Array.from({ length: 300 }, () => clean), toolTrailer], false],
 	] as const) {
+		await writeFile(
+			path.join(directory, "commit-messages.json"),
+			JSON.stringify(messages.map((message) => ({ sha: "a".repeat(40), message }))),
+		);
 		const result = spawnSync(
 			process.execPath,
 			[
 				"-e",
 				`
 			const assert = require("node:assert/strict");
-			const context = { repo: { owner: "owner", repo: "repo" }, payload: { pull_request: { number: 7, body: ${JSON.stringify(staleBody)} } } };
-			const github = { rest: { pulls: { get: async () => ({ data: { body: ${JSON.stringify(body)} } }) } } };
+			const context = { repo: { owner: "owner", repo: "repo" }, payload: { pull_request: { number: 7, title: "Generated with stale text", body: "Generated with stale text" } } };
+			const github = { rest: { pulls: {
+				get: async () => ({ data: { title: ${JSON.stringify(title)}, body: ${JSON.stringify(body)} } }),
+			} } };
 			const outputs = {};
 			const core = { setOutput(name, value) { outputs[name] = value; }, setFailed() { process.exitCode = 1; } };
 			(async () => { ${String(script)} })().then(() => assert.deepEqual(outputs, ${JSON.stringify(valid ? {} : { violations: "true" })})).catch(error => { console.error(error); process.exitCode = 2; });
 		`,
 			],
-			{ encoding: "utf8", env: { ...process.env, RUNNER_TEMP: directory } },
+			{
+				encoding: "utf8",
+				env: { ...process.env, GITHUB_WORKSPACE: process.cwd(), RUNNER_TEMP: directory },
+			},
 		);
 		assert.equal(result.status, valid ? 0 : 1, result.stderr);
 		assert.equal(result.stderr, "");
@@ -405,5 +420,32 @@ void test("unavailable PR metadata fails without claiming a policy violation", a
 		);
 		assert.equal(result.status, 0, `${id}: ${result.stderr}`);
 		assert.equal(result.stderr, "", id);
+	}
+});
+
+void test("a new commit cancels old policy work while same-head metadata edits complete", async () => {
+	const document = parseDocument(await readFile(".github/workflows/pull-request.yml", "utf8"));
+	const expression = new Parser(
+		new Lexer(
+			String(document.getIn(["concurrency", "cancel-in-progress"])).replaceAll(
+				/^\$\{\{\s*|\s*\}\}$/gu,
+				"",
+			),
+		).lex().tokens,
+		["github"],
+		[],
+	).parse();
+	for (const action of ["synchronize", "edited", "opened", "reopened"]) {
+		const context = new data.Dictionary({
+			key: "github",
+			value: new data.Dictionary({
+				key: "event",
+				value: new data.Dictionary({ key: "action", value: new data.StringData(action) }),
+			}),
+		});
+		assert.equal(
+			new Evaluator(expression, context).evaluate().coerceString(),
+			String(action === "synchronize"),
+		);
 	}
 });
