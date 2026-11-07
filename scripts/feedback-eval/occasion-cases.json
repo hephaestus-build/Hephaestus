@@ -1,0 +1,11 @@
+{
+	"version": 1,
+	"cases": [
+		"release-permission-scaffold",
+		"release-permission-actual-access",
+		"release-permission-point-of-use",
+		"release-merge-substantive-account",
+		"release-merge-unaccounted-outcome",
+		"release-unmerged-outcome"
+	]
+}

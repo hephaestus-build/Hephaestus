@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "sourceCases": [
+    "gh-a-01-menu-view-does-its-own-networking",
+    "gh-a-11-label-claim-contradicted-by-code",
+    "gh-c-09-autosave-ignored-errors",
+    "mx-d-01-injection-in-description-ios"
+  ],
+  "destinations": [
+    "PRACTICE_PAGE",
+    "CONVERSATION"
+  ],
+  "supportCounts": [
+    1,
+    2
+  ],
+  "expectedActions": {
+    "gh-a-01-menu-view-does-its-own-networking/PRACTICE_PAGE/1": "WITHHOLD",
+    "gh-a-01-menu-view-does-its-own-networking/PRACTICE_PAGE/2": "NEW",
+    "gh-a-01-menu-view-does-its-own-networking/CONVERSATION/1": "NEW",
+    "gh-a-01-menu-view-does-its-own-networking/CONVERSATION/2": "NEW",
+    "gh-a-11-label-claim-contradicted-by-code/PRACTICE_PAGE/1": "WITHHOLD",
+    "gh-a-11-label-claim-contradicted-by-code/PRACTICE_PAGE/2": "WITHHOLD",
+    "gh-a-11-label-claim-contradicted-by-code/CONVERSATION/1": "WITHHOLD",
+    "gh-a-11-label-claim-contradicted-by-code/CONVERSATION/2": "WITHHOLD",
+    "gh-c-09-autosave-ignored-errors/PRACTICE_PAGE/1": "WITHHOLD",
+    "gh-c-09-autosave-ignored-errors/PRACTICE_PAGE/2": "NEW",
+    "gh-c-09-autosave-ignored-errors/CONVERSATION/1": "NEW",
+    "gh-c-09-autosave-ignored-errors/CONVERSATION/2": "NEW",
+    "mx-d-01-injection-in-description-ios/PRACTICE_PAGE/1": "WITHHOLD",
+    "mx-d-01-injection-in-description-ios/PRACTICE_PAGE/2": "NEW",
+    "mx-d-01-injection-in-description-ios/CONVERSATION/1": "NEW",
+    "mx-d-01-injection-in-description-ios/CONVERSATION/2": "NEW"
+  }
+}

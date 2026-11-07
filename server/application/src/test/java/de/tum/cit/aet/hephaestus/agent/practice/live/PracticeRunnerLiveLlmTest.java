@@ -68,6 +68,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 // Pi does not read OPENAI_BASE_URL; the harness must configure its provider extension explicitly.
@@ -229,6 +230,19 @@ class PracticeRunnerLiveLlmTest {
             }
             assertThat(candidate.has("confidence")).isFalse();
             assertThat(candidate.path("citations").isArray()).isTrue();
+        }
+        String releaseFile = System.getenv("RELEASE_FEEDBACK_EVAL_OCCASIONS");
+        if (releaseFile != null && scenario != null) {
+            Path path = Path.of(releaseFile);
+            var evidence = (ObjectNode) MAPPER.readTree(Files.readAllBytes(path));
+            var rows = (ArrayNode) evidence.path("cases");
+            var row = rows.addObject().put("id", scenario.path("id").asString());
+            if (result.usage() != null && result.usage().model() != null)
+                row.put("runnerModel", result.usage().model());
+            row.set("results", MAPPER.valueToTree(practiceResults));
+            row.set("actual", MAPPER.valueToTree(actual));
+            row.set("actualSeverity", MAPPER.valueToTree(actualSeverity));
+            Files.writeString(path, MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(evidence));
         }
         assertThat(actual)
                 .as(

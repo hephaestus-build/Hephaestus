@@ -79,7 +79,13 @@ final class CompositionEvalCases {
 
     /** One case as main's composer reads it, with the case's short ids mapped to the ids the model sees. */
     record Scenario(
-            String id, JsonNode item, ReviewCompositionTurn turn, Map<String, String> ids, Map<String, String> back) {
+            String id,
+            JsonNode item,
+            ReviewCompositionTurn turn,
+            Map<String, String> ids,
+            Map<String, String> back,
+            Map<String, byte[]> inputs,
+            JsonNode response) {
         JsonNode toModel(JsonNode review) {
             return rename(review, ids);
         }
@@ -481,7 +487,112 @@ final class CompositionEvalCases {
             }
         }
 
-        return new Scenario(id, item, render(files, admission, history), ids, back);
+        return new Scenario(id, item, render(files, admission, history), ids, back, files, admission);
+    }
+
+    static List<PrivateScenario> privateScenarios(List<Scenario> scenarios) throws Exception {
+        var panel = MAPPER.readTree(Files.readAllBytes(Path.of("../../scripts/feedback-eval/private-cases.json")));
+        var result = new ArrayList<PrivateScenario>();
+        for (JsonNode sourceId : panel.path("sourceCases")) {
+            var scenario = scenarios.stream()
+                    .filter(each -> each.id().equals(sourceId.asString()))
+                    .findFirst()
+                    .orElseThrow();
+            for (JsonNode destination : panel.path("destinations")) {
+                for (JsonNode supportCount : panel.path("supportCounts")) {
+                    result.add(privateScenario(scenario, destination.asString(), supportCount.asInt()));
+                }
+            }
+        }
+        return result;
+    }
+
+    record PrivateScenario(
+            String id,
+            String sourceCase,
+            String destination,
+            ComposerFiles files,
+            String turn,
+            ObjectNode toolParameters,
+            Admission admission,
+            PrivateFeedback.Request request,
+            Map<String, List<String>> routes) {
+        Checked check(JsonNode raw) {
+            var slugs = Evidence.notMetPractices(admission.results());
+            var draft = new PrivateFeedback.Draft(List.copyOf(slugs), request, admission, List.of(), Map.of(), routes);
+            var outcome = draft.call(raw);
+            var missing = PrivateFeedback.undecided(admission, draft.feedback, routes);
+            if (!draft.complete() || !missing.isEmpty()) {
+                String why = outcome.text() + "; undecided: " + missing;
+                return new Checked(false, List.of(why), why);
+            }
+            var texts = new LinkedHashMap<String, String>();
+            for (int i = 0; i < draft.feedback.size(); i++)
+                texts.put("feedback[" + i + "]", draft.feedback.get(i).feedbackBody());
+            var refused = FeedbackTextCheck.refusal(texts);
+            if (refused == null) return new Checked(true, List.of(), null);
+            String why = WorkerFeedbackComposer.textRefusal(refused);
+            return new Checked(false, List.of(why), why);
+        }
+    }
+
+    private static PrivateScenario privateScenario(Scenario scenario, String destination, int supportCount)
+            throws Exception {
+        var response = (ObjectNode) scenario.response().deepCopy();
+        var page = ((ObjectNode) response.path("practicePageSupport")).putArray("practices");
+        var conversation = ((ObjectNode) response.path("conversationEligibility")).putArray("results");
+        for (JsonNode admitted : response.path("admitted")) {
+            if (!admitted.path("outcome").asString().equals("NOT_MET")) continue;
+            var support = page.addObject()
+                    .put("practiceSlug", admitted.path("practiceSlug").asString())
+                    .put("decision", "ADMIT")
+                    .putArray("occurrences");
+            for (int i = 0; i < supportCount; i++) {
+                var occurrence = JSON.objectNode();
+                occurrence.put("resultId", admitted.path("resultId").asString());
+                occurrence.put("outcome", "NOT_MET");
+                occurrence.put("origin", "EVENT");
+                occurrence.set("summary", admitted.path("summary"));
+                occurrence.set("explanation", admitted.path("explanation"));
+                occurrence.set("evidence", admitted.path("evidence"));
+                occurrence.putNull("practiceVersionId");
+                occurrence.put("itemId", i == 0 ? "7" : "6");
+                occurrence.put("itemKind", "scm.pull_request");
+                occurrence.put("recordedAt", CAPTURED_AT);
+                if (i > 0)
+                    occurrence.put(
+                            "resultId",
+                            uuid(
+                                    scenario.id(),
+                                    "prior-" + admitted.path("resultId").asString()));
+                support.add(occurrence);
+            }
+            conversation
+                    .addObject()
+                    .put("resultId", admitted.path("resultId").asString())
+                    .put("decision", "ADMIT");
+        }
+        var state = Admission.of(response, Map.of());
+        var request = new PrivateFeedback.Request(Map.of(destination, 3), 2, List.of());
+        var envelope = JSON.objectNode().put("contractVersion", 3).put("minDistinctItems", 2);
+        envelope.putObject("destinations").putObject(destination).put("maxPieces", 3);
+        envelope.putArray("onWorkCopyForms");
+        var files = WorkerFeedbackComposer.workspace(scenario.inputs(), json(envelope), state);
+        PrivateFeedback.stageHistory(state.privateHistory(), files);
+        var routes = PrivateFeedback.closeUnrouted(request, state, new ArrayList<>());
+        var captured = new CapturedWork(files, MAPPER);
+        var turn = WorkerFeedbackComposer.privateTurn(files, captured, request, state, null, routes, List.of());
+        var slugs = Evidence.notMetPractices(state.results());
+        return new PrivateScenario(
+                scenario.id() + "/" + destination + "/" + supportCount,
+                scenario.id(),
+                destination,
+                files,
+                turn,
+                PrivateFeedback.toolParameters(List.copyOf(slugs), request),
+                state,
+                request,
+                routes);
     }
 
     /** The path the golden test drives, which is the path the composer drives from its inputs. */

@@ -511,6 +511,17 @@ Only its complete version image alias moves.
 4. For a correction, add a changeset and repeat steps 2–3. Qualify each new candidate before deployment.
    The release gate seeds from the last stable release. Also run **Release / Seeded upgrade** with the previous candidate tag when that candidate is installed.
 
+### Feedback quality evidence
+
+Before qualifying a candidate, run the [release feedback eval](./feedback-quality-evals.md#release-feedback-eval) through the existing validation path.
+Attach its `results.json` file to the release evidence.
+Check that its commit is the candidate source commit and that its model is the configured release model.
+Require complete outputs and AI-drafted labels bound to those outputs.
+Read every finding and each unmeasured destination before deciding whether to qualify the candidate.
+
+A failed, skipped or incomplete eval does not establish feedback quality.
+Record the decision with the release evidence. Do not change a check or label to obtain a passing result.
+
 ### Promote the qualified candidate
 
 Freeze `main` at the last qualified candidate's source commit.

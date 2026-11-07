@@ -368,6 +368,11 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
             systemProperty("hephaestus.test.network.open", "true")
             listOf(
                     "PI_RUNNER_CWD",
+                    "COMPOSITION_EVAL_CHECKED",
+                    "COMPOSITION_EVAL_CASES",
+                    "COMPOSITION_EVAL_REASONING_EFFORT",
+                    "COMPOSITION_EVAL_MAX_OUTPUT_TOKENS",
+                    "RELEASE_FEEDBACK_EVAL_OCCASIONS",
                     "HEPHAESTUS_LIVE_LLM_BASE_URL",
                     "HEPHAESTUS_LIVE_LLM_API_KEY",
                     "HEPHAESTUS_LIVE_LLM_MODEL",

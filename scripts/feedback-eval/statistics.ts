@@ -41,20 +41,12 @@ export function workItemRate(outcomes: boolean[], infer: boolean) {
 				"descriptive-only: missing or unsettled labels, selected claims, nonrandom sample, unknown or mixed arms, or unequal repeats",
 		};
 	}
-	const z = 1.959963984540054;
-	const denominator = 1 + (z * z) / total;
-	const center = (estimate + (z * z) / (2 * total)) / denominator;
-	const half =
-		(z * Math.sqrt((estimate * (1 - estimate)) / total + (z * z) / (4 * total * total))) /
-		denominator;
+
 	return {
 		successes,
 		total,
 		estimate,
-		interval95: [
-			successes === 0 ? 0 : Math.max(0, center - half),
-			successes === total ? 1 : Math.min(1, center + half),
-		],
+		interval95: wilson95(successes, total),
 		uncertainty:
 			"Wilson marginal 95% interval for work items with any selected error across their recorded attempts; not claim precision; owner-attested sampling; failed captures excluded",
 	};
@@ -78,4 +70,30 @@ export function agreement(pairs: [string, string][]) {
 		observedAgreement: observed,
 		kappa: chance === 1 ? null : (observed - chance) / (1 - chance),
 	};
+}
+
+/** Binomial reference interval; callers must state the sampling assumptions for their measure. */
+export function wilson95(successes: number, total: number) {
+	if (
+		!Number.isInteger(total) ||
+		!Number.isInteger(successes) ||
+		successes < 0 ||
+		total < successes
+	) {
+		throw new Error("Invalid evaluation counts");
+	}
+	if (total === 0) {
+		return null;
+	}
+	const estimate = successes / total;
+	const z = 1.959963984540054;
+	const denominator = 1 + (z * z) / total;
+	const center = (estimate + (z * z) / (2 * total)) / denominator;
+	const half =
+		(z * Math.sqrt((estimate * (1 - estimate)) / total + (z * z) / (4 * total * total))) /
+		denominator;
+	return [
+		successes === 0 ? 0 : Math.max(0, center - half),
+		successes === total ? 1 : Math.min(1, center + half),
+	];
 }

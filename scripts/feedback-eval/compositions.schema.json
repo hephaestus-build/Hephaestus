@@ -273,6 +273,8 @@
 			"required": ["version", "cases"],
 			"properties": {
 				"version": { "const": 1 },
+				"commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+				"privateCases": { "$ref": "#/$defs/run/properties/cases" },
 				"cases": {
 					"type": "array",
 					"items": {
@@ -280,6 +282,7 @@
 						"required": ["id", "accepted", "errors", "review"],
 						"properties": {
 							"id": { "type": "string" },
+							"servedModels": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
 							"accepted": { "type": "boolean" },
 							"firstAccepted": { "type": ["boolean", "null"] },
 							"failure": { "type": ["string", "null"] },
@@ -296,6 +299,17 @@
 			"required": ["version", "labels"],
 			"properties": {
 				"version": { "const": 1 },
+				"source": { "enum": ["ai-drafted", "human"] },
+				"runSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+				"labeller": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["model", "rubricSha256"],
+					"properties": {
+						"model": { "type": "string", "minLength": 1 },
+						"rubricSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+					}
+				},
 				"labels": {
 					"type": "array",
 					"items": {
