@@ -202,3 +202,25 @@ Check that the resource trace covers the whole load and drain interval.
 Check that the operator state and merge queue stayed clear.
 Check that no synthetic turn remains active after cancellation or failure.
 Keep failed, interrupted and contaminated runs; do not use them as qualified capacity.
+
+## Stateful resource observations
+
+The observation window runs from `2026-10-31T09:56:22Z` to `2026-11-05T08:31:18Z`, about 4.94 days.
+The metrics store contains no earlier container samples, including a query over 30 days.
+These observations cover normal activity across several releases, not a controlled review-width load or a backup qualification.
+
+| Container | Peak working set | Peak total memory charge | Retained request / limit |
+| --- | --- | --- | --- |
+| PostgreSQL | 1,202.44 MiB | 2,047.67 MiB | 2 GiB / 2 GiB |
+| NATS | 409.13 MiB | 811.95 MiB | 1 GiB / 1 GiB |
+
+The [sizing guide](/admin/sizing#measure-stateful-memory) owns the query method and the qualification criteria.
+
+The separate conversation benchmark on `2026-10-30` had synthetic chat load and zero reviews.
+Its PostgreSQL maximum was 1,544.31 MiB RSS and 291.25 MiB charged, across the three admission cases.
+Its NATS maximum was 15.55 MiB RSS and 5.09 MiB charged.
+
+The sampler sums process RSS, which can count shared pages more than once, as [Collect and interpret](#5-collect-and-interpret) explains.
+Do not substitute RSS for cgroup charge or working set, or add these independent maxima.
+Neither observation qualifies the lower PostgreSQL target.
+Keep the current ceilings until the reference workload includes reviews, vacuum, backups and broker catch-up.

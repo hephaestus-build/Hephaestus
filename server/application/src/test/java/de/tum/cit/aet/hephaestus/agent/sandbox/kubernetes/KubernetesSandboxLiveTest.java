@@ -466,6 +466,55 @@ class KubernetesSandboxLiveTest {
     }
 
     @Test
+    void shouldRecordAKernelOomKillOfAReviewInsteadOfAnEviction() throws Exception {
+        UUID jobId = UUID.randomUUID();
+        double killed = meters.get(AgentMetrics.SANDBOX_EXITS)
+                .tags("kind", "review", "reason", "oom_killed")
+                .counter()
+                .count();
+        double evicted = meters.get(AgentMetrics.SANDBOX_EXITS)
+                .tags("kind", "review", "reason", "evicted")
+                .counter()
+                .count();
+
+        CompletableFuture<List<Pod>> terminated = client.pods()
+                .inNamespace(namespace())
+                .withLabel(KubernetesWorker.JOB_ID, jobId.toString())
+                .informOnCondition(candidates -> candidates.stream()
+                        .anyMatch(pod -> KubernetesPods.exitCode(pod, KubernetesPods.RUNTIME) != null));
+        try {
+            // External buffers touch anonymous pages without exhausting the JavaScript heap first.
+            assertThatThrownBy(() -> reviews.execute(review(
+                            jobId,
+                            "exec node --max-old-space-size=64 -e 'const pages=[]; "
+                                    + "setInterval(() => pages.push(Buffer.alloc(16*1024*1024, 1)), 50)'",
+                            Map.of(),
+                            Duration.ofMinutes(3))))
+                    .isInstanceOf(SandboxException.class)
+                    .hasRootCauseInstanceOf(IllegalStateException.class)
+                    .hasRootCauseMessage("Sandbox exited without uploading its result");
+            assertThat(terminated.get(COMMAND.toMillis(), TimeUnit.MILLISECONDS))
+                    .extracting(pod -> KubernetesPods.exitCode(pod, KubernetesPods.RUNTIME))
+                    .containsExactly(137);
+        } finally {
+            terminated.cancel(true);
+        }
+        assertThat(meters.get(AgentMetrics.SANDBOX_EXITS)
+                        .tags("kind", "review", "reason", "oom_killed")
+                        .counter()
+                        .count())
+                .as("the production exit recorder observed Kubernetes OOMKilled, not merely exit 137")
+                .isEqualTo(killed + 1);
+        assertThat(meters.get(AgentMetrics.SANDBOX_EXITS)
+                        .tags("kind", "review", "reason", "evicted")
+                        .counter()
+                        .count())
+                .isEqualTo(evicted);
+        awaitJobGone(KubernetesSandboxBackend.jobName(jobId, 0), null);
+        awaitNoPodsOf(jobId);
+    }
+
+    @Test
     void shouldReportTheNonZeroExitOfAReview() throws Exception {
         UUID jobId = UUID.randomUUID();
         String name = KubernetesSandboxBackend.jobName(jobId, 0);

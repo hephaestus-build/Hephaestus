@@ -1329,7 +1329,9 @@ It writes these objects into it:
 
 ### Priorities
 
-Under memory pressure, the kubelet evicts Pods of a lower priority first.
+For memory eviction, the kubelet first ranks Pods whose usage exceeds their requests.
+Within each request-usage group, it evicts Pods of a lower priority first.
+Thus, priority alone does not protect a stateful Pod that exceeds its request.
 The scheduler can also preempt Pods of a lower priority to place one of a higher priority.
 The chart gives every Pod one of three priorities, highest first:
 
@@ -1338,6 +1340,8 @@ The chart gives every Pod one of three priorities, highest first:
 3. The review sandboxes and the isolation probe. A review is an attempt that runs again. It never preempts another Pod.
 
 A preempted or evicted review counts as an attempt that the worker lost, and the review runs again.
+
+See [node-pressure eviction](https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/) for the kubelet’s ranking rules.
 
 By default, the chart creates the three PriorityClasses.
 If your account cannot create cluster-wide objects, ask the cluster's administrator for three classes, with values in the order above.

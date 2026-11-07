@@ -665,6 +665,15 @@ A pull request runs the **fast tier**. A merge group, a push and a dispatch also
 Path filters and the main-push rules in [Path filters](#path-filters) still select within each tier.
 Kubernetes qualification stays on same-repository pull requests, because it boots this run's own images. A draft does not select it.
 
+The latest-minor `amd64` Kubernetes leg, including pull requests, deliberately exceeds a review container's memory limit through the production sandbox adapter.
+It requires exit code 137 and the recorded `oom_killed` reason, with no `evicted` increment.
+
+Another drill uses a tainted, disposable node and a raised soft memory threshold to exercise the kubelet without exhausting the runner.
+Three synthetic Pods stay below equal memory requests and use the chart's priorities.
+Creation order and memory use oppose the expected eviction order.
+The drill requires memory evictions in review, conversation, then role order, with no `OOMKilled` container.
+This checks priority within one request-usage group. It does not qualify loaded node capacity or enable soft eviction in the installation.
+
 Main changes only through the merge queue, and the queue runs the required checks on the merged result
 ([GitHub: managing a merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue)).
 bors and Prow's Tide apply the same rule. They test the merge candidate and advance the branch only when it passes
