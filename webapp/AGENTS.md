@@ -191,7 +191,8 @@ A separate rule bans `Date.now` everywhere under `src/**`, so a handler may use 
 Use `@/lib/numbers` for English counts (comma grouping, decimal point).
 Use `@/lib/dates` for English, day-first dates.
 Currency and percentages keep explicit precision.
-Timestamps use local time unless labeled UTC; wire dates and UTC report buckets stay UTC.
+Timestamps use local time unless labeled UTC.
+Wire dates and UTC report buckets stay UTC.
 Calendar controls retain the explicit locale prop.
 
 ## Name a component for the concept, not for the wire
