@@ -1,6 +1,11 @@
 import { cn } from "cn";
+import { definitionFor } from "@/components/common/status-def";
 
-import { AGENT_PURPOSE_DEFS, type AgentPurpose } from "./agent-purpose-defs";
+import {
+	UNKNOWN_AGENT_PURPOSE_DEF,
+	AGENT_PURPOSE_DEFS,
+	type AgentPurpose,
+} from "./agent-purpose-defs";
 
 const TILE = {
 	sm: "size-5 rounded-sm",
@@ -35,7 +40,11 @@ export function ModelKindMark({
 	name,
 	className,
 }: ModelKindMarkProps) {
-	const { title, icon: Icon, tone } = AGENT_PURPOSE_DEFS[purpose];
+	const {
+		title,
+		icon: Icon,
+		tone,
+	} = definitionFor(AGENT_PURPOSE_DEFS, purpose, UNKNOWN_AGENT_PURPOSE_DEF);
 	return (
 		<span className={cn("inline-flex min-w-0 items-center gap-2", className)}>
 			<span

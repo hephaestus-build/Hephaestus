@@ -1,4 +1,4 @@
-import type { StatusDef, StatusDefs } from "@/components/common/status-def";
+import { definitionFor, type StatusDef, type StatusDefs } from "@/components/common/status-def";
 
 import { DELIVERY_STATE_DEFS, type DeliveryState } from "./delivery-state-defs";
 
@@ -31,7 +31,7 @@ export const DELIVERY_FAMILY_STATES = {
  * rows it opens read alike; only the description widens to every state the family holds.
  */
 function familyDef(family: DeliveryFamily, description: string): StatusDef {
-	return { ...DELIVERY_STATE_DEFS[DELIVERY_FAMILY_STATES[family][0]], description };
+	return { ...definitionFor(DELIVERY_STATE_DEFS, DELIVERY_FAMILY_STATES[family][0]), description };
 }
 
 export const DELIVERY_FAMILY_DEFS: StatusDefs<DeliveryFamily> = {

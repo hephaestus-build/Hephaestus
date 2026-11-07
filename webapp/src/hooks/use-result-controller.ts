@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { definitionFor } from "@/components/common/status-def";
 import { toast } from "@/lib/toast";
 
 import {
@@ -52,7 +53,7 @@ export function useResultController(workspaceSlug: string, resultId: string): Re
 		...settled,
 		onSuccess: (created) => {
 			void invalidateWorkspaceReads(queryClient, workspaceSlug, READS_OF_RESULT_MARKS);
-			toast.success(RESULT_MARK_DEFS[created.kind].label);
+			toast.success(definitionFor(RESULT_MARK_DEFS, created.kind).label);
 		},
 	});
 	const removal = useMutation({

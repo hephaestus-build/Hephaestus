@@ -1,5 +1,6 @@
 import type { ItemEvent, ItemRef, ReviewLineage, ReviewRef } from "@/api/types.gen";
-import type { BadgeVariant } from "@/components/common/status-def";
+import { definitionFor, type BadgeVariant } from "@/components/common/status-def";
+
 import { FEEDBACK_LOCATION_DEFS } from "@/components/practice-vocabulary/feedback-location-defs";
 import {
 	ITEM_EVENT_REASON_SENTENCES,
@@ -220,7 +221,9 @@ function feedbackFate(feedback: LineageFeedback, item: ItemRef | undefined): Fee
 					};
 		}
 		case "DELIVERED": {
-			const place = lowerFirst(FEEDBACK_LOCATION_DEFS[feedbackLocation(feedback, item)].label);
+			const place = lowerFirst(
+				definitionFor(FEEDBACK_LOCATION_DEFS, feedbackLocation(feedback, item)).label,
+			);
 			return {
 				end: end("delivered", `it reached the developer ${place}`, { at }),
 				clause: ["was delivered", "were delivered"],
@@ -231,7 +234,9 @@ function feedbackFate(feedback: LineageFeedback, item: ItemRef | undefined): Fee
 }
 
 function feedbackSentence(feedback: LineageFeedback, item: ItemRef | undefined): string {
-	const place = lowerFirst(FEEDBACK_LOCATION_DEFS[feedbackLocation(feedback, item)].label);
+	const place = lowerFirst(
+		definitionFor(FEEDBACK_LOCATION_DEFS, feedbackLocation(feedback, item)).label,
+	);
 	const reached = `This feedback reached the developer ${place}`;
 	if (feedback.withdrawn) {
 		return reachedDeveloper(feedback)
@@ -603,7 +608,7 @@ export function unreviewedVerdict(
 		reason ??
 		(staleOff
 			? "Practice review was turned off for this workspace when it happened. It is on now."
-			: ITEM_EVENT_STATE_DEFS[event.state].description);
+			: definitionFor(ITEM_EVENT_STATE_DEFS, event.state).description);
 	return {
 		sentence: `No review started on this work: ${lowerFirst(firstSentence(why))}.`,
 		end: end("lost", why, { label: "No review started", at: event.occurredAt }),

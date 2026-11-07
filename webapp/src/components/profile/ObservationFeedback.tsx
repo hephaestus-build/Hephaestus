@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import { cn } from "cn";
 import type { OwnFeedbackRef } from "@/api/types.gen";
@@ -11,7 +12,10 @@ import {
 } from "@/components/practice-vocabulary/delivery-state-defs";
 import { FEEDBACK_DESTINATION_DEFS } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { FEEDBACK_RESOLUTION_DEFS } from "@/components/practice-vocabulary/feedback-resolution-defs";
-import { FEEDBACK_USEFULNESS_DEFS } from "@/components/practice-vocabulary/feedback-usefulness-defs";
+import {
+	UNKNOWN_USEFULNESS_DEF,
+	FEEDBACK_USEFULNESS_DEFS,
+} from "@/components/practice-vocabulary/feedback-usefulness-defs";
 import { formatDayTime } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
@@ -70,7 +74,7 @@ export function ObservationFeedback({ feedback: given, links }: ObservationFeedb
 						>
 							{index + 1}
 						</span>
-						<StatusBadge def={FEEDBACK_DESTINATION_DEFS[piece.destination]} />
+						<StatusBadge def={definitionFor(FEEDBACK_DESTINATION_DEFS, piece.destination)} />
 						{/* Full delivery needs no state label; partial delivery is described below. */}
 						{piece.deliveredAt !== null && (
 							<time dateTime={piece.deliveredAt.toISOString()} className="text-muted-foreground">
@@ -154,10 +158,12 @@ function ResponseLine({ feedback }: { feedback: OwnFeedbackRef }) {
 		<p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 			<span>Your response:</span>
 			{response.resolution !== null && (
-				<StatusBadge def={FEEDBACK_RESOLUTION_DEFS[response.resolution]} />
+				<StatusBadge def={definitionFor(FEEDBACK_RESOLUTION_DEFS, response.resolution)} />
 			)}
 			{response.usefulness !== null && (
-				<StatusBadge def={FEEDBACK_USEFULNESS_DEFS[response.usefulness]} />
+				<StatusBadge
+					def={definitionFor(FEEDBACK_USEFULNESS_DEFS, response.usefulness, UNKNOWN_USEFULNESS_DEF)}
+				/>
 			)}
 			{hasText(response.comment) && <q>{response.comment}</q>}
 		</p>

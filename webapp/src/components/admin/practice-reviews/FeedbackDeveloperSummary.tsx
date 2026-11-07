@@ -5,7 +5,7 @@ import type { ReasonCount } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { statusToneClass, statusValues } from "@/components/common/status-def";
+import { definitionFor, statusToneClass, statusValues } from "@/components/common/status-def";
 import { Section } from "@/components/layout/Section";
 import {
 	FEEDBACK_LOCATION_DEFS,
@@ -151,7 +151,7 @@ function LocationRow({
 	developerId: string;
 	row: LocationCount;
 }) {
-	const def = FEEDBACK_LOCATION_DEFS[row.location];
+	const def = definitionFor(FEEDBACK_LOCATION_DEFS, row.location);
 	const Icon = def.icon;
 	return (
 		<TableRow variant="static">

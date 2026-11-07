@@ -1,5 +1,6 @@
 import { EyeOffIcon, RotateCcwIcon, SearchCheckIcon, Undo2Icon } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type {
 	FeedbackBasis,
@@ -55,7 +56,10 @@ import {
 	type WithdrawalCorrection,
 	withdrawalCorrection,
 } from "@/components/practice-vocabulary/feedback-send-defs";
-import { FEEDBACK_USEFULNESS_DEFS } from "@/components/practice-vocabulary/feedback-usefulness-defs";
+import {
+	UNKNOWN_USEFULNESS_DEF,
+	FEEDBACK_USEFULNESS_DEFS,
+} from "@/components/practice-vocabulary/feedback-usefulness-defs";
 import { WITHHOLDING_REASON_DEFS } from "@/components/practice-vocabulary/withholding-defs";
 import { Button } from "@/components/ui/button";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
@@ -127,7 +131,7 @@ function inOrder(copies: readonly FeedbackCopy[]): FeedbackCopy[] {
  * its text: "What it says" shows that once, and the text can be private to the developer or hidden.
  */
 function feedbackTitle(feedback: FeedbackRecord): string {
-	const where = FEEDBACK_LOCATION_DEFS[feedback.location].label;
+	const where = definitionFor(FEEDBACK_LOCATION_DEFS, feedback.location).label;
 	return `For ${developerLabel(feedback.developer)} · ${where}`;
 }
 
@@ -462,8 +466,12 @@ function feedbackHistory(feedback: FeedbackRecord): SheetEvent[] {
 		events.push({
 			key: "stopped",
 			at: stop?.checkedAt,
-			title: DELIVERY_STATE_DEFS[feedback.state].label,
-			detail: WITHHOLDING_REASON_DEFS[stopReason],
+			title: definitionFor(DELIVERY_STATE_DEFS, feedback.state).label,
+			detail: definitionFor(
+				WITHHOLDING_REASON_DEFS,
+				stopReason,
+				"Unknown reason. Reload to check for an update.",
+			),
 		});
 	}
 	const onWork = feedback.destination === "ON_WORK";
@@ -492,7 +500,7 @@ function decisionEvent(decision: FeedbackDecision): SheetEvent {
 	return {
 		key: decision.id,
 		at: decision.decidedAt,
-		title: FEEDBACK_DECISION_DEFS[decision.action].label,
+		title: definitionFor(FEEDBACK_DECISION_DEFS, decision.action).label,
 		by: decision.actor === null ? ERASED_ACCOUNT : accountName(decision.actor),
 		detail:
 			reasonCode !== null || hasText(note) ? (
@@ -510,7 +518,7 @@ function copyEvent(
 	copy: FeedbackCopy,
 	feedbackStopReason: FeedbackRecord["stopReason"],
 ): SheetEvent | undefined {
-	const kind = FEEDBACK_COPY_KIND_DEFS[copy.kind].label;
+	const kind = definitionFor(FEEDBACK_COPY_KIND_DEFS, copy.kind).label;
 	const anchor = copyAnchor(copy);
 	const where = anchor !== undefined && <code className="break-all">{anchor}</code>;
 	switch (copy.state) {
@@ -538,7 +546,7 @@ function copyEvent(
 		}
 		case "WRITE_STARTED":
 		case "FAILED": {
-			const def = FEEDBACK_COPY_STATE_DEFS[copy.state];
+			const def = definitionFor(FEEDBACK_COPY_STATE_DEFS, copy.state);
 			return {
 				key: copy.id,
 				at: copy.writeStartedAt ?? undefined,
@@ -562,7 +570,13 @@ function copyEvent(
 					<>
 						{where}
 						{reason !== null && reason !== feedbackStopReason && (
-							<span className="block">{WITHHOLDING_REASON_DEFS[reason]}</span>
+							<span className="block">
+								{definitionFor(
+									WITHHOLDING_REASON_DEFS,
+									reason,
+									"Unknown reason. Reload to check for an update.",
+								)}
+							</span>
 						)}
 					</>
 				),
@@ -589,10 +603,12 @@ function sendEvent(
 		action = "Write the comment, or read back the one already started";
 	} else if (checking) {
 		title =
-			send.state === "PENDING" ? "Waiting to check" : FEEDBACK_SEND_STATE_DEFS[send.state].label;
+			send.state === "PENDING"
+				? "Waiting to check"
+				: definitionFor(FEEDBACK_SEND_STATE_DEFS, send.state).label;
 		action = "Read the work for the unconfirmed comment";
 	} else if (!done) {
-		title = FEEDBACK_SEND_STATE_DEFS[send.state].label;
+		title = definitionFor(FEEDBACK_SEND_STATE_DEFS, send.state).label;
 	} else if (
 		send.action === "RETRACT" &&
 		(correction === "retryable" || correction === "needsAttention")
@@ -649,9 +665,11 @@ function responseEvent(feedback: FeedbackRecord): SheetEvent | undefined {
 	const { resolution, usefulness, comment } = response;
 	const facts = [
 		resolution !== null && resolution !== "DISAGREE"
-			? FEEDBACK_RESOLUTION_DEFS[resolution].label
+			? definitionFor(FEEDBACK_RESOLUTION_DEFS, resolution).label
 			: undefined,
-		usefulness === null ? undefined : FEEDBACK_USEFULNESS_DEFS[usefulness].label,
+		usefulness === null
+			? undefined
+			: definitionFor(FEEDBACK_USEFULNESS_DEFS, usefulness, UNKNOWN_USEFULNESS_DEF).label,
 	].filter(hasText);
 	return {
 		key: "response",
@@ -836,7 +854,7 @@ function feedbackTechnical(feedback: FeedbackRecord): TechnicalFact[] {
 		const ref = copy.externalRef ?? copy.mentorEntryId;
 		if (hasText(ref)) {
 			const sameKind = copies.filter((other) => other.kind === copy.kind);
-			const kind = FEEDBACK_COPY_KIND_DEFS[copy.kind].label;
+			const kind = definitionFor(FEEDBACK_COPY_KIND_DEFS, copy.kind).label;
 			const label = sameKind.length === 1 ? kind : `${kind} ${sameKind.indexOf(copy) + 1}`;
 			facts.push({ label: `${label} reference`, value: <code>{ref}</code>, copy: ref });
 		}

@@ -10,7 +10,7 @@ import {
 import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { ResultCount } from "@/components/common/ResultCount";
 import { SelectFilter } from "@/components/common/SelectFilter";
-import { statusFacetOptions } from "@/components/common/status-def";
+import { definitionFor, statusFacetOptions } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	getGroupVisual,
@@ -375,7 +375,7 @@ function ResultRow({
 }
 
 function ResultOutcome({ outcome, plain }: { outcome: Outcome; plain: boolean }) {
-	const def = OUTCOME_DEFS[outcome];
+	const def = definitionFor(OUTCOME_DEFS, outcome);
 	if (plain) {
 		return def.badgeVariant === "destructive" || def.badgeVariant === "warning" ? (
 			<StatusBadge def={def} />

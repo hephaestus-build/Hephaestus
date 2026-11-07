@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { cn } from "cn";
 import type { ItemRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
-import { statusToneClass } from "@/components/common/status-def";
+import { definitionFor, statusToneClass } from "@/components/common/status-def";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import {
@@ -244,7 +244,7 @@ export function ReviewSawCell({ saw }: ReviewSawCellProps) {
 					// wrap where the table is narrow without a wrapped line starting with a separator.
 					<span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
 						{outcomes.map(({ outcome, text }) => {
-							const def = OUTCOME_DEFS[outcome];
+							const def = definitionFor(OUTCOME_DEFS, outcome);
 							const Icon = def.icon;
 							return (
 								<span key={outcome} className="inline-flex items-center gap-1 whitespace-nowrap">

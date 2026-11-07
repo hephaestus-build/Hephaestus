@@ -1,4 +1,5 @@
 import { CircleAlert, Copy, ShieldCheck } from "lucide-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import { cn } from "cn";
 import type { PracticeDefinitionOptions } from "@/api/types.gen";
@@ -14,7 +15,10 @@ import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { Section } from "@/components/layout/Section";
-import { CATALOG_AVAILABILITY_DEFS } from "@/components/practice-vocabulary/catalog-availability-defs";
+import {
+	UNKNOWN_CATALOG_AVAILABILITY_DEF,
+	CATALOG_AVAILABILITY_DEFS,
+} from "@/components/practice-vocabulary/catalog-availability-defs";
 import { FeedbackModeBadge } from "@/components/practice-vocabulary/FeedbackModeBadge";
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
@@ -66,7 +70,11 @@ export function PracticeAdoptionPanel({
 		return <PracticeAdoptionPlaceholder state={state} nested={nested} path={path} />;
 	}
 	const { preview, definitionOptions, action } = state;
-	const availability = CATALOG_AVAILABILITY_DEFS[preview.availability];
+	const availability = definitionFor(
+		CATALOG_AVAILABILITY_DEFS,
+		preview.availability,
+		UNKNOWN_CATALOG_AVAILABILITY_DEF,
+	);
 	const unavailable = preview.availability !== "AVAILABLE";
 
 	return (

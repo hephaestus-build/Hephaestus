@@ -1,7 +1,7 @@
 import type { PracticeStanding } from "@/api/types.gen";
-import { statusToneClass, statusValues } from "@/components/common/status-def";
+import { definitionFor, statusToneClass, statusValues } from "@/components/common/status-def";
 
-import { PRACTICE_GROUP_STANDING_DEFS } from "./practice-group-standing-defs";
+import { UNKNOWN_STANDING_DEF, PRACTICE_GROUP_STANDING_DEFS } from "./practice-group-standing-defs";
 
 type Standing = PracticeStanding["standing"];
 type HasStanding = Pick<PracticeStanding, "standing">;
@@ -20,7 +20,10 @@ const RING_OPACITY: Partial<Record<Standing, string>> = {
 
 /** The colour a standing's arc, bar part and legend line wear. */
 export const standingColorClass = (standing: Standing): string =>
-	RING_OPACITY[standing] ?? statusToneClass(PRACTICE_GROUP_STANDING_DEFS[standing].badgeVariant);
+	RING_OPACITY[standing] ??
+	statusToneClass(
+		definitionFor(PRACTICE_GROUP_STANDING_DEFS, standing, UNKNOWN_STANDING_DEF).badgeVariant,
+	);
 
 /** Every standing in registry order, with its colour and short label. */
 export const STANDING_SEGMENTS: readonly {

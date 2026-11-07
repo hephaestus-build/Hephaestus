@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ItemEvent, ItemFact, ItemRef, ReviewRef } from "@/api/types.gen";
 import { DotSeparator } from "@/components/common/DotSeparator";
@@ -87,8 +88,8 @@ export function WorkLevel({
 				<div className="flex flex-col gap-2">
 					{state.status === "ready" && latestReview !== undefined && (
 						<SheetStatusLine
-							status={<StatusBadge def={REVIEW_STATUS_DEFS[latestReview.status]} />}
-							flag={<StatusBadge def={REVIEW_ORIGIN_DEFS[latestReview.origin]} />}
+							status={<StatusBadge def={definitionFor(REVIEW_STATUS_DEFS, latestReview.status)} />}
+							flag={<StatusBadge def={definitionFor(REVIEW_ORIGIN_DEFS, latestReview.origin)} />}
 							figure={
 								<InlineLink
 									render={<DetailStackLink entry={reviewLevel(latestReview.id)} single />}
@@ -104,7 +105,7 @@ export function WorkLevel({
 					)}
 					{latest && (
 						<SheetStatusLine
-							status={<StatusBadge def={ITEM_EVENT_STATE_DEFS[latest.state]} />}
+							status={<StatusBadge def={definitionFor(ITEM_EVENT_STATE_DEFS, latest.state)} />}
 							figure={eventsFigure(events)}
 							at={{ label: "latest event", date: latest.occurredAt }}
 						/>
@@ -281,7 +282,7 @@ function itemEvent(
 				<span className="block">
 					<span title={foundBy.description}>{foundBy.label}</span>
 					<DotSeparator inline />
-					{ITEM_EVENT_STATE_DEFS[event.state].label}
+					{definitionFor(ITEM_EVENT_STATE_DEFS, event.state).label}
 				</span>
 				{event.reason !== null && (
 					<span className="block">
@@ -300,12 +301,12 @@ function reviewEvent(review: ReviewRef): SheetEvent {
 		at: review.createdAt,
 		title: (
 			<InlineLink render={<DetailStackLink entry={reviewLevel(review.id)} single />}>
-				{REVIEW_ORIGIN_DEFS[review.origin].label} review
+				{definitionFor(REVIEW_ORIGIN_DEFS, review.origin).label} review
 			</InlineLink>
 		),
 		detail: (
 			<>
-				Current status: <StatusBadge def={REVIEW_STATUS_DEFS[review.status]} />
+				Current status: <StatusBadge def={definitionFor(REVIEW_STATUS_DEFS, review.status)} />
 			</>
 		),
 	};

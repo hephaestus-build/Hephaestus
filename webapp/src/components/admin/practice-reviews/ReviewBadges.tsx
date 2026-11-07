@@ -1,5 +1,6 @@
 import type { ReviewResult } from "@/api/types.gen";
-import type { StatusDef } from "@/components/common/status-def";
+import { definitionFor, type StatusDef } from "@/components/common/status-def";
+
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { OUTCOME_DEFS, outcomeLabel } from "@/components/practice-vocabulary/outcome-defs";
 import { REVIEW_ORIGIN_DEFS } from "@/components/practice-vocabulary/review-origin-defs";
@@ -10,7 +11,7 @@ export function resultOutcomeDef(
 	outcome: ReviewResult["outcome"],
 	problems: number | undefined,
 ): StatusDef {
-	return { ...OUTCOME_DEFS[outcome], label: outcomeLabel(outcome, problems) };
+	return { ...definitionFor(OUTCOME_DEFS, outcome), label: outcomeLabel(outcome, problems) };
 }
 
 export interface ResultOutcomeProps {
@@ -46,7 +47,7 @@ export function resultSeverity(
 	result: Pick<ReviewResult, "outcome" | "severity">,
 ): StatusDef | undefined {
 	return result.outcome === "NOT_MET" && result.severity
-		? SEVERITY_DEFS[result.severity]
+		? definitionFor(SEVERITY_DEFS, result.severity)
 		: undefined;
 }
 
@@ -54,5 +55,5 @@ export function ResultOriginNote({ origin }: { origin: ReviewResult["origin"] })
 	if (origin === "EVENT") {
 		return null;
 	}
-	return <span>{REVIEW_ORIGIN_DEFS[origin].label}</span>;
+	return <span>{definitionFor(REVIEW_ORIGIN_DEFS, origin).label}</span>;
 }

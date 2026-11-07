@@ -12,7 +12,7 @@ import {
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import { STANDING_BASIS_DEFS } from "@/components/practice-vocabulary/standing-basis-defs";
 import { WITHHOLDING_FAMILY_DEFS } from "@/components/practice-vocabulary/withholding-defs";
-import { type StatusDef, type StatusDefs, statusValues } from "./status-def";
+import { definitionFor, type StatusDef, type StatusDefs, statusValues } from "./status-def";
 import { StatusBadge } from "./StatusBadge";
 
 /**
@@ -34,6 +34,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+/** A newer server supplied a value that this build does not yet recognize. */
+export const UnknownServerValue: Story = {
+	args: { def: definitionFor(OUTCOME_DEFS, "FUTURE_OUTCOME") },
+	play: ({ canvas }) => {
+		canvas.getByText("Unknown");
+	},
+};
 
 function Gallery<TValue extends string>({
 	heading,

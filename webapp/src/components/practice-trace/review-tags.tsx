@@ -1,4 +1,5 @@
 import { LayersIcon } from "lucide-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ReviewRef } from "@/api/types.gen";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -12,7 +13,7 @@ import { reviewOrdinalLabel } from "./review-groups";
  * started is the usual case, so it has no tag.
  */
 export function ReviewOriginTag({ origin }: { origin: Exclude<ReviewRef["origin"], "EVENT"> }) {
-	return <StatusBadge def={REVIEW_ORIGIN_DEFS[origin]} />;
+	return <StatusBadge def={definitionFor(REVIEW_ORIGIN_DEFS, origin)} />;
 }
 
 export function ReviewOrdinalTag({

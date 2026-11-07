@@ -1,10 +1,14 @@
 import { ChevronRight, Library } from "lucide-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { AdoptablePractice } from "@/components/admin/practices/catalog-adoption";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Section } from "@/components/layout/Section";
-import { CATALOG_AVAILABILITY_DEFS } from "@/components/practice-vocabulary/catalog-availability-defs";
+import {
+	UNKNOWN_CATALOG_AVAILABILITY_DEF,
+	CATALOG_AVAILABILITY_DEFS,
+} from "@/components/practice-vocabulary/catalog-availability-defs";
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
 import { buttonVariants } from "@/components/ui/button";
@@ -132,7 +136,11 @@ function reviewLabel(groupMissing: boolean, available: number, restorable: numbe
 }
 
 function PracticeRow({ practice }: { practice: AdoptablePractice }) {
-	const def = CATALOG_AVAILABILITY_DEFS[practice.availability];
+	const def = definitionFor(
+		CATALOG_AVAILABILITY_DEFS,
+		practice.availability,
+		UNKNOWN_CATALOG_AVAILABILITY_DEF,
+	);
 	// Both open as a drawer level, so the catalog never has to be left to look at something in it.
 	const link =
 		practice.availability === "ADOPTED" ? (

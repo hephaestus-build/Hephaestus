@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import { BrainCircuit, CircleHelpIcon } from "lucide-react";
 import { type ReactElement, type ReactNode, useId, useState } from "react";
+import { definitionFor, type StatusDef } from "@/components/common/status-def";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
 import type {
@@ -19,7 +20,7 @@ import { FOCUS_RING } from "@/components/common/focus";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { LoadState, PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import type { StatusDef } from "@/components/common/status-def";
+
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { AiMark } from "@/components/icons/AiMark";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
@@ -27,6 +28,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
 import {
+	UNKNOWN_AGENT_PURPOSE_DEF,
 	AGENT_PURPOSE_DEFS,
 	AGENT_PURPOSES,
 	type AgentPurpose,
@@ -682,7 +684,11 @@ function PurposeRow({
 }: PurposeRowProps) {
 	const titleId = useId();
 	const { purpose, bindings, off, status, cells, usedBy, unmet } = view;
-	const { title, description } = AGENT_PURPOSE_DEFS[purpose];
+	const { title, description } = definitionFor(
+		AGENT_PURPOSE_DEFS,
+		purpose,
+		UNKNOWN_AGENT_PURPOSE_DEF,
+	);
 	const servingModels = availableModels.filter((model) => model.purposes.includes(purpose));
 	const practiceScript = isPracticeScriptPurpose(purpose);
 	return (
@@ -783,7 +789,7 @@ function PurposeRow({
 }
 
 function unmetNeedSentence(purpose: AgentPurpose, unmet: UsedBy[]): string {
-	const { withArticle } = AGENT_PURPOSE_DEFS[purpose];
+	const { withArticle } = definitionFor(AGENT_PURPOSE_DEFS, purpose, UNKNOWN_AGENT_PURPOSE_DEF);
 	const members = tierMembersPhrase(unmet[0]?.unmetTiers ?? []);
 	const needs =
 		unmet.length === 1

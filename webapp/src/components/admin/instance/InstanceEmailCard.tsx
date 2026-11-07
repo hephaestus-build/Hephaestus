@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { MailIcon, SendIcon } from "lucide-react";
 import { type SubmitEvent, useId, useState } from "react";
 import { useSpinDelay } from "spin-delay";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { EmailTestResponse } from "@/api/types.gen";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -48,7 +49,7 @@ export function InstanceEmailCard({ isPending, result, onSendTest }: InstanceEma
 		onSendTest(trimmed === "" ? undefined : trimmed);
 	};
 
-	const def = result ? EMAIL_TEST_OUTCOME_DEFS[result.outcome] : undefined;
+	const def = result ? definitionFor(EMAIL_TEST_OUTCOME_DEFS, result.outcome) : undefined;
 
 	return (
 		<Card>

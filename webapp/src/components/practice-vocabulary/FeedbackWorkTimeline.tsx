@@ -2,7 +2,7 @@ import { type ComponentProps, Fragment, type ReactNode, useLayoutEffect, useRef 
 
 import { cn } from "cn";
 import { InlineLink } from "@/components/common/InlineLink";
-import { statusToneClass } from "@/components/common/status-def";
+import { definitionFor, statusToneClass } from "@/components/common/status-def";
 import { formatDay, formatShortDay } from "@/lib/dates";
 
 import { OUTCOME_DEFS, type Outcome } from "./outcome-defs";
@@ -203,7 +203,7 @@ export function FeedbackWorkTimeline({
 				{pieces.map((piece, index) => {
 					// The outcome's own icon in its own tone, as the profile and the admin pages draw it. Clean
 					// work before the feedback is muted: only the work since counts towards resolving it.
-					const def = OUTCOME_DEFS[piece.outcome];
+					const def = definitionFor(OUTCOME_DEFS, piece.outcome);
 					const Icon = def.icon;
 					const beforeFeedback = index < split;
 					return (

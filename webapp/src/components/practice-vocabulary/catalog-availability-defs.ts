@@ -1,8 +1,11 @@
 import { Check, CircleAlert, CirclePlus } from "lucide-react";
+import {
+	UNKNOWN_STATUS_DEF,
+	type StatusDef,
+	type StatusDefs,
+} from "@/components/common/status-def";
 
 import type { CatalogPracticeSummary } from "@/api/types.gen";
-
-import type { StatusDef, StatusDefs } from "@/components/common/status-def";
 
 export type CatalogAvailability = NonNullable<CatalogPracticeSummary["availability"]>;
 
@@ -19,6 +22,12 @@ export interface CatalogAvailabilityDef extends StatusDef {
 	 */
 	badged: boolean;
 }
+
+export const UNKNOWN_CATALOG_AVAILABILITY_DEF: CatalogAvailabilityDef = {
+	...UNKNOWN_STATUS_DEF,
+	action: "reload to check availability",
+	badged: true,
+};
 
 export const CATALOG_AVAILABILITY_DEFS: StatusDefs<CatalogAvailability> &
 	Record<CatalogAvailability, CatalogAvailabilityDef> = {

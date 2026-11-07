@@ -1,11 +1,16 @@
 import { cn } from "cn";
 import type { UserInfo } from "@/api/types.gen";
+import { definitionFor } from "@/components/common/status-def";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 
 import { ACTIVITY_TONES } from "./activity-tones";
 import { MemberAvatar } from "./MemberAvatar";
-import { REVIEWER_STATE_DEFS, type ReviewerState } from "./work-state-defs";
+import {
+	UNKNOWN_REVIEWER_STATE_DEF,
+	REVIEWER_STATE_DEFS,
+	type ReviewerState,
+} from "./work-state-defs";
 
 /** Primer's AvatarStack shows at most four faces; the rest are a count. */
 const SHOWN = 4;
@@ -26,7 +31,7 @@ export interface PeopleStackProps {
 function describe(person: StackedPerson): string {
 	return person.state === undefined
 		? person.user.name
-		: `${person.user.name} ${REVIEWER_STATE_DEFS[person.state].label}`;
+		: `${person.user.name} ${definitionFor(REVIEWER_STATE_DEFS, person.state, UNKNOWN_REVIEWER_STATE_DEF).label}`;
 }
 
 /**
@@ -40,7 +45,10 @@ export function PeopleStack({ people, providerType, "aria-label": label }: Peopl
 	return (
 		<ul aria-label={label} className="flex shrink-0 items-center gap-1.5">
 			{shown.map((person) => {
-				const def = person.state === undefined ? undefined : REVIEWER_STATE_DEFS[person.state];
+				const def =
+					person.state === undefined
+						? undefined
+						: definitionFor(REVIEWER_STATE_DEFS, person.state, UNKNOWN_REVIEWER_STATE_DEF);
 				const StateIcon = def?.icon(providerType);
 				return (
 					<li key={person.user.id} className="flex">

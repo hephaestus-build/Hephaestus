@@ -1,4 +1,5 @@
 import { ScanSearchIcon } from "lucide-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ReviewResult } from "@/api/types.gen";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -110,7 +111,7 @@ function actionabilityRank(result: ReviewResult): string {
 	if (result.outcome === "NOT_MET") {
 		return result.severity === null
 			? OUTCOME_DEFS.NOT_MET.label
-			: `${OUTCOME_DEFS.NOT_MET.label} · ${SEVERITY_DEFS[result.severity].label}`;
+			: `${OUTCOME_DEFS.NOT_MET.label} · ${definitionFor(SEVERITY_DEFS, result.severity).label}`;
 	}
 	if (result.outcome === "MET") {
 		return OUTCOME_DEFS.MET.label;
@@ -160,7 +161,7 @@ export interface ResultRowProps {
 function costlySeverity(result: ReviewResult) {
 	return result.outcome === "NOT_MET" &&
 		(result.severity === "CRITICAL" || result.severity === "MAJOR")
-		? SEVERITY_DEFS[result.severity]
+		? definitionFor(SEVERITY_DEFS, result.severity)
 		: undefined;
 }
 

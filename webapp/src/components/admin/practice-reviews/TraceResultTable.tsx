@@ -1,8 +1,9 @@
 import { ChevronRightIcon } from "lucide-react";
+import { definitionFor, type BadgeVariant } from "@/components/common/status-def";
 
 import { cn } from "cn";
 import type { ProblemSummary, ReviewLineage } from "@/api/types.gen";
-import type { BadgeVariant } from "@/components/common/status-def";
+
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import { Button } from "@/components/ui/button";
@@ -232,7 +233,7 @@ function ResultsHead({
 function worstTone(results: readonly LineageResult[]): BadgeVariant {
 	for (const outcome of ["NOT_MET", "MET", "COULD_NOT_DETERMINE", "DOES_NOT_APPLY"] as const) {
 		if (results.some((entry) => entry.outcome === outcome)) {
-			return OUTCOME_DEFS[outcome].badgeVariant;
+			return definitionFor(OUTCOME_DEFS, outcome).badgeVariant;
 		}
 	}
 	return "outline";
@@ -252,8 +253,10 @@ function ResultDot({ result, number }: { result: LineageResult; number: number }
 	const { open } = context;
 	// Dots need outcome words so color is not their only distinction.
 	const facts = [
-		OUTCOME_DEFS[result.outcome].label,
-		result.severity === null ? undefined : SEVERITY_DEFS[result.severity].label.toLowerCase(),
+		definitionFor(OUTCOME_DEFS, result.outcome).label,
+		result.severity === null
+			? undefined
+			: definitionFor(SEVERITY_DEFS, result.severity).label.toLowerCase(),
 	].filter(hasText);
 	const title = `${number} · ${facts.join(", ")}: ${resultSummary(result)}`;
 	if (open === undefined) {
@@ -304,8 +307,9 @@ function ResultRow({
 }) {
 	const { display, factsOpen, here } = useStory();
 	const { result, number } = entry;
-	const outcome = OUTCOME_DEFS[result.outcome];
-	const severity = result.severity === null ? undefined : SEVERITY_DEFS[result.severity];
+	const outcome = definitionFor(OUTCOME_DEFS, result.outcome);
+	const severity =
+		result.severity === null ? undefined : definitionFor(SEVERITY_DEFS, result.severity);
 	const earlier = review !== undefined && result.reviewId !== review;
 	const fed = fedLetters(result.id, records, letters);
 	return (
@@ -442,7 +446,7 @@ function TraceProblemList({
 			className="flex min-w-0 flex-col gap-0.5"
 		>
 			{problems.map((problem, index) => {
-				const severity = SEVERITY_DEFS[problem.severity];
+				const severity = definitionFor(SEVERITY_DEFS, problem.severity);
 				// Observations can share a summary, so each name says which one and which of its problems.
 				// The visible words lead (WCAG 2.5.3); which observation and problem follow.
 				const name = `${severity.label} ${problem.summary}: problem ${String(index + 1)} of observation ${String(number)}`;

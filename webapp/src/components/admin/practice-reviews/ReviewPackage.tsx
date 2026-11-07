@@ -1,4 +1,5 @@
 import { FileCode2Icon } from "lucide-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { FeedbackCopy, ReviewFeedbackDetail } from "@/api/types.gen";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
@@ -36,7 +37,7 @@ export function ReviewPackage({ feedback, defaultExpanded = false }: ReviewPacka
 			{summaries.map((summary) => (
 				<div key={summary.id} className="min-w-0 space-y-1.5">
 					<StatusLabel
-						def={FEEDBACK_COPY_STATE_DEFS[summary.state]}
+						def={definitionFor(FEEDBACK_COPY_STATE_DEFS, summary.state)}
 						className="text-xs text-muted-foreground"
 					/>
 					<FeedbackBody feedback={{ ...feedback, body: summary.body ?? feedback.body }} />
@@ -60,7 +61,7 @@ export function ReviewPackage({ feedback, defaultExpanded = false }: ReviewPacka
 											{noteAnchor(note)}
 										</span>
 										<StatusLabel
-											def={FEEDBACK_COPY_STATE_DEFS[note.state]}
+											def={definitionFor(FEEDBACK_COPY_STATE_DEFS, note.state)}
 											className="text-xs font-normal"
 										/>
 									</span>

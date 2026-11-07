@@ -1,5 +1,6 @@
 import { ArrowRightIcon, CircleSlashIcon, MessageSquareTextIcon, SparklesIcon } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { MemberReviewReadiness, ProfileReviewRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
@@ -152,7 +153,7 @@ function firstReviewSentences(review: ProfileReviewRef): string {
 	if (state === "CONTINUING") {
 		return `${progress ?? ""}. It continues with the rest. A slow AI provider can take several attempts.`;
 	}
-	const status = OWN_REVIEW_STATUS_DEFS[state].description;
+	const status = definitionFor(OWN_REVIEW_STATUS_DEFS, state).description;
 	return progress === undefined ? status : `${status} ${progress}.`;
 }
 

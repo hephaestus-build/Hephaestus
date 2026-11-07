@@ -1,5 +1,6 @@
 import { MessageSquarePlus } from "lucide-react";
 import { useId, useState } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { EditProductFeedbackDraft, MyProductFeedback } from "@/api/types.gen";
 import { FEEDBACK_KIND_DEFS } from "@/components/admin/product-feedback/feedback-kind-defs";
@@ -139,7 +140,7 @@ function MyProductFeedbackRow({
 	const id = useId();
 	const now = useNow();
 	const [editing, setEditing] = useState(false);
-	const kind = FEEDBACK_KIND_DEFS[report.kind];
+	const kind = definitionFor(FEEDBACK_KIND_DEFS, report.kind);
 	const busy = pending !== undefined;
 	const draft =
 		report.canEdit && hasText(report.draftTitle)
@@ -150,7 +151,7 @@ function MyProductFeedbackRow({
 		<Card>
 			<CardHeader className="flex flex-wrap items-center gap-x-3 gap-y-1">
 				{report.kind !== "FEEDBACK" && <StatusBadge def={kind} />}
-				<StatusBadge def={REPORT_STATE_DEFS[report.state]} />
+				<StatusBadge def={definitionFor(REPORT_STATE_DEFS, report.state)} />
 				<RelativeTime value={report.createdAt} className="text-sm text-muted-foreground" />
 			</CardHeader>
 			<CardContent className="flex flex-col gap-2">

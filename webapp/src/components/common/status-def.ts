@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import { CircleHelpIcon, type LucideIcon } from "lucide-react";
 
 import type { BrandIcon } from "@/components/icons/brand";
 
@@ -33,6 +33,28 @@ export type BadgeVariant =
  * rendering as a blank cell in production.
  */
 export type StatusDefs<TValue extends string> = Record<TValue, StatusDef>;
+
+export const UNKNOWN_STATUS_DEF: StatusDef = {
+	label: "Unknown",
+	icon: CircleHelpIcon,
+	badgeVariant: "outline",
+	description: "This version of Hephaestus does not recognize this value.",
+};
+
+export function definitionFor(defs: Readonly<Record<string, StatusDef>>, value: string): StatusDef;
+export function definitionFor<T, TFallback>(
+	defs: Readonly<Record<string, T>>,
+	value: string,
+	fallback: TFallback,
+): T | TFallback;
+/** A newer server can send a value that this build's generated union does not yet contain. */
+export function definitionFor<T, TFallback>(
+	defs: Readonly<Record<string, T>>,
+	value: string,
+	fallback: TFallback | StatusDef = UNKNOWN_STATUS_DEF,
+): T | TFallback | StatusDef {
+	return Object.hasOwn(defs, value) ? (defs[value] ?? fallback) : fallback;
+}
 
 /** Icon colour matching a badge variant, for the places an icon appears outside a badge. */
 const TONE_CLASS: Record<BadgeVariant, string> = {

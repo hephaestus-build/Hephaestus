@@ -1,6 +1,6 @@
 import type { FacetSource } from "@/components/common/FacetMultiSelect";
 import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
-import { statusFacetOptions } from "@/components/common/status-def";
+import { definitionFor, statusFacetOptions } from "@/components/common/status-def";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-state-defs";
 import { FEEDBACK_DESTINATION_DEFS } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { FEEDBACK_LOCATION_DEFS } from "@/components/practice-vocabulary/feedback-location-defs";
@@ -128,7 +128,7 @@ export function FeedbackFilters({
 					{search.location !== undefined && (
 						<ReferenceFilterPill
 							label="Where"
-							value={FEEDBACK_LOCATION_DEFS[search.location].label}
+							value={definitionFor(FEEDBACK_LOCATION_DEFS, search.location).label}
 							onClear={() => onPatch({ location: undefined })}
 						/>
 					)}

@@ -1,4 +1,5 @@
 import { cn } from "cn";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ReviewProblemDetail } from "@/api/types.gen";
 import type { PanelState } from "@/components/common/panel-state";
@@ -41,7 +42,7 @@ export function ProblemLevel({ nested, path, problem: state }: ProblemLevelProps
 			path={path}
 			kind="problem"
 			loading={state.status === "loading"}
-			chips={detail && <StatusBadge def={SEVERITY_DEFS[detail.severity]} />}
+			chips={detail && <StatusBadge def={definitionFor(SEVERITY_DEFS, detail.severity)} />}
 			title={detail?.summary}
 			description={detail && <ReviewItemLink item={detail.item} />}
 		/>

@@ -1,5 +1,6 @@
 import { CircleCheck } from "lucide-react";
 import { type ReactNode, useId } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ProductFeedbackCleanupAction, ProductFeedbackNeedsAction } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
@@ -142,7 +143,7 @@ function NeedsActionRow({
 		<li className="flex flex-wrap items-center justify-between gap-3 p-3 text-sm">
 			<div id={`${id}-summary`} className="flex min-w-0 flex-col gap-1">
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-					<StatusBadge def={FEEDBACK_KIND_DEFS[item.kind]} />
+					<StatusBadge def={definitionFor(FEEDBACK_KIND_DEFS, item.kind)} />
 					<span className="text-muted-foreground">
 						Sent <RelativeTime value={item.createdAt} /> · stopped{" "}
 						<RelativeTime value={item.stoppedAt} />

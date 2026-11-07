@@ -6,8 +6,10 @@ import {
 	TriangleAlertIcon,
 } from "lucide-react";
 import type { AgentBinding } from "@/api/types.gen";
-import type { StatusDefs } from "@/components/common/status-def";
+import { definitionFor, type StatusDefs } from "@/components/common/status-def";
+
 import {
+	UNKNOWN_DATA_HANDLING_DEF,
 	DATA_HANDLING_DEFS,
 	DATA_HANDLING_TIERS,
 	type DataHandlingTier,
@@ -93,7 +95,7 @@ export function reviewReadinessDescription(readiness: ReviewReadinessState): str
 	const model =
 		tier === "UNDECLARED"
 			? "a review model is ready for members who have not chosen"
-			: `a review model declared as ${DATA_HANDLING_DEFS[tier].label} is ready`;
+			: `a review model declared as ${definitionFor(DATA_HANDLING_DEFS, tier, UNKNOWN_DATA_HANDLING_DEF).label} is ready`;
 	return `Practice reviews are on and ${model}. Each developer’s AI choice still decides whether it runs for them. Feedback mode decides separately where observations become feedback.`;
 }
 

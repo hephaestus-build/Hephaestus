@@ -1,14 +1,17 @@
 import { type MouseEvent, type ReactNode, useId } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { AvailableLlmModel } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { AiMark } from "@/components/icons/AiMark";
 import {
+	UNKNOWN_AGENT_PURPOSE_DEF,
 	AGENT_PURPOSE_DEFS,
 	type AgentPurpose,
 	isPracticeScriptPurpose,
 } from "@/components/practice-vocabulary/agent-purpose-defs";
 import {
+	UNKNOWN_DATA_HANDLING_DEF,
 	DATA_HANDLING_DEFS,
 	type DataHandlingTier,
 } from "@/components/practice-vocabulary/data-handling-defs";
@@ -97,7 +100,11 @@ export function listedModels<TModel extends Pick<AvailableLlmModel, "dataHandlin
 
 /** The option's words in the order it shows them (WCAG 2.5.3). */
 function optionLabel(model: AvailableLlmModel): string {
-	const tier = DATA_HANDLING_DEFS[model.dataHandlingTier].label;
+	const tier = definitionFor(
+		DATA_HANDLING_DEFS,
+		model.dataHandlingTier,
+		UNKNOWN_DATA_HANDLING_DEF,
+	).label;
 	return `${model.displayName} ${priceLabel(model, "workspace")} ${model.connectionDisplayName} ${tier}`;
 }
 
@@ -126,7 +133,7 @@ function purposeHint(
 	if (!isPracticeScriptPurpose(purpose)) {
 		return undefined;
 	}
-	const { noun } = AGENT_PURPOSE_DEFS[purpose];
+	const { noun } = definitionFor(AGENT_PURPOSE_DEFS, purpose, UNKNOWN_AGENT_PURPOSE_DEF);
 	if (availableModels.length === 0) {
 		if (!ownProviderAllowed) {
 			return `No ${noun} yet. Ask an instance admin to share one.`;

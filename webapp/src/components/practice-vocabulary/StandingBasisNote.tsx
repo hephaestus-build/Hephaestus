@@ -1,3 +1,4 @@
+import { definitionFor } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 
 import { isEarlierBasis, STANDING_BASIS_DEFS, type StandingBasis } from "./standing-basis-defs";
@@ -16,5 +17,5 @@ export function StandingBasisNote({ basis }: StandingBasisNoteProps) {
 	if (!isEarlierBasis(basis)) {
 		return null;
 	}
-	return <StatusBadge wrap def={STANDING_BASIS_DEFS[basis]} />;
+	return <StatusBadge wrap def={definitionFor(STANDING_BASIS_DEFS, basis)} />;
 }

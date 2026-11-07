@@ -1,5 +1,6 @@
 import { AlertCircle } from "lucide-react";
 import type { PracticeReviewSettings, UpdatePracticeReviewSettingsRequest } from "@/api/types.gen";
+import { definitionFor } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { WORKSPACE_DELIVERY_STATUS_DEFS } from "@/components/practice-vocabulary/workspace-delivery-status-defs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -59,7 +60,9 @@ export function FeedbackSendingSettings({
 					<FieldContent>
 						<div className="flex flex-wrap items-center gap-2">
 							<FieldLabel htmlFor="policy-delivery-active">Send feedback</FieldLabel>
-							<StatusBadge def={WORKSPACE_DELIVERY_STATUS_DEFS[settings.deliveryStatus]} />
+							<StatusBadge
+								def={definitionFor(WORKSPACE_DELIVERY_STATUS_DEFS, settings.deliveryStatus)}
+							/>
 						</div>
 						<FieldDescription>
 							Pause all comments and feedback from Hephaestus without stopping reviews or changing

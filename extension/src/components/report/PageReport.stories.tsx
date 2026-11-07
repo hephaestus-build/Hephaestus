@@ -251,7 +251,7 @@ export const ValuesFromANewerServer: Story = {
 		await expect(canvas.getByRole("list", { name: "Comments for you" })).toBeVisible();
 		await expect(canvas.getByText("A comment on this work")).toBeVisible();
 		await expect(canvas.queryByText("Summary comment")).toBeNull();
-		await expect(canvas.getByText(/Unknown \(PARTLY_MET\)/u)).toBeVisible();
+		await expect(canvas.getByText("Unknown", { exact: true })).toBeVisible();
 	},
 };
 

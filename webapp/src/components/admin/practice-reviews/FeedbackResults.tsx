@@ -2,7 +2,7 @@ import { MessageSquareTextIcon } from "lucide-react";
 
 import { cn } from "cn";
 import type { ReviewFeedback } from "@/api/types.gen";
-import { statusToneClass } from "@/components/common/status-def";
+import { definitionFor, statusToneClass } from "@/components/common/status-def";
 import { useNow } from "@/components/common/use-now";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { ReviewItemCell } from "@/components/practice-trace/ReviewDayTable";
@@ -98,7 +98,7 @@ export interface FeedbackRowProps {
 }
 
 export function feedbackRowName(feedback: ReviewFeedback): string {
-	const location = FEEDBACK_LOCATION_DEFS[feedback.location].label.toLowerCase();
+	const location = definitionFor(FEEDBACK_LOCATION_DEFS, feedback.location).label.toLowerCase();
 	const on = feedback.item === null ? "" : ` on ${feedback.item.label}`;
 	return `for ${developerLabel(feedback.developer)}${on}, ${location}`;
 }
@@ -114,7 +114,7 @@ export function FeedbackRow({ feedback }: FeedbackRowProps) {
 		withdrawal === undefined
 			? delivery.label
 			: `${delivery.label}, ${withdrawal.label.toLowerCase()}`;
-	const location = FEEDBACK_LOCATION_DEFS[feedback.location];
+	const location = definitionFor(FEEDBACK_LOCATION_DEFS, feedback.location);
 	const LocationIcon = location.icon;
 	return (
 		<PracticeTableRow
@@ -159,7 +159,7 @@ export function FeedbackRow({ feedback }: FeedbackRowProps) {
 					{feedback.state === "WITHHELD" && feedback.stopReason !== null && (
 						<span title={withholdingReasonSentence(feedback.stopReason)}>
 							<StatusLabel
-								def={WITHHOLDING_FAMILY_DEFS[withholdingFamily(feedback.stopReason)]}
+								def={definitionFor(WITHHOLDING_FAMILY_DEFS, withholdingFamily(feedback.stopReason))}
 								className="text-xs text-muted-foreground"
 							/>
 						</span>

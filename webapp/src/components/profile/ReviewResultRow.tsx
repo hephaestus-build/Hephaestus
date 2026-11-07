@@ -11,7 +11,7 @@ import type {
 } from "@/api/types.gen";
 import { FOCUS_RING, FOCUS_RING_INSET } from "@/components/common/focus";
 import { SectionLabel } from "@/components/common/SectionLabel";
-import { statusToneClass } from "@/components/common/status-def";
+import { definitionFor, statusToneClass } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { ProblemList } from "@/components/practice-problems/ProblemList";
@@ -188,7 +188,7 @@ export function ReviewResultRow({
 	selected = false,
 	matched = false,
 }: ReviewResultRowProps) {
-	const outcome = OUTCOME_DEFS[result.outcome];
+	const outcome = definitionFor(OUTCOME_DEFS, result.outcome);
 	const OutcomeIcon = outcome.icon;
 	const note = claimCurrentnessNote(result.currentness);
 	const markedIncorrect = result.markedIncorrectAt !== null;

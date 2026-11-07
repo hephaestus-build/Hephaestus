@@ -1,4 +1,5 @@
 import { ListChecksIcon } from "lucide-react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ScanPracticeReport } from "@/api/types.gen";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -73,7 +74,7 @@ export function ScanPracticeTable({ practices, progress }: ScanPracticeTableProp
 							</span>
 						</TableCell>
 						<TableCell>
-							<StatusBadge def={REVIEW_PRACTICE_STATUS_DEFS[practice.status]} />
+							<StatusBadge def={definitionFor(REVIEW_PRACTICE_STATUS_DEFS, practice.status)} />
 							{practice.status === "WITHHELD" && (
 								<span className="mt-1 block text-xs text-muted-foreground">
 									{withheldSentence(practice.reason)}
@@ -82,8 +83,8 @@ export function ScanPracticeTable({ practices, progress }: ScanPracticeTableProp
 						</TableCell>
 						<TableCell>
 							<StatusBadge
-								def={SCAN_COMPARISON_DEFS[practice.comparison]}
-								title={SCAN_COMPARISON_DEFS[practice.comparison].description}
+								def={definitionFor(SCAN_COMPARISON_DEFS, practice.comparison)}
+								title={definitionFor(SCAN_COMPARISON_DEFS, practice.comparison).description}
 							/>
 						</TableCell>
 						<TableCell numeric>

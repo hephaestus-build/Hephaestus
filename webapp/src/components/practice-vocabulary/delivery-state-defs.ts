@@ -12,10 +12,9 @@ import {
 	UserRoundIcon,
 	XCircleIcon,
 } from "lucide-react";
+import { definitionFor, type StatusDef, type StatusDefs } from "@/components/common/status-def";
 
 import type { ReviewFeedback } from "@/api/types.gen";
-
-import type { StatusDef, StatusDefs } from "@/components/common/status-def";
 
 import { FEEDBACK_DECISION_DEFS } from "./feedback-decision-defs";
 
@@ -153,7 +152,7 @@ export function deliveryOutcome(feedback: DeliveryFacts): StatusDef {
 	// Withdrawn, it keeps this outcome and gains the withdrawal mark, as delivered feedback does.
 	if (isPartialDelivery(feedback)) {
 		return {
-			...DELIVERY_STATE_DEFS[state],
+			...definitionFor(DELIVERY_STATE_DEFS, state),
 			label: "Partly delivered",
 			description: partialDeliveryDescription(feedback),
 		};
@@ -178,7 +177,7 @@ export function deliveryOutcome(feedback: DeliveryFacts): StatusDef {
 	if (state === "READY") {
 		return destination === "PRACTICE_PAGE" ? PRACTICE_PAGE_READY : ON_WORK_READY;
 	}
-	return DELIVERY_STATE_DEFS[state];
+	return definitionFor(DELIVERY_STATE_DEFS, state);
 }
 
 /**

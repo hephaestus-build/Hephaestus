@@ -1,5 +1,6 @@
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ReviewDetail, ReviewLineage } from "@/api/types.gen";
 import { useNow } from "@/components/common/use-now";
@@ -445,7 +446,7 @@ function TraceFilterSelect({
 		// all the results it shows.
 		...outcomes.map(({ outcome, count }) => ({
 			value: traceFilterValue({ kind: "outcome", outcome }),
-			label: `Only ${OUTCOME_DEFS[outcome].label.toLowerCase()} (${String(count)})`,
+			label: `Only ${definitionFor(OUTCOME_DEFS, outcome).label.toLowerCase()} (${String(count)})`,
 		})),
 		...practices.map((practice) => ({
 			value: traceFilterValue({ kind: "practice", practiceSlug: practice.slug }),

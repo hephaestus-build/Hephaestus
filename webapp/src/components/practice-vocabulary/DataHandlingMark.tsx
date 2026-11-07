@@ -1,6 +1,11 @@
 import { cn } from "cn";
+import { definitionFor } from "@/components/common/status-def";
 
-import { DATA_HANDLING_DEFS, type DataHandlingTier } from "./data-handling-defs";
+import {
+	UNKNOWN_DATA_HANDLING_DEF,
+	DATA_HANDLING_DEFS,
+	type DataHandlingTier,
+} from "./data-handling-defs";
 
 export interface DataHandlingMarkProps {
 	tier: DataHandlingTier;
@@ -13,7 +18,11 @@ export interface DataHandlingMarkProps {
 }
 
 export function DataHandlingMark({ tier, label = "sr-only", className }: DataHandlingMarkProps) {
-	const { icon: Icon, label: name } = DATA_HANDLING_DEFS[tier];
+	const { icon: Icon, label: name } = definitionFor(
+		DATA_HANDLING_DEFS,
+		tier,
+		UNKNOWN_DATA_HANDLING_DEF,
+	);
 	return (
 		<span className={cn("inline-flex min-w-0 items-center gap-1 text-muted-foreground", className)}>
 			<Icon className="size-3.5 shrink-0" aria-hidden />

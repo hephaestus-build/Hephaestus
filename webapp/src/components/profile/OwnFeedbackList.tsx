@@ -5,7 +5,7 @@ import { InlineLink } from "@/components/common/InlineLink";
 import { ResponseButton, toneOf } from "@/components/common/ResponseButton";
 import { ResponseCommentBand } from "@/components/common/ResponseCommentBand";
 import { SectionLabel } from "@/components/common/SectionLabel";
-import { statusValues } from "@/components/common/status-def";
+import { definitionFor, statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	isPartialDelivery,
@@ -16,7 +16,10 @@ import {
 	FEEDBACK_RESOLUTION_DEFS,
 	type FeedbackResolution,
 } from "@/components/practice-vocabulary/feedback-resolution-defs";
-import { FEEDBACK_USEFULNESS_DEFS } from "@/components/practice-vocabulary/feedback-usefulness-defs";
+import {
+	UNKNOWN_USEFULNESS_DEF,
+	FEEDBACK_USEFULNESS_DEFS,
+} from "@/components/practice-vocabulary/feedback-usefulness-defs";
 import { Button } from "@/components/ui/button";
 import { formatShortDay } from "@/lib/dates";
 import { hasText } from "@/lib/text";
@@ -43,7 +46,7 @@ export function OwnFeedbackList({ feedback: given, responses }: OwnFeedbackListP
 			{feedback.map((piece) => (
 				<li key={piece.id} className="flex min-w-0 flex-col gap-2.5">
 					<p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-						<StatusBadge def={FEEDBACK_DESTINATION_DEFS[piece.destination]} />
+						<StatusBadge def={definitionFor(FEEDBACK_DESTINATION_DEFS, piece.destination)} />
 						{piece.deliveredAt !== null && (
 							<span>
 								{isPartialDelivery(piece) ? "First appeared" : "Delivered"}{" "}
@@ -128,7 +131,10 @@ function FeedbackResponse({ feedback, responses }: FeedbackResponseProps) {
 		setPendingResolution(undefined);
 		write({ resolution: pendingResolution, comment });
 	};
-	const destination = FEEDBACK_DESTINATION_DEFS[feedback.destination].label.toLowerCase();
+	const destination = definitionFor(
+		FEEDBACK_DESTINATION_DEFS,
+		feedback.destination,
+	).label.toLowerCase();
 	return (
 		<div className="flex min-w-0 flex-col gap-2.5">
 			<SectionLabel as="span" className="font-normal">
@@ -174,7 +180,13 @@ function FeedbackResponse({ feedback, responses }: FeedbackResponseProps) {
 			{(current.usefulness !== undefined || hasText(current.comment)) && (
 				<p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 					{current.usefulness !== undefined && (
-						<StatusBadge def={FEEDBACK_USEFULNESS_DEFS[current.usefulness]} />
+						<StatusBadge
+							def={definitionFor(
+								FEEDBACK_USEFULNESS_DEFS,
+								current.usefulness,
+								UNKNOWN_USEFULNESS_DEF,
+							)}
+						/>
 					)}
 					{hasText(current.comment) && <q>{current.comment}</q>}
 				</p>

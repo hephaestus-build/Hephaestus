@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Settings2 } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { definitionFor } from "@/components/common/status-def";
 import { usePasskeySettings } from "@/hooks/use-passkey-settings";
 import { toast } from "@/lib/toast";
 
@@ -76,7 +77,7 @@ function WorkspaceSettingsPage() {
 	const testEmailMutation = useMutation({
 		...adminSendTestEmailMutation(),
 		onSuccess: (data) => {
-			const def = EMAIL_TEST_OUTCOME_DEFS[data.outcome];
+			const def = definitionFor(EMAIL_TEST_OUTCOME_DEFS, data.outcome);
 			if (data.outcome === "SENT") {
 				toast.success(`The mail server accepted the test email to ${data.to ?? "your address"}.`);
 			} else {

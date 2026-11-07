@@ -1,3 +1,4 @@
+import { definitionFor } from "@/components/common/status-def";
 import { OWN_REVIEW_STATUS_DEFS } from "@/components/practice-vocabulary/review-status-defs";
 
 import { formatRelative } from "~/components/common/format";
@@ -62,7 +63,7 @@ export function reviewedVersion(context: Pick<ReadyContext, "trace">): string | 
 export function unfinishedReview(context: Pick<ReadyContext, "trace">): string | undefined {
 	const status = context.trace?.review.status;
 	return status === "PARTIAL" || status === "FAILED"
-		? `review ${OWN_REVIEW_STATUS_DEFS[status].label.toLowerCase()}`
+		? `review ${definitionFor(OWN_REVIEW_STATUS_DEFS, status).label.toLowerCase()}`
 		: undefined;
 }
 
@@ -133,7 +134,7 @@ export function summarizeReport({
 	const parts: string[] = [];
 	let tone: ReportSummary["tone"] = "neutral";
 	if (activity !== undefined) {
-		parts.push(`Review ${OWN_REVIEW_STATUS_DEFS[activity].label.toLowerCase()}`);
+		parts.push(`Review ${definitionFor(OWN_REVIEW_STATUS_DEFS, activity).label.toLowerCase()}`);
 	}
 	if (feedback?.status === "error") {
 		parts.push("We could not load your comments");

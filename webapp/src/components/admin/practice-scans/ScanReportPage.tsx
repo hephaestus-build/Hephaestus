@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { AlertCircleIcon, ArrowLeftIcon, DownloadIcon, InfoIcon, OctagonXIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import type { ScanDetail, ScanReport, ScanReportItem, ScanReportProblem } from "@/api/types.gen";
 import {
@@ -173,7 +174,7 @@ function LoadedReport({
 							{repositoryName(scan.repository)}
 						</h1>
 						<p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-							<StatusBadge def={REVIEW_STATUS_DEFS[scan.status]} />
+							<StatusBadge def={definitionFor(REVIEW_STATUS_DEFS, scan.status)} />
 							<span>
 								{scan.ref}
 								<span className="font-mono"> · {shortVersion(scan.itemVersion)}</span>
@@ -335,7 +336,9 @@ function StoppedNote({ scan, nothingCounted }: { scan: ScanDetail; nothingCounte
 	return (
 		<Alert variant={failed ? "destructive" : "warning"}>
 			<AlertCircleIcon />
-			<AlertTitle>{failed ? "Scan failed" : REVIEW_STATUS_DEFS[scan.status].label}</AlertTitle>
+			<AlertTitle>
+				{failed ? "Scan failed" : definitionFor(REVIEW_STATUS_DEFS, scan.status).label}
+			</AlertTitle>
 			<AlertDescription>
 				{nothingCounted
 					? `The scan stopped before it reviewed any file.${reason} Nothing here says the code is clean. Start a new scan to try again.`
@@ -365,8 +368,8 @@ function ReportNotes({
 	progress: ScanProgress;
 	nothingCounted: boolean;
 }) {
-	const comparison = SCAN_COMPARISON_DEFS[report.comparison];
-	const guard = REMOVAL_GUARD_DEFS[report.removalGuard.state];
+	const comparison = definitionFor(SCAN_COMPARISON_DEFS, report.comparison);
+	const guard = definitionFor(REMOVAL_GUARD_DEFS, report.removalGuard.state);
 	const stopped = progress === "stopped";
 	// Both notes speak of an earlier scan: what it covered, and its files missing now. With none,
 	// neither is true, and the stopped scan's own note already says what its counts cover and why.
@@ -379,7 +382,9 @@ function ReportNotes({
 	return (
 		<div className="space-y-3">
 			{progress === "active" && (
-				<Note title={REVIEW_STATUS_DEFS[scan.status].label}>{progressSentence(scan)}</Note>
+				<Note title={definitionFor(REVIEW_STATUS_DEFS, scan.status).label}>
+					{progressSentence(scan)}
+				</Note>
 			)}
 			{stopped && <StoppedNote scan={scan} nothingCounted={nothingCounted} />}
 			{showComparison && <Note title={comparison.label}>{comparison.description}</Note>}

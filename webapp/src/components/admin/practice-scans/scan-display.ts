@@ -1,5 +1,6 @@
 import type { ItemRef, ScanSummary } from "@/api/types.gen";
 import { accountName } from "@/components/admin/users/account-labels";
+import { definitionFor } from "@/components/common/status-def";
 import { REVIEW_ORIGIN_DEFS } from "@/components/practice-vocabulary/review-origin-defs";
 import {
 	isActiveReview,
@@ -32,7 +33,7 @@ export function countedNothing(scan: Pick<ScanSummary, "status" | "counts">): bo
 
 export function scanStartedBy(scan: Pick<ScanSummary, "requestedBy" | "origin">): string {
 	return scan.requestedBy === null
-		? REVIEW_ORIGIN_DEFS[scan.origin].label
+		? definitionFor(REVIEW_ORIGIN_DEFS, scan.origin).label
 		: accountName(scan.requestedBy);
 }
 

@@ -15,10 +15,9 @@ import {
 	SplitIcon,
 	WrenchIcon,
 } from "lucide-react";
+import { definitionFor, type StatusDef, type StatusDefs } from "@/components/common/status-def";
 
 import type { RemovalGuard, ScanReport } from "@/api/types.gen";
-
-import type { StatusDef, StatusDefs } from "@/components/common/status-def";
 
 // Compare scan problems against the preceding scan; absence alone establishes no fix.
 export type ProblemBaselineState = "NEW" | "UNCHANGED" | "UPDATED" | "ABSENT";
@@ -80,7 +79,7 @@ export function baselineDef(
 ): StatusDef {
 	return state === "ABSENT" && absentReason === "REPAIRED"
 		? NOW_MET_DEF
-		: SCAN_BASELINE_DEFS[state];
+		: definitionFor(SCAN_BASELINE_DEFS, state);
 }
 
 export const METHOD_CHANGED_SENTENCE =

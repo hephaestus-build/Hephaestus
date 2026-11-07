@@ -1,5 +1,6 @@
 import { BadgeCheckIcon, CircleSlashIcon, Undo2Icon } from "lucide-react";
 import type { ReactNode } from "react";
+import { definitionFor } from "@/components/common/status-def";
 
 import { cn } from "cn";
 import type {
@@ -173,9 +174,11 @@ export function ResultLevel({
 							)}
 							<ReviewFact label="Started by">
 								<span className="space-y-0.5">
-									<span className="block">{REVIEW_ORIGIN_DEFS[record.origin].label}</span>
+									<span className="block">
+										{definitionFor(REVIEW_ORIGIN_DEFS, record.origin).label}
+									</span>
 									<span className="block text-muted-foreground">
-										{REVIEW_ORIGIN_DEFS[record.origin].description}
+										{definitionFor(REVIEW_ORIGIN_DEFS, record.origin).description}
 									</span>
 								</span>
 							</ReviewFact>
@@ -312,7 +315,7 @@ function ResultFeedback({ feedback }: { feedback: readonly ReviewBoundFeedback[]
 	return (
 		<ul aria-label="Feedback written from this observation" className="flex min-w-0 flex-col gap-2">
 			{feedback.map((entry) => {
-				const destination = FEEDBACK_DESTINATION_DEFS[entry.destination].label;
+				const destination = definitionFor(FEEDBACK_DESTINATION_DEFS, entry.destination).label;
 				// The bound record carries no stop reason, so a refined state reads as its base state.
 				const facts = { ...entry, stopReason: null };
 				const delivery = deliveryOutcome(facts);
@@ -348,7 +351,10 @@ export function resultHistory(result: ReviewResultDetail): SheetEvent[] {
 	const DisagreedIcon = DISAGREEMENT_DEFS.DISAGREED.icon;
 	const events: SheetEvent[] = [{ key: "recorded", at: result.recordedAt, title: "Recorded" }];
 	for (const disagreement of result.disagreements) {
-		const destination = FEEDBACK_DESTINATION_DEFS[disagreement.destination].label.toLowerCase();
+		const destination = definitionFor(
+			FEEDBACK_DESTINATION_DEFS,
+			disagreement.destination,
+		).label.toLowerCase();
 		events.push({
 			key: `disagreed-${disagreement.feedbackId}`,
 			at: disagreement.respondedAt,
@@ -365,7 +371,7 @@ export function resultHistory(result: ReviewResultDetail): SheetEvent[] {
 		events.push({
 			key: mark.id,
 			at: mark.createdAt,
-			title: RESULT_MARK_DEFS[mark.kind].label,
+			title: definitionFor(RESULT_MARK_DEFS, mark.kind).label,
 			by: actorName(mark.createdBy),
 			detail: `Reason: “${mark.reason}”`,
 		});

@@ -1,9 +1,9 @@
 import { ArrowDownWideNarrowIcon, ChartScatterIcon, ListChecksIcon, SplitIcon } from "lucide-react";
 import { type ComponentType, createElement } from "react";
+import { UNKNOWN_STATUS_DEF, definitionFor, statusValues } from "@/components/common/status-def";
 
 import type { AgentBinding } from "@/api/types.gen";
 import { HephaestusMark } from "@/components/brand/HephaestusMark";
-import { statusValues } from "@/components/common/status-def";
 
 export type AgentPurpose = AgentBinding["purpose"];
 
@@ -35,6 +35,17 @@ interface AgentPurposeDef {
 	 */
 	tone: string;
 }
+
+export const UNKNOWN_AGENT_PURPOSE_DEF: AgentPurposeDef = {
+	title: "Unknown model purpose",
+	short: "Unknown",
+	noun: "model for an unknown purpose",
+	withArticle: "an unknown model purpose",
+	description: UNKNOWN_STATUS_DEF.description,
+	practiceScript: false,
+	icon: UNKNOWN_STATUS_DEF.icon,
+	tone: "text-muted-foreground",
+};
 
 // Agent purposes are model kinds, so their registry has no status tone.
 export const AGENT_PURPOSE_DEFS = {
@@ -101,9 +112,9 @@ export function isAgentPurpose(value: string): value is AgentPurpose {
 }
 
 export function isPracticeScriptPurpose(purpose: AgentPurpose): boolean {
-	return AGENT_PURPOSE_DEFS[purpose].practiceScript;
+	return definitionFor(AGENT_PURPOSE_DEFS, purpose, UNKNOWN_AGENT_PURPOSE_DEF).practiceScript;
 }
 
 export function assignModelLabel(purpose: AgentPurpose): string {
-	return `Assign ${AGENT_PURPOSE_DEFS[purpose].withArticle}`;
+	return `Assign ${definitionFor(AGENT_PURPOSE_DEFS, purpose, UNKNOWN_AGENT_PURPOSE_DEF).withArticle}`;
 }

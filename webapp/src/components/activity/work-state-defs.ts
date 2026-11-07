@@ -1,4 +1,5 @@
 import {
+	QuestionIcon,
 	CheckIcon,
 	CommentDiscussionIcon,
 	DotFillIcon,
@@ -36,6 +37,12 @@ interface ReviewerStateDef {
 	/** Where the review stands, after the reviewer's name: "Bob Brenner approved". */
 	label: string;
 }
+
+export const UNKNOWN_REVIEWER_STATE_DEF: ReviewerStateDef = {
+	icon: () => QuestionIcon,
+	tone: "muted",
+	label: "has an unknown review state",
+};
 
 /**
  * Where each reviewer of an open pull request stands, as GitHub's sidebar and GitLab's reviewer
