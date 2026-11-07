@@ -284,6 +284,9 @@ springdoc:
     paths-to-exclude: /internal/**
 
 hephaestus:
+    commit-identity-resolution:
+        enabled: ${HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_ENABLED:false}
+        batch-size: ${HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_BATCH_SIZE:50}
     scm:
         egress:
             private-hosts: ${HEPHAESTUS_SCM_EGRESS_PRIVATE_HOSTS:}

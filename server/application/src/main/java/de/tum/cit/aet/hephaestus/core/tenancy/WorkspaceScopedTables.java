@@ -109,6 +109,8 @@ public class WorkspaceScopedTables {
             // ECB daily reference rates for display-only currency conversion; not a
             // tenant's property
             "fx_rate",
+            // numeric record of corrected commit links; it spans workspaces like the shared rows it corrects
+            "commit_identity_change",
             // Liquibase machinery
             "databasechangelog",
             "databasechangeloglock");
@@ -121,6 +123,7 @@ public class WorkspaceScopedTables {
     public static final Set<String> MIRROR_TABLES = Set.of(
             "commit_contributor",
             "commit_file_change",
+            "commit_identity_resolution",
             "commit_pull_request",
             "git_commit",
             "issue",

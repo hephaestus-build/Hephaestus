@@ -490,8 +490,24 @@ It logs a count and no personal values.
 
 Earlier releases could set a commit's author or contributor without an answer from the provider.
 Person export and erasure follow those values, so they can reach a commit that the person did not write, or miss one that they did.
-This limit stays until a later release reads these values from the provider again.
+On GitHub, the commit link correction job reads these values from the provider again when an administrator enables it.
+The limit stays on GitLab until a later release does the same.
 GitLab gives no answer for an email that appears in no merge request, so that value will stay.
+
+The commit link correction job overwrites `git_commit.author_id`, `git_commit.committer_id`, and `commit_contributor.user_id` with GitHub's answer for an email on a repository.
+If GitHub says that no account owns the email, the job clears these values.
+A later sync does not restore them from a stored email.
+A new commit with that email can still link through an email stored on exactly one user.
+If GitHub gives no answer, the job changes nothing.
+
+The job never links an erased person.
+Person export and erasure follow the new values from then on, and earlier exports are not recalled.
+
+`commit_identity_resolution` holds the job's queue. It points at a commit and holds no email.
+`commit_identity_change` holds one row for each changed link: the column, the row id, the old and new user ids, the outcome, and the time.
+It holds numbers and fixed labels only, so an administrator can undo a wrong correction from it.
+Person export includes the rows that name the person, and erasure deletes them.
+The server deletes a row after 90 days, whether the job is enabled or not.
 
 The conversation store holds no data from releases before it. The upgrade that added it deleted
 every earlier conversation, including the Hephaestus copies of Slack DMs. Slack keeps its own
