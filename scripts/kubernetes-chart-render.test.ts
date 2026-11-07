@@ -3741,6 +3741,26 @@ await test("without an explicit max_connections the database gets what the role 
 	);
 });
 
+await test("restore configuration preserves max_connections while application roles are paused", () => {
+	const base = [prepared, operator, reviews, { worker: { enabled: true } }];
+	const source = maxConnections(base);
+	assert.ok(typeof source === "string");
+	const paused = {
+		migration: { enabled: false },
+		server: { replicas: 0 },
+		webhook: { replicas: 0 },
+		worker: { replicas: 0 },
+	};
+	assert.equal(maxConnections([...base, paused]), "max_connections=100");
+	const preserved = {
+		postgresql: {
+			parameters: { max_connections: Number(source.slice("max_connections=".length)) },
+		},
+	};
+	assert.equal(maxConnections([...base, paused, preserved]), source);
+	assert.equal(maxConnections([...base, preserved]), source);
+});
+
 await test("the small database holds one worker surge and rejects pools beyond the connection budget", () => {
 	const base = [prepared, profile("small"), operator, reviews];
 	assert.ok(render([...base, { worker: { rolloutStrategy: "RollingUpdate" } }]).ok);

@@ -24,7 +24,11 @@ on:
         type: string
         required: true
       queue:
-        description: Whether to run the lowest minor on amd64 and arm64, kind with Calico and the backup drill too; a pull request runs the latest k3s alone
+        description: Whether to run the lowest minor on amd64 and arm64 and kind with Calico; a pull request runs the latest k3s alone
+        type: boolean
+        default: false
+      backup-drill:
+        description: Qualify replacement-storage recovery on the latest amd64 leg
         type: boolean
         default: false
       application-artifact:
@@ -159,9 +163,9 @@ jobs:
           echo "Live sandbox kernel: $(uname -r)" >> "$GITHUB_STEP_SUMMARY"
           node scripts/kubernetes-cluster.ts live --packaged
       # k3s gives Pods 10.42.0.0/16, where the drill's S3 server runs.
-      # On the latest minor, amd64, in the queue.
+      # Nightly and relevant pull requests opt in; merge groups keep the destructive drill off their path.
       - name: Back up, then restore to a point in time
-        if: ${{ inputs.queue && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        if: ${{ inputs.backup-drill && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
         run: node scripts/kubernetes-cluster.ts backup-drill --work "$RUNNER_TEMP/kubernetes-cluster" --pod-cidr 10.42.0.0/16
       - name: Verify kubelet memory eviction order on a disposable node
         if: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' }}

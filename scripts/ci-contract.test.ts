@@ -5680,7 +5680,11 @@ function clusterMatrix(queue: boolean) {
 }
 
 /** Evaluates a `ci-kubernetes.yml` expression for one leg and one value of the `queue` input. */
-function evaluateLeg(source: unknown, queue: boolean, leg: Record<string, string> = {}): string {
+function evaluateLeg(
+	source: unknown,
+	queue: boolean,
+	leg: Record<string, string | boolean> = {},
+): string {
 	const parsed = new Parser(
 		new Lexer(String(source).replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "")).lex().tokens,
 		["inputs"],
@@ -5691,7 +5695,7 @@ function evaluateLeg(source: unknown, queue: boolean, leg: Record<string, string
 	return new Evaluator(parsed, context).evaluate().coerceString();
 }
 
-void test("a pull request runs the chart and the latest k3s on amd64; the queue adds the floor on both architectures, kind and the drill", async () => {
+void test("a pull request runs the chart and the latest k3s on amd64; the queue adds the floor on both architectures and kind", async () => {
 	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
 	const cicd = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 	const queue = String(cicd.getIn(["jobs", "Kubernetes-chart", "with", "queue"]));
@@ -5757,21 +5761,12 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 	);
 
 	const minors = ["1.35", "1.37"];
-	const steps = kubernetes.getIn(["jobs", "k3d", "steps"]);
-	assert.ok(isSeq(steps));
-	const drill = steps.items.find(
-		(item) => isMap(item) && item.get("name") === "Back up, then restore to a point in time",
-	);
-	assert.ok(isMap(drill));
 	const legs = (tier: boolean) =>
 		clusterMatrix(tier)
 			.include.filter((leg) => leg.leg === "k3d")
-			.map(
-				(leg) =>
-					`${leg.minor} ${leg.arch}${evaluateLeg(drill.get("if"), tier, { minor: leg.minor, arch: leg.arch }) === "true" ? " drill" : ""}`,
-			);
+			.map((leg) => `${leg.minor} ${leg.arch}`);
 	assert.deepEqual(legs(false), ["1.37 amd64"]);
-	assert.deepEqual(legs(true), ["1.35 amd64", "1.35 arm64", "1.37 amd64 drill"]);
+	assert.deepEqual(legs(true), ["1.35 amd64", "1.35 arm64", "1.37 amd64"]);
 	assert.equal(
 		clusterMatrix(false).include.some((leg) => leg.leg === "calico"),
 		false,
@@ -5799,6 +5794,73 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 	assert.match(
 		String(lintStep.get("run")),
 		new RegExp(`for version in ${versions.join(" ").replaceAll(".", String.raw`\.`)}; do`, "u"),
+	);
+});
+
+void test("replacement-storage recovery runs nightly and on relevant pull requests, never in the merge queue", async () => {
+	const source = await readFile(".github/workflows/cicd.yml", "utf8");
+	const cicd = parseDocument(source);
+	const nightly = parseDocument(await readFile(".github/workflows/kubernetes-nightly.yml", "utf8"));
+	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
+	const recoveryPatterns: unknown = parseDocument(pathFilter(source, "kubernetes-recovery")).get(
+		"kubernetes-recovery",
+	);
+	assert.ok(isSeq(recoveryPatterns));
+	const patterns = asArray(recoveryPatterns.toJSON(), "recovery paths").map((entry) =>
+		asString(entry, "path"),
+	);
+	const selector = asString(
+		cicd.getIn(["jobs", "detect-changes", "outputs", "kubernetes-recovery"]),
+		"recovery selector",
+	);
+	const input = cicd.getIn(["jobs", "Kubernetes", "with", "backup-drill"]);
+	const drill = namedStep(kubernetes, ["jobs", "k3d"], "Back up, then restore to a point in time");
+	for (const [file, relevant] of [
+		["deploy/chart/hephaestus/templates/postgresql-backup.yaml", true],
+		["deploy/chart/hephaestus/templates/networkpolicy.yaml", true],
+		["docker/postgres/Dockerfile", true],
+		["scripts/kubernetes-cluster.ts", true],
+		[".github/workflows/ci-kubernetes.yml", true],
+		[".github/workflows/kubernetes-nightly.yml", true],
+		[".github/workflows/cicd.yml", false],
+		["webapp/src/routes/index.tsx", false],
+		["server/application/src/main/java/example/Service.java", false],
+		["docs/admin/backup-restore.mdx", false],
+	] as const) {
+		const changed = String(patterns.some((pattern) => minimatch(file, pattern)));
+		assert.equal(changed, String(relevant), file);
+		for (const event of ["pull_request", "merge_group", "push", "workflow_dispatch"]) {
+			const selected = evaluateTierOutput(selector, event, {
+				filter: { "kubernetes-recovery": changed },
+			});
+			const enabled = expandExpressions(input, {
+				needs: { "detect-changes": { outputs: { "kubernetes-recovery": selected } } },
+			});
+			assert.equal(enabled, String(relevant && event === "pull_request"), `${event}: ${file}`);
+			assert.equal(
+				evaluateLeg(drill.get("if"), event === "merge_group", {
+					minor: "1.37",
+					arch: "amd64",
+					"backup-drill": enabled === "true",
+				}),
+				enabled,
+			);
+		}
+	}
+	const enabled = nightly.getIn(["jobs", "Kubernetes", "with", "backup-drill"]);
+	assert.equal(enabled, true);
+	assert.deepEqual(
+		clusterMatrix(true)
+			.include.filter((leg) => leg.leg === "k3d")
+			.filter(
+				(leg) => evaluateLeg(drill.get("if"), true, { ...leg, "backup-drill": enabled }) === "true",
+			)
+			.map((leg) => `${leg.minor} ${leg.arch}`),
+		["1.37 amd64"],
+	);
+	assert.equal(
+		kubernetes.getIn(["on", "workflow_call", "inputs", "backup-drill", "default"]),
+		false,
 	);
 });
 

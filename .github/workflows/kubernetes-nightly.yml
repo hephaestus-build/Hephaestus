@@ -66,6 +66,7 @@ jobs:
       minor: ${{ matrix.minor }}
       arch: ${{ matrix.arch }}
       queue: ${{ needs.Kubernetes-chart.outputs.queue == 'true' }}
+      backup-drill: true
       commit: ${{ needs.build.outputs.commit }}
       ref: ${{ needs.build.outputs.commit }}
 
