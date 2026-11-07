@@ -201,6 +201,7 @@ interface TaskEnvelope {
 /** The server sets every one of these; a missing one stops the runner before it does any work. */
 /** A pinned file that the loop could not prove. A failed read is not a statement about the file. */
 const UNREADABLE = Symbol("unreadable");
+const TOO_LARGE = Symbol("too large");
 
 /** The most bytes of a pinned file that the loop reads: what one `exec` streams. */
 const MAX_PINNED_BYTES = LIMITS.execStreamBytes;
@@ -1370,7 +1371,7 @@ export async function runReviewJob(): Promise<void> {
 
 	async function citedContent(
 		citation: Citation,
-	): Promise<string | typeof BINARY | typeof UNREADABLE | null> {
+	): Promise<string | typeof BINARY | typeof UNREADABLE | typeof TOO_LARGE | null> {
 		if (citation.sourceKind === TREE_SOURCE) {
 			if (citation.commit === undefined) {
 				return readCheckoutFile(citation.path, citationRepository(citation));
@@ -1383,8 +1384,11 @@ export async function runReviewJob(): Promise<void> {
 				citation.path,
 				MAX_PINNED_BYTES,
 			);
-			if (blob.kind === "unreadable" || blob.kind === "tooLarge") {
+			if (blob.kind === "unreadable") {
 				return UNREADABLE;
+			}
+			if (blob.kind === "tooLarge") {
+				return TOO_LARGE;
 			}
 			return blob.kind === "regular" ? asText(blob.bytes) : null;
 		}
@@ -1396,13 +1400,20 @@ export async function runReviewJob(): Promise<void> {
 
 	function resolveCited(
 		citation: Citation,
-		content: string | typeof BINARY | typeof UNREADABLE | null,
+		content: string | typeof BINARY | typeof UNREADABLE | typeof TOO_LARGE | null,
 	): ReturnType<typeof resolveOnEitherSide> {
 		if (content === UNREADABLE) {
 			return {
 				mismatch:
 					`the checkout's history could not be read at commit ${citation.commit ?? "HEAD"}. ` +
 					"That says nothing about the file. Cite the checked-out text or a captured record instead",
+			};
+		}
+		if (content === TOO_LARGE) {
+			return {
+				mismatch:
+					`that file is larger than a review reads at commit ${citation.commit ?? "HEAD"}. ` +
+					"Cite the checked-out text or a captured record instead",
 			};
 		}
 		if (content === null) {

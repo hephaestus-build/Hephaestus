@@ -1044,6 +1044,25 @@ void describe("a program that does not stop when the host stops it", { concurren
 		assert.equal(outcome.candidate, undefined);
 	});
 
+	void test("a program that answers its abort keeps the host's reason for a lost side", async () => {
+		const cancel = new AbortController();
+		const ws = await workspace({
+			rethrows: program(
+				"definePracticeScript",
+				"{ meta: {}, async run(ctx) { await ctx.review(); return null; } }",
+			),
+		});
+		const { outcome } = await run(ws, "rethrows", {
+			signal: cancel.signal,
+			review: async () => {
+				cancel.abort(new UnratedError("unavailable", "the tools side stopped"));
+				return REVIEWED;
+			},
+		});
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "unavailable");
+	});
+
 	void test("a built-in review that answers after its deadline supplies no candidate", async () => {
 		const ws = await workspace({ builtin: null });
 		const { outcome } = await run(ws, "builtin", {

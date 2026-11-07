@@ -291,6 +291,8 @@ export async function runCustomProgram(
 		AbortSignal.timeout(Math.max(0, job.deadline - Date.now())),
 	]);
 	let aborted: AbortReason | undefined;
+	/** Why the host stopped the program. The program hears only `aborted`, which has no word for a lost side. */
+	let hostStop: StopReason | undefined;
 	const open = new Map<number, OpenRequest>();
 	let lastRequestId = -1;
 	const outstanding = new Map<OpenRequest, Promise<void>>();
@@ -324,6 +326,7 @@ export async function runCustomProgram(
 			return;
 		}
 		aborted = reason;
+		hostStop = stopReason;
 		settled = {
 			failure: { stopReason, error: `the host stopped this program: ${stopReason}` },
 		};
@@ -615,7 +618,7 @@ export async function runCustomProgram(
 				const reason = message.reason ?? (meta === undefined ? "invalid-program" : "error");
 				settled = {
 					failure: {
-						stopReason: aborted ?? reason,
+						stopReason: hostStop ?? reason,
 						error: cut(message.message),
 					},
 				};
@@ -693,7 +696,7 @@ export async function runCustomProgram(
 	if (limit.reached || aborted !== undefined) {
 		return done({
 			failure: {
-				stopReason: aborted ?? "deadline",
+				stopReason: hostStop ?? "deadline",
 				error: "the program did not return before its deadline",
 			},
 		});

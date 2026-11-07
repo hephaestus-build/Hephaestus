@@ -1455,6 +1455,7 @@ The probe checks these items on the running cluster:
 - A Pod with the labels of a review sandbox reaches the worker's gateway port, directly and through a Service.
   It does not reach the worker's management port, the Kubernetes API, or the cluster DNS server.
 - A Pod of no sandbox kind reaches the gateway port by neither route. Turn sandboxes have the same policy.
+- The user of a review's `tools` container reaches the gateway port by neither route, though the Pod's policy admits it.
 - The probe Pods have no service account token, a read-only root filesystem, and a non-root user.
 - A named RuntimeClass exists: without it, no probe Pod runs.
 - A Pod with `hostUsers: false` has a private user mapping. A RuntimeClass does not replace this requirement.
@@ -1471,7 +1472,7 @@ A Pod that reaches a node but cannot start with the sandbox configuration fails 
 A later probe whose Pods cannot start, because the sandbox quota is full or the nodes have no room, proves nothing.
 The same is true when the worker cannot resolve the name of its gateway probe Service.
 The worker logs a warning and keeps its last passing proof.
-A Pod that the sandbox quota refuses delays that verdict by up to 2 minutes.
+A Pod that the sandbox quota refuses delays that verdict by up to 2 minutes, and up to 4 minutes when the tools probe that runs after it is refused too.
 
 The probe also records the runtime and process limit, which are optional:
 

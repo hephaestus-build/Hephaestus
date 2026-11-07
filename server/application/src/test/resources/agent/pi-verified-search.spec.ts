@@ -173,6 +173,10 @@ writeFileSync(
 	path.join(texts, "marked.cs"),
 	Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("using System;\n")]),
 );
+writeFileSync(
+	path.join(texts, "two-marks.txt"),
+	Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf, 0xff, 0xfe]), Buffer.from("hidden\n")]),
+);
 writeFileSync(path.join(texts, "cased.txt"), "ſecret\nσασ\n");
 writeFileSync(path.join(texts, "marks.txt"), "Ⓐ\u200Cx²\nnext\u0085line\nsep\u2028line\n");
 
@@ -187,6 +191,7 @@ const searches: [pattern: string, flags: readonly string[]][] = [
 	[String.raw`\S\s\S`, []],
 	["secret", ["--ignore-case", "--fixed-strings"]],
 	["ΣΑΣ", ["--ignore-case", "--fixed-strings"]],
+	["hidden", []],
 	["a.c", ["--fixed-strings"]],
 ];
 for (const [pattern, flags] of searches) {
@@ -239,6 +244,12 @@ for (const [pattern, flags] of searches) {
 			}
 		},
 	);
+}
+
+for (const pattern of ["(?-s:x.)$", "[^a&&b]", "[^a--b]", "[^a~~b]", String.raw`[^\P{Lu}]`]) {
+	void test(`a pattern that rg and the loop read apart proves nothing: ${pattern}`, async () => {
+		assert.deepEqual(await proveSearches(texts, [claim({ pattern })]), [false]);
+	});
 }
 
 void test("a match in .git is left out of the proof, as the loop leaves out .git", async () => {

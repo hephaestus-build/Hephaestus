@@ -63,6 +63,11 @@ jobs:
         if: inputs.leg == 'tooling' || inputs.leg == 'windows'
         uses: ./.github/actions/setup-helm
 
+      # test:agents compares the loop's search proof with the real rg, and skips that comparison without it.
+      - name: Install ripgrep
+        if: inputs.leg == 'tooling'
+        run: sudo apt-get update --quiet && sudo apt-get install --yes --no-install-recommends ripgrep
+
       # The extension's story tests run in Chromium.
       - name: Setup Playwright browsers
         if: inputs.leg == 'extension'

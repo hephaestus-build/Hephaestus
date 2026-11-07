@@ -56,6 +56,10 @@ function translated(pattern: string): string | null {
 	if (pattern.includes("[[:") || /\\[nr]/u.test(pattern.replaceAll(String.raw`\\`, ""))) {
 		return null;
 	}
+	// A flag inside the pattern can turn off what `matcherOf` set, and JavaScript reads it otherwise.
+	if (/\(\?[a-zA-Z-]+[:)]/u.test(pattern)) {
+		return null;
+	}
 	let out = "";
 	let inSet = false;
 	for (let at = 0; at < pattern.length; at += 1) {
@@ -63,11 +67,15 @@ function translated(pattern: string): string | null {
 		if (character === "\\") {
 			const next = pattern.charAt(at + 1);
 			at += 1;
-			if (inSet && (next === "W" || next === "D" || next === "S")) {
+			if (inSet && "WDSP".includes(next)) {
 				return null;
 			}
 			out += (inSet ? INSIDE_A_SET : OUTSIDE_A_SET)[next] ?? `\\${next}`;
 		} else {
+			// `rg` reads these as set operators, and JavaScript as members of the set.
+			if (inSet && ["&&", "--", "~~"].includes(pattern.slice(at, at + 2))) {
+				return null;
+			}
 			inSet = (inSet || character === "[") && character !== "]";
 			out += character;
 		}
@@ -116,15 +124,16 @@ const UTF8_MARK = Buffer.from([0xef, 0xbb, 0xbf]);
  * tools side could hide.
  */
 function textOf(file: Buffer): string | null {
-	const bytes = file.subarray(0, 3).equals(UTF8_MARK) ? file.subarray(3) : file;
-	if (bytes[0] === 0xff && bytes[1] === 0xfe) {
-		return bytes.toString("utf16le", 2);
+	if (file[0] === 0xff && file[1] === 0xfe) {
+		return file.toString("utf16le", 2);
 	}
-	if (bytes[0] === 0xfe && bytes[1] === 0xff) {
-		return Buffer.from(bytes.subarray(2, bytes.length - (bytes.length % 2)))
+	if (file[0] === 0xfe && file[1] === 0xff) {
+		return Buffer.from(file.subarray(2, file.length - (file.length % 2)))
 			.swap16()
 			.toString("utf16le");
 	}
+	// Only the first mark counts: after a UTF-8 mark, `rg` reads UTF-8 whatever follows.
+	const bytes = file.subarray(0, 3).equals(UTF8_MARK) ? file.subarray(3) : file;
 	const nul = bytes.indexOf(0);
 	if (nul === -1) {
 		return bytes.toString("utf8");
