@@ -58,6 +58,8 @@ const { values: options } = parseArgs({
 		memory: { type: "string", default: "3g" },
 		cpus: { type: "string", default: "1" },
 		"tool-calls": { type: "string" },
+		/** Whole-checkout searches that the stand-in model runs, comma-separated, before its reads. */
+		searches: { type: "string", default: "" },
 		"latency-ms": { type: "string", default: "1500" },
 		"work-seconds": { type: "string", default: "1500" },
 		"budget-seconds": { type: "string", default: "1200" },
@@ -71,6 +73,7 @@ const { values: options } = parseArgs({
 const stage = path.resolve(required(options.stage, "--stage"));
 const { image } = options;
 const reviews = positiveInteger(options.reviews, "--reviews");
+const searches = options.searches === "" ? [] : options.searches.split(",");
 const latencyMs = positiveInteger(options["latency-ms"], "--latency-ms");
 const workSeconds = positiveInteger(options["work-seconds"], "--work-seconds");
 const budgetSeconds = positiveInteger(options["budget-seconds"], "--budget-seconds");
@@ -235,6 +238,10 @@ function nextStep(
 		(m) => isRecord(m) && m.role === "assistant" && Array.isArray(m.tool_calls),
 	).length;
 	const has = (name: string) => tools.includes(name);
+	const search = searches[done - 1];
+	if (search !== undefined && has("grep")) {
+		return { name: "grep", args: { pattern: search, path: REPO } };
+	}
 	if (done < toolCalls && (has("read") || has("bash"))) {
 		const pick = repoFiles[(seed + done * 7) % Math.max(1, repoFiles.length)] ?? "README.md";
 		const commands = [
@@ -759,6 +766,12 @@ async function container(
 	return { exit, ms };
 }
 
+/** A stage from before the tools side has one container, which the benchmark runs as a baseline. */
+const hasSides = await stat(path.join(stage, "tool-client.ts")).then(
+	() => true,
+	() => false,
+);
+
 /** Whether the stage holds a custom program: a review then gets a program side, as the worker's Pod does. */
 async function stagesPrograms(): Promise<boolean> {
 	const practices = await readdir(path.join(stage, "work/practice-scripts/practices")).catch(
@@ -893,17 +906,19 @@ async function review(index: number): Promise<ReviewRun> {
 	if (init.exit === 0) {
 		const nonce = randomUUID();
 		const programs = await stagesPrograms();
-		const sides = [
-			await side(`review-${index}/tools`, `${runId}-${index}-tools`, {
-				uid: 1001,
-				role: "tools",
-				socketVolume: toolsSocket,
-				socket: "/run/tools/tools.sock",
-				nonce,
-				volumes,
-			}),
-		];
-		if (programs) {
+		const sides = hasSides
+			? [
+					await side(`review-${index}/tools`, `${runId}-${index}-tools`, {
+						uid: 1001,
+						role: "tools",
+						socketVolume: toolsSocket,
+						socket: "/run/tools/tools.sock",
+						nonce,
+						volumes,
+					}),
+				]
+			: [];
+		if (hasSides && programs) {
 			sides.push(
 				await side(`review-${index}/programs`, `${runId}-${index}-programs`, {
 					uid: 1002,
@@ -918,13 +933,17 @@ async function review(index: number): Promise<ReviewRun> {
 		runtime = await container(`review-${index}/runtime`, `${runId}-${index}-runtime`, [
 			...podFlags(`${runId}-${index}-runtime`, volumes, true),
 			...environment(sessionId),
-			"--mount",
-			`type=volume,src=${toolsSocket},dst=/run/tools,volume-nocopy`,
-			"--env",
-			"TOOLS_SOCKET=/run/tools/tools.sock",
-			"--env",
-			`TOOLS_NONCE=${nonce}`,
-			...(programs
+			...(hasSides
+				? [
+						"--mount",
+						`type=volume,src=${toolsSocket},dst=/run/tools,volume-nocopy`,
+						"--env",
+						"TOOLS_SOCKET=/run/tools/tools.sock",
+						"--env",
+						`TOOLS_NONCE=${nonce}`,
+					]
+				: []),
+			...(hasSides && programs
 				? [
 						"--mount",
 						`type=volume,src=${programsSocket},dst=/run/programs,volume-nocopy`,
@@ -945,6 +964,22 @@ async function review(index: number): Promise<ReviewRun> {
 			await stop();
 		}
 	}
+	// What the review left in `out/`: its result, its coverage and its reports.
+	await run("docker", [
+		"run",
+		"--rm",
+		"--user",
+		"0",
+		"-v",
+		`${volumes[DISK_VOLUMES.indexOf("/workspace/out")] ?? ""}:/out:ro`,
+		"-v",
+		`${path.resolve(work)}:/copy`,
+		"--entrypoint",
+		"sh",
+		image,
+		"-c",
+		`mkdir -p /copy/out-${String(index)} && cp -R /out/. /copy/out-${String(index)}/ && chmod -R a+rX /copy/out-${String(index)}`,
+	]).catch(() => undefined);
 	const disk: Record<string, number> = {};
 	const du = await output("docker", [
 		"run",
