@@ -27,8 +27,8 @@ For a security incident, follow [Security policy](https://github.com/hephaestus-
 
 1. Ask operators to use the [first-response controls](../admin/production-operations-runbook#first-response-and-kill-switch-map) for the observed symptom.
 2. Hold further Production promotion approvals.
-3. Pause automatic Staging promotions with **freeze** in [Release / Promote](../admin/pull-based-deployment#operating-it).
-4. Ask each affected operator to pause reconciliation with [Operating it](../admin/pull-based-deployment#operating-it).
+3. Ask each affected operator to pause reconciliation with [Operating it](../admin/pull-based-deployment#operating-it).
+4. Pause automatic Staging promotions with **freeze** in [Release / Promote](../admin/pull-based-deployment#operating-it).
 5. Record whether the release started a migration, changed stored data, or sent external feedback.
 6. Preserve the failed run's diagnostics and the signed locks of the installed and previous releases.
 7. Add a factual warning and recovery pointer to the affected release's public notes after the incident owner approves disclosure.
@@ -110,6 +110,8 @@ The operator's separate recovery checks establish their state.
 
 The operator restores normal feedback and network access only after the recovery checks pass.
 The [first-response controls](../admin/production-operations-runbook#first-response-and-kill-switch-map) own those reverse actions.
+
+After incident acceptance, the release maintainer lets Staging follow `main` again with [Operating it](../admin/pull-based-deployment#operating-it).
 
 Self-hosters outside the managed environments use their own channel and the [upgrade procedure](../admin/upgrade).
 **Release / Promote** selects only this repository's Staging or Production environment.
