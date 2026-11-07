@@ -16,6 +16,7 @@ import {
 	exactUtcTime,
 	needsComponentEvidence,
 } from "./check-release-vulnerabilities.ts";
+import { isCommit } from "./commit-image-lock.ts";
 import { asString, readJsonFileSync } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import {
@@ -538,7 +539,7 @@ export function verifyReleaseEvidence(
 		}
 	}
 	if (mode === "verify-signatures") {
-		verifyIndexSignatures(manifest, release);
+		verifyIndexSignatures(manifest, release, asString(manifestValue.commit, "release commit"));
 	}
 	return manifest;
 }
@@ -547,7 +548,10 @@ function readJsonFromCommand(name: string, args: string[]): unknown {
 	return JSON.parse(command(name, args, true)) as unknown;
 }
 
-function verifyIndexSignatures(manifest: Manifest, release: string): void {
+function verifyIndexSignatures(manifest: Manifest, release: string, commit: string): void {
+	if (!isCommit(commit)) {
+		throw new Error("release manifest must name a full source commit");
+	}
 	// The image indexes are signed by reusable-docker-build.yml in the repository that
 	// built them, which for a pre-transfer release is the pre-transfer slug.
 	const repository = releaseRepository(release, process.env);
@@ -586,6 +590,11 @@ function verifyIndexSignatures(manifest: Manifest, release: string): void {
 				owner,
 				"--signer-workflow",
 				`${repository}/.github/workflows/reusable-docker-build.yml`,
+				"--deny-self-hosted-runners",
+				"--source-digest",
+				commit,
+				"--predicate-type",
+				"https://slsa.dev/provenance/v1",
 			],
 			true,
 		);
