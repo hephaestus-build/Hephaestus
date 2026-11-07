@@ -87,7 +87,6 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
     void onInstallationSuspended_stillWritesStatusOnly() {
         adapter.onInstallationSuspended(INSTALLATION_ID);
 
-        verify(githubLifecycleListener).stopNatsForInstallation(INSTALLATION_ID);
         verify(githubLifecycleListener).updateWorkspaceStatus(INSTALLATION_ID, Workspace.WorkspaceStatus.SUSPENDED);
         verify(githubLifecycleListener, never()).purgeWorkspaceForInstallation(anyLong());
     }

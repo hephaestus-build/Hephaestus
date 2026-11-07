@@ -22,8 +22,11 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider.S
 import de.tum.cit.aet.hephaestus.integration.core.sync.activity.ConnectionActivityRecorder;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.nats.client.ConsumerContext;
+import io.nats.client.JetStreamApiException;
 import io.nats.client.Message;
 import io.nats.client.StreamContext;
+import io.nats.client.api.ConsumerConfiguration;
+import io.nats.client.api.ConsumerInfo;
 import io.nats.client.api.DeliverPolicy;
 import java.io.IOException;
 import java.time.Clock;
@@ -98,8 +101,9 @@ class IntegrationNatsConsumerTest {
         }
     }
 
-    @Test
-    void rolledBackPurgeRestartsConsumption() throws Exception {
+    @ParameterizedTest
+    @CsvSource({"false,false", "false,true", "true,false", "true,true"})
+    void shouldFenceAStopUntilItsTransactionCompletes(boolean purge, boolean rolledBack) throws Exception {
         CountDownLatch restarted = new CountDownLatch(1);
         IntegrationNatsConsumer consumer =
                 new IntegrationNatsConsumer(
@@ -127,12 +131,25 @@ class IntegrationNatsConsumerTest {
                 };
         TransactionSynchronizationManager.initSynchronization();
         try {
-            consumer.stopConsumingScopeForPurge(7L);
+            if (purge) consumer.stopConsumingScopeForPurge(7L);
+            else consumer.stopConsumingScope(7L);
+            assertThatThrownBy(() -> consumer.establishScopeConsumer(7L, "github"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("stopping");
             List<TransactionSynchronization> synchronizations = TransactionSynchronizationManager.getSynchronizations();
             TransactionSynchronizationManager.clearSynchronization();
-            synchronizations.forEach(s -> s.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
-
-            assertThat(restarted.await(2, TimeUnit.SECONDS)).isTrue();
+            synchronizations.forEach(s -> s.afterCompletion(
+                    rolledBack
+                            ? TransactionSynchronization.STATUS_ROLLED_BACK
+                            : TransactionSynchronization.STATUS_COMMITTED));
+            if (purge && !rolledBack) {
+                assertThatThrownBy(() -> consumer.establishScopeConsumer(7L, "github"))
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("stopping");
+            } else {
+                if (!rolledBack) consumer.startConsumingScope(7L);
+                assertThat(restarted.await(2, TimeUnit.SECONDS)).isTrue();
+            }
         } finally {
             if (TransactionSynchronizationManager.isSynchronizationActive()) {
                 TransactionSynchronizationManager.clearSynchronization();
@@ -624,11 +641,22 @@ class IntegrationNatsConsumerTest {
                 if (failingStreams.contains(subscription.streamName())) {
                     throw new IOException("stream not found: " + subscription.streamName());
                 }
+                ConsumerContext context = mock(ConsumerContext.class);
+                ConsumerInfo info = mock(ConsumerInfo.class);
+                try {
+                    when(context.getConsumerInfo()).thenReturn(info);
+                } catch (JetStreamApiException e) {
+                    throw new IOException(e);
+                }
+                when(info.getConsumerConfiguration())
+                        .thenReturn(ConsumerConfiguration.builder()
+                                .filterSubjects(subscription.subjects().toArray(String[]::new))
+                                .build());
                 ScopeConsumer scopeConsumer = new ScopeConsumer(
                         scopeId,
                         "heph-scope-" + scopeId + "-" + subscription.streamName(),
                         subscription.streamName(),
-                        mock(ConsumerContext.class),
+                        context,
                         mock(StreamContext.class),
                         subscription.subjects().toArray(String[]::new),
                         msg -> {});

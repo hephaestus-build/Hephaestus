@@ -389,7 +389,7 @@ public class IntegrationNatsConsumer {
         }
     }
 
-    /** Stops every consumer for the scope and waits until no handler or setup task is running. */
+    /** Stops the scope through transaction completion, waiting until no handler or setup task can write. */
     public void stopConsumingScope(Long scopeId) {
         stopConsumingScope(scopeId, false);
     }
@@ -442,18 +442,22 @@ public class IntegrationNatsConsumer {
             log.info("Stopped scope consumers: scopeId={}, count={}", scopeId, consumers.size());
             stopped = true;
         } finally {
-            if (!retainFenceOnCommit || !stopped) {
+            if (!stopped) {
                 stoppingScopes.remove(scopeId);
             } else if (TransactionSynchronizationManager.isSynchronizationActive()) {
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                     @Override
                     public void afterCompletion(int status) {
-                        if (status != TransactionSynchronization.STATUS_COMMITTED) {
+                        if (!retainFenceOnCommit || status != TransactionSynchronization.STATUS_COMMITTED) {
                             stoppingScopes.remove(scopeId);
+                        }
+                        if (status != TransactionSynchronization.STATUS_COMMITTED) {
                             startConsumingScope(scopeId);
                         }
                     }
                 });
+            } else if (!retainFenceOnCommit) {
+                stoppingScopes.remove(scopeId);
             }
         }
     }
@@ -481,7 +485,7 @@ public class IntegrationNatsConsumer {
     void reconcileScope(Long scopeId) throws IOException {
         Optional<NatsSubscriptionInfo> infoOpt = subscriptionProvider.getSubscriptionInfo(scopeId);
         if (infoOpt.isEmpty()) {
-            log.warn("No subscription info available: scopeId={}", scopeId);
+            log.debug("No subscription info available: scopeId={}", scopeId);
             return;
         }
         Map<String, StreamSubscription> desired = new LinkedHashMap<>();
@@ -506,8 +510,17 @@ public class IntegrationNatsConsumer {
                 }
                 kept.add(existing.streamName());
                 try {
+                    // A cached subscription can still look attached after the broker removes its durable.
+                    existing.installedSubjects();
                     existing.updateSubjects(want.subjects().toArray(String[]::new));
-                } catch (JetStreamApiException | IOException e) {
+                } catch (JetStreamApiException e) {
+                    if (e.getApiErrorCode() != 10014) {
+                        throw new IOException("Failed to update scope consumer for scopeId=" + scopeId, e);
+                    }
+                    existing.stop();
+                    next.remove(existing);
+                    kept.remove(existing.streamName());
+                } catch (IOException e) {
                     throw new IOException("Failed to update scope consumer for scopeId=" + scopeId, e);
                 }
             }
@@ -542,7 +555,7 @@ public class IntegrationNatsConsumer {
     private void commitScopeConsumers(Long scopeId, List<ScopeConsumer> consumers) {
         if (consumers.isEmpty()) {
             scopeConsumers.remove(scopeId);
-            log.info("Skipped scope consumer setup (no subjects): scopeId={}", scopeId);
+            log.debug("Skipped scope consumer setup (no subjects): scopeId={}", scopeId);
         } else {
             scopeConsumers.put(scopeId, List.copyOf(consumers));
         }

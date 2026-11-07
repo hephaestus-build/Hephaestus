@@ -539,6 +539,11 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             workspace = workspaceRepository.save(workspace);
         }
 
+        if (status == Workspace.WorkspaceStatus.SUSPENDED && shouldUseNats(workspace)) {
+            Long workspaceId = workspace.getId();
+            natsConsumerService.ifAvailable(svc -> svc.stopConsumingScope(workspaceId));
+        }
+
         if (status == Workspace.WorkspaceStatus.SUSPENDED || status == Workspace.WorkspaceStatus.ACTIVE) {
             long workspaceId = workspace.getId();
             connectionService

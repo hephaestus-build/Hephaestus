@@ -35,6 +35,7 @@ class ScheduledJobLockTest {
      */
     private static final Map<String, String> UNLOCKED = Map.ofEntries(
             Map.entry("AgentQueueHealthSampler#sample", "LOCAL"),
+            Map.entry("WorkspaceConsumerReconciler#reconcile", "LOCAL"),
             Map.entry("WalArchiveMonitor#sample", "LOCAL"),
             Map.entry("FeedbackDeliveryFreshness#sample", "LOCAL"),
             Map.entry("ReviewJobZombieSweeper#reapStaleRunningJobs", "ROW"),

@@ -198,7 +198,6 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
             return;
         }
 
-        githubLifecycleListener.stopNatsForInstallation(installationId);
         githubLifecycleListener.updateWorkspaceStatus(installationId, Workspace.WorkspaceStatus.SUSPENDED);
         log.info("Suspended installation: installationId={}", installationId);
     }
@@ -216,7 +215,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
                 .ifPresent(workspace -> {
                     Long workspaceId = workspace.getId();
                     afterCommit(() -> triggerInitialSync(installationId, workspaceId));
-                    githubLifecycleListener.startNatsForInstallation(installationId);
+                    afterCommit(() -> githubLifecycleListener.startNatsForInstallation(installationId));
                 });
 
         log.info("Activated installation: installationId={}", installationId);

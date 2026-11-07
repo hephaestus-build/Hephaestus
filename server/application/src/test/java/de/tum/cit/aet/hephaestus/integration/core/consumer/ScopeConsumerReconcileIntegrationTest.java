@@ -19,6 +19,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider.N
 import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider.StreamSubscription;
 import de.tum.cit.aet.hephaestus.integration.core.sync.activity.ConnectionActivityRecorder;
 import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceConsumerReconciler;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceQueryService;
 import io.nats.client.Connection;
 import io.nats.client.ConsumerContext;
 import io.nats.client.JetStreamApiException;
@@ -50,6 +52,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 /**
  * The consumer fleet against a real JetStream server when a repository is added to a scope while the
@@ -75,6 +79,7 @@ class ScopeConsumerReconcileIntegrationTest {
     private final BlockingQueue<String> handledSubjects = new LinkedBlockingQueue<>();
     private final CountDownLatch startReadSubscriptions = new CountDownLatch(1);
     private final CountDownLatch releaseStart = new CountDownLatch(1);
+    private final AtomicBoolean failNextMessage = new AtomicBoolean();
 
     private Connection natsConnection;
     private JetStreamManagement jsm;
@@ -114,6 +119,46 @@ class ScopeConsumerReconcileIntegrationTest {
         jsm.deleteStream(STREAM);
         jsm.deleteStream(OUTLINE_STREAM);
         natsConnection.close();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true,false", "true,true", "false,true"})
+    void shouldRecoverAScopeFromScheduledReconciliation(boolean fatalStop, boolean durableWasRemoved) throws Exception {
+        fleet.shutdown();
+        releaseStart.countDown();
+        afterNextSubscriptionRead.set(null);
+        var defaults = NatsConsumerPropertiesFixture.defaults();
+        fleet = connectedFleet(new NatsConsumerProperties(
+                Duration.ofMillis(100), defaults.reconnectDelay(), defaults.inactiveThreshold(), defaults.poison()));
+        var workspaces = mock(WorkspaceQueryService.class);
+        when(workspaces.findActiveIds()).thenReturn(List.of(SCOPE_ID));
+        var reconciliation = new WorkspaceConsumerReconciler(workspaces, fleet);
+        reconciliation.reconcile();
+        await().atMost(Duration.ofSeconds(10))
+                .until(() -> fleet.trackedConsumers(SCOPE_ID).stream().anyMatch(ScopeConsumer::isAttached));
+        var stopped = fleet.trackedConsumers(SCOPE_ID).getFirst();
+        String failed = "github.hephaestustest.demo-heph-e2e.issues.failed";
+        if (fatalStop) {
+            failNextMessage.set(true);
+            natsConnection.jetStream().publish(failed, new byte[0]);
+            await().atMost(Duration.ofSeconds(10)).until(() -> !stopped.isRunning());
+        }
+        if (durableWasRemoved) jsm.deleteConsumer(STREAM, stopped.consumerName());
+        String following = "github.hephaestustest.demo-heph-e2e.issues.following";
+        if (!durableWasRemoved) natsConnection.jetStream().publish(following, new byte[0]);
+
+        reconciliation.reconcile();
+        await().atMost(Duration.ofSeconds(10))
+                .until(() -> fleet.trackedConsumers(SCOPE_ID).stream()
+                        .anyMatch(candidate -> candidate.isAttached() && (!durableWasRemoved || candidate != stopped)));
+
+        if (durableWasRemoved) {
+            natsConnection.jetStream().publish(following, new byte[0]);
+        } else {
+            assertThat(handledSubjects.poll(10, SECONDS)).isEqualTo(failed);
+        }
+        assertThat(handledSubjects.poll(10, SECONDS)).isEqualTo(following);
+        assertThat(fleet.trackedConsumers(SCOPE_ID)).allMatch(ScopeConsumer::isAttached);
     }
 
     @Test
@@ -338,9 +383,13 @@ class ScopeConsumerReconcileIntegrationTest {
     }
 
     private IntegrationNatsConsumer connectedFleet() {
+        return connectedFleet(NatsConsumerPropertiesFixture.defaults());
+    }
+
+    private IntegrationNatsConsumer connectedFleet(NatsConsumerProperties properties) {
         IntegrationNatsConsumer consumer = new IntegrationNatsConsumer(
                 fleetProperties(),
-                NatsConsumerPropertiesFixture.defaults(),
+                properties,
                 this::subscriptionInfo,
                 dispatcher(),
                 mock(IntegrationPoisonHandler.class),
@@ -370,6 +419,7 @@ class ScopeConsumerReconcileIntegrationTest {
 
             @Override
             public void onMessage(Message msg) {
+                if (failNextMessage.getAndSet(false)) throw new InternalError("Synthetic fatal consumer failure");
                 handledSubjects.add(msg.getSubject());
             }
         };
