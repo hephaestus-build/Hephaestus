@@ -790,7 +790,7 @@ A chart test adds up what one node of 16 GiB holds, with backups on:
 
 | State | Memory | CPU requests |
 | --- | --- | --- |
-| Steady: every role, one backup, five reviews, the conversation host, two pooled turn sandboxes and 8 running turns | 12.9 GiB of 13.9 GiB | 1.90 of 3.5 |
+| Steady: every role, one backup, five reviews, the conversation host, eight active turn sandboxes and two pooled turn sandboxes | 12.9 GiB of 13.9 GiB | 1.90 of 3.5 |
 | The same, with the isolation probe | 13.5 GiB | — |
 | An upgrade. The old worker is gone. The webhook and webapp surge, with the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 12.3 GiB of 13.9 GiB | 2.40 of 3.5 |
 
@@ -800,8 +800,8 @@ It does not qualify the peak memory of running work.
 Sandbox Pods may use more than they request, up to their limits.
 If every sandbox Pod used its limit at the same time, the node would be full.
 
-A chart test derives the conversation turns of both single-node profiles.
-The result is 8, the worker's automatic number, as long as one more turn sandbox would still fit.
+Both single-node profiles set `worker.conversationTurns: auto`.
+With their default values, the chart derives 32 resident conversation turns for the one worker.
 
 An earlier staging capture recorded these values on one node of 16 GiB with k3s 1.37.
 Its request figures precede the PostgreSQL memory-request change:
@@ -1295,7 +1295,7 @@ The chart runs the workers as one Deployment:
   A practice review usually takes 10 to 16 minutes. An attempt that outlasts the drain is tried again.
 - A worker on a lost node is replaced after 60 seconds.
 - `AGENT_ENABLED=true` on the workers and the server, so that the server submits practice reviews and the workers run them. Without a worker, the server submits none.
-- `worker.sandbox.reviewMemory` sets the memory that the sandbox nodes give review Pods, 3840 MiB by default. The reviews that run at once are that memory over one review Pod's request and `worker.runtime.podOverhead`: 10 by default, five in `small.yaml`. Each worker runs as many of them as its memory limit holds, and the reviews quota holds them once. `worker.conversationTurns` sets the resident conversation turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, `auto` by default). Tools start on demand within the separate conversations quota ([Runtime roles § Conversation turn capacity](./runtime-roles#conversation-turn-capacity)). `small.yaml` resolves 32.
+- `worker.sandbox.reviewMemory` sets the memory that the sandbox nodes give review Pods, 3840 MiB by default. The reviews that run at once are that memory over one review Pod's request and `worker.runtime.podOverhead`: 10 by default, five in `small.yaml`. Each worker runs as many of them as its memory limit holds, and the reviews quota holds them once. `worker.conversationTurns` sets the resident conversation turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, eight by default). Tools start on demand within the separate conversations quota ([Runtime roles § Conversation turn capacity](./runtime-roles#conversation-turn-capacity)). The single-node profiles select `auto` ([Profiles](#profiles)).
 - The sandbox namespace and the Pod name and address from the Downward API ([Runtime roles § Sandbox runtime](./runtime-roles#sandbox-runtime)).
 - The existing gateway setting `SANDBOX_API_PORT`, with the value 8081.
 
