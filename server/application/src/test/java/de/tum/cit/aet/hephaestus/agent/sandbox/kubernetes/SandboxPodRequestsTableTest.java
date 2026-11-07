@@ -124,14 +124,21 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
     }
 
     /** What a quota charges for a Pod's request: its containers together, or its largest init container when more. */
+    /** A Pod's request as Kubernetes counts it: a native sidecar adds to everything that runs after it starts. */
     private static BigDecimal effective(Pod pod, String resource) {
         BigDecimal running = pod.getSpec().getContainers().stream()
                 .map(container -> request(container, resource))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal init = pod.getSpec().getInitContainers().stream()
-                .map(container -> request(container, resource))
-                .reduce(BigDecimal.ZERO, BigDecimal::max);
-        return running.max(init);
+        BigDecimal sidecars = BigDecimal.ZERO;
+        BigDecimal init = BigDecimal.ZERO;
+        for (var container : pod.getSpec().getInitContainers()) {
+            if ("Always".equals(container.getRestartPolicy())) {
+                sidecars = sidecars.add(request(container, resource));
+            } else {
+                init = init.max(sidecars.add(request(container, resource)));
+            }
+        }
+        return running.add(sidecars).max(init);
     }
 
     private static BigDecimal request(Container container, String resource) {
