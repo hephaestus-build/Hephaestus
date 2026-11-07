@@ -7,6 +7,9 @@ public final class ScmDomainEvent {
 
     private ScmDomainEvent() {}
 
+    /** Synchronous maintenance event. A failed derived correction must roll back the provider answer. */
+    public record CommitIdentityCorrected(long resolutionId) {}
+
     public sealed interface Event
             permits IssueEvent,
                     PullRequestEvent,

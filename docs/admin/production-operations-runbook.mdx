@@ -506,9 +506,23 @@ It is off by default. It asks about 50 emails every 5 minutes, and it stops when
 To undo a wrong correction, run one conditional `UPDATE` on the table and column named in `target`.
 Set the column to `old_user_id`, and match `id` to `row_id` and the column `IS NOT DISTINCT FROM new_user_id`.
 If the update changes no row, the link changed again, so leave it.
+
+After you restore an author link, restore matching `COMMIT_CREATED` Activity actors from that commit’s author.
+Match both the repository and commit ID. Change only actors `IS NOT DISTINCT FROM` the correction’s `new_user_id`.
+Leave an actor that changed again. Never restore an erased account.
+
+This restores Activity to the restored commit author, not to its earlier actor.
+A committer or contributor change does not change the commit Activity actor.
+An Activity correction with no changed commit link has no change record, so this table cannot undo it.
+
 To ask again after a provider outage, set `state` to `PENDING` and `attempts` to 0 on the `UNANSWERED` rows of `commit_identity_resolution`.
 
 GitLab repositories are not in the queue.
+
+If a local Activity correction fails, its source and queue result roll back together.
+The job counts one failed attempt as `retry`, then continues with other emails.
+After 5 failed attempts the row becomes `UNANSWERED`, which fires the existing unanswered alert.
+Read the `Commit identity correction failed` log for the queue ID and cause before you reset it.
 
 ## Un-deliver external feedback, then purge
 
