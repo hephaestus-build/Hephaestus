@@ -58,6 +58,8 @@ export function toolObjects(tools: ToolClient, repository: string): ObjectSource
 				(chunk) => {
 					chunks.push(chunk);
 				},
+				// A wait for a slot counts too: a citation's check must not outlast its session.
+				AbortSignal.timeout(OBJECT_TIMEOUT_MS),
 			);
 			return exit.code === 0 && !exit.truncated ? Buffer.concat(chunks) : null;
 		} catch {

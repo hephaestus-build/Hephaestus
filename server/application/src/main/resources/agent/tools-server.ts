@@ -555,7 +555,8 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		sweepTrash();
 	}
 
-	return createServer({ highWaterMark: LIMITS.bodyBytes, noDelay: true }, (socket: Socket) => {
+	const sockets = { highWaterMark: LIMITS.bodyBytes, noDelay: true };
+	const server = createServer(sockets, (socket: Socket) => {
 		const reader = frameReader();
 		/** The ids of this connection's requests that have not sent their final frame. */
 		const inFlight = new Set<string>();
@@ -1351,7 +1352,12 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		socket.on("error", () => {
 			socket.destroy();
 		});
-	}).listen(options.address, () => {
+	});
+	// A program can reach this socket: a second connection would let it start a program without its permission flags.
+	if (options.programsOnly === true) {
+		server.maxConnections = 1;
+	}
+	return server.listen(options.address, () => {
 		// The loop runs as another user of the Pod's group, and a Unix connect needs write access to the socket.
 		if ("path" in options.address) {
 			chmodSync(options.address.path, 0o660);

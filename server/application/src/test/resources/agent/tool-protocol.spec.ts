@@ -831,6 +831,18 @@ void test("a call past the in-flight bound waits for a slot, and its signal ends
 	);
 });
 
+void test("a call past the waiting bound fails as busy, and the calls before it run", async () => {
+	const calls = Array.from({ length: LIMITS.inFlight + LIMITS.waitingCalls + 1 }, async () =>
+		run("sleep 0.05"),
+	);
+	const outcomes = await Promise.allSettled(calls);
+	const refused = outcomes.filter(
+		(outcome): outcome is PromiseRejectedResult => outcome.status === "rejected",
+	);
+	assert.equal(refused.length, 1);
+	assert.ok(refusal("busy")(refused[0]?.reason));
+});
+
 void test("a call that waits for a slot ends when the connection closes", async () => {
 	const tools = await ToolClient.open(served, nonce);
 	const exec = async () =>

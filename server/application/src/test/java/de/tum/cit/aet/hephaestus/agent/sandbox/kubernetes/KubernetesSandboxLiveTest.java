@@ -485,7 +485,10 @@ class KubernetesSandboxLiveTest {
         Path program = Files.write(staging.resolve("a-practice.ts"), synthetic(64));
         var review = review(
                 UUID.randomUUID(),
-                "for i in $(seq 60); do [ -S /run/programs/programs.sock ] && exit 0; sleep 0.5; done; exit 9",
+                "for i in $(seq 60); do [ -S /run/programs/programs.sock ] && break; sleep 0.5; done; "
+                        + "node --input-type=module -e \"const { ToolClient } = await import('/opt/pi-sdk/tool-client.js');"
+                        + " const side = await ToolClient.open({ path: '/run/programs/programs.sock' },"
+                        + " process.env.TOOLS_NONCE); side.close();\"",
                 Map.of(),
                 limits(Duration.ofMinutes(5)),
                 Map.of(SandboxLayout.PRACTICE_SCRIPT_PRACTICES_PREFIX + "a-practice.ts", program));
@@ -493,7 +496,7 @@ class KubernetesSandboxLiveTest {
         SandboxResult result = reviews.execute(review);
 
         assertThat(result.exitCode())
-                .as("the loop sees the socket of the program side")
+                .as("the loop connects to the program side and it answers")
                 .isZero();
     }
 

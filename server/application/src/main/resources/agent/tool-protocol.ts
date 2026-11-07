@@ -14,6 +14,8 @@ export const LIMITS = {
 	bodyBytes: 1024 * 1024,
 	/** The most requests in flight on one connection: Pi runs parallel tool calls at once. */
 	inFlight: 8,
+	/** The most calls that wait for a slot of one connection: a steered model can start thousands at once. */
+	waitingCalls: 64,
 	/** The most output bytes streamed for one `exec`; the rest goes only to its spill file. */
 	execStreamBytes: 8 * 1024 * 1024,
 	/** The most output bytes streamed for one attempt, across all its calls. */

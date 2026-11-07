@@ -244,7 +244,9 @@ export async function runCustomProgram(
 		};
 	}
 	let report: SlotReport[] = [];
-	const readable = readableRoots([path.dirname(path.dirname(modulePath))]);
+	// Its own file and the toolkit: another practice's program and inputs stay out of reach.
+	const staged = path.dirname(path.dirname(modulePath));
+	const readable = readableRoots([modulePath, path.join(staged, "lib"), path.join(staged, "kits")]);
 	const child = services.start({
 		execArgv: [
 			"--permission",

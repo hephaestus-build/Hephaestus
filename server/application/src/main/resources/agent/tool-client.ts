@@ -91,6 +91,7 @@ export class ToolClient {
 	readonly #ending = new AbortController();
 	readonly #ended = Promise.withResolvers<Error>();
 	#slotFreed = Promise.withResolvers<undefined>();
+	#waiting = 0;
 	/** Calls that the loop gave up on: bounded by the calls it makes, a few per review. */
 	readonly #abandoned = new Set<string>();
 	#lastFrameAt = Date.now();
@@ -171,8 +172,19 @@ export class ToolClient {
 		signal?: AbortSignal,
 	): Promise<ExecExit> {
 		// The sessions of a review share this connection, so a burst of their calls waits for a slot and does not fail.
-		while (this.#closed === undefined && this.#pending.size >= LIMITS.inFlight) {
-			await this.#nextSlot(signal);
+		// Nothing may be awaited between the last check and `#request`, which takes the slot.
+		if (this.#full()) {
+			if (this.#waiting >= LIMITS.waitingCalls) {
+				throw new ToolProtocolError("busy", "Too many tool calls at once.");
+			}
+			this.#waiting += 1;
+			try {
+				while (this.#full()) {
+					await this.#nextSlot(signal);
+				}
+			} finally {
+				this.#waiting -= 1;
+			}
 		}
 		const id = randomUUID();
 		const requestHeader = { ...request, type: "exec", id };
@@ -308,6 +320,10 @@ export class ToolClient {
 		this.#pending.delete(id);
 		this.#slotFreed.resolve(undefined);
 		this.#slotFreed = Promise.withResolvers();
+	}
+
+	#full(): boolean {
+		return this.#closed === undefined && this.#pending.size >= LIMITS.inFlight;
 	}
 
 	/** Settles when a call ends, and rejects when `signal` stops the wait. */

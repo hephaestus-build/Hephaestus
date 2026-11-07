@@ -173,6 +173,8 @@ void test("the program side refuses everything but a program", async () => {
 	});
 	await once(programs, "listening");
 	const side = await ToolClient.open(address, nonce);
+	// A program can reach this socket: its second connection must not start a program of its own.
+	await assert.rejects(ToolClient.open(address, nonce));
 	const refused = { name: "ToolProtocolError", code: "unknown" };
 	try {
 		await assert.rejects(
