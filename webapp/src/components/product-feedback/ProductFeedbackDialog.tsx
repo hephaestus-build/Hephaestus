@@ -25,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { SEND_SHORTCUT_ARIA, SEND_SHORTCUT_LABEL } from "@/lib/keyboard-shortcuts";
+import { formatNumber } from "@/lib/numbers";
 import { hasText } from "@/lib/text";
 
 import { SHARING_COPY } from "./sharing-copy";
@@ -178,8 +179,7 @@ export function ProductFeedbackDialog({
 									aria-live="polite"
 									className="text-xs text-muted-foreground tabular-nums empty:sr-only"
 								>
-									{remaining <= COUNTER_THRESHOLD &&
-										`${remaining.toLocaleString()} characters left`}
+									{remaining <= COUNTER_THRESHOLD && `${formatNumber(remaining)} characters left`}
 								</span>
 								{messageInvalid && (
 									<FieldError id={`${id}-message-error`}>

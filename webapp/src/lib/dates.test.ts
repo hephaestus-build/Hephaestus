@@ -7,6 +7,8 @@ import {
 	formatCalendarDate,
 	formatDayRange,
 	formatDayTime,
+	formatDateTime,
+	formatShortDay,
 	formatWeekdayDay,
 	type Wire,
 } from "./dates";
@@ -163,5 +165,13 @@ describe("durationBetween", () => {
 		expect(durationBetween(from, to)).toBe("1 h 17 min");
 		expect(durationBetween(to, from)).toBe("1 h 17 min");
 		expect(durationBetween(from, from)).toBe("0 s");
+	});
+});
+
+describe("compact English labels", () => {
+	it("keeps September labels and the 12-hour clock consistent", () => {
+		const date = new Date(2026, 8, 5, 14, 3, 22);
+		expect(formatShortDay(date)).toBe("5 Sept");
+		expect(formatDateTime(date)).toBe("5 Sept 2026, 2:03:22 pm");
 	});
 });

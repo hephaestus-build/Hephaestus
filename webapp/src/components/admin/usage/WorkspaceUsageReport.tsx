@@ -20,6 +20,7 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { formatCapUsd, formatCostUsd } from "@/lib/money";
+import { formatNumber } from "@/lib/numbers";
 
 import { BudgetPaceAlert } from "./BudgetPaceAlert";
 import { CapIsNotMonthScoped } from "./CapIsNotMonthScoped";
@@ -140,7 +141,7 @@ export function WorkspaceUsageReport({
 				<AlertTitle>
 					{unpricedEventCount === 1
 						? "1 use has unavailable cost"
-						: `${unpricedEventCount.toLocaleString()} uses have unavailable cost`}
+						: `${formatNumber(unpricedEventCount)} uses have unavailable cost`}
 				</AlertTitle>
 				<AlertDescription>
 					<p>

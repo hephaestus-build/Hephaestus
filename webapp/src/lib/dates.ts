@@ -1,5 +1,21 @@
 import { format, isSameDay, isSameMonth, isSameYear } from "date-fns";
 
+export const DATE_LOCALE = "en-GB";
+
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat(DATE_LOCALE, {
+	day: "numeric",
+	month: "short",
+	year: "numeric",
+	hour: "numeric",
+	minute: "2-digit",
+	second: "2-digit",
+	hour12: true,
+});
+
+export function formatDateTime(date: Date): string {
+	return DATE_TIME_FORMAT.format(date);
+}
+
 export type DateLike = Date | string | undefined | null;
 
 /**
@@ -36,13 +52,13 @@ export type Wire<T> = T extends Date
 
 /**
  * The day and the time of day as the practice surfaces write them, in one home so a card, a
- * header and a timeline cannot each spell September their own way. date-fns rather than `Intl`,
- * whose en-GB short month is "Sept".
+ * header and a timeline use the same English, day-first convention. Date-fns supplies the
+ * prose formats, and Intl supplies compact labels with the shared locale.
  *
  * - `formatDay`, "9 September": a day named in prose.
  * - `formatDate`, "9 September 2026": a day that may lie in another year, such as when something
  *   was created.
- * - `formatShortDay`, "9 Sep": a day in a row of them, where the full month would widen the row
+ * - `formatShortDay`, "9 Sept": a day in a row of them, where the full month would widen the row
  *   past its words.
  * - `formatDayTime`, "9 September, 2:10 pm", and `formatTime`, "2:10 pm": the moment a run
  *   happened, the hour written the English way rather than on a 24-hour clock; `formatDayTime`
@@ -71,15 +87,15 @@ const UTC_DATE_FIELDS = {
 	year: "numeric",
 	timeZone: "UTC",
 } as const;
-const UTC_DATE_FORMAT = new Intl.DateTimeFormat("en-GB", UTC_DATE_FIELDS);
-const UTC_SHORT_DAY_FORMAT = new Intl.DateTimeFormat("en-GB", {
+const UTC_DATE_FORMAT = new Intl.DateTimeFormat(DATE_LOCALE, UTC_DATE_FIELDS);
+const UTC_SHORT_DAY_FORMAT = new Intl.DateTimeFormat(DATE_LOCALE, {
 	day: "numeric",
 	month: "short",
 	timeZone: "UTC",
 });
 
 export function formatCalendarDate(date: Date): string {
-	return date.toLocaleDateString("en-GB", UTC_DATE_FIELDS);
+	return date.toLocaleDateString(DATE_LOCALE, UTC_DATE_FIELDS);
 }
 
 /** Calendar days of an actual UTC interval, without projecting its instants into local midnight. */
@@ -108,8 +124,10 @@ export function formatDayRange(from: Date, to: Date): string {
 	return `${formatDate(from)} – ${formatDate(to)}`;
 }
 
+const SHORT_DAY_FORMAT = new Intl.DateTimeFormat(DATE_LOCALE, { day: "numeric", month: "short" });
+
 export function formatShortDay(date: Date): string {
-	return format(date, "d MMM");
+	return SHORT_DAY_FORMAT.format(date);
 }
 
 export function formatTime(date: Date): string {

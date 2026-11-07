@@ -20,6 +20,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { asDate } from "@/lib/dates";
+import { formatNumber } from "@/lib/numbers";
 import { rendersContent } from "@/lib/react-node";
 import { hasText } from "@/lib/text";
 
@@ -82,8 +83,8 @@ function rateLimitReading(rateLimit: RateLimitSnapshot, now: number): ReactNode 
 			rateLimit.limit > 0 && rateLimit.remaining / rateLimit.limit < RATE_LIMIT_WARNING_FRACTION;
 		const value = (
 			<span className={isLow ? "text-warning tabular-nums" : "tabular-nums"}>
-				{rateLimit.remaining.toLocaleString()}
-				<span className="text-muted-foreground"> / {rateLimit.limit.toLocaleString()}</span>
+				{formatNumber(rateLimit.remaining)}
+				<span className="text-muted-foreground"> / {formatNumber(rateLimit.limit)}</span>
 			</span>
 		);
 		if (!rateLimit.resetAt) {
@@ -100,7 +101,7 @@ function rateLimitReading(rateLimit: RateLimitSnapshot, now: number): ReactNode 
 	if (rateLimit.limit != null) {
 		return (
 			<span className="text-muted-foreground tabular-nums">
-				limit {rateLimit.limit.toLocaleString()}
+				limit {formatNumber(rateLimit.limit)}
 			</span>
 		);
 	}

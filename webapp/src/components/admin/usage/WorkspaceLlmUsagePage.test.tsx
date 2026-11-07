@@ -160,7 +160,7 @@ describe("WorkspaceLlmUsagePage", () => {
 					ownProviderTotalCostUsd: 10,
 				},
 				"Your provider cap is reached",
-				"Paused until August 1 (UTC), or until you raise or remove the cap.",
+				"Paused until 1 August (UTC), or until you raise or remove the cap.",
 				null,
 			],
 			[
@@ -174,7 +174,7 @@ describe("WorkspaceLlmUsagePage", () => {
 				"an exhausted shared budget",
 				{ instancePaused: true, instanceBudgetVerdict: "EXHAUSTED", instanceTotalCostUsd: 25 },
 				"Shared-model budget reached",
-				"Paused until August 1 (UTC), or until an instance admin raises the budget. Practice reviews and conversations can keep running on your own models.",
+				"Paused until 1 August (UTC), or until an instance admin raises the budget. Practice reviews and conversations can keep running on your own models.",
 				"/w/acme/admin/models",
 			],
 			[
@@ -234,7 +234,7 @@ describe("WorkspaceLlmUsagePage", () => {
 				"warns at 80% with the date the pace reaches the cap",
 				{ ownProviderTotalCostUsd: 8.4 },
 				new Date("2026-07-10T12:00:00.000Z"),
-				"You’ve used 84% of your provider cap$8.40 of $10. At this pace, the cap is reached around July 12.",
+				"You’ve used 84% of your provider cap$8.40 of $10. At this pace, the cap is reached around 12 July.",
 			],
 			[
 				"keeps the warning but withholds a projection the month is too young to support",

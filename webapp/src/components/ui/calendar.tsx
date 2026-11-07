@@ -1,5 +1,7 @@
 "use client";
 
+// Diverges from the shadcn registry: the default locale keeps month controls in English.
+
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type * as React from "react";
 import { useEffect, useRef } from "react";
@@ -11,6 +13,8 @@ import {
 	type Locale,
 } from "react-day-picker";
 
+import { enUS } from "react-day-picker/locale";
+
 import { cn } from "cn";
 import { Button, buttonVariants } from "@/components/ui/button";
 
@@ -20,7 +24,7 @@ function Calendar({
 	showOutsideDays = true,
 	captionLayout = "label",
 	buttonVariant = "ghost",
-	locale,
+	locale = enUS,
 	formatters,
 	components,
 	labels,
@@ -51,7 +55,7 @@ function Calendar({
 				...labels,
 			}}
 			formatters={{
-				formatMonthDropdown: (date) => date.toLocaleString(locale?.code, { month: "short" }),
+				formatMonthDropdown: (date) => date.toLocaleString(locale.code, { month: "short" }),
 				...formatters,
 			}}
 			classNames={{
@@ -168,7 +172,7 @@ function CalendarDayButton({
 	className,
 	day,
 	modifiers,
-	locale,
+	locale = enUS,
 	...props
 }: React.ComponentProps<typeof DayButton> & { locale?: Partial<Locale> }) {
 	const defaultClassNames = getDefaultClassNames();
@@ -184,7 +188,7 @@ function CalendarDayButton({
 		<Button
 			variant="ghost"
 			size="icon"
-			data-day={day.date.toLocaleDateString(locale?.code)}
+			data-day={day.date.toLocaleDateString(locale.code)}
 			data-selected-single={
 				modifiers.selected === true &&
 				modifiers.range_start !== true &&

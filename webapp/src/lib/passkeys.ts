@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatDateTime } from "@/lib/dates";
 
 const descriptor = z.object({
 	id: z.string(),
@@ -47,7 +48,7 @@ export function passkeyPromptCanceled(error: unknown): boolean {
  * The time to the second keeps a primary and a backup passkey added on one day apart.
  */
 export function defaultPasskeyLabel(addedAt: Date): string {
-	return `Passkey added ${addedAt.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "medium" })}`;
+	return `Passkey added ${formatDateTime(addedAt)}`;
 }
 
 export async function createPasskey(optionsJson: string): Promise<string> {

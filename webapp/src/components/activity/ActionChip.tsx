@@ -5,6 +5,7 @@ import { cn } from "cn";
 import type { ActivityAction } from "@/api/types.gen";
 import type { IconComponent } from "@/components/icons/provider-icons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatNumber } from "@/lib/numbers";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 import { capitalise } from "@/lib/text";
 
@@ -51,7 +52,7 @@ export function ActionChip({ action, providerType, display }: ActionChipProps) {
 				aria-hidden
 				className={cn(byLabel ? "text-muted-foreground" : "font-medium tabular-nums")}
 			>
-				{byLabel ? def.label : action.count.toLocaleString("en-GB")}
+				{byLabel ? def.label : formatNumber(action.count)}
 			</span>
 			{byLabel && action.count > 1 && (
 				<span aria-hidden className="font-medium tabular-nums">

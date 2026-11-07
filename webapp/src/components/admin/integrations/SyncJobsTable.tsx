@@ -23,6 +23,7 @@ import {
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { asDate } from "@/lib/dates";
+import { formatNumber } from "@/lib/numbers";
 import { hasText } from "@/lib/text";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
@@ -75,10 +76,10 @@ function formatItems(job: SyncJob): string {
 	// Grouped, because a backfill's counts run to seven digits and "1234567/2000000" is a number the
 	// reader has to decode rather than read.
 	if (job.itemsTotal != null) {
-		return `${(job.itemsProcessed ?? 0).toLocaleString()}/${job.itemsTotal.toLocaleString()}`;
+		return `${formatNumber(job.itemsProcessed ?? 0)}/${formatNumber(job.itemsTotal)}`;
 	}
 	if (job.itemsProcessed != null) {
-		return job.itemsProcessed.toLocaleString();
+		return formatNumber(job.itemsProcessed);
 	}
 	return "–";
 }
@@ -138,8 +139,8 @@ function JobProgressPanel({ progress }: { progress: SyncJobProgress }) {
 				<>
 					<dt className="text-muted-foreground">Units in phase</dt>
 					<dd className="tabular-nums">
-						{unitsCompleted?.toLocaleString() ?? "–"}
-						{unitsTotal != null && ` / ${unitsTotal.toLocaleString()}`}
+						{(unitsCompleted == null ? undefined : formatNumber(unitsCompleted)) ?? "–"}
+						{unitsTotal != null && ` / ${formatNumber(unitsTotal)}`}
 					</dd>
 				</>
 			)}

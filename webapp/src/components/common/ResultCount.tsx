@@ -1,3 +1,5 @@
+import { formatNumber } from "@/lib/numbers";
+
 export interface ResultCountProps {
 	total: number | undefined;
 	/** Singular and plural, in that order: `["result", "results"]`. */
@@ -18,7 +20,7 @@ export function ResultCount({ total, noun, hasFilter = false }: ResultCountProps
 	if (hasFilter) {
 		suffix = one ? " matches your filters" : " match your filters";
 	}
-	const text = `${total.toLocaleString()} ${one ? noun[0] : noun[1]}${suffix}.`;
+	const text = `${formatNumber(total)} ${one ? noun[0] : noun[1]}${suffix}.`;
 	return (
 		<p role="status" aria-live="polite" className="text-sm text-muted-foreground">
 			{text}

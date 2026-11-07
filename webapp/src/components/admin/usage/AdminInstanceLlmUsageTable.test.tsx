@@ -277,12 +277,12 @@ describe("AdminInstanceLlmUsageTable", () => {
 		within(byJobType).getByText("Conversation answer");
 		within(byJobType).getByText("$1.75");
 		const byDay = screen.getByRole("table", { name: "AI spend by day" });
-		const julyFifthRow = within(byDay).getByRole("row", { name: /^Jul 5/u });
+		const julyFifthRow = within(byDay).getByRole("row", { name: /^5 Jul/u });
 		expect(
 			within(julyFifthRow)
 				.getAllByRole("cell")
 				.map((cell) => cell.textContent),
-		).toStrictEqual(["Jul 5", "$4.25", "$1.75", "1"]);
+		).toStrictEqual(["5 Jul", "$4.25", "$1.75", "1"]);
 	});
 
 	it("names the expanded workspace's practice reviews beside its conversation turns", () => {
@@ -313,7 +313,7 @@ describe("AdminInstanceLlmUsageTable", () => {
 		});
 
 		screen.getByText("Example Workspace has used 84% of its shared-model budget");
-		screen.getByText(/At this pace, the budget is reached around July 12\./u);
+		screen.getByText(/At this pace, the budget is reached around 12 July\./u);
 		expect(screen.queryByText(/of its provider cap/u)).toBeNull();
 	});
 

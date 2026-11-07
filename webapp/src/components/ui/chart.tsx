@@ -1,5 +1,7 @@
 "use client";
 
+// Diverges from the shadcn registry: numeric tooltips use the shared product number format.
+
 import {
 	type ComponentProps,
 	type ComponentType,
@@ -10,6 +12,7 @@ import {
 } from "react";
 import * as RechartsPrimitive from "recharts";
 import type { TooltipValueType } from "recharts";
+import { formatNumber } from "@/lib/numbers";
 
 import { cn } from "cn";
 
@@ -215,7 +218,7 @@ function ChartTooltipContent({
 											{item.value !== undefined && (
 												<span className="font-mono font-medium text-foreground tabular-nums">
 													{typeof item.value === "number"
-														? item.value.toLocaleString()
+														? formatNumber(item.value)
 														: String(item.value)}
 												</span>
 											)}

@@ -6,6 +6,7 @@ import type { IconComponent } from "@/components/icons/provider-icons";
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 import { capitalise } from "@/lib/text";
 
+import { formatNumber } from "@/lib/numbers";
 import { CountChip, NoneMark } from "./ActionChip";
 import {
 	UNKNOWN_ACTIVITY_KIND_DEF,
@@ -56,7 +57,7 @@ export function ActivityCountCell({ category, counts, providerType }: ActivityCo
 					{part.count > 0 && (
 						<CountChip icon={part.icon} tone={part.tone} phrase={part.phrase}>
 							<span aria-hidden className="font-medium tabular-nums">
-								{part.count.toLocaleString("en-GB")}
+								{formatNumber(part.count)}
 							</span>
 						</CountChip>
 					)}

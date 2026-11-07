@@ -186,6 +186,14 @@ Only these two readings are permitted:
 It ignores event handlers, effects, and `useState` initializers, because the AST cannot see a function's callers.
 A separate rule bans `Date.now` everywhere under `src/**`, so a handler may use `new Date()` but not `Date.now()`.
 
+## Display numbers and dates
+
+Use `@/lib/numbers` for English counts (comma grouping, decimal point).
+Use `@/lib/dates` for English, day-first dates.
+Currency and percentages keep explicit precision.
+Timestamps use local time unless labeled UTC; wire dates and UTC report buckets stay UTC.
+Calendar controls retain the explicit locale prop.
+
 ## Name a component for the concept, not for the wire
 
 A component, its file, its props type, and its story title all name the same concept.

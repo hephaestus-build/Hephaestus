@@ -3,6 +3,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { DATE_LOCALE } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
 export type ProductFeedbackSharingSectionState =
@@ -28,7 +29,7 @@ export function hasProductFeedbackSharing(state: ProductFeedbackSharingSectionSt
 	);
 }
 
-const DATE_FORMAT = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+const DATE_FORMAT = new Intl.DateTimeFormat(DATE_LOCALE, { dateStyle: "medium" });
 
 /**
  * The remembered choice about public GitHub issues, which a tick in the composer also sets, and the

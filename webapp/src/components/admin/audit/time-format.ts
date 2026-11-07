@@ -1,4 +1,4 @@
-import { asDate } from "@/lib/dates";
+import { asDate, formatDateTime } from "@/lib/dates";
 
 /** The generated client types these as `Date`; at runtime they are ISO strings. */
 type Timestamp = Date | string | null | undefined;
@@ -15,7 +15,7 @@ export function formatTimestamp(value: Timestamp): FormattedTimestamp | null {
 		return null;
 	}
 	return {
-		local: date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "medium" }),
+		local: formatDateTime(date),
 		isoUtc: date.toISOString(),
 	};
 }

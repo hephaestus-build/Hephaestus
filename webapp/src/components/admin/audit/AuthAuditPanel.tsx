@@ -27,6 +27,7 @@ import { ResultCount } from "@/components/common/ResultCount";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { saveTextFile } from "@/lib/download";
+import { formatNumber } from "@/lib/numbers";
 import { narrowToEnum, nonEmpty } from "@/lib/search-params";
 import { infiniteListState } from "@/runtime/tanstack-query/infinite-list";
 import { nextCursorOf } from "@/runtime/tanstack-query/list-pages";
@@ -57,7 +58,7 @@ async function downloadAuditLog(query: AdminExportAuthEventsData["query"]): Prom
 	const leftOut = Number(response?.headers.get("X-Left-Out-Count"));
 	if (leftOut > 0) {
 		toast.warning("The file does not hold every matching event", {
-			description: `It leaves out ${leftOut.toLocaleString()} matching ${leftOut === 1 ? "event" : "events"}. Narrow the filters to export them.`,
+			description: `It leaves out ${formatNumber(leftOut)} matching ${leftOut === 1 ? "event" : "events"}. Narrow the filters to export them.`,
 		});
 	}
 }

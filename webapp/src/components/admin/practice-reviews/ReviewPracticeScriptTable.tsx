@@ -21,10 +21,10 @@ import {
 } from "@/components/ui/table";
 import { hasText } from "@/lib/text";
 
+import { formatNumber } from "@/lib/numbers";
 import { practiceLevel } from "./review-levels";
 
-const count = new Intl.NumberFormat("en-GB");
-const seconds = new Intl.NumberFormat("en-GB", {
+const seconds = new Intl.NumberFormat("en-US", {
 	minimumFractionDigits: 1,
 	maximumFractionDigits: 1,
 });
@@ -38,7 +38,7 @@ function formatScriptTime(durationMs: number): string {
 		return `${seconds.format(tenths / 10)} s`;
 	}
 	const total = Math.round(durationMs / 1000);
-	return `${count.format(Math.floor(total / 60))} min ${total % 60} s`;
+	return `${formatNumber(Math.floor(total / 60))} min ${total % 60} s`;
 }
 
 export interface ReviewPracticeScriptTableProps {
@@ -148,7 +148,7 @@ function ScriptRow({
 				<ScriptModels models={run.models} />
 			</TableCell>
 			<TableCell numeric className="text-right align-top">
-				{run.models.length === 0 ? <Nothing /> : count.format(calls)}
+				{run.models.length === 0 ? <Nothing /> : formatNumber(calls)}
 			</TableCell>
 			<TableCell numeric className="text-right align-top">
 				{run.durationMs === null ? <Nothing /> : formatScriptTime(run.durationMs)}
@@ -182,7 +182,7 @@ function ReviewCalls({ calls }: { calls: number | null }) {
 	if (calls === null) {
 		return <span className="text-muted-foreground">Not recorded</span>;
 	}
-	return calls === 0 ? <Nothing /> : count.format(calls);
+	return calls === 0 ? <Nothing /> : formatNumber(calls);
 }
 
 function Nothing() {

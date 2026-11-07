@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { ITEM_KIND, itemKindNoun } from "@/lib/item-kinds";
+import { formatNumber } from "@/lib/numbers";
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
@@ -150,7 +151,7 @@ function ReadySettingsBody({
 							</ItemContent>
 							<ItemActions>
 								<span className="text-sm font-medium tabular-nums">
-									{state.hiddenPeople.toLocaleString("en-GB")}
+									{formatNumber(state.hiddenPeople)}
 								</span>
 							</ItemActions>
 						</Item>
