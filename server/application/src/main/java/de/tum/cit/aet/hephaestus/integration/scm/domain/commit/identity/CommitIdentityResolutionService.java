@@ -38,7 +38,7 @@ public class CommitIdentityResolutionService {
             case Answer.Account account -> {
                 var person = new PersonIdentity(providerId, Long.toString(account.nativeId()), null);
                 if (!fence.holdForWrite(List.of(person))) {
-                    yield finish(resolutionId, State.RESOLVED, "erased", 0);
+                    yield finish(resolutionId, State.RESOLVED, "erased", write(repositoryId, email, NO_USER, "erased"));
                 }
                 int changed = write(repositoryId, email, account.userId(), "resolved");
                 yield finish(resolutionId, State.RESOLVED, "resolved", changed);
@@ -47,7 +47,8 @@ public class CommitIdentityResolutionService {
                 int changed = write(repositoryId, email, NO_USER, "no_account");
                 yield finish(resolutionId, State.NO_ACCOUNT, "no_account", changed);
             }
-            case Answer.Erased ignored -> finish(resolutionId, State.RESOLVED, "erased", 0);
+            case Answer.Erased ignored ->
+                finish(resolutionId, State.RESOLVED, "erased", write(repositoryId, email, NO_USER, "erased"));
             case Answer.Deferred ignored -> throw new IllegalArgumentException("A deferred answer writes nothing");
         };
     }

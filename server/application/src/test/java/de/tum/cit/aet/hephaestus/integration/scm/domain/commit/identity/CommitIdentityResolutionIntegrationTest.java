@@ -1,16 +1,21 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity;
 
+import static de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource.WEBHOOK;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.database.CommitIdentityResolutionSeedChange;
+import de.tum.cit.aet.hephaestus.core.database.GitLabCommitIdentityResolutionSeedChange;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributorRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Answer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Question;
@@ -38,6 +43,8 @@ import liquibase.database.jvm.JdbcConnection;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -53,6 +60,12 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private CommitRepository commits;
+
+    @Autowired
+    private CommitContributorRepository contributors;
+
+    @Autowired
+    private CommitDetailsPersister capture;
 
     @Autowired
     private UserRepository users;
@@ -150,6 +163,142 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldKeepTheProviderAccountWhenCaptureHasADifferentStoredEmailMatch() throws Exception {
+        User correct = user("correct");
+        User stored = user("stored");
+        Repository repository = repository();
+        long commitId = commit(repository, null, null, EMAIL);
+        long contributorId = contributor(commitId, null, EMAIL);
+        seed();
+        provider = question -> new Answer.Account(id(correct), correct.getNativeId());
+        run(50);
+        String sha = commits.findById(commitId).orElseThrow().getSha();
+        var now = Instant.now();
+        var details = new CommitDetails(
+                sha,
+                "Captured",
+                null,
+                "Author",
+                EMAIL,
+                now,
+                "Committer",
+                EMAIL,
+                now,
+                0,
+                0,
+                0,
+                List.of(),
+                List.of(),
+                "Captured");
+        var origin = new CommitDetailsPersister.Origin(
+                1L,
+                WEBHOOK,
+                IdentityProviderType.GITHUB,
+                value -> "https://example.com/commit/" + value,
+                email -> stored.getId(),
+                (commit, captured, author, committer) ->
+                        contributors.upsertContributor(commit.getId(), author, "CO_AUTHOR", "A", EMAIL, 1));
+
+        assertThat(capture.persist(details, repository, origin)).isEqualTo(CommitDetailsPersister.Outcome.CAPTURED);
+
+        assertThat(authorOf(commitId)).isEqualTo(correct.getId());
+        assertThat(committerOf(commitId)).isEqualTo(correct.getId());
+        assertThat(contributorUser(contributorId)).isEqualTo(correct.getId());
+        assertThat(jdbc.queryForObject("SELECT message FROM git_commit WHERE id = ?", String.class, commitId))
+                .isEqualTo("Captured");
+    }
+
+    @Test
+    void shouldReplaceAStoredEmailLinkWhenTheProviderNamesAnotherAccount() {
+        User stored = user("stored");
+        User correct = user("correct");
+        Repository repository = repository();
+        long commit = commit(repository, stored, stored, EMAIL);
+        String sha = commits.findById(commit).orElseThrow().getSha();
+        var now = Instant.now();
+
+        commits.upsertCommit(
+                sha,
+                "Provider update",
+                null,
+                null,
+                now,
+                now,
+                null,
+                null,
+                null,
+                now,
+                repository.getId(),
+                correct.getId(),
+                correct.getId(),
+                EMAIL,
+                EMAIL,
+                null,
+                false);
+
+        assertThat(authorOf(commit)).isEqualTo(correct.getId());
+        assertThat(committerOf(commit)).isEqualTo(correct.getId());
+    }
+
+    @Test
+    void shouldReadNoAccountEmailsAndAnErasedEmailWithoutLosingTheNull() throws Exception {
+        Repository repository = repository();
+        long erased = commit(repository, null, null, "erased@example.com");
+        commit(repository, null, null, EMAIL);
+        seed();
+        jdbc.update("UPDATE commit_identity_resolution SET state = 'NO_ACCOUNT'");
+        jdbc.update("UPDATE git_commit SET author_email = NULL, committer_email = NULL WHERE id = ?", erased);
+
+        assertThat(resolutions.findNoAccountEmails(Objects.requireNonNull(repository.getId())))
+                .containsExactlyInAnyOrder(EMAIL, null);
+    }
+
+    @Test
+    void shouldKeepAClearWhenStoredEmailEnrichmentHasAnOlderExclusionList() throws Exception {
+        User stored = user("stored");
+        Repository repository = repository();
+        long commit = commit(repository, stored, stored, EMAIL);
+        seed();
+        assertThat(resolutions.findNoAccountEmails(Objects.requireNonNull(repository.getId())))
+                .isEmpty();
+        provider = question -> new Answer.NoAccount();
+        run(50);
+
+        assertThat(commits.bulkUpdateAuthorIdFromStoredEmail(EMAIL, repository.getId(), stored.getId()))
+                .isZero();
+        assertThat(commits.bulkUpdateCommitterIdFromStoredEmail(EMAIL, repository.getId(), stored.getId()))
+                .isZero();
+        assertThat(authorOf(commit)).isNull();
+        assertThat(committerOf(commit)).isNull();
+    }
+
+    @Test
+    void shouldSeedGitLabOnlyAndPreferAnAuthoredCommitOverANewerCommitter() throws Exception {
+        IdentityProvider gitlab = provider(IdentityProviderType.GITLAB, "https://gitlab.example.test");
+        Repository repository = repository(gitlab);
+        long authored = commit(repository, null, null, EMAIL);
+        long newer = commit(repository, null, null, "other@example.com");
+        jdbc.update("UPDATE git_commit SET committer_email = ? WHERE id = ?", EMAIL, newer);
+        commit(repository(), null, null, "github@example.com");
+        var change = new GitLabCommitIdentityResolutionSeedChange();
+        try (var connection = dataSource.getConnection()) {
+            var database = new PostgresDatabase();
+            database.setConnection(new JdbcConnection(connection));
+            change.execute(database);
+            connection.commit();
+        }
+
+        assertThat(jdbc.queryForList("SELECT repository_id FROM commit_identity_resolution", Long.class))
+                .containsOnly(Objects.requireNonNull(repository.getId()));
+        assertThat(jdbc.queryForList(
+                        "SELECT commit_id FROM commit_identity_resolution WHERE commit_id = ?", Long.class, authored))
+                .containsExactly(authored);
+        assertThat(jdbc.queryForList(
+                        "SELECT source FROM commit_identity_resolution WHERE commit_id = ?", String.class, authored))
+                .containsExactly("AUTHOR");
+    }
+
+    @Test
     void shouldChangeOnlyTheRowsOfTheAnsweredEmail() throws Exception {
         User wrong = user("wrong");
         User right = user("right");
@@ -187,8 +336,9 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
         assertThat(authorOf(untouched)).isEqualTo(wrong.getId());
     }
 
-    @Test
-    void shouldNotLinkAnAccountThatWasErased() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldClearAContradictedLinkWhenTheProviderNamesAnErasedAccount(boolean providerKnows) throws Exception {
         User wrong = user("wrong");
         User erased = user("erased");
         long commit = commit(repository(), wrong, null, EMAIL);
@@ -199,13 +349,14 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
                 github.getId(),
                 Long.toString(erased.getNativeId()));
         seed();
-        provider = question -> new Answer.Account(id(erased), erased.getNativeId());
+        provider =
+                question -> providerKnows ? new Answer.Erased() : new Answer.Account(id(erased), erased.getNativeId());
 
         run(50);
 
-        assertThat(authorOf(commit)).isEqualTo(wrong.getId());
+        assertThat(authorOf(commit)).isNull();
         assertThat(states()).containsOnly("RESOLVED");
-        assertThat(changes.count()).isZero();
+        assertThat(changes.count()).isEqualTo(1);
         assertThat(meters.counter("commit.identity.resolutions", "outcome", "erased")
                         .count())
                 .isEqualTo(1);
@@ -468,7 +619,8 @@ class CommitIdentityResolutionIntegrationTest extends BaseIntegrationTest {
                 committer == null ? null : committer.getId(),
                 email,
                 email,
-                null);
+                null,
+                false);
         return Objects.requireNonNull(commits.findByShaAndRepositoryId(sha, repository.getId())
                 .orElseThrow()
                 .getId());

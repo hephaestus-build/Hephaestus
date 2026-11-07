@@ -4,6 +4,7 @@
         type = org.springframework.modulith.ApplicationModule.Type.OPEN,
         allowedDependencies = {
             "integration.scm::spi",
+            "core::person-data",
             "integration.scm::events",
             "evidence",
             "integration.core",

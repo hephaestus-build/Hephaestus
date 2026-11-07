@@ -362,7 +362,8 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
                 null,
                 authorEmail,
                 authorEmail,
-                null);
+                null,
+                false);
 
         if (!asFallback) {
             persistWebhookFileChanges(sha, commit, repository);

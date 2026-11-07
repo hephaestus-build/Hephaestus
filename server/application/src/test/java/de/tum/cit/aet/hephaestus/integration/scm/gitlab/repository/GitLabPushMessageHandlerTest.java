@@ -264,7 +264,8 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
                         any(),
                         any(),
                         any(),
-                        any());
+                        any(),
+                        eq(false));
     }
 
     @Test
@@ -294,7 +295,8 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
                         any(),
                         any(),
                         any(),
-                        any());
+                        any(),
+                        eq(false));
     }
 
     @Test

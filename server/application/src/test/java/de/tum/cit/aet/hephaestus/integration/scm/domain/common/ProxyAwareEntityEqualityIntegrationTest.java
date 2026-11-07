@@ -89,7 +89,8 @@ class ProxyAwareEntityEqualityIntegrationTest extends BaseIntegrationTest {
                 null,
                 "author@example.com",
                 "author@example.com",
-                null);
+                null,
+                false);
         long id = commitRepository
                 .findByShaAndRepositoryId(sha, repository.getId())
                 .orElseThrow()

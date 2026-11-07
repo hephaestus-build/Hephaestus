@@ -239,7 +239,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
         }
 
         @Test
@@ -312,7 +313,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
         }
 
         @Test
@@ -365,7 +367,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
         }
     }
 
@@ -406,7 +409,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(), // authorEmail
                             any() // committerEmail
                             ,
-                            any());
+                            any(),
+                            eq(false));
         }
 
         @Test
@@ -440,7 +444,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
         }
 
         @Test
@@ -475,7 +480,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             eq(43L),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
         }
 
         @Test
@@ -518,7 +524,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             eq(null),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
         }
 
         @Test
@@ -555,7 +562,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
         }
 
         @Test
@@ -591,7 +599,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
         }
     }
 
@@ -653,7 +662,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
         }
 
         @Test
@@ -691,7 +701,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
             verify(eventPublisher, never()).publishEvent(any(Object.class));
         }
 
@@ -782,7 +793,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
         }
 
         @Test
@@ -823,7 +835,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
         }
     }
 
@@ -859,7 +872,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
         }
 
         @Test
@@ -892,7 +906,8 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
-                            any());
+                            any(),
+                            eq(false));
         }
     }
 

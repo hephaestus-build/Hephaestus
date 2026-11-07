@@ -169,7 +169,8 @@ class CommitContributorNativeUserIntegrationTest extends BaseIntegrationTest {
                 null,
                 email,
                 email,
-                null);
+                null,
+                false);
         return Objects.requireNonNull(commits.findByShaAndRepositoryId(sha, repository.getId())
                 .orElseThrow()
                 .getId());

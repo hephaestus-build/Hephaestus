@@ -224,13 +224,13 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
                     .thenReturn(List.of()); // second call
 
             when(authorResolver.resolveByEmail(eq("author@example.com"), any())).thenReturn(42L);
-            when(commitRepository.bulkUpdateAuthorIdByEmail("author@example.com", 1L, 42L))
+            when(commitRepository.bulkUpdateAuthorIdFromStoredEmail("author@example.com", 1L, 42L))
                     .thenReturn(2);
 
             int result = service.enrichCommitAuthors(1L, "owner/repo", 1L, 1L, null);
 
             assertThat(result).isEqualTo(2);
-            verify(commitRepository).bulkUpdateAuthorIdByEmail("author@example.com", 1L, 42L);
+            verify(commitRepository).bulkUpdateAuthorIdFromStoredEmail("author@example.com", 1L, 42L);
         }
 
         @Test
@@ -244,13 +244,13 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
 
             when(authorResolver.resolveByEmail(eq("committer@example.com"), any()))
                     .thenReturn(99L);
-            when(commitRepository.bulkUpdateCommitterIdByEmail("committer@example.com", 1L, 99L))
+            when(commitRepository.bulkUpdateCommitterIdFromStoredEmail("committer@example.com", 1L, 99L))
                     .thenReturn(1);
 
             int result = service.enrichCommitAuthors(1L, "owner/repo", 1L, 1L, null);
 
             assertThat(result).isEqualTo(1);
-            verify(commitRepository).bulkUpdateCommitterIdByEmail("committer@example.com", 1L, 99L);
+            verify(commitRepository).bulkUpdateCommitterIdFromStoredEmail("committer@example.com", 1L, 99L);
         }
 
         @Test
@@ -269,7 +269,7 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
             int result = service.enrichCommitAuthors(1L, "owner/repo", null, 1L, null);
 
             assertThat(result).isEqualTo(0);
-            verify(commitRepository, never()).bulkUpdateAuthorIdByEmail(any(), anyLong(), anyLong());
+            verify(commitRepository, never()).bulkUpdateAuthorIdFromStoredEmail(any(), anyLong(), anyLong());
         }
 
         @Test
@@ -285,15 +285,16 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
             when(authorResolver.resolveByEmail(eq("alice@example.com"), any())).thenReturn(10L);
             when(authorResolver.resolveByEmail(eq("bob@example.com"), any())).thenReturn(null);
 
-            when(commitRepository.bulkUpdateAuthorIdByEmail("alice@example.com", 1L, 10L))
+            when(commitRepository.bulkUpdateAuthorIdFromStoredEmail("alice@example.com", 1L, 10L))
                     .thenReturn(2);
 
             int result = service.enrichCommitAuthors(1L, "owner/repo", null, 1L, null);
 
             assertThat(result).isEqualTo(2);
             // Alice's cluster updated, Bob's skipped
-            verify(commitRepository).bulkUpdateAuthorIdByEmail("alice@example.com", 1L, 10L);
-            verify(commitRepository, never()).bulkUpdateAuthorIdByEmail(eq("bob@example.com"), anyLong(), anyLong());
+            verify(commitRepository).bulkUpdateAuthorIdFromStoredEmail("alice@example.com", 1L, 10L);
+            verify(commitRepository, never())
+                    .bulkUpdateAuthorIdFromStoredEmail(eq("bob@example.com"), anyLong(), anyLong());
         }
     }
 
@@ -400,16 +401,16 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
             when(authorResolver.resolveByEmail(eq("author@example.com"), any())).thenReturn(10L);
             when(authorResolver.resolveByEmail(eq("committer@example.com"), any()))
                     .thenReturn(20L);
-            when(commitRepository.bulkUpdateAuthorIdByEmail("author@example.com", 1L, 10L))
+            when(commitRepository.bulkUpdateAuthorIdFromStoredEmail("author@example.com", 1L, 10L))
                     .thenReturn(1);
-            when(commitRepository.bulkUpdateCommitterIdByEmail("committer@example.com", 1L, 20L))
+            when(commitRepository.bulkUpdateCommitterIdFromStoredEmail("committer@example.com", 1L, 20L))
                     .thenReturn(1);
 
             int result = service.enrichCommitAuthors(1L, "owner/repo", 1L, 1L, null);
 
             assertThat(result).isEqualTo(2);
-            verify(commitRepository).bulkUpdateAuthorIdByEmail("author@example.com", 1L, 10L);
-            verify(commitRepository).bulkUpdateCommitterIdByEmail("committer@example.com", 1L, 20L);
+            verify(commitRepository).bulkUpdateAuthorIdFromStoredEmail("author@example.com", 1L, 10L);
+            verify(commitRepository).bulkUpdateCommitterIdFromStoredEmail("committer@example.com", 1L, 20L);
         }
 
         @Test
@@ -426,7 +427,7 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
             when(authorResolver.resolveByEmail(eq("alice@example.com"), any())).thenReturn(10L);
             when(authorResolver.resolveByEmail(eq("unknown@personal.com"), any()))
                     .thenReturn(null);
-            when(commitRepository.bulkUpdateAuthorIdByEmail("alice@example.com", 1L, 10L))
+            when(commitRepository.bulkUpdateAuthorIdFromStoredEmail("alice@example.com", 1L, 10L))
                     .thenReturn(1);
 
             // API pass would be attempted for unknown@personal.com but since we're not mocking
@@ -453,9 +454,9 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
                     .thenReturn(List.of());
 
             when(authorResolver.resolveByEmail(eq("same@example.com"), any())).thenReturn(10L);
-            when(commitRepository.bulkUpdateAuthorIdByEmail("same@example.com", 1L, 10L))
+            when(commitRepository.bulkUpdateAuthorIdFromStoredEmail("same@example.com", 1L, 10L))
                     .thenReturn(1);
-            when(commitRepository.bulkUpdateCommitterIdByEmail("same@example.com", 1L, 10L))
+            when(commitRepository.bulkUpdateCommitterIdFromStoredEmail("same@example.com", 1L, 10L))
                     .thenReturn(1);
 
             int result = service.enrichCommitAuthors(1L, "owner/repo", null, 1L, null);
@@ -475,7 +476,7 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
 
             when(authorResolver.resolveByEmail(eq("author@example.com"), any())).thenReturn(42L);
             // Bulk update returns 0 (already resolved by concurrent process)
-            when(commitRepository.bulkUpdateAuthorIdByEmail("author@example.com", 1L, 42L))
+            when(commitRepository.bulkUpdateAuthorIdFromStoredEmail("author@example.com", 1L, 42L))
                     .thenReturn(0);
 
             int result = service.enrichCommitAuthors(1L, "owner/repo", null, 1L, null);
@@ -525,7 +526,7 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
                     .thenReturn(List.of());
 
             when(authorResolver.resolveByEmail(eq("real@example.com"), any())).thenReturn(42L);
-            when(commitRepository.bulkUpdateAuthorIdByEmail("real@example.com", 1L, 42L))
+            when(commitRepository.bulkUpdateAuthorIdFromStoredEmail("real@example.com", 1L, 42L))
                     .thenReturn(3);
 
             int result = service.enrichCommitAuthors(1L, "owner/repo", null, 1L, null);
@@ -554,7 +555,7 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
                     .thenReturn(List.of())
                     .thenReturn(List.of());
             when(authorResolver.resolveByEmail(eq("author@example.com"), any())).thenReturn(42L);
-            when(commitRepository.bulkUpdateAuthorIdByEmail("author@example.com", 1L, 42L))
+            when(commitRepository.bulkUpdateAuthorIdFromStoredEmail("author@example.com", 1L, 42L))
                     .thenReturn(2);
 
             int result = service.enrichCommitAuthors(1L, "owner/repo", 7L, 1L, repository);

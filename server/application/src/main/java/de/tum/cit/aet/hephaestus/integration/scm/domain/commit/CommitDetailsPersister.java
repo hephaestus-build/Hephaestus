@@ -109,7 +109,8 @@ public class CommitDetailsPersister {
                 committerId,
                 fit(details.authorEmail(), Commit.EMAIL_LENGTH),
                 fit(details.committerEmail(), Commit.EMAIL_LENGTH),
-                now);
+                now,
+                true);
         commitRepository.deleteFileChanges(repositoryId, details.sha());
 
         Commit commit = existing != null
