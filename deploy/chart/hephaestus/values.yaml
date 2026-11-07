@@ -269,6 +269,11 @@ observability:
     # Labels for both, so that the rule selector of your Prometheus finds them, such as
     # `release: <your monitoring release>` for kube-prometheus-stack.
     labels: {}
+  # Optional: publish the release's dashboards for an existing VictoriaMetrics. The namespace must
+  # already exist. Mount <release>-victoria-metrics-dashboards at its vmui.customDashboardsPath.
+  # With the bundled stack, leave this empty: its dashboards stay in the release namespace.
+  dashboards:
+    namespace: ""
   # A monitoring stack in the release's namespace: VictoriaMetrics scrapes the roles, vmalert evaluates
   # the alert rules, and Alertmanager sends the alerts. Node and cluster exporters are not part of it:
   # docs/admin/observability.mdx § Monitoring stack.

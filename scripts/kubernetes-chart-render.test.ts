@@ -656,6 +656,84 @@ await test("the alert rules render as the tested file, and only when asked", () 
 const stackOn = {
 	observability: { stack: { enabled: true, alertmanager: { configSecret: "alertmanager" } } },
 };
+await test("external monitoring receives the release dashboards without a second monitoring stack", () => {
+	const dashboardConfig = (resources: Resource[]) =>
+		resources.filter(
+			(resource) =>
+				kindOf(resource) === "ConfigMap" && get(resource, "data", "overview.json") !== undefined,
+		);
+	assert.deepEqual(dashboardConfig(rendered(layersFor("small"))), []);
+	const resources = rendered([
+		...layersFor("small"),
+		{
+			observability: { dashboards: { namespace: "monitoring" } },
+		},
+	]);
+	const [config] = dashboardConfig(resources);
+	assert.ok(config);
+	assert.equal(get(config, "metadata", "namespace"), "monitoring");
+	assert.equal(nameOf(config), "heph-victoria-metrics-dashboards");
+	assert.deepEqual(
+		get(config, "data"),
+		get(dashboardConfig(rendered([...layersFor("small"), stackOn]))[0], "data"),
+	);
+	assert.ok(
+		!resources.some(
+			(resource) =>
+				componentOf(resource) === "victoria-metrics" && kindOf(resource) !== "ConfigMap",
+		),
+	);
+	assert.ok(
+		!resources.some(
+			(resource) => kindOf(resource) === "Namespace" && nameOf(resource) === "monitoring",
+		),
+	);
+});
+
+await test("external dashboard namespace names stay strings in the rendered resource", () => {
+	for (const namespace of ["123", "true"]) {
+		const resources = rendered([
+			...layersFor("small"),
+			{ observability: { dashboards: { namespace } } },
+		]);
+		const config = resources.find(
+			(resource) =>
+				kindOf(resource) === "ConfigMap" && get(resource, "data", "overview.json") !== undefined,
+		);
+		assert.equal(get(config, "metadata", "namespace"), namespace);
+	}
+});
+
+await test("the bundled monitoring stack accepts its own namespace explicitly", () => {
+	const resources = rendered([
+		...layersFor("small"),
+		stackOn,
+		{
+			observability: { dashboards: { namespace: "hephaestus" } },
+		},
+	]);
+	const dashboards = resources.filter(
+		(resource) =>
+			kindOf(resource) === "ConfigMap" && get(resource, "data", "overview.json") !== undefined,
+	);
+	assert.equal(dashboards.length, 1);
+	assert.equal(get(dashboards[0], "metadata", "namespace"), "hephaestus");
+});
+
+await test("the bundled monitoring stack cannot mount dashboards from another namespace", () => {
+	assert.throws(
+		() =>
+			rendered([
+				...layersFor("small"),
+				stackOn,
+				{
+					observability: { dashboards: { namespace: "monitoring" } },
+				},
+			]),
+		/must be the release namespace/u,
+	);
+});
+
 const stackComponents = ["victoria-metrics", "vmalert", "alertmanager"] as const;
 const inStack = (resource: Resource) =>
 	stackComponents.some((component) => component === componentOf(resource));
@@ -692,6 +770,12 @@ await test("the monitoring stack scrapes this release, evaluates its rules and n
 	const dashboards = metricsConfigMaps.find(
 		(resource) => get(resource, "data", "overview.json") !== undefined,
 	);
+	assert.equal(
+		metricsConfigMaps.filter((resource) => get(resource, "data", "overview.json") !== undefined)
+			.length,
+		1,
+	);
+	assert.equal(get(dashboards, "metadata", "namespace"), "hephaestus");
 	const dashboardFiles = asRecord(get(dashboards, "data"), "dashboards");
 	assert.deepEqual(Object.keys(dashboardFiles).toSorted(), [
 		"database.json",

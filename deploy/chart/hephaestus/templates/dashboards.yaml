@@ -1,0 +1,18 @@
+{{- /* docs/admin/observability.mdx § Dashboards. The release files are the one home of the dashboard queries. */}}
+{{- $target := .Values.observability.dashboards.namespace }}
+{{- $stack := .Values.observability.stack.enabled }}
+{{- if or $stack $target }}
+{{- $namespace := default .Release.Namespace $target }}
+{{- if and $stack (ne $namespace .Release.Namespace) }}
+{{- fail "observability.dashboards.namespace must be the release namespace when observability.stack.enabled=true" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "victoria-metrics") }}-dashboards
+  namespace: {{ $namespace | quote }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "victoria-metrics") | nindent 4 }}
+data:
+  {{- (.Files.Glob "files/dashboards/*.json").AsConfig | nindent 2 }}
+{{- end }}
