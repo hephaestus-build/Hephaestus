@@ -674,7 +674,7 @@ await test("--render-site prints the site values of a scripted install, and asks
 		"--github-client-id",
 		"Iv1.client",
 		"--bootstrap-admins",
-		"github:1234567",
+		"github:1234567,gitlab:@example",
 		"--render-site",
 	);
 	assert.equal(result.status, 0, result.stderr);
@@ -682,7 +682,7 @@ await test("--render-site prints the site values of a scripted install, and asks
 	assert.ok(isRecord(site) && isRecord(site.config));
 	assert.equal(site.host, "heph.example.org");
 	assert.deepEqual(site.config.github, { oauthClientId: "Iv1.client" });
-	assert.deepEqual(site.config.auth, { bootstrapAdmins: "github:1234567" });
+	assert.deepEqual(site.config.auth, { bootstrapAdmins: ["github:1234567", "gitlab:@example"] });
 	assert.doesNotMatch(result.stderr, /Host name of this instance/u);
 	// Helm validates the site that the installer writes against the chart's schema. This run found
 	// no API endpoint on the fake host, and a real install writes the one that it finds.
@@ -714,7 +714,7 @@ await test(
 			);
 			assert.match(result.output, /^host: heph\.example\.org/mu);
 			assert.match(result.output, /oauthClientId: Iv1\.client/u);
-			assert.match(result.output, /bootstrapAdmins: "github:4242"/u);
+			assert.match(result.output, /bootstrapAdmins:\s+- "github:4242"/u);
 			assert.doesNotMatch(result.output, /Client secret of the OAuth app/u);
 		} finally {
 			platform.done();
@@ -730,7 +730,7 @@ await test(
 		try {
 			const result = onTerminal(platform.directory, FIRST_INSTALL_ANSWERS, "--render-site");
 			assert.equal(result.status, 0, result.output);
-			assert.match(result.output, /bootstrapAdmins: "github:@octo"/u);
+			assert.match(result.output, /bootstrapAdmins:\s+- "github:@octo"/u);
 			assert.match(result.output, /could not look up the numeric ID of octo/u);
 		} finally {
 			platform.done();

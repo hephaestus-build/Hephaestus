@@ -516,6 +516,35 @@ await test("sandbox identities and other roles do not receive an API token", () 
 	}
 });
 
+await test("chart list inputs require arrays of non-empty strings without commas", () => {
+	const valid = install(prepared, operator);
+	const inputs = [
+		["auth", "bootstrapAdmins"],
+		["auth", "browserExtensionIds"],
+		["auth", "passkeys", "allowedOrigins"],
+		["outline", "allowedOrigins"],
+	];
+	for (const keys of inputs) {
+		const change = (value: unknown) => {
+			let nested = value;
+			for (const key of keys.toReversed()) {
+				nested = { [key]: nested };
+			}
+			return nested;
+		};
+		for (const accepted of [[], ["first", "second"]]) {
+			assert.equal(
+				validate(merge(valid, { config: change(accepted) })),
+				true,
+				JSON.stringify(validate.errors),
+			);
+		}
+		for (const rejected of ["", "first,second", [1], [""], ["first,second"]]) {
+			assert.equal(validate(merge(valid, { config: change(rejected) })), false, keys.join("."));
+		}
+	}
+});
+
 function source(name: string): string {
 	return templates.find((template) => template.name === name)?.source ?? "";
 }

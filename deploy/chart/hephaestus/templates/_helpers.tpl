@@ -281,7 +281,7 @@ fails every pod, so each role is owed the lock's digest. */}}
 - name: HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED
   value: {{ .Values.config.outline.enabled | quote }}
 - name: HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS
-  value: {{ .Values.config.outline.allowedOrigins | quote }}
+  value: {{ .Values.config.outline.allowedOrigins | join "," | quote }}
 - name: HEPHAESTUS_INTEGRATION_SLACK_ENABLED
   value: {{ .Values.config.slack.enabled | quote }}
 {{- end -}}

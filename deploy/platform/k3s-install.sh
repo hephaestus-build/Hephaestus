@@ -289,7 +289,12 @@ render_site() {
 	fi
 	printf 'config:\n  gitCheckoutEnabled: true\n'
 	if [ -n "$GITHUB_CLIENT_ID" ]; then printf '  github:\n    oauthClientId: %s\n' "$GITHUB_CLIENT_ID"; fi
-	if [ -n "$BOOTSTRAP_ADMINS" ]; then printf '  auth:\n    bootstrapAdmins: "%s"\n' "$BOOTSTRAP_ADMINS"; fi
+	if [ -n "$BOOTSTRAP_ADMINS" ]; then
+		printf '  auth:\n    bootstrapAdmins:\n'
+		printf '%s\n' "$BOOTSTRAP_ADMINS" | tr ',' '\n' | while IFS= read -r admin; do
+			printf '      - "%s"\n' "$admin"
+		done
+	fi
 }
 if [ "$RENDER_SITE" = true ]; then
 	render_site "" ""

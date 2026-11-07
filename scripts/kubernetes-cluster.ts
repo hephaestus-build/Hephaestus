@@ -208,7 +208,7 @@ export function operatorValues(options: ValuesOptions): Record<string, unknown> 
 			: {
 					config: {
 						github: { oauthClientId: options.signIn.clientId },
-						auth: { bootstrapAdmins: options.signIn.bootstrapAdmins },
+						auth: { bootstrapAdmins: options.signIn.bootstrapAdmins.split(",").filter(Boolean) },
 					},
 				}),
 	};

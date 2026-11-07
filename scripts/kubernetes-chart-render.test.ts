@@ -2227,7 +2227,7 @@ await test("the server's operator settings reach the server alone", () => {
 						instanceAdminRequired: false,
 						workspaceAdminRequired: true,
 						rpId: "example.com",
-						allowedOrigins: "https://hephaestus.example.com",
+						allowedOrigins: ["https://hephaestus.example.com"],
 					},
 				},
 				monitoring: {
@@ -4006,4 +4006,45 @@ await test("the PostgreSQL exporter runs apart from the database, and its role J
 		list(get(exporterPolicy, "spec", "ingress")).map((rule) => get(rule, "ports", 0, "port")),
 		["metrics"],
 	);
+});
+
+await test("chart list inputs keep their order in environment bindings for each role", () => {
+	const bootstrapAdmins = ["github:1234567", "gitlab:@example"];
+	const browserExtensionIds = ["a".repeat(32), "b".repeat(32)];
+	const origins = ["https://first.example", "https://second.example"];
+	for (const populated of [false, true]) {
+		const resources = rendered([
+			...layersFor("small"),
+			{
+				config: {
+					auth: {
+						bootstrapAdmins: populated ? bootstrapAdmins : [],
+						browserExtensionIds: populated ? browserExtensionIds : [],
+						passkeys: { allowedOrigins: populated ? origins : [] },
+					},
+					outline: { allowedOrigins: populated ? origins : [] },
+				},
+			},
+		]);
+		const server = workload(resources, "server");
+		assert.equal(
+			envValue(server, "HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS"),
+			populated ? bootstrapAdmins.join(",") : "",
+		);
+		assert.equal(
+			envValue(server, "HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS"),
+			populated ? browserExtensionIds.join(",") : "",
+		);
+		assert.equal(
+			envValue(server, "HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS"),
+			populated ? origins.join(",") : "",
+		);
+		for (const component of ["server", "worker", "webhook"]) {
+			assert.equal(
+				envValue(workload(resources, component), "HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS"),
+				populated ? origins.join(",") : "",
+				component,
+			);
+		}
+	}
 });
