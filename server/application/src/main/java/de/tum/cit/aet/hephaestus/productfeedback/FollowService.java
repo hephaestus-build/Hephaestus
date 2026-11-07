@@ -351,7 +351,8 @@ class FollowService {
         ProductFeedback report = feedback.findById(filing.getFeedbackId()).orElseThrow();
         var rendered = IssueRenderer.render(
                 draft,
-                new IssueRenderer.Context(report.getAppVersion(), filing.getPageRoute(), null),
+                new IssueRenderer.Context(
+                        report.getAppVersion(), filing.getPageRoute(), null, filing.getDraftedAt() != null),
                 publicRepository.fullName(),
                 null,
                 null,

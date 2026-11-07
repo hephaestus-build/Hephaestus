@@ -20,7 +20,12 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Service
 class DraftingService implements ProductFeedbackDrafting {
-    static final Duration LEASE = Duration.ofMinutes(2);
+    /** Two calls of the adapter's limit, with room for the wait for a permit. */
+    static final Duration LEASE = Duration.ofMinutes(5);
+    /** A slow model must not decide where a report goes, so a failed call gets more chances before filing goes on. */
+    static final int DRAFT_ATTEMPTS = 3;
+
+    private static final Duration RETRY_DELAY = Duration.ofSeconds(30);
     static final Duration HOLD = Duration.ofMinutes(5);
     /** How long a report waits for a worker before the server routes it without a draft. */
     static final Duration EXPIRY = Duration.ofMinutes(10);
@@ -142,12 +147,24 @@ class DraftingService implements ProductFeedbackDrafting {
             if (filing == null) return;
             count(filing, inputTokens, outputTokens);
             meters.draft(failure.name().toLowerCase(Locale.ROOT));
-            answered(filing, null, clock.instant());
+            Instant now = clock.instant();
+            int failures = filing.getFailures() + 1;
+            if (failure != Failure.MODEL_UNAVAILABLE && failures < DRAFT_ATTEMPTS) {
+                filing.setFailures(failures);
+                filing.apply(FilingLifecycle.Event.DRAFT_RETRIED);
+                filing.setClaimedBy(null);
+                filing.setLeaseUntil(null);
+                filing.setNextAttemptAt(now.plus(RETRY_DELAY));
+                filing.setUpdatedAt(now);
+                return;
+            }
+            answered(filing, null, now);
         }));
     }
 
     private static void answered(ProductFeedbackFiling filing, @Nullable String answer, Instant now) {
         filing.setAnswer(answer);
+        filing.setFailures(0);
         filing.apply(FilingLifecycle.Event.DRAFT_ENDED);
         filing.setClaimedBy(null);
         filing.setLeaseUntil(null);

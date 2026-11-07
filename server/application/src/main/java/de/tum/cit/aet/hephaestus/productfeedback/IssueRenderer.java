@@ -20,7 +20,8 @@ final class IssueRenderer {
     record Context(
             @Nullable String release,
             @Nullable String route,
-            @Nullable String browser) {}
+            @Nullable String browser,
+            boolean drafted) {}
 
     /** One rendered issue. */
     record Rendered(String title, String body) {}
@@ -83,7 +84,10 @@ final class IssueRenderer {
                     .append(draft.related())
                     .append("\n\n");
         body.append("---\n");
-        body.append("Drafted by a model from product feedback sent through Hephaestus")
+        body.append(
+                        context.drafted()
+                                ? "Drafted by a model from product feedback sent through Hephaestus"
+                                : "Filed as the reporter wrote it, without a model draft. Sent through Hephaestus")
                 .append(version == null ? "" : " " + version)
                 .append(".");
         if (mention != null) body.append(" Reported by @").append(mention).append('.');

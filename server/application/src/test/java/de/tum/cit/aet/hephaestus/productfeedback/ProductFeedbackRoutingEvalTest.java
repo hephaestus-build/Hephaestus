@@ -58,7 +58,7 @@ class ProductFeedbackRoutingEvalTest {
                             ? Fallback.of(kind, outcome.original().text())
                             : outcome.draft(),
                     new IssueRenderer.Context(
-                            "1.0.0-test", item.path("context").path("route").asString(null), null),
+                            "1.0.0-test", item.path("context").path("route").asString(null), null, true),
                     repository,
                     isPublic ? null : outcome.decision().reason().words(),
                     isPublic ? null : "report-" + id,

@@ -203,6 +203,7 @@ class FilingLifecycleModelTest {
                         "worker ends with a security draft",
                         w.set(Fact.LATCH, true).with(Event.DRAFT_ENDED)));
                 out.add(new Step("worker is replaced", w.with(Event.DRAFT_CLAIMED)));
+                out.add(new Step("draft call fails with attempts left", w.with(Event.DRAFT_RETRIED)));
                 out.add(new Step("expires", routed(w)));
             }
             case ANSWERED -> out.add(new Step("routes", routed(w)));

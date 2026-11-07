@@ -180,7 +180,8 @@ class FilingService {
         Draft draft = Objects.requireNonNull(routing.read(filing.getDraft()));
         var rendered = IssueRenderer.render(
                 draft,
-                new IssueRenderer.Context(report.getAppVersion(), filing.getPageRoute(), null),
+                new IssueRenderer.Context(
+                        report.getAppVersion(), filing.getPageRoute(), null, filing.getDraftedAt() != null),
                 destination.getPublicRepository(),
                 isPublic ? null : Objects.requireNonNull(filing.getReason()).words(),
                 isPublic ? null : id.toString(),

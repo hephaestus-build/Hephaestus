@@ -213,6 +213,39 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldGiveAFailedDraftMoreChancesBeforeFilingGoesOn() {
+        UUID id = report();
+        for (int attempt = 1; attempt < DraftingService.DRAFT_ATTEMPTS; attempt++) {
+            jdbc.update(
+                    "UPDATE product_feedback_filing SET state = 'DRAFTING', attempt = ? WHERE feedback_id = ?",
+                    attempt,
+                    id);
+
+            drafting.fail(id, attempt, ProductFeedbackDrafting.Failure.PROVIDER_ERROR, 0, 0);
+
+            assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.DRAFT_QUEUED);
+        }
+        jdbc.update(
+                "UPDATE product_feedback_filing SET state = 'DRAFTING', attempt = ? WHERE feedback_id = ?",
+                DraftingService.DRAFT_ATTEMPTS,
+                id);
+
+        drafting.fail(id, DraftingService.DRAFT_ATTEMPTS, ProductFeedbackDrafting.Failure.PROVIDER_ERROR, 0, 0);
+
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.ANSWERED);
+    }
+
+    @Test
+    void shouldNotWaitForADraftWhenNoModelIsThere() {
+        UUID id = report();
+        jdbc.update("UPDATE product_feedback_filing SET state = 'DRAFTING', attempt = 1 WHERE feedback_id = ?", id);
+
+        drafting.fail(id, 1, ProductFeedbackDrafting.Failure.MODEL_UNAVAILABLE, 0, 0);
+
+        assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.ANSWERED);
+    }
+
+    @Test
     void shouldDropALateAnswerWhenTheReportAlreadyMovedOn() {
         UUID id = report();
         jdbc.update(
