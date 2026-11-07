@@ -90,7 +90,7 @@ function ScmIntegrationPage() {
 				{...scm.syncStatusHeaderProps}
 			/>
 
-			{isConnectionActive && kind && !isAppInstallationWorkspace && (
+			{(isConnectionActive || scm.canReconnectGitLab) && kind && !isAppInstallationWorkspace && (
 				<WorkspaceScmTokenSettings {...scm.tokenSettingsProps} />
 			)}
 

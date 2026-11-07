@@ -16,10 +16,14 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
+import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.api.InitiateConnectionRequestDTO;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabPreflightService;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
@@ -33,6 +37,7 @@ import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.Nullable;
@@ -40,6 +45,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -82,6 +90,15 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Autowired
     private ConnectionRepository connectionRepository;
+
+    @Autowired
+    private CredentialReader credentialReader;
+
+    @Autowired
+    private CredentialBundleConverter credentialConverter;
+
+    @Autowired
+    private RepositoryToMonitorRepository repositoryToMonitorRepository;
 
     /** {@code hephaestus.integration.gitlab.default-server-url} in the test profile. */
     private static final String DEFAULT_INSTANCE = "https://gitlab.lrz.de";
@@ -258,7 +275,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
-    void shouldRefuseToConnectGitLabOutsideWorkspaceCreation() {
+    void shouldRefuseToReconnectAnActiveGitLabConnection() {
         Consumer<HttpHeaders> owner = gitLabCaller("connector");
         WorkspaceDTO workspace = Objects.requireNonNull(postGitLabWorkspace(owner, "gitlab-connect", null)
                 .expectStatus()
@@ -273,8 +290,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(owner)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new InitiateConnectionRequestDTO(
-                        IntegrationKind.GITLAB,
-                        Map.of("pat", "glpat-test", "group_id", "7", "server_url", "https://gitlab.attacker.example")))
+                        IntegrationKind.GITLAB, Map.of("personalAccessToken", "glpat-test")))
                 .exchange()
                 .expectStatus()
                 .isBadRequest()
@@ -286,6 +302,207 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 .isInstanceOfSatisfying(
                         ConnectionConfig.GitLabConfig.class,
                         config -> assertThat(config.serverUrl()).isEqualTo(DEFAULT_INSTANCE));
+    }
+
+    @Test
+    void shouldReconnectTheSameGitLabGroupWhileItsPreviousWebhookCleanupIsPending() {
+        var caller = gitLabCallerWithMirror("reconnector");
+        Workspace workspace =
+                createWorkspace("reconnect-gitlab", "Reconnect GitLab", "my-group", AccountType.ORG, caller.scmUser());
+        Connection previous = new Connection(
+                workspace,
+                IntegrationKind.GITLAB,
+                DEFAULT_INSTANCE,
+                new ConnectionConfig.GitLabConfig(DEFAULT_INSTANCE, 42L, 99L, Set.of(), null));
+        previous.setCredentials(new BearerToken("previous-test-token", null), credentialConverter);
+        previous.setState(IntegrationState.ACTIVE);
+        long previousId =
+                persistedId(connectionRepository.saveAndFlush(previous).getId());
+        RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setWorkspace(workspace);
+        monitor.setNativeId(12L);
+        monitor.setNameWithOwner("my-group/test-project");
+        repositoryToMonitorRepository.save(monitor);
+        webTestClient
+                .patch()
+                .uri("/workspaces/{slug}/connections/{id}/status", workspace.getWorkspaceSlug(), previousId)
+                .headers(caller.headers())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("state", "UNINSTALLED"))
+                .exchange()
+                .expectStatus()
+                .isOk();
+
+        Connection disconnected = connectionRepository.findById(previousId).orElseThrow();
+        assertThat(disconnected.getState()).isEqualTo(IntegrationState.UNINSTALLED);
+        assertThat(disconnected.getProviderTeardownRequestedAt()).isNotNull();
+        assertThat(credentialReader.credentialsOf(disconnected)).isEmpty();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
+                .isEmpty();
+
+        webTestClient
+                .post()
+                .uri("/workspaces/{slug}/connections", workspace.getWorkspaceSlug())
+                .headers(caller.headers())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new InitiateConnectionRequestDTO(
+                        IntegrationKind.GITLAB, Map.of("personalAccessToken", "fresh-test-token")))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.connectionId")
+                .isEqualTo(previousId);
+
+        assertThat(connectionRepository.findByWorkspaceId(workspace.getId()))
+                .singleElement()
+                .satisfies(connection -> {
+                    assertThat(connection.getId()).isEqualTo(previousId);
+                    assertThat(connection.getState()).isEqualTo(IntegrationState.ACTIVE);
+                    assertThat(connection.getProviderTeardownRequestedAt()).isNull();
+                    assertThat(credentialReader.credentialsOf(connection))
+                            .contains(new BearerToken("fresh-test-token", null));
+                    assertThat(connection.getConfig())
+                            .isInstanceOfSatisfying(ConnectionConfig.GitLabConfig.class, config -> {
+                                assertThat(config.serverUrl()).isEqualTo(DEFAULT_INSTANCE);
+                                assertThat(config.gitlabGroupId()).isEqualTo(42L);
+                                assertThat(config.gitlabWebhookId()).isEqualTo(99L);
+                            });
+                });
+    }
+
+    @Test
+    void shouldLeaveGitLabDisconnectedWhenTheGroupIdentityHasChanged() {
+        var caller = gitLabCallerWithMirror("reconnect-refused");
+        Workspace workspace = createWorkspace(
+                "reconnect-refused", "Reconnect refused", "my-group", AccountType.ORG, caller.scmUser());
+        Connection previous = new Connection(
+                workspace,
+                IntegrationKind.GITLAB,
+                DEFAULT_INSTANCE,
+                new ConnectionConfig.GitLabConfig(DEFAULT_INSTANCE, 99L, null, Set.of(), null));
+        previous.setState(IntegrationState.UNINSTALLED);
+        long id = persistedId(connectionRepository.saveAndFlush(previous).getId());
+
+        webTestClient
+                .post()
+                .uri("/workspaces/{slug}/connections", workspace.getWorkspaceSlug())
+                .headers(caller.headers())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new InitiateConnectionRequestDTO(
+                        IntegrationKind.GITLAB, Map.of("personalAccessToken", "wrong-group-token")))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(ProblemDetail.class)
+                .value(problem -> assertThat(problem.getDetail()).contains("group has changed"));
+
+        Connection unchanged = connectionRepository.findById(id).orElseThrow();
+        assertThat(unchanged.getState()).isEqualTo(IntegrationState.UNINSTALLED);
+        assertThat(unchanged.getCredentialsEncrypted()).isNull();
+    }
+
+    @Test
+    void shouldLeaveGitLabDisconnectedWhenTheProviderRefusesTheFreshToken() {
+        var caller = gitLabCallerWithMirror("reconnect-token-refused");
+        Workspace workspace = createWorkspace(
+                "reconnect-token-refused", "Reconnect token refused", "my-group", AccountType.ORG, caller.scmUser());
+        Connection previous = new Connection(
+                workspace,
+                IntegrationKind.GITLAB,
+                DEFAULT_INSTANCE,
+                new ConnectionConfig.GitLabConfig(DEFAULT_INSTANCE, 42L, null, Set.of(), null));
+        previous.setState(IntegrationState.UNINSTALLED);
+        long id = persistedId(connectionRepository.saveAndFlush(previous).getId());
+        doThrow(new ResponseStatusException(
+                        HttpStatus.UNPROCESSABLE_CONTENT,
+                        "We could not verify the GitLab group ID. Check the group path and token access."))
+                .when(fixtureGitLabGroups)
+                .resolveAccountId(anyString(), any(), anyString());
+
+        webTestClient
+                .post()
+                .uri("/workspaces/{slug}/connections", workspace.getWorkspaceSlug())
+                .headers(caller.headers())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new InitiateConnectionRequestDTO(
+                        IntegrationKind.GITLAB, Map.of("personalAccessToken", "refused-test-token")))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(422);
+
+        Connection unchanged = connectionRepository.findById(id).orElseThrow();
+        assertThat(unchanged.getState()).isEqualTo(IntegrationState.UNINSTALLED);
+        assertThat(unchanged.getCredentialsEncrypted()).isNull();
+    }
+
+    @Test
+    void shouldKeepTheCurrentGitHubConnectionWhenGitLabReconnectIsRequested() {
+        var caller = gitLabCallerWithMirror("reconnect-other-scm");
+        Workspace workspace = createWorkspace(
+                "reconnect-other-scm", "Reconnect other SCM", "my-group", AccountType.ORG, caller.scmUser());
+        Connection previous = new Connection(
+                workspace,
+                IntegrationKind.GITLAB,
+                DEFAULT_INSTANCE,
+                new ConnectionConfig.GitLabConfig(DEFAULT_INSTANCE, 42L, null, Set.of(), null));
+        previous.setState(IntegrationState.UNINSTALLED);
+        long id = persistedId(connectionRepository.saveAndFlush(previous).getId());
+        Connection github = new Connection(
+                workspace,
+                IntegrationKind.GITHUB,
+                "12345",
+                new ConnectionConfig.GitHubAppConfig(12345L, "my-group", null, Set.of()));
+        github.setState(IntegrationState.ACTIVE);
+        long githubId = persistedId(connectionRepository.saveAndFlush(github).getId());
+
+        webTestClient
+                .post()
+                .uri("/workspaces/{slug}/connections", workspace.getWorkspaceSlug())
+                .headers(caller.headers())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new InitiateConnectionRequestDTO(
+                        IntegrationKind.GITLAB, Map.of("personalAccessToken", "fresh-test-token")))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+
+        Connection unchanged = connectionRepository.findById(id).orElseThrow();
+        assertThat(unchanged.getState()).isEqualTo(IntegrationState.UNINSTALLED);
+        assertThat(unchanged.getCredentialsEncrypted()).isNull();
+        assertThat(connectionRepository.findById(githubId).orElseThrow().getState())
+                .isEqualTo(IntegrationState.ACTIVE);
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = "   ")
+    void shouldKeepGitLabDisconnectedWhenTheTokenIsMissingOrBlank(@Nullable String token) {
+        var caller = gitLabCallerWithMirror("reconnect-token-missing");
+        Workspace workspace = createWorkspace(
+                "reconnect-token-missing", "Reconnect token missing", "my-group", AccountType.ORG, caller.scmUser());
+        Connection previous = new Connection(
+                workspace,
+                IntegrationKind.GITLAB,
+                DEFAULT_INSTANCE,
+                new ConnectionConfig.GitLabConfig(DEFAULT_INSTANCE, 42L, null, Set.of(), null));
+        previous.setState(IntegrationState.UNINSTALLED);
+        long id = persistedId(connectionRepository.saveAndFlush(previous).getId());
+
+        webTestClient
+                .post()
+                .uri("/workspaces/{slug}/connections", workspace.getWorkspaceSlug())
+                .headers(caller.headers())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new InitiateConnectionRequestDTO(
+                        IntegrationKind.GITLAB, token == null ? Map.of() : Map.of("personalAccessToken", token)))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+
+        Connection unchanged = connectionRepository.findById(id).orElseThrow();
+        assertThat(unchanged.getState()).isEqualTo(IntegrationState.UNINSTALLED);
+        assertThat(unchanged.getCredentialsEncrypted()).isNull();
     }
 
     @Test

@@ -330,13 +330,13 @@ public class GitLabWebhookService {
     }
 
     /**
-     * Reads a live connection's stored webhook and PAT and returns the GitLab call that deletes the hook. Empty for a
-     * disconnected connection, whose hook the provider teardown removes.
+     * Reads a suspended connection's webhook and PAT. An active connection has resumed; a disconnected connection's
+     * hook belongs to provider teardown, which fences its removal against reconnect.
      */
     public Optional<Runnable> prepareWebhookDeregistration(long workspaceId, long connectionId) {
         Optional<Connection> connection = connectionService
                 .findInWorkspace(workspaceId, connectionId)
-                .filter(c -> c.getState() != IntegrationState.UNINSTALLED);
+                .filter(c -> c.getState() == IntegrationState.SUSPENDED);
         if (connection.isEmpty() || !(connection.get().getConfig() instanceof GitLabConfig config)) {
             return Optional.empty();
         }

@@ -225,7 +225,7 @@ If the provider is unreachable, Hephaestus tries again every few minutes for at 
 After 24 hours, it deletes the credential without the removal.
 Then the integration's page and an email to the workspace admins tell you to remove the app, token, or webhook at the provider yourself.
 
-You can connect the same Slack workspace or GitHub installation again before the removal succeeds.
+You can connect the same Slack workspace, GitHub installation or GitLab group again before the removal succeeds.
 The new connection then uses it again, and Hephaestus removes nothing.
 You can connect Outline again only after the removal ends.
 Another Hephaestus workspace cannot connect the same Slack workspace or GitHub installation until the removal ends.
@@ -237,3 +237,11 @@ See erasure triggers in the [personal-data map](./dsms/personal-data-map.md).
 
 1. Inspect provider-side app access, hooks, and keys separately.
 2. To repair a credential, use the replacement paths above or [Credential key rotation](./credential-key-rotation), not Disconnect.
+
+## Reconnect GitLab
+
+Open **Administration → Integrations**, then open **GitLab**.
+Enter a new token and select **Reconnect GitLab**.
+Hephaestus verifies that the token can read the same group before it restores the connection.
+If the workspace used **Selected projects**, select those projects again after reconnecting.
+The previous mirror was erased. The connection syncs the work again.

@@ -16,6 +16,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +50,9 @@ import org.springframework.web.server.ResponseStatusException;
 public class ConnectionAdminService {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectionAdminService.class);
+
+    @PersistenceContext
+    private @Nullable EntityManager entityManager;
 
     private final ConnectionRepository connectionRepository;
     private final ConnectionAuditRepository auditRepository;
@@ -126,11 +131,25 @@ public class ConnectionAdminService {
             CredentialBundle credentials,
             Map<String, String> userInput,
             @Nullable Long actorAccountId) {
-        Workspace workspace = workspaceRepository
-                .findById(workspaceId)
+        // Hold the workspace status steady while reconnecting.
+        Workspace workspace = (kind == IntegrationKind.GITLAB
+                        ? workspaceRepository.findByIdForUpdate(workspaceId)
+                        : workspaceRepository.findById(workspaceId))
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
 
-        ConnectionConfig config = buildConfigForInlineKind(kind, userInput, instanceKey);
+        if (kind == IntegrationKind.GITLAB && workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE) {
+            throw new IllegalArgumentException("Resume this workspace before reconnecting GitLab.");
+        }
+
+        if (kind == IntegrationKind.GITLAB
+                && connectionRepository.findByWorkspaceId(workspaceId).stream()
+                        .anyMatch(connection -> connection.getKind().family() == kind.family()
+                                && connection.getState() != IntegrationState.UNINSTALLED)) {
+            throw new IllegalArgumentException(
+                    "Disconnect the current source-control integration before reconnecting GitLab.");
+        }
+
+        ConnectionConfig config = buildConfigForInlineKind(workspaceId, kind, userInput, instanceKey);
         // Reconnect-friendly upsert: (workspace, kind, instance_key) is unique, so a previous
         // UNINSTALLED install of the same vendor instance is revived with fresh config +
         // credentials instead of colliding — the guarded INITIATE reconnect in
@@ -139,7 +158,7 @@ public class ConnectionAdminService {
                 .findByWorkspaceIdAndKindAndInstanceKey(workspaceId, kind, instanceKey)
                 .map(existing -> {
                     // The webhook and token to remove are in this row; a new config would lose them at the provider.
-                    if (existing.getProviderTeardownRequestedAt() != null) {
+                    if (existing.getProviderTeardownRequestedAt() != null && kind != IntegrationKind.GITLAB) {
                         throw new ResponseStatusException(
                                 HttpStatus.CONFLICT,
                                 "Hephaestus is still removing the previous connection at the provider. Try again in a few minutes.");
@@ -184,14 +203,31 @@ public class ConnectionAdminService {
 
     /**
      * Per-kind config construction for inline-flow Connections. Only kinds with an
-     * {@code AcceptInline} initiation are handled here: GitHub redirects to its App install, and a
-     * GitLab connection is provisioned with its workspace, whose creation checks the instance.
+     * {@code AcceptInline} initiation are handled here. GitLab can revive only its previous group;
+     * its strategy checked the fresh token before this transaction began.
      */
     private ConnectionConfig buildConfigForInlineKind(
-            IntegrationKind kind, Map<String, String> userInput, @Nullable String instanceKey) {
+            long workspaceId, IntegrationKind kind, Map<String, String> userInput, @Nullable String instanceKey) {
         Set<String> enabledStreams = new HashSet<>();
         return switch (kind) {
-            case GITHUB, GITLAB -> throw new IllegalStateException(kind + " is never connected inline");
+            case GITHUB -> throw new IllegalStateException(kind + " is never connected inline");
+            case GITLAB -> {
+                Connection previous = connectionRepository
+                        .findByWorkspaceIdAndKindAndInstanceKey(workspaceId, kind, instanceKey)
+                        .orElseThrow(() ->
+                                new IllegalArgumentException("This workspace has no GitLab connection to reconnect."));
+                long previousId = Objects.requireNonNull(previous.getId());
+                connectionRepository.acquireLifecycleLock(previousId, workspaceId);
+                Objects.requireNonNull(entityManager).refresh(previous);
+                if (previous.getState() != IntegrationState.UNINSTALLED) {
+                    throw new IllegalArgumentException("This GitLab connection changed. Reload before reconnecting.");
+                }
+                ConnectionConfig current = previous.getConfig();
+                if (!(current instanceof ConnectionConfig.GitLabConfig gitlab)) {
+                    throw new IllegalStateException("The disconnected GitLab connection has no group configuration.");
+                }
+                yield gitlab.withTokenMetadata(null);
+            }
             case SLACK ->
                 new ConnectionConfig.SlackConfig(
                         instanceKey, /* teamName */ null, /* retentionDays */ null, enabledStreams);
