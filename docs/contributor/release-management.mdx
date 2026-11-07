@@ -88,6 +88,8 @@ sequenceDiagram
 
 ### When a release fails
 
+For a release that is already published, use [Recover from a bad published release](./recover-a-published-release).
+
 Release images are promoted **by digest and never rebuilt**.
 A commit rejected by the evidence gate cannot pass on retry.
 Only a new commit can pass.
@@ -645,5 +647,3 @@ For the running release, follow the [runtime identity handoff](/admin/release-im
 Renovate policy is in [Supply-chain security in CI](./supply-chain-security.md). `Verify changesets`
 skips bot-authored pull requests. When a dependency bump is user-facing, a maintainer adds the
 changeset.
-
-For a release that is already published, use [Recover from a bad published release](./recover-a-published-release).
