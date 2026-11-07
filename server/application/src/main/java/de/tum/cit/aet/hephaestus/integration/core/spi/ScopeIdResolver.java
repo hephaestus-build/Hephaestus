@@ -3,23 +3,9 @@ package de.tum.cit.aet.hephaestus.integration.core.spi;
 import java.util.Optional;
 
 /**
- * Resolves scope ID (workspace ID) for webhook processing and sync operations.
- * <p>
- * This SPI allows the integration.scm module to resolve scope IDs without depending
- * on workspace domain entities directly.
- *
- * <h2>Resolution Strategies</h2>
- * <ul>
- *   <li>{@link #findScopeIdByOrgLogin(String)} - For organization-owned repositories</li>
- *   <li>{@link #findScopeIdByRepositoryName(String)} - For personal (user-owned) repositories
- *       and fallback when org lookup fails</li>
- * </ul>
- *
- * <h2>Personal Repository Support</h2>
- * Personal repositories (owned by GitHub users, not organizations) have no organization
- * entity. For these repos, scope resolution falls back to looking up the workspace
- * by the repository's nameWithOwner field, which is tracked in the workspace's
- * monitored repositories list.
+ * Resolves a workspace without exposing workspace entities to integration processors.
+ * A bound broker dispatch supplies the authoritative workspace, including the absence of a workspace
+ * for installation deliveries. Only unbound calls use account-login or repository-monitor lookups.
  */
 public interface ScopeIdResolver {
     /**

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import de.tum.cit.aet.hephaestus.core.event.WorkspacesInitializedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationDispatchScope;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -920,7 +921,10 @@ public class IntegrationNatsConsumer {
         var metadata = msg.isJetStream() ? msg.metaData() : null;
         String stream =
                 metadata != null ? metadata.getStream() : msg.getSubject().split("\\.", 2)[0];
-        return serialDispatch(scopeId, stream, () -> dispatchAdmitted(scopeId, msg));
+        return serialDispatch(
+                scopeId,
+                stream,
+                () -> new IntegrationDispatchScope(scopeId).call(() -> dispatchAdmitted(scopeId, msg)));
     }
 
     <T extends @Nullable Object> T serialDispatch(@Nullable Long scopeId, String stream, Supplier<T> work) {
