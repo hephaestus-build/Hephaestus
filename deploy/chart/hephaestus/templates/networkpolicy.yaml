@@ -9,7 +9,7 @@
 {{- $_ := required "nats.external.cidr is required for the egress rule when nats.bundled is false" .Values.nats.external.cidr }}
 {{- end }}
 # Every pod of the release starts with no ingress and no egress. The policies below open only the
-# paths that the Compose topology uses.
+# paths that each role needs.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

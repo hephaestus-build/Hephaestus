@@ -3381,6 +3381,74 @@ await test("a private CA reaches the roles that call a Git provider, and is off 
 	}
 });
 
+await test("the webhook trusts an external TLS broker only with a configured CA bundle", () => {
+	const externalBroker = { url: "tls://broker.example.test:4222", cidr: "10.0.13.0/24" };
+	const bundle = { existingSecret: "broker-ca", key: "bundle.pem" };
+	const expectedBundle = {
+		env: "/etc/hephaestus/private-ca/ca.crt",
+		volumes: [
+			{
+				name: "private-ca",
+				secret: {
+					secretName: "broker-ca",
+					items: [{ key: "bundle.pem", path: "ca.crt" }],
+					defaultMode: 292,
+				},
+			},
+		],
+		mounts: [{ name: "private-ca", mountPath: "/etc/hephaestus/private-ca", readOnly: true }],
+	};
+	const noBundle = { env: undefined, volumes: [], mounts: [] };
+	for (const scenario of [
+		{
+			label: "external TLS",
+			nats: { bundled: false, external: externalBroker },
+			privateCa: bundle,
+			expected: expectedBundle,
+		},
+		{
+			label: "plain broker",
+			nats: {
+				bundled: false,
+				external: { ...externalBroker, url: "nats://broker.example.test:4222" },
+			},
+			privateCa: bundle,
+			expected: noBundle,
+		},
+		{
+			label: "bundled broker",
+			nats: { bundled: true, external: externalBroker },
+			privateCa: bundle,
+			expected: noBundle,
+		},
+		{
+			label: "no private CA",
+			nats: { bundled: false, external: externalBroker },
+			privateCa: { existingSecret: "", key: "ca.crt" },
+			expected: noBundle,
+		},
+	]) {
+		const resources = rendered([
+			...layersFor("small"),
+			{ nats: scenario.nats, config: { privateCa: scenario.privateCa } },
+		]);
+		const receiver = workload(resources, "webhook");
+		assert.deepEqual(
+			{
+				env: envValue(receiver, "SSL_CERT_FILE"),
+				volumes: list(get(receiver, "spec", "template", "spec", "volumes")).filter(
+					(volume) => get(volume, "name") === "private-ca",
+				),
+				mounts: list(get(container(receiver), "volumeMounts")).filter(
+					(mount) => get(mount, "name") === "private-ca",
+				),
+			},
+			scenario.expected,
+			scenario.label,
+		);
+	}
+});
+
 await test("the migration knows the configured GitLab, which a connection without a URL used", () => {
 	const resources = rendered([
 		...layersFor("small"),

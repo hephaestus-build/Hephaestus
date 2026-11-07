@@ -85,9 +85,8 @@ spec:
   commonName: hephaestus-postgresql.hephaestus.svc
   dnsNames:
     - hephaestus-postgresql.hephaestus.svc
-  # One year. PostgreSQL reads a renewed certificate only when it starts: restart it in the 30 days
-  # between the renewal and the expiry of the previous certificate.
-  duration: 8760h
+  # The server certificate requests the same duration as its CA.
+  duration: 87600h
   renewBefore: 720h
   issuerRef:
     kind: Issuer
