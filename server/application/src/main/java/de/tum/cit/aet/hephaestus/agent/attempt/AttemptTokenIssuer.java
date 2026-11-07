@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Issues the attempt tokens of this worker's sandboxes; {@link AttemptTokenVerifier} checks them. */
+/** Issues the attempt tokens of this worker's sandboxes; {@link AttemptTokenVerifier} checks them on any worker. */
 public class AttemptTokenIssuer {
 
     static final String ISSUER = "hephaestus-worker";
@@ -26,10 +26,10 @@ public class AttemptTokenIssuer {
      */
     public static final String LLM_PROXY_SCOPE = "llm_proxy";
 
-    private final AttemptSigningKey key;
+    private final AttemptKeyring keyring;
 
-    public AttemptTokenIssuer(AttemptSigningKey key) {
-        this.key = key;
+    public AttemptTokenIssuer(AttemptKeyring keyring) {
+        this.keyring = keyring;
     }
 
     /**
@@ -42,13 +42,18 @@ public class AttemptTokenIssuer {
             throw new IllegalArgumentException("workDeadline must be in the future and not after expiresAt");
         return claims(AttemptJwt.Kind.REVIEW, id, workspaceId, attempt, leaseId, expiresAt)
                 .withClaim(WORK_DEADLINE_CLAIM, workDeadline)
-                .sign(Algorithm.RSA256(key.publicKey(), key.privateKey()));
+                .sign(algorithm());
     }
 
     /** A turn attempt's credential that stays valid until {@code expiresAt}, which the caller derives from the turn. */
     public String issueForTurn(UUID id, Long workspaceId, int attempt, UUID leaseId, Instant expiresAt) {
         return claims(AttemptJwt.Kind.TURN, id, workspaceId, attempt, leaseId, expiresAt)
-                .sign(Algorithm.RSA256(key.publicKey(), key.privateKey()));
+                .sign(algorithm());
+    }
+
+    private Algorithm algorithm() {
+        AttemptSigningKey key = keyring.signingKey();
+        return Algorithm.RSA256(key.publicKey(), key.privateKey());
     }
 
     private JWTCreator.Builder claims(
@@ -57,7 +62,7 @@ public class AttemptTokenIssuer {
         Instant now = Instant.now();
         if (!expiresAt.isAfter(now)) throw new IllegalArgumentException("expiresAt must be in the future");
         return JWT.create()
-                .withHeader(Map.of("kid", key.kid(), "typ", ATTEMPT_TOKEN_TYPE))
+                .withHeader(Map.of("kid", keyring.signingKey().kid(), "typ", ATTEMPT_TOKEN_TYPE))
                 .withIssuer(ISSUER)
                 .withAudience(AUDIENCE)
                 .withClaim(KIND_CLAIM, kind.name())

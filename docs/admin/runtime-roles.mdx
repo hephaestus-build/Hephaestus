@@ -843,7 +843,8 @@ A higher review capacity there has no effect until you also raise the sandbox li
 1. Raise the sandbox limit only with sufficient RAM, as [Sizing](./sizing) describes.
 
 Each worker signs the attempt tokens of its sandboxes with a key that it generates at start and keeps in memory.
-A sandbox calls only the gateway of the worker that runs its attempt, so the key needs no configuration.
+It stores the public key in the table `attempt_public_key`, so any worker can verify those tokens.
+The key needs no configuration.
 
 [Sizing](./sizing#database-connections) owns the connection pool budget of each role and the JVM [memory headroom](./sizing#memory-headroom).
 

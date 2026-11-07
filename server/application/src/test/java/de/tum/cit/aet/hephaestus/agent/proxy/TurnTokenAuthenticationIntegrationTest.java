@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
@@ -76,9 +77,10 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
     /** This test's worker key: the worker role, which signs attempt tokens, is off in the test context. */
     private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
 
-    private final AttemptTokenVerifier jwtVerifier = new AttemptTokenVerifier(KEY, new SimpleMeterRegistry());
+    private final AttemptTokenVerifier jwtVerifier =
+            new AttemptTokenVerifier(AttemptKeyFixtures.keyring(KEY), new SimpleMeterRegistry());
 
-    private final AttemptTokenIssuer jwtIssuer = new AttemptTokenIssuer(KEY);
+    private final AttemptTokenIssuer jwtIssuer = new AttemptTokenIssuer(AttemptKeyFixtures.keyring(KEY));
 
     @Autowired
     private ObjectMapper objectMapper;

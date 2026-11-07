@@ -30,6 +30,7 @@ public final class AgentMetrics {
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_EVALUATED = "agent.review.practice.coverage.evaluated";
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_RATIO = "agent.review.practice.coverage.ratio";
     public static final String AGENT_REVIEW_PRACTICE_SCRIPTS = "agent.review.practice_scripts";
+    public static final String ATTEMPT_KEY_SYNC_FAILURES = "attempt.key.sync.failures";
     public static final String ATTEMPT_TOKEN_VERIFY = "attempt.token.verify";
     public static final String LLM_BUDGET_ALERT_FAILURE = "llm.budget.alert.failure";
     public static final String LLM_BUDGET_BLOCKED = "llm.budget.blocked";

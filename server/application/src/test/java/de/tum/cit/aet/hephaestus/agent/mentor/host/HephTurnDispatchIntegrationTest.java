@@ -6,6 +6,7 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
@@ -121,9 +122,10 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     /** This test's worker key: the worker role, which signs attempt tokens, is off in the test context. */
     private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
 
-    private final AttemptTokenIssuer issuer = new AttemptTokenIssuer(KEY);
+    private final AttemptTokenIssuer issuer = new AttemptTokenIssuer(AttemptKeyFixtures.keyring(KEY));
 
-    private final AttemptTokenVerifier verifier = new AttemptTokenVerifier(KEY, new SimpleMeterRegistry());
+    private final AttemptTokenVerifier verifier =
+            new AttemptTokenVerifier(AttemptKeyFixtures.keyring(KEY), new SimpleMeterRegistry());
 
     @Autowired
     private DataSourceProperties dataSource;

@@ -9,6 +9,12 @@ erDiagram
 
     direction LR
 
+    AttemptPublicKey {
+        VARCHAR(36) kid PK
+        TIMESTAMPTZ not_after "NOT NULL"
+        BYTEA public_key "NOT NULL"
+    }
+
     FxRate {
         BIGINT id PK
         DATE rate_date UK "NOT NULL"

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
@@ -146,9 +147,10 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     /** This test's worker key: the worker role, which signs attempt tokens, is off in the test context. */
     private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
 
-    private final AttemptTokenVerifier jwtVerifier = new AttemptTokenVerifier(KEY, new SimpleMeterRegistry());
+    private final AttemptTokenVerifier jwtVerifier =
+            new AttemptTokenVerifier(AttemptKeyFixtures.keyring(KEY), new SimpleMeterRegistry());
 
-    private final AttemptTokenIssuer jwtIssuer = new AttemptTokenIssuer(KEY);
+    private final AttemptTokenIssuer jwtIssuer = new AttemptTokenIssuer(AttemptKeyFixtures.keyring(KEY));
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -305,14 +307,15 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         ReviewJob job = runningJob(true);
         Instant work = Instant.now().plus(Duration.ofMinutes(5));
 
-        AuthenticationResult result = authenticate(new AttemptTokenIssuer(AttemptSigningKey.generate())
-                .issueForReview(
-                        job.getId(),
-                        job.getWorkspaceId(),
-                        job.getAttempt(),
-                        Objects.requireNonNull(job.getLeaseId()),
-                        work,
-                        work.plus(Duration.ofMinutes(10))));
+        AuthenticationResult result =
+                authenticate(new AttemptTokenIssuer(AttemptKeyFixtures.keyring(AttemptSigningKey.generate()))
+                        .issueForReview(
+                                job.getId(),
+                                job.getWorkspaceId(),
+                                job.getAttempt(),
+                                Objects.requireNonNull(job.getLeaseId()),
+                                work,
+                                work.plus(Duration.ofMinutes(10))));
 
         assertThat(result.status()).isEqualTo(401);
         assertThat(result.authentication()).isNull();
