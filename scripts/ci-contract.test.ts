@@ -28,6 +28,32 @@ import { planSubjects } from "./scan-main-images.ts";
 import { PLATFORMS, planUpstreamSubjects } from "./scan-upstream-images.ts";
 import { validateManifest } from "./verify-release-evidence.ts";
 
+void test("private dependency and platform reports run only on the default branch", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/rescan-images.yml", "utf8"));
+	const condition = workflow.getIn(["jobs", "dependencies-and-platform", "if"]);
+	const source = condition === undefined ? "true" : asString(condition, "private scan condition");
+	const parsed = new Parser(new Lexer(source).lex().tokens, ["github"], []).parse();
+	for (const [defaultBranch, ref, expected] of [
+		["main", "refs/heads/main", true],
+		["main", "refs/heads/topic", false],
+		["trunk", "refs/heads/trunk", true],
+		["trunk", "refs/heads/main", false],
+		["main", "refs/pull/7/merge", false],
+		["main", "refs/tags/v1.0.0", false],
+	] as const) {
+		const context: unknown = JSON.parse(
+			JSON.stringify({ github: { ref, event: { repository: { default_branch: defaultBranch } } } }),
+			data.reviver,
+		);
+		assert.ok(context instanceof data.Dictionary);
+		assert.equal(
+			new Evaluator(parsed, context).evaluate().coerceString() === "true",
+			expected,
+			ref,
+		);
+	}
+});
+
 function job(source: string, name: string): string {
 	const match = new RegExp(
 		`^  ${name}:\\n(?:[\\s\\S]*?)(?=^  [A-Za-z][\\w-]*:\\s*$|(?![\\s\\S]))`,
@@ -3013,7 +3039,7 @@ void describe("CI contract", () => {
 		const namespace = "ghcr.io/hephaestus-build";
 		const digest = `sha256:${"c".repeat(64)}`;
 		// The subject set the pre-release scans cover, derived from the inventory rather than listed:
-		// the build gate and the weekly rescan take the first-party half, scan-upstream-images.ts the
+		// the build gate and the scheduled rescan take the first-party half, scan-upstream-images.ts the
 		// pinned upstream half.
 		const scanned = [
 			...planSubjects(inventory, namespace, "main").map((subject) => ({
@@ -3047,7 +3073,7 @@ void describe("CI contract", () => {
 
 		// A planner nothing invokes covers nothing. The pinned digests need no build, so they are
 		// scanned on the pull request that changes them — which is the pull request a Renovate digest
-		// bump opens — and again in the weekly rescan, where a finding routes to the tracking issue.
+		// bump opens — and again in the scheduled rescan, where a finding routes to the tracking issue.
 		assert.match(
 			job(await readFile(".github/workflows/cicd.yml", "utf8"), "upstream-images"),
 			/run: node scripts\/scan-upstream-images\.ts reports\n/u,
@@ -3758,20 +3784,18 @@ void describe("CI contract", () => {
 		);
 	});
 
-	void test("rescans main's images weekly and reports drift to an issue, not a status", async () => {
+	void test("rescans main's images daily and reports drift to an issue, not a status", async () => {
 		const workflow = await readFile(".github/workflows/rescan-images.yml", "utf8");
 		const source = job(workflow, "main");
-		// Weekly, with the supported-release rescan: the remedy for drift is a rebuild of main,
-		// which the next merge performs anyway, so a nightly run would report the same finding six
-		// more times before anything could have changed.
-		assert.match(workflow, /^ {4}- cron: "\d+ \d+ \* \* 1"$/mu);
+		// Repeated findings do not create duplicate notifications; the report fingerprints them.
+		assert.match(workflow, /^ {4}- cron: "\d+ \d+ \* \* \*"$/mu);
 		assert.match(workflow, /workflow_dispatch:/u);
 		assert.match(workflow, /group: rescan-images/u);
 		// Writing an issue is the whole point; nothing else here needs a write.
 		assert.match(source, /issues: write/u);
 		assert.doesNotMatch(source, /contents: write|packages: write|id-token: write/u);
 		// The scan and the reporting are tested TypeScript, not inline bash: the upsert in
-		// particular has to not open a duplicate every week, which no eyeball review establishes.
+		// particular has to not open a duplicate each day, which no eyeball review establishes.
 		assert.match(source, /run: node scripts\/scan-main-images\.ts reports/u);
 		assert.match(source, /run: node scripts\/report-vulnerability-drift\.ts reports/u);
 		assert.match(source, /uses: \.\/\.github\/actions\/download-trivy-db/u);

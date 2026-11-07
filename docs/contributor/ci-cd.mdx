@@ -523,7 +523,8 @@ The required checks are job names, so a display name does not change them.
 | `semgrep.yml`                         | Pull request, push to main                                                    | Tests and scans the repository's own TLS rule pack                                                                                                                                                                               |
 | `kubernetes-nightly.yml`              | Nightly, manual                                                               | Runs every Kubernetes leg and the sandbox footprint benchmark on the newest main build that passed CI, with its chart and agent image. Reports a failure on one tracking issue                                              |
 | `extension-provider-slots.yml` | Nightly, manual | Checks the actual extension adapter against six public GitHub and GitLab report layouts and keeps each result |
-| `rescan-images.yml`                   | Weekly, manual                                                                | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings. A second job rescans the latest published release's images and reports drift on the vulnerability response issue|
+| `platform-pins.yml` | PR touching platform pins or their validator | Verifies the installer checksum and the images that both upstream charts render |
+| `rescan-images.yml`                   | Daily, manual                                                                | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings. A second job rescans the latest published release's images and reports drift on the vulnerability response issue|
 | `ci-diagnostics.yml`                  | Completed CI/CD runs                                                          | Reports exact-attempt job and step timings without changing the required CI verdict                                                                                                                                              |
 | `ci-profile.yml`                      | Weekly, manual                                                                | Reports advisory performance budgets and profiles server test tiers                                                                                                                                                              |
 | `delivery-metrics.yml`                | Weekly, manual                                                                | Reports lead time, deployment frequency, and change fail, recovery and rework proxies. See [Delivery Metrics](./delivery-metrics.mdx)                                                                                                 |
@@ -1183,6 +1184,27 @@ metric. Summed execution times overlap: they measure runner demand, not verdict 
 retain the original run creation time and must not enter first-attempt percentiles. Unlike the
 gate's in-flight summary, this report uses its completed verdict and rejects incomplete job lists
 or mixed attempts. Keep raw API evidence under `tmp/`, not in committed performance snapshots.
+
+### Daily security rescan
+
+`Security / Rescan images` runs daily and on dispatch.
+It rescans the images from `main`, the supported release, dependency locks, and the one-host platform pins.
+Platform image scans cover both release architectures and resolve each subject to a digest.
+Dependency and platform findings go to access-controlled code-scanning alerts, without public report artifacts.
+
+Dependency and platform scans run only on the default branch.
+Select that branch for a manual rescan.
+An unavailable scan fails the scheduled job. It does not count as a clean scan.
+
+The merge queue keeps the full vulnerability policy, including findings against unchanged dependencies.
+A daily rescan reduces the time before maintainers see new advisories. It does not guarantee an advisory arrives before a merge group.
+A finding requires an update or a reviewed policy exception. Cancellation or a retry does not waive it.
+
+Renovate tracks the platform chart versions, image tags and digests, and the k3s release.
+These updates require dashboard approval and human review.
+A k3s update also needs an independently verified installer checksum. The Platform pins check and scheduled rescan check that pair.
+The pull request check renders both upstream charts and compares their image subjects with the scan plan.
+The rescan also reads the selected k3s release's complete image list.
 
 ### Flaky tests
 

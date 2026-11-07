@@ -1,0 +1,41 @@
+name: CI / Platform pins
+
+on:
+  pull_request:
+    paths:
+      - "deploy/platform/k3s-platform.yaml"
+      - "scripts/scan-platform-images.ts"
+      - "scripts/scan-upstream-images.ts"
+      - "scripts/lib/image-scan.ts"
+      - "scripts/lib/json.ts"
+      - "scripts/lib/process.ts"
+      - ".github/actions/setup-helm/**"
+      - ".github/actions/setup-toolchain/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/platform-pins.yml"
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Platform pins
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+      - uses: ./.github/actions/setup-helm
+      - name: Check the installer checksum and the charts' exact image subjects
+        run: node scripts/scan-platform-images.ts --check-pins

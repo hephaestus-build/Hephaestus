@@ -265,6 +265,9 @@ function extractedDatasources(matchStrings: string[], content: string): string[]
 
 void test("every custom manager reads every file it claims to read", async () => {
 	const sources = new Map<string, string[]>([
+		["Track platform chart versions", ["deploy/platform/k3s-platform.yaml"]],
+		["Track platform image tags and digests", ["deploy/platform/k3s-platform.yaml"]],
+		["Track the one-host k3s release", ["deploy/platform/k3s-platform.yaml"]],
 		["Track Dockerfile ARG version pins", ["docker/agents/pi/Dockerfile", "webapp/Dockerfile"]],
 		[
 			"Track release security tool versions",
