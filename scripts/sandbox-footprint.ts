@@ -774,10 +774,8 @@ const hasSides = await stat(path.join(stage, "tool-client.ts")).then(
 
 /** Whether the stage holds a custom program: a review then gets a program side, as the worker's Pod does. */
 async function stagesPrograms(): Promise<boolean> {
-	const practices = await readdir(path.join(stage, "work/practice-scripts/practices")).catch(
-		() => [],
-	);
-	return practices.some((name) => name.endsWith(".ts"));
+	const staged = await readdir(path.join(stage, "work/practice-scripts/practices")).catch(() => []);
+	return staged.some((name) => name.endsWith(".ts"));
 }
 
 /** A side of the review's Pod: its own user and `/tmp`, the workspace read-only, and no network at all. */

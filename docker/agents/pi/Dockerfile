@@ -147,6 +147,11 @@ RUN mkdir -p /workspace/inputs/sources/scm/repo/.hidden && \
     chown -R 1000:1000 /home/agent/.local /workspace/work && \
     setpriv --reuid=1000 --regid=1000 --init-groups node --max-old-space-size=256 \
       /opt/pi-sdk/native-tools-check.ts && \
+    # Under the loop's grants (PracticeRunnerProfile), codemode still runs and a process does not start.
+    setpriv --reuid=1000 --regid=1000 --init-groups node --max-old-space-size=256 --permission \
+      --allow-fs-read=/workspace --allow-fs-read=/opt/pi-sdk --allow-fs-read=/home/agent \
+      --allow-fs-write=/workspace/work --allow-fs-write=/home/agent/.local/tmp --allow-worker \
+      /opt/pi-sdk/native-tools-check.ts && \
     rm -rf /workspace/inputs /workspace/work /opt/pi-sdk/native-tools-check.ts /home/agent/.local
 
 # The base image installs Yarn as a tree under /opt that /usr/local/bin only links to, so removing

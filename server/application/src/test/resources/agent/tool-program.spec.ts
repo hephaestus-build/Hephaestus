@@ -224,7 +224,7 @@ void test("a program gets one session, however many it asks for", async () => {
 
 void test("each program's requests stay in the context that started it, on one shared socket", async () => {
 	const practice = new AsyncLocalStorage<string>();
-	const seen = await Promise.all(
+	const runs = await Promise.all(
 		["first", "second", "third"].map(async (name) =>
 			practice.run(name, async () => {
 				const reviews: (string | undefined)[] = [];
@@ -235,7 +235,7 @@ void test("each program's requests stay in the context that started it, on one s
 			}),
 		),
 	);
-	for (const { name, reviews } of seen) {
+	for (const { name, reviews } of runs) {
 		assert.deepEqual(reviews, [name]);
 	}
 });
