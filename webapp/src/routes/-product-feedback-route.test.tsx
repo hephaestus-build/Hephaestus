@@ -98,6 +98,20 @@ describe("product feedback sent from a workspace page", () => {
 		await screen.findByText("Report sent");
 	});
 
+	it("opens the form from anywhere with the shortcut", async () => {
+		const user = userEvent.setup();
+		renderRouteAt("/w/acme/activity");
+		await screen.findByRole(
+			"button",
+			{ name: "Send feedback about Hephaestus" },
+			ROUTE_RENDER_WAIT,
+		);
+
+		await user.keyboard("{Control>}{Shift>}F{/Shift}{/Control}");
+
+		await screen.findByRole("textbox", { name: "Your feedback" });
+	});
+
 	it("keeps a failed report recoverable when the form closes during sending", async () => {
 		const response = deferred<Response>();
 		server.use(http.post("*/workspaces/acme/product-feedback", async () => response.promise));

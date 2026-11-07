@@ -1,7 +1,9 @@
 import { MessageSquarePlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { FEEDBACK_SHORTCUT_ARIA, FEEDBACK_SHORTCUT_LABEL } from "@/lib/keyboard-shortcuts";
 
 export interface ProductFeedbackButtonProps {
 	onSendFeedback: () => void;
@@ -17,6 +19,7 @@ export function ProductFeedbackButton({ onSendFeedback }: ProductFeedbackButtonP
 						variant="ghost"
 						className="w-8 sm:w-auto"
 						aria-label="Send feedback about Hephaestus"
+						aria-keyshortcuts={FEEDBACK_SHORTCUT_ARIA}
 						onClick={onSendFeedback}
 					/>
 				}
@@ -24,7 +27,11 @@ export function ProductFeedbackButton({ onSendFeedback }: ProductFeedbackButtonP
 				<MessageSquarePlus data-icon="inline-start" aria-hidden />
 				<span className="hidden sm:inline">Send feedback</span>
 			</TooltipTrigger>
-			<TooltipContent>Send feedback about Hephaestus</TooltipContent>
+			<TooltipContent>
+				<span className="flex items-center gap-2">
+					Send feedback about Hephaestus <Kbd>{FEEDBACK_SHORTCUT_LABEL}</Kbd>
+				</span>
+			</TooltipContent>
 		</Tooltip>
 	);
 }
