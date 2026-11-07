@@ -88,12 +88,16 @@ final class CapturedEvidence {
         return identity != null && (identity.equals(version) || identity.startsWith(version + ":"));
     }
 
-    /** Whether the capture of {@code kind} names something that it left out, so its silence shows nothing. */
-    boolean namesAGap(SourceKind kind) {
+    /**
+     * Whether the capture of {@code kind} may have left something out, so its silence shows nothing. A collector can
+     * know that it is partial without a limitation to name.
+     */
+    boolean leftPartOut(SourceKind kind) {
         return manifest.sources().stream()
                 .anyMatch(source -> source.kind().equals(kind)
                         && source.state() instanceof SourceCaptureState.Available available
-                        && !available.limitations().isEmpty());
+                        && (available.completeness() != SourceCompleteness.COMPLETE
+                                || !available.limitations().isEmpty()));
     }
 
     private SourceCaptureState.@Nullable Available whole(SourceKind kind) {

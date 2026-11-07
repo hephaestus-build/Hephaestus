@@ -259,7 +259,7 @@ public class ReviewOutputService {
                 .toList();
         // The checkout has its own rule below: a search of it can still run to the end.
         var cut = consulted.stream()
-                .filter(kind -> !checkouts.contains(kind) && captured.namesAGap(kind))
+                .filter(kind -> !checkouts.contains(kind) && captured.leftPartOut(kind))
                 .findFirst();
         if (cut.isPresent())
             throw new CandidateEvidenceVerifier.Unverified(

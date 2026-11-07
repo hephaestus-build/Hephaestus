@@ -769,8 +769,13 @@ export async function runReviewJob(): Promise<void> {
 	}
 
 	const folderIndex: unknown = JSON.parse(readFileSync(INPUT_PATHS.manifest, "utf8"));
-	const { availableSourceKinds, completeSourceKinds, sourceFileSources, citationCapabilities } =
-		folderCitationIndex(folderIndex);
+	const {
+		availableSourceKinds,
+		completeSourceKinds,
+		partialSourceKinds,
+		sourceFileSources,
+		citationCapabilities,
+	} = folderCitationIndex(folderIndex);
 	const capturedTexts = citableTextIndex(folderIndex);
 	const availableSourceKindValues = [...availableSourceKinds].toSorted();
 	const practiceIndex = readPracticeIndex();
@@ -1152,8 +1157,9 @@ export async function runReviewJob(): Promise<void> {
 			submission,
 			practiceExhaustiveSources.get(slug) ?? new Set(),
 			availableSourceKinds,
+			partialSourceKinds,
 		);
-		validateInapplicabilityScope(submission, availableSourceKinds);
+		validateInapplicabilityScope(submission, availableSourceKinds, partialSourceKinds);
 		const assignment = assignedInputs.get(slug);
 		const scan = assignment?.scope.kind === "SCAN";
 

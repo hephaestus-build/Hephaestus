@@ -361,6 +361,9 @@ Listings, metadata, history queries and failed reads of optional paths do not pr
 Session diagnostics retain all observed reads.
 Candidate omissions and failure counts describe only gaps in the sources needed by that result.
 
+A result that names a source as consulted for an absence needs that source captured whole.
+A partial or unknown capture stays usable for what its cited lines show, and otherwise admission withholds the result as `source_unavailable`.
+
 In an item review that reads a checkout, a result that says the repository lacks something needs a search of the whole checkout.
 Otherwise admission withholds it as `consulted_source_unread`.
 [Workspace ABI § Claims that the repository lacks something](./agent/workspace-abi.mdx#claims-that-the-repository-lacks-something) has the rules.

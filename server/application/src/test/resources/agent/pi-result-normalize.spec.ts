@@ -1522,6 +1522,29 @@ void test("an absence-based MET claim needs exhaustive captured evidence", () =>
 	validateSearchScope(submission, new Set(goodSearch.consulted), new Set(goodSearch.consulted));
 });
 
+void test("a source captured only in part backs no absence, and a could-not-determine result may name it", () => {
+	const available = new Set(goodSearch.consulted);
+	const partly = available;
+	assert.throws(
+		() =>
+			validateSearchScope(
+				normalizeSubmission(baseSubmission({ evidence: { search: goodSearch } })),
+				new Set(),
+				available,
+				partly,
+			),
+		/^Error: consulted source 'scm\.review-threads' was captured only in part/u,
+	);
+	assert.doesNotThrow(() =>
+		validateSearchScope(
+			normalizeSubmission(resultOf("COULD_NOT_DETERMINE")),
+			new Set(),
+			available,
+			partly,
+		),
+	);
+});
+
 void test("a NOT_MET or COULD_NOT_DETERMINE search names every exhaustive source it left out", () => {
 	const available = new Set(["scm.review-threads", "scm.linked-work-items", "scm.issue.core"]);
 	for (const submission of [

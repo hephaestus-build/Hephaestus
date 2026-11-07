@@ -66,6 +66,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -214,6 +215,14 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     }
 
     private void pr50Capture(SourceCompleteness completeness, List<String> diffLimitations) {
+        pr50Capture(
+                completeness,
+                diffLimitations,
+                diffLimitations.isEmpty() ? SourceCompleteness.COMPLETE : SourceCompleteness.PARTIAL);
+    }
+
+    private void pr50Capture(
+            SourceCompleteness completeness, List<String> diffLimitations, SourceCompleteness diffCompleteness) {
         var whole = new SourceCaptureFacts(Instant.EPOCH, null, null, null);
         var tree = new SourceCaptureFacts(Instant.EPOCH, null, null, PR50_HEAD + ":" + "b".repeat(40));
         var manifest = new JobFolderIndex(
@@ -225,12 +234,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         new SourceCapture(
                                 DIFF,
                                 new SourceCaptureState.Available(
-                                        SourceContentState.EMPTY,
-                                        diffLimitations.isEmpty()
-                                                ? SourceCompleteness.COMPLETE
-                                                : SourceCompleteness.PARTIAL,
-                                        whole,
-                                        diffLimitations),
+                                        SourceContentState.EMPTY, diffCompleteness, whole, diffLimitations),
                                 EvidenceSnapshotFixtures.citation(DIFF),
                                 List.of()),
                         new SourceCapture(
@@ -497,6 +501,20 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()));
 
         verify(membership, never()).withhold(anyLong(), any(), any(), any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = SourceCompleteness.class, names = "COMPLETE", mode = EnumSource.Mode.EXCLUDE)
+    void shouldWithholdAResultThatNamesAsConsultedASourceCapturedLessThanWhole(SourceCompleteness completeness) {
+        pr50Capture(SourceCompleteness.COMPLETE, List.of(), completeness);
+
+        prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(
+                CandidateRefusal.SOURCE_UNAVAILABLE,
+                "The result names " + DIFF.value() + " as consulted, but its capture left part of it out, "
+                        + "so it cannot show that something is absent");
     }
 
     @Test
