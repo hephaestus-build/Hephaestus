@@ -4,13 +4,13 @@ import type { DefaultError, UseMutationOptions } from '@tanstack/react-query';
 
 import type { Options } from '../../sdk.gen.js';
 import { adminDeleteLoginProvider } from '../../sdk/adminDeleteLoginProvider.gen.js';
-import type { AdminDeleteLoginProviderData } from '../../types.gen.js';
+import type { AdminDeleteLoginProviderData, AdminDeleteLoginProviderResponse } from '../../types.gen.js';
 
 /**
  * Delete a login provider
  */
-export const adminDeleteLoginProviderMutation = (options?: Partial<Options<AdminDeleteLoginProviderData>>): UseMutationOptions<unknown, DefaultError, Options<AdminDeleteLoginProviderData>> => {
-    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<AdminDeleteLoginProviderData>> = {
+export const adminDeleteLoginProviderMutation = (options?: Partial<Options<AdminDeleteLoginProviderData>>): UseMutationOptions<AdminDeleteLoginProviderResponse, DefaultError, Options<AdminDeleteLoginProviderData>> => {
+    const mutationOptions: UseMutationOptions<AdminDeleteLoginProviderResponse, DefaultError, Options<AdminDeleteLoginProviderData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await adminDeleteLoginProvider({
                 ...options,

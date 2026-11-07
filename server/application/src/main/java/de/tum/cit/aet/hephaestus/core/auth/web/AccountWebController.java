@@ -154,6 +154,7 @@ public class AccountWebController {
 
     @DeleteMapping
     @Operation(summary = "Delete the current account (GDPR Art. 17)", operationId = "deleteCurrentUser")
+    @ApiResponse(responseCode = "204", description = "Account deletion requested")
     public ResponseEntity<Void> deleteAccount(
             @RequestHeader(value = "X-Confirm-Delete", required = false) @Nullable String confirmHeader) {
         Long accountId = CurrentAccount.requireId();

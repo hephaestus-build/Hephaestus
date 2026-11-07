@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.util.List;
@@ -90,6 +91,7 @@ public class SessionWebController {
             summary = "Revoke a single session",
             description = "Any token of an installed-client session, even one it rotated away, ends that session.",
             operationId = "revokeSession")
+    @ApiResponse(responseCode = "204", description = "Session revoked")
     public ResponseEntity<Void> revoke(@PathVariable UUID jti) {
         sessionService.revokeSession(CurrentAccount.requireId(), jti);
         return ResponseEntity.noContent().build();
@@ -97,6 +99,7 @@ public class SessionWebController {
 
     @DeleteMapping
     @Operation(summary = "Revoke all sessions except the current one", operationId = "revokeOtherSessions")
+    @ApiResponse(responseCode = "204", description = "Other sessions revoked")
     public ResponseEntity<Void> revokeAllOthers() {
         sessionService.revokeAllExcept(
                 CurrentAccount.requireId(), CurrentAccount.requireJti(), CurrentAccount.sessionIdOrNull());

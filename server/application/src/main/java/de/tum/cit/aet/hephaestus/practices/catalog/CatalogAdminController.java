@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.dto.PracticeReleaseProposalDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.ReorderRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.SetCatalogStatusRequestDTO;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -80,6 +81,7 @@ public class CatalogAdminController {
     @PostMapping("/practices")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "CATALOG_PRACTICE")
     @Operation(operationId = "createCatalogPractice")
+    @ApiResponse(responseCode = "201", description = "Practice created; URL in the Location header")
     public ResponseEntity<CatalogPracticeDTO> createPractice(@RequestBody @Valid CatalogPracticeInputDTO input) {
         return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentRequest()
                         .path("/{slug}")
@@ -101,6 +103,7 @@ public class CatalogAdminController {
     @PostMapping("/groups")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "CATALOG_GROUP")
     @Operation(operationId = "createCatalogGroup")
+    @ApiResponse(responseCode = "201", description = "Group created; URL in the Location header")
     public ResponseEntity<CatalogGroupDTO> createGroup(@RequestBody @Valid CatalogGroupInputDTO input) {
         return ResponseEntity.created(ServletUriComponentsBuilder.fromCurrentRequest()
                         .path("/{slug}")

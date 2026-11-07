@@ -58,6 +58,7 @@ public class ScmWorkspaceController {
 
     @PostMapping("/repositories")
     @Operation(summary = "Add a repository to a workspace monitor list")
+    @ApiResponse(responseCode = "201", description = "Repository added to the monitor list")
     @RequireAtLeastWorkspaceAdmin
     @AuditExempt(
             reason = "which repositories are synced is ingestion scope, not a control that gates"
@@ -71,6 +72,7 @@ public class ScmWorkspaceController {
 
     @DeleteMapping("/repositories")
     @Operation(summary = "Remove a repository from a workspace monitor list")
+    @ApiResponse(responseCode = "204", description = "Repository removed from the monitor list")
     @RequireAtLeastWorkspaceAdmin
     @AuditExempt(
             reason = "which repositories are synced is ingestion scope, not a control that gates"

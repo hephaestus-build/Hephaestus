@@ -8166,10 +8166,12 @@ export type AdminDeleteLoginProviderData = {
 
 export type AdminDeleteLoginProviderResponses = {
     /**
-     * OK
+     * Login provider deleted
      */
-    200: unknown;
+    204: void;
 };
+
+export type AdminDeleteLoginProviderResponse = AdminDeleteLoginProviderResponses[keyof AdminDeleteLoginProviderResponses];
 
 export type AdminUpdateLoginProviderData = {
     body: UpdateLoginProviderRequest;
@@ -8316,9 +8318,9 @@ export type CreateCatalogGroupData = {
 
 export type CreateCatalogGroupResponses = {
     /**
-     * OK
+     * Group created; URL in the Location header
      */
-    200: CatalogGroup;
+    201: CatalogGroup;
 };
 
 export type CreateCatalogGroupResponse = CreateCatalogGroupResponses[keyof CreateCatalogGroupResponses];
@@ -8472,9 +8474,9 @@ export type CreateCatalogPracticeData = {
 
 export type CreateCatalogPracticeResponses = {
     /**
-     * OK
+     * Practice created; URL in the Location header
      */
-    200: CatalogPractice;
+    201: CatalogPractice;
 };
 
 export type CreateCatalogPracticeResponse = CreateCatalogPracticeResponses[keyof CreateCatalogPracticeResponses];
@@ -9230,10 +9232,12 @@ export type LogoutData = {
 
 export type LogoutResponses = {
     /**
-     * OK
+     * Session ended
      */
-    200: unknown;
+    204: void;
 };
+
+export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
 
 export type RefreshData = {
     body?: never;
@@ -9661,10 +9665,12 @@ export type DeleteCurrentUserData = {
 
 export type DeleteCurrentUserResponses = {
     /**
-     * OK
+     * Account deletion requested
      */
-    200: unknown;
+    204: void;
 };
+
+export type DeleteCurrentUserResponse = DeleteCurrentUserResponses[keyof DeleteCurrentUserResponses];
 
 export type GetCurrentUserData = {
     body?: never;
@@ -9771,9 +9777,9 @@ export type RequestDataExportData = {
 
 export type RequestDataExportResponses = {
     /**
-     * OK
+     * Export requested; status URL in the Location header
      */
-    200: ExportCreated;
+    202: ExportCreated;
 };
 
 export type RequestDataExportResponse = RequestDataExportResponses[keyof RequestDataExportResponses];
@@ -10151,10 +10157,12 @@ export type RevokeOtherSessionsData = {
 
 export type RevokeOtherSessionsResponses = {
     /**
-     * OK
+     * Other sessions revoked
      */
-    200: unknown;
+    204: void;
 };
+
+export type RevokeOtherSessionsResponse = RevokeOtherSessionsResponses[keyof RevokeOtherSessionsResponses];
 
 export type ListSessionsData = {
     body?: never;
@@ -10183,10 +10191,12 @@ export type RevokeSessionData = {
 
 export type RevokeSessionResponses = {
     /**
-     * OK
+     * Session revoked
      */
-    200: unknown;
+    204: void;
 };
+
+export type RevokeSessionResponse = RevokeSessionResponses[keyof RevokeSessionResponses];
 
 export type GetUserSettingsData = {
     body?: never;
@@ -15099,10 +15109,12 @@ export type RemoveRepositoryToMonitorData = {
 
 export type RemoveRepositoryToMonitorResponses = {
     /**
-     * OK
+     * Repository removed from the monitor list
      */
-    200: unknown;
+    204: void;
 };
+
+export type RemoveRepositoryToMonitorResponse = RemoveRepositoryToMonitorResponses[keyof RemoveRepositoryToMonitorResponses];
 
 export type GetRepositoriesToMonitorData = {
     body?: never;
@@ -15141,9 +15153,9 @@ export type AddRepositoryToMonitorData = {
 
 export type AddRepositoryToMonitorResponses = {
     /**
-     * OK
+     * Repository added to the monitor list
      */
-    200: unknown;
+    201: unknown;
 };
 
 export type GetGitLabRepositorySelectionData = {

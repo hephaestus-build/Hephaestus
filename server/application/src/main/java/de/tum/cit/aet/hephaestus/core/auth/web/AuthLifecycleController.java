@@ -38,6 +38,7 @@ public class AuthLifecycleController {
             summary = "Log out — revoke the current token + clear the cookie",
             description = "An installed-client access token ends its whole session.",
             operationId = "logout")
+    @ApiResponse(responseCode = "204", description = "Session ended")
     public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
         sessionService.logout(
                 CurrentAccount.requireId(), CurrentAccount.requireJti(), CurrentAccount.sessionIdOrNull(), response);

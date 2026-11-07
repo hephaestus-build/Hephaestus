@@ -4,13 +4,13 @@ import type { DefaultError, UseMutationOptions } from '@tanstack/react-query';
 
 import type { Options } from '../../sdk.gen.js';
 import { revokeOtherSessions } from '../../sdk/revokeOtherSessions.gen.js';
-import type { RevokeOtherSessionsData } from '../../types.gen.js';
+import type { RevokeOtherSessionsData, RevokeOtherSessionsResponse } from '../../types.gen.js';
 
 /**
  * Revoke all sessions except the current one
  */
-export const revokeOtherSessionsMutation = (options?: Partial<Options<RevokeOtherSessionsData>>): UseMutationOptions<unknown, DefaultError, Options<RevokeOtherSessionsData>> => {
-    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<RevokeOtherSessionsData>> = {
+export const revokeOtherSessionsMutation = (options?: Partial<Options<RevokeOtherSessionsData>>): UseMutationOptions<RevokeOtherSessionsResponse, DefaultError, Options<RevokeOtherSessionsData>> => {
+    const mutationOptions: UseMutationOptions<RevokeOtherSessionsResponse, DefaultError, Options<RevokeOtherSessionsData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await revokeOtherSessions({
                 ...options,

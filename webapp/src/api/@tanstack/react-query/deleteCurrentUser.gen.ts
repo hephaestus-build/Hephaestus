@@ -4,13 +4,13 @@ import type { DefaultError, UseMutationOptions } from '@tanstack/react-query';
 
 import type { Options } from '../../sdk.gen.js';
 import { deleteCurrentUser } from '../../sdk/deleteCurrentUser.gen.js';
-import type { DeleteCurrentUserData } from '../../types.gen.js';
+import type { DeleteCurrentUserData, DeleteCurrentUserResponse } from '../../types.gen.js';
 
 /**
  * Delete the current account (GDPR Art. 17)
  */
-export const deleteCurrentUserMutation = (options?: Partial<Options<DeleteCurrentUserData>>): UseMutationOptions<unknown, DefaultError, Options<DeleteCurrentUserData>> => {
-    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<DeleteCurrentUserData>> = {
+export const deleteCurrentUserMutation = (options?: Partial<Options<DeleteCurrentUserData>>): UseMutationOptions<DeleteCurrentUserResponse, DefaultError, Options<DeleteCurrentUserData>> => {
+    const mutationOptions: UseMutationOptions<DeleteCurrentUserResponse, DefaultError, Options<DeleteCurrentUserData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await deleteCurrentUser({
                 ...options,

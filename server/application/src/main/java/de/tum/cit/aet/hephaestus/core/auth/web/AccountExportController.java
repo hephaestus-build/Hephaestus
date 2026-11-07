@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.export.dto.ExportCreatedDTO;
 import de.tum.cit.aet.hephaestus.core.auth.export.dto.ExportStatusDTO;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
 import java.util.Objects;
@@ -46,6 +47,7 @@ public class AccountExportController {
 
     @PostMapping
     @Operation(summary = "Request a data export (async)", operationId = "requestDataExport")
+    @ApiResponse(responseCode = "202", description = "Export requested; status URL in the Location header")
     public ResponseEntity<ExportCreatedDTO> requestExport() {
         Long accountId = CurrentAccount.requireId();
         AccountExport export = exportService.requestExport(accountId);
