@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
  * and leaves claims bounded to the change or the cited lines alone. A clause that states what the review did not
  * establish is a limit of the review, not a claim. Clauses end at a full stop, a semicolon, a colon, a dash, a
  * parenthesis or a comma before a conjunction, so such a limit cannot hide the claim beside it. {@code pi-session-reads.ts} holds the same markers, so the runner
- * asks the session once before admission withholds the result.
+ * asks the session before admission withholds the result.
  *
  * <p>A search of the whole checkout backs a claim only when it names what the claim says is absent, or a model could
  * search for nonsense and claim anything. The server does not run a model's pattern: it reads the words of a plain one,
@@ -29,11 +29,12 @@ import java.util.stream.Collectors;
 final class AbsenceClaims {
 
     static final List<String> MARKERS = List.of(
-            "\\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|"
-                    + "absent)\\b[^.]{0,80}\\b(?:in|from|across|throughout|under) (?:the |this |our )?(?:whole |entire |"
+            "(?:\\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|"
+                    + "absent)\\b[^.]{0,80}\\b(?:in|across|throughout|under)|\\b(?:missing|absent) from) "
+                    + "(?:the |this |our )?(?:whole |entire |"
                     + "reviewed |pinned |checked-out |rest of the )?(?:repository|repo|codebase|code base|"
                     + "checkout|project|application|source tree|src)\\b(?!\\.\\w|[ -](?:code|manifest|"
-                    + "inventory|policy|board|tracker)\\b)",
+                    + "inventory|policy|board|tracker|method|call|class|interface|layer|bean|query|lookup|result|field|object|instance|step|action|settings?)s?\\b)",
             "\\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|"
                     + "absent)\\b[^.]{0,80}\\b(?:anywhere|elsewhere) (?:in|across|throughout|"
                     + "under) (?:the )?(?:whole |entire |reviewed |pinned |checked-out |"
@@ -229,38 +230,43 @@ final class AbsenceClaims {
         return claims.stream().allMatch(clause -> named(terms, content(clause).isEmpty() ? subject : clause));
     }
 
-    private record Term(String word, boolean ignoresCase) {}
+    private record Term(String word, boolean ignoresCase, boolean bounded) {}
 
     private static List<Term> terms(String pattern) {
         if (!PLAIN.matcher(pattern).matches()) return List.of();
         boolean ignoresCase = pattern.startsWith("(?i)");
-        return Arrays.stream(pattern.replace("(?i)", "").replace("\\b", "").split("\\|"))
-                .filter(word ->
-                        !content(word).isEmpty() && !WORD_EDGE.matcher(word).find())
-                .map(word -> new Term(word, ignoresCase))
+        return Arrays.stream(pattern.replace("(?i)", "").split("\\|"))
+                .map(word -> new Term(word.replace("\\b", ""), ignoresCase, word.endsWith("\\b")))
+                .filter(term -> !content(term.word()).isEmpty()
+                        && !WORD_EDGE.matcher(term.word()).find())
                 .toList();
     }
 
     private static boolean named(List<Term> terms, String text) {
         var words = words(text);
         var tokens = TOKEN_BREAK.splitAsStream(text).collect(Collectors.toSet());
-        return terms.stream()
-                .anyMatch(term -> term.ignoresCase()
-                        ? finds(term.word().replaceAll("[_-]", "").toLowerCase(Locale.ROOT), words)
-                        : tokens.contains(term.word()));
+        return terms.stream().anyMatch(term -> term.ignoresCase() ? finds(term, words) : tokens.contains(term.word()));
     }
 
-    /** Whether a search for {@code term} finds these words: it runs over them in order, and ends inside the last. */
-    private static boolean finds(String term, List<String> words) {
+    /**
+     * Whether a search for {@code term} finds these words. It runs over them in order, past a separator only where one
+     * word ends, and ends inside the last unless a word boundary ends it. It starts and ends at a word that names a
+     * subject, so that a prefix of a generic word names nothing.
+     */
+    private static boolean finds(Term term, List<String> words) {
+        String search = term.word().toLowerCase(Locale.ROOT);
         for (int first = 0; first < words.size(); first++) {
+            if (GENERIC.contains(stem(words.get(first)))) continue;
             int at = 0;
-            for (int next = first; next < words.size() && at < term.length(); next++) {
+            for (int next = first; next < words.size() && at < search.length(); next++) {
                 String word = words.get(next);
-                String rest = term.substring(at);
+                String rest = search.substring(at);
                 boolean sameWord = rest.length() <= word.length() && stem(rest).equals(stem(word));
-                if (rest.length() >= 3 && (word.startsWith(rest) || sameWord)) return true;
+                boolean ends = sameWord || (term.bounded() ? rest.equals(word) : word.startsWith(rest));
+                if (rest.length() >= 3 && ends && !GENERIC.contains(stem(word))) return true;
                 if (!rest.startsWith(word)) break;
                 at += word.length();
+                if (at < search.length() && "_-".indexOf(search.charAt(at)) >= 0) at++;
             }
         }
         return false;

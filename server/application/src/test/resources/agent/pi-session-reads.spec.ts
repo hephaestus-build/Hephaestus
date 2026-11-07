@@ -1106,6 +1106,24 @@ void test("#50: a claim that the checkout lacks something goes back to the model
 	);
 });
 
+void test("a search for something else has its own ask, once", () => {
+	const stored = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff", "scm.repository.tree"]);
+	const searched = hostCoverage([{ status: "SEARCHED", path: ".", pattern: "zzz_absent" }]);
+	assert.equal(
+		unreadCheckoutClaim(stored, searched, { ...ASK, ask: false, askUntied: true })?.untied,
+		true,
+	);
+	assert.equal(
+		unreadCheckoutClaim(stored, searched, { ...ASK, ask: false, askUntied: false }),
+		undefined,
+	);
+	// The first ask already names the claim and the rule, so a regex search does not spend it.
+	assert.match(
+		unreadCheckoutClaim(stored, hostCoverage(), ASK)?.text ?? "",
+		/: "[^"]+", but this session ran no search.*a plain word that the claim holds.*reword the claim/u,
+	);
+});
+
 void test("a receipt states a search as it ran", () => {
 	assert.equal(
 		searchedPattern({ pattern: "a|b", literal: true, ignoreCase: false }),

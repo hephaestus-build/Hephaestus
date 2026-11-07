@@ -148,7 +148,8 @@ Each claim must hold one of those words.
 A search that ignored case must be able to find the claim's word: `auth` counts for "authentication", and `retries` does not count for "retry".
 A search that did not ignore case must match the word as written.
 A clause with only generic words takes `lookedFor` as its claim.
-Otherwise the reason is `absence_not_searched`, and the runner asks the session once before that.
+Otherwise the reason is `absence_not_searched`.
+The runner asks the session before that, once for each of the two reasons.
 
 This check stops a lazy or nonsense search.
 It does not judge the matches of a search that had any, because a match does not refute "no other file references X".

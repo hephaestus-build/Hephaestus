@@ -160,6 +160,17 @@ class AbsenceClaimsTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldLeaveASentenceBoundedToTheCodeItCites() {
+        assertThat(List.of(
+                        "No null check on the value returned from the repository.",
+                        "The new code calls get() without a check on the result from the repository.",
+                        "The controller has no timeout on the request from the application.",
+                        "No fallback is given for values from the project configuration.",
+                        "There is no null check in this repository method."))
+                .noneMatch(AbsenceClaims::claimed);
+    }
+
+    @Test
     void shouldTieASearchToAClaimAsTheRunnerDoes() throws IOException {
         var vectors = new JsonMapper().readTree(Path.of("src/test/resources/agent/absence-search-vectors.json"));
 

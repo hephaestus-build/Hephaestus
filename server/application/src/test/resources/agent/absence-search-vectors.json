@@ -361,5 +361,101 @@
 		],
 		"consulted": false,
 		"tied": false
+	},
+	{
+		"name": "a separator inside a word finds another word",
+		"patterns": [
+			"(?i)re-try"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a boundary after a part of the word finds another word",
+		"patterns": [
+			"(?i)\\bretr\\b"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a boundary after the whole word finds it",
+		"patterns": [
+			"(?i)\\bauthentication\\b"
+		],
+		"subject": "authentication",
+		"texts": [
+			"The repository has no authentication."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a prefix of a generic word names nothing",
+		"patterns": [
+			"(?i)logi|repositor"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a term cannot start at a generic word",
+		"patterns": [
+			"(?i)noretry"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a term cannot end at a generic word",
+		"patterns": [
+			"(?i)retrylog"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a separator at a word joint counts",
+		"patterns": [
+			"(?i)rate-limit"
+		],
+		"subject": "a rate limiter",
+		"texts": [
+			"The repository has no rate limiter."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a long identifier may cross generic words",
+		"patterns": [
+			"(?i)IndexOutOfBoundsException"
+		],
+		"subject": "an IndexOutOfBoundsException",
+		"texts": [
+			"The repository has no IndexOutOfBoundsException."
+		],
+		"consulted": true,
+		"tied": true
 	}
 ]

@@ -544,13 +544,13 @@ export class SessionReads {
 
 /**
  * Words that say the repository, beyond the cited lines, lacks something. `AbsenceClaims.java` holds the same markers
- * and admission withholds such a result without a search of the whole checkout, so the session is asked first, once.
+ * and admission withholds such a result without a search of the whole checkout, so the session is asked first.
  * A clause that states what the review did not establish is a limit of the review, not a claim. Clauses end at a full
  * stop, a semicolon, a colon, a dash, a parenthesis or a comma before a conjunction, so such a limit cannot hide the
  * claim beside it.
  */
 export const ABSENCE_MARKERS = [
-	String.raw`\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|absent)\b[^.]{0,80}\b(?:in|from|across|throughout|under) (?:the |this |our )?(?:whole |entire |reviewed |pinned |checked-out |rest of the )?(?:repository|repo|codebase|code base|checkout|project|application|source tree|src)\b(?!\.\w|[ -](?:code|manifest|inventory|policy|board|tracker)\b)`,
+	String.raw`(?:\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|absent)\b[^.]{0,80}\b(?:in|across|throughout|under)|\b(?:missing|absent) from) (?:the |this |our )?(?:whole |entire |reviewed |pinned |checked-out |rest of the )?(?:repository|repo|codebase|code base|checkout|project|application|source tree|src)\b(?!\.\w|[ -](?:code|manifest|inventory|policy|board|tracker|method|call|class|interface|layer|bean|query|lookup|result|field|object|instance|step|action|settings?)s?\b)`,
 	String.raw`\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|absent)\b[^.]{0,80}\b(?:anywhere|elsewhere) (?:in|across|throughout|under) (?:the )?(?:whole |entire |reviewed |pinned |checked-out |rest of the )?(?:code|app|source|sources)\b(?![ -](?:file|files|change|diff)\b)`,
 	String.raw`\bno other files?\b(?! (?:in|of) (?:the|this) (?:change|diff|commit|pull request)\b)[^.;]{0,30}\b(?:references?|imports?|calls?|uses?|instantiates?|consumes?|wires?|depends? on|handles?|catches?|validates?)\b|\b(?:referenced|imported|called|used|instantiated|consumed|handled) (?:by|from|in) no other files?\b|\breferences from other files\b`,
 	String.raw`\b(?:the|this) (?:whole |entire |reviewed |pinned )?(?:repository|repo|codebase|code base|checkout)\b(?! (?:method|call|class|interface|layer|bean|query|lookup|result|field|object|instance|step|action|policy|settings?)s?\b)[^.]{0,40}\b(?:contains no|has no|holds no|defines no|declares no|registers no|lacks?|never|does not|doesn't)\b|\b(?:the|this) (?:project|application)\b(?![ -](?:code|manifest|inventory|policy|board|tracker)\b)[^.]{0,40}\b(?:defines no|declares no|registers no|never)\b`,
@@ -708,6 +708,7 @@ const content = (text: string) =>
 interface SearchTerm {
 	word: string;
 	ignoresCase: boolean;
+	bounded: boolean;
 }
 
 function termsOf(pattern: string): SearchTerm[] {
@@ -717,29 +718,44 @@ function termsOf(pattern: string): SearchTerm[] {
 	const ignoresCase = pattern.startsWith("(?i)");
 	return pattern
 		.replace("(?i)", "")
-		.replaceAll(String.raw`\b`, "")
 		.split("|")
-		.filter((word) => content(word).length > 0 && !/^[_-]|[_-]$/u.test(word))
-		.map((word) => ({ word, ignoresCase }));
+		.map((word) => ({
+			word: word.replaceAll(String.raw`\b`, ""),
+			ignoresCase,
+			bounded: word.endsWith(String.raw`\b`),
+		}))
+		.filter(({ word }) => content(word).length > 0 && !/^[_-]|[_-]$/u.test(word));
 }
 
-/** Whether a search for `term` finds these words: it runs over them in order, and ends inside the last. */
-function finds(term: string, words: readonly string[]): boolean {
-	return words.some((_, first) => {
+/**
+ * Whether a search for `term` finds these words. It runs over them in order, past a separator only where one word
+ * ends, and ends inside the last unless a word boundary ends it. It starts and ends at a word that names a subject,
+ * so that a prefix of a generic word names nothing.
+ */
+function finds(term: SearchTerm, words: readonly string[]): boolean {
+	const search = term.word.toLowerCase();
+	return words.some((start, first) => {
+		if (GENERIC.has(stem(start))) {
+			return false;
+		}
 		let at = 0;
 		for (const word of words.slice(first)) {
-			if (at >= term.length) {
+			if (at >= search.length) {
 				return false;
 			}
-			const rest = term.slice(at);
+			const rest = search.slice(at);
 			const sameWord = rest.length <= word.length && stem(rest) === stem(word);
-			if (rest.length >= 3 && (word.startsWith(rest) || sameWord)) {
+			const ends = sameWord || (term.bounded ? rest === word : word.startsWith(rest));
+			if (rest.length >= 3 && ends && !GENERIC.has(stem(word))) {
 				return true;
 			}
 			if (!rest.startsWith(word)) {
 				return false;
 			}
 			at += word.length;
+			if (at < search.length && "_-".includes(search.charAt(at))) {
+				at += 1;
+			}
 		}
 		return false;
 	});
@@ -748,11 +764,7 @@ function finds(term: string, words: readonly string[]): boolean {
 function holdsTerm(terms: readonly SearchTerm[], text: string): boolean {
 	const words = wordsOf(text);
 	const tokens = new Set(text.split(TOKEN_BREAK));
-	return terms.some((term) =>
-		term.ignoresCase
-			? finds(term.word.replaceAll(/[_-]/gu, "").toLowerCase(), words)
-			: tokens.has(term.word),
-	);
+	return terms.some((term) => (term.ignoresCase ? finds(term, words) : tokens.has(term.word)));
 }
 
 const claimed = (clause: string) =>
@@ -845,7 +857,7 @@ export interface UnreadCheckoutClaim {
  * needs a search of the whole checkout in this session: a complete read of one file is a complete source of that file,
  * not of the tree (ADR 0064 § Absence). A submission of a review that reads a checkout, whose words say the repository
  * lacks something, needs the same. Without a checkout captured whole, no search can show it. The session is asked once
- * per practice (`ask`); a resubmission goes to admission, which withholds such a result, so a session that cannot
+ * per practice (`ask`), and once more when its search names something else (`askUntied`); a resubmission goes to admission, which withholds such a result, so a session that cannot
  * repair it does not spend the practice's refusals.
  */
 export function unreadCheckoutClaim(
@@ -899,11 +911,14 @@ export function unreadCheckoutClaim(
 			text: `${claim}, but this checkout was captured only in part, so no search of it can show what the repository lacks. ${remove}`,
 		};
 	}
+	const first = textsOf(submission)
+		.flatMap((text) => text.split(CLAUSE_END))
+		.find(claimed);
 	const exit = consulted
 		? `If your search covered only the selected or cited lines, name the source that holds them, such as scm.pull-request.diff, in place of ${TREE_SOURCE}.`
 		: "If you cannot, remove the claim about the rest of the repository and keep only what the cited lines show.";
 	return {
 		// A grep in bash runs, but it leaves no receipt that admission can read, so the model must hear which tool counts.
-		text: `${claim}, but this session ran no search of the whole checkout. Call the grep tool, not grep in bash, with ignoreCase, a plain word that the claim holds, alternatives joined by |, and path "${checkout.root}", without a glob. A pattern with any other syntax names nothing. A search in bash proves nothing to admission. Narrow the pattern until the search is not cut, then submit again. ${exit}`,
+		text: `${claim}${first === undefined ? "" : `: "${first}"`}, but this session ran no search of the whole checkout. Call the grep tool, not grep in bash, with ignoreCase, a plain word that the claim holds, alternatives joined by |, and path "${checkout.root}", without a glob. A pattern with any other syntax names nothing, and a search in bash proves nothing to admission. If the search is cut, raise limit or use a longer word of the claim. Or reword the claim to name what you searched for. ${exit}`,
 	};
 }
