@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
+import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -77,7 +78,18 @@ public class ProcessingContextFactory {
     @Transactional(readOnly = true)
     public Optional<ProcessingContext> forRelatedIssue(
             ProcessingContext delivering, @Nullable GitHubRepositoryRefDTO namedRepository, String action) {
-        return namedRepository == null ? Optional.of(delivering) : forWebhookRepository(namedRepository, action);
+        if (namedRepository == null) return Optional.of(delivering);
+        return forWebhookRepository(namedRepository, action).map(related -> {
+            Repository repository = Objects.requireNonNull(related.repository());
+            Repository deliveredRepository = delivering.repository();
+            Long scopeId = delivering.scopeId();
+            if (scopeId != null
+                    && (deliveredRepository == null || !Objects.equals(deliveredRepository.getId(), repository.getId()))
+                    && !repositoryScopeFilter.isRepositoryMonitored(scopeId, repository.getId())) {
+                scopeId = null;
+            }
+            return ProcessingContext.forWebhook(scopeId, repository, action);
+        });
     }
 
     private Optional<ProcessingContext> forWebhookRepository(@Nullable GitHubRepositoryRefDTO ref, String action) {

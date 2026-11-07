@@ -26,6 +26,12 @@ The GitHub installation durable has no workspace and serializes all installation
 A failed installation event delays later installation events until success or capture.
 The server runs as one replica with Recreate; this contract requires no consumer leader lock.
 
+Synchronous dispatch carries the workspace that the consumer selected.
+GitHub repository and team handlers use that workspace.
+A related issue uses it only when the workspace also monitors the related repository.
+Shared organization logins and shared monitored repositories do not select a different workspace.
+The dispatch scope ends when handling returns or throws and does not cross to asynchronous work.
+
 Copies of a sequence already queued or in progress share one queue entry.
 A redelivery after dispatch can repeat a committed handler.
 Existing event identities must keep those handlers idempotent.

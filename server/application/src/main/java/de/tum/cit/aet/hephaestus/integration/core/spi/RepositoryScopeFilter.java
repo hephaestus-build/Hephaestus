@@ -25,6 +25,9 @@ public interface RepositoryScopeFilter {
      */
     boolean isRepositoryAllowed(String nameWithOwner);
 
+    /** Whether this workspace monitors the exact source repository, including its provider. */
+    boolean isRepositoryMonitored(Long scopeId, Long repositoryId);
+
     /**
      * Check if any filtering is currently active.
      * <p>

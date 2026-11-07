@@ -183,12 +183,14 @@ class ProcessingContextFactoryTest {
                         .thenReturn(Optional.of(named));
             }
             when(scopeIdResolver.findScopeIdByRepositoryName(repoFullName)).thenReturn(Optional.of(7L));
+            when(repositoryScopeFilter.isRepositoryMonitored(7L, 2L)).thenReturn(true);
 
             Optional<ProcessingContext> result =
                     factory.forRelatedIssue(delivering, repositoryRef(repoFullName, nativeId), "blocked_by_added");
 
             assertThat(result).hasValueSatisfying(context -> {
                 assertThat(context.repository()).isEqualTo(named);
+                assertThat(context.scopeId()).isEqualTo(7L);
                 assertThat(context.webhookAction()).isEqualTo("blocked_by_added");
             });
         }
