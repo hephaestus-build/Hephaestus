@@ -124,6 +124,7 @@ import {
 	toolLines,
 } from "./pi-tool-side.ts";
 import { prepareTurnText } from "./pi-turn-context.ts";
+import { proveSearches } from "./pi-verified-search.ts";
 import { toolsProgram } from "./tool-program.ts";
 import { LIMITS } from "./tool-protocol.ts";
 import { parseDiff } from "./work/practice-scripts/kits/scm/diff-parser.ts";
@@ -1206,6 +1207,7 @@ export async function runReviewJob(): Promise<void> {
 			await verifySubmissionCitation(citation, notes);
 		}
 		validateProblemClaims(submission.problems ?? [], slug);
+		await reads.proveSearches(proveSearches);
 		const coverage = measureCoverage(citations);
 		// A scan's search covers its assigned file, which it must read whole.
 		const unread = scan
@@ -1899,6 +1901,10 @@ export async function runReviewJob(): Promise<void> {
 			repo: checkout,
 			headRevision: change?.head ?? (checkout === null ? null : checkoutCommit),
 			search: toolLines(toolSide, CWD),
+			proveSearch: async (claim) => {
+				const [proved] = await proveSearches(repository, [claim]);
+				return proved === true;
+			},
 			pinnedFile: pinnedText(
 				toolObjects(toolSide, repository),
 				pinnedHistory(repository),

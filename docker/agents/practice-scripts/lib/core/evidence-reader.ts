@@ -9,7 +9,7 @@ import path from "node:path";
 import { DIFF_SOURCE, TREE_SOURCE } from "../../kits/scm/sources.ts";
 
 import { globFilesSync } from "../../kits/scm/files.ts";
-import { grep, type LineRunner } from "../../kits/scm/grep.ts";
+import { grep, type GrepMatch, type LineRunner } from "../../kits/scm/grep.ts";
 import type { DiffFile } from "../../kits/scm/types.ts";
 import {
 	CANDIDATE_LIMITS,
@@ -55,6 +55,15 @@ export interface EvidenceSources {
 	permittedPaths?: ReadonlySet<string>;
 	/** How a repository search runs. Its answer is text to look at; a citation still reads the file. */
 	search?: LineRunner;
+	/**
+	 * Whether a search that `search` ran can stand as proof of an absence. Without it, the search ran here.
+	 */
+	proveSearch?: (claim: {
+		pattern: string;
+		literal: boolean;
+		ignoreCase: boolean;
+		found: readonly string[];
+	}) => Promise<boolean>;
 	/** The text of a file at another commit than the head, or null when it cannot be proved. */
 	pinnedFile?: (commit: string, file: string, signal?: AbortSignal) => Promise<string | null>;
 }
@@ -261,6 +270,22 @@ export class EvidenceReader {
 		}
 	}
 
+	/** Whether this search can prove an absence: it always can when it ran in this process. */
+	async #searchStands(
+		{ pattern, fixedString }: { pattern: string; fixedString?: boolean },
+		matches: readonly GrepMatch[],
+	): Promise<boolean> {
+		return (
+			this.#sources.proveSearch === undefined ||
+			this.#sources.proveSearch({
+				pattern,
+				literal: fixedString === true,
+				ignoreCase: false,
+				found: matches.map((match) => `${match.file}:${String(match.line)}`),
+			})
+		);
+	}
+
 	/**
 	 * A search of the whole checkout's contents for `pattern` that ran to the end, without a file filter. A scan
 	 * reads only its assigned file and context, so its searches prove nothing about the rest of the tree and get no
@@ -422,7 +447,8 @@ export class EvidenceReader {
 					signal,
 				);
 				const truncated = matches.length > maxResults;
-				this.#searchReceipt(recordReceipt, truncated, request);
+				const stands = truncated || (await this.#searchStands(request, matches));
+				this.#searchReceipt(recordReceipt && stands, truncated, request);
 				return { matches: matches.slice(0, maxResults), truncated };
 			}
 			case "record": {

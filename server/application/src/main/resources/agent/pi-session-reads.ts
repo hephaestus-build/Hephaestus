@@ -22,6 +22,8 @@ import {
 import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
 import { ReadRanges } from "./work/practice-scripts/lib/core/read-ranges.ts";
 
+import type { SearchClaim } from "./pi-search-worker.ts";
+
 const READ_TOOLS = new Set(["read", "grep", "find", "ls", "bash"]);
 
 /**
@@ -74,7 +76,9 @@ export class SessionReads {
 	readonly #lineCount: (target: string) => number;
 	readonly #tree: SessionTree | undefined;
 	/** What each grep without a file filter that searched the whole checkout to the end looked for. */
-	readonly #searchedPatterns = new Set<string>();
+	readonly #searches = new Map<string, SearchClaim>();
+	/** The searches that the loop proved: only these are receipts. */
+	readonly #provedPatterns = new Set<string>();
 
 	constructor(
 		root: string,
@@ -203,7 +207,7 @@ export class SessionReads {
 			return;
 		}
 		if (event.toolName === "grep") {
-			this.#searched(args, target);
+			this.#searched(args, target, text);
 		}
 	}
 
@@ -211,17 +215,57 @@ export class SessionReads {
 	 * Records the pattern of a grep that ran to the end over the whole checkout. A file filter or a narrower path
 	 * searched part of the checkout, and a file listing searched no contents.
 	 */
-	#searched(args: unknown, target: string | undefined): void {
+	#searched(args: unknown, target: string | undefined, output: string): void {
 		if (
 			isRecord(args) &&
 			typeof args.pattern === "string" &&
 			args.pattern !== "" &&
 			args.pattern.length <= CANDIDATE_LIMITS.warrantFieldChars &&
-			this.#searchedPatterns.size < SEARCHED_PATTERNS &&
+			this.#searches.size < SEARCHED_PATTERNS &&
 			!(typeof args.glob === "string" && args.glob !== "") &&
 			this.#containsTree(target ?? "")
 		) {
-			this.#searchedPatterns.add(args.pattern);
+			this.#searches.set(args.pattern, {
+				pattern: args.pattern,
+				literal: args.literal === true,
+				ignoreCase: args.ignoreCase === true,
+				found: this.#reported(output, target ?? ""),
+			});
+		}
+	}
+
+	/** The matches that a grep over `searched` reported, as `path:line` from the checkout's root. */
+	#reported(output: string, searched: string): string[] {
+		const root = this.#tree === undefined ? "" : this.#key(this.#tree.root);
+		return output.split("\n").flatMap((line) => {
+			const match = /^(?<file>.+?):(?<number>\d+): /u.exec(line);
+			const { file, number } = match?.groups ?? {};
+			return file === undefined || number === undefined
+				? []
+				: [`${path.relative(root, path.join(searched, file))}:${number}`];
+		});
+	}
+
+	/**
+	 * Proves the searches that this session ran, before a result relies on them. The tools side ran them, so a search
+	 * counts only when the loop's own search of the same files found nothing that it left out.
+	 */
+	async proveSearches(
+		prove: (root: string, claims: readonly SearchClaim[]) => Promise<boolean[]>,
+	): Promise<void> {
+		const tree = this.#tree;
+		const open = [...this.#searches.values()].filter(
+			(claim) => !this.#provedPatterns.has(claim.pattern),
+		);
+		if (tree === undefined || !tree.complete || open.length === 0) {
+			return;
+		}
+		const proved = await prove(path.resolve(this.#root, tree.root), open);
+		for (const [index, claim] of open.entries()) {
+			if (proved[index] === true) {
+				this.#provedPatterns.add(claim.pattern);
+			}
+			this.#searches.delete(claim.pattern);
 		}
 	}
 
@@ -240,7 +284,7 @@ export class SessionReads {
 	 * The checkout's own proof of what this session read: each search of the whole checkout's contents that ran to
 	 * the end, with its pattern, and then each file read to its last line, with the digest of the pinned bytes. A
 	 * search that was cut, failed, filtered by file, narrower than the checkout or run through the shell proves no
-	 * such search, and so does any search of a checkout captured only in part. The searches come first, so the receipt
+	 * such search, and so does one that the loop could not prove and any search of a checkout captured only in part. The searches come first, so the receipt
 	 * bound never drops them. The `.git` folder holds no work.
 	 */
 	treeReceipts(): ReadReceipt[] {
@@ -249,7 +293,7 @@ export class SessionReads {
 			return [];
 		}
 		const root = this.#key(tree.root);
-		const searches = tree.complete ? [...this.#searchedPatterns] : [];
+		const searches = tree.complete ? [...this.#provedPatterns] : [];
 		const receipts: ReadReceipt[] = searches.map((pattern) => ({
 			sourceKind: TREE_SOURCE,
 			sourcePath: tree.sourcePath,
