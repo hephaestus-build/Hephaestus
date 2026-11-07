@@ -81,9 +81,6 @@ public interface PracticeRepository extends JpaRepository<Practice, Long> {
 
     boolean existsByWorkspaceIdAndSlug(Long workspaceId, String slug);
 
-    @Query("SELECT p.id FROM Practice p WHERE p.catalogSlug IN :slugs")
-    List<Long> findIdsDescendedFrom(Collection<String> slugs);
-
     @Modifying
     @Query("DELETE FROM Practice p WHERE p.workspace.id = :workspaceId")
     void deleteAllByWorkspaceId(Long workspaceId);

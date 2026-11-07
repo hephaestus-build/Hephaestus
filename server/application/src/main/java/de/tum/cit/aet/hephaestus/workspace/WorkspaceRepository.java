@@ -6,8 +6,6 @@ import jakarta.persistence.QueryHint;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -146,34 +144,4 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
             AND w.status = de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.ACTIVE
         """)
     Optional<Workspace> findPublicActivityWorkspace(@Param("slug") String slug);
-
-    /**
-     * Resolves the workspace id from a repository id via the {@code RepositoryToMonitor} join. Used
-     * by mentor-cache invalidation: domain events carry {@code repositoryId} but mentor caches key
-     * on {@code workspaceId}.
-     *
-     * <p>The join is on {@code nameWithOwner} (no FK from {@code RepositoryToMonitor} to {@code
-     * Repository}), and {@code repository_to_monitor.name_with_owner} has no unique constraint, so
-     * two monitors that share a {@code nameWithOwner} would yield more than one row. Rather than
-     * assert a cardinality the schema does not enforce — which would surface as an uncaught {@code
-     * IncorrectResultSizeDataAccessException} inside the async invalidation listener — this picks
-     * the lowest workspace id deterministically and caps the result to one row.
-     *
-     * @return the resolved workspace id, or {@code Optional.empty()} if the repository is not
-     *     monitored anywhere
-     */
-    default Optional<Long> findWorkspaceIdByRepositoryId(Long repositoryId) {
-        List<Long> ids = findWorkspaceIdsByRepositoryId(repositoryId, PageRequest.of(0, 1));
-        return ids.isEmpty() ? Optional.empty() : Optional.of(ids.get(0));
-    }
-
-    @Query("""
-        SELECT m.workspace.id
-        FROM RepositoryToMonitor m
-        JOIN Repository r ON r.nameWithOwner = m.nameWithOwner
-            AND monitor_covers_repository(m.workspace.id, m.nativeId, r.nativeId, r.provider.id) = true
-        WHERE r.id = :repositoryId
-        ORDER BY m.workspace.id
-        """)
-    List<Long> findWorkspaceIdsByRepositoryId(@Param("repositoryId") Long repositoryId, Pageable pageable);
 }

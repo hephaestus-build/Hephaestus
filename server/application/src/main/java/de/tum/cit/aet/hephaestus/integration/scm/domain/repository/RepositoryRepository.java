@@ -227,6 +227,8 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
      * {@code visibility} is derived from {@code isPrivate} and {@code html_url} from {@code nameWithOwner}
      * inside the SQL to keep the parameter count within architecture limits.
      */
+    @WorkspaceAgnostic(
+            "Refreshes one shared mirror row; only upsertFromSnapshot, which carries its own marker, calls it")
     @Transactional
     @Modifying(flushAutomatically = true)
     @Query(value = """
