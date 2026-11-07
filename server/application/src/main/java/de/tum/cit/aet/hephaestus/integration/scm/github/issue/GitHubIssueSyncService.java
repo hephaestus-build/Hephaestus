@@ -232,8 +232,6 @@ public class GitHubIssueSyncService {
         boolean resuming = initialCursor != null;
         final boolean incrementalSync = isIncrementalSync;
         SyncResult.Status abortReason = null; // null means completed successfully
-        // A list longer than a run reads is a warning: holding the timestamp would read the same pages again.
-        boolean capped = false;
 
         if (initialCursor != null) {
             log.info(
@@ -244,12 +242,12 @@ public class GitHubIssueSyncService {
 
         while (hasMore) {
             pageCount++;
-            if (pageCount >= MAX_PAGINATION_PAGES) {
+            if (pageCount > MAX_PAGINATION_PAGES) {
                 log.warn(
                         "Reached maximum pagination limit for issue sync: repoName={}, limit={}",
                         safeNameWithOwner,
                         MAX_PAGINATION_PAGES);
-                capped = true;
+                abortReason = SyncResult.Status.ABORTED_ERROR;
                 break;
             }
 
@@ -512,8 +510,6 @@ public class GitHubIssueSyncService {
         }
 
         // Determine the final result status
-        if (capped && SyncResult.Status.COMPLETED_WITH_WARNINGS.isWorseThan(commentReads))
-            commentReads = SyncResult.Status.COMPLETED_WITH_WARNINGS;
         SyncResult.Status finalStatus = abortReason != null ? abortReason : commentReads;
 
         log.info(
