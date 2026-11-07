@@ -1049,16 +1049,13 @@ void describe("a program that does not stop when the host stops it", { concurren
 		const ws = await workspace({
 			rethrows: program(
 				"definePracticeScript",
-				"{ meta: {}, async run(ctx) { await ctx.review(); return null; } }",
+				'{ meta: {}, async run() { await new Promise((end) => setTimeout(end, 1500)); throw new Error("stopped"); } }',
 			),
 		});
-		const { outcome } = await run(ws, "rethrows", {
-			signal: cancel.signal,
-			review: async () => {
-				cancel.abort(new UnratedError("unavailable", "the tools side stopped"));
-				return REVIEWED;
-			},
-		});
+		setTimeout(() => {
+			cancel.abort(new UnratedError("unavailable", "the tools side stopped"));
+		}, 700);
+		const { outcome } = await run(ws, "rethrows", { signal: cancel.signal });
 		assert.equal(outcome.status, "failed");
 		assert.equal(outcome.stopReason, "unavailable");
 	});

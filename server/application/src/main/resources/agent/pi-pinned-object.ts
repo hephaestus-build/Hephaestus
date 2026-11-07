@@ -3,7 +3,8 @@
 // Git runs on the tools side, which the loop does not trust. A Git object is named by the hash of its bytes, so the loop
 // walks from the commit id that the capture pinned: commit, each tree, then the blob, checking each object's hash before
 // it reads the next id from it. A hostile source can refuse, or stall until a call's time-out, and that reads as
-// unreadable. It cannot supply a byte that the pinned commit does not hold.
+// unreadable. It can overstate a size, and that reads as too large. It cannot supply a byte that the pinned commit
+// does not hold.
 //
 // A hash proves only that bytes match their id, so anyone can make a commit whose id is right. A commit id that a citation
 // names therefore counts only when `PinnedHistory` reaches it from a commit the capture pinned, parent by parent.

@@ -1412,8 +1412,8 @@ export async function runReviewJob(): Promise<void> {
 		if (content === TOO_LARGE) {
 			return {
 				mismatch:
-					`that file is larger than a review reads at commit ${citation.commit ?? "HEAD"}. ` +
-					"Cite the checked-out text or a captured record instead",
+					`the tools side reports that file as larger than a review reads at commit ${citation.commit ?? "HEAD"}. ` +
+					"That says nothing about the file. Cite the checked-out text or a captured record instead",
 			};
 		}
 		if (content === null) {

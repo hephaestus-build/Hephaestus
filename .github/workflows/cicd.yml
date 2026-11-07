@@ -355,6 +355,9 @@ jobs:
               - 'security/semgrep/**'
               - 'security/dependency-baseline.json'
               - 'docker/agents/**'
+              # test:agents runs on this leg, and these files are what it tests.
+              - 'server/application/src/main/resources/agent/**'
+              - 'server/application/src/test/resources/agent/**'
               # test:tooling renders this chart with the real Helm CLI on this leg and on Windows, and
               # test:alerts runs promtool on the alert rules in its files/ on this leg.
               - 'deploy/chart/**'

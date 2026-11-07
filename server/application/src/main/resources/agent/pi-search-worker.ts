@@ -60,6 +60,10 @@ function translated(pattern: string): string | null {
 	if (/\(\?[a-zA-Z-]+[:)]/u.test(pattern)) {
 		return null;
 	}
+	// A `]` that opens a set is a member to `rg`, and to JavaScript it ends an empty set.
+	if (/(?:^|[^\\])(?:\\\\)*\[\^?\]/u.test(pattern)) {
+		return null;
+	}
 	let out = "";
 	let inSet = false;
 	for (let at = 0; at < pattern.length; at += 1) {
@@ -125,12 +129,10 @@ const UTF8_MARK = Buffer.from([0xef, 0xbb, 0xbf]);
  */
 function textOf(file: Buffer): string | null {
 	if (file[0] === 0xff && file[1] === 0xfe) {
-		return file.toString("utf16le", 2);
+		return new TextDecoder("utf-16le").decode(file.subarray(2));
 	}
 	if (file[0] === 0xfe && file[1] === 0xff) {
-		return Buffer.from(file.subarray(2, file.length - (file.length % 2)))
-			.swap16()
-			.toString("utf16le");
+		return new TextDecoder("utf-16be").decode(file.subarray(2));
 	}
 	// Only the first mark counts: after a UTF-8 mark, `rg` reads UTF-8 whatever follows.
 	const bytes = file.subarray(0, 3).equals(UTF8_MARK) ? file.subarray(3) : file;

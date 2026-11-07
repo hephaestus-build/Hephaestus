@@ -211,6 +211,8 @@ export function abortReasonOf(signal: AbortSignal): AbortReason {
 		: "deadline";
 }
 
+const unratedBy = (reason: AbortReason) => (reason === "cancelled" ? "deadline" : reason);
+
 /** Why a run that `signal` ended has no result. A program never hears `unavailable`: its abort stays a deadline. */
 export function stopReasonOf(signal: AbortSignal) {
 	const reason: unknown = signal.reason;
@@ -338,7 +340,7 @@ export async function runCustomProgram(
 			request.refused = true;
 			request.call.abort(new UnratedError(reason, `the host stopped this program: ${reason}`));
 			if (request.slot !== undefined) {
-				countUnrated(request.slot, reason === "cancelled" ? "deadline" : reason);
+				countUnrated(request.slot, stopReason === "unavailable" ? stopReason : unratedBy(reason));
 			}
 			refuseRequest(request.kind, id, reason);
 		}

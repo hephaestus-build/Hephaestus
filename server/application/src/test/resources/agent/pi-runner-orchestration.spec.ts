@@ -1677,6 +1677,10 @@ if (scenario !== undefined && scenario !== "") {
 									atRevision(historySha, 2, "src/Missing.java"),
 									/no such file at commit/u,
 								);
+								await assert.rejects(
+									atRevision(historySha, 2, "src/Huge.txt"),
+									/reports that file as larger than a review reads/u,
+								);
 								record("citation:history-refused");
 								await assert.rejects(cite("src/Auth.java", "", "Cited by line alone"), /quote/u);
 								record("citation:no-quote-refused");
@@ -2231,6 +2235,10 @@ if (scenario !== undefined && scenario !== "") {
 						writeFileSync(
 							nodePath.join(cwd, "repos/primary/src/logo.png"),
 							Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 2]),
+						);
+						writeFileSync(
+							nodePath.join(cwd, "repos/primary/src/Huge.txt"),
+							"x".repeat(9 * 1024 * 1024),
 						);
 						git("init", "-q");
 						git("add", ".");

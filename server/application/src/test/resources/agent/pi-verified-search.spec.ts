@@ -177,6 +177,15 @@ writeFileSync(
 	path.join(texts, "two-marks.txt"),
 	Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf, 0xff, 0xfe]), Buffer.from("hidden\n")]),
 );
+const utf16 = (text: string) => Buffer.from(text, "utf16le");
+writeFileSync(
+	path.join(texts, "doubled.txt"),
+	Buffer.concat([Buffer.from([0xff, 0xfe, 0xff, 0xfe]), utf16("import os\n")]),
+);
+writeFileSync(
+	path.join(texts, "odd.txt"),
+	Buffer.concat([Buffer.from([0xff, 0xfe]), utf16("evil"), Buffer.from([0x41])]),
+);
 writeFileSync(path.join(texts, "cased.txt"), "ſecret\nσασ\n");
 writeFileSync(path.join(texts, "marks.txt"), "Ⓐ\u200Cx²\nnext\u0085line\nsep\u2028line\n");
 
@@ -192,12 +201,15 @@ const searches: [pattern: string, flags: readonly string[]][] = [
 	["secret", ["--ignore-case", "--fixed-strings"]],
 	["ΣΑΣ", ["--ignore-case", "--fixed-strings"]],
 	["hidden", []],
+	["^import os", []],
+	["evil.", []],
 	["a.c", ["--fixed-strings"]],
 ];
 for (const [pattern, flags] of searches) {
 	void test(
 		`what rg finds for ${pattern} is what the loop finds`,
-		{ skip: hasRg ? false : "rg is not installed" },
+		// CI must not lose this comparison to a missing install.
+		{ skip: hasRg || process.env.CI !== undefined ? false : "rg is not installed" },
 		async () => {
 			const rg = spawnSync(
 				"rg",
@@ -246,9 +258,19 @@ for (const [pattern, flags] of searches) {
 	);
 }
 
-for (const pattern of ["(?-s:x.)$", "[^a&&b]", "[^a--b]", "[^a~~b]", String.raw`[^\P{Lu}]`]) {
+// In this file each pattern matches for `rg`, and JavaScript's reading of it would find nothing to hide.
+const apart = mkdtempSync(path.join(tmpdir(), "verified-search-apart-"));
+writeFileSync(path.join(apart, "a.txt"), "x\r\nab&\nab~\naA\n[]\n");
+for (const [pattern, ignoreCase] of [
+	["(?-s:x.)$", false],
+	["^[^a&&b]$", false],
+	["^[^a~~b]$", false],
+	[String.raw`^a[^\P{Lu}]$`, true],
+	["[]A-[]", false],
+	["[^]A-[]", false],
+] as const) {
 	void test(`a pattern that rg and the loop read apart proves nothing: ${pattern}`, async () => {
-		assert.deepEqual(await proveSearches(texts, [claim({ pattern })]), [false]);
+		assert.deepEqual(await proveSearches(apart, [claim({ pattern, ignoreCase })]), [false]);
 	});
 }
 

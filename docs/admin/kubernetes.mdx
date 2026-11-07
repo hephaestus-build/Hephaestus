@@ -1472,7 +1472,8 @@ A Pod that reaches a node but cannot start with the sandbox configuration fails 
 A later probe whose Pods cannot start, because the sandbox quota is full or the nodes have no room, proves nothing.
 The same is true when the worker cannot resolve the name of its gateway probe Service.
 The worker logs a warning and keeps its last passing proof.
-A Pod that the sandbox quota refuses delays that verdict by up to 2 minutes, and up to 4 minutes when the tools probe that runs after it is refused too.
+A Pod that the sandbox quota refuses delays that verdict by up to 2 minutes.
+The tools probe runs after the other probes, so a refusal of both delays the verdict by up to 4 minutes.
 
 The probe also records the runtime and process limit, which are optional:
 
