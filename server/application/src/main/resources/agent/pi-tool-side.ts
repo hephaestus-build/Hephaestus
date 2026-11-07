@@ -4,11 +4,14 @@
 // trust: their output is text for the model, and it counts for nothing until the loop has verified it. Pi's tools keep
 // their contracts, so a model sees the tools that it knows.
 
+import { existsSync } from "node:fs";
+import { glob as nodeGlob } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import {
 	type BashOperations,
+	createFindToolDefinition,
 	createGrepToolDefinition,
 	DEFAULT_MAX_BYTES,
 	formatSize,
@@ -98,6 +101,25 @@ export function toolLines(tools: Pick<ToolClient, "exec">, cwd: string): LineRun
 			throw new Error(`grep exited with status ${String(exit.code)}`);
 		}
 	};
+}
+
+/** Pi's `find` with a Node glob: Pi's own runs `fd`, and the loop starts no process. */
+export function loopFindTool(root: string) {
+	return createFindToolDefinition(root, {
+		operations: {
+			exists: (file) => existsSync(file),
+			glob: async (pattern, cwd, { ignore, limit }) => {
+				const found: string[] = [];
+				for await (const file of nodeGlob(pattern, { cwd, exclude: ignore })) {
+					found.push(file);
+					if (found.length >= limit) {
+						break;
+					}
+				}
+				return found;
+			},
+		},
+	});
 }
 
 interface Match {

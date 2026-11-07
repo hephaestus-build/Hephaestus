@@ -130,15 +130,32 @@ void test("bash runs on the tools side and gets its exit code and its output", a
 	assert.equal(Buffer.concat(chunks).toString(), "hi");
 });
 
-void test("bash keeps the runner's variables out of a command", async () => {
-	process.env.HEPHAESTUS_SECRET = "must-not-leak";
+void test("a command sees the sandbox's Git hardening and none of the runner's variables", async () => {
+	const runner = { LLM_PROXY_TOKEN: "must-not-leak", NODE_OPTIONS: "--max-old-space-size=64" };
+	const sandbox = {
+		GIT_CONFIG_COUNT: "1",
+		GIT_CONFIG_KEY_0: "core.fsmonitor",
+		GIT_CONFIG_VALUE_0: "false",
+	};
+	Object.assign(process.env, runner, sandbox);
 	const chunks: Buffer[] = [];
-	await toolBashOperations(client).exec("env", source, {
-		onData: (chunk) => {
-			chunks.push(chunk);
-		},
-	});
-	assert.equal(Buffer.concat(chunks).toString().includes("must-not-leak"), false);
+	try {
+		await toolBashOperations(client).exec("env", source, {
+			onData: (chunk) => {
+				chunks.push(chunk);
+			},
+		});
+	} finally {
+		for (const name of Object.keys({ ...runner, ...sandbox })) {
+			Reflect.deleteProperty(process.env, name);
+		}
+	}
+	const output = Buffer.concat(chunks).toString();
+	assert.equal(output.includes("must-not-leak"), false);
+	assert.doesNotMatch(output, /^NODE_OPTIONS=/mu);
+	for (const [name, value] of Object.entries(sandbox)) {
+		assert.match(output, new RegExp(`^${name}=${value}$`, "mu"));
+	}
 });
 
 void test("a repository search runs on the tools side, and stops when it has enough", async () => {

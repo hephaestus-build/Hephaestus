@@ -13,10 +13,14 @@ import {
 	checkedOutCommit,
 	parseNameStatus,
 	readChange,
-	readPinnedBlob,
 	renderAuthoredDescription,
 	writeChangeView,
 } from "../../../main/resources/agent/pi-change.ts";
+import {
+	type ObjectSource,
+	PinnedHistory,
+	readPinnedObject,
+} from "../../../main/resources/agent/pi-pinned-object.ts";
 
 /** A project template under .gitlab/merge_request_templates/. */
 const TEMPLATE = `<!-- MR title format: #<IssueNumber>: <Short, imperative description> — Example: #12: Add login screen -->
@@ -182,7 +186,7 @@ function repositoryWithChange() {
 	return { root, repo, base, head };
 }
 
-void test("a pinned file is read from the commit named, never from the checkout or through a link", (t) => {
+void test("a pinned file is read from the commit named, never from the checkout or through a link", async (t) => {
 	const { root, repo, base, head } = repositoryWithChange();
 	t.after(() => rmSync(root, { recursive: true, force: true }));
 	symlinkSync("/etc/hostname", path.join(repo, "outside.ts"));
@@ -190,22 +194,29 @@ void test("a pinned file is read from the commit named, never from the checkout 
 	git(repo, "add", "outside.ts");
 	git(repo, "commit", "-q", "-m", "Link outside");
 	const linked = git(repo, "rev-parse", "HEAD");
-	const read = (commit: string, file: string, limit = 1000) =>
-		readPinnedBlob(repo, commit, file, limit);
+	const raw = (...args: string[]) =>
+		execFileSync("git", ["-C", repo, ...args], { encoding: "buffer", stdio: "pipe" });
+	const objects: ObjectSource = {
+		read: async (type, id) => raw("cat-file", type, id),
+		size: async (id) => Number(raw("cat-file", "-s", id).toString()),
+	};
+	const history = new PinnedHistory(objects, [linked]);
+	const read = async (commit: string, file: string, limit = 1000) =>
+		readPinnedObject(objects, history, commit, file, limit);
 
 	// The renamed file's old side exists only at the base; the working tree's edit is not what was reviewed.
-	assert.deepEqual(read(base, "app.ts"), {
+	assert.deepEqual(await read(base, "app.ts"), {
 		kind: "regular",
 		bytes: Buffer.from("export const a = 1;\nexport const b = 2;\nexport const c = 3;\n"),
 	});
-	assert.deepEqual(read(head, "app.ts"), { kind: "absent" });
-	assert.deepEqual(read(head, "lib.ts"), {
+	assert.deepEqual(await read(head, "app.ts"), { kind: "absent" });
+	assert.deepEqual(await read(head, "lib.ts"), {
 		kind: "regular",
 		bytes: Buffer.from("export const a = 1;\nexport const b = 20;\nexport const c = 3;\n"),
 	});
-	assert.deepEqual(read(head, "lib.ts", 10), { kind: "tooLarge", size: 61 });
-	assert.deepEqual(read(linked, "outside.ts"), { kind: "nonregular" });
-	assert.deepEqual(read(head, ".gitlab"), { kind: "nonregular" });
+	assert.deepEqual(await read(head, "lib.ts", 10), { kind: "tooLarge", size: 61 });
+	assert.deepEqual(await read(linked, "outside.ts"), { kind: "nonregular" });
+	assert.deepEqual(await read(head, ".gitlab"), { kind: "nonregular" });
 	for (const unsafe of [
 		"",
 		"/etc/hostname",
@@ -216,10 +227,10 @@ void test("a pinned file is read from the commit named, never from the checkout 
 		"a//b",
 		"a\nb",
 	]) {
-		assert.deepEqual(read(head, unsafe), { kind: "unsafe" }, JSON.stringify(unsafe));
+		assert.deepEqual(await read(head, unsafe), { kind: "unsafe" }, JSON.stringify(unsafe));
 	}
-	assert.deepEqual(read("HEAD", "lib.ts"), { kind: "unsafe" });
-	assert.deepEqual(read("f".repeat(40), "lib.ts"), { kind: "unreadable" });
+	assert.deepEqual(await read("HEAD", "lib.ts"), { kind: "unsafe" });
+	assert.deepEqual(await read("f".repeat(40), "lib.ts"), { kind: "unreadable" });
 	assert.equal(checkedOutCommit(repo), linked);
 });
 

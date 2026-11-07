@@ -9,7 +9,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { readPinnedBlob } from "../../../main/resources/agent/pi-change.ts";
 import {
 	HISTORY_COMMITS,
 	type ObjectSource,
@@ -54,20 +53,20 @@ const honest: ObjectSource = {
 	size: async (id) => Number(git("cat-file", "-s", id).toString()),
 };
 
-for (const file of [
-	"README.md",
-	"src/deep/kept.ts",
-	"run.sh",
-	"large.bin",
-	"link",
-	"src",
-	"gone.ts",
-	"src/deep/gone",
-]) {
-	void test(`the walk agrees with Git at ${file}`, async () => {
+for (const [file, expected] of [
+	["README.md", { kind: "regular", bytes: Buffer.from("# readme\n") }],
+	["src/deep/kept.ts", { kind: "regular", bytes: Buffer.from("export const kept = 1;\n") }],
+	["run.sh", { kind: "regular", bytes: Buffer.from("#!/bin/sh\n") }],
+	["large.bin", { kind: "regular", bytes: Buffer.from("x".repeat(4096)) }],
+	["link", { kind: "nonregular" }],
+	["src", { kind: "nonregular" }],
+	["gone.ts", { kind: "absent" }],
+	["src/deep/gone", { kind: "absent" }],
+] as const) {
+	void test(`the walk reads ${file} as Git holds it`, async () => {
 		assert.deepEqual(
 			await readPinnedObject(honest, pinned(honest), commit, file, 1_048_576),
-			readPinnedBlob(repository, commit, file, 1_048_576),
+			expected,
 		);
 	});
 }
@@ -243,10 +242,10 @@ void test("the walk reads a real repository through the tools side, and a file p
 	try {
 		const source = toolObjects(tools, repository);
 		const history = pinned(source);
-		assert.deepEqual(
-			await readPinnedObject(source, history, commit, "src/deep/kept.ts", 1000),
-			readPinnedBlob(repository, commit, "src/deep/kept.ts", 1000),
-		);
+		assert.deepEqual(await readPinnedObject(source, history, commit, "src/deep/kept.ts", 1000), {
+			kind: "regular",
+			bytes: Buffer.from("export const kept = 1;\n"),
+		});
 		assert.deepEqual(await readPinnedObject(source, history, commit, "large.bin", 100), {
 			kind: "tooLarge",
 			size: 4096,

@@ -77,6 +77,13 @@ export interface ToolsServerOptions {
 /** Every process of a call carries this variable, with the call's id: it finds a process that left the call's group. */
 const CALL_MARKER = "HEPHAESTUS_TOOL_CALL";
 
+/** The sandbox's Git settings: the Pod gives them to this side, and they carry no credential. */
+function gitSettings(): NodeJS.ProcessEnv {
+	return Object.fromEntries(
+		Object.entries(process.env).filter(([name]) => name.startsWith("GIT_")),
+	);
+}
+
 const ALL_OPERATIONS = ["exec", "script.run", "read", "put", "reset"];
 
 /** Only these variables reach a program: no credential ever does. */
@@ -664,7 +671,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			try {
 				child = spawn(file, args, {
 					cwd,
-					env: { ...ENV, HOME: options.scratch, [CALL_MARKER]: id },
+					env: { ...ENV, ...gitSettings(), HOME: options.scratch, [CALL_MARKER]: id },
 					detached: true,
 					stdio: ["ignore", "pipe", "pipe"],
 				});

@@ -23,7 +23,7 @@ interface ResultToolOptions<T> {
 	sourceKinds: readonly string[];
 	contextRoot: string;
 	drafts: () => ProblemDrafts;
-	validateProblem: (raw: unknown) => Problem & { key: string };
+	validateProblem: (raw: unknown) => Promise<Problem & { key: string }>;
 	submit: (id: string, params: Record<string, unknown>) => Promise<AgentToolResult<T>>;
 }
 
@@ -57,7 +57,7 @@ export function buildResultTools<T>(options: ResultToolOptions<T>) {
 			},
 			execute: async (_id, params) => {
 				const drafts = options.drafts();
-				const problem = options.validateProblem(params);
+				const problem = await options.validateProblem(params);
 				return draftReply(drafts, drafts.upsert(problem), problem.key);
 			},
 		}),

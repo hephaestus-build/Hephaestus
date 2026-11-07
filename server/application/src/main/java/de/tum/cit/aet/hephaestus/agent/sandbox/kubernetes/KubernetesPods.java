@@ -358,13 +358,17 @@ public class KubernetesPods {
             volumes.add(memoryVolume("tools-socket", SOCKET_BYTES));
             volumes.add(diskVolume("tools-tmp", size.volumeBytes()));
             loopMounts.add(mount("tools-socket", "/run/tools", false));
-            inits.add(sidecar(workload, TOOLS, TOOLS_UID, TOOLS_SOCKET, sidecars.nonce(), "tools"));
+            List<EnvVar> gitSettings = env.stream()
+                    .filter(variable -> variable.getName().startsWith("GIT_"))
+                    .toList();
+            inits.add(sidecar(workload, TOOLS, TOOLS_UID, TOOLS_SOCKET, sidecars.nonce(), "tools", gitSettings));
             if (sidecars.programs()) {
                 loopEnv.add(variable("PROGRAMS_SOCKET", PROGRAMS_SOCKET));
                 volumes.add(memoryVolume("programs-socket", SOCKET_BYTES));
                 volumes.add(diskVolume("programs-tmp", size.volumeBytes()));
                 loopMounts.add(mount("programs-socket", "/run/programs", false));
-                inits.add(sidecar(workload, PROGRAMS, PROGRAMS_UID, PROGRAMS_SOCKET, sidecars.nonce(), "programs"));
+                inits.add(sidecar(
+                        workload, PROGRAMS, PROGRAMS_UID, PROGRAMS_SOCKET, sidecars.nonce(), "programs", gitSettings));
             }
         }
         Container loop = base(LOOP, workload.image(), SANDBOX_UID)
@@ -383,8 +387,8 @@ public class KubernetesPods {
     }
 
     /**
-     * A native sidecar: an init container that stays up beside the loop. It gets the nonce and its socket and no other
-     * variable, so the attempt's credential never reaches it. It mounts the workspace read-only and has its own {@code
+     * A native sidecar: an init container that stays up beside the loop. It gets the nonce, its socket and Git's settings,
+     * so the attempt's credential never reaches it. It mounts the workspace read-only and has its own {@code
      * /tmp}; the loop's {@code out}, {@code .pi} and {@code .sessions} are not mounted at all.
      */
     private Container sidecar(Workload workload, String name, long uid, String socket, String nonce, String role) {

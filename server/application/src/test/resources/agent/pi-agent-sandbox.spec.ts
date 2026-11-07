@@ -6,7 +6,6 @@ import test from "node:test";
 
 import {
 	createAgentSession,
-	createBashTool,
 	createCodemodeExtension,
 	DefaultResourceLoader,
 	ModelRuntime,
@@ -15,7 +14,6 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import {
-	REVIEW_SHELL_OPTIONS,
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
 } from "../../../main/resources/agent/pi-agent-sandbox.ts";
@@ -109,47 +107,5 @@ void test("the review tool list excludes write and edit from direct and nested c
 		assert.doesNotMatch(session.systemPrompt, /coding assistant|edit tool|write tool|ignore me/u);
 	} finally {
 		session.dispose();
-	}
-});
-
-void test("a review's shell command sees the sandbox's git hardening and none of the runner's own variables", async () => {
-	const runner = {
-		LLM_PROXY_TOKEN: "runner-credential-marker",
-		LLM_PROXY_URL: "http://gateway.invalid/internal/llm",
-		SANDBOX_RUNTIME_URL: "http://gateway.invalid/runtime",
-		PI_CODING_AGENT_DIR: AGENT_DIR,
-		NODE_OPTIONS: "--max-old-space-size=64",
-	};
-	const sandbox = {
-		GIT_CONFIG_COUNT: "1",
-		GIT_CONFIG_KEY_0: "core.fsmonitor",
-		GIT_CONFIG_VALUE_0: "false",
-	};
-	const saved = Object.fromEntries(
-		Object.keys({ ...runner, ...sandbox }).map((name) => [name, process.env[name]]),
-	);
-	Object.assign(process.env, runner, sandbox);
-	try {
-		const result = await createBashTool(CWD, REVIEW_SHELL_OPTIONS).execute("call-1", {
-			command: "env",
-		});
-		const output = result.content.map((part) => ("text" in part ? part.text : "")).join("");
-		for (const name of Object.keys(runner)) {
-			assert.doesNotMatch(output, new RegExp(`^${name}=`, "mu"), `${name} reached the command`);
-		}
-		assert.equal(output.includes(runner.LLM_PROXY_TOKEN), false);
-		for (const [name, value] of Object.entries(sandbox)) {
-			assert.match(output, new RegExp(`^${name}=${value}$`, "mu"));
-		}
-		assert.match(output, /^PATH=/mu);
-		assert.doesNotMatch(output, /^PI_(?:SESSION|MODEL|PROVIDER)/mu);
-	} finally {
-		for (const [name, value] of Object.entries(saved)) {
-			if (value === undefined) {
-				Reflect.deleteProperty(process.env, name);
-			} else {
-				process.env[name] = value;
-			}
-		}
 	}
 });
