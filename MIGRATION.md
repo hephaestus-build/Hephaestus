@@ -63,6 +63,35 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
+### v1.0.0-rc.4
+
+#### 🔴 The alert rule file has a new path
+
+**Affected**: deployments that load the alert rules from the repository or from a release's source tree.
+
+The rule file and its promtool tests moved from `deploy/observability/` to `deploy/chart/hephaestus/files/`, so that the chart can render them. A rule loader that still reads the old path finds no file.
+
+**Migration**: load `deploy/chart/hephaestus/files/hephaestus-alerts.yml` from the release that you run. Or let the chart give your cluster the rules with each upgrade:
+
+- Set `observability.alertRules.configMap`, mount the ConfigMap into your Prometheus or vmalert, and point its rule loader at the mounted file.
+- Set `observability.alertRules.prometheusRule`, and make the `ruleSelector` and `ruleNamespaceSelector` of your Prometheus match it. `observability.alertRules.labels` adds the labels that the selector reads.
+
+After the upgrade, check that your Prometheus or vmalert lists the Hephaestus rules.
+
+#### 🔴 Three model call metrics have new names
+
+**Affected**: deployments with their own alerts or dashboards on the LLM proxy metrics. The shipped alert rules read none of them.
+
+| Old metric | New metric |
+| --- | --- |
+| `llm_proxy_duration_seconds` | `gen_ai_client_operation_duration_seconds`, by `pool` and `class`, from the pool's grant to the end of the call |
+| `sandbox_gateway_calls_in_flight_refused_total` | `llm_proxy_refused_total{refusal="calls_in_flight"}` |
+| `llm_proxy_budget_blocked_total` | `llm_budget_blocked_total{surface="model_call"}`, with the same `cap` label |
+
+A query on an old name does not fail. It returns no series, so an alert built on it stops firing without a sign.
+
+**Migration**: change those queries when you upgrade. The old duration included the wait for a pool permit, which `llm_pool_permit_wait_seconds` measures on its own.
+
 ### v1.0.0-rc.3
 
 #### 🔴 Give the bundled NATS one memory size, in Mi or Gi
