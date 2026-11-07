@@ -101,7 +101,6 @@ public class KubernetesIsolationProbe {
             (async () => {
               const out = { reached: {}, uid: process.getuid() };
               out.token = fs.existsSync('/var/run/secrets/kubernetes.io/serviceaccount/token');
-              out.programSocket = fs.existsSync('/run/programs');
               try { fs.writeFileSync('/isolation-probe', ''); out.rootWritable = true; }
               catch (error) { out.rootWritable = error.code !== 'EROFS'; }
               try { out.uidMap = fs.readFileSync('/proc/self/uid_map', 'utf8').trim().split(/\\s+/).join(' '); }
@@ -544,9 +543,6 @@ public class KubernetesIsolationProbe {
         }
         if (!result.path("uid").isIntegralNumber() || result.path("uid").intValue() == 0) {
             failures.add(probe + " runs as root");
-        }
-        if (result.path("programSocket").asBoolean(false)) {
-            failures.add(probe + " can see the program socket");
         }
         if (!ownUserNamespace(result)) {
             failures.add(probe + " has no private user mapping; the sandbox nodes must support user namespaces");

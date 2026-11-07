@@ -32,7 +32,7 @@ import { isJsonObject } from "./json.ts";
 import { definePracticeScript, reasonOf, UnratedError } from "./practice-script.ts";
 import { programContext } from "./program-context.ts";
 import {
-	abortReasonOf,
+	stopReasonOf,
 	acceptModels,
 	noCalls,
 	ProgramSettlementError,
@@ -149,7 +149,7 @@ async function runBuiltin(job: ProgramJob, services: ProgramServices): Promise<P
 		}
 		return { value, models: report, calls };
 	} catch (error) {
-		const stopReason = signal.aborted ? abortReasonOf(signal) : reasonOf(error);
+		const stopReason = signal.aborted ? stopReasonOf(signal) : reasonOf(error);
 		return {
 			failure: { stopReason, error: error instanceof Error ? error.message : String(error) },
 			models: report,

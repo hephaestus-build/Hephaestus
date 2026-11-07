@@ -1506,6 +1506,12 @@ No per-review memory or process setting overrides it.
 | conversation host | 50m | 256 MiB | 1 GiB | 256 MiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
 | Turn sandbox | 20m, and 5m for its stager | 128 MiB, and 32 MiB for its stager | 512 MiB, and 32 MiB | 256 MiB, and 16 MiB | 512 MiB, 3 volumes | 1.5 GiB and 64 MiB, and 16 MiB |
 
+The review row counts the whole Pod.
+Its `loop` container requests 312 MiB, 30m and 992 MiB of disk and has the memory limit of the table.
+Its `tools` container requests 32 MiB, and its `programs` container requests 40 MiB.
+Each of these two requests 10m and 16 MiB of disk, and has a limit of 768 MiB and 500m.
+A review has `programs` only when it runs a custom practice program.
+
 A review and the conversation host have seven volumes on the node's disk: the workspace, `work`, `out`, `.pi`, `.sessions`, `/tmp` and `~/.local`.
 A turn sandbox has three: its workspace, `/tmp` and `~/.local`.
 The disk limit of the main container holds all the volumes full and 64 MiB for its logs.
@@ -1881,6 +1887,7 @@ A change of NATS itself stops reception: while NATS is down, the receiver answer
 | A new Pod restarts during an upgrade, and its log names a pending change set | It waited 10 minutes for the schema. Check the migration Job's log. A longer migration needs the [database maintenance](#database-maintenance) procedure. |
 | A backup Job fails with `unable to find primary cluster` | The Job cannot reach pgBackRest's TLS server on port 8432 of the PostgreSQL Service, or its client certificate is not for `hephaestus-backup` from `ca.crt`. |
 | PostgreSQL's volume fills | A failed WAL archive keeps the WAL on the volume. Check the latest backup Job's log and the bucket's credentials. |
+| A review ends with `execution_incomplete`, and its diagnostics show `review.side_lost` or `review.side_unreachable` | The review's `tools` or `programs` container stopped, or never started. The `side` field names it. The worker log's sandbox exit names the container that ran out of memory or could not start. Hephaestus does not report the missing work as missing evidence. Repeated memory kills of `tools` point to a command of the review that needs more than the 768 MiB limit. |
 | A practice review fails with "The sandbox could not prepare its workspace." | The sandbox's initializer failed before any model call. The job runs again within its retry limit, so a failure that repeats on every attempt uses all of them. The worker log names the initializer's exit code. After the last attempt, read the exit code and the last lines of the initializer's log on the job: `kubectl --namespace hephaestus exec hephaestus-postgresql-0 -c postgresql -- psql -U "$DATABASE_USERNAME" -d hephaestus -c "SELECT capture->'initializationFailure' FROM review_job WHERE id='<job id>'"`. Known credential formats in those lines are masked. |
 
 `kubectl --namespace <release namespace> logs deployment/<release>-worker` shows a worker's probe result and its isolation tier.

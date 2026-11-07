@@ -206,8 +206,6 @@ public class SandboxExits {
                 : Stream.concat(
                                 listOf(status.getInitContainerStatuses()).stream(),
                                 listOf(status.getContainerStatuses()).stream())
-                        // A sidecar ends by a signal when the loop ends, so its code says nothing about the review.
-                        .filter(container -> !SIDECARS.contains(container.getName()))
                         .toList();
         for (ContainerStatus container : containers) {
             var state = container.getState();
@@ -222,9 +220,15 @@ public class SandboxExits {
         }
         for (ContainerStatus container : containers) {
             ContainerStateTerminated ended = terminated(container);
-            if (ended == null) continue;
-            if ("OOMKilled".equals(ended.getReason()))
-                return new Exit(Reason.OOM_KILLED, container.getName(), ended.getExitCode(), ended.getReason());
+            boolean sidecar = SIDECARS.contains(container.getName());
+            // A sidecar restarts after a memory kill, so the kill shows only in its last state.
+            ContainerStateTerminated killed = sidecar && container.getLastState() != null
+                    ? container.getLastState().getTerminated()
+                    : ended;
+            if (killed != null && "OOMKilled".equals(killed.getReason()))
+                return new Exit(Reason.OOM_KILLED, container.getName(), killed.getExitCode(), killed.getReason());
+            // A sidecar ends by a signal when the loop ends, so its exit code says nothing about the review.
+            if (ended == null || sidecar) continue;
             Integer code = ended.getExitCode();
             if (code != null && code != 0) return new Exit(Reason.ERROR, container.getName(), code, ended.getReason());
         }

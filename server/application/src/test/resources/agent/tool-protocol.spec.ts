@@ -1714,7 +1714,10 @@ void test("a call that a side never ends fails alone, and its late reply goes un
 	}
 	await assert.rejects(stuck, /did not end a call/u);
 	held.socket?.write(encode({ type: "exit", id: held.request?.id, code: 0 }));
-	const next = await tools.exec({ command: "true", cwd: workspace, timeoutMs: 1000 }, () => undefined);
+	const next = await tools.exec(
+		{ command: "true", cwd: workspace, timeoutMs: 1000 },
+		() => undefined,
+	);
 	assert.equal(next.code, 0);
 	tools.close();
 });

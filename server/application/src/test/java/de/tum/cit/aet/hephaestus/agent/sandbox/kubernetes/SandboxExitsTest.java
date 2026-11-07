@@ -52,6 +52,37 @@ class SandboxExitsTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldNameASidecarThatRanOutOfMemoryThoughItRestarted() {
+        ContainerStatus restarted = new ContainerStatusBuilder()
+                .withName(KubernetesPods.TOOLS)
+                .withNewLastState()
+                .withNewTerminated()
+                .withExitCode(137)
+                .withReason("OOMKilled")
+                .endTerminated()
+                .endLastState()
+                .build();
+
+        assertThat(SandboxExits.exit(pod(null, restarted, ended(KubernetesPods.LOOP, 0, "Completed"))))
+                .isEqualTo(
+                        new SandboxExits.Exit(SandboxExits.Reason.OOM_KILLED, KubernetesPods.TOOLS, 137, "OOMKilled"));
+    }
+
+    @Test
+    void shouldNameASidecarThatCouldNotStart() {
+        ContainerStatus waiting = new ContainerStatusBuilder()
+                .withName(KubernetesPods.TOOLS)
+                .withNewState()
+                .withNewWaiting()
+                .withReason("ImagePullBackOff")
+                .endWaiting()
+                .endState()
+                .build();
+
+        assertThat(SandboxExits.exit(pod(null, waiting)).reason()).isEqualTo(SandboxExits.Reason.START_FAILED);
+    }
+
+    @Test
     void shouldTellAnErrorAnEvictionAStartThatFailedAndACompletedRun() {
         assertThat(SandboxExits.exit(pod(null, ended(KubernetesPods.LOOP, 1, "Error")))
                         .reason())

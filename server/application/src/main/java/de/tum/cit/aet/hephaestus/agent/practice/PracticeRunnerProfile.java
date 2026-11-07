@@ -20,6 +20,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-tool-validation.ts",
             "pi-change.ts",
             "pi-change-view.ts",
+            "pi-glob-worker.ts",
             "pi-pinned-object.ts",
             "pi-search-worker.ts",
             "pi-tool-side.ts",

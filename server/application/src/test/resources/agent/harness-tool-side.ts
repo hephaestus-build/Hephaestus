@@ -36,6 +36,14 @@ export async function startHarnessSides(cwd: string): Promise<void> {
 	});
 	await once(server, "listening");
 	server.unref();
+	if (process.env.PI_HARNESS_LOSE_TOOLS !== undefined) {
+		// A sidecar that dies: every connection ends, as a memory kill ends them.
+		server.on("connection", (connection) => {
+			setTimeout(() => {
+				connection.destroy();
+			}, 200).unref();
+		});
+	}
 	process.env.TOOLS_SOCKET = socket;
 	process.env.PROGRAMS_SOCKET = socket;
 	process.env.TOOLS_NONCE = NONCE;

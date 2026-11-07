@@ -211,6 +211,14 @@ export function abortReasonOf(signal: AbortSignal): AbortReason {
 		: "deadline";
 }
 
+/** Why a run that `signal` ended has no result. A program never hears `unavailable`: its abort stays a deadline. */
+export function stopReasonOf(signal: AbortSignal) {
+	const reason: unknown = signal.reason;
+	return reason instanceof UnratedError && reason.reason === "unavailable"
+		? "unavailable"
+		: abortReasonOf(signal);
+}
+
 /**
  * Run one custom program in its own process, until it returns, fails, asks for its review or reaches
  * its deadline. Its value is returned unchecked: the host validates it as a candidate.
@@ -223,7 +231,7 @@ export async function runCustomProgram(
 	const { slug } = job;
 	const calls = noCalls();
 	if (services.signal.aborted || Date.now() >= job.deadline) {
-		const stopReason = services.signal.aborted ? abortReasonOf(services.signal) : "deadline";
+		const stopReason = services.signal.aborted ? stopReasonOf(services.signal) : "deadline";
 		return {
 			failure: {
 				stopReason,

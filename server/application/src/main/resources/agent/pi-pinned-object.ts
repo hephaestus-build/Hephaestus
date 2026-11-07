@@ -2,8 +2,8 @@
 //
 // Git runs on the tools side, which the loop does not trust. A Git object is named by the hash of its bytes, so the loop
 // walks from the commit id that the capture pinned: commit, each tree, then the blob, checking each object's hash before
-// it reads the next id from it. A hostile source can refuse or stall, and that reads as unreadable. It cannot supply a
-// byte that the pinned commit does not hold.
+// it reads the next id from it. A hostile source can refuse, or stall until a call's time-out, and that reads as
+// unreadable. It cannot supply a byte that the pinned commit does not hold.
 //
 // A hash proves only that bytes match their id, so anyone can make a commit whose id is right. A commit id that a citation
 // names therefore counts only when `PinnedHistory` reaches it from a commit the capture pinned, parent by parent.
@@ -52,6 +52,7 @@ export function toolObjects(tools: ToolClient, repository: string): ObjectSource
 					cwd: repository,
 					timeoutMs: OBJECT_TIMEOUT_MS,
 					maxOutputBytes: limit,
+					uncounted: true,
 				},
 				(chunk) => {
 					chunks.push(chunk);
@@ -126,6 +127,10 @@ export class PinnedHistory {
 	readonly #source: ObjectSource;
 	readonly #reached = new Set<string>();
 	readonly #frontier: string[];
+	/** Commits that the source did not answer for: a later walk tries them again. */
+	readonly #unanswered: string[] = [];
+	/** Sessions share this history, so one walk runs at a time. */
+	#turn: Promise<void> = Promise.resolve();
 
 	constructor(source: ObjectSource, pinned: readonly string[]) {
 		this.#source = source;
@@ -133,6 +138,19 @@ export class PinnedHistory {
 	}
 
 	async contains(commit: string): Promise<boolean> {
+		const turn = Promise.withResolvers<undefined>();
+		const previous = this.#turn;
+		this.#turn = turn.promise;
+		await previous;
+		try {
+			return await this.#walk(commit);
+		} finally {
+			turn.resolve(undefined);
+		}
+	}
+
+	async #walk(commit: string): Promise<boolean> {
+		this.#frontier.push(...this.#unanswered.splice(0));
 		while (!this.#reached.has(commit)) {
 			const next = this.#frontier.shift();
 			if (next === undefined || this.#reached.size >= HISTORY_COMMITS) {
@@ -140,7 +158,9 @@ export class PinnedHistory {
 			}
 			if (!this.#reached.has(next)) {
 				const content = await verified(this.#source, "commit", next, TREE_BYTES);
-				if (content !== null) {
+				if (content === null) {
+					this.#unanswered.push(next);
+				} else {
 					this.#reached.add(next);
 					this.#frontier.push(...parentsOfCommit(content, next.length));
 				}

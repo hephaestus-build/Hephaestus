@@ -213,6 +213,26 @@ void test("a commit past the walk's bound reads as unreadable, and the walk stop
 	assert.equal(reads, HISTORY_COMMITS);
 });
 
+void test("a commit that the source did not answer for is tried again, and its history stays reachable", async () => {
+	let silent = true;
+	const flaky: ObjectSource = {
+		...honest,
+		read: async (type, id, limit) => (silent ? null : honest.read(type, id, limit)),
+	};
+	const history = pinned(flaky);
+	assert.equal(await history.contains(commit), false);
+	silent = false;
+	assert.equal(await history.contains(commit), true);
+});
+
+void test("sessions that share a history do not race its walk", async () => {
+	const history = pinned(honest);
+	assert.deepEqual(await Promise.all([history.contains(commit), history.contains(commit)]), [
+		true,
+		true,
+	]);
+});
+
 void test("a tree whose hash is right but whose bytes are malformed reads as unreadable", async () => {
 	const objects = new Map<string, Buffer>();
 	const forged = forgedCommit(objects, Buffer.from("100644 name-with-no-end"));

@@ -125,6 +125,7 @@ import {
 } from "./pi-tool-side.ts";
 import { prepareTurnText } from "./pi-turn-context.ts";
 import { proveSearches } from "./pi-verified-search.ts";
+import type { ToolClient } from "./tool-client.ts";
 import { toolsProgram } from "./tool-program.ts";
 import { LIMITS } from "./tool-protocol.ts";
 import { parseDiff } from "./work/practice-scripts/kits/scm/diff-parser.ts";
@@ -198,6 +199,9 @@ interface TaskEnvelope {
 }
 
 /** The server sets every one of these; a missing one stops the runner before it does any work. */
+/** A pinned file that the loop could not prove. A failed read is not a statement about the file. */
+const UNREADABLE = Symbol("unreadable");
+
 /** The most bytes of a pinned file that the loop reads: what one `exec` streams. */
 const MAX_PINNED_BYTES = LIMITS.execStreamBytes;
 
@@ -686,15 +690,6 @@ export async function runReviewJob(): Promise<void> {
 	const INPUT_PATHS = resolveTaskPaths(CWD, taskEnvelope.paths);
 	/** The commit that the checkout holds, as the change view read it before anything untrusted ran. */
 	const checkoutCommit = pinnedCheckout(CWD);
-	const toolSide = await openToolSide(
-		{ path: requiredEnv("TOOLS_SOCKET") },
-		requiredEnv("TOOLS_NONCE"),
-	);
-	const programSocket = process.env.PROGRAMS_SOCKET;
-	const programs =
-		programSocket === undefined
-			? null
-			: await openToolSide({ path: programSocket }, requiredEnv("TOOLS_NONCE"));
 	const histories = new Map<string, PinnedHistory>();
 	/** What the capture pinned for `repository`: its head, and the change's two ends. */
 	function pinnedHistory(repository: string): PinnedHistory {
@@ -1373,7 +1368,9 @@ export async function runReviewJob(): Promise<void> {
 		return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
 	}
 
-	async function citedContent(citation: Citation): Promise<string | typeof BINARY | null> {
+	async function citedContent(
+		citation: Citation,
+	): Promise<string | typeof BINARY | typeof UNREADABLE | null> {
 		if (citation.sourceKind === TREE_SOURCE) {
 			if (citation.commit === undefined) {
 				return readCheckoutFile(citation.path, citationRepository(citation));
@@ -1386,6 +1383,9 @@ export async function runReviewJob(): Promise<void> {
 				citation.path,
 				MAX_PINNED_BYTES,
 			);
+			if (blob.kind === "unreadable") {
+				return UNREADABLE;
+			}
 			return blob.kind === "regular" ? asText(blob.bytes) : null;
 		}
 		if (citation.sourceKind === DIFF_SOURCE) {
@@ -1396,8 +1396,15 @@ export async function runReviewJob(): Promise<void> {
 
 	function resolveCited(
 		citation: Citation,
-		content: string | typeof BINARY | null,
+		content: string | typeof BINARY | typeof UNREADABLE | null,
 	): ReturnType<typeof resolveOnEitherSide> {
+		if (content === UNREADABLE) {
+			return {
+				mismatch:
+					`the checkout's history could not be read at commit ${citation.commit ?? "HEAD"}. ` +
+					"That says nothing about the file. Cite the checked-out text or a captured record instead",
+			};
+		}
 		if (content === null) {
 			return {
 				mismatch:
@@ -2032,6 +2039,19 @@ export async function runReviewJob(): Promise<void> {
 	// The review staged what it could and left at least one practice without a result. The worker decides from what is
 	// staged whether another attempt continues it; the code only tells this designed end from a failure.
 	const PARTIAL_REVIEW_EXIT = 78;
+
+	/** Dials a side of the Pod. A review cannot run without its tools: the attempt ends as a failure to capture. */
+	async function openSide(side: string, socket: string): Promise<ToolClient> {
+		try {
+			return await openToolSide({ path: socket }, requiredEnv("TOOLS_NONCE"));
+		} catch (error) {
+			diagnose("review.side_unreachable", { side, error: errorKind(error) });
+			process.exit(PARTIAL_REVIEW_EXIT);
+		}
+	}
+	const toolSide = await openSide("tools", requiredEnv("TOOLS_SOCKET"));
+	const programSocket = process.env.PROGRAMS_SOCKET;
+	const programs = programSocket === undefined ? null : await openSide("programs", programSocket);
 
 	function readTaskEnvelope(): TaskEnvelope {
 		let raw: string;
@@ -2778,6 +2798,19 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		const directBudget = new ModelBudget(DIRECT_MODEL_TOKENS, MODEL_CONCURRENCY);
 		let sessionStopFailure: Error | null = null;
 		const measuringEnded = new AbortController();
+		const lostSides = new Set<string>();
+		// The loop has one connection to each side: past its end no command, search or program can run.
+		const whenLost = async (side: string, client: ToolClient) => {
+			const reason = await client.ended;
+			diagnose("review.side_lost", { side, error: errorKind(reason) });
+			lostSides.add(side);
+			unreachedReason = "unavailable";
+			measuringEnded.abort(new UnratedError("unavailable", `the ${side} side stopped`));
+		};
+		void whenLost("tools", toolSide);
+		if (programs !== null) {
+			void whenLost("programs", programs);
+		}
 
 		async function runScope(
 			label: string,
@@ -3373,6 +3406,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			throw stagingFailure.error;
 		}
 		if (!maybeWriteResultFile()) {
+			if (lostSides.size > 0) {
+				finalizeOutput();
+				process.exit(PARTIAL_REVIEW_EXIT);
+			}
 			if ((providerFailures > 0 || measurementReply.asked) && !measurementReply.received) {
 				diagnose("review.unreachable", { unanswered_calls: providerFailures });
 				finalizeOutput();

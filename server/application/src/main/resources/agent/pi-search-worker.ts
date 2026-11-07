@@ -29,23 +29,91 @@ interface OpenClaim {
 	confirmed: Set<string>;
 }
 
+const WORD = String.raw`\p{L}\p{M}\p{N}\p{Pc}`;
+const BOUNDARY = `(?:(?<=[${WORD}])(?![${WORD}])|(?<![${WORD}])(?=[${WORD}]))`;
+const NOT_BOUNDARY = `(?:(?<=[${WORD}])(?=[${WORD}])|(?<![${WORD}])(?![${WORD}]))`;
+
+/** `rg`'s classes are Unicode, and in JavaScript `\w`, `\d` and `\b` are ASCII: a word in another script would go unseen. */
+const OUTSIDE_A_SET: Readonly<Record<string, string>> = {
+	w: `[${WORD}]`,
+	W: `[^${WORD}]`,
+	d: String.raw`\p{Nd}`,
+	D: String.raw`\P{Nd}`,
+	b: BOUNDARY,
+	B: NOT_BOUNDARY,
+};
+const INSIDE_A_SET: Readonly<Record<string, string>> = { w: WORD, d: String.raw`\p{Nd}` };
+
+/** The pattern as JavaScript must read it to agree with `rg`, or null where the two cannot agree. */
+function translated(pattern: string): string | null {
+	// `rg` searches line by line, and a POSIX class means something else to JavaScript.
+	if (pattern.includes("[[:") || /\\[nr]/u.test(pattern.replaceAll(String.raw`\\`, ""))) {
+		return null;
+	}
+	let out = "";
+	let inSet = false;
+	for (let at = 0; at < pattern.length; at += 1) {
+		const character = pattern.charAt(at);
+		if (character === "\\") {
+			const next = pattern.charAt(at + 1);
+			at += 1;
+			if (inSet && (next === "W" || next === "D")) {
+				return null;
+			}
+			out += (inSet ? INSIDE_A_SET : OUTSIDE_A_SET)[next] ?? `\\${next}`;
+		} else {
+			inSet = (inSet || character === "[") && character !== "]";
+			out += character;
+		}
+	}
+	return out;
+}
+
 function matcherOf({ pattern, literal, ignoreCase }: SearchClaim): Matcher | null {
+	if (pattern.includes("\n")) {
+		return null;
+	}
 	if (literal) {
 		const needle = ignoreCase ? pattern.toLowerCase() : pattern;
 		return (line) => (ignoreCase ? line.toLowerCase() : line).includes(needle);
 	}
 	// `rg` takes the flag inside the pattern too, and JavaScript takes it only outside.
 	const inline = pattern.startsWith("(?i)");
+	const source = translated(inline ? pattern.slice(4) : pattern);
+	if (source === null) {
+		return null;
+	}
 	try {
-		const expression = new RegExp(
-			inline ? pattern.slice(4) : pattern,
-			ignoreCase || inline ? "iu" : "u",
-		);
+		const expression = new RegExp(source, ignoreCase || inline ? "iu" : "u");
 		return (line) => expression.test(line);
 	} catch {
 		// `rg` and JavaScript differ here, so this pattern proves nothing.
 		return null;
 	}
+}
+
+/** Where `rg` looks for a NUL before it reads on: one in this window makes the file binary, and it skips the file. */
+const BINARY_WINDOW = 64 * 1024;
+
+/**
+ * A file's text as `rg` reads it, so that both search the same bytes. It follows a byte order mark, skips a file with a
+ * NUL near its start, and reads a later NUL as the end of the file. Text that `rg` does not search is no match that the
+ * tools side could hide.
+ */
+function textOf(bytes: Buffer): string | null {
+	if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+		return bytes.toString("utf16le", 2);
+	}
+	if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+		return Buffer.from(bytes.subarray(2, bytes.length - (bytes.length % 2)))
+			.swap16()
+			.toString("utf16le");
+	}
+	const nul = bytes.indexOf(0);
+	if (nul === -1) {
+		return bytes.toString("utf8");
+	}
+	return nul < BINARY_WINDOW ? null : bytes.toString("utf8", 0, nul);
 }
 
 function* filesOf(root: string, directory = ""): Generator<string> {
@@ -91,9 +159,9 @@ export function proved({ root, maxBytes, claims }: SearchJob): boolean[] {
 		if (seen > maxBytes) {
 			return claims.map(() => false);
 		}
-		const bytes = readFileSync(absolute);
-		if (!bytes.includes(0)) {
-			const lines = bytes.toString("utf8").split("\n");
+		const text = textOf(readFileSync(absolute));
+		if (text !== null) {
+			const lines = text.split("\n");
 			for (const claim of open) {
 				compare(claim, file, lines);
 			}

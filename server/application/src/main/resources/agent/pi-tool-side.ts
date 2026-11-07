@@ -5,8 +5,8 @@
 // their contracts, so a model sees the tools that it knows.
 
 import { existsSync } from "node:fs";
-import { glob as nodeGlob } from "node:fs/promises";
 import path from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import {
@@ -21,6 +21,8 @@ import {
 
 import type { LineRunner } from "./work/practice-scripts/kits/scm/grep.ts";
 
+import type { GlobJob } from "./pi-glob-worker.ts";
+import { onWorker } from "./pi-verified-search.ts";
 import { ToolClient } from "./tool-client.ts";
 import { LIMITS, type ToolAddress } from "./tool-protocol.ts";
 
@@ -30,15 +32,27 @@ const OPEN_RETRY_MS = 200;
 
 const DEFAULT_GREP_LIMIT = 100;
 
+/** How many lines of `rg`'s own message reach the model: it fixes a pattern from them. */
+const MAX_REFUSAL_LINES = 20;
+
 /** How long one repository search of a program may take. */
 const SEARCH_TIMEOUT_MS = 60_000;
+
+/** How long one `find` may take: it runs apart from the loop, because a pattern can match for ever. */
+const FIND_TIMEOUT_MS = 20_000;
+
+const GLOB_WORKER = new URL("pi-glob-worker.ts", import.meta.url);
 
 /** Pi truncates a `grep` line here and does not export the number; the parity test holds the two together. */
 const GREP_MAX_LINE_LENGTH = 500;
 
 /** Dials a side of the Pod, which may still be starting. */
-export async function openToolSide(address: ToolAddress, nonce: string): Promise<ToolClient> {
-	const until = Date.now() + OPEN_WAIT_MS;
+export async function openToolSide(
+	address: ToolAddress,
+	nonce: string,
+	waitMs = OPEN_WAIT_MS,
+): Promise<ToolClient> {
+	const until = Date.now() + waitMs;
 	for (;;) {
 		try {
 			return await ToolClient.open(address, nonce);
@@ -49,6 +63,30 @@ export async function openToolSide(address: ToolAddress, nonce: string): Promise
 			await sleep(OPEN_RETRY_MS);
 		}
 	}
+}
+
+/** The lines of a stream, whole: a frame can end inside a line, or inside a character. */
+function lineReader(onLine: (line: string) => void) {
+	const decoder = new StringDecoder("utf8");
+	let pending = "";
+	return {
+		push: (chunk: Buffer) => {
+			pending += decoder.write(chunk);
+			let end = pending.indexOf("\n");
+			while (end !== -1) {
+				onLine(pending.slice(0, end));
+				pending = pending.slice(end + 1);
+				end = pending.indexOf("\n");
+			}
+		},
+		end: () => {
+			const rest = pending + decoder.end();
+			pending = "";
+			if (rest !== "") {
+				onLine(rest);
+			}
+		},
+	};
 }
 
 /** Pi's `bash` over `exec`: the tools side gives a command its own environment, so `env` goes unused. */
@@ -64,39 +102,39 @@ export function toolBashOperations(tools: Pick<ToolClient, "exec">): BashOperati
 				onData,
 				signal,
 			);
+			if (exit.timedOut) {
+				// Pi's tool reads this form.
+				throw new Error(`timeout:${String(timeout ?? LIMITS.execTimeoutMs / 1000)}`);
+			}
+			if (exit.truncated || exit.outputLost) {
+				onData(Buffer.from("\n[The output was cut here. What follows it is unknown.]\n"));
+			}
 			return { exitCode: exit.code };
 		},
 	};
 }
 
-type GrepInput = Parameters<ReturnType<typeof createGrepToolDefinition>["execute"]>[1];
-
 /** A repository search on the tools side, for the program host: it stops as soon as `onLine` has seen enough. */
 export function toolLines(tools: Pick<ToolClient, "exec">, cwd: string): LineRunner {
 	return async (argv, onLine, signal) => {
 		const stop = new AbortController();
-		let pending = "";
-		const take = (line: string) => {
+		const reader = lineReader((line) => {
 			if (!stop.signal.aborted && !onLine(line)) {
 				stop.abort();
 			}
-		};
+		});
 		const exit = await tools.exec(
 			{ argv: [...argv], cwd, timeoutMs: SEARCH_TIMEOUT_MS },
 			(chunk) => {
-				pending += chunk.toString("utf8");
-				const lines = pending.split("\n");
-				pending = lines.pop() ?? "";
-				for (const line of lines) {
-					take(line);
-				}
+				reader.push(chunk);
 			},
 			signal === undefined ? stop.signal : AbortSignal.any([signal, stop.signal]),
 		);
-		if (pending !== "") {
-			take(pending);
-		}
+		reader.end();
 		signal?.throwIfAborted();
+		if (!stop.signal.aborted && (exit.truncated || exit.outputLost)) {
+			throw new Error("The search's output was cut, so what it found is unknown.");
+		}
 		if (!stop.signal.aborted && exit.code !== 0 && exit.code !== 1) {
 			throw new Error(`grep exited with status ${String(exit.code)}`);
 		}
@@ -104,23 +142,25 @@ export function toolLines(tools: Pick<ToolClient, "exec">, cwd: string): LineRun
 }
 
 /** Pi's `find` with a Node glob: Pi's own runs `fd`, and the loop starts no process. */
+/** Matches on a worker: a pattern that backtracks for ever must not stop the loop. */
+export async function globApart(job: GlobJob): Promise<string[]> {
+	const found = await onWorker(GLOB_WORKER, job, FIND_TIMEOUT_MS);
+	if (!Array.isArray(found)) {
+		throw new TypeError("The pattern took too long to match. Try a simpler one.");
+	}
+	return found.filter((file) => typeof file === "string");
+}
+
 export function loopFindTool(root: string) {
 	return createFindToolDefinition(root, {
 		operations: {
 			exists: (file) => existsSync(file),
-			glob: async (pattern, cwd, { ignore, limit }) => {
-				const found: string[] = [];
-				for await (const file of nodeGlob(pattern, { cwd, exclude: ignore })) {
-					found.push(file);
-					if (found.length >= limit) {
-						break;
-					}
-				}
-				return found;
-			},
+			glob: async (pattern, cwd, { ignore, limit }) => globApart({ pattern, cwd, ignore, limit }),
 		},
 	});
 }
+
+type GrepInput = Parameters<ReturnType<typeof createGrepToolDefinition>["execute"]>[1];
 
 interface Match {
 	file: string;
@@ -198,9 +238,12 @@ export function toolGrepTool(
 
 			const stop = new AbortController();
 			const matches: Match[] = [];
-			let pending = "";
+			const refusals: string[] = [];
 			const cutOff = { atLimit: false };
-			const onLine = (line: string) => {
+			const reader = lineReader((line) => {
+				if (!line.startsWith("{") && refusals.length < MAX_REFUSAL_LINES) {
+					refusals.push(line);
+				}
 				const match = matches.length < effectiveLimit ? matchOf(line) : undefined;
 				if (match !== undefined) {
 					matches.push(match);
@@ -209,25 +252,23 @@ export function toolGrepTool(
 						stop.abort();
 					}
 				}
-			};
+			});
 			const exit = await tools.exec(
 				{ argv, cwd: root, timeoutMs: LIMITS.execTimeoutMs },
 				(chunk) => {
-					pending += chunk.toString("utf8");
-					const lines = pending.split("\n");
-					pending = lines.pop() ?? "";
-					for (const line of lines) {
-						onLine(line);
-					}
+					reader.push(chunk);
 				},
 				signal === undefined ? stop.signal : AbortSignal.any([signal, stop.signal]),
 			);
-			onLine(pending);
+			reader.end();
 			if (signal?.aborted === true) {
 				throw new Error("Operation aborted");
 			}
+			if (!cutOff.atLimit && (exit.truncated || exit.outputLost)) {
+				throw new Error("The search's output was cut, so what it found is unknown.");
+			}
 			if (!cutOff.atLimit && exit.code !== 0 && exit.code !== 1) {
-				throw new Error(`ripgrep exited with code ${String(exit.code)}`);
+				throw new Error(refusals.join("\n") || `ripgrep exited with code ${String(exit.code)}`);
 			}
 			if (matches.length === 0) {
 				return {

@@ -18,6 +18,28 @@ const PROOF_BYTES = 512 * 1024 * 1024;
 
 const WORKER = new URL("pi-search-worker.ts", import.meta.url);
 
+/** What a worker answers within `timeoutMs`, or null when it fails or runs out of time; it ends either way. */
+export async function onWorker(
+	file: URL,
+	workerData: unknown,
+	timeoutMs: number,
+): Promise<unknown> {
+	const worker = new Worker(file, { workerData });
+	const stop = new AbortController();
+	try {
+		const answer = await Promise.race([
+			once(worker, "message", { signal: stop.signal }),
+			sleep(timeoutMs, null, { signal: stop.signal }),
+		]);
+		return answer?.[0] ?? null;
+	} catch {
+		return null;
+	} finally {
+		stop.abort();
+		await worker.terminate();
+	}
+}
+
 /** For each claim, whether it stands. A worker that fails or runs out of time proves none. */
 export async function proveSearches(
 	root: string,
@@ -27,23 +49,8 @@ export async function proveSearches(
 	if (claims.length === 0) {
 		return [];
 	}
-	const worker = new Worker(WORKER, {
-		workerData: { root, maxBytes, claims } satisfies SearchJob,
-	});
-	const stop = new AbortController();
-	try {
-		const answer = await Promise.race([
-			once(worker, "message", { signal: stop.signal }),
-			sleep(timeoutMs, null, { signal: stop.signal }),
-		]);
-		const proved: unknown = answer?.[0];
-		return Array.isArray(proved) && proved.length === claims.length
-			? proved.map((value) => value === true)
-			: claims.map(() => false);
-	} catch {
-		return claims.map(() => false);
-	} finally {
-		stop.abort();
-		await worker.terminate();
-	}
+	const proved = await onWorker(WORKER, { root, maxBytes, claims } satisfies SearchJob, timeoutMs);
+	return Array.isArray(proved) && proved.length === claims.length
+		? proved.map((value) => value === true)
+		: claims.map(() => false);
 }

@@ -13,6 +13,7 @@ import test, { after, before } from "node:test";
 import { createGrepTool } from "@earendil-works/pi-coding-agent";
 
 import {
+	globApart,
 	openToolSide,
 	toolBashOperations,
 	toolGrepTool,
@@ -174,6 +175,91 @@ void test("a search that finds nothing is no failure, and one that breaks is", a
 		toolLines(client, source)(["sh", "-c", "exit 2"], () => true),
 		/grep exited with status 2/u,
 	);
+});
+
+/** A side whose call ends with a cut stream. */
+function cutting(over: { truncated?: boolean; outputLost?: boolean; timedOut?: boolean }) {
+	return {
+		exec: async () => ({
+			code: 0,
+			signal: null,
+			timedOut: false,
+			truncated: false,
+			fullOutputPath: "",
+			outputLost: false,
+			...over,
+		}),
+	};
+}
+
+for (const over of [{ truncated: true }, { outputLost: true }]) {
+	void test(`a cut stream is no "no match": ${JSON.stringify(over)}`, async () => {
+		await assert.rejects(grep(cutting(over), { pattern: "x" }), /output was cut/u);
+		await assert.rejects(
+			toolLines(cutting(over), source)(["grep", "x"], () => true),
+			/output was cut/u,
+		);
+	});
+
+	void test(`bash says so when its output was cut: ${JSON.stringify(over)}`, async () => {
+		const chunks: Buffer[] = [];
+		await toolBashOperations(cutting(over)).exec("true", source, {
+			onData: (chunk) => {
+				chunks.push(chunk);
+			},
+		});
+		assert.match(Buffer.concat(chunks).toString(), /output was cut/u);
+	});
+}
+
+void test("a command that timed out fails as Pi's bash fails", async () => {
+	await assert.rejects(
+		toolBashOperations(cutting({ timedOut: true })).exec("sleep 9", source, {
+			onData: () => undefined,
+			timeout: 5,
+		}),
+		/^Error: timeout:5$/u,
+	);
+});
+
+void test("a character that a frame splits stays whole", async () => {
+	const seen: string[] = [];
+	const word = Buffer.from("übung\n");
+	const split: Pick<ToolClient, "exec"> = {
+		exec: async (_request, onOutput) => {
+			onOutput(word.subarray(0, 1));
+			onOutput(word.subarray(1));
+			return {
+				code: 0,
+				signal: null,
+				timedOut: false,
+				truncated: false,
+				fullOutputPath: "",
+				outputLost: false,
+			};
+		},
+	};
+	await toolLines(split, source)(["grep", "x"], (line) => {
+		seen.push(line);
+		return true;
+	});
+	assert.deepEqual(seen, ["übung"]);
+});
+
+void test("rg's own message reaches the model, so that it can fix its pattern", async () => {
+	await assert.rejects(
+		grep(lying(["regex parse error: unclosed group"], 2), { pattern: "(" }),
+		/unclosed group/u,
+	);
+});
+
+void test("find runs apart from the loop and finds what the walk finds", async () => {
+	const found = await globApart({ pattern: "*.ts", cwd: source, ignore: [], limit: 10 });
+	assert.ok(found.some((file) => file.endsWith("a.ts")));
+});
+
+void test("a side that never answers ends the wait with its failure", async () => {
+	await assert.rejects(openToolSide({ path: path.join(base, "none.sock") }, nonce, 50));
 });
 
 void test("a path that the answer names outside the root is not shown or read", async () => {

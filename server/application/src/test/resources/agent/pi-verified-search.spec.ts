@@ -48,6 +48,76 @@ void test("a literal pattern and case are read as the search read them", async (
 	);
 });
 
+void test("a hostile side cannot hide text that `rg` would have found", async () => {
+	writeFileSync(
+		path.join(root, "wide.txt"),
+		Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("WIDE here\n", "utf16le")]),
+	);
+	const big = Buffer.from("BIG here\n", "utf16le").swap16();
+	writeFileSync(path.join(root, "big.txt"), Buffer.concat([Buffer.from([0xfe, 0xff]), big]));
+	// `rg` reads on until a NUL past its first buffer, so this match is one it reports.
+	writeFileSync(
+		path.join(root, "late.bin"),
+		Buffer.concat([
+			Buffer.from("EARLY\n"),
+			Buffer.alloc(100_000, 0x78),
+			Buffer.from([0]),
+			Buffer.from("tail\n"),
+		]),
+	);
+	assert.deepEqual(
+		await proveSearches(root, [
+			claim({ pattern: "WIDE" }),
+			claim({ pattern: "BIG" }),
+			claim({ pattern: "EARLY" }),
+		]),
+		[false, false, false],
+	);
+});
+
+void test("text that `rg` does not search is no match to hide", async () => {
+	writeFileSync(
+		path.join(root, "early.bin"),
+		Buffer.concat([Buffer.from("BINARYTEXT\n"), Buffer.from([0]), Buffer.from("MORE\n")]),
+	);
+	writeFileSync(
+		path.join(root, "after.bin"),
+		Buffer.concat([Buffer.alloc(100_000, 0x78), Buffer.from([0]), Buffer.from("AFTERNUL\n")]),
+	);
+	assert.deepEqual(
+		await proveSearches(root, [claim({ pattern: "BINARYTEXT" }), claim({ pattern: "AFTERNUL" })]),
+		[true, true],
+	);
+});
+
+void test("`rg`'s Unicode classes are read as `rg` reads them", async () => {
+	writeFileSync(path.join(root, "words.txt"), "eine übung hier\nzahl ٣ steht\n");
+	assert.deepEqual(
+		await proveSearches(root, [
+			claim({ pattern: String.raw`\bübung\b` }),
+			claim({ pattern: String.raw`\w+ung` }),
+			claim({ pattern: String.raw`zahl \d` }),
+			claim({ pattern: String.raw`[\w]+ung` }),
+		]),
+		[false, false, false, false],
+	);
+	assert.deepEqual(
+		await proveSearches(root, [claim({ pattern: String.raw`\bübung\b`, found: ["words.txt:1"] })]),
+		[true],
+	);
+});
+
+void test("a pattern across lines, or in a form that JavaScript reads otherwise, proves nothing", async () => {
+	assert.deepEqual(
+		await proveSearches(root, [
+			claim({ pattern: "alpha\nbeta" }),
+			claim({ pattern: String.raw`alpha\nbeta` }),
+			claim({ pattern: "[[:alpha:]]+zzz" }),
+		]),
+		[false, false, false],
+	);
+});
+
 void test("a case flag inside the pattern is read as `rg` reads it", async () => {
 	assert.deepEqual(
 		await proveSearches(root, [

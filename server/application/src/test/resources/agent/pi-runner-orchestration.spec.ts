@@ -314,7 +314,7 @@ if (scenario !== undefined && scenario !== "") {
 	let now = 1_000_000;
 	mock.method(Date, "now", () => now);
 	const record = (event: string) => appendFileSync(nodePath.join(cwd, "events"), `${event}\n`);
-	await mockChange({ writeChangeView: () => record("derive-change") });
+	await mockChange({ writeChangeView: () => undefined });
 	/** What the mocked server admits: nothing, or one result whose outcome is outside the vocabulary. */
 	const admitted = (): unknown[] => {
 		const outcome = new Map<string, unknown>([
@@ -1652,13 +1652,17 @@ if (scenario !== undefined && scenario !== "") {
 								// A citation at a commit in the history is read through .git; a wrong line is
 								// corrected there too, and an unknown commit is refused.
 								const historySha = readFileSync(nodePath.join(cwd, "history-sha"), "utf8");
-								const atRevision = async (commit: string, startLine: number) =>
+								const atRevision = async (
+									commit: string,
+									startLine: number,
+									path = "src/Auth.java",
+								) =>
 									report.execute(
 										"o-2",
 										quotedProblem(`Cited at commit line ${startLine}`, {
 											sourceKind: "scm.repository.tree",
 											sourcePath: "repos/primary/.git/HEAD",
-											path: "src/Auth.java",
+											path,
 											commit,
 											startLine,
 											quote: "insecure();",
@@ -1668,7 +1672,11 @@ if (scenario !== undefined && scenario !== "") {
 								record(
 									`citation:history:${typeof relocated === "object" && relocated !== null && "details" in relocated && typeof relocated.details === "object" && relocated.details !== null && "revised" in relocated.details ? String(relocated.details.revised) : "?"}`,
 								);
-								await assert.rejects(atRevision("b".repeat(40), 2), /no such file at commit/u);
+								await assert.rejects(atRevision("b".repeat(40), 2), /could not be read at commit/u);
+								await assert.rejects(
+									atRevision(historySha, 2, "src/Missing.java"),
+									/no such file at commit/u,
+								);
 								record("citation:history-refused");
 								await assert.rejects(cite("src/Auth.java", "", "Cited by line alone"), /quote/u);
 								record("citation:no-quote-refused");
@@ -2439,7 +2447,6 @@ if (scenario !== undefined && scenario !== "") {
 							})),
 						});
 					const slugs = index.map(({ slug }) => slug).toSorted();
-					assert.ok(events.includes("derive-change"), child.stderr);
 					const reportPath = nodePath.join(cwd, "out/practice-scripts.json");
 					assert.ok(existsSync(reportPath), child.stderr);
 					const report = recordOf(JSON.parse(readFileSync(reportPath, "utf8")));
@@ -2867,7 +2874,7 @@ if (scenario !== undefined && scenario !== "") {
 						}
 						case "setup": {
 							assert.equal(child.status, 1, child.stderr);
-							assert.deepEqual(events, ["derive-change"]);
+							assert.deepEqual(events, []);
 							reached({ "test-practice": "NOT_REACHED" });
 							ran({ "test-practice": "not-reached (deadline)" });
 							break;
