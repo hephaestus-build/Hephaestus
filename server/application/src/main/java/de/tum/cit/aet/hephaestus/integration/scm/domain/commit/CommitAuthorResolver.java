@@ -15,7 +15,8 @@ import org.springframework.stereotype.Component;
  * A commit's email is whatever its author typed, so this class never infers a person from it. It accepts only:
  * <ol>
  *   <li>The email stored on exactly one user of the provider.</li>
- *   <li>A GitHub noreply address on a GitHub provider. GitHub issues that address to the login it names.</li>
+ *   <li>A GitHub noreply address that holds an account id, on a GitHub provider. GitHub never reuses that id, but it
+ *       gives a released login to a new account, so the login in an address proves nothing.</li>
  *   <li>A login that the provider itself reported, through {@link #resolveByLogin}.</li>
  * </ol>
  * Anything else stays unlinked: an unlinked commit is safe, a wrong link is a false claim about a person.
@@ -26,15 +27,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class CommitAuthorResolver {
 
-    /**
-     * Matches GitHub noreply email patterns:
-     * <ul>
-     *   <li>{@code username@users.noreply.github.com}</li>
-     *   <li>{@code 12345+username@users.noreply.github.com} (ID-prefixed)</li>
-     * </ul>
-     */
+    /** Matches {@code 12345+username@users.noreply.github.com}. Eighteen digits always fit a {@code long}. */
     private static final Pattern GITHUB_NOREPLY_PATTERN =
-            Pattern.compile("^(?:\\d+\\+)?([^@]+)@users\\.noreply\\.github\\.com$", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("^([1-9]\\d{0,17})\\+[^@]+@users\\.noreply\\.github\\.com$", Pattern.CASE_INSENSITIVE);
 
     private final UserRepository userRepository;
 
@@ -58,10 +53,12 @@ public class CommitAuthorResolver {
         if (!users.isEmpty()) {
             return null;
         }
-        String login = extractLoginFromNoreply(email);
-        return login == null
+        Long nativeId = extractNativeIdFromNoreply(email);
+        return nativeId == null
                 ? null
-                : userRepository.findGitHubUserIdByLogin(login, providerId).orElse(null);
+                : userRepository
+                        .findGitHubUserIdByNativeId(nativeId, providerId)
+                        .orElse(null);
     }
 
     /**
@@ -87,14 +84,14 @@ public class CommitAuthorResolver {
     }
 
     /**
-     * Extracts the GitHub login from a noreply email address.
+     * Extracts the GitHub account id from a noreply email address.
      *
      * @param email the email to parse
-     * @return the extracted login, or {@code null} if the email doesn't match noreply patterns
+     * @return the account id, or {@code null} if the email is no noreply address with an account id
      */
     @Nullable
-    static String extractLoginFromNoreply(String email) {
+    static Long extractNativeIdFromNoreply(String email) {
         Matcher matcher = GITHUB_NOREPLY_PATTERN.matcher(email);
-        return matcher.matches() ? matcher.group(1) : null;
+        return matcher.matches() ? Long.valueOf(matcher.group(1)) : null;
     }
 }

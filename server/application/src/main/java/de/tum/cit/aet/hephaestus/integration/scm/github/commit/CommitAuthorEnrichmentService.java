@@ -53,7 +53,7 @@ import reactor.util.retry.Retry;
  *   <li>Query distinct unresolved author/committer emails from {@code git_commit}
  *       where {@code author_id IS NULL AND author_email IS NOT NULL}</li>
  *   <li>First pass: resolve each email against existing DB users via
- *       {@link CommitAuthorResolver#resolveByEmail} (direct match + noreply parsing)</li>
+ *       {@link CommitAuthorResolver#resolveByEmail} (direct match + noreply account id)</li>
  *   <li>Bulk update all commits sharing the resolved email in one statement</li>
  *   <li>For still-unresolved emails: pick one representative SHA per email,
  *       batch up to 50 per GraphQL query to get the login from GitHub</li>
@@ -216,7 +216,7 @@ public class CommitAuthorEnrichmentService {
 
     /**
      * First pass: resolve authors by email using {@link CommitAuthorResolver#resolveByEmail}.
-     * This resolves noreply emails and direct email matches without any API call.
+     * This resolves noreply emails that hold an account id and direct email matches without any API call.
      * Uses bulk update by email — one UPDATE per distinct email.
      */
     private int enrichByEmail(
