@@ -35,8 +35,8 @@ final class FeedbackDTOs {
             @Size(max = 500) @Pattern(regexp = "[^\\p{Cc}]*") @Nullable
             String userAgent,
 
-            /* The composer's switch: may this report become a public issue? Null keeps the remembered choice; the
-            first report on an instance with a public repository must give it. */
+            /* The composer's box: may this report become a public issue? Null keeps the remembered choice, and
+            without one the report stays private. */
             @Nullable Boolean share) {}
 
     record FeedbackTriageDTO(

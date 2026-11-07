@@ -6,15 +6,14 @@ import { ProductFeedbackDialog } from "./ProductFeedbackDialog";
 
 afterEach(cleanup);
 
-const context = { pagePath: "/w/$workspaceSlug/practice-profile", userAgent: "Mozilla/5.0 Test" };
+const pagePath = "/w/$workspaceSlug/practice-profile";
 
 function renderDialog(overrides: Partial<React.ComponentProps<typeof ProductFeedbackDialog>> = {}) {
 	const props = {
 		open: true,
 		onOpenChange: vi.fn(),
-		onRetrySharing: vi.fn(),
 		reportsLink: <a href="/product-feedback">Your reports</a>,
-		context,
+		pagePath,
 		sharing: { status: "off" } as const,
 		isSubmitting: false,
 		onSubmit: vi.fn(async () => true),
@@ -24,92 +23,110 @@ function renderDialog(overrides: Partial<React.ComponentProps<typeof ProductFeed
 	return { ...view, props };
 }
 
+const message = () => screen.getByRole("textbox", { name: "Your feedback" });
+const send = () => screen.getByRole("button", { name: "Send" });
+const publicBox = () => screen.getByRole("checkbox", { name: "Post as a public GitHub issue" });
+
 describe("product feedback dialog", () => {
-	it("keeps a refused draft across close and reopen, and attaches details only once chosen", async () => {
+	it("keeps a refused draft across close and reopen", async () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog({ onSubmit: vi.fn(async () => false) });
-		await user.type(screen.getByRole("textbox", { name: "Your feedback" }), "  An idea  ");
-		await user.click(screen.getByRole("button", { name: "Send feedback" }));
+		await user.type(message(), "  An idea  ");
+		await user.click(send());
 		expect(props.onOpenChange).not.toHaveBeenCalledWith(false);
 
 		rerender(<ProductFeedbackDialog {...props} open={false} />);
 		rerender(<ProductFeedbackDialog {...props} open />);
-		expect(screen.getByRole("textbox", { name: "Your feedback" })).toHaveProperty(
-			"value",
-			"  An idea  ",
-		);
-		await user.click(screen.getByText("Add page details (optional)"));
-		await user.click(screen.getByRole("checkbox", { name: "Include page and browser details" }));
-		await user.click(screen.getByRole("button", { name: "Send feedback" }));
-		expect(props.onSubmit).toHaveBeenLastCalledWith({
-			kind: "FEEDBACK",
-			message: "An idea",
-			pagePath: context.pagePath,
-			userAgent: context.userAgent,
-		});
+		expect(message()).toHaveProperty("value", "  An idea  ");
 	});
 
 	it("clears the message only after the send was accepted", async () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog();
-		await user.type(screen.getByRole("textbox", { name: "Your feedback" }), "An idea");
-		await user.click(screen.getByRole("button", { name: "Send feedback" }));
+		await user.type(message(), "An idea");
+		await user.click(send());
 		await waitFor(() => expect(props.onSubmit).toHaveBeenCalledOnce());
-		await waitFor(() =>
-			expect(screen.getByRole("textbox", { name: "Your feedback" })).toHaveProperty("value", ""),
-		);
+		await waitFor(() => expect(message()).toHaveProperty("value", ""));
 		rerender(<ProductFeedbackDialog {...props} open={false} />);
 		rerender(<ProductFeedbackDialog {...props} open />);
-		expect(screen.getByRole("textbox", { name: "Your feedback" })).toHaveProperty("value", "");
+		expect(message()).toHaveProperty("value", "");
 	});
 
-	it("does not change the context choice while sending", async () => {
-		const user = userEvent.setup();
-		const { props, rerender } = renderDialog();
-		await user.click(screen.getByText("Add page details (optional)"));
-		const checkbox = screen.getByRole("checkbox", {
-			name: "Include page and browser details",
-		});
-		await user.click(checkbox);
-		rerender(<ProductFeedbackDialog {...props} isSubmitting />);
-		await user.click(checkbox);
-		expect(checkbox.getAttribute("aria-checked")).toBe("true");
-	});
 	it("explains an empty submission, focuses the message, and clears the error while writing", async () => {
 		const user = userEvent.setup();
 		renderDialog();
-		await user.click(screen.getByRole("button", { name: "Send feedback" }));
+		await user.click(send());
 		screen.getByText("Write your feedback before sending.");
-		const field = screen.getByRole("textbox", { name: "Your feedback" });
-		expect(document.activeElement).toBe(field);
-		await user.type(field, "Let me pin a practice.");
+		expect(document.activeElement).toBe(message());
+		await user.type(message(), "Let me pin a practice.");
 		expect(screen.queryByText("Write your feedback before sending.")).toBeNull();
 	});
 
-	it("keeps the original page details with a draft after the page changes", async () => {
+	it("sends the page and a private report on a first report, with nothing else to do", async () => {
+		const user = userEvent.setup();
+		const { props } = renderDialog({ sharing: { status: "public", remembered: false } });
+		await user.type(message(), "An idea");
+		await user.click(send());
+		expect(props.onSubmit).toHaveBeenCalledWith({
+			kind: "FEEDBACK",
+			message: "An idea",
+			pagePath,
+			share: false,
+		});
+	});
+
+	it("makes a report public only when the box is ticked", async () => {
+		const user = userEvent.setup();
+		const { props } = renderDialog({ sharing: { status: "public", remembered: false } });
+		await user.type(message(), "An idea");
+		await user.click(publicBox());
+		await user.click(send());
+		expect(props.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ share: true }));
+	});
+
+	it("starts from an earlier tick, and unticking applies to this report", async () => {
+		const user = userEvent.setup();
+		const { props } = renderDialog({ sharing: { status: "public", remembered: true } });
+		expect(publicBox().getAttribute("aria-checked")).toBe("true");
+		await user.type(message(), "An idea");
+		await user.click(publicBox());
+		await user.click(send());
+		expect(props.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ share: false }));
+	});
+
+	it.each([
+		["loading", { status: "loading" }],
+		["failed", { status: "error" }],
+	] as const)(
+		"keeps Send open and the report private while sharing is %s",
+		async (_name, sharing) => {
+			const user = userEvent.setup();
+			const { props } = renderDialog({ sharing });
+			await user.type(message(), "An idea");
+			await user.click(send());
+			expect(props.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ share: false }));
+		},
+	);
+
+	it("keeps the original page with a draft after the page changes", async () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog();
-		await user.type(screen.getByRole("textbox", { name: "Your feedback" }), "This page jumps.");
-		rerender(
-			<ProductFeedbackDialog {...props} context={{ ...context, pagePath: "/product-feedback" }} />,
-		);
-		await user.click(screen.getByText("Add page details (optional)"));
-		screen.getByText(context.pagePath);
-		expect(screen.queryByText("/product-feedback")).toBeNull();
+		await user.type(message(), "This page jumps.");
+		rerender(<ProductFeedbackDialog {...props} pagePath="/product-feedback" />);
+		await user.click(send());
+		expect(props.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ pagePath }));
 	});
 
 	it("uses the current page for a new draft after the previous text was cleared", async () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog();
-		const message = screen.getByRole("textbox", { name: "Your feedback" });
-		await user.type(message, "An abandoned draft");
-		await user.clear(message);
-		rerender(
-			<ProductFeedbackDialog {...props} context={{ ...context, pagePath: "/product-feedback" }} />,
+		await user.type(message(), "An abandoned draft");
+		await user.clear(message());
+		rerender(<ProductFeedbackDialog {...props} pagePath="/product-feedback" />);
+		await user.type(message(), "A new report");
+		await user.click(send());
+		expect(props.onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({ pagePath: "/product-feedback" }),
 		);
-		await user.type(message, "A new report");
-		await user.click(screen.getByText("Add page details (optional)"));
-		screen.getByText("/product-feedback");
-		expect(screen.queryByText(context.pagePath)).toBeNull();
 	});
 });

@@ -586,6 +586,239 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
                 .isFalse();
     }
 
+    private UUID send(Account reporter, @Nullable Boolean share, @Nullable String page) {
+        return feedbackService
+                .add(
+                        new FeedbackRequestDTO(ProductFeedback.Kind.FEEDBACK, "The list jumps", page, null, share),
+                        Objects.requireNonNull(reporter.getId()),
+                        null,
+                        false)
+                .id();
+    }
+
+    private long consentsOf(Account reporter) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM product_feedback_consent WHERE account_id = ?", Long.class, reporter.getId()));
+    }
+
+    @Test
+    void shouldKeepAFirstReportPrivateAndRecordNoChoiceWhenNothingWasTicked() {
+        Account reporter = newReporter();
+
+        UUID id = send(reporter, false, null);
+
+        assertThat(filings.findById(id).orElseThrow().isAllowPublic()).isFalse();
+        assertThat(consentsOf(reporter)).isZero();
+    }
+
+    @Test
+    void shouldTakeAFirstReportWithoutAnyAnswerAsPrivate() {
+        Account reporter = newReporter();
+
+        UUID id = send(reporter, null, null);
+
+        assertThat(filings.findById(id).orElseThrow().isAllowPublic()).isFalse();
+        assertThat(consentsOf(reporter)).isZero();
+    }
+
+    @Test
+    void shouldRecordTheChoiceWhenTheBoxIsTicked() {
+        Account reporter = newReporter();
+
+        UUID id = send(reporter, true, null);
+
+        ProductFeedbackFiling filing = filings.findById(id).orElseThrow();
+        assertThat(filing.isAllowPublic()).isTrue();
+        assertThat(filing.getConsentId()).isNotNull();
+        assertThat(consentsOf(reporter)).isEqualTo(1);
+    }
+
+    @Test
+    void shouldLeaveTheRememberedChoiceAloneWhenOneReportIsUnticked() {
+        Account reporter = newReporter();
+        send(reporter, true, null);
+        jdbc.update(
+                "UPDATE product_feedback SET submission_minute = submission_minute - interval '1 hour'"
+                        + " WHERE account_id = ?",
+                reporter.getId());
+
+        UUID id = send(reporter, false, null);
+
+        assertThat(filings.findById(id).orElseThrow().isAllowPublic()).isFalse();
+        assertThat(consentsOf(reporter)).isEqualTo(1);
+        assertThat(reports.sharing(Objects.requireNonNull(reporter.getId())).allowPublic())
+                .isTrue();
+    }
+
+    @Test
+    void shouldNotReverseAWithdrawalWithoutANewTick() {
+        Account reporter = newReporter();
+        reports.updateSharing(
+                Objects.requireNonNull(reporter.getId()), new FilingDTOs.UpdateProductFeedbackSharingDTO(false, false));
+
+        UUID id = send(reporter, null, null);
+
+        assertThat(filings.findById(id).orElseThrow().isAllowPublic()).isFalse();
+        assertThat(consentsOf(reporter)).isEqualTo(1);
+    }
+
+    private void filedPrivately(UUID id) {
+        jdbc.update(
+                "UPDATE product_feedback_filing SET state = 'FILED', route = 'PRIVATE', issue_number = 12,"
+                        + " issue_url = 'https://github.com/acme/feedback-private/issues/12' WHERE feedback_id = ?",
+                id);
+    }
+
+    private void withNewNotice(Runnable body) {
+        jdbc.update("UPDATE product_feedback_destination SET notice_version = notice_version + 1");
+        try {
+            body.run();
+        } finally {
+            jdbc.update("UPDATE product_feedback_destination SET notice_version = notice_version - 1");
+        }
+    }
+
+    private int consentNotice(UUID id) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT c.notice_version FROM product_feedback_consent c"
+                        + " JOIN product_feedback_filing f ON f.consent_id = c.id WHERE f.feedback_id = ?",
+                Integer.class,
+                id));
+    }
+
+    @Test
+    void shouldRecordTheChoiceWhenAReportSentUntickedIsAllowedLater() {
+        Account reporter = newReporter();
+        UUID id = send(reporter, false, null);
+        filedPrivately(id);
+
+        reports.allowPublic(Objects.requireNonNull(reporter.getId()), id, true);
+
+        ProductFeedbackFiling filing = filings.findById(id).orElseThrow();
+        assertThat(filing.isAllowPublic()).isTrue();
+        assertThat(filing.getConsentId()).isNotNull();
+        assertThat(consentNotice(id)).isEqualTo(destination().getNoticeVersion());
+        assertThat(consentsOf(reporter)).isEqualTo(1);
+    }
+
+    @Test
+    void shouldRecordANewChoiceWhenAReportIsAllowedUnderANewerNotice() {
+        Account reporter = newReporter();
+        UUID id = send(reporter, true, null);
+        filedPrivately(id);
+
+        withNewNotice(() -> {
+            reports.allowPublic(Objects.requireNonNull(reporter.getId()), id, true);
+
+            assertThat(consentNotice(id)).isEqualTo(destination().getNoticeVersion());
+            assertThat(consentsOf(reporter)).isEqualTo(2);
+        });
+    }
+
+    @Test
+    void shouldReuseTheCurrentChoiceWhenAReportIsAllowedAgain() {
+        Account reporter = newReporter();
+        UUID id = send(reporter, true, null);
+        filedPrivately(id);
+        long account = Objects.requireNonNull(reporter.getId());
+        UUID consent = filings.findById(id).orElseThrow().getConsentId();
+
+        reports.allowPublic(account, id, false);
+        reports.allowPublic(account, id, true);
+
+        assertThat(filings.findById(id).orElseThrow().getConsentId()).isEqualTo(consent);
+        assertThat(consentsOf(reporter)).isEqualTo(1);
+    }
+
+    @Test
+    void shouldRecordANewChoiceWhenAReportIsAllowedAfterAWithdrawal() {
+        Account reporter = newReporter();
+        UUID id = send(reporter, true, null);
+        filedPrivately(id);
+        long account = Objects.requireNonNull(reporter.getId());
+        UUID consent = filings.findById(id).orElseThrow().getConsentId();
+        reports.updateSharing(account, new FilingDTOs.UpdateProductFeedbackSharingDTO(false, false));
+
+        reports.allowPublic(account, id, true);
+
+        assertThat(filings.findById(id).orElseThrow().getConsentId()).isNotEqualTo(consent);
+        assertThat(consentsOf(reporter)).isEqualTo(3);
+    }
+
+    @Test
+    void shouldRefuseToAllowAReportWhenThereIsNoPublicRepository() {
+        Account reporter = newReporter();
+        UUID id = send(reporter, false, null);
+        filedPrivately(id);
+        ProductFeedbackDestination destination = destination();
+        destination.setPublicRepository(null);
+        destinationRows.save(destination);
+
+        assertThatThrownBy(() -> reports.allowPublic(Objects.requireNonNull(reporter.getId()), id, true))
+                .isInstanceOf(ResponseStatusException.class);
+
+        assertThat(filings.findById(id).orElseThrow().isAllowPublic()).isFalse();
+        assertThat(consentsOf(reporter)).isZero();
+    }
+
+    @Test
+    void shouldKeepARememberedChoiceWhenAReportArrivesWithoutAnAnswer() {
+        Account reporter = newReporter();
+        send(reporter, true, null);
+        jdbc.update(
+                "UPDATE product_feedback SET submission_minute = submission_minute - interval '1 hour'"
+                        + " WHERE account_id = ?",
+                reporter.getId());
+
+        UUID id = send(reporter, null, null);
+
+        ProductFeedbackFiling filing = filings.findById(id).orElseThrow();
+        assertThat(filing.isAllowPublic()).isTrue();
+        assertThat(filing.getConsentId()).isNotNull();
+        assertThat(consentsOf(reporter)).isEqualTo(1);
+    }
+
+    @Test
+    void shouldNotCarryARememberedChoiceOverToANewerNotice() {
+        Account reporter = newReporter();
+        send(reporter, true, null);
+        jdbc.update(
+                "UPDATE product_feedback SET submission_minute = submission_minute - interval '1 hour'"
+                        + " WHERE account_id = ?",
+                reporter.getId());
+
+        withNewNotice(() -> {
+            UUID id = send(reporter, null, null);
+
+            assertThat(filings.findById(id).orElseThrow().isAllowPublic()).isFalse();
+            assertThat(consentsOf(reporter)).isEqualTo(1);
+        });
+    }
+
+    @Test
+    void shouldKeepThePageOffEveryPublicRouteWhenNothingWasTicked() {
+        UUID id = send(newReporter(), false, "/w/$workspaceSlug/activity");
+        backdate("next_attempt_at", id, DraftingService.EXPIRY.plusMinutes(1));
+
+        routing.routeAnswered();
+
+        ProductFeedbackFiling routed = filings.findById(id).orElseThrow();
+        assertThat(routed.getRoute()).isEqualTo(FilingRoute.PRIVATE);
+        assertThat(routed.getRepository()).isEqualTo(PRIVATE_REPOSITORY.fullName());
+    }
+
+    @Test
+    void shouldShowAPrivateIssueOnlyToAnInstanceAdmin() {
+        Account reporter = newReporter();
+        UUID id = send(reporter, false, null);
+        filedPrivately(id);
+        long account = Objects.requireNonNull(reporter.getId());
+
+        assertThat(reports.mine(account, false).getFirst().issueUrl()).isNull();
+        assertThat(reports.mine(account, true).getFirst().issueUrl())
+                .isEqualTo("https://github.com/acme/feedback-private/issues/12");
+    }
+
     /** A saved report that may go public, waiting for its draft. */
     private UUID report() {
         return feedbackService

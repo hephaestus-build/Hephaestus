@@ -119,22 +119,16 @@ class MyReportsService {
      * Opens a report's filing at submission. Returns the route it is heading for. Without a destination, or while
      * paused, the report goes to the admin email as before.
      *
-     * @param share the switch on the composer; null keeps the remembered choice
+     * @param share the composer's box for this report; null keeps the remembered choice, and without one it is private
      */
     ProductFeedbackFiling open(ProductFeedback report, @Nullable Boolean share, Instant now) {
         ProductFeedbackDestination destination = destinations.current();
         if (!destination.configured() || destination.isPaused()) return filings.save(emailed(report, now));
         boolean publicDestination = destination.getPublicRepository() != null;
         ProductFeedbackConsent consent = currentConsent(report.getAccountId());
-        if (publicDestination && consent == null) {
-            if (share == null)
-                throw new ResponseStatusException(
-                        HttpStatus.UNPROCESSABLE_CONTENT,
-                        "Choose whether your reports can become public GitHub issues.");
-            consent = consents.save(new ProductFeedbackConsent(
-                    report.getAccountId(), share, false, destination.getNoticeVersion(), now));
-        }
         boolean allowPublic = publicDestination && (share != null ? share : consent != null && consent.isAllowPublic());
+        // Only a tick is a choice, so it alone records one. Silence stays private and records nothing: Recital 32.
+        if (allowPublic) consent = ticked(report.getAccountId(), consent, destination, now);
         var filing = new ProductFeedbackFiling(report.getId(), FilingState.DRAFT_QUEUED, allowPublic, now);
         if (consent != null) filing.setConsentId(consent.getId());
         routing.prepare(filing, report, report.getMessage());
@@ -146,6 +140,17 @@ class MyReportsService {
         return filings.save(filing);
     }
 
+    /** The consent behind a tick: the current one if it already allows a public issue, otherwise a new event. */
+    private ProductFeedbackConsent ticked(
+            long accountId,
+            @Nullable ProductFeedbackConsent current,
+            ProductFeedbackDestination destination,
+            Instant now) {
+        if (current != null && current.isAllowPublic()) return current;
+        return consents.save(new ProductFeedbackConsent(
+                accountId, true, current != null && current.isMention(), destination.getNoticeVersion(), now));
+    }
+
     private static ProductFeedbackFiling emailed(ProductFeedback report, Instant now) {
         var filing = new ProductFeedbackFiling(report.getId(), FilingState.EMAILED, false, now);
         filing.setRoute(FilingRoute.EMAIL);
@@ -153,11 +158,11 @@ class MyReportsService {
     }
 
     @Transactional(readOnly = true)
-    public List<MyProductFeedbackDTO> mine(long accountId) {
+    public List<MyProductFeedbackDTO> mine(long accountId, boolean instanceAdmin) {
         var byId = new HashMap<UUID, ProductFeedbackFiling>();
         filings.findAllByAccount(accountId).forEach(filing -> byId.put(filing.getFeedbackId(), filing));
         return feedback.findAllByAccountIdOrderByCreatedAtDesc(accountId).stream()
-                .map(report -> dto(report, byId.get(report.getId())))
+                .map(report -> dto(report, byId.get(report.getId()), instanceAdmin))
                 .sorted(Comparator.comparing(MyProductFeedbackDTO::createdAt).reversed())
                 .toList();
     }
@@ -222,8 +227,17 @@ class MyReportsService {
         ProductFeedback report = owned(accountId, id);
         ProductFeedbackFiling filing = filings.lock(id).orElseThrow(() -> conflict("This report has no filing."));
         if (filing.getRoute() != FilingRoute.PRIVATE) throw conflict("Only a private report can change this.");
+        Instant now = clock.instant();
+        if (allow) {
+            ProductFeedbackDestination destination = destinations.current();
+            if (destination.getPublicRepository() == null)
+                throw conflict("This instance has no public repository for this report.");
+            // Promotion reads the consent on the filing, and a report sent unticked has none.
+            filing.setConsentId(ticked(accountId, currentConsent(accountId), destination, now)
+                    .getId());
+        }
         filing.setAllowPublic(allow);
-        filing.setUpdatedAt(clock.instant());
+        filing.setUpdatedAt(now);
         return dto(report, filing);
     }
 
@@ -291,6 +305,12 @@ class MyReportsService {
     }
 
     MyProductFeedbackDTO dto(ProductFeedback report, @Nullable ProductFeedbackFiling filing) {
+        return dto(report, filing, false);
+    }
+
+    /** @param instanceAdmin the reader administers the instance, so a private issue's address tells them nothing new */
+    private MyProductFeedbackDTO dto(
+            ProductFeedback report, @Nullable ProductFeedbackFiling filing, boolean instanceAdmin) {
         String message = report.getMessage().strip();
         String excerpt = message.length() <= EXCERPT ? message : message.substring(0, EXCERPT - 1) + "…";
         if (filing == null)
@@ -328,6 +348,7 @@ class MyReportsService {
                 : ReportRoute.valueOf(route.name());
         Draft draft = routing.read(filing.getDraft());
         boolean isPublicIssue = filing.getState() == FilingState.FILED && route == FilingRoute.PUBLIC;
+        boolean showsIssue = isPublicIssue || (instanceAdmin && filing.getState() == FilingState.FILED);
         FilingReason reason = filing.getReason();
         boolean held = filing.getState() == FilingState.HELD;
         return new MyProductFeedbackDTO(
@@ -339,8 +360,8 @@ class MyReportsService {
                 shown,
                 reason == null || reason == FilingReason.NONE ? null : reason.words(),
                 held || state == ReportState.DRAFTING ? filing.getFiledAfter() : null,
-                isPublicIssue ? filing.getIssueUrl() : null,
-                isPublicIssue ? filing.getIssueNumber() : null,
+                showsIssue ? filing.getIssueUrl() : null,
+                showsIssue ? filing.getIssueNumber() : null,
                 Boolean.FALSE.equals(filing.getIssueOpen()) ? filing.getIssueStateReason() : null,
                 filing.getRemoved(),
                 draft == null || filing.getDraftedAt() == null ? null : draft.title(),
@@ -353,6 +374,9 @@ class MyReportsService {
                                         || filing.getState() == FilingState.ANSWERED)),
                 held && draft != null && filing.getDraftedAt() != null,
                 isPublicIssue && destinations.current().getPrivateRepository() != null,
-                route == FilingRoute.PRIVATE && !filing.isRiskLatch() && filing.getDraftedAt() != null);
+                route == FilingRoute.PRIVATE
+                        && !filing.isRiskLatch()
+                        && filing.getDraftedAt() != null
+                        && destinations.current().getPublicRepository() != null);
     }
 }

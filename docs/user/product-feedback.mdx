@@ -33,7 +33,7 @@ If filing stops, the report stays saved for the instance admins, who can read it
 
 ## Public and private details
 
-A public issue contains a short title, your reported problem or idea, and the context you chose to attach.
+A public issue contains a short title, your reported problem or idea, the page route, and your release.
 Hephaestus removes the personal details and secrets it finds before drafting and checks the issue text again before filing.
 It can miss details, so leave out other people’s personal information and secrets.
 Anyone can read a public issue, including people without a Hephaestus account.
@@ -53,13 +53,12 @@ Private repository access follows the operator’s GitHub permissions.
 
 1. Select **Send feedback** in the header. On a phone, select the speech-bubble icon.
 2. Describe what happened or what you would like to improve.
-3. If asked, choose whether the report can become public.
-4. Optional: open **Add page details (optional)** to inspect the page and browser details.
-5. Optional: select **Include page and browser details** to attach them.
-6. Select **Send feedback**.
+3. Optional: select **Post as a public GitHub issue**. If you leave it clear, the report stays private.
+4. Select **Send**.
 
-Once your report is saved, the form closes and a short notice confirms receipt.
-**Your reports** in that notice opens its status and any available actions.
+Once your report is saved, the form closes and a short notice says where it went.
+**View** in that notice opens its status and any available actions.
+To make a private report public later, open **Your reports** and turn on **Allow public**.
 You can also reach **Your reports** through your account menu in the header.
 Receipt means the report is saved. GitHub filing continues in the background.
 
@@ -68,10 +67,10 @@ For a bug, describe the action, what happened, and what you expected.
 
 Wait one minute between reports. Ordinary accounts can send up to five reports per UTC day across all workspaces. Instance admins are exempt from the daily submission limit.
 
-The attached page is the screen’s route, such as `/w/$workspaceSlug/activity`, without your workspace’s name or IDs.
-The browser context helps reproduce the problem.
-The issue uses a short browser summary rather than the full browser identification stored for admins.
-Page details start unselected. A resumed draft keeps the details of the page where you began writing.
+Hephaestus includes the page where you started the report and the app version.
+The page is the screen’s route, such as `/w/$workspaceSlug/activity`, without your workspace’s name or IDs.
+It reaches a public issue only if you select **Post as a public GitHub issue**, or later turn on **Allow public**.
+A resumed draft keeps the page where you began writing.
 It never includes query parameters, page contents, or logs.
 
 If sending fails, the dialog keeps your text and explains why.
@@ -79,21 +78,16 @@ Closing the dialog keeps your unsent text until you reload, switch workspace, or
 
 ### Choose public or private
 
-Your first report asks **Can this become a public GitHub issue?**
-Neither answer starts selected:
-
-- **Share publicly** allows a public issue if the checks pass.
-- **Keep private** sends the report privately to the maintainers.
-
-If you send without choosing, the form explains what is missing and focuses the choice.
-Hephaestus remembers your answer.
-Later reports show the **Public GitHub issue** switch with that answer.
-Changing the switch applies to that report only.
-If your instance changes its privacy notice version, you’ll see the question again.
+A report stays private unless you select **Post as a public GitHub issue**.
+The box is clear on your first report, and you can send without touching it.
+Once you select it, Hephaestus remembers that and starts your next report with it selected.
+Clearing it applies to that report only.
+To change what Hephaestus remembers, use **User settings → Product feedback**.
+If your instance changes its privacy notice version, the box starts clear again.
 
 ### Use the five-minute hold
 
-A report intended for the public repository waits five minutes after **Send feedback** before filing.
+A report intended for the public repository waits five minutes after **Send** before filing.
 Drafting happens during that time.
 You do not have to stay on the page or approve the draft.
 
@@ -134,6 +128,9 @@ If the move cannot finish, contact your instance admin.
 This gives permission for a maintainer to publish the report.
 It does not publish the report by itself or bypass privacy and security checks.
 You can withdraw that permission while the report stays private.
+Selecting **Allow public** also starts your next report with **Post as a public GitHub issue** selected.
+Clearing **Allow public** changes that report only.
+To change the default, use **User settings → Product feedback**.
 
 ## Change your defaults
 

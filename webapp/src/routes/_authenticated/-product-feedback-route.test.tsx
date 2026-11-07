@@ -56,7 +56,7 @@ describe("your reports route", () => {
 		await user.click(dialog.getByRole("button", { name: "Make private" }));
 
 		await waitFor(() => expect(madePrivate).toStrictEqual([publicIssue.id]));
-		await screen.findByText("The maintainers have it as a private issue on GitHub.");
+		await screen.findByText("The Hephaestus maintainers have it as a private GitHub issue.");
 		expect(screen.queryByRole("link", { name: /Public issue #1234/u })).toBeNull();
 	});
 });

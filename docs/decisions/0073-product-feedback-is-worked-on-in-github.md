@@ -12,6 +12,12 @@ A report written under a notice that named only the instance admins moves too, b
 An instance can run with no destination and connect GitHub later: the list then offers to move what waits. Each report moves in its own transaction, so a move can stop and run again, and the marker keeps a report from getting a second issue.
 The list of reports not on GitHub is thus a waiting room, not the inbox that option 1 rejected. Its only way out for a real report is GitHub.
 
+**Update (2026-11-06):** Decision 3 changed. A first report no longer waits for a choice, because a person's effort must end at **Send**.
+The rule stays as strict: nothing is pre-ticked, and silence never means public (Recital 32, Planet49).
+The cost is that fewer reports start public. The maintainers still get every report in GitHub.
+
+The composer also attaches the page route without a step. A route holds no name or id. The form says so, and a route reaches a public issue only with the tick. The composer no longer sends browser details.
+
 ## Context
 
 Product feedback is a report about Hephaestus itself: a bug, an idea, or anything else.
@@ -111,14 +117,15 @@ Product feedback is filed in GitHub automatically, and it is worked on there.
 2. **The route.** A report goes to the public repository when the gate in decision 5 passes.
    Otherwise it goes to the private repository, if one is configured.
    Otherwise it goes to the admin email and the list of reports that are not on GitHub. This is the default.
-3. **The person's choice.** On the first report, the composer asks once: share as a public issue, or keep private.
-   Neither option is selected.
-   - Each choice and each withdrawal is an append-only consent event with the notice version.
+3. **The person's choice.** The composer shows one box, clear until the person selects it. A clear box means private.
+   A report never waits for a choice.
+   - A tick and a withdrawal are each an append-only consent event with the notice version. Not ticking records nothing.
    - The events determine the current choice. No mutable flag does.
-   - A switch on each later report shows the remembered choice. Changing it applies to that report only.
+   - A remembered tick is the box's starting state on the next report. Clearing the box applies to that report only.
+   - **Allow public** on a private report is a tick too, so it records the event and is remembered.
    - Each report records the event that it was routed under.
    - A withdrawal at once moves the person's held public reports to the private route.
-   - A new notice version asks every person again.
+   - A new notice version clears the box for every person.
 4. **Drafting.** One model call without tools drafts a short issue under the repository's form headings.
    It can name one related open issue.
    - The call uses the operator's instance-level model in `LlmCallClass.PRODUCT_FEEDBACK`.

@@ -62,7 +62,7 @@ function YourProductFeedbackPage() {
 			<PageHeader
 				icon={<MessageSquarePlus />}
 				title="Your reports"
-				description="The ideas, bugs and feedback you sent, and where each one is now."
+				description="What you sent, and where each report is now."
 			/>
 			<MyProductFeedbackList
 				state={state}

@@ -88,7 +88,7 @@ describe("product feedback wire contract", () => {
 	});
 });
 
-it("blocks sending on a failed destination read and recovers when retried", async () => {
+it("reports a failed destination read, which the composer treats as private", async () => {
 	server.use(
 		http.get("*/product-feedback/sharing", () =>
 			HttpResponse.json({ status: 503 }, { status: 503 }),
@@ -97,13 +97,23 @@ it("blocks sending on a failed destination read and recovers when retried", asyn
 	const { wrapper } = setup();
 	const { result } = renderHook(() => useProductFeedbackSharing(true), { wrapper });
 	await waitFor(() => expect(result.current.sharing.status).toBe("error"));
+});
+
+it("offers the public box from an earlier tick, and clear when there is none", async () => {
 	server.use(
 		http.get("*/product-feedback/sharing", () =>
-			HttpResponse.json({ filesToGitHub: true, mention: false }),
+			HttpResponse.json({
+				filesToGitHub: true,
+				publicRepository: "acme/app",
+				mention: false,
+			}),
 		),
 	);
-	act(() => result.current.retry());
-	await waitFor(() => expect(result.current.sharing.status).toBe("private"));
+	const { wrapper } = setup();
+	const { result } = renderHook(() => useProductFeedbackSharing(true), { wrapper });
+	await waitFor(() =>
+		expect(result.current.sharing).toStrictEqual({ status: "public", remembered: false }),
+	);
 });
 
 it("shows the server's daily limit and keeps the report draft actionable", async () => {

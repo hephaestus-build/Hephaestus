@@ -75,7 +75,7 @@ final class FilingDTOs {
      * One of the person's own reports.
      *
      * @param reason why the report is not public, in words; null for a public one
-     * @param issueUrl the public issue; null for a private issue, which the person cannot open
+     * @param issueUrl the issue the person can open: a public one, or a private one for an instance admin
      * @param removed what redaction removed, in words
      * @param draftTitle the drafted title, while the report is held or once it is filed
      * @param draftDescription the drafted main text the person can edit while the report is held

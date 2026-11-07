@@ -53,10 +53,7 @@ describe("product feedback sent from a workspace page", () => {
 			await screen.findByRole("textbox", { name: "Your feedback" }, ROUTE_RENDER_WAIT),
 			"The list is empty.",
 		);
-		await user.click(screen.getByText("Add page details (optional)"));
-		await user.click(screen.getByRole("checkbox", { name: "Include page and browser details" }));
-		screen.getByText("/w/$workspaceSlug/activity");
-		await user.click(screen.getByRole("button", { name: "Send feedback" }));
+		await user.click(screen.getByRole("button", { name: "Send" }));
 
 		await waitFor(() => expect(sent).toHaveLength(1));
 		expect(sent[0]).toMatchObject({
@@ -86,13 +83,10 @@ describe("product feedback sent from a workspace page", () => {
 		const reports = await screen.findByRole("menuitem", { name: "Your reports" });
 		expect(reports.getAttribute("href")).toBe("/product-feedback?chromeWorkspace=acme");
 		await user.click(reports);
-		await screen.findByRole("heading", { name: "Your reports" });
+		await screen.findByRole("heading", { name: "Your reports" }, ROUTE_RENDER_WAIT);
 		await user.click(screen.getByRole("button", { name: "Send feedback about Hephaestus" }));
 		const message = await screen.findByRole("textbox", { name: "Your feedback" });
 		expect(message).toHaveProperty("value", "The list jumps.");
-		await user.click(screen.getByText("Add page details (optional)"));
-		screen.getByText("/w/$workspaceSlug/activity");
-		await user.click(screen.getByRole("checkbox", { name: "Include page and browser details" }));
 		await user.click(message);
 		await user.keyboard("{Control>}{Enter}{/Control}");
 		await waitFor(() => expect(sent).toHaveLength(1));
@@ -101,7 +95,7 @@ describe("product feedback sent from a workspace page", () => {
 			message: "The list jumps.",
 			pagePath: "/w/$workspaceSlug/activity",
 		});
-		await screen.findByText("Feedback saved");
+		await screen.findByText("Report sent");
 	});
 
 	it("keeps a failed report recoverable when the form closes during sending", async () => {
@@ -120,7 +114,7 @@ describe("product feedback sent from a workspace page", () => {
 			await screen.findByRole("textbox", { name: "Your feedback" }),
 			"Keep this draft",
 		);
-		await user.click(screen.getByRole("button", { name: "Send feedback" }));
+		await user.click(screen.getByRole("button", { name: "Send" }));
 		await screen.findByRole("button", { name: "Sending…" });
 		await user.click(screen.getByRole("button", { name: "Close" }));
 		response.resolve(HttpResponse.json({ status: 503 }, { status: 503 }));
@@ -230,29 +224,41 @@ describe("product feedback that can become a public GitHub issue", () => {
 		keptPrivate = [];
 	});
 
-	it("asks once, closes after acceptance, and links to the report actions", async () => {
+	it("sends a first report at once, as a private one, and says where it went", async () => {
 		mockSharing({ filesToGitHub: true, publicRepository: REPOSITORY, mention: false });
 		const user = userEvent.setup();
 		await composeFeedback(user);
 
-		const share = await screen.findByRole("radio", { name: "Share publicly" });
-		expect(share.getAttribute("aria-checked")).toBe("false");
-		expect(screen.getByRole("radio", { name: "Keep private" }).getAttribute("aria-checked")).toBe(
-			"false",
-		);
-		await user.click(screen.getByRole("button", { name: "Send feedback" }));
-		await screen.findByText("Choose whether your report can become public.");
-		expect(sent).toHaveLength(0);
-
-		await user.click(share);
-		await user.click(screen.getByRole("button", { name: "Send feedback" }));
+		const box = await screen.findByRole("checkbox", { name: "Post as a public GitHub issue" });
+		expect(box.getAttribute("aria-checked")).toBe("false");
+		await user.click(screen.getByRole("button", { name: "Send" }));
 
 		await waitFor(() => expect(sent).toHaveLength(1));
-		expect(sent[0]).toMatchObject({ kind: "FEEDBACK", message: "Pin a practice.", share: true });
-		await screen.findByText("Feedback saved");
+		expect(sent[0]).toMatchObject({ kind: "FEEDBACK", message: "Pin a practice.", share: false });
+		await screen.findByText("Report sent");
+		await screen.findByText(
+			"Your report is saved. It becomes a private GitHub issue for the Hephaestus maintainers. To ask for a public issue, open Your reports.",
+		);
 		expect(screen.queryByRole("dialog")).toBeNull();
-		await user.click(screen.getByRole("button", { name: "Your reports" }));
-		await screen.findByRole("heading", { name: "Your reports" });
+	});
+
+	it("files a ticked report publicly, and its receipt leads to the report's actions", async () => {
+		mockSharing({ filesToGitHub: true, publicRepository: REPOSITORY, mention: false });
+		const user = userEvent.setup();
+		await composeFeedback(user);
+
+		await user.click(
+			await screen.findByRole("checkbox", { name: "Post as a public GitHub issue" }),
+		);
+		await user.click(screen.getByRole("button", { name: "Send" }));
+
+		await waitFor(() => expect(sent).toHaveLength(1));
+		expect(sent[0]).toMatchObject({ share: true });
+		await screen.findByText(
+			"Your report is saved. It can become a public GitHub issue after the checks pass.",
+		);
+		await user.click(screen.getByRole("button", { name: "View" }));
+		await screen.findByRole("heading", { name: "Your reports" }, ROUTE_RENDER_WAIT);
 		await user.click(await screen.findByRole("button", { name: "Keep private" }));
 		await screen.findByText("Report kept private");
 		await screen.findByText("It is not marked public, so it stays private.");
@@ -269,27 +275,28 @@ describe("product feedback that can become a public GitHub issue", () => {
 		const user = userEvent.setup();
 		await composeFeedback(user);
 
-		const toggle = await screen.findByRole("switch", { name: "Public GitHub issue" });
+		const toggle = await screen.findByRole("checkbox", { name: "Post as a public GitHub issue" });
 		expect(toggle.getAttribute("aria-checked")).toBe("true");
 		await user.click(toggle);
-		await user.click(screen.getByRole("button", { name: "Send feedback" }));
+		await user.click(screen.getByRole("button", { name: "Send" }));
 
 		await waitFor(() => expect(sent).toHaveLength(1));
 		expect(sent[0]).toMatchObject({ share: false });
 		// The remembered choice is not changed by one report.
 		expect(sharingWrites).toStrictEqual([]);
-		await screen.findByText("Feedback saved");
-		expect(screen.queryByText(/public issue/u)).toBeNull();
+		await screen.findByText(
+			"Your report is saved. It becomes a private GitHub issue for the Hephaestus maintainers. To ask for a public issue, open Your reports.",
+		);
 	});
 
-	it("asks nothing and sends no choice without a public repository", async () => {
+	it("offers no box and keeps the report private without a public repository", async () => {
 		mockSharing({ filesToGitHub: false, mention: false });
 		const user = userEvent.setup();
 		await composeFeedback(user);
-		await user.click(screen.getByRole("button", { name: "Send feedback" }));
+		await user.click(screen.getByRole("button", { name: "Send" }));
 
 		await waitFor(() => expect(sent).toHaveLength(1));
-		expect(sent[0]).not.toHaveProperty("share");
-		expect(screen.queryByRole("switch", { name: "Public GitHub issue" })).toBeNull();
+		expect(sent[0]).toMatchObject({ share: false });
+		expect(screen.queryByRole("checkbox")).toBeNull();
 	});
 });

@@ -55,7 +55,7 @@ public class MyProductFeedbackController {
             operationId = "listMyProductFeedback",
             summary = "List the current account's product feedback, newest first")
     public List<MyProductFeedbackDTO> mine() {
-        return reports.mine(CurrentAccount.requireId());
+        return reports.mine(CurrentAccount.requireId(), CurrentAccount.roles().contains("app_admin"));
     }
 
     @GetMapping("/{feedbackId}")

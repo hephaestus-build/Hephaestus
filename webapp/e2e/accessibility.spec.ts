@@ -466,7 +466,7 @@ base.describe("complete processes, keyboard only", () => {
 		await page.keyboard.press("Enter");
 
 		await expect(dialog).toBeHidden();
-		await expect(page.getByText("Feedback saved", { exact: true })).toBeVisible();
+		await expect(page.getByText("Report sent", { exact: true })).toBeVisible();
 
 		await page
 			.getByRole("banner")

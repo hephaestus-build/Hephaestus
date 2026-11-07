@@ -116,7 +116,7 @@ export const NotOnGitHub: Story = {
 		await expect(canvas.getByText("Not filed")).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"It is saved on this instance. Its admins can read it, and can send it to GitHub as a private issue drafted by an AI model.",
+				"Your report is saved on this instance for its admins. They can move it to GitHub as a private issue.",
 			),
 		).toBeVisible();
 		// Neither row has a change left to offer: the admins hold both.
