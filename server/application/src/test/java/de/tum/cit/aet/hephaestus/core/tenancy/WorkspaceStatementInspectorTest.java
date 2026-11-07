@@ -95,38 +95,6 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         verifyNoInteractions(reporter, scopedTables);
     }
 
-    // report-only inside a type-level bypass (ADR 0077)
-
-    // Closing the scope is the operation; its binding is intentionally unread.
-    @SuppressWarnings("try")
-    @Test
-    void shouldCountWhatATypeLevelBypassSilencesWithoutThrowing() {
-        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
-        when(scopedTables.isScoped("pull_request")).thenReturn(true);
-
-        try (TenancyBypass.Scope ignored = TenancyBypass.openForType("type marker", String.class)) {
-            inspector.inspect("SELECT * FROM pull_request");
-            inspector.inspect("SELECT * FROM pull_request WHERE workspace_id = ?");
-        }
-
-        verify(reporter).reportBypassed("SELECT * FROM pull_request", Set.of("pull_request"), Set.of("String"));
-        verify(reporter, never()).report(any(), any(), any());
-    }
-
-    // Closing the scope is the operation; its binding is intentionally unread.
-    @SuppressWarnings("try")
-    @Test
-    void shouldReportNothingInsideAMethodLevelBypass() {
-        WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
-
-        try (TenancyBypass.Scope type = TenancyBypass.openForType("type marker", String.class);
-                TenancyBypass.Scope method = TenancyBypass.open("method marker")) {
-            inspector.inspect("SELECT * FROM pull_request");
-        }
-
-        verifyNoInteractions(reporter, scopedTables);
-    }
-
     // provider mirror tables (ADR 0077): the workspace must be bound, not only named
 
     @Test

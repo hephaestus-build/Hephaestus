@@ -47,6 +47,7 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
             Map.entry("http_server_requests_seconds_count", "a request creates its route's timer"),
             Map.entry("web_vital_duration_seconds_bucket", "a browser report creates it"),
             Map.entry("web_vital_duration_seconds_count", "a browser report creates it"),
+            Map.entry("tenancy_violation_total", "a refused statement creates its series"),
             Map.entry("agent_job_infra_retry_requeued_total", "worker role"),
             Map.entry("agent_job_server_error_total", "worker role"),
             Map.entry("agent_queue_oldest_age_seconds", "worker role"),

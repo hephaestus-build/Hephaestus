@@ -12,9 +12,10 @@ import java.lang.annotation.Target;
  * <p>Effects:
  * <ul>
  *   <li>Architecture tests skip workspace-filter validation for annotated elements.</li>
- *   <li>{@link de.tum.cit.aet.hephaestus.core.tenancy.WorkspaceAgnosticAspect} opens a
- *       {@code TenancyBypass} scope for the duration of the annotated call, so
- *       {@code WorkspaceStatementInspector} does not flag the emitted SQL.</li>
+ *   <li>On a method, {@link de.tum.cit.aet.hephaestus.core.tenancy.WorkspaceAgnosticAspect} opens a
+ *       {@code TenancyBypass} scope for the duration of the call, so
+ *       {@code WorkspaceStatementInspector} does not flag the emitted SQL. On a type, the marker opens no
+ *       bypass (ADR 0077, decision 5).</li>
  * </ul>
  *
  * <p><b>When to use:</b>
@@ -25,8 +26,8 @@ import java.lang.annotation.Target;
  *   <li>Cross-workspace queries for admin operations</li>
  * </ul>
  *
- * <p>The annotation is load-bearing at runtime: dropping it from a repository that queries
- * a workspace-scoped table causes {@code TenancyViolationException} under
+ * <p>The method-level annotation is load-bearing at runtime: dropping it from a method that queries
+ * a workspace-scoped table without binding the workspace causes {@code TenancyViolationException} under
  * {@code hephaestus.tenancy.enforcement=throw}.
  */
 @Target({ElementType.TYPE, ElementType.METHOD})

@@ -52,6 +52,15 @@ groups:
         annotations:
           summary: Delivery inbox cleanup failed more than once in 24 hours
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # Each count is one statement that read a workspace's table without binding the workspace. In throw mode the
+      # server refused it, so its request or job failed. One count is a defect, so the alert has no threshold.
+      - alert: HephaestusTenancyViolations
+        expr: sum by (table, mode) (increase(tenancy_violation_total{job="hephaestus"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: A database statement on {{ $labels.table }} did not stay in one workspace ({{ $labels.mode }} mode)
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusConsumerRetryStalled
         expr: sum by (kind) (increase(integration_consumer_nak_total{job="hephaestus"}[10m])) > 0
         for: 15m
