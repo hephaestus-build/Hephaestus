@@ -754,7 +754,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                             Arrays.stream(admitted).map(Result::getId).toList(), List.of(piece), false, null),
                     rows,
                     new FeedbackCompositionService.Read(
-                            new FeedbackCompositionContext(null, null), List.of(), List.of(), null),
+                            new FeedbackCompositionContext(null, null), List.of(), List.of(), null, Map.of()),
                     Map.of(),
                     false);
             jobRepository.saveAndFlush(owned);

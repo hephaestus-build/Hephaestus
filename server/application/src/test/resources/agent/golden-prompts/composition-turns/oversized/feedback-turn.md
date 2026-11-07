@@ -244,7 +244,8 @@ A fenced ``` block inside.
             "citations": []
           },
           "practiceVersionId": "11",
-          "recordedAt": "2026-09-01T10:00:00Z"
+          "recordedAt": "2026-09-01T10:00:00Z",
+          "item": null
         },
         {
           "resultId": "30000000-0000-4000-8000-000000000001",
@@ -256,7 +257,19 @@ A fenced ``` block inside.
           "explanation": null,
           "evidence": null,
           "practiceVersionId": null,
-          "recordedAt": "2026-10-20T10:01:00Z"
+          "recordedAt": "2026-10-20T10:01:00Z",
+          "item": {
+            "id": "7",
+            "kind": "scm.pull_request",
+            "parentId": null,
+            "provider": "GITHUB",
+            "label": "#7",
+            "title": "Retry record fetches",
+            "url": "https://github.com/acme/app/pull/7",
+            "container": "acme/app",
+            "path": null,
+            "removedAt": null
+          }
         }
       ]
     },

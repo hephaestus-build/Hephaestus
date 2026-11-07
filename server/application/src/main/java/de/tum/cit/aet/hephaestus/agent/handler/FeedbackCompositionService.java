@@ -9,8 +9,10 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.ConversationEligibilityDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticePageSupportDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateFeedbackHistoryDTO;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
+import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationEligibility;
@@ -58,6 +60,7 @@ public class FeedbackCompositionService {
     private final HistoryCopies copies;
     private final FeedbackHistoryQuery feedbackHistory;
     private final FeedbackRepair repairs;
+    private final ProductReferenceQuery references;
 
     public PreparedPackage prepare(
             ReviewJob job,
@@ -203,7 +206,7 @@ public class FeedbackCompositionService {
                 .distinct()
                 .toList();
         if (people.size() != 1 || people.getFirst() == null)
-            return new Read(new FeedbackCompositionContext(null, null), List.of(), List.of(), null);
+            return new Read(new FeedbackCompositionContext(null, null), List.of(), List.of(), null, Map.of());
         long developer = Objects.requireNonNull(people.getFirst());
         var context = feedback.compositionContext(
                 job.getWorkspaceId(),
@@ -256,7 +259,15 @@ public class FeedbackCompositionService {
         if (said != null)
             said.entries().stream().map(entry -> copies.of(entry.feedback())).forEach(readCopies::add);
         retained.stream().map(copies::of).forEach(readCopies::add);
-        return new Read(context, readCopies, retained, said);
+        Map<Long, ItemRefDTO> items = withHistory && !retained.isEmpty()
+                ? references.items(
+                        job.getWorkspaceId(),
+                        retained.stream()
+                                .map(ResultHistoryEntry::itemId)
+                                .distinct()
+                                .toList())
+                : Map.of();
+        return new Read(context, readCopies, retained, said, items);
     }
 
     /**
@@ -308,6 +319,7 @@ public class FeedbackCompositionService {
                                                 row.resultId(),
                                                 row.itemKind(),
                                                 row.itemId(),
+                                                read.supportItems().get(Long.parseLong(row.itemId())),
                                                 row.outcome(),
                                                 row.origin(),
                                                 row.summary(),
@@ -390,10 +402,12 @@ public class FeedbackCompositionService {
             FeedbackCompositionContext context,
             List<HistoryCopy> copies,
             List<ResultHistoryEntry> support,
-            @Nullable PrivateFeedbackHistory privateHistory) {
+            @Nullable PrivateFeedbackHistory privateHistory,
+            Map<Long, ItemRefDTO> supportItems) {
         public Read {
             copies = List.copyOf(copies);
             support = List.copyOf(support);
+            supportItems = Map.copyOf(supportItems);
         }
     }
 }

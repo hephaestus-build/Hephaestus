@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextCheck;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -558,6 +560,7 @@ final class CompositionEvalCases {
                 occurrence.putNull("practiceVersionId");
                 occurrence.put("itemId", i == 0 ? "7" : "6");
                 occurrence.put("itemKind", "scm.pull_request");
+                occurrence.set("item", MAPPER.valueToTree(supportItem(scenario, i)));
                 occurrence.put("recordedAt", CAPTURED_AT);
                 if (i > 0)
                     occurrence.put(
@@ -593,6 +596,29 @@ final class CompositionEvalCases {
                 state,
                 request,
                 routes);
+    }
+
+    private static ItemRefDTO supportItem(Scenario scenario, int earlier) {
+        var work = scenario.item().path("work");
+        boolean gitlab = "gitlab".equals(scenario.item().path("provider").asString());
+        String container = work.path("repository").asString();
+        int number = work.path("number").asInt() - earlier;
+        String capturedUrl = MAPPER.readTree(
+                        Objects.requireNonNull(scenario.inputs().get("context/metadata.json")))
+                .path("pr_url")
+                .asString();
+        String url = capturedUrl.substring(0, capturedUrl.lastIndexOf('/') + 1) + number;
+        return new ItemRefDTO(
+                earlier == 0 ? "7" : "6",
+                "scm.pull_request",
+                null,
+                gitlab ? IntegrationKind.GITLAB : IntegrationKind.GITHUB,
+                (gitlab ? "!" : "#") + number,
+                (earlier == 0 ? "" : "Earlier ") + work.path("title").asString(),
+                url,
+                container,
+                null,
+                null);
     }
 
     /** The path the golden test drives, which is the path the composer drives from its inputs. */
