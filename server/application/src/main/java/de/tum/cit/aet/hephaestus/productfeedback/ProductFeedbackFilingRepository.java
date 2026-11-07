@@ -104,6 +104,7 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
     long countPublicFiledByAccountSince(@Param("accountId") long accountId, @Param("since") Instant since);
 
     /** Open reports that wait for the admins, oldest first. */
+    @WorkspaceAgnostic("Instance administrators read the open reports of every workspace")
     @Query(value = """
                     SELECT f.feedback_id FROM product_feedback_filing f JOIN product_feedback p ON p.id = f.feedback_id
                     WHERE f.state = 'EMAILED' AND p.resolved_at IS NULL
@@ -111,6 +112,7 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
                     """, nativeQuery = true)
     List<UUID> savedForAdmins(@Param("limit") int limit);
 
+    @WorkspaceAgnostic("Instance administrators count the open reports of every workspace")
     @Query(value = """
                     SELECT count(*) FROM product_feedback_filing f JOIN product_feedback p ON p.id = f.feedback_id
                     WHERE f.state = 'EMAILED' AND p.resolved_at IS NULL
