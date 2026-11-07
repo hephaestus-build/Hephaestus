@@ -18,10 +18,10 @@ A signature, checksum, SBOM, or release attestation alone does not establish a S
 
 | Artifact | Build assessment | Evidence and limit |
 | --- | --- | --- |
-| `application-server` image index | Build L2 with independent verification | The reusable image workflow runs on GitHub-hosted runners and publishes native GitHub build provenance for the index digest. The release gate verifies that provenance. |
-| `webapp` image index | Build L2 with independent verification | The same workflow and verification apply to this image's own index digest. |
-| `agent-pi` image index | Build L2 with independent verification | The same workflow and verification apply to this image's own index digest. |
-| `postgres` image index | Build L2 with independent verification | The same workflow and verification apply to this image's own index digest. |
+| `application-server` image index | Build L2 | The reusable image workflow runs on GitHub-hosted runners and publishes native GitHub build provenance for the index digest. The release gate verifies that provenance. |
+| `webapp` image index | Build L2 | The same workflow and verification apply to this image's own index digest. |
+| `agent-pi` image index | Build L2 | The same workflow and verification apply to this image's own index digest. |
+| `postgres` image index | Build L2 | The same workflow and verification apply to this image's own index digest. |
 | First-party platform manifests | No separate Build claim | The image index binds the child manifest digests. Each platform has its own signed SBOM and scan evidence. The native build attestation names the index. |
 | Upstream image indexes and platform manifests | No Hephaestus Build claim | The release pins upstream digests and captures platform membership, inventories, licenses, and scans. It does not require upstream build provenance. |
 | Helm chart package and OCI manifest | No Build claim | The release signs the chart digest and includes both subjects in a release attestation. That in-toto `release/v0.1` predicate is not SLSA build provenance. |
@@ -43,11 +43,10 @@ The assessment does not extend to their base images, buildpack builder, or other
 
 ## Verification scope
 
-The release gate requires valid build provenance for each first-party image index.
+The release gate verifies each first-party image index against its full source commit, allowed build workflow, SLSA v1 predicate, and hosted-runner identity.
 [Image build provenance](../admin/release-image-lock#image-build-provenance) gives the independent verification commands.
 The expected subjects and source commit come from the authenticated joint lock.
-The Build L2 assessment remains conditional on independent consumer verification.
-Reassess that condition when the release gate enforces the same verification policy.
+Consumers verify their target release independently before relying on its provenance.
 
 A reused image keeps the build provenance of its merge-group run.
 The subsequent `main` run signs that same digest without rebuilding it.
