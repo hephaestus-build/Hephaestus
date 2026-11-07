@@ -856,8 +856,10 @@ The chart has no setting for a connection without certificate verification or wi
 
 Set `nats.bundled=false` to use your NATS JetStream broker.
 Put the broker on a private network that only this release can reach.
-The released NATS client verifies the certificate chain of a `tls://` broker, but not the host name in the certificate.
-Thus, TLS alone does not prevent a connection to another broker that has a certificate from the same CA.
+
+For a `tls://` broker, Hephaestus verifies the certificate chain and the broker's hostname.
+The certificate must name the host in `nats.external.url`.
+For each advertised address, the destination broker's certificate must name that address.
 
 The bundled broker stays inside the release namespace, and network policy admits only the server and the webhook role.
 The application has no setting for the stream replica count.
