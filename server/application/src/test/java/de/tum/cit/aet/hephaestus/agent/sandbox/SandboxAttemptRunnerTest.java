@@ -180,6 +180,27 @@ class SandboxAttemptRunnerTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldAskForTheProgramSideWhenPreparationStagedAProgramOnDisk() throws Exception {
+            Path program = Files.createTempFile("practice", ".ts");
+            try {
+                String staged = SandboxLayout.PRACTICE_SCRIPT_PRACTICES_PREFIX + "a-practice.ts";
+
+                runner.execute(spec(Map.of(), Map.of(), Map.of(staged, program), null));
+
+                assertThat(backend.launch().programs()).isTrue();
+            } finally {
+                Files.deleteIfExists(program);
+            }
+        }
+
+        @Test
+        void shouldLeaveOutTheProgramSideWhenNoProgramIsStaged() throws Exception {
+            runner.execute(createSpec());
+
+            assertThat(backend.launch().programs()).isFalse();
+        }
+
+        @Test
         void shouldLaunchNothingWhenTheWorkDeadlinePassedBeforeTheStart() {
             assertThatThrownBy(() -> runner.execute(spec(Map.of(), Map.of(), Map.of(), Instant.now())))
                     .isInstanceOf(SandboxException.class)
