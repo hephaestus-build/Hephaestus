@@ -25,7 +25,7 @@ erDiagram
         BIGINT id PK,UK
         TIMESTAMPTZ labels_synced_at
         TIMESTAMPTZ milestones_synced_at
-        VARCHAR(255) name_with_owner
+        VARCHAR(255) name_with_owner UK
         TIMESTAMPTZ repository_synced_at
         BIGINT workspace_id FK,UK "NOT NULL"
         TIMESTAMPTZ backfill_last_run_at

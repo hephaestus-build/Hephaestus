@@ -128,6 +128,13 @@ public class GitLabRepositoryMonitors {
                 // A workspace that selected its projects monitors only those it already monitors.
                 if (policy.getRepositorySelection() != RepositorySelection.SELECTED
                         && (createAll || workspaceScopeFilter.isGroupRepositoryAllowed(group, path))) {
+                    if (own.stream().anyMatch(monitor -> path.equals(monitor.getNameWithOwner()))) {
+                        log.warn(
+                                "Skipped repository monitor: reason=nameHeldByAnotherMonitor, workspaceId={}, repoId={}",
+                                workspaceId,
+                                repository.getId());
+                        continue;
+                    }
                     RepositoryToMonitor monitor = new RepositoryToMonitor();
                     monitor.setNameWithOwner(path);
                     monitor.setNativeId(nativeId);

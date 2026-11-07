@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
+import de.tum.cit.aet.hephaestus.core.exception.DataIntegrityViolationConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -31,6 +32,7 @@ import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -144,7 +146,7 @@ public class ManualRepositoryMonitorService {
             created.setNativeId(repository.getNativeId());
             created.setWorkspace(owner);
             owner.getRepositoriesToMonitor().add(created);
-            RepositoryToMonitor saved = repositoryToMonitorRepository.saveAndFlush(created);
+            RepositoryToMonitor saved = insertMonitor(created, nameWithOwner);
             eventPublisher.publishEvent(new RepositoryMonitoringChangedEvent(
                     owner.getId(), repositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(saved.getId())));
             return saved;
@@ -209,12 +211,23 @@ public class ManualRepositoryMonitorService {
             created.setNativeId(nativeId);
             created.setWorkspace(owner);
             owner.getRepositoriesToMonitor().add(created);
-            RepositoryToMonitor saved = repositoryToMonitorRepository.saveAndFlush(created);
+            RepositoryToMonitor saved = insertMonitor(created, nameWithOwner);
             eventPublisher.publishEvent(new RepositoryMonitoringChangedEvent(
                     owner.getId(), repositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(saved.getId())));
             return saved;
         });
         return Objects.requireNonNull(monitor);
+    }
+
+    private RepositoryToMonitor insertMonitor(RepositoryToMonitor monitor, String nameWithOwner) {
+        try {
+            return repositoryToMonitorRepository.saveAndFlush(monitor);
+        } catch (DataIntegrityViolationException exception) {
+            if (DataIntegrityViolationConstraints.hasName(exception, "uk_repository_to_monitor_workspace_name")) {
+                throw new RepositoryAlreadyMonitoredException(nameWithOwner, exception);
+            }
+            throw exception;
+        }
     }
 
     /**

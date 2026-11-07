@@ -349,6 +349,29 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldKeepANameHolderWhenTheInstallationReportsARecreatedRepository() {
+        Workspace workspace = persistWorkspace(RepositorySelection.ALL);
+        RepositoryToMonitor holder = buildMonitor(workspace, SHARED_NAME);
+        holder.setNativeId(90L);
+        var checkpoint = Instant.parse("2025-01-03T10:11:12Z");
+        holder.setRepositorySyncedAt(checkpoint);
+        holder = repositoryToMonitorRepository.saveAndFlush(holder);
+
+        workspaceRepositoryMonitorService.ensureRepositoryAndMonitorFromSnapshot(
+                INSTALLATION_ID, new ProvisioningListener.RepositorySnapshot(9001L, SHARED_NAME, "shared", true));
+        workspaceRepositoryMonitorService.ensureRepositoryAndMonitorFromSnapshot(
+                INSTALLATION_ID, new ProvisioningListener.RepositorySnapshot(9002L, "shared-org/other", "other", true));
+
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
+                .extracting(RepositoryToMonitor::getNativeId)
+                .containsExactlyInAnyOrder(90L, 9002L);
+        assertThat(repositoryToMonitorRepository.findById(holder.getId())).hasValueSatisfying(monitor -> {
+            assertThat(monitor.getNameWithOwner()).isEqualTo(SHARED_NAME);
+            assertThat(monitor.getRepositorySyncedAt()).isEqualTo(checkpoint);
+        });
+    }
+
+    @Test
     void replayedRepositoryAddCannotRepopulateAPurgedWorkspace() {
         Workspace workspace = persistWorkspace(RepositorySelection.SELECTED);
         workspace.setStatus(Workspace.WorkspaceStatus.PURGED);

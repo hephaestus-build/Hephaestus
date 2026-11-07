@@ -542,6 +542,13 @@ public class WorkspaceRepositoryMonitorService {
         Long workspaceId = workspace.getId();
         var existing = repositoryToMonitorRepository.findOneByWorkspaceIdAndNativeId(workspaceId, nativeId);
         if (existing.isEmpty()) {
+            if (repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(workspaceId, nameWithOwner)) {
+                log.warn(
+                        "Skipped repository monitor: reason=nameHeldByAnotherMonitor, workspaceId={}, nativeId={}",
+                        workspaceId,
+                        nativeId);
+                return;
+            }
             RepositoryToMonitor monitor = new RepositoryToMonitor();
             monitor.setNameWithOwner(nameWithOwner);
             monitor.setNativeId(nativeId);

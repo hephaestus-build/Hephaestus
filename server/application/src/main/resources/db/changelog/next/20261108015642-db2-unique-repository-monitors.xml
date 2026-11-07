@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794103002698-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT" onFailMessage="Repository monitor names are duplicated within a workspace. Reconcile the monitors against provider repository IDs before retrying. No monitor was removed or merged.">
+            <sqlCheck expectedResult="0">SELECT count(*) FROM (SELECT workspace_id, name_with_owner FROM repository_to_monitor GROUP BY workspace_id, name_with_owner HAVING count(*) &gt; 1) duplicates</sqlCheck>
+        </preConditions>
+        <addUniqueConstraint tableName="repository_to_monitor" columnNames="workspace_id,name_with_owner" constraintName="uk_repository_to_monitor_workspace_name"/>
+        <rollback><dropUniqueConstraint tableName="repository_to_monitor" constraintName="uk_repository_to_monitor_workspace_name"/></rollback>
+    </changeSet>
+</databaseChangeLog>

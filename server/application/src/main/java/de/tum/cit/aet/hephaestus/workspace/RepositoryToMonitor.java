@@ -33,7 +33,10 @@ import org.jspecify.annotations.Nullable;
                     columnNames = {"workspace_id", "id"}),
             @UniqueConstraint(
                     name = "uk_repository_to_monitor_workspace_native_id",
-                    columnNames = {"workspace_id", "native_id"})
+                    columnNames = {"workspace_id", "native_id"}),
+            @UniqueConstraint(
+                    name = "uk_repository_to_monitor_workspace_name",
+                    columnNames = {"workspace_id", "name_with_owner"})
         })
 @Getter
 @Setter

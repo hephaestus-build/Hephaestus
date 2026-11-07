@@ -619,7 +619,8 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         }
 
         String prefixLower = (oldLogin + "/").toLowerCase(Locale.ENGLISH);
-        repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()).forEach(monitor -> {
+        var monitors = repositoryToMonitorRepository.findByWorkspaceId(workspace.getId());
+        monitors.forEach(monitor -> {
             String current = monitor.getNameWithOwner();
             if (current == null) {
                 return;
@@ -633,7 +634,17 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                 return;
             }
             String suffix = current.substring(slashIndex);
-            monitor.setNameWithOwner(newLogin + suffix);
+            String target = newLogin + suffix;
+            if (monitors.stream()
+                    .anyMatch(other ->
+                            !other.getId().equals(monitor.getId()) && target.equals(other.getNameWithOwner()))) {
+                log.warn(
+                        "Skipped repository monitor rename: reason=nameHeldByAnotherMonitor, workspaceId={}, monitorId={}",
+                        workspace.getId(),
+                        monitor.getId());
+                return;
+            }
+            monitor.setNameWithOwner(target);
             repositoryToMonitorRepository.save(monitor);
         });
 
