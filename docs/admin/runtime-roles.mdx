@@ -572,6 +572,11 @@ A burst of refusals or late calls lowers the limit once: only a call that starte
 The same rule applies to a served call that raises it.
 The limit does not rise while calls do not fill it.
 An instance admin's maximum is a ceiling on the limit.
+A release grants waiting calls immediately.
+Workers send a pool-id hint through PostgreSQL after a release or grant.
+Each worker keeps one dedicated database connection for these notifications.
+The database owns admission; a hint does not grant capacity.
+If a hint is lost, a two-second check recovers it and checks rate refills, cooldowns and expired permits.
 
 The conversation reserve is a quarter of the limit, rounded up, and the limit always leaves one background call.
 A limit of 32 has a reserve of 8. A limit of 8 has a reserve of 2.

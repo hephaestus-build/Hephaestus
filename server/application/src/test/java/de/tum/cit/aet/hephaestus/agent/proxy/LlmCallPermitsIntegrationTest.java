@@ -29,6 +29,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestReporter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -60,6 +62,9 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private DataSourceProperties dataSource;
 
     private LlmCallPermits workerA;
     private LlmCallPermits workerB;
@@ -558,6 +563,114 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Model calls must acquire capacity outside a database transaction"));
         assertThat(rows.countActive(pool)).isZero();
+    }
+
+    @Test
+    void shouldGrantARemoteRequestOnReleaseWithoutAWaitingLocalThread() {
+        long pool = pool(1);
+        var active = admit(workerA, pool, LlmCallClass.REQUEST, 1);
+        UUID remote = UUID.randomUUID();
+        transactions.executeWithoutResult(status -> rows.enqueue(new LlmCallPermitRepository.Request(
+                remote, pool, "remote-" + UUID.randomUUID(), LlmCallClass.REQUEST.name(), 2L, UUID.randomUUID(), 0)));
+
+        active.close();
+
+        assertThat(rows.findById(remote).orElseThrow().getState()).isEqualTo("ACTIVE");
+        assertThat(rows.countActive(pool)).isEqualTo(1);
+    }
+
+    @Test
+    void shouldGrantBackfillBeforeProductFeedbackOnRelease() {
+        long pool = pool(1);
+        var active = admit(workerA, pool, LlmCallClass.TURN, 1);
+        UUID feedback = UUID.randomUUID();
+        UUID review = UUID.randomUUID();
+        transactions.executeWithoutResult(status -> {
+            rows.enqueue(new LlmCallPermitRepository.Request(
+                    feedback, pool, "feedback", LlmCallClass.PRODUCT_FEEDBACK.name(), null, UUID.randomUUID(), 0));
+            rows.enqueue(new LlmCallPermitRepository.Request(
+                    review, pool, "review", LlmCallClass.BACKFILL.name(), 2L, UUID.randomUUID(), 0));
+        });
+
+        active.close();
+
+        assertThat(rows.findById(review).orElseThrow().getState()).isEqualTo("ACTIVE");
+        assertThat(rows.findById(feedback).orElseThrow().getState()).isEqualTo("WAITING");
+    }
+
+    @Test
+    void shouldDeliverPoolHintsOnlyAfterCommitAndOmitRolledBackHints() throws Exception {
+        var notifications = new LlmPoolNotifications(dataSource);
+        var received = new LinkedBlockingQueue<Long>();
+        var listening = new CompletableFuture<Void>();
+        notifications.subscribe(received::add, () -> listening.complete(null));
+        try {
+            listening.get(5, TimeUnit.SECONDS);
+            transactions.executeWithoutResult(status -> {
+                rows.notifyPool(LlmPoolNotifications.CHANNEL, "11");
+                status.setRollbackOnly();
+            });
+            transactions.executeWithoutResult(status -> {
+                rows.notifyPool(LlmPoolNotifications.CHANNEL, "invalid");
+                rows.notifyPool(LlmPoolNotifications.CHANNEL, "12");
+                assertThat(received).isEmpty();
+            });
+
+            assertThat(received.poll(5, TimeUnit.SECONDS)).isEqualTo(12L);
+            assertThat(received).isEmpty();
+        } finally {
+            notifications.destroy();
+        }
+    }
+
+    @Test
+    void shouldHandOffARemoteGrantAfterReleaseWithDatabaseNotifications(TestReporter reporter) throws Exception {
+        var first = new LlmPoolNotifications(dataSource);
+        var second = new LlmPoolNotifications(dataSource);
+        try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
+            workerA = new LlmCallPermits(
+                    pools,
+                    rows,
+                    transactions,
+                    PROPERTIES,
+                    "wake-a-" + UUID.randomUUID(),
+                    workerAMeters,
+                    mock(LlmModelResolver.class),
+                    first);
+            workerB = new LlmCallPermits(
+                    pools,
+                    rows,
+                    transactions,
+                    PROPERTIES,
+                    "wake-b-" + UUID.randomUUID(),
+                    new SimpleMeterRegistry(),
+                    mock(LlmModelResolver.class),
+                    second);
+            workerA.start();
+            workerB.start();
+            long pool = pool(1);
+            var active = admit(workerA, pool, LlmCallClass.REQUEST, 1);
+            try {
+                var queued = calls.submit(() -> admit(workerB, pool, LlmCallClass.REQUEST, 2));
+                await().atMost(Duration.ofSeconds(5)).until(() -> waiting(pool) == 1);
+                long releasedAt = System.nanoTime();
+                active.close();
+                try (var granted = queued.get(5, TimeUnit.SECONDS)) {
+                    assertThat(granted.isRevoked()).isFalse();
+                    assertThat(rows.countActive(pool)).isEqualTo(1);
+                    reporter.publishEntry(
+                            "cross-worker release to handoff ms",
+                            Long.toString(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - releasedAt)));
+                }
+            } finally {
+                active.close();
+            }
+        } finally {
+            workerA.stop();
+            workerB.stop();
+            first.destroy();
+            second.destroy();
+        }
     }
 
     /** A pool that has already learned its maximum, so that the maximum decides in these tests. */
