@@ -338,8 +338,12 @@ public class SandboxAttemptRunner implements SandboxManager {
 
     @Override
     public boolean loopRunning(UUID jobId) {
-        var handle = activeSandboxes.get(jobId);
-        return handle != null && backend.running(handle);
+        var running = new AtomicBoolean();
+        activeSandboxes.computeIfPresent(jobId, (id, handle) -> {
+            running.set(backend.running(handle));
+            return handle;
+        });
+        return running.get();
     }
 
     /**

@@ -132,9 +132,8 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
                 "receipt", now, now.plusSeconds(60), now.plusSeconds(30));
         var leases = new ReviewAttemptLease(jobRepository);
 
-        var receipt = transactionTemplate.execute(status -> leases.renew(token).orElseThrow());
+        var receipt = Objects.requireNonNull(transactionTemplate.execute(status -> leases.renew(token).orElseThrow()));
 
-        assertThat(receipt).isNotNull();
         assertThat(receipt.remainingMillis()).isPositive().isLessThanOrEqualTo(60_000);
         assertThat(receipt.renewAfterMillis()).isPositive().isLessThanOrEqualTo(receipt.remainingMillis());
         assertThat(jobRepository.findById(id).orElseThrow().getLeasedUntil())
@@ -150,7 +149,7 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
     void shouldRefuseAnotherFenceOrKindWithoutChangingTheReviewsLease() {
         UUID id = runningJob(LEASE);
         transactionTemplate.executeWithoutResult(status -> jobRepository.lease(id, LEASE_TTL_SECONDS));
-        Instant before = jobRepository.findById(id).orElseThrow().getLeasedUntil();
+        Instant before = Objects.requireNonNull(jobRepository.findById(id).orElseThrow().getLeasedUntil());
         Instant now = jobRepository.databaseClock();
         var tokens = List.of(
                 new AttemptJwt(AttemptJwt.Kind.REVIEW, id, workspace.getId() + 1, 0, LEASE, Set.of("llm_proxy"),
