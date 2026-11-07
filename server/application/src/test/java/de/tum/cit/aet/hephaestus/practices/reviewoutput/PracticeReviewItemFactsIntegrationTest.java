@@ -136,7 +136,7 @@ class PracticeReviewItemFactsIntegrationTest extends BaseIntegrationTest {
                 .orElseGet(() -> providers.saveAndFlush(new IdentityProvider(type, origin)));
         ConnectionConfig config = type == IdentityProviderType.GITHUB
                 ? new ConnectionConfig.GitHubAppConfig(123L, "pilot", null, Set.of())
-                : new ConnectionConfig.GitLabConfig(origin, null, null, Set.of(), null);
+                : new ConnectionConfig.GitLabConfig(origin, 42L, null, Set.of(), null);
         var connection = new Connection(scenario.workspace(), provider.kind(), "pilot", config);
         ReflectionTestUtils.setField(connection, "state", IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
@@ -149,8 +149,8 @@ class PracticeReviewItemFactsIntegrationTest extends BaseIntegrationTest {
         repository.setCreatedAt(Instant.now());
         repository.setUpdatedAt(Instant.now());
         repository = repositories.saveAndFlush(repository);
-        monitors.saveAndFlush(
-                WorkspaceTestFixtures.repositoryMonitor(scenario.workspace(), repository.getNameWithOwner()));
+        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
+                scenario.workspace(), repository.getNameWithOwner(), repository.getNativeId()));
         var pull = new PullRequest();
         pull.setProvider(provider);
         pull.setNativeId(scenario.item().getId());

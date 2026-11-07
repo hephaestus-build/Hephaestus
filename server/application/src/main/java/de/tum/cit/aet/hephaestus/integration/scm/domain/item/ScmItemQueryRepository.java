@@ -26,7 +26,7 @@ public interface ScmItemQueryRepository extends Repository<Item, Long> {
           AND r.name_with_owner=:repositoryName AND work.number=:number
           AND EXISTS (SELECT 1 FROM repository_to_monitor monitor
             WHERE monitor.workspace_id=i.workspace_id AND monitor.name_with_owner=r.name_with_owner
-              AND (monitor.native_id IS NULL OR monitor.native_id=r.native_id))
+              AND monitor.native_id=r.native_id)
         ORDER BY i.id
         LIMIT 2
         """, nativeQuery = true)
@@ -104,7 +104,7 @@ public interface ScmItemQueryRepository extends Repository<Item, Long> {
                 JOIN identity_provider p ON p.id=r.provider_id
                 JOIN repository_to_monitor m ON m.workspace_id=i.workspace_id
                   AND m.name_with_owner=r.name_with_owner
-                  AND (m.native_id IS NULL OR m.native_id=r.native_id)
+                  AND m.native_id=r.native_id
                 WHERE i.workspace_id=:workspaceId AND i.kind=:repositoryKind AND i.parent_id IS NULL
                   AND i.removed_at IS NULL AND p.type=:providerType ORDER BY i.id
         """, nativeQuery = true)
@@ -113,7 +113,7 @@ public interface ScmItemQueryRepository extends Repository<Item, Long> {
             @Param("repositoryKind") String repositoryKind,
             @Param("providerType") String providerType);
 
-    /** Active repository items whose source no monitor of the workspace covers by native id or by unbound path. */
+    /** Active repository items whose source no monitor of the workspace covers by native id. */
     @Query(value = """
                 SELECT i.id AS item_id, r.id AS repository_id, r.native_id, r.name_with_owner, p.server_url
                 FROM item i JOIN repository r ON r.id=i.source_id
@@ -121,7 +121,7 @@ public interface ScmItemQueryRepository extends Repository<Item, Long> {
                 WHERE i.workspace_id=:workspaceId AND i.kind=:repositoryKind AND i.parent_id IS NULL
                   AND i.removed_at IS NULL AND p.type=:providerType
                   AND NOT EXISTS (SELECT 1 FROM repository_to_monitor m WHERE m.workspace_id=i.workspace_id
-                    AND (m.native_id=r.native_id OR (m.native_id IS NULL AND m.name_with_owner=r.name_with_owner)))
+                    AND m.native_id=r.native_id)
                 ORDER BY r.name_with_owner, i.id
         """, nativeQuery = true)
     List<UnmonitoredRow> unmonitored(

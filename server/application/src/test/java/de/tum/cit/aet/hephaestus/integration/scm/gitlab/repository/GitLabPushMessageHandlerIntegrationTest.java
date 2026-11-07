@@ -115,7 +115,7 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 workspace,
                 IntegrationKind.GITLAB,
                 "push-fixture",
-                new ConnectionConfig.GitLabConfig(provider.getServerUrl(), null, null, Set.of(), null));
+                new ConnectionConfig.GitLabConfig(provider.getServerUrl(), 42L, null, Set.of(), null));
         connection.setState(IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
         var monitor = new RepositoryToMonitor();

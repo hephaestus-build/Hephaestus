@@ -30,7 +30,6 @@ class GitLabProjectExclusionsSyncIntegrationTest extends AbstractWorkspaceIntegr
     // The real hub coalesces for one second before writing. Silence must span that window.
     private static final Duration QUIET_WINDOW = Duration.ofSeconds(2);
     private static final long PROJECT_ID = 4101L;
-    private static final String PROJECT_PATH = "acme/platform/api";
 
     @Autowired
     private WebTestClient webTestClient;
@@ -66,7 +65,7 @@ class GitLabProjectExclusionsSyncIntegrationTest extends AbstractWorkspaceIntegr
         UUID firstReceipt = UUID.randomUUID();
         var config = (ConnectionConfig.GitLabConfig) connection.getConfig();
         connection.setConfig(
-                config.withProjectExclusions(config.projectExclusions().stop(PROJECT_ID, PROJECT_PATH, firstReceipt)));
+                config.withProjectExclusions(config.projectExclusions().stop(PROJECT_ID, firstReceipt)));
         connections.saveAndFlush(connection);
 
         List<ServerSentEvent<String>> events = new CopyOnWriteArrayList<>();
@@ -98,7 +97,7 @@ class GitLabProjectExclusionsSyncIntegrationTest extends AbstractWorkspaceIntegr
             // Only the receipt changes: the same project and path were stopped again.
             UUID secondReceipt = UUID.randomUUID();
             transactions.executeWithoutResult(status -> assertThat(connectionService.updateGitLabProjectExclusions(
-                            workspace.getId(), exclusions -> exclusions.stop(PROJECT_ID, PROJECT_PATH, secondReceipt)))
+                            workspace.getId(), exclusions -> exclusions.stop(PROJECT_ID, secondReceipt)))
                     .isPresent());
 
             await().atMost(STREAM_WAIT)

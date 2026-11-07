@@ -285,7 +285,8 @@ public class OAuthCallbackService {
     private static ConnectionConfig defaultConfig(IntegrationKind kind) {
         return switch (kind) {
             case GITHUB -> new ConnectionConfig.GitHubAppConfig(null, null, null, new HashSet<>());
-            case GITLAB -> new ConnectionConfig.GitLabConfig("https://gitlab.com", null, null, new HashSet<>(), null);
+            case GITLAB ->
+                throw new IllegalArgumentException("Create a GitLab workspace to connect its verified group.");
             case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, new HashSet<>());
             case OUTLINE -> new ConnectionConfig.OutlineConfig(null, null, null, new HashSet<>());
         };

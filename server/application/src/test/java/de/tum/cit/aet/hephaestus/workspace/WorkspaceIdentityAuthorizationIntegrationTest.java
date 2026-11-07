@@ -272,9 +272,10 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
 
     private void recordIssueOpened(Workspace workspace, User actor) {
         UUID id = UUID.randomUUID();
+        long nativeId = Integer.toUnsignedLong(id.hashCode()) + 1;
         Repository repository = new Repository();
         repository.setProvider(actor.getProvider());
-        repository.setNativeId(id.getMostSignificantBits());
+        repository.setNativeId(nativeId);
         repository.setName("issues-" + id);
         repository.setNameWithOwner("profile/" + repository.getName());
         repository.setHtmlUrl("https://example.com/" + repository.getNameWithOwner());
@@ -283,6 +284,7 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
         RepositoryToMonitor monitor = new RepositoryToMonitor();
         monitor.setWorkspace(workspace);
         monitor.setNameWithOwner(repository.getNameWithOwner());
+        monitor.setNativeId(repository.getNativeId());
         monitoredRepositories.save(monitor);
         activityEvents.insertIfAbsent(
                 id,
@@ -293,6 +295,6 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
                 workspace.getId(),
                 repository.getId(),
                 ActivityTargetType.ISSUE.getValue(),
-                id.getMostSignificantBits());
+                nativeId);
     }
 }

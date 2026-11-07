@@ -8,11 +8,11 @@ import org.hibernate.type.StandardBasicTypes;
  * Whether a workspace's {@code repository_to_monitor} row covers a {@code repository} row of the
  * same {@code name_with_owner}.
  *
- * <p>Repositories are unique per {@code (provider_id, name_with_owner)}, but a monitor stores only
- * the name. So a monitor covers a repository only when, besides the name:
+ * <p>Repositories are unique per {@code (provider_id, name_with_owner)}. A monitor covers a repository
+ * only when, besides the name:
  *
  * <ul>
- *   <li>the monitor's native id, once known, is the repository's, and
+ *   <li>the monitor's native id is the repository's, and
  *   <li>the repository's provider is the one registered for the workspace's active or paused GitHub
  *       or GitLab connection: the same kind and the connection's configured server URL, or {@link
  *       PersonSourceNamespace}'s default for that kind when it configures none. {@code
@@ -36,7 +36,7 @@ public final class MonitoredRepositoryScope implements FunctionContributor {
      * The predicate over {@code ?1} monitor workspace id, {@code ?2} monitor native id, {@code ?3}
      * repository native id and {@code ?4} repository provider id.
      */
-    static final String PATTERN = "((?2 IS NULL OR ?2 = ?3) AND EXISTS (SELECT 1"
+    static final String PATTERN = "(?2 = ?3 AND EXISTS (SELECT 1"
             + SOURCE_PROVIDER
             + " AND monitor_connection.workspace_id = ?1 AND monitor_provider.id = ?4))";
 
@@ -60,10 +60,9 @@ public final class MonitoredRepositoryScope implements FunctionContributor {
      * {@link #PATTERN} for native SQL that aliases {@code repository_to_monitor} as {@code rtm} and
      * {@code repository} as {@code r}. A unit test keeps it equal to the pattern.
      */
-    public static final String NATIVE_RTM_R =
-            "((rtm.native_id IS NULL OR rtm.native_id = r.native_id) AND EXISTS (SELECT 1"
-                    + SOURCE_PROVIDER
-                    + " AND monitor_connection.workspace_id = rtm.workspace_id AND monitor_provider.id = r.provider_id))";
+    public static final String NATIVE_RTM_R = "(rtm.native_id = r.native_id AND EXISTS (SELECT 1"
+            + SOURCE_PROVIDER
+            + " AND monitor_connection.workspace_id = rtm.workspace_id AND monitor_provider.id = r.provider_id))";
 
     @Override
     public void contributeFunctions(FunctionContributions contributions) {

@@ -126,8 +126,7 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
         pullRequest = pullRequests.save(pr);
         var workspace = WorkspaceTestFixtures.persistGitLabWorkspace(
                 workspaces, connectionRows, WorkspaceTestFixtures.gitLabPatWorkspace("owner"), serverUrl);
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, "owner/repo");
-        monitor.setNativeId(repository.getNativeId());
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, "owner/repo", repository.getNativeId());
         monitors.save(monitor);
         long workspaceId = workspace.getId();
         context = ScmCaptureFixtures.context(

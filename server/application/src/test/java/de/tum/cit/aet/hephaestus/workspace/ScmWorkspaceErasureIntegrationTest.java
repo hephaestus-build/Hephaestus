@@ -240,9 +240,9 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
         persistIssue(exclusive, 1, "exclusive issue");
 
         // Both tenants monitor the shared repo; only tenant A monitors the exclusive one.
-        persistMonitor(tenantA, SHARED_REPO);
-        persistMonitor(tenantB, SHARED_REPO);
-        persistMonitor(tenantA, EXCLUSIVE_REPO);
+        persistMonitor(tenantA, shared);
+        persistMonitor(tenantB, shared);
+        persistMonitor(tenantA, exclusive);
     }
 
     @Test
@@ -562,9 +562,10 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
         issueRepository.save(issue);
     }
 
-    private void persistMonitor(Workspace workspace, String nameWithOwner) {
+    private void persistMonitor(Workspace workspace, Repository repository) {
         RepositoryToMonitor monitor = new RepositoryToMonitor();
-        monitor.setNameWithOwner(nameWithOwner);
+        monitor.setNameWithOwner(repository.getNameWithOwner());
+        monitor.setNativeId(repository.getNativeId());
         monitor.setWorkspace(workspace);
         repositoryToMonitorRepository.save(monitor);
     }

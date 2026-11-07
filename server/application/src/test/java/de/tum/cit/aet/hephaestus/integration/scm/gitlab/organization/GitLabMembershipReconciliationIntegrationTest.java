@@ -91,8 +91,6 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.core.io.ClassPathResource;
@@ -263,6 +261,7 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
                 workspaces, connections, WorkspaceTestFixtures.gitLabPatWorkspace(COURSE), GITLAB_URL);
         workspace.setOrganizationId(course.getId());
         workspace = workspaces.save(workspace);
+        connectToGroup(COURSE_ID);
         owner = users.save(TestUserFactory.createUser(OWNER_ID, "owner", gitLab));
         membershipService.createMembership(workspace, ensureAccount(owner), WorkspaceRole.OWNER);
 
@@ -1011,10 +1010,8 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
                 .isPresent();
     }
 
-    @ParameterizedTest(name = "connection names the new group by id: {0}")
-    @ValueSource(booleans = {true, false})
-    void shouldNotEnrollFromTheOldGroupsRosterOnceTheWorkspaceIsRelinkedWhileItWaits(boolean connectionNamesGroup)
-            throws Exception {
+    @Test
+    void shouldNotEnrollFromTheOldGroupsRosterOnceTheWorkspaceIsRelinkedWhileItWaits() throws Exception {
         User student = users.save(TestUserFactory.createUser(STUDENT, "student", gitLab));
         roster.upsertMembership(course.getId(), student.getId(), OrganizationMemberRole.MEMBER);
         assertThat(workspaceRoleOf(student)).isEmpty();
@@ -1060,8 +1057,7 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
                                         workspaceId,
                                         IntegrationKind.GITLAB,
                                         config -> config instanceof ConnectionConfig.GitLabConfig gitLabConfig
-                                                ? gitLabConfig.withGitlabGroupId(
-                                                        connectionNamesGroup ? replacementNativeId : null)
+                                                ? gitLabConfig.withGitlabGroupId(replacementNativeId)
                                                 : config))
                                 .isPresent();
                         holder.complete(

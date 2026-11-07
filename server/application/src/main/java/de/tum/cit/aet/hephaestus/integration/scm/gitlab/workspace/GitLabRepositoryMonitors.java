@@ -117,12 +117,11 @@ public class GitLabRepositoryMonitors {
                 continue;
             }
             Long nativeId = repository.getNativeId();
-            if (config.projectExclusions().excludes(nativeId, path)) {
+            if (config.projectExclusions().excludes(nativeId)) {
                 continue;
             }
             List<RepositoryToMonitor> same = own.stream()
-                    .filter(monitor -> nativeId.equals(monitor.getNativeId())
-                            || (monitor.getNativeId() == null && path.equals(monitor.getNameWithOwner())))
+                    .filter(monitor -> nativeId.equals(monitor.getNativeId()))
                     .sorted(Comparator.comparing(RepositoryToMonitor::getId))
                     .toList();
             if (same.isEmpty()) {

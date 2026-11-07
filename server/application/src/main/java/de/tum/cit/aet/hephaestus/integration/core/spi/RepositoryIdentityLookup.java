@@ -9,5 +9,9 @@ public interface RepositoryIdentityLookup {
     /** External lookup; callers must recheck the connection before a subsequent local write. */
     Optional<RepositoryIdentity> resolve(long workspaceId, String fullPath);
 
-    record RepositoryIdentity(long nativeId, String fullPath) {}
+    record RepositoryIdentity(long nativeId, String fullPath) {
+        public RepositoryIdentity {
+            if (nativeId <= 0) throw new IllegalArgumentException("A repository requires a positive provider ID");
+        }
+    }
 }

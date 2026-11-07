@@ -80,6 +80,7 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
     @Test
     void wildcardPatternsAreNormalizedBeforePersistence() {
         var monitor = new RepositoryToMonitor();
+        monitor.setNativeId(1L);
         monitor.setId(8L);
         monitor.setNameWithOwner("owner/repo");
         when(indexed.repositories(1)).thenReturn(Map.of(2L, new MonitoredRepositoryRef(2, 8, "owner/repo")));

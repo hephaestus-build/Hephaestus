@@ -446,7 +446,9 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(reviewSnapshot.roles()).extracting(RoleHolder::role).containsExactly(AboutRole.REVIEWER);
         var second = connectedWorkspace(type, fixture.provider().getServerUrl(), "second-" + UUID.randomUUID());
         monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
-                second, fixture.repository().getNameWithOwner()));
+                second,
+                fixture.repository().getNameWithOwner(),
+                fixture.repository().getNativeId()));
         var context = new EventContext(
                 UUID.randomUUID(),
                 Instant.now().truncatedTo(ChronoUnit.MICROS),
@@ -480,7 +482,9 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         }
         var otherFixture = fixture(type);
         monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
-                otherFixture.workspace(), fixture.repository().getNameWithOwner()));
+                otherFixture.workspace(),
+                fixture.repository().getNameWithOwner(),
+                fixture.repository().getNativeId()));
         var otherRoot = writer.upsert(new ItemRegistration(
                 otherFixture.workspace().getId(),
                 ScmItemEvents.REPOSITORY,
@@ -1681,7 +1685,8 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         repository.setCreatedAt(Instant.now());
         repository.setUpdatedAt(Instant.now());
         repository = repositories.saveAndFlush(repository);
-        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, repository.getNameWithOwner()));
+        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
+                workspace, repository.getNameWithOwner(), repository.getNativeId()));
         var author = users.saveAndFlush(TestUserFactory.createUser(
                 ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE), slug + "-author", provider));
         return new Fixture(workspace, provider, repository, author);

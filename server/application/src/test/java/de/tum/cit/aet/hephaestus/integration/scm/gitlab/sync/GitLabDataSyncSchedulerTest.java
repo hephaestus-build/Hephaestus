@@ -89,6 +89,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     private static final long WORKSPACE_ID = 1L;
     private static final long CONNECTION_ID = 10L;
+    private static final long PROJECT_NATIVE_ID = 123L;
 
     @Mock
     private SyncTargetProvider syncTargetProvider;
@@ -459,11 +460,13 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         var originalRead = GitLabAdmissionTestFixtures.permit(projectAdmission, WORKSPACE_ID, stopped, 77L);
         Repository sibling = new Repository();
         sibling.setId(100L);
+        sibling.setNativeId(124L);
         sibling.setNameWithOwner("course/sibling");
         sibling.setProvider(stopped.getProvider());
         GitLabAdmissionTestFixtures.permit(projectAdmission, WORKSPACE_ID, sibling, 78L);
         var siblingTarget = SyncTargetTestBuilder.syncTarget()
                 .id(78L)
+                .nativeId(sibling.getNativeId())
                 .scopeId(WORKSPACE_ID)
                 .repositoryNameWithOwner(sibling.getNameWithOwner())
                 .build();
@@ -471,7 +474,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         when(syncTargetProvider.getSyncTargetsForScope(WORKSPACE_ID))
                 .thenReturn(List.of(session.syncTargets().getFirst(), siblingTarget));
         var siblingMetadata = mock(GitLabProjectResponse.class);
-        when(projectSyncService.fetchProject(WORKSPACE_ID, sibling.getNameWithOwner()))
+        when(projectSyncService.fetchProjectById(WORKSPACE_ID, sibling.getNativeId()))
                 .thenReturn(Optional.of(siblingMetadata));
         when(projectSyncService.persistProject(siblingMetadata, sibling.getProvider()))
                 .thenReturn(Optional.of(sibling));
@@ -526,7 +529,8 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         when(holder.getGroupSyncService()).thenReturn(groupSync);
         when(groupSync.syncGroupProjects(WORKSPACE_ID, "my-group", "https://gitlab.com"))
                 .thenReturn(GitLabSyncResult.completed(List.of(), 1, 0, 0));
-        when(projectSyncService.fetchProject(WORKSPACE_ID, "course/project")).thenReturn(Optional.empty());
+        when(projectSyncService.fetchProjectById(WORKSPACE_ID, PROJECT_NATIVE_ID))
+                .thenReturn(Optional.empty());
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).recordRepositoryUnavailable(WORKSPACE_ID, 77L);
         verify(repositoryRepository, never()).delete(any());
@@ -537,7 +541,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     @Test
     void shouldStopPublicationWhenMetadataFetchReportsAccessLoss() {
         prepareProject(mockHolder());
-        when(projectSyncService.fetchProject(WORKSPACE_ID, "course/project"))
+        when(projectSyncService.fetchProjectById(WORKSPACE_ID, PROJECT_NATIVE_ID))
                 .thenThrow(new RepositoryNotFoundOnGitProviderException("course/project"));
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).recordRepositoryUnavailable(WORKSPACE_ID, 77L);
@@ -553,7 +557,8 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         var subIssues = mock(GitLabSubIssueSyncService.class);
         when(holder.getCommitMergeRequestLinker()).thenReturn(linker);
         when(holder.getSubIssueSyncService()).thenReturn(subIssues);
-        when(projectSyncService.fetchProject(WORKSPACE_ID, "course/project")).thenReturn(Optional.empty());
+        when(projectSyncService.fetchProjectById(WORKSPACE_ID, PROJECT_NATIVE_ID))
+                .thenReturn(Optional.empty());
 
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
@@ -568,7 +573,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         prepareProject(holder);
         when(syncTargetProvider.deferUnavailableRepository(WORKSPACE_ID, 77L)).thenReturn(true);
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
-        verify(projectSyncService, never()).fetchProject(any(), any());
+        verify(projectSyncService, never()).fetchProjectById(anyLong(), anyLong());
         verify(syncTargetProvider, never()).clearRepositoryUnavailable(any(), any());
     }
 
@@ -594,7 +599,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     void shouldNotStartRepositoryBackoffForTransientMetadataFailures() {
         var holder = mockHolder();
         prepareProject(holder);
-        when(projectSyncService.fetchProject(WORKSPACE_ID, "course/project"))
+        when(projectSyncService.fetchProjectById(WORKSPACE_ID, PROJECT_NATIVE_ID))
                 .thenThrow(WebClientResponseException.create(
                         503, "Service Unavailable", HttpHeaders.EMPTY, new byte[0], null))
                 .thenThrow(WebClientResponseException.create(
@@ -628,11 +633,13 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         when(syncServiceHolderProvider.getIfAvailable()).thenReturn(holder);
         Repository project = new Repository();
         project.setId(99L);
+        project.setNativeId(PROJECT_NATIVE_ID);
         project.setNameWithOwner("course/project");
         GitLabAdmissionTestFixtures.permit(projectAdmission, WORKSPACE_ID, project, 77L);
         when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID)).thenReturn(List.of(project));
         var target = SyncTargetTestBuilder.syncTarget()
                 .id(77L)
+                .nativeId(PROJECT_NATIVE_ID)
                 .scopeId(WORKSPACE_ID)
                 .repositoryNameWithOwner("course/project")
                 .build();
@@ -651,7 +658,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         project.setProvider(TestEntities.gitProvider(100L, IdentityProviderType.GITLAB));
         var metadata = mock(GitLabProjectResponse.class);
         lenient()
-                .when(projectSyncService.fetchProject(WORKSPACE_ID, "course/project"))
+                .when(projectSyncService.fetchProjectById(WORKSPACE_ID, PROJECT_NATIVE_ID))
                 .thenReturn(Optional.of(metadata));
         lenient()
                 .when(projectSyncService.persistProject(metadata, project.getProvider()))

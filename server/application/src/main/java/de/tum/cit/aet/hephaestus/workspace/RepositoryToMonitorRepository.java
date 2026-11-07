@@ -127,7 +127,7 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
             nativeQuery = true)
     List<Long> findSourceRepositoryIds(@Param("workspaceId") Long workspaceId);
 
-    /** This workspace's monitors of the exact source repository, including monitors without a native id. */
+    /** This workspace's monitors of the exact source repository. */
     @Query(
             value = "SELECT rtm.* FROM repository_to_monitor rtm JOIN repository r ON"
                     + " r.name_with_owner = rtm.name_with_owner WHERE r.id = :repositoryId"
@@ -164,14 +164,6 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
 
     /** The workspace's monitor of the repository with the given provider-stable id; a workspace holds at most one. */
     Optional<RepositoryToMonitor> findOneByWorkspaceIdAndNativeId(Long workspaceId, Long nativeId);
-
-    /** A monitor at this path whose repository has not been resolved yet. */
-    Optional<RepositoryToMonitor> findByWorkspaceIdAndNameWithOwnerAndNativeIdIsNull(
-            Long workspaceId, String nameWithOwner);
-
-    /** Monitors at this path in any casing whose repository has not been resolved yet. */
-    List<RepositoryToMonitor> findByWorkspaceIdAndNameWithOwnerIgnoreCaseAndNativeIdIsNull(
-            Long workspaceId, String nameWithOwner);
 
     boolean existsByWorkspaceIdAndNativeIdAndIdNot(Long workspaceId, Long nativeId, Long id);
 

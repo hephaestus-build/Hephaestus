@@ -292,7 +292,7 @@ public class GitLabDeletionSweepService {
         for (Repository repository : repositories) {
             if (unavailableTargets.stream()
                     .anyMatch(target -> target.repositoryNameWithOwner().equals(repository.getNameWithOwner())
-                            || (target.nativeId() != null && target.nativeId().equals(repository.getNativeId())))) {
+                            || target.nativeId().equals(repository.getNativeId()))) {
                 skipped = true;
                 continue;
             }

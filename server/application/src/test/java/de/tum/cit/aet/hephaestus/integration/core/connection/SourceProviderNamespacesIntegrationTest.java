@@ -151,10 +151,10 @@ class SourceProviderNamespacesIntegrationTest extends BaseIntegrationTest {
         var first = activate(
                 IntegrationKind.GITLAB,
                 new ConnectionConfig.GitLabConfig(
-                        "HTTPS://" + host.toUpperCase(Locale.ROOT) + ":443/", null, null, Set.of(), null));
+                        "HTTPS://" + host.toUpperCase(Locale.ROOT) + ":443/", 42L, null, Set.of(), null));
         var second = activate(
                 IntegrationKind.GITLAB,
-                new ConnectionConfig.GitLabConfig("https://" + host + ":8443", null, null, Set.of(), null));
+                new ConnectionConfig.GitLabConfig("https://" + host + ":8443", 42L, null, Set.of(), null));
         var seed = new SchemaRowSeeder(jdbc);
         seed.insert(
                 "repository",

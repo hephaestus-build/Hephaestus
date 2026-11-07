@@ -174,16 +174,13 @@ public class GitHubDataSyncService {
 
     private Optional<Repository> fetchRepositoryMetadata(SyncTarget target, IdentityProvider provider) {
         Long nativeId = target.nativeId();
-        if (nativeId != null && syncTargetProvider.isRepositoryUnavailable(target.scopeId(), target.id())) {
+        if (syncTargetProvider.isRepositoryUnavailable(target.scopeId(), target.id())) {
             return fetchRepositoryMetadataById(target, provider, nativeId);
         }
         try {
             return repositorySyncService.syncRepository(
                     target.scopeId(), target.repositoryNameWithOwner(), provider, nativeId);
         } catch (RepositoryNotFoundOnGitProviderException | RepositoryIdentityMismatchException e) {
-            if (nativeId == null) {
-                throw e;
-            }
             return fetchRepositoryMetadataById(target, provider, nativeId);
         }
     }
@@ -220,13 +217,10 @@ public class GitHubDataSyncService {
                         "IdentityProvider not found for type=GITHUB, serverUrl=" + GITHUB_SERVER_URL));
 
         Long providerId = Objects.requireNonNull(provider.getId());
-        Repository repository = (syncTarget.nativeId() != null
-                        ? repositoryRepository.findByNativeIdAndProviderId(syncTarget.nativeId(), providerId)
-                        : repositoryRepository.findByNameWithOwnerAndProviderId(nameWithOwner, providerId))
+        Repository repository = repositoryRepository
+                .findByNativeIdAndProviderId(syncTarget.nativeId(), providerId)
                 .orElse(null);
-        if (syncTarget.nativeId() != null
-                && repository != null
-                && !Objects.equals(nameWithOwner, repository.getNameWithOwner())) {
+        if (repository != null && !Objects.equals(nameWithOwner, repository.getNameWithOwner())) {
             syncTargetProvider.reconcileSyncTargetIdentity(
                     syncTarget.id(), repository.getNativeId(), repository.getNameWithOwner());
         }

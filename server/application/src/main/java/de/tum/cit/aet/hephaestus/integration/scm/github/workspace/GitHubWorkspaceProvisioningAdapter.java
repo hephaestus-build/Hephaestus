@@ -174,10 +174,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
             repositoryMonitorService.removeRepositoryMonitorForInstallation(
                     installationId, repository.nameWithOwner(), repository.nativeId());
         }
-        log.info(
-                "Removed repositories from monitor: installationId={}, repoCount={}",
-                installationId,
-                repositories.size());
+        log.info("Handled repository removals: installationId={}, repoCount={}", installationId, repositories.size());
     }
 
     @Override

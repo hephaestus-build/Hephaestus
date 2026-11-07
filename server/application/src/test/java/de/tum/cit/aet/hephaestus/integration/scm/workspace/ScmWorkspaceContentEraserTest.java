@@ -85,6 +85,7 @@ class ScmWorkspaceContentEraserTest extends BaseUnitTest {
         List<RepositoryToMonitor> monitors = List.of(namesWithOwner).stream()
                 .map(name -> {
                     RepositoryToMonitor monitor = new RepositoryToMonitor();
+                    monitor.setNativeId(1L);
                     monitor.setNameWithOwner(name);
                     monitor.setWorkspace(workspace);
                     return monitor;

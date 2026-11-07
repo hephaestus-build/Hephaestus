@@ -155,8 +155,7 @@ class GitLabStoppedProjectServiceIntegrationTest extends BaseIntegrationTest {
 
         assertThat(stoppedProjects.getStoppedProjects(own.getId())).isEmpty();
         var exclusions = gitLabConfig(own).projectExclusions();
-        assertThat(exclusions.excludes(repository.getNativeId(), repository.getNameWithOwner()))
-                .isFalse();
+        assertThat(exclusions.excludes(repository.getNativeId())).isFalse();
         assertThat(exclusions.stopReceipt(repository.getNativeId())).isEmpty();
         assertThat(monitors.findByWorkspaceIdAndNameWithOwner(own.getId(), repository.getNameWithOwner()))
                 .isPresent();
@@ -188,9 +187,7 @@ class GitLabStoppedProjectServiceIntegrationTest extends BaseIntegrationTest {
 
         assertThat(active(own, root)).isFalse();
         assertThat(repositories.findById(repository.getId())).isEmpty();
-        assertThat(gitLabConfig(own)
-                        .projectExclusions()
-                        .excludes(repository.getNativeId(), repository.getNameWithOwner()))
+        assertThat(gitLabConfig(own).projectExclusions().excludes(repository.getNativeId()))
                 .isTrue();
         assertThat(stoppedProjects.getStoppedProjects(own.getId())).isEmpty();
     }
@@ -259,8 +256,7 @@ class GitLabStoppedProjectServiceIntegrationTest extends BaseIntegrationTest {
         assertThat(monitors.findByWorkspaceIdAndNameWithOwner(own.getId(), repository.getNameWithOwner()))
                 .isEmpty();
         var exclusions = gitLabConfig(own).projectExclusions();
-        assertThat(exclusions.excludes(repository.getNativeId(), repository.getNameWithOwner()))
-                .isTrue();
+        assertThat(exclusions.excludes(repository.getNativeId())).isTrue();
         assertThat(exclusions.stopReceipt(repository.getNativeId())).contains(stopReceipt);
         assertThat(receipt(own, root)).isEqualTo(stopReceipt);
         assertThat(active(own, root)).isTrue();
@@ -650,8 +646,8 @@ class GitLabStoppedProjectServiceIntegrationTest extends BaseIntegrationTest {
 
     /** Binds a monitor the way sync does and returns the workspace's repository item. */
     private long monitorAndIndex(Workspace workspace, Repository repository) {
-        var monitor = monitors.saveAndFlush(
-                WorkspaceTestFixtures.repositoryMonitor(workspace, repository.getNameWithOwner()));
+        var monitor = monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
+                workspace, repository.getNameWithOwner(), repository.getNativeId()));
         syncTargets.reconcileSyncTargetIdentity(
                 monitor.getId(), repository.getNativeId(), repository.getNameWithOwner());
         return Objects.requireNonNull(jdbc.queryForObject(

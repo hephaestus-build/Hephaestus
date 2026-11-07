@@ -282,20 +282,14 @@ class GitLabRouteAdmissionTest {
 
         @Test
         void shouldFollowThePathGitLabReportsNotTheOneAStaleRenameNames() {
-            when(repositoryRepository.findByNativeIdAndProviderId(PROJECT_A, PROVIDER_ID))
-                    .thenReturn(Optional.of(repository(PROJECT_A, GROUP + "/old")));
             GitLabProjectResponse current = reported(PROJECT_A, GROUP + "/sub/current");
             when(projectSync.fetchProjectById(WORKSPACE_ID, PROJECT_A)).thenReturn(Optional.of(current));
             Repository stored = repository(PROJECT_A, GROUP + "/sub/current");
+            when(repositoryRepository.findByNativeIdAndProviderId(PROJECT_A, PROVIDER_ID))
+                    .thenReturn(Optional.of(stored));
             when(projectSync.persistProject(current)).thenReturn(Optional.of(stored));
-            RepositoryToMonitor legacy = monitor(55L);
-            legacy.setNameWithOwner(GROUP + "/old");
-            when(monitors.findByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, GROUP + "/old"))
-                    .thenReturn(Optional.of(legacy));
 
             assertProjectAdmitted(projectEvent("project_rename", PROJECT_A, GROUP + "/stale"));
-            // The monitor learns the project's id where it is; the shared boundary moves it to the reported path.
-            verify(syncTargets).reconcileSyncTargetIdentity(55L, PROJECT_A, GROUP + "/old");
             verify(repositoryMonitors).monitorAllowed(workspace, List.of(stored));
         }
 
@@ -328,10 +322,9 @@ class GitLabRouteAdmissionTest {
 
         @Test
         void shouldOnlyStopMonitoringAProjectGitLabReportsElsewhereOrNotAtAll() {
-            when(repositoryRepository.findByNativeIdAndProviderId(PROJECT_A, PROVIDER_ID))
-                    .thenReturn(Optional.of(repository(PROJECT_A, GROUP + "/a")));
-            when(monitors.findByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, GROUP + "/a"))
-                    .thenReturn(Optional.of(monitor(56L, GROUP + "/a")));
+            var own = monitor(56L, GROUP + "/a");
+            own.setNativeId(PROJECT_A);
+            when(monitors.findByWorkspaceIdAndNativeId(WORKSPACE_ID, PROJECT_A)).thenReturn(List.of(own));
             when(projectSync.fetchProjectById(WORKSPACE_ID, PROJECT_A))
                     .thenReturn(Optional.of(reported(PROJECT_A, "elsewhere/a")))
                     .thenReturn(Optional.empty());
@@ -345,13 +338,9 @@ class GitLabRouteAdmissionTest {
         }
 
         @Test
-        void shouldLeaveAMonitorWithoutIdAloneWhenOnlyTheEventNamesItsPath() {
-            // This workspace's monitor predates native ids; the event claims another project used to live there.
-            when(monitors.findByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, GROUP + "/a"))
-                    .thenReturn(Optional.of(monitor(57L, GROUP + "/a")));
-            when(repositoryRepository.findByNativeIdAndProviderId(PROJECT_B, PROVIDER_ID))
-                    .thenReturn(Optional.empty())
-                    .thenReturn(Optional.of(repository(PROJECT_B, "other-group/b")));
+        void shouldKeepAnotherProjectsMonitorWhenOnlyTheEventNamesItsPath() {
+            var own = monitor(57L, GROUP + "/a");
+            own.setNativeId(PROJECT_A);
             when(projectSync.fetchProjectById(WORKSPACE_ID, PROJECT_B))
                     .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(reported(PROJECT_B, "other-group/b")));
@@ -608,6 +597,7 @@ class GitLabRouteAdmissionTest {
 
     private RepositoryToMonitor monitor(long id) {
         RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setNativeId(id);
         monitor.setId(id);
         originalMonitors.add(monitor);
         return monitor;

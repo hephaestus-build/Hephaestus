@@ -12,6 +12,9 @@ import org.jspecify.annotations.Nullable;
 public interface SelectedRepositoryVerifier {
     IntegrationKind kind();
 
+    /** Resolves the account or group with the supplied credential before its workspace exists. */
+    long resolveAccountId(String token, @Nullable String serverUrl, String accountLogin);
+
     /**
      * The provider's identity of every repository in {@code nativeIds}, in the given order. Each must be readable with
      * {@code token} and lie inside {@code accountLogin}. External lookups only, with no local write. One refused

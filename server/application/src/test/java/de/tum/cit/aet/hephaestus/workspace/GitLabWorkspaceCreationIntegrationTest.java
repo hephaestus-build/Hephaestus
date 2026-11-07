@@ -3,6 +3,10 @@ package de.tum.cit.aet.hephaestus.workspace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
@@ -17,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.connection.api.InitiateConnectionRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabPreflightService;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
@@ -32,6 +37,7 @@ import java.util.function.Consumer;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,11 +45,20 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.server.ResponseStatusException;
 
 @DisplayName("GitLab workspace creation integration")
 class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @MockitoSpyBean
+    private GitLabPreflightService fixtureGitLabGroups;
+
+    @BeforeEach
+    void confirmFixtureGroup() {
+        doReturn(42L).when(fixtureGitLabGroups).resolveAccountId(anyString(), any(), anyString());
+    }
 
     @BeforeAll
     static void declarePublicHosts() {
@@ -149,6 +164,24 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                         null,
                         null))
                 .exchange();
+    }
+
+    @Test
+    void shouldKeepNoWorkspaceWhenGitLabCannotConfirmTheGroupId() {
+        Consumer<HttpHeaders> caller = gitLabCaller("group-refused");
+        doThrow(new ResponseStatusException(
+                        HttpStatus.UNPROCESSABLE_CONTENT,
+                        "We could not verify the GitLab group ID. Check the group path and token access."))
+                .when(fixtureGitLabGroups)
+                .resolveAccountId(anyString(), any(), anyString());
+
+        postGitLabWorkspace(caller, "gitlab-group-refused", DEFAULT_INSTANCE)
+                .expectStatus()
+                .isEqualTo(422)
+                .expectBody(Void.class);
+
+        assertThat(workspaceRepository.findByWorkspaceSlug("gitlab-group-refused"))
+                .isEmpty();
     }
 
     @Test
@@ -295,6 +328,13 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
         Workspace persisted = workspaceRepository.findById(workspace.id()).orElseThrow();
         assertThat(persisted.getAccountLogin()).isEqualTo("my-group/my-project");
+        assertThat(connectionRepository
+                        .findActive(workspace.id(), IntegrationKind.GITLAB)
+                        .orElseThrow()
+                        .getConfig())
+                .isInstanceOfSatisfying(
+                        ConnectionConfig.GitLabConfig.class,
+                        config -> assertThat(config.gitlabGroupId()).isEqualTo(42L));
         // A request that names no selection follows every project of the group.
         assertThat(persisted.getRepositorySelection()).isEqualTo(RepositorySelection.ALL);
         User instanceActor = userRepository

@@ -2656,8 +2656,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .findById(Objects.requireNonNull(pull.getRepository()).getId())
                 .orElseThrow();
         var other = fixture(IdentityProviderType.GITLAB);
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(other.workspace(), repository.getNameWithOwner());
-        monitor.setNativeId(repository.getNativeId());
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(
+                other.workspace(), repository.getNameWithOwner(), repository.getNativeId());
         monitors.saveAndFlush(monitor);
         var holder = writer.upsert(new ItemRegistration(
                 other.workspace().getId(), ScmItemEvents.REPOSITORY, repository.getId(), null, null));
@@ -3676,8 +3676,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         repository.setCreatedAt(Instant.now());
         repository.setUpdatedAt(Instant.now());
         repository = repositories.saveAndFlush(repository);
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, repository.getNameWithOwner());
-        monitor.setNativeId(repository.getNativeId());
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(
+                workspace, repository.getNameWithOwner(), repository.getNativeId());
         monitors.saveAndFlush(monitor);
         var author = users.saveAndFlush(TestUserFactory.createUser(
                 ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE), slug + "-author", provider));

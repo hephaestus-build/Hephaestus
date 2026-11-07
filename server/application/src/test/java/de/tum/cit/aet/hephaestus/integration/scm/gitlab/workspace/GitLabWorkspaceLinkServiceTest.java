@@ -99,10 +99,8 @@ class GitLabWorkspaceLinkServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNotTakeAMonitorOfAnotherProjectAtTheSamePathForThisOne() {
+    void shouldRefuseARepositoryWithoutAMonitorForItsProviderId() {
         when(monitorRepository.findByWorkspaceIdAndNativeId(OWNER, 700L)).thenReturn(List.of());
-        when(monitorRepository.findByWorkspaceIdAndNameWithOwner(OWNER, PROJECT))
-                .thenReturn(Optional.of(monitor(701L)));
 
         assertThat(service.mayWriteRepository(OWNER, project)).isFalse();
     }

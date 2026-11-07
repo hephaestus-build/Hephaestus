@@ -170,8 +170,7 @@ public interface SyncTargetProvider
      * @param issueSyncCursor                     pagination cursor for resuming issue sync
      * @param pullRequestSyncCursor               pagination cursor for resuming PR sync
      * @param nativeId                            provider's stable numeric repository id (GitHub
-     *                                            {@code repository.id} / GitLab {@code project.id}), or
-     *                                            {@code null} for legacy/unresolved rows. Unlike
+     *                                            {@code repository.id} / GitLab {@code project.id}). Unlike
      *                                            {@code repositoryNameWithOwner} it never changes across a
      *                                            rename/transfer, so the sync engine uses it to re-key the
      *                                            monitor after a rename. A missing name alone is never
@@ -197,7 +196,7 @@ public interface SyncTargetProvider
             @Nullable Instant backfillLastRunAt,
             @Nullable String issueSyncCursor,
             @Nullable String pullRequestSyncCursor,
-            @Nullable Long nativeId) {
+            Long nativeId) {
         /** @return true if full sync has never run or is older than {@code staleThreshold} */
         public boolean needsFullSync(Instant staleThreshold) {
             return lastFullSyncAt == null || lastFullSyncAt.isBefore(staleThreshold);

@@ -71,7 +71,7 @@ public final class WorkspaceTestFixtures {
             GitLabWorkspaceBuilder builder,
             String serverUrl) {
         Workspace saved = workspaceRepository.save(builder.build());
-        ConnectionConfig.GitLabConfig cfg = new ConnectionConfig.GitLabConfig(serverUrl, null, null, Set.of(), null);
+        ConnectionConfig.GitLabConfig cfg = new ConnectionConfig.GitLabConfig(serverUrl, 42L, null, Set.of(), null);
         Connection connection = new Connection(saved, IntegrationKind.GITLAB, serverUrl, cfg);
         connection.setDisplayName(saved.getAccountLogin());
         ReflectionTestUtils.setField(connection, "state", IntegrationState.ACTIVE);
@@ -82,10 +82,11 @@ public final class WorkspaceTestFixtures {
     /**
      * Creates an unsaved repository monitor.
      */
-    public static RepositoryToMonitor repositoryMonitor(Workspace workspace, String nameWithOwner) {
+    public static RepositoryToMonitor repositoryMonitor(Workspace workspace, String nameWithOwner, long nativeId) {
         RepositoryToMonitor monitor = new RepositoryToMonitor();
         monitor.setWorkspace(workspace);
         monitor.setNameWithOwner(nameWithOwner);
+        monitor.setNativeId(nativeId);
         return monitor;
     }
 

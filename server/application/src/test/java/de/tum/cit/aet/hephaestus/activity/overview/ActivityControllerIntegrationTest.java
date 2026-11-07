@@ -473,6 +473,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             var sharedMonitor = new RepositoryToMonitor();
             sharedMonitor.setWorkspace(other);
             sharedMonitor.setNameWithOwner(monitored.getNameWithOwner());
+            sharedMonitor.setNativeId(monitored.getNativeId());
             sharedMonitor = repositoryToMonitorRepository.save(sharedMonitor);
             syncTargets.recordRepositoryUnavailable(other.getId(), sharedMonitor.getId());
             UUID otherEvent = UUID.randomUUID();
@@ -1487,7 +1488,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             boolean gitlab = provider.getType() == IdentityProviderType.GITLAB;
             IntegrationKind kind = gitlab ? IntegrationKind.GITLAB : IntegrationKind.GITHUB;
             ConnectionConfig config = gitlab
-                    ? new ConnectionConfig.GitLabConfig(provider.getServerUrl(), null, null, Set.of(), null)
+                    ? new ConnectionConfig.GitLabConfig(provider.getServerUrl(), 42L, null, Set.of(), null)
                     : new ConnectionConfig.GitHubAppConfig(
                             9302L, workspace.getAccountLogin(), provider.getServerUrl(), Set.of());
             retireScmSources();
@@ -2705,6 +2706,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             onGitLab.setProvider(ensureGitLabProvider());
             repositoryRepository.save(onGitLab);
             RepositoryToMonitor notSynced = new RepositoryToMonitor();
+            notSynced.setNativeId(987654321L);
             notSynced.setWorkspace(workspace);
             notSynced.setNameWithOwner("activity-org/not-synced");
             repositoryToMonitorRepository.save(notSynced);
@@ -3232,7 +3234,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                             workspace,
                             IntegrationKind.GITLAB,
                             "activity-gitlab",
-                            new ConnectionConfig.GitLabConfig(provider.getServerUrl(), null, null, Set.of(), null)));
+                            new ConnectionConfig.GitLabConfig(provider.getServerUrl(), 42L, null, Set.of(), null)));
                     connectionService.transition(
                             connection,
                             new ConnectionService.TransitionRequest(
@@ -3638,6 +3640,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         repository = repositoryRepository.save(repository);
         if (monitor) {
             RepositoryToMonitor monitorRow = new RepositoryToMonitor();
+            monitorRow.setNativeId(repository.getNativeId());
             monitorRow.setWorkspace(workspace);
             monitorRow.setNameWithOwner(nameWithOwner);
             repositoryToMonitorRepository.save(monitorRow);

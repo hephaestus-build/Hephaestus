@@ -430,19 +430,10 @@ public class GitLabDataSyncScheduler {
         }
         for (SyncTarget target : session.syncTargets()) {
             try {
-                Repository repo = null;
-                if (target.nativeId() != null) {
-                    repo = repositoryRepository
-                            .findByNativeIdAndProviderId(target.nativeId(), providerId)
-                            .orElse(null);
-                }
-                if (repo == null) {
-                    // A row with no captured id yet — resolve by (still-current) name to capture it.
-                    repo = repositoryRepository
-                            .findByNameWithOwnerAndProviderId(target.repositoryNameWithOwner(), providerId)
-                            .orElse(null);
-                }
-                if (repo != null && repo.getNativeId() != null) {
+                Repository repo = repositoryRepository
+                        .findByNativeIdAndProviderId(target.nativeId(), providerId)
+                        .orElse(null);
+                if (repo != null) {
                     syncTargetProvider.reconcileSyncTargetIdentity(
                             target.id(), repo.getNativeId(), repo.getNameWithOwner());
                 }
@@ -646,9 +637,7 @@ public class GitLabDataSyncScheduler {
 
             Instant metadataRequestedAt = Instant.now();
             try {
-                var metadata = repo.getNativeId() != null
-                        ? projectSyncService.fetchProjectById(session.scopeId(), repo.getNativeId())
-                        : projectSyncService.fetchProject(session.scopeId(), repo.getNameWithOwner());
+                var metadata = projectSyncService.fetchProjectById(session.scopeId(), repo.getNativeId());
                 if (!admission.current(read)) continue;
                 if (metadata.isEmpty()) {
                     syncTargetProvider.recordRepositoryUnavailable(session.scopeId(), rtmId);

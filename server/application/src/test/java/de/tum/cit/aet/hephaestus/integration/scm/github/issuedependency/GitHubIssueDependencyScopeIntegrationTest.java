@@ -130,8 +130,8 @@ class GitHubIssueDependencyScopeIntegrationTest extends BaseIntegrationTest {
     void shouldKeepScopeStubsOnGitHubWhenAnotherProviderHasTheMonitoredPath() {
         String target = owner + "/target";
         String siblingPath = owner + "/sibling";
-        monitor(target);
-        monitor(siblingPath);
+        monitor(target, nativeId);
+        monitor(siblingPath, nativeId + 1);
         var foreign = repository(gitlab, nativeId, target);
         var sibling = repository(github, nativeId + 1, siblingPath);
         var service = service(Map.of(
@@ -173,7 +173,7 @@ class GitHubIssueDependencyScopeIntegrationTest extends BaseIntegrationTest {
         String sourcePath = owner + "/source";
         String target = owner + "/foreign-blocker";
         String siblingPath = owner + "/known-blocker";
-        monitor(sourcePath);
+        monitor(sourcePath, nativeId);
         var source = repository(github, nativeId, sourcePath);
         var foreign = repository(gitlab, nativeId + 1, target);
         var sibling = repository(github, nativeId + 2, siblingPath);
@@ -212,7 +212,7 @@ class GitHubIssueDependencyScopeIntegrationTest extends BaseIntegrationTest {
     void shouldSelectGitHubBlockerWhenAnotherProviderHasTheSamePath() {
         String sourcePath = owner + "/source";
         String target = owner + "/blocker";
-        monitor(sourcePath);
+        monitor(sourcePath, nativeId);
         var source = repository(github, nativeId, sourcePath);
         var foreign = repository(gitlab, nativeId + 1, target);
         var correct = repository(github, nativeId + 1, target);
@@ -244,8 +244,8 @@ class GitHubIssueDependencyScopeIntegrationTest extends BaseIntegrationTest {
     void shouldReconcileOnlyTheGitHubIssueWhenItsNativeIdMatchesForeignIssuePk(IdentityProviderType collisionProvider) {
         String targetPath = owner + "/target";
         String siblingPath = owner + "/sibling";
-        monitor(targetPath);
-        monitor(siblingPath);
+        monitor(targetPath, nativeId + 1);
+        monitor(siblingPath, nativeId + 2);
         var foreignRepository = repository(
                 collisionProvider == IdentityProviderType.GITHUB ? github : gitlab, nativeId, owner + "/foreign");
         var targetRepository = repository(github, nativeId + 1, targetPath);
@@ -294,7 +294,7 @@ class GitHubIssueDependencyScopeIntegrationTest extends BaseIntegrationTest {
         String sourcePath = owner + "/source";
         String blockerPath = owner + "/blocker";
         String siblingPath = owner + "/sibling-blocker";
-        monitor(sourcePath);
+        monitor(sourcePath, nativeId);
         var sourceRepository = repository(github, nativeId, sourcePath);
         var foreignRepository = repository(
                 collisionProvider == IdentityProviderType.GITHUB ? github : gitlab, nativeId + 1, owner + "/foreign");
@@ -357,8 +357,8 @@ class GitHubIssueDependencyScopeIntegrationTest extends BaseIntegrationTest {
                         .toList()));
     }
 
-    private void monitor(String path) {
-        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, path));
+    private void monitor(String path, long repositoryNativeId) {
+        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, path, repositoryNativeId));
     }
 
     private Repository repository(IdentityProvider provider, long id, String path) {

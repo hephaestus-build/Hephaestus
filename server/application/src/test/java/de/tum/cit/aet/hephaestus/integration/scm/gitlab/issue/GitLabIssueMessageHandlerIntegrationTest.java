@@ -792,8 +792,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         workspace.build().setPublicActivityEnabled(true);
         savedWorkspace = WorkspaceTestFixtures.persistGitLabWorkspace(
                 workspaceRepository, connectionRepository, workspace, "https://gitlab.lrz.de");
-        repositoryMonitors.saveAndFlush(
-                WorkspaceTestFixtures.repositoryMonitor(savedWorkspace, FIXTURE_REPO_FULL_NAME));
+        repositoryMonitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
+                savedWorkspace, FIXTURE_REPO_FULL_NAME, savedRepo.getNativeId()));
     }
 
     private static long persistedId(IdentityProvider provider) {

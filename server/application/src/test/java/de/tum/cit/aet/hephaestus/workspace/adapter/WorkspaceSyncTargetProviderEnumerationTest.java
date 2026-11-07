@@ -43,7 +43,7 @@ import org.springframework.context.ApplicationEventPublisher;
 class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
 
     private static final ConnectionConfig.GitLabConfig GITLAB_CONFIG =
-            new ConnectionConfig.GitLabConfig("https://gitlab.example.com", null, null, Set.of(), null);
+            new ConnectionConfig.GitLabConfig("https://gitlab.example.com", 42L, null, Set.of(), null);
 
     @Mock
     private WorkspaceRepository workspaceRepository;
@@ -86,6 +86,7 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
         workspace.setDisplayName("Workspace " + id);
         workspace.setAccountLogin("org-" + id);
         RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setNativeId(id);
         monitor.setId(id * 10);
         monitor.setNameWithOwner("org-" + id + "/repo");
         monitor.setWorkspace(workspace);

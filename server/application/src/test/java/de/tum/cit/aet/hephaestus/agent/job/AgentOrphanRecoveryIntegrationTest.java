@@ -801,8 +801,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         repository.setCreatedAt(now);
         repository.setUpdatedAt(now);
         repository = privateRepositories.saveAndFlush(repository);
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, repository.getNameWithOwner());
-        monitor.setNativeId(repository.getNativeId());
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(
+                workspace, repository.getNameWithOwner(), repository.getNativeId());
         privateMonitors.saveAndFlush(monitor);
         var pull = new PullRequest();
         pull.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));

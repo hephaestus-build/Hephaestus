@@ -23,7 +23,6 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -83,7 +82,7 @@ class WorkspaceSyncTargetProviderReconcileTest extends BaseUnitTest {
                 new SimpleMeterRegistry());
     }
 
-    private RepositoryToMonitor monitor(@Nullable Long nativeId, String nameWithOwner) {
+    private RepositoryToMonitor monitor(Long nativeId, String nameWithOwner) {
         RepositoryToMonitor rtm = new RepositoryToMonitor();
         rtm.setNativeId(nativeId);
         rtm.setNameWithOwner(nameWithOwner);
@@ -108,20 +107,6 @@ class WorkspaceSyncTargetProviderReconcileTest extends BaseUnitTest {
         assertThat(rtm.getNameWithOwner()).isEqualTo(NEW_NAME);
         verify(repositoryToMonitorRepository).saveAndFlush(rtm);
         verify(natsConsumer).updateScopeConsumer(WORKSPACE_ID);
-    }
-
-    @Test
-    void shouldCaptureNativeIdForLegacyRowWithoutRenamingWhenNameUnchanged() {
-        RepositoryToMonitor rtm = monitor(null, OLD_NAME);
-        when(repositoryToMonitorRepository.findById(SYNC_TARGET_ID)).thenReturn(Optional.of(rtm));
-
-        provider.reconcileSyncTargetIdentity(SYNC_TARGET_ID, NATIVE_ID, OLD_NAME);
-
-        assertThat(rtm.getNativeId()).isEqualTo(NATIVE_ID);
-        assertThat(rtm.getNameWithOwner()).isEqualTo(OLD_NAME);
-        verify(repositoryToMonitorRepository).saveAndFlush(rtm);
-        // Name did not move, so no consumer rebuild.
-        verify(natsConsumerService, never()).ifAvailable(any());
     }
 
     @Test

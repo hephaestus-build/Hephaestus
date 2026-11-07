@@ -173,8 +173,7 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
                 INSERT INTO repository(native_id,provider_id,name,name_with_owner,is_private,is_archived,is_disabled,html_url,pushed_at,visibility)
                 VALUES (?,?,'repo',?,false,false,false,'https://example.com/repo',now(),'PUBLIC') RETURNING id
                 """, Long.class, base, providerId, name));
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, name);
-        monitor.setNativeId(base);
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, name, base);
         monitorId = Objects.requireNonNull(monitors.saveAndFlush(monitor).getId());
 
         when(clients.forScope(workspaceId)).thenReturn(client);

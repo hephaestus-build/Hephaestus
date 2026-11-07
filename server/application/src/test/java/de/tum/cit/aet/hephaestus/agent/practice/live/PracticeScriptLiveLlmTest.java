@@ -666,8 +666,8 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         repository.setDefaultBranch("main");
         repository.setVisibility(Repository.Visibility.PUBLIC);
         repository = repositories.save(repository);
-        var monitor = WorkspaceTestFixtures.repositoryMonitor(workspace, repository.getNameWithOwner());
-        monitor.setNativeId(repository.getNativeId());
+        var monitor = WorkspaceTestFixtures.repositoryMonitor(
+                workspace, repository.getNameWithOwner(), repository.getNativeId());
         monitors.saveAndFlush(monitor);
         Instant now = Instant.now();
         pullRequests.upsertCore(

@@ -319,6 +319,43 @@ public class GitLabPreflightService implements SelectedRepositoryVerifier {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, "The cursor is not valid.", cause);
     }
 
+    @Override
+    public long resolveAccountId(String token, @Nullable String serverUrl, String accountLogin) {
+        String resolvedUrl = instance.require(serverUrl);
+        try {
+            GitLabGroupResponse group = endpoints
+                    .clientFor(resolvedUrl)
+                    .get()
+                    .uri(resolvedUrl + "/api/v4/groups/{groupPath}", accountLogin)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .retrieve()
+                    .bodyToMono(GitLabGroupResponse.class)
+                    .block(REQUEST_TIMEOUT);
+            if (group == null
+                    || group.id() == null
+                    || group.id() <= 0
+                    || !accountLogin.equalsIgnoreCase(group.fullPath())) {
+                throw new ResponseStatusException(
+                        HttpStatus.UNPROCESSABLE_CONTENT,
+                        "We could not verify the GitLab group ID. Check the group path and token access.");
+            }
+            return group.id();
+        } catch (ResponseStatusException e) {
+            throw e;
+        } catch (WebClientResponseException e) {
+            int status = e.getStatusCode().value();
+            throw new ResponseStatusException(
+                    status == 401 || status == 403 || status == 404
+                            ? HttpStatus.UNPROCESSABLE_CONTENT
+                            : HttpStatus.BAD_GATEWAY,
+                    "We could not verify the GitLab group ID. Check the group path and token access.",
+                    e);
+        } catch (RuntimeException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY, "We could not reach GitLab to verify the group ID. Try again.", e);
+        }
+    }
+
     /**
      * Reads each selected project with the PAT at the default instance and keeps GitLab's identity for it. The whole
      * check, all projects together, is bounded by one request timeout.

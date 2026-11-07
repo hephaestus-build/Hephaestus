@@ -49,7 +49,7 @@ public class GitLabWorkspaceLinkService {
     public boolean mayWriteRepository(long scopeId, Repository repository) {
         String path = repository.getNameWithOwner();
         Long providerId = repository.getProvider().getId();
-        if (path == null || providerId == null || !monitors(scopeId, repository, path)) {
+        if (path == null || providerId == null || !monitors(scopeId, repository)) {
             return false;
         }
         return workspaceRepository
@@ -71,20 +71,11 @@ public class GitLabWorkspaceLinkService {
                 .isPresent();
     }
 
-    /** A monitor at the same path that records another project's native id is another project. */
-    private boolean monitors(long scopeId, Repository repository, String path) {
-        Long nativeId = repository.getNativeId();
-        if (nativeId != null
-                && !monitorRepository
-                        .findByWorkspaceIdAndNativeId(scopeId, nativeId)
-                        .isEmpty()) {
-            return true;
-        }
-        return monitorRepository
-                .findByWorkspaceIdAndNameWithOwner(scopeId, path)
-                .filter(monitor ->
-                        monitor.getNativeId() == null || monitor.getNativeId().equals(nativeId))
-                .isPresent();
+    /** A monitor identifies the project by its provider ID. */
+    private boolean monitors(long scopeId, Repository repository) {
+        return !monitorRepository
+                .findByWorkspaceIdAndNativeId(scopeId, repository.getNativeId())
+                .isEmpty();
     }
 
     /**

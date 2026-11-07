@@ -649,9 +649,10 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     /** One review event by {@code actor} in a connected repository of the viewed workspace. */
     private void recordReview(User actor) {
         UUID id = UUID.randomUUID();
+        long nativeId = Integer.toUnsignedLong(id.hashCode()) + 1;
         Repository repository = new Repository();
         repository.setProvider(actor.getProvider());
-        repository.setNativeId(id.getMostSignificantBits());
+        repository.setNativeId(nativeId);
         repository.setName("reviews-" + id);
         repository.setNameWithOwner("acme/" + repository.getName());
         repository.setHtmlUrl("https://example.com/" + repository.getNameWithOwner());
@@ -660,6 +661,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
         RepositoryToMonitor monitor = new RepositoryToMonitor();
         monitor.setWorkspace(workspace);
         monitor.setNameWithOwner(repository.getNameWithOwner());
+        monitor.setNativeId(repository.getNativeId());
         monitoredRepositories.save(monitor);
         activityEvents.insertIfAbsent(
                 id,
@@ -670,7 +672,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 workspace.getId(),
                 repository.getId(),
                 ActivityTargetType.REVIEW.getValue(),
-                id.getMostSignificantBits());
+                nativeId);
     }
 
     private void persistGuidedPractice(Workspace ownerWorkspace) {

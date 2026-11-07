@@ -274,6 +274,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
             RepositoryToMonitor m = new RepositoryToMonitor();
             ReflectionTestUtils.setField(m, "id", id);
             m.setNameWithOwner(nameWithOwner);
+            m.setNativeId(id);
             return m;
         }
 
@@ -428,6 +429,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
             RepositoryToMonitor monitor = new RepositoryToMonitor();
             ReflectionTestUtils.setField(monitor, "id", id);
             monitor.setNameWithOwner(nameWithOwner);
+            monitor.setNativeId(id);
             return monitor;
         }
     }

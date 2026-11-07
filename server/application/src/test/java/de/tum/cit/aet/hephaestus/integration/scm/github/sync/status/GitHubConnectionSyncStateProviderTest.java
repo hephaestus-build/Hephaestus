@@ -249,7 +249,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
         @Test
         void backfillEnabledAllComplete_stateIsCompleteAndPercentIsFull() {
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
-            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-a");
+            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-a", 100L);
             rtm.setId(500L);
             rtm.setIssueBackfillHighWaterMark(100);
             rtm.setIssueBackfillCheckpoint(0);
@@ -267,7 +267,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
         @Test
         void backfillEnabledPartialProgress_stateIsInProgressWithCoarsePercent() {
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
-            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-a");
+            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-a", 100L);
             rtm.setId(500L);
             rtm.setIssueBackfillHighWaterMark(100);
             rtm.setIssueBackfillCheckpoint(25);
@@ -298,7 +298,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void mapsRepositoryToMonitor_withItemCountFromGroupedQuery() {
-            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-a");
+            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-a", 100L);
             rtm.setId(500L);
             rtm.setRecentSyncError("Issue sync: ABORTED_ERROR");
             rtm.setHistoricalBackfillSyncError("Historical issue backfill aborted");
@@ -334,7 +334,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void repositoryPendingInitialSync_stateReflectsPending() {
-            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-b");
+            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-b", 101L);
             rtm.setId(501L);
             when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(rtm));
             when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID)).thenReturn(List.of());
@@ -350,7 +350,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void perEntityClassBreakdown_carriesAllSixClassesAndRollsUpToItemCount() {
-            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-a");
+            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-a", 100L);
             rtm.setId(500L);
             rtm.setIssuesSyncedAt(Instant.now().minusSeconds(60));
             rtm.setPullRequestsSyncedAt(Instant.now().minusSeconds(30));
@@ -385,7 +385,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
         void issuesStalledWhilePullRequestsFresh_watermarksAreReportedPerClassNotCollapsed() {
             Instant issuesSyncedAt = Instant.now().minus(Duration.ofDays(4));
             Instant prsSyncedAt = Instant.now().minusSeconds(30);
-            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-a");
+            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-a", 100L);
             rtm.setId(500L);
             rtm.setIssuesSyncedAt(issuesSyncedAt);
             rtm.setPullRequestsSyncedAt(prsSyncedAt);
@@ -422,7 +422,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void monitorWithoutLocalRepositoryRow_reportsNoBreakdownRatherThanZeroes() {
-            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-b");
+            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-b", 101L);
             rtm.setId(501L);
             when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(rtm));
             when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID)).thenReturn(List.of());
@@ -438,7 +438,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void backfillInProgress_percentReflectsRemainingAgainstHighWaterMark() {
-            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-c");
+            RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-c", 102L);
             rtm.setId(502L);
             rtm.setIssuesSyncedAt(Instant.now());
             rtm.setPullRequestsSyncedAt(Instant.now());

@@ -83,7 +83,7 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
         ResponseSpec responseSpec = mock(ResponseSpec.class);
 
         when(mockWebClient.get()).thenReturn((RequestHeadersUriSpec) uriSpec);
-        when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
+        lenient().when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
         lenient().when(uriSpec.uri(anyString(), any(Object.class))).thenReturn((RequestHeadersSpec) headersSpec);
         when(headersSpec.header(anyString(), anyString())).thenReturn((RequestHeadersSpec) headersSpec);
         lenient().doReturn(headersSpec).when(headersSpec).attribute(anyString(), any());
@@ -99,13 +99,27 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
         ResponseSpec responseSpec = mock(ResponseSpec.class);
 
         when(mockWebClient.get()).thenReturn((RequestHeadersUriSpec) uriSpec);
-        when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
+        lenient().when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
         lenient().when(uriSpec.uri(anyString(), any(Object.class))).thenReturn((RequestHeadersSpec) headersSpec);
         when(headersSpec.header(anyString(), anyString())).thenReturn((RequestHeadersSpec) headersSpec);
         lenient().doReturn(headersSpec).when(headersSpec).attribute(anyString(), any());
         when(headersSpec.retrieve()).thenReturn(responseSpec);
         lenient().when(responseSpec.bodyToMono(any(Class.class))).thenReturn(Mono.error(exception));
         lenient().when(responseSpec.bodyToFlux(any(Class.class))).thenReturn(Flux.error(exception));
+    }
+
+    @Test
+    void shouldResolveTheNativeGroupIdFromGitLabBeforeWorkspaceCreation() {
+        mockGetRequest(new GitLabPreflightService.GitLabGroupResponse(42L, "Group", "my-group", null, null));
+        assertThat(preflightService.resolveAccountId("token", null, "my-group")).isEqualTo(42L);
+    }
+
+    @Test
+    void shouldRefuseAGroupResponseThatNamesAnotherGroup() {
+        mockGetRequest(new GitLabPreflightService.GitLabGroupResponse(42L, "Other", "other-group", null, null));
+        assertThatThrownBy(() -> preflightService.resolveAccountId("token", null, "my-group"))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Check the group path and token access");
     }
 
     @Nested
@@ -183,7 +197,7 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
             ResponseSpec responseSpec = mock(ResponseSpec.class);
 
             when(mockWebClient.get()).thenReturn((RequestHeadersUriSpec) uriSpec);
-            when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
+            lenient().when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
             when(headersSpec.header(anyString(), anyString())).thenReturn((RequestHeadersSpec) headersSpec);
             lenient().doReturn(headersSpec).when(headersSpec).attribute(anyString(), any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
@@ -203,7 +217,7 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
             ResponseSpec responseSpec = mock(ResponseSpec.class);
 
             when(mockWebClient.get()).thenReturn((RequestHeadersUriSpec) uriSpec);
-            when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
+            lenient().when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
             when(headersSpec.header(anyString(), anyString())).thenReturn((RequestHeadersSpec) headersSpec);
             lenient().doReturn(headersSpec).when(headersSpec).attribute(anyString(), any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);

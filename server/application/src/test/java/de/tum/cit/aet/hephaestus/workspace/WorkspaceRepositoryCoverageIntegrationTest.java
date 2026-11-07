@@ -232,24 +232,6 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void monitorWithoutAnIdAdoptsTheListedRepositoryAtItsPath() {
-        Workspace workspace = persistWorkspace(RepositorySelection.ALL);
-        RepositoryToMonitor monitor =
-                repositoryToMonitorRepository.saveAndFlush(buildMonitor(workspace, "HephaestusTest/Legacy-Case"));
-        repositoryEnumerator.returns(List.of(snapshot(79L, "HephaestusTest/legacy-case", "legacy-case", false)));
-
-        workspaceRepositoryMonitorService.ensureAllInstallationRepositoriesCovered(INSTALLATION_ID, null, true);
-
-        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
-                .singleElement()
-                .satisfies(adopted -> {
-                    assertThat(adopted.getId()).isEqualTo(monitor.getId());
-                    assertThat(adopted.getNativeId()).isEqualTo(79L);
-                    assertThat(adopted.getNameWithOwner()).isEqualTo("HephaestusTest/legacy-case");
-                });
-    }
-
-    @Test
     void pathMirroredForAnotherRepositoryIsNeitherTakenOverNorMonitored() {
         Workspace workspace = persistWorkspace(RepositorySelection.ALL);
         Repository holder = persistGitHubRepository(85L, "HephaestusTest/taken");
@@ -292,6 +274,20 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldKeepTheMonitorAndRepositoryWhenAnInstallationRemovalOmitsItsNativeId() {
+        Workspace workspace = persistWorkspace(RepositorySelection.SELECTED);
+        Repository mirror = persistGitHubRepository(84L, "HephaestusTest/kept");
+        RepositoryToMonitor monitor = monitorWithScope(workspace, "HephaestusTest/kept", 84L);
+
+        assertThat(workspaceRepositoryMonitorService.removeRepositoryMonitorForInstallation(
+                        INSTALLATION_ID, "HephaestusTest/kept", null))
+                .isEmpty();
+
+        assertThat(repositoryToMonitorRepository.findById(monitor.getId())).isPresent();
+        assertThat(repositoryRepository.findById(mirror.getId())).isPresent();
+    }
+
+    @Test
     void repositoryRemovalNamesTheMonitorByItsId() {
         Workspace workspace = persistWorkspace(RepositorySelection.SELECTED);
         RepositoryToMonitor renamedAway = buildMonitor(workspace, "HephaestusTest/stale-name");
@@ -331,7 +327,7 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
                 .hasValueSatisfying(
                         monitor -> assertThat(monitor.getNameWithOwner()).isEqualTo("acme/other"));
         assertThat(repositoryToMonitorRepository.findById(unresolved.getId()))
-                .hasValueSatisfying(monitor -> assertThat(monitor.getNativeId()).isNull());
+                .hasValueSatisfying(monitor -> assertThat(monitor.getNativeId()).isEqualTo(99999L));
         assertThat(repositoryToMonitorRepository.findById(holder.getId()))
                 .hasValueSatisfying(monitor -> assertThat(monitor.getNativeId()).isEqualTo(90L));
     }
@@ -693,7 +689,7 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
     }
 
     private RepositoryToMonitor buildMonitor(Workspace workspace, String nameWithOwner) {
-        return WorkspaceTestFixtures.repositoryMonitor(workspace, nameWithOwner);
+        return WorkspaceTestFixtures.repositoryMonitor(workspace, nameWithOwner, 99999L);
     }
 
     private InstallationRepositoryEnumerator.InstallationRepository snapshot(

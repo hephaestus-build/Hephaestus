@@ -19,7 +19,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceDataSyncTrigger;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.events.RepositoryAboutToBeDeletedEvent;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
@@ -232,21 +231,10 @@ public class WorkspaceRepositoryMonitorService {
             List<Long> repositoryIds =
                     repositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(repositoryToMonitor.getId());
             if (gitLab) {
-                Long stoppedNativeId = repositoryToMonitor.getNativeId() != null
-                        ? repositoryToMonitor.getNativeId()
-                        : repositoryIds.size() == 1
-                                ? repositoryRepository
-                                        .findById(repositoryIds.getFirst())
-                                        .map(Repository::getNativeId)
-                                        .orElse(null)
-                                : null;
-                String stoppedPath = repositoryToMonitor.getNameWithOwner();
+                Long stoppedNativeId = repositoryToMonitor.getNativeId();
                 if (connectionService
                         .updateGitLabProjectExclusions(
-                                workspace.getId(),
-                                exclusions -> stoppedNativeId == null
-                                        ? exclusions.exclude(null, stoppedPath)
-                                        : exclusions.stop(stoppedNativeId, stoppedPath, UUID.randomUUID()))
+                                workspace.getId(), exclusions -> exclusions.stop(stoppedNativeId, UUID.randomUUID()))
                         .isEmpty()) {
                     throw new RepositoryProviderNotConnectedException(slug);
                 }
@@ -283,21 +271,15 @@ public class WorkspaceRepositoryMonitorService {
         }
         Workspace workspace = workspaceOpt.get();
         Long workspaceId = workspace.getId();
-        // The id names the removed repository even after a rename; the path alone may name a repository reusing it.
-        var monitorOpt = expectedNativeId == null
-                ? repositoryToMonitorRepository.findByWorkspaceIdAndNameWithOwner(workspaceId, nameWithOwner)
-                : repositoryToMonitorRepository
-                        .findOneByWorkspaceIdAndNativeId(workspaceId, expectedNativeId)
-                        .or(() -> repositoryToMonitorRepository
-                                .findByWorkspaceIdAndNameWithOwnerAndNativeIdIsNull(workspaceId, nameWithOwner)
-                                .filter(monitor ->
-                                        repositoryToMonitorRepository
-                                                .findSourceRepositoryIdsOfMonitor(monitor.getId())
-                                                .stream()
-                                                .map(repositoryRepository::findById)
-                                                .flatMap(Optional::stream)
-                                                .anyMatch(repository ->
-                                                        expectedNativeId.equals(repository.getNativeId()))));
+        // A path can have been reused since the event. An omitted ID cannot authorize removal.
+        if (expectedNativeId == null) {
+            log.warn(
+                    "Skipped repository removal: reason=missingNativeId, installationId={}, workspaceId={}",
+                    installationId,
+                    workspaceId);
+            return Optional.empty();
+        }
+        var monitorOpt = repositoryToMonitorRepository.findOneByWorkspaceIdAndNativeId(workspaceId, expectedNativeId);
         if (monitorOpt.isEmpty()) {
             log.debug("Skipped repository removal: reason=notMonitored, workspaceId={}", workspaceId);
             return workspaceOpt;
@@ -420,11 +402,6 @@ public class WorkspaceRepositoryMonitorService {
         Set<Long> desiredIds = allowedSnapshots.stream()
                 .map(InstallationRepositoryEnumerator.InstallationRepository::id)
                 .collect(Collectors.toSet());
-        Set<String> desiredNames = allowedSnapshots.stream()
-                .map(snapshot -> snapshot.nameWithOwner())
-                .filter(name -> !StringUtils.isBlank(name))
-                .map(name -> name.toLowerCase(Locale.ENGLISH))
-                .collect(Collectors.toSet());
         Set<String> protectedNames = protectedRepositories == null
                 ? Set.of()
                 : protectedRepositories.stream()
@@ -444,9 +421,7 @@ public class WorkspaceRepositoryMonitorService {
                 .filter(monitor -> !StringUtils.isBlank(monitor.getNameWithOwner()))
                 .filter(monitor -> {
                     String name = monitor.getNameWithOwner().toLowerCase(Locale.ENGLISH);
-                    boolean listed = monitor.getNativeId() != null
-                            ? desiredIds.contains(monitor.getNativeId())
-                            : desiredNames.contains(name);
+                    boolean listed = desiredIds.contains(monitor.getNativeId());
                     return !listed && !protectedNames.contains(name);
                 })
                 .forEach(monitor -> removeMonitorAndOrphanedRepositories(workspace, monitor));
@@ -560,28 +535,12 @@ public class WorkspaceRepositoryMonitorService {
 
     /**
      * Callers hold the workspace lock and have recorded the snapshot on the mirrored repository. The
-     * provider-stable id finds the monitor; GitHub paths are case-insensitive, so an unresolved monitor at the
-     * path in any casing is adopted. The monitor takes the installation's path when no other monitor holds it.
+     * provider-stable id finds the monitor. The monitor takes the installation's path when no other monitor holds it.
      */
     private void ensureRepositoryMonitorInternal(
             Workspace workspace, long nativeId, String nameWithOwner, boolean deferSync) {
         Long workspaceId = workspace.getId();
         var existing = repositoryToMonitorRepository.findOneByWorkspaceIdAndNativeId(workspaceId, nativeId);
-        if (existing.isEmpty()) {
-            List<RepositoryToMonitor> unresolved =
-                    repositoryToMonitorRepository.findByWorkspaceIdAndNameWithOwnerIgnoreCaseAndNativeIdIsNull(
-                            workspaceId, nameWithOwner);
-            if (unresolved.size() > 1) {
-                log.warn(
-                        "Skipped repository monitor: reason=ambiguousUnresolvedMonitors, workspaceId={},"
-                                + " syncTargetIds={}, nativeId={}",
-                        workspaceId,
-                        unresolved.stream().map(RepositoryToMonitor::getId).toList(),
-                        nativeId);
-                return;
-            }
-            existing = unresolved.isEmpty() ? Optional.empty() : Optional.of(unresolved.getFirst());
-        }
         if (existing.isEmpty()) {
             RepositoryToMonitor monitor = new RepositoryToMonitor();
             monitor.setNameWithOwner(nameWithOwner);
@@ -592,10 +551,6 @@ public class WorkspaceRepositoryMonitorService {
         }
 
         RepositoryToMonitor monitor = existing.get();
-        boolean adopted = monitor.getNativeId() == null;
-        if (adopted) {
-            monitor.setNativeId(nativeId);
-        }
         boolean renamed = !nameWithOwner.equals(monitor.getNameWithOwner());
         if (renamed
                 && repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwnerAndIdNot(
@@ -619,7 +574,7 @@ public class WorkspaceRepositoryMonitorService {
             monitor.setNameWithOwner(nameWithOwner);
             refreshScopeConsumerAfterCommit(workspace);
         }
-        if (adopted || renamed) {
+        if (renamed) {
             repositoryToMonitorRepository.saveAndFlush(monitor);
         }
         eventPublisher.publishEvent(new RepositoryMonitoringChangedEvent(

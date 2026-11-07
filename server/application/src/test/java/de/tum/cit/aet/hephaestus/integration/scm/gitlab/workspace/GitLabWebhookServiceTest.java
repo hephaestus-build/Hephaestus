@@ -27,7 +27,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.GroupInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitLabTokenLifecycleService;
@@ -136,7 +135,6 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     /** The group's hooks as GitLab keeps them: listed, fetched, created and deleted through the client. */
     private void fakeGroupHooks() {
         lenient().when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-        lenient().when(webhookClient.lookupGroup(1L, "my-org")).thenReturn(new GroupInfo(42L, "My Org", "my-org"));
         lenient().when(webhookClient.listGroupWebhooks(1L, 42L)).thenAnswer(inv -> List.copyOf(hooks));
         lenient()
                 .when(webhookClient.getGroupWebhook(eq(1L), eq(42L), anyLong()))
@@ -189,7 +187,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         // Default: workspace is a GitLab workspace with a token. Tests that need
         // to flip this out (non-GitLab, missing token) override per-test.
-        bindGitLabConfig(1L, new ConnectionConfig.GitLabConfig("https://gitlab.com", null, null, Set.of(), null));
+        bindGitLabConfig(1L, new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, null, Set.of(), null));
         gitLabBearerTokens.put(1L, new BearerToken("glpat-test-token", null));
 
         // lenient() — each Nested test exercises a different code path, so a shared setUp stub may go
@@ -435,7 +433,6 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         @Test
         void shouldReportRegistrationStatusWithoutLoggingTheProviderBody() {
             when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-            when(webhookClient.lookupGroup(1L, "my-org")).thenReturn(new GroupInfo(42L, "My Org", "my-org"));
             when(webhookClient.listGroupWebhooks(1L, 42L)).thenReturn(List.of());
             when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
                     .thenThrow(WebClientResponseException.create(
@@ -482,7 +479,6 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         @Test
         void shouldReturnFailedOn403() {
             when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-            when(webhookClient.lookupGroup(1L, "my-org")).thenReturn(new GroupInfo(42L, "My Org", "my-org"));
             when(webhookClient.listGroupWebhooks(1L, 42L)).thenReturn(List.of());
             when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
                     .thenThrow(WebClientResponseException.create(
