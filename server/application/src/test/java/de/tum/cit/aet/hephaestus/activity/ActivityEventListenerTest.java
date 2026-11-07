@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -45,6 +46,9 @@ class ActivityEventListenerTest extends BaseUnitTest {
     private ActivityEventService activityEventService;
 
     @Mock
+    private ActivityFactDelivery activityFacts;
+
+    @Mock
     private PullRequestReviewThreadRepository reviewThreadRepository;
 
     @Mock
@@ -61,7 +65,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         listener = new ActivityEventListener(
-                activityEventService, reviewThreadRepository, userRepository, repositoryRepository);
+                activityEventService, activityFacts, reviewThreadRepository, userRepository, repositoryRepository);
 
         testUser = new User();
         testUser.setId(100L);
@@ -88,7 +92,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onPullRequestCreated(event);
 
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.PULL_REQUEST_OPENED),
@@ -104,8 +108,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
         @Test
         void shouldLetARecordingFailureReachDurableDelivery() {
             var failure = new TransientDataAccessResourceException("database unavailable");
-            when(activityEventService.record(anyLong(), any(), any(), any(), any(), any(), anyLong()))
-                    .thenThrow(failure);
+            doThrow(failure).when(activityFacts).record(anyLong(), any(), any(), any(), any(), any(), anyLong());
             var event = new ScmDomainEvent.PullRequestCreated(
                     createPullRequestData(createPullRequest(1L)), createContext());
 
@@ -121,7 +124,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onPullRequestCreated(event);
 
-            verifyNoInteractions(activityEventService);
+            verifyNoInteractions(activityFacts);
         }
     }
 
@@ -142,7 +145,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onPullRequestMerged(event);
 
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.PULL_REQUEST_MERGED),
@@ -169,7 +172,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onPullRequestMerged(event);
 
-            verifyNoInteractions(activityEventService);
+            verifyNoInteractions(activityFacts);
         }
     }
 
@@ -186,7 +189,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onPullRequestClosed(event);
 
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.PULL_REQUEST_CLOSED),
@@ -206,7 +209,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onPullRequestClosed(event);
 
-            verifyNoInteractions(activityEventService);
+            verifyNoInteractions(activityFacts);
         }
     }
 
@@ -221,7 +224,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onPullRequestReopened(event);
 
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.PULL_REQUEST_REOPENED),
@@ -245,7 +248,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onPullRequestReady(event);
 
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.PULL_REQUEST_READY),
@@ -270,7 +273,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
             listener.onReviewEdited(
                     new ScmDomainEvent.ReviewEdited(createReviewData(review), Set.of("body"), createContext()));
 
-            verifyNoInteractions(activityEventService);
+            verifyNoInteractions(activityFacts);
         }
 
         @Test
@@ -284,7 +287,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onReviewSubmitted(event);
 
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.REVIEW_APPROVED),
@@ -305,7 +308,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onReviewSubmitted(event);
 
-            verifyNoInteractions(activityEventService);
+            verifyNoInteractions(activityFacts);
         }
     }
 
@@ -320,7 +323,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onIssueCreated(event);
 
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.ISSUE_CREATED),
@@ -339,7 +342,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onIssueCreated(event);
 
-            verifyNoInteractions(activityEventService);
+            verifyNoInteractions(activityFacts);
         }
 
         @Test
@@ -353,7 +356,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
             listener.onIssueCreated(event);
 
             // Recorded for the audit trail, with no actor
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.ISSUE_CREATED),
@@ -377,7 +380,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onIssueClosed(event);
 
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.ISSUE_CLOSED),
@@ -398,7 +401,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onIssueClosed(event);
 
-            verifyNoInteractions(activityEventService);
+            verifyNoInteractions(activityFacts);
         }
 
         @Test
@@ -413,7 +416,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
             listener.onIssueClosed(event);
 
             // Recorded for the audit trail, with no actor
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.ISSUE_CLOSED),
@@ -437,7 +440,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onCommitCreated(event);
 
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.COMMIT_CREATED),
@@ -458,7 +461,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
             listener.onCommitCreated(event);
 
             // Recorded for the audit trail, with no actor
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.COMMIT_CREATED),
@@ -487,7 +490,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onCommitCreated(event);
 
-            verifyNoInteractions(activityEventService);
+            verifyNoInteractions(activityFacts);
         }
     }
 
@@ -514,7 +517,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onReviewCommentCreated(event);
 
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.REVIEW_COMMENT_CREATED),
@@ -544,7 +547,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onReviewCommentCreated(event);
 
-            verify(activityEventService)
+            verify(activityFacts)
                     .record(
                             eq(42L),
                             eq(ActivityEventType.REVIEW_COMMENT_CREATED),
@@ -583,7 +586,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onReviewCommentCreated(event);
 
-            verifyNoInteractions(activityEventService);
+            verifyNoInteractions(activityFacts);
         }
 
         @Test
@@ -604,7 +607,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onReviewCommentCreated(event);
 
-            verifyNoInteractions(activityEventService);
+            verifyNoInteractions(activityFacts);
         }
     }
 

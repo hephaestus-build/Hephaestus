@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.activity.adapter;
 
+import de.tum.cit.aet.hephaestus.activity.ActivityFact;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
@@ -14,7 +15,7 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@PersonDataStores({"activity_event", "activity_automation"})
+@PersonDataStores({"activity_event", "activity_automation", "activity_publication"})
 public class ActivityPersonDataCatalog implements PersonDataCatalog {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -22,6 +23,32 @@ public class ActivityPersonDataCatalog implements PersonDataCatalog {
     @Override
     public List<PersonDataContributor> contributors() {
         return List.of(
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "activity_publication",
+                        "event_publication",
+                        "t.event_type='" + ActivityFact.class.getName() + "' AND (" + """
+                (t.serialized_event::jsonb->>'actorId')::bigint = ANY(:users)
+                OR (t.serialized_event::jsonb->>'actorId' IS NULL AND (
+                    (t.serialized_event::jsonb->>'targetType'='COMMIT' AND
+                        (t.serialized_event::jsonb->>'targetId')::bigint IN (
+                            SELECT id FROM git_commit WHERE author_id=ANY(:users)
+                            UNION SELECT commit_id FROM commit_contributor WHERE user_id=ANY(:users) AND role IN ('AUTHOR','CO_AUTHOR')))
+                    OR (t.serialized_event::jsonb->>'targetType' IN ('ISSUE','PULL_REQUEST') AND
+                        (t.serialized_event::jsonb->>'targetId')::bigint IN (SELECT id FROM issue WHERE author_id=ANY(:users)))
+                    OR (t.serialized_event::jsonb->>'targetType'='ISSUE_COMMENT' AND
+                        (t.serialized_event::jsonb->>'targetId')::bigint IN (SELECT id FROM issue_comment WHERE author_id=ANY(:users)))
+                    OR (t.serialized_event::jsonb->>'targetType'='REVIEW' AND
+                        (t.serialized_event::jsonb->>'targetId')::bigint IN (SELECT id FROM pull_request_review WHERE author_id=ANY(:users)))
+                    OR (t.serialized_event::jsonb->>'targetType'='REVIEW_COMMENT' AND
+                        (t.serialized_event::jsonb->>'targetId')::bigint IN (SELECT id FROM pull_request_review_comment WHERE author_id=ANY(:users)))
+                )))
+                """,
+                        "id,event_type,publication_date,completion_date,status",
+                        "id",
+                        "",
+                        -250),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,
