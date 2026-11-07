@@ -4,15 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeReviewReadiness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchPauseReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.UUID;
@@ -20,15 +25,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.util.AopTestUtils;
 
 class ReviewBatchDriverIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ReviewIntegrationData data;
-
-    @Autowired
-    ReviewBatchDriver driver;
 
     @Autowired
     ReviewBatchRepository batches;
@@ -36,11 +36,29 @@ class ReviewBatchDriverIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ReviewBatchTargetRepository targets;
 
-    @MockitoBean
-    PracticeReviewReadiness readiness;
+    @Autowired
+    ReviewBatchScopeQuery scope;
 
-    @MockitoBean
-    ReviewBatchSubmitter submitter;
+    @Autowired
+    WorkspaceRepository workspaces;
+
+    @Autowired
+    ReviewBudget budget;
+
+    @Autowired
+    ReviewBatchProperties properties;
+
+    @Autowired
+    Clock clock;
+
+    @Autowired
+    ReviewRepository reviews;
+
+    @Autowired
+    ReviewBatchSpend spend;
+
+    final PracticeReviewReadiness readiness = mock(PracticeReviewReadiness.class);
+    final ReviewBatchSubmitter submitter = mock(ReviewBatchSubmitter.class);
 
     Scenario scenario;
 
@@ -68,7 +86,9 @@ class ReviewBatchDriverIntegrationTest extends BaseIntegrationTest {
         when(submitter.offer(any(), eq(itemId), isNull()))
                 .thenReturn(new ReviewBatchSubmitter.SubmissionOutcome.Submitted());
 
-        AopTestUtils.<ReviewBatchDriver>getUltimateTargetObject(driver).tick();
+        var driver = new ReviewBatchDriver(
+                batches, scope, submitter, workspaces, budget, readiness, properties, clock, reviews, spend);
+        driver.tick();
 
         var continued = batches.findById(batch.getId()).orElseThrow();
         assertThat(continued.getStatus()).isEqualTo(ReviewBatchStatus.RUNNING);
