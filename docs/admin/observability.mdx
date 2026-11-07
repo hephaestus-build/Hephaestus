@@ -730,6 +730,29 @@ GROUP BY r.workspace_id, p.slug, r.outcome
 ORDER BY marked_incorrect DESC, results DESC;
 ```
 
+This query counts mark changes in the last seven days, whatever the age of the result.
+A mark set and removed in that window counts once for each change.
+A recent removal of an older mark counts only as `removed`.
+The query groups each workspace separately.
+
+```sql
+WITH changes AS (
+  SELECT workspace_id, result_id, kind, 'set' AS change
+  FROM result_mark
+  WHERE created_at > now() - interval '7 days'
+  UNION ALL
+  SELECT workspace_id, result_id, kind, 'removed' AS change
+  FROM result_mark
+  WHERE removed_at > now() - interval '7 days'
+)
+SELECT c.workspace_id, p.slug, c.kind, c.change, count(*) AS changes
+FROM changes c
+JOIN result r ON r.workspace_id = c.workspace_id AND r.id = c.result_id
+JOIN practice p ON p.workspace_id = r.workspace_id AND p.id = r.practice_id
+GROUP BY c.workspace_id, p.slug, c.kind, c.change
+ORDER BY c.workspace_id, p.slug, c.kind, c.change;
+```
+
 ## Agent-job metrics
 
 | Prometheus name               | Type      | Labels    | Meaning                                                         |
