@@ -831,6 +831,16 @@ void test("a call past the in-flight bound waits for a slot, and its signal ends
 	);
 });
 
+void test("a call that waits for a slot ends when the connection closes", async () => {
+	const tools = await ToolClient.open(served, nonce);
+	const exec = async () =>
+		tools.exec({ command: "sleep 5", cwd: workspace, timeoutMs: 10_000 }, () => undefined);
+	const calls = Array.from({ length: LIMITS.inFlight + 1 }, exec);
+	tools.close();
+	const outcomes = await Promise.allSettled(calls);
+	assert.equal(outcomes.filter((outcome) => outcome.status === "rejected").length, calls.length);
+});
+
 void test("a put refused as busy sends no archive, and the calls in flight go on", async () => {
 	const calls = Array.from({ length: LIMITS.inFlight }, async () => run("sleep 0.5"));
 	await assert.rejects(

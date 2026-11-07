@@ -3318,7 +3318,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				// A custom program holds a slot of the program connection for as long as its session runs.
 				const pace = new SessionPace(
 					(running) =>
-						running < LIMITS.inFlight &&
+						(programs === null || running < LIMITS.inFlight) &&
 						roomForSession({ running, scriptHeapBytes: SCRIPT_HEAP_BYTES, baseHeapBytes }),
 				);
 				let sessionsAtOnce = 0;
