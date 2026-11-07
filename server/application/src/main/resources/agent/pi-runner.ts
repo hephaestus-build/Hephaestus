@@ -37,6 +37,7 @@ import { assessmentCacheExtension } from "./pi-assessment-cache.ts";
 import { CHANGE_ROOT, pinnedCheckout, readChange, safeRepositoryPath } from "./pi-change.ts";
 import { type DiagnosticValue, diagnose, errorKind, ms } from "./pi-diagnostics.ts";
 import { errorText } from "./pi-error-text.ts";
+import { waitForGateway } from "./pi-gateway-wait.ts";
 import {
 	type ModelWait,
 	newModelWait,
@@ -2726,6 +2727,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				thinkingLevel,
 			});
 			const scope = sessionState();
+			fresh.agent.streamFunction = waitForGateway(
+				fresh.agent.streamFunction,
+				PROCESS_START_MS + AGENT_BUDGET_MS,
+			);
 			if (scope.currentTurn?.practiceSlug !== undefined) {
 				const stream = fresh.agent.streamFunction;
 				fresh.agent.streamFunction = (
