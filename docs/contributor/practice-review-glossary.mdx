@@ -214,13 +214,14 @@ The same name is the source capture code that causes it.
 | **Isolation probe**            | A worker's check, with real Pods, that the cluster holds the sandbox boundary. No sandbox starts while it fails. | KubernetesIsolationProbe |
 | **Isolation tier**             | The runtime class and process limit that the isolation probe records. User namespaces are required by the sandbox boundary. | sandbox.isolation.*     |
 | **Runtime attempt**            | One attempt of a review job or of a conversation turn, with one lease, one attempt token and writes fenced on the lease. | AttemptJwt |
-| **Review agent Pod**           | The Pod of one review attempt: a trusted loop container with the token, and a tools container without one. | planned                |
+| **Review agent Pod**           | The Pod of one review attempt: a trusted loop container with the token, a tools container without one, and, when its practices include a custom program, a program container. | KubernetesPods.workspacePod |
 | **Tools Pod**                  | A Pod that runs only the tools program of a review agent Pod, bound to one conversation turn attempt, with no token and no egress. | planned             |
 | **Conversation loop**                  | The one long-lived trusted process that runs the conversation turns of an install and calls tools Pods for their tools. | planned            |
-| **Tool protocol v1**           | The messages from a loop to its tools, each with a request id. It has hello, put, read, streamed exec, cancel and reset, and script runs for reviews. | planned |
+| **Tool protocol v1**           | The messages from a loop to its tools, each with a request id. It has hello, put, read, streamed exec, cancel and reset, and script runs for reviews. | tool-protocol.ts |
+| **Proved search**              | A search that the loop confirmed by searching the same files itself. Only a proved search can show that the work lacks something. | pi-verified-search.ts |
 
 Stage and Seal are decided for 1.0 and not shipped yet ([ADR 0063](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0063-each-practice-is-staged-when-it-ends.md)).
-Runtime attempt, review agent Pod, tools Pod, conversation loop and tool protocol v1 are decided for 1.0 and not shipped yet ([ADR 0068](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md)).
+Tools Pod and conversation loop are decided for 1.0 and not shipped yet ([ADR 0068](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md)).
 
 The job folder of a review is the context folder of that review.
 The [Conversation runtime](./unified-pi-runtime.mdx) owns turns, the conversation host, context documents, context loaders and turn sandboxes.
