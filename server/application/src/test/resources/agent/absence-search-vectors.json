@@ -1,0 +1,233 @@
+[
+	{
+		"name": "a search for the word the claim names",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "a retry of a failed call",
+		"texts": [
+			"Nothing in the repository retries a failed call."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "any form of the word when case was ignored",
+		"patterns": [
+			"(?i)retries"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "one alternative is enough",
+		"patterns": [
+			"(?i)zzz|retry"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a word boundary changes nothing",
+		"patterns": [
+			"(?i)\\bretry\\b"
+		],
+		"subject": "retry logic",
+		"texts": [],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "an identifier split into the claim's words",
+		"patterns": [
+			"(?i)retryPolicy"
+		],
+		"subject": "a retry policy",
+		"texts": [],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a case-sensitive identifier as written",
+		"patterns": [
+			"RetryPolicy"
+		],
+		"subject": "a RetryPolicy class",
+		"texts": [],
+		"consulted": true,
+		"tied": true
+	},
+	{
+		"name": "a clause of generic words takes the subject",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"No other file references it."
+		],
+		"consulted": false,
+		"tied": true
+	},
+	{
+		"name": "several claims, each named",
+		"patterns": [
+			"(?i)retry|timeout"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic; the repository has no timeout setting."
+		],
+		"consulted": false,
+		"tied": true
+	},
+	{
+		"name": "a limit of the review is no claim",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository was not searched for auth."
+		],
+		"consulted": false,
+		"tied": true
+	},
+	{
+		"name": "nonsense proves nothing",
+		"patterns": [
+			"(?i)zzz_absent"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a word glued to nonsense names nothing",
+		"patterns": [
+			"(?i)retryzzz"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "each part of a term must be claimed",
+		"patterns": [
+			"(?i)retry_zzz"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a case-sensitive word in another case",
+		"patterns": [
+			"RETRY"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a pattern with any other syntax names nothing",
+		"patterns": [
+			"(?i)retry.*"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a pattern that matches anything names nothing",
+		"patterns": [
+			".*"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "an escaped literal is not an alternation",
+		"patterns": [
+			"(?i)retry\\|zzz"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "a generic word names nothing",
+		"patterns": [
+			"(?i)code|repository"
+		],
+		"subject": "retry logic in the code",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "another claim stays unnamed",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic.",
+			"The repository has no auth check."
+		],
+		"consulted": false,
+		"tied": false
+	},
+	{
+		"name": "a consulted checkout needs its subject named",
+		"patterns": [
+			"(?i)retry"
+		],
+		"subject": "an auth check",
+		"texts": [],
+		"consulted": true,
+		"tied": false
+	},
+	{
+		"name": "no search names nothing",
+		"patterns": [],
+		"subject": "retry logic",
+		"texts": [
+			"The repository has no retry logic."
+		],
+		"consulted": false,
+		"tied": false
+	}
+]

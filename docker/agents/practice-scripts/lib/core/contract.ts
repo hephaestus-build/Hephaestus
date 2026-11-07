@@ -237,6 +237,20 @@ export const readReceiptSchema = z
 	);
 export type ReadReceipt = z.infer<typeof readReceiptSchema>;
 
+/** A search as a receipt states it: admission reads what ran, so a literal is escaped and ignored case is a flag. */
+export function searchedPattern({
+	pattern,
+	literal,
+	ignoreCase,
+}: {
+	pattern: string;
+	literal: boolean;
+	ignoreCase: boolean;
+}): string {
+	const read = literal ? pattern.replaceAll(/[\\^$.*+?()[\]{}|]/gu, String.raw`\$&`) : pattern;
+	return ignoreCase ? `(?i)${read}` : read;
+}
+
 export type Coverage = z.infer<typeof coverageShape> & Completeness;
 
 export type Candidate = NonNullable<ReturnType<typeof candidateOf>>;

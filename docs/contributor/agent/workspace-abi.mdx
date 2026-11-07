@@ -122,7 +122,6 @@ In an item review, a result says that the repository lacks something in one of t
   A clause that says what the review did not establish is no claim.
 
 Such a result needs a search receipt of the tree.
-Admission records the pattern for audit, but it does not compare the pattern with the claim.
 The capture must hold the tree `COMPLETE` at the version of the receipt, and the receipt's checkout digest must equal the capture's.
 A could-not-determine result says nothing about the work, so it needs no receipt.
 
@@ -139,6 +138,16 @@ When the capture does not hold the whole checkout, the runner asks the model to 
 Then admission withholds a result without the receipt.
 The reason is `source_unavailable` when the capture does not hold the whole checkout.
 Otherwise the reason is `consulted_source_unread`.
+
+A search with the recorded checkout digest backs a claim only when it also names what the claim says is absent.
+Admission does not run a model's pattern.
+It reads the words of a plain pattern: words joined by `|`, with `\b` or a leading `(?i)` if needed.
+Any other pattern names nothing.
+
+Each claim must hold one of those words.
+A search that ignored case matches any form of the word, and a search that did not must match the word as written.
+A clause with only generic words takes `lookedFor` as its claim.
+Otherwise the reason is `absence_not_searched`, and the runner asks the session once before that.
 
 ## Admission and composition
 

@@ -16,6 +16,7 @@ import {
 	isSafeRelativePath,
 	type Citation,
 	type ReadReceipt,
+	searchedPattern,
 } from "./contract.ts";
 import type { ReadRequest, ReadValues } from "./ipc.ts";
 import { UnratedError } from "./practice-script.ts";
@@ -303,12 +304,13 @@ export class EvidenceReader {
 		{ pattern, glob, fixedString }: { pattern: string; glob?: string; fixedString?: boolean },
 		matches: readonly GrepMatch[],
 	): Promise<void> {
+		const stated = searchedPattern({ pattern, literal: fixedString === true, ignoreCase: false });
 		if (
 			!record ||
 			truncated ||
 			glob !== undefined ||
 			this.#sources.permittedPaths !== undefined ||
-			pattern.length > CANDIDATE_LIMITS.warrantFieldChars
+			stated.length > CANDIDATE_LIMITS.warrantFieldChars
 		) {
 			return;
 		}
@@ -323,7 +325,7 @@ export class EvidenceReader {
 			version: this.#sources.headRevision ?? "unavailable",
 			status: "SEARCHED",
 			...(contentDigest === undefined ? {} : { contentDigest }),
-			pattern,
+			pattern: stated,
 		});
 	}
 

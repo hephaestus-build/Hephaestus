@@ -4,7 +4,10 @@ import de.tum.cit.aet.hephaestus.agent.handler.candidate.Candidate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Words that say the repository, beyond the lines a result cites, lacks something: that nothing elsewhere handles a
@@ -14,6 +17,11 @@ import java.util.regex.Pattern;
  * establish is a limit of the review, not a claim. Clauses end at a full stop, a semicolon, a colon, a dash, a
  * parenthesis or a comma before a conjunction, so such a limit cannot hide the claim beside it. {@code pi-session-reads.ts} holds the same markers, so the runner
  * asks the session once before admission withholds the result.
+ *
+ * <p>A search of the whole checkout backs a claim only when it names what the claim says is absent, or a model could
+ * search for nonsense and claim anything. The server does not run a model's pattern: it reads the words of a plain one,
+ * words joined by {@code |}, and any other pattern names nothing. Each claim must hold one of those words, as a word
+ * stem when the search ignored case, or as written when it did not, because {@code RETRY} does not find {@code retry}.
  */
 final class AbsenceClaims {
 
@@ -54,6 +62,108 @@ final class AbsenceClaims {
             "(?<=[.;:])[ \\t\\r\\n\\u00A0]+|,[ \\t\\r\\n\\u00A0]+(?=(?:but|and|so|yet|while|though|"
                     + "although)[ \\t\\r\\n\\u00A0])|[ \\t\\r\\n\\u00A0]+[—–-][ \\t\\r\\n\\u00A0]+|[ \\t\\r\\n\\u00A0]*[()][ \\t\\r\\n\\u00A0]*";
 
+    static final String PLAIN_SEARCH =
+            "(?:\\(\\?i\\))?(?:\\\\b)?[\\p{L}\\p{N}_-]+(?:\\\\b)?(?:\\|(?:\\\\b)?[\\p{L}\\p{N}_-]+(?:\\\\b)?)*";
+
+    /** Words that name no subject: a clause of only these says what is absent in another sentence. */
+    static final List<String> GENERIC_WORDS = List.of(
+            "a",
+            "an",
+            "and",
+            "any",
+            "are",
+            "as",
+            "at",
+            "base",
+            "be",
+            "by",
+            "call",
+            "catch",
+            "check",
+            "checked",
+            "checkout",
+            "code",
+            "codebase",
+            "commit",
+            "consume",
+            "define",
+            "depend",
+            "diff",
+            "do",
+            "does",
+            "else",
+            "elsewhere",
+            "entire",
+            "exist",
+            "file",
+            "find",
+            "for",
+            "found",
+            "from",
+            "handle",
+            "has",
+            "have",
+            "hold",
+            "import",
+            "in",
+            "instantiate",
+            "into",
+            "is",
+            "it",
+            "its",
+            "lack",
+            "missing",
+            "never",
+            "no",
+            "none",
+            "not",
+            "nothing",
+            "nowhere",
+            "of",
+            "on",
+            "one",
+            "only",
+            "or",
+            "other",
+            "out",
+            "path",
+            "pinned",
+            "project",
+            "pull",
+            "reference",
+            "register",
+            "repo",
+            "repository",
+            "request",
+            "rest",
+            "reviewed",
+            "search",
+            "source",
+            "sources",
+            "src",
+            "that",
+            "the",
+            "there",
+            "this",
+            "throughout",
+            "to",
+            "tree",
+            "under",
+            "use",
+            "validate",
+            "was",
+            "were",
+            "whole",
+            "wire",
+            "with",
+            "without");
+
+    private static final Pattern PLAIN = Pattern.compile(PLAIN_SEARCH);
+    private static final Pattern WORD_BREAK = Pattern.compile("(?<=\\p{Ll})(?=\\p{Lu})|[^\\p{L}\\p{N}]+");
+    private static final Pattern TOKEN_BREAK = Pattern.compile("[^\\p{L}\\p{N}_-]+");
+    private static final Set<String> GENERIC =
+            GENERIC_WORDS.stream().map(AbsenceClaims::stem).collect(Collectors.toSet());
+
     private static final List<Pattern> PATTERNS =
             MARKERS.stream().map(AbsenceClaims::compile).toList();
     private static final Pattern DISCLAIMS = compile(DISCLAIMER);
@@ -67,6 +177,80 @@ final class AbsenceClaims {
 
     /** Whether any text the result shows a reader says the repository lacks something. */
     static boolean claimed(Candidate candidate) {
+        return texts(candidate).stream().anyMatch(AbsenceClaims::claimed);
+    }
+
+    /**
+     * Whether the patterns of a result's searches name what it says is absent: each claim, and when the result names
+     * the checkout as consulted, what it looked for.
+     */
+    static boolean searchedFor(Candidate candidate, List<String> patterns, boolean consulted) {
+        var search = candidate.search();
+        var inapplicability = candidate.inapplicability();
+        String subject = search != null
+                ? search.lookedFor()
+                : inapplicability != null ? inapplicability.prerequisite() : candidate.summary();
+        return searchedFor(subject, texts(candidate), patterns, consulted);
+    }
+
+    static boolean searchedFor(String subject, List<String> texts, List<String> patterns, boolean consulted) {
+        var terms =
+                patterns.stream().flatMap(pattern -> terms(pattern).stream()).toList();
+        return (!consulted || named(terms, subject))
+                && texts.stream()
+                        .flatMap(text -> Arrays.stream(CLAUSES.split(text)))
+                        .filter(AbsenceClaims::claimed)
+                        .allMatch(clause -> named(terms, content(clause).isEmpty() ? subject : clause));
+    }
+
+    private record Term(String word, boolean ignoresCase, Set<String> stems) {}
+
+    private static List<Term> terms(String pattern) {
+        if (!PLAIN.matcher(pattern).matches()) return List.of();
+        boolean ignoresCase = pattern.startsWith("(?i)");
+        return Arrays.stream(pattern.replace("(?i)", "").replace("\\b", "").split("\\|"))
+                .filter(word -> !content(word).isEmpty())
+                .map(word -> new Term(word, ignoresCase, stems(word)))
+                .toList();
+    }
+
+    private static boolean named(List<Term> terms, String text) {
+        var stems = stems(text);
+        var tokens = Set.of(TOKEN_BREAK.splitAsStream(text).distinct().toArray(String[]::new));
+        return terms.stream()
+                .anyMatch(term -> term.ignoresCase() ? stems.containsAll(term.stems()) : tokens.contains(term.word()));
+    }
+
+    private static Set<String> content(String text) {
+        return stems(text).stream()
+                .filter(stem -> stem.length() >= 3 && !GENERIC.contains(stem))
+                .collect(Collectors.toSet());
+    }
+
+    private static Set<String> stems(String text) {
+        return WORD_BREAK
+                .splitAsStream(text)
+                .filter(word -> !word.isEmpty())
+                .map(AbsenceClaims::stem)
+                .collect(Collectors.toSet());
+    }
+
+    /** A crude stem: it needs only to bring the forms of a word together, and a miss costs one more search. */
+    private static String stem(String word) {
+        String stem = word.toLowerCase(Locale.ROOT);
+        if (stem.length() > 4 && stem.endsWith("ies")) {
+            stem = stem.substring(0, stem.length() - 3) + "y";
+        } else if (stem.length() > 5 && stem.endsWith("ing")) {
+            stem = stem.substring(0, stem.length() - 3);
+        } else if (stem.length() > 4 && (stem.endsWith("ed") || stem.endsWith("es"))) {
+            stem = stem.substring(0, stem.length() - 2);
+        } else if (stem.length() > 3 && stem.endsWith("s")) {
+            stem = stem.substring(0, stem.length() - 1);
+        }
+        return stem.length() > 3 && stem.endsWith("e") ? stem.substring(0, stem.length() - 1) : stem;
+    }
+
+    private static List<String> texts(Candidate candidate) {
         var texts = new ArrayList<String>();
         texts.add(candidate.summary());
         texts.add(candidate.explanation());
@@ -92,7 +276,7 @@ final class AbsenceClaims {
             texts.add(question.openQuestion());
             texts.add(question.wouldSettleIt());
         }
-        return texts.stream().anyMatch(AbsenceClaims::claimed);
+        return texts;
     }
 
     static boolean claimed(String text) {

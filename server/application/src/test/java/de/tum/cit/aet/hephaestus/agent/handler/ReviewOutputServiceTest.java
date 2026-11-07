@@ -306,11 +306,19 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     private static final String CAPTURED_CHECKOUT = "5".repeat(64);
 
     private static ReadReceipt searched(String version) {
-        return searched(version, CAPTURED_CHECKOUT);
+        return searched(version, "(?i)ControllerAdvice|handler");
+    }
+
+    private static ReadReceipt searched(String version, String pattern) {
+        return searchedBytes(version, pattern, CAPTURED_CHECKOUT);
     }
 
     /** A search of the whole checkout whose proof read bytes with this checkout digest. */
-    private static ReadReceipt searched(String version, @Nullable String checkoutDigest) {
+    private static ReadReceipt searchedBytes(String version, @Nullable String checkoutDigest) {
+        return searchedBytes(version, "(?i)ControllerAdvice|handler", checkoutDigest);
+    }
+
+    private static ReadReceipt searchedBytes(String version, String pattern, @Nullable String checkoutDigest) {
         return new ReadReceipt(
                 TREE,
                 CHECKOUT_ROOT + ".git/HEAD",
@@ -320,7 +328,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 checkoutDigest,
                 null,
                 null,
-                "ControllerAdvice|ExceptionHandler");
+                pattern);
     }
 
     /** The diff alone named as searched: the claim now rests on its words. */
@@ -525,7 +533,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         // One container: a command can change the sandbox's checkout before the loop searches it.
         pr50Capture(SourceCompleteness.COMPLETE);
 
-        prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD, checkoutDigest)), UnaryOperator.identity()))
+        prepare(job, pr50ErrorHandling(List.of(searchedBytes(PR50_HEAD, checkoutDigest)), UnaryOperator.identity()))
                 .record(job);
 
         assertWithheld(
@@ -540,7 +548,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         prepare(
                 job,
                 pr50ErrorHandling(
-                        List.of(searched(PR50_HEAD, "6".repeat(64)), searched(PR50_HEAD)), UnaryOperator.identity()));
+                        List.of(searchedBytes(PR50_HEAD, "6".repeat(64)), searched(PR50_HEAD)), UnaryOperator.identity()));
 
         verify(membership, never()).withhold(anyLong(), any(), any(), any());
     }
@@ -570,6 +578,18 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 CandidateRefusal.SOURCE_UNAVAILABLE,
                 "The result names " + DIFF.value() + " as consulted, but its capture left part of it out, "
                         + "so it cannot show that something is absent");
+    }
+
+    @Test
+    void shouldWithholdAClaimAboutTheCheckoutWhenItsSearchNamesSomethingElse() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+
+        prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD, "(?i)zzz_absent_marker")), UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(
+                CandidateRefusal.ABSENCE_NOT_SEARCHED,
+                NAMED + ", but no search of the whole checkout names what it says is absent");
     }
 
     @Test

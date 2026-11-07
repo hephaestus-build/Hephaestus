@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createReadTool, createBashTool } from "@earendil-works/pi-coding-agent";
-import { parseCandidate } from "../../../../../../docker/agents/practice-scripts/lib/core/contract.ts";
+import {
+	parseCandidate,
+	searchedPattern,
+} from "../../../../../../docker/agents/practice-scripts/lib/core/contract.ts";
 import { isJsonObject } from "../../../../../../docker/agents/practice-scripts/lib/core/json.ts";
 import { z } from "../../../../../../docker/agents/practice-scripts/lib/core/practice-script.ts";
 import { ReadRanges } from "../../../../../../docker/agents/practice-scripts/lib/core/read-ranges.ts";
@@ -16,6 +19,7 @@ import {
 import {
 	SessionReads,
 	claimsAbsence,
+	searchedFor,
 	unreadCheckoutClaim,
 } from "../../../main/resources/agent/pi-session-reads.ts";
 
@@ -1063,11 +1067,28 @@ void test("#50: a claim that the checkout lacks something goes back to the model
 	assert.equal(
 		unreadCheckoutClaim(
 			stored,
-			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "ControllerAdvice" }]),
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "(?i)ControllerAdvice|guard" }]),
 			ASK,
 		),
 		undefined,
 	);
+	// A search for something else leaves the claim unsearched, and the ask says what would count.
+	assert.match(
+		unreadCheckoutClaim(
+			stored,
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "ControllerAdvice" }]),
+			ASK,
+		)?.text ?? "",
+		/no search of the whole checkout names what it says is absent.*ignoreCase and a plain word/u,
+	);
+});
+
+void test("a receipt states a search as it ran", () => {
+	assert.equal(
+		searchedPattern({ pattern: "a|b", literal: true, ignoreCase: false }),
+		String.raw`a\|b`,
+	);
+	assert.equal(searchedPattern({ pattern: "a|b", literal: false, ignoreCase: true }), "(?i)a|b");
 });
 
 void test("#50: leaving the tree out of the search does not hide words that say the repository lacks something, once", () => {
@@ -1214,3 +1235,21 @@ void test("a bounded Met that names the tree for its selected lines is told how 
 		undefined,
 	);
 });
+
+const absenceVectors = z
+	.array(
+		z.strictObject({
+			name: z.string(),
+			patterns: z.array(z.string()),
+			subject: z.string(),
+			texts: z.array(z.string()),
+			consulted: z.boolean(),
+			tied: z.boolean(),
+		}),
+	)
+	.parse(JSON.parse(readFileSync(new URL("absence-search-vectors.json", import.meta.url), "utf8")));
+for (const { name, patterns, subject, texts, consulted, tied } of absenceVectors) {
+	void test(`an absence and its search: ${name}`, () => {
+		assert.equal(searchedFor(subject, texts, patterns, consulted), tied);
+	});
+}

@@ -20,6 +20,7 @@ public enum CandidateRefusal {
     BASIS_WITNESS_MISSING("basis_witness_missing"),
     DUTY_QUOTE_UNVERIFIED("duty_quote_unverified"),
     CONSULTED_SOURCE_UNREAD("consulted_source_unread"),
+    ABSENCE_NOT_SEARCHED("absence_not_searched"),
     UNDECLARED_SOURCE_CITED("undeclared_source_cited"),
     UNFINISHED_RUN_CITED("unfinished_run_cited");
 

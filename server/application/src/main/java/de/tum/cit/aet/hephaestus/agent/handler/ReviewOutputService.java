@@ -244,7 +244,8 @@ public class ReviewOutputService {
     /**
      * Refuses a result that says a checkout lacks something: it names the checkout as searched, or its words say the
      * repository beyond its citations lacks something ({@link AbsenceClaims}), and its receipts hold no search of the
-     * whole checkout that ran to the end, captured complete at the searched commit. A complete read of one file is a
+     * whole checkout that ran to the end, captured complete at the searched commit, or none that names what it says is
+     * absent. A complete read of one file is a
      * complete source of that file, not of the checkout (ADR 0064 § Absence). Every other source is staged as captured
      * in the job folder, so one whose capture names a gap cannot be named as consulted either. A checkout that the capture did not hold whole is a capture limit, so no search could support
      * the claim. A could-not-determine result says nothing about the work. A command in the sandbox can change the
@@ -284,10 +285,21 @@ public class ReviewOutputService {
                         && searchable.contains(receipt.sourceKind())
                         && captured.completeAt(receipt.sourceKind(), receipt.version()))
                 .toList();
-        if (searches.stream().anyMatch(searchedAsCaptured)) return;
+        var asCaptured = searches.stream()
+                .filter(searchedAsCaptured)
+                .map(ReadReceipt::pattern)
+                .filter(Objects::nonNull)
+                .toList();
         String claim = named != null
                 ? "The result names " + named.value() + " as searched"
                 : "The result says the repository lacks something beyond its citations";
+        if (!asCaptured.isEmpty()) {
+            if (AbsenceClaims.searchedFor(candidate, asCaptured, named != null)) return;
+            throw new CandidateEvidenceVerifier.Unverified(
+                    CandidateRefusal.ABSENCE_NOT_SEARCHED,
+                    claim + ", but no search of the whole checkout names what it says is absent",
+                    null);
+        }
         if (searchable.stream().noneMatch(captured::capturedWhole))
             throw new CandidateEvidenceVerifier.Unverified(
                     CandidateRefusal.SOURCE_UNAVAILABLE,

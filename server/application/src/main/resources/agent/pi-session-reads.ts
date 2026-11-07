@@ -13,6 +13,7 @@ import {
 	type Coverage,
 	type Omission,
 	type ReadReceipt,
+	searchedPattern,
 } from "./work/practice-scripts/lib/core/contract.ts";
 import {
 	type EvidenceReader,
@@ -77,8 +78,11 @@ export class SessionReads {
 	readonly #tree: SessionTree | undefined;
 	/** What each grep without a file filter that searched the whole checkout to the end looked for. */
 	readonly #searches = new Map<string, SearchClaim>();
-	/** The searches that the loop proved, with the digest of the checkout it searched: only these are receipts. */
-	readonly #provedPatterns = new Map<string, string>();
+	/**
+	 * The searches that the loop proved, each with the pattern its receipt states and the digest of the checkout it
+	 * searched: only these are receipts.
+	 */
+	readonly #provedPatterns = new Map<string, { pattern: string; contentDigest: string }>();
 
 	constructor(
 		root: string,
@@ -220,7 +224,11 @@ export class SessionReads {
 			isRecord(args) &&
 			typeof args.pattern === "string" &&
 			args.pattern !== "" &&
-			args.pattern.length <= CANDIDATE_LIMITS.warrantFieldChars &&
+			searchedPattern({
+				pattern: args.pattern,
+				literal: args.literal === true,
+				ignoreCase: args.ignoreCase === true,
+			}).length <= CANDIDATE_LIMITS.warrantFieldChars &&
 			this.#searches.size < SEARCHED_PATTERNS &&
 			!(typeof args.glob === "string" && args.glob !== "") &&
 			this.#containsTree(target ?? "")
@@ -263,7 +271,10 @@ export class SessionReads {
 		const { proved, checkoutDigest } = await prove(path.resolve(this.#root, tree.root), open);
 		for (const [index, claim] of open.entries()) {
 			if (proved[index] === true && checkoutDigest !== null) {
-				this.#provedPatterns.set(claim.pattern, checkoutDigest);
+				this.#provedPatterns.set(claim.pattern, {
+					pattern: searchedPattern(claim),
+					contentDigest: checkoutDigest,
+				});
 			}
 			this.#searches.delete(claim.pattern);
 		}
@@ -294,8 +305,8 @@ export class SessionReads {
 			return [];
 		}
 		const root = this.#key(tree.root);
-		const searches = tree.complete ? [...this.#provedPatterns] : [];
-		const receipts: ReadReceipt[] = searches.map(([pattern, contentDigest]) => ({
+		const searches = tree.complete ? [...this.#provedPatterns.values()] : [];
+		const receipts: ReadReceipt[] = searches.map(({ pattern, contentDigest }) => ({
 			sourceKind: TREE_SOURCE,
 			sourcePath: tree.sourcePath,
 			path: ".",
@@ -548,18 +559,202 @@ export const ABSENCE_MARKERS = [
 ];
 export const ABSENCE_DISCLAIMER = String.raw`\b(?:did|does|do|could|can|would)(?: not|n't) (?:\w+ ){0,1}?(?:establish|inspect|examine|search|judge)\w*\b|\bnot (?:established|inspected|examined|searched|judged)\b|\bwithout (?:establishing|inspecting|examining|searching|judging)\b|\bnot that\b|\b(?:was|were) not (?:examined|inspected|judged)\b|\bno (?:[\w-]+ ){0,8}?(?:was|were) (?:examined|inspected|judged)\b`;
 export const ABSENCE_CLAUSE_END = String.raw`(?<=[.;:])[ \t\r\n\u00A0]+|,[ \t\r\n\u00A0]+(?=(?:but|and|so|yet|while|though|although)[ \t\r\n\u00A0])|[ \t\r\n\u00A0]+[—–-][ \t\r\n\u00A0]+|[ \t\r\n\u00A0]*[()][ \t\r\n\u00A0]*`;
+/** What `AbsenceClaims.java` reads as a plain search and as words that name no subject. */
+export const ABSENCE_PLAIN_SEARCH = String.raw`(?:\(\?i\))?(?:\\b)?[\p{L}\p{N}_-]+(?:\\b)?(?:\|(?:\\b)?[\p{L}\p{N}_-]+(?:\\b)?)*`;
+export const ABSENCE_GENERIC_WORDS = [
+	"a",
+	"an",
+	"and",
+	"any",
+	"are",
+	"as",
+	"at",
+	"base",
+	"be",
+	"by",
+	"call",
+	"catch",
+	"check",
+	"checked",
+	"checkout",
+	"code",
+	"codebase",
+	"commit",
+	"consume",
+	"define",
+	"depend",
+	"diff",
+	"do",
+	"does",
+	"else",
+	"elsewhere",
+	"entire",
+	"exist",
+	"file",
+	"find",
+	"for",
+	"found",
+	"from",
+	"handle",
+	"has",
+	"have",
+	"hold",
+	"import",
+	"in",
+	"instantiate",
+	"into",
+	"is",
+	"it",
+	"its",
+	"lack",
+	"missing",
+	"never",
+	"no",
+	"none",
+	"not",
+	"nothing",
+	"nowhere",
+	"of",
+	"on",
+	"one",
+	"only",
+	"or",
+	"other",
+	"out",
+	"path",
+	"pinned",
+	"project",
+	"pull",
+	"reference",
+	"register",
+	"repo",
+	"repository",
+	"request",
+	"rest",
+	"reviewed",
+	"search",
+	"source",
+	"sources",
+	"src",
+	"that",
+	"the",
+	"there",
+	"this",
+	"throughout",
+	"to",
+	"tree",
+	"under",
+	"use",
+	"validate",
+	"was",
+	"were",
+	"whole",
+	"wire",
+	"with",
+	"without",
+];
 const ABSENCE_PATTERNS = ABSENCE_MARKERS.map((marker) => new RegExp(marker, "iu"));
 const DISCLAIMER = new RegExp(ABSENCE_DISCLAIMER, "iu");
 const CLAUSE_END = new RegExp(ABSENCE_CLAUSE_END, "u");
 
+const PLAIN_SEARCH = new RegExp(`^(?:${ABSENCE_PLAIN_SEARCH})$`, "u");
+const WORD_BREAK = /(?<=\p{Ll})(?=\p{Lu})|[^\p{L}\p{N}]+/u;
+const TOKEN_BREAK = /[^\p{L}\p{N}_-]+/u;
+
+/** The same crude stem as `AbsenceClaims.java`: a miss costs one more search. */
+function stem(word: string): string {
+	let stemmed = word.toLowerCase();
+	if (stemmed.length > 4 && stemmed.endsWith("ies")) {
+		stemmed = `${stemmed.slice(0, -3)}y`;
+	} else if (stemmed.length > 5 && stemmed.endsWith("ing")) {
+		stemmed = stemmed.slice(0, -3);
+	} else if (stemmed.length > 4 && (stemmed.endsWith("ed") || stemmed.endsWith("es"))) {
+		stemmed = stemmed.slice(0, -2);
+	} else if (stemmed.length > 3 && stemmed.endsWith("s")) {
+		stemmed = stemmed.slice(0, -1);
+	}
+	return stemmed.length > 3 && stemmed.endsWith("e") ? stemmed.slice(0, -1) : stemmed;
+}
+
+const GENERIC = new Set(ABSENCE_GENERIC_WORDS.map(stem));
+const stems = (text: string) => new Set(text.split(WORD_BREAK).filter(Boolean).map(stem));
+const content = (text: string) =>
+	[...stems(text)].filter((word) => word.length >= 3 && !GENERIC.has(word));
+
+interface SearchTerm {
+	word: string;
+	ignoresCase: boolean;
+	stems: Set<string>;
+}
+
+function termsOf(pattern: string): SearchTerm[] {
+	if (!PLAIN_SEARCH.test(pattern)) {
+		return [];
+	}
+	const ignoresCase = pattern.startsWith("(?i)");
+	return pattern
+		.replace("(?i)", "")
+		.replaceAll(String.raw`\b`, "")
+		.split("|")
+		.filter((word) => content(word).length > 0)
+		.map((word) => ({ word, ignoresCase, stems: stems(word) }));
+}
+
+function holdsTerm(terms: readonly SearchTerm[], text: string): boolean {
+	const inText = stems(text);
+	const tokens = new Set(text.split(TOKEN_BREAK));
+	return terms.some((term) =>
+		term.ignoresCase ? [...term.stems].every((word) => inText.has(word)) : tokens.has(term.word),
+	);
+}
+
+const claimed = (clause: string) =>
+	!DISCLAIMER.test(clause) && ABSENCE_PATTERNS.some((pattern) => pattern.test(clause));
+
 /** Whether a text says the repository lacks something, clause by clause. */
 export function claimsAbsence(text: string): boolean {
-	return text
-		.split(CLAUSE_END)
-		.some(
-			(clause) =>
-				!DISCLAIMER.test(clause) && ABSENCE_PATTERNS.some((pattern) => pattern.test(clause)),
-		);
+	return text.split(CLAUSE_END).some(claimed);
+}
+
+/** The texts of a result that the absence check reads. */
+function textsOf(submission: AbsenceCheckInput): string[] {
+	const { search, inapplicability, openQuestions = [] } = submission.evidence;
+	return [
+		submission.summary,
+		submission.explanation,
+		...(submission.problems ?? []).flatMap((problem) => [
+			problem.summary,
+			problem.explanation,
+			problem.nextStep ?? "",
+			problem.basis.explanation,
+		]),
+		submission.example?.note ?? "",
+		search?.lookedFor ?? "",
+		search?.boundary ?? "",
+		inapplicability?.prerequisite ?? "",
+		inapplicability?.ruledOutBy ?? "",
+		...openQuestions.flatMap((question) => [question.openQuestion, question.wouldSettleIt]),
+	];
+}
+
+/**
+ * Whether the patterns of a result's searches name what it says is absent: each claim, and when the result names the
+ * checkout as consulted, what it looked for. `AbsenceClaims.java` decides this at admission.
+ */
+export function searchedFor(
+	subject: string,
+	texts: readonly string[],
+	patterns: readonly string[],
+	consulted: boolean,
+): boolean {
+	const terms = patterns.flatMap(termsOf);
+	return (
+		(!consulted || holdsTerm(terms, subject)) &&
+		texts
+			.flatMap((text) => text.split(CLAUSE_END))
+			.filter(claimed)
+			.every((clause) => holdsTerm(terms, content(clause).length === 0 ? subject : clause))
+	);
 }
 
 /** The texts and warrants of a submission that the absence check reads, as the candidate carries them. */
@@ -608,42 +803,36 @@ export function unreadCheckoutClaim(
 	coverage: Coverage,
 	{ checkout, ask }: { checkout?: CheckoutState; ask: boolean },
 ): UnreadCheckoutClaim | undefined {
-	const searched = coverage.receipts.some(
-		(receipt) =>
-			receipt.sourceKind === TREE_SOURCE && receipt.status === "SEARCHED" && receipt.path === ".",
+	const searches = coverage.receipts.flatMap((receipt) =>
+		receipt.sourceKind === TREE_SOURCE && receipt.status === "SEARCHED" && receipt.path === "."
+			? [receipt.pattern ?? ""]
+			: [],
 	);
 	// A could-not-determine result says nothing about the work.
-	if (!ask || searched || submission.outcome === "COULD_NOT_DETERMINE") {
+	if (!ask || submission.outcome === "COULD_NOT_DETERMINE") {
 		return undefined;
 	}
-	const { search, inapplicability, openQuestions = [] } = submission.evidence;
+	const { search, inapplicability } = submission.evidence;
 	const consulted = [...(search?.consulted ?? []), ...(inapplicability?.consulted ?? [])].includes(
 		TREE_SOURCE,
 	);
-	const texts = [
-		submission.summary,
-		submission.explanation,
-		...(submission.problems ?? []).flatMap((problem) => [
-			problem.summary,
-			problem.explanation,
-			problem.nextStep ?? "",
-			problem.basis.explanation,
-		]),
-		submission.example?.note ?? "",
-		search?.lookedFor ?? "",
-		search?.boundary ?? "",
-		inapplicability?.prerequisite ?? "",
-		inapplicability?.ruledOutBy ?? "",
-		...openQuestions.flatMap((question) => [question.openQuestion, question.wouldSettleIt]),
-	];
-	const byWords = !consulted && checkout !== undefined && texts.some(claimsAbsence);
-	if (!consulted && !byWords) {
+	const byWords = !consulted && checkout !== undefined && textsOf(submission).some(claimsAbsence);
+	const subject = search?.lookedFor ?? inapplicability?.prerequisite ?? submission.summary;
+	if (
+		(!consulted && !byWords) ||
+		(searches.length > 0 && searchedFor(subject, textsOf(submission), searches, consulted))
+	) {
 		return undefined;
 	}
 	const claim = consulted
 		? `this result names ${TREE_SOURCE} as searched`
 		: "this result says the repository lacks something beyond the cited lines";
 	const remove = "Remove that claim and keep only what the cited lines show, then submit again.";
+	if (searches.length > 0) {
+		return {
+			text: `${claim}, but no search of the whole checkout names what it says is absent. Call the grep tool with ignoreCase and a plain word from the claim, alternatives joined by |, then submit again. A pattern with any other syntax names nothing. ${remove}`,
+		};
+	}
 	if (checkout?.root === undefined) {
 		return { text: `${claim}, but this work has no checkout to search. ${remove}` };
 	}

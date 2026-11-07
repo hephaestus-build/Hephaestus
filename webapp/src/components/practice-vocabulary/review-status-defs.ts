@@ -181,6 +181,7 @@ const CANDIDATE_REFUSALS = [
 	"basis_witness_missing",
 	"duty_quote_unverified",
 	"consulted_source_unread",
+	"absence_not_searched",
 	"undeclared_source_cited",
 	"unfinished_run_cited",
 ] as const;

@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 class AbsenceClaimsTest extends BaseUnitTest {
@@ -41,6 +42,22 @@ class AbsenceClaimsTest extends BaseUnitTest {
                 .as("pi-session-reads.ts declares ABSENCE_CLAUSE_END")
                 .isTrue();
         assertThat(clauseEnd.group(1)).isEqualTo(AbsenceClaims.CLAUSE_END);
+        var plainSearch = Pattern.compile("export const ABSENCE_PLAIN_SEARCH = String\\.raw`([^`]*)`;")
+                .matcher(runner);
+        assertThat(plainSearch.find())
+                .as("pi-session-reads.ts declares ABSENCE_PLAIN_SEARCH")
+                .isTrue();
+        assertThat(plainSearch.group(1)).isEqualTo(AbsenceClaims.PLAIN_SEARCH);
+        var genericWords = Pattern.compile("export const ABSENCE_GENERIC_WORDS = \\[(.*?)\\n];", Pattern.DOTALL)
+                .matcher(runner);
+        assertThat(genericWords.find())
+                .as("pi-session-reads.ts declares ABSENCE_GENERIC_WORDS")
+                .isTrue();
+        assertThat(Pattern.compile("\"([^\"]+)\"")
+                        .matcher(genericWords.group(1))
+                        .results()
+                        .map(word -> word.group(1)))
+                .containsExactlyElementsOf(AbsenceClaims.GENERIC_WORDS);
     }
 
     @Test
@@ -140,5 +157,27 @@ class AbsenceClaimsTest extends BaseUnitTest {
                 .toList();
 
         assertThat(reasons).hasSizeGreaterThan(100).noneMatch(AbsenceClaims::claimed);
+    }
+
+    @Test
+    void shouldTieASearchToAClaimAsTheRunnerDoes() throws IOException {
+        var vectors = new JsonMapper().readTree(Path.of("src/test/resources/agent/absence-search-vectors.json"));
+
+        assertThat(vectors).isNotEmpty();
+        for (var vector : vectors) {
+            assertThat(AbsenceClaims.searchedFor(
+                            vector.path("subject").asString(),
+                            strings(vector.path("texts")),
+                            strings(vector.path("patterns")),
+                            vector.path("consulted").asBoolean()))
+                    .as(vector.path("name").asString())
+                    .isEqualTo(vector.path("tied").asBoolean());
+        }
+    }
+
+    private static List<String> strings(JsonNode list) {
+        return StreamSupport.stream(list.spliterator(), false)
+                .map(JsonNode::asString)
+                .toList();
     }
 }
