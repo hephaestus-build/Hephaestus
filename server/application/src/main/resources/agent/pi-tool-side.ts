@@ -141,7 +141,6 @@ export function toolLines(tools: Pick<ToolClient, "exec">, cwd: string): LineRun
 	};
 }
 
-/** Pi's `find` with a Node glob: Pi's own runs `fd`, and the loop starts no process. */
 /** Matches on a worker: a pattern that backtracks for ever must not stop the loop. */
 export async function globApart(job: GlobJob): Promise<string[]> {
 	const found = await onWorker(GLOB_WORKER, job, FIND_TIMEOUT_MS);
@@ -151,6 +150,7 @@ export async function globApart(job: GlobJob): Promise<string[]> {
 	return found.filter((file) => typeof file === "string");
 }
 
+/** Pi's `find` with a Node glob: Pi's own runs `fd`, and the loop starts no process. */
 export function loopFindTool(root: string) {
 	return createFindToolDefinition(root, {
 		operations: {

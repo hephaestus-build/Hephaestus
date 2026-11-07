@@ -1,6 +1,7 @@
 // A search that the tools side ran stands as proof of an absence only when the loop can confirm it.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -163,4 +164,86 @@ void test("a checkout past the size bound proves nothing", async () => {
 
 void test("no claims need no worker", async () => {
 	assert.deepEqual(await proveSearches(root, []), []);
+});
+
+const hasRg = spawnSync("rg", ["--version"]).status === 0;
+const texts = mkdtempSync(path.join(tmpdir(), "verified-search-rg-"));
+writeFileSync(path.join(texts, "crlf.txt"), "foo bar\r\nabc def\r\n");
+writeFileSync(
+	path.join(texts, "marked.cs"),
+	Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("using System;\n")]),
+);
+writeFileSync(path.join(texts, "cased.txt"), "ſecret\nσασ\n");
+writeFileSync(path.join(texts, "marks.txt"), "Ⓐ\u200Cx²\nnext\u0085line\nsep\u2028line\n");
+
+const searches: [pattern: string, flags: readonly string[]][] = [
+	["foo.*$", []],
+	["^abc.+$", []],
+	["^using ", []],
+	["sep.line", []],
+	[String.raw`\w+$`, []],
+	[String.raw`\bx\b`, []],
+	[String.raw`next\sline`, []],
+	[String.raw`\S\s\S`, []],
+	["secret", ["--ignore-case", "--fixed-strings"]],
+	["ΣΑΣ", ["--ignore-case", "--fixed-strings"]],
+	["a.c", ["--fixed-strings"]],
+];
+for (const [pattern, flags] of searches) {
+	void test(
+		`what rg finds for ${pattern} is what the loop finds`,
+		{ skip: hasRg ? false : "rg is not installed" },
+		async () => {
+			const rg = spawnSync(
+				"rg",
+				[
+					"--hidden",
+					"--line-number",
+					"--no-heading",
+					"--with-filename",
+					...flags,
+					"--",
+					pattern,
+					".",
+				],
+				{ cwd: texts, encoding: "utf8" },
+			);
+			const found = rg.stdout
+				.split("\n")
+				.filter(Boolean)
+				.map((line) => /^(?:\.\/)?(?<at>[^:]+:\d+):/u.exec(line)?.groups?.at ?? line);
+			assert.deepEqual(
+				await proveSearches(texts, [
+					claim({
+						pattern,
+						literal: flags.includes("--fixed-strings"),
+						ignoreCase: flags.includes("--ignore-case"),
+						found,
+					}),
+				]),
+				[true],
+			);
+			// A side that hides what `rg` found earns no receipt.
+			if (found.length > 0) {
+				assert.deepEqual(
+					await proveSearches(texts, [
+						claim({
+							pattern,
+							literal: flags.includes("--fixed-strings"),
+							ignoreCase: flags.includes("--ignore-case"),
+							found: [],
+						}),
+					]),
+					[false],
+				);
+			}
+		},
+	);
+}
+
+void test("a match in .git is left out of the proof, as the loop leaves out .git", async () => {
+	assert.deepEqual(
+		await proveSearches(root, [claim({ pattern: "holds no work", found: [".git/config:1"] })]),
+		[true],
+	);
 });

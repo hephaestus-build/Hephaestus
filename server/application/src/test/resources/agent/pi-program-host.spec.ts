@@ -248,7 +248,7 @@ void test("a tools side that stops ends the review as a failure to capture, and 
 		{ PI_HARNESS_LOSE_TOOLS: "1" },
 	);
 	assert.match(lost.stderr, /review\.side_lost side=(?:tools|programs) error=ToolProtocolError/u);
-	assert.equal(lost.status, 78, lost.stderr);
+	assert.equal(lost.status, 79, lost.stderr);
 	assert.partialDeepStrictEqual(readJsonFile(lost.cwd, "out/review-state.json"), {
 		nonResults: [{ practiceSlug: "a-hangs", reason: "EXECUTION_INCOMPLETE" }],
 	});

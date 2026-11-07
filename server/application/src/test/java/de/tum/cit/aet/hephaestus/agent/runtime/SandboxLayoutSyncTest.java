@@ -41,6 +41,7 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
         assertThat(constant(runner, "PROVIDER_UNREACHABLE_EXIT"))
                 .isEqualTo(Integer.toString(SandboxLayout.EXIT_PROVIDER_UNREACHABLE));
         assertThat(constant(runner, "SERVER_ERROR_EXIT")).isEqualTo(Integer.toString(SandboxLayout.EXIT_SERVER_ERROR));
+        assertThat(constant(runner, "SIDE_LOST_EXIT")).isEqualTo(Integer.toString(SandboxLayout.EXIT_SIDE_LOST));
     }
 
     @Test

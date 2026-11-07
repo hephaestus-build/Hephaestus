@@ -9,6 +9,7 @@ import io.fabric8.kubernetes.api.model.PodCondition;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
@@ -221,12 +222,14 @@ public class SandboxExits {
         for (ContainerStatus container : containers) {
             ContainerStateTerminated ended = terminated(container);
             boolean sidecar = SIDECARS.contains(container.getName());
-            // A sidecar restarts after a memory kill, so the kill shows only in its last state.
-            ContainerStateTerminated killed = sidecar && container.getLastState() != null
+            // A sidecar restarts after a memory kill, so the kill can show only in its last state.
+            ContainerStateTerminated last = sidecar && container.getLastState() != null
                     ? container.getLastState().getTerminated()
-                    : ended;
-            if (killed != null && "OOMKilled".equals(killed.getReason()))
-                return new Exit(Reason.OOM_KILLED, container.getName(), killed.getExitCode(), killed.getReason());
+                    : null;
+            for (ContainerStateTerminated run : Arrays.asList(ended, last)) {
+                if (run != null && "OOMKilled".equals(run.getReason()))
+                    return new Exit(Reason.OOM_KILLED, container.getName(), run.getExitCode(), run.getReason());
+            }
             // A sidecar ends by a signal when the loop ends, so its exit code says nothing about the review.
             if (ended == null || sidecar) continue;
             Integer code = ended.getExitCode();

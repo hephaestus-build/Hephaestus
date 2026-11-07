@@ -1383,7 +1383,7 @@ export async function runReviewJob(): Promise<void> {
 				citation.path,
 				MAX_PINNED_BYTES,
 			);
-			if (blob.kind === "unreadable") {
+			if (blob.kind === "unreadable" || blob.kind === "tooLarge") {
 				return UNREADABLE;
 			}
 			return blob.kind === "regular" ? asText(blob.bytes) : null;
@@ -2039,6 +2039,9 @@ export async function runReviewJob(): Promise<void> {
 	// The review staged what it could and left at least one practice without a result. The worker decides from what is
 	// staged whether another attempt continues it; the code only tells this designed end from a failure.
 	const PARTIAL_REVIEW_EXIT = 78;
+	// A side of the Pod stopped or never started before anything was staged: the failure says nothing about the work,
+	// and another attempt can run it.
+	const SIDE_LOST_EXIT = 79;
 
 	/** Dials a side of the Pod. A review cannot run without its tools: the attempt ends as a failure to capture. */
 	async function openSide(side: string, socket: string): Promise<ToolClient> {
@@ -2046,7 +2049,7 @@ export async function runReviewJob(): Promise<void> {
 			return await openToolSide({ path: socket }, requiredEnv("TOOLS_NONCE"));
 		} catch (error) {
 			diagnose("review.side_unreachable", { side, error: errorKind(error) });
-			process.exit(PARTIAL_REVIEW_EXIT);
+			process.exit(SIDE_LOST_EXIT);
 		}
 	}
 	const toolSide = await openSide("tools", requiredEnv("TOOLS_SOCKET"));
@@ -3408,7 +3411,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		if (!maybeWriteResultFile()) {
 			if (lostSides.size > 0) {
 				finalizeOutput();
-				process.exit(PARTIAL_REVIEW_EXIT);
+				process.exit(SIDE_LOST_EXIT);
 			}
 			if ((providerFailures > 0 || measurementReply.asked) && !measurementReply.received) {
 				diagnose("review.unreachable", { unanswered_calls: providerFailures });

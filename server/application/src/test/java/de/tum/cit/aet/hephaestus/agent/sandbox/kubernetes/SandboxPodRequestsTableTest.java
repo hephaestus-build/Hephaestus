@@ -88,7 +88,6 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
                 "isolationProbe",
                 List.of(
                         probe.apply(KubernetesIsolationProbe.TRIAL_MEMORY),
-                        probe.apply(KubernetesIsolationProbe.PROBE_MEMORY),
                         probe.apply(KubernetesIsolationProbe.PROBE_MEMORY)));
     }
 

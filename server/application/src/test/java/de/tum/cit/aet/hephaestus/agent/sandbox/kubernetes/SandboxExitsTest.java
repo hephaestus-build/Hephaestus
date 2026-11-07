@@ -69,6 +69,16 @@ class SandboxExitsTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldNameASidecarThatRanOutOfMemoryAndDidNotRestart() {
+        assertThat(SandboxExits.exit(pod(
+                        null,
+                        ended(KubernetesPods.TOOLS, 137, "OOMKilled"),
+                        ended(KubernetesPods.LOOP, 0, "Completed"))))
+                .isEqualTo(
+                        new SandboxExits.Exit(SandboxExits.Reason.OOM_KILLED, KubernetesPods.TOOLS, 137, "OOMKilled"));
+    }
+
+    @Test
     void shouldNameASidecarThatCouldNotStart() {
         ContainerStatus waiting = new ContainerStatusBuilder()
                 .withName(KubernetesPods.TOOLS)

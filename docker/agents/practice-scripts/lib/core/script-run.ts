@@ -301,10 +301,11 @@ export async function runCustomProgram(
 		}
 	};
 	const reply = (message: Exclude<HostMessage, { kind: "job" | "abort" | "meta-accepted" }>) => {
-		if (!open.delete(message.id) || !child.connected || handOff.happened) {
-			return;
+		if (open.has(message.id) && child.connected && !handOff.happened) {
+			child.send(message);
 		}
-		child.send(message);
+		// Only now: a reply that could not go leaves the request open for its failure.
+		open.delete(message.id);
 	};
 	const refuseRequest = (kind: "model" | "read" | "review", id: number, reason: AbortReason) => {
 		if (!child.connected) {
@@ -318,13 +319,13 @@ export async function runCustomProgram(
 		};
 		child.send(failures[kind]);
 	};
-	const sendAbort = (reason: AbortReason) => {
+	const sendAbort = (reason: AbortReason, stopReason: StopReason = reason) => {
 		if (aborted !== undefined) {
 			return;
 		}
 		aborted = reason;
 		settled = {
-			failure: { stopReason: reason, error: `the host stopped this program: ${reason}` },
+			failure: { stopReason, error: `the host stopped this program: ${stopReason}` },
 		};
 		if (child.connected) {
 			child.send({ kind: "abort", reason } satisfies HostMessage);
@@ -345,7 +346,7 @@ export async function runCustomProgram(
 		"abort",
 		() => {
 			if (!ended) {
-				sendAbort(abortReasonOf(signal));
+				sendAbort(abortReasonOf(signal), stopReasonOf(signal));
 				return;
 			}
 			for (const { call } of open.values()) {

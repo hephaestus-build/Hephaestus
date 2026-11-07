@@ -235,9 +235,11 @@ public class KubernetesIsolationProbe {
                 () -> run(KubernetesWorker.KIND_REVIEW, review, PROCESS_TRIAL, PROBE_TIME));
         CompletableFuture<Outcome> closedRun =
                 CompletableFuture.supplyAsync(() -> run(CLOSED_KIND, closed, 0, PROBE_TIME));
-        // The policy admits a review's Pod to the gateway, so only the filter can stop the tools user here.
+        // The policy admits a review's Pod to the gateway, so only the filter can stop the tools user here. It runs
+        // after
+        // the closed Pod because the sandbox quota holds two probe Pods, and a third would cost a small node its turns.
         CompletableFuture<Outcome> toolsRun =
-                CompletableFuture.supplyAsync(() -> run(KubernetesWorker.KIND_REVIEW, closed, 0, PROBE_TIME, true));
+                closedRun.thenApplyAsync(done -> run(KubernetesWorker.KIND_REVIEW, closed, 0, PROBE_TIME, true));
         Outcome reviewed = reviewRun.join();
         Outcome closedOutcome = closedRun.join();
         Outcome toolsOutcome = toolsRun.join();
