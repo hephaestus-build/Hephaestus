@@ -87,7 +87,7 @@ jobs:
           CHANNEL: ${{ inputs.environment }}
         run: node scripts/automatic-promotion.ts
 
-      - uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@972e766b362779c7d2115251e8fc589b443a2c97
+      - uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@1f4a99eec77bf8504060ba1ca0fba492a809a930
         if: ${{ steps.policy.outputs.apply != 'false' }}
 
       # Unlike tooling, upstream image pins must come from the deployment target.
