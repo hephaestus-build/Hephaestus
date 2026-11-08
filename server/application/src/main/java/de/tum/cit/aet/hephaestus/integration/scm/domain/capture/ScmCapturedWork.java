@@ -24,6 +24,9 @@ public record ScmCapturedWork(
     /** The limitation of a discussion without a recorded whole provider read. */
     public static final String DISCUSSION_NOT_READ_WHOLE = "DISCUSSION_NOT_READ_WHOLE";
 
+    public static final String COMMENT_COUNT_UNKNOWN = "COMMENT_COUNT_UNKNOWN";
+    public static final String COMMENTS_NOT_READ_WHOLE = "COMMENTS_NOT_READ_WHOLE";
+
     public ScmCapturedWork {
         if (sourceId <= 0 || repositoryId <= 0 || number <= 0 || repositoryPath.isBlank())
             throw new IllegalArgumentException("Invalid pinned SCM work");

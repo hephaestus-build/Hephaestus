@@ -75,7 +75,8 @@ class ScmSparseCountersIntegrationTest extends BaseIntegrationTest {
         upsertPullRequest(fixture, false, 0, 0, 0, 0, 0);
         upsertIssue(fixture, false, 0);
 
-        assertDefaults(fixture);
+        assertDefaultPullRequestCountersAndLocks(fixture);
+        assertThat(readIssue(fixture).getCommentsCount()).isZero();
     }
 
     @ParameterizedTest
@@ -106,16 +107,17 @@ class ScmSparseCountersIntegrationTest extends BaseIntegrationTest {
     @EnumSource(
             value = IdentityProviderType.class,
             names = {"GITHUB", "GITLAB"})
-    void shouldKeepExistingInsertDefaultsWhenANewRowHasNoCountersOrLock(IdentityProviderType providerType) {
+    void shouldKeepAnOmittedIssueCountUnknownAndDefaultOtherCountersOnInsert(IdentityProviderType providerType) {
         Fixture fixture = fixture(providerType);
 
         upsertPullRequest(fixture, null, null, null, null, null, null);
         upsertIssue(fixture, null, null);
 
-        assertDefaults(fixture);
+        assertDefaultPullRequestCountersAndLocks(fixture);
+        assertThat(readIssue(fixture).getCommentsCount()).isNull();
     }
 
-    private void assertDefaults(Fixture fixture) {
+    private void assertDefaultPullRequestCountersAndLocks(Fixture fixture) {
         PullRequest pullRequest = readPullRequest(fixture);
         assertThat(pullRequest.getCommits()).isZero();
         assertThat(pullRequest.getAdditions()).isZero();
@@ -123,9 +125,7 @@ class ScmSparseCountersIntegrationTest extends BaseIntegrationTest {
         assertThat(pullRequest.getChangedFiles()).isZero();
         assertThat(pullRequest.getCommentsCount()).isZero();
         assertThat(pullRequest.isLocked()).isFalse();
-        Issue issue = readIssue(fixture);
-        assertThat(issue.getCommentsCount()).isZero();
-        assertThat(issue.isLocked()).isFalse();
+        assertThat(readIssue(fixture).isLocked()).isFalse();
     }
 
     private Fixture fixture(IdentityProviderType providerType) {

@@ -93,6 +93,7 @@ public class IssueContentSource {
         Map<SourceKind, SourceCompleteness> completeness = new HashMap<>();
         Map<SourceKind, Instant> observedAt = new HashMap<>();
         Map<SourceKind, SourceContentState> contentStates = new HashMap<>();
+        Map<SourceKind, List<String>> limitations = new HashMap<>();
 
         if (selectedKinds.contains(CORE)) {
             IssueRepository.ChildRollup children =
@@ -132,6 +133,14 @@ public class IssueContentSource {
                 commentsArr.add(cn);
             }
             commentCount = ordered.size();
+            if (!commentCapture.complete()) {
+                limitations.put(
+                        COMMENTS,
+                        List.of(
+                                issue.getCommentsCount() == null
+                                        ? ScmCapturedWork.COMMENT_COUNT_UNKNOWN
+                                        : ScmCapturedWork.COMMENTS_NOT_READ_WHOLE));
+            }
             writeJson(files, "comments.json", commentsArr);
             completeness.put(
                     COMMENTS, commentCapture.complete() ? SourceCompleteness.COMPLETE : SourceCompleteness.PARTIAL);
@@ -154,16 +163,18 @@ public class IssueContentSource {
                 Map.of(),
                 Map.of(),
                 null,
-                Map.of(),
+                limitations,
                 List.of(),
                 List.of(),
                 ScmCitableTexts.files(files, this::sourceKindFor, objectMapper));
     }
 
-    // A larger provider count proves missing comments; a smaller count does not prove the mirror is current.
+    // Missing counts cannot prove coverage. A larger provider count proves missing comments;
+    // a smaller count does not prove the mirror is current.
     private CommentCapture reviewedComments(long issueId, Issue issue) {
         long mirrored = issueCommentRepository.countByIssueId(issueId);
-        return new CommentCapture(revisions.reviewedComments(issueId), issue.getCommentsCount() <= mirrored);
+        Integer expected = issue.getCommentsCount();
+        return new CommentCapture(revisions.reviewedComments(issueId), expected != null && expected <= mirrored);
     }
 
     private record CommentCapture(List<StoredComment> comments, boolean complete) {}

@@ -147,6 +147,20 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
         long getCompleted();
     }
 
+    /** The manual backfill repairs counts only within the workspace's monitored provider scope. */
+    @Query("""
+        SELECT (COUNT(i) > 0) FROM Issue i
+        WHERE TYPE(i) = Issue AND i.repository.id = :repositoryId
+            AND i.deletedAt IS NULL AND i.commentsCount IS NULL
+            AND EXISTS (
+                SELECT 1 FROM RepositoryToMonitor m
+                WHERE m.workspace.id = :workspaceId AND m.nameWithOwner = i.repository.nameWithOwner
+                    AND monitor_covers_repository(m.workspace.id, m.nativeId,
+                        i.repository.nativeId, i.repository.provider.id) = true
+            )
+        """)
+    boolean existsUnknownCommentCount(@Param("workspaceId") long workspaceId, @Param("repositoryId") long repositoryId);
+
     @Query("SELECT i FROM Issue i LEFT JOIN FETCH i.repository WHERE TYPE(i) = Issue AND i.id = :id")
     Optional<Issue> findByIdWithRepository(@Param("id") long id);
 
@@ -383,7 +397,7 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
         VALUES (
             :nativeId, :providerId, :number, :title, :body, :state, :stateReason, :htmlUrl,
             COALESCE(:isLocked, false),
-            :closedAt, COALESCE(:commentsCount, 0), :lastSyncAt, :createdAt, :updatedAt,
+            :closedAt, :commentsCount, :lastSyncAt, :createdAt, :updatedAt,
             :authorId, :repositoryId, :milestoneId, :issueTypeId,
             :parentIssueId, :subIssuesTotal, :subIssuesCompleted, :subIssuesPercentCompleted,
             'ISSUE'

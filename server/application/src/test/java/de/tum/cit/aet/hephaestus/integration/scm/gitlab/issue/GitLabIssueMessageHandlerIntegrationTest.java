@@ -160,6 +160,16 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         setupTestData();
     }
 
+    @Test
+    void shouldKeepTheCountUnknownWhenAnIssueWebhookDoesNotCarryIt() throws IOException {
+        handleOnRoute(loadPayload("issue.open"));
+        var stored = transactionTemplate.execute(status -> issueRepository
+                .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
+                .orElseThrow()
+                .getCommentsCount());
+        assertThat(stored).isNull();
+    }
+
     @Nested
     class EventType {
 

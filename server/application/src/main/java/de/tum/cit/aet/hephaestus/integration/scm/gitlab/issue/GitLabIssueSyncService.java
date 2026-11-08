@@ -463,7 +463,8 @@ public class GitLabIssueSyncService {
         String createdAt = node.get("createdAt") != null ? node.get("createdAt").toString() : null;
         String updatedAt = node.get("updatedAt") != null ? node.get("updatedAt").toString() : null;
         String closedAt = node.get("closedAt") != null ? node.get("closedAt").toString() : null;
-        int userNotesCount = node.get("userNotesCount") != null ? ((Number) node.get("userNotesCount")).intValue() : 0;
+        Integer userNotesCount =
+                node.get("userNotesCount") != null ? ((Number) node.get("userNotesCount")).intValue() : null;
         Integer milestoneIid = extractMilestoneIid(node);
         String typeName = (String) node.get("type");
         String closedAsDuplicateOfGid = null;
@@ -573,7 +574,7 @@ public class GitLabIssueSyncService {
                 .orElse(null);
 
         // Sync notes for this issue if it has comments and wasn't skipped
-        if (issue != null && userNotesCount > 0) {
+        if (issue != null && userNotesCount != null && userNotesCount > 0) {
             try {
                 noteSyncService.syncNotesForIssue(scopeId, repository, Integer.parseInt(iid), issue, read);
             } catch (ConcurrencyFailureException conflict) {

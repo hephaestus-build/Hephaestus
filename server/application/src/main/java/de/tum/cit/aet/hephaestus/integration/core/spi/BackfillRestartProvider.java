@@ -11,6 +11,7 @@ public interface BackfillRestartProvider {
         return expected - stored >= MINIMUM_GAP && stored < expected * 0.8;
     }
 
+    /** Explicit incomplete coverage may be repaired even when an earlier row-count repair left a gap. */
     Optional<SyncTarget> restartCompletedBackfill(
-            long workspaceId, long syncTargetId, int providerCount, long storedCount);
+            long workspaceId, long syncTargetId, int providerCount, long storedCount, boolean repairIncompleteCoverage);
 }

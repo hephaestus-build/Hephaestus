@@ -138,6 +138,17 @@ The practices that need the whole discussion withhold their results on such work
 After the repair records a whole read, request a new review.
 A withheld review does not restart automatically.
 
+For GitHub and GitLab, manual repair also reopens completed history when a monitored live issue has an unknown comment count.
+Existing zero issue counts can be ambiguous, so they stay unknown until a backfill supplies the provider's count.
+
+This explicit coverage repair can restart history even when a previous row-count repair left a persistent gap.
+The guard against repeating that gap remains in effect for row-count repairs.
+If the server refuses the restart, the job reports a warning.
+Unknown coverage does not become a successful repair.
+
+After coverage is recovered, request a new review for work whose evidence was incomplete.
+Existing results are not rewritten.
+
 ## Run the repair
 
 1. Sign in as a workspace administrator.
@@ -167,7 +178,7 @@ A GitHub pull request or GitLab merge request that is not read whole also restar
 
 The server records the provider count of each repair restart in the repository monitor.
 It does not restart the same gap again, including after a server restart.
-Before another restart, the stored row count must reach the provider total recorded at the previous attempt.
+Before another row-count repair, the stored row count must reach the provider total recorded at the previous attempt.
 A later gap must still meet the same size and coverage thresholds.
 
 A repository that cannot be read or repaired adds a job warning.
