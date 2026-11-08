@@ -106,6 +106,12 @@ The Service `<release>-sandbox-gateway` selects every ready worker on this port.
 The Service `<release>-sandbox-gateway-probe` also selects a worker that is not ready, and only the isolation probe calls it.
 Through it, the probe checks that a review sandbox reaches the gateway and that a Pod of another kind does not.
 
+A review loop renews its own attempt lease through this Service during execution and result upload.
+Any ready worker can renew it. The worker that launched the Pod is not required for renewal.
+If renewal fails, the loop stops when its last confirmed lease expires.
+The worker renews the lease before the loop starts, after it exits, and during composition.
+The rollout drain stays unchanged until completion and composition can also survive a worker replacement.
+
 To deploy a worker pod:
 
 1. Set `SPRING_PROFILES_ACTIVE=prod,worker`.

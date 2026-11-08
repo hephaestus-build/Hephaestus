@@ -41,6 +41,7 @@ import io.fabric8.kubernetes.api.model.VolumeMount;
 import io.fabric8.kubernetes.api.model.batch.v1.Job;
 import io.fabric8.kubernetes.api.model.batch.v1.JobBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.server.mock.KubernetesMixedDispatcher;
 import io.fabric8.kubernetes.client.server.mock.KubernetesMockServer;
 import io.fabric8.mockwebserver.Context;
@@ -77,6 +78,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.health.contributor.Status;
@@ -823,6 +825,79 @@ class KubernetesSandboxRuntimeTest {
         assertThat(reviews.roomFor(LIMITS))
                 .as("the quota does not count the Job until the Job controller creates its Pod")
                 .isEqualTo(1);
+    }
+
+    @Test
+    void shouldObserveTheReviewLoopStartingAndEndingFromTheKubernetesWatch() {
+        var reviews = backend();
+        var handle = reviews.launch(new SandboxBackend.Launch(
+                SandboxBackend.Kind.REVIEW,
+                UUID.randomUUID(),
+                1,
+                IMAGE,
+                List.of("node", "run.ts"),
+                LIMITS,
+                Instant.now().plus(Duration.ofMinutes(7)),
+                gateway -> Map.of(),
+                false));
+        assertThat(reviews.running(handle)).isFalse();
+        String child = startChild(handle.id());
+        setStatus(
+                SANDBOXES,
+                child,
+                "Pending",
+                List.of(exited(KubernetesPods.ISOLATION, 0), exited(KubernetesPods.INITIALIZER, 0)),
+                List.of());
+        reviews.observe(handle, SandboxBackend.Stage.INITIALIZED, Instant.now().plusSeconds(10));
+        assertThat(reviews.running(handle)).isFalse();
+
+        setStatus(
+                SANDBOXES,
+                child,
+                "Running",
+                List.of(exited(KubernetesPods.ISOLATION, 0), exited(KubernetesPods.INITIALIZER, 0)),
+                List.of(running(KubernetesPods.LOOP)));
+        await().atMost(Duration.ofSeconds(10)).until(() -> reviews.running(handle));
+
+        setStatus(
+                SANDBOXES,
+                child,
+                "Succeeded",
+                List.of(exited(KubernetesPods.ISOLATION, 0), exited(KubernetesPods.INITIALIZER, 0)),
+                List.of(exited(KubernetesPods.LOOP, 0)));
+        await().atMost(Duration.ofSeconds(10)).until(() -> !reviews.running(handle));
+    }
+
+    @ParameterizedTest
+    @EnumSource(SandboxBackend.Kind.class)
+    void shouldKeepWorkerRenewalActiveWhenTheSandboxWatchIsUnavailable(SandboxBackend.Kind kind) {
+        var unavailable = mock(KubernetesSandboxCache.class);
+        when(unavailable.pod(any())).thenThrow(new KubernetesClientException("watch unavailable"));
+        var reviews = new KubernetesSandboxBackend(
+                pods, reviewJobs, worker, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()), unavailable);
+        var handle = reviews.launch(new SandboxBackend.Launch(
+                kind,
+                UUID.randomUUID(),
+                1,
+                IMAGE,
+                List.of("node", "run.ts"),
+                LIMITS,
+                Instant.now().plus(Duration.ofMinutes(7)),
+                gateway -> Map.of(),
+                false));
+        if (kind == SandboxBackend.Kind.REVIEW) {
+            String child = startChild(handle.id());
+            setStatus(
+                    SANDBOXES,
+                    child,
+                    "Pending",
+                    List.of(exited(KubernetesPods.ISOLATION, 0), exited(KubernetesPods.INITIALIZER, 0)),
+                    List.of());
+            reviews.observe(
+                    handle, SandboxBackend.Stage.INITIALIZED, Instant.now().plusSeconds(10));
+        }
+
+        assertThat(reviews.running(handle)).isFalse();
     }
 
     @Test

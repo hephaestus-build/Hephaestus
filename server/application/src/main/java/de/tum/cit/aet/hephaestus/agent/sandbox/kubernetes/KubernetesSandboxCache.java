@@ -9,6 +9,7 @@ import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,6 +70,11 @@ public class KubernetesSandboxCache implements AutoCloseable {
     /** The sandbox Pods that carry every one of the labels. */
     public List<Pod> pods(Map<String, String> labels) {
         return matching(pods, labels);
+    }
+
+    /** One sandbox Pod by its namespace/name key; no namespace scan or API-server request. */
+    public @Nullable Pod pod(String name) {
+        return synced(pods).getStore().getByKey(namespace + "/" + name);
     }
 
     /** The sandbox Jobs that carry every one of the labels. */

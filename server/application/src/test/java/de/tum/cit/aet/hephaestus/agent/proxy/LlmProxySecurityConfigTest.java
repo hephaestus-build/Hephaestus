@@ -285,7 +285,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         "POST,/internal/llm/stage-result",
         "GET,/internal/llm/runtime/{job}",
         "GET,/internal/llm/runtime/{job}/workspace",
-        "POST,/internal/llm/runtime/{job}/result"
+        "POST,/internal/llm/runtime/{job}/result",
+        "POST,/internal/llm/runtime/{job}/lease"
     })
     void shouldServeEveryCapabilityWhenTheJobsOneTokenCallsIt(String method, String path) throws Exception {
         ReviewJob job = runningJobOnAttempt(1);
@@ -321,6 +322,42 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
 
         assertThat(answerToTokenCall("unscoped")).isEqualTo(403);
         assertThat(servedAs.get()).isNull();
+    }
+
+    @Test
+    void shouldBindReviewLeaseRenewalToTheTokensOwnReviewOnTheGatewayOnly() throws Exception {
+        ReviewJob job = runningJobOnAttempt(1);
+        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jwtVerifier.verify("job-token")).thenReturn(jobJwt(job, 1));
+        String own = "/internal/llm/runtime/" + job.getId() + "/lease";
+
+        assertThat(answerTo(withToken(request("POST", own, GATEWAY_PORT), "job-token")))
+                .isEqualTo(200);
+        assertThat(answerTo(withToken(request("POST", own, APPLICATION_PORT), "job-token")))
+                .isEqualTo(404);
+        assertThat(answerTo(withToken(
+                        request("POST", "/internal/llm/runtime/" + UUID.randomUUID() + "/lease", GATEWAY_PORT),
+                        "job-token")))
+                .isEqualTo(401);
+        turnJwt(1);
+        assertThat(answerTo(withToken(request("POST", own, GATEWAY_PORT), "turn-token")))
+                .isEqualTo(401);
+        assertThat(answerTo(request("POST", own, GATEWAY_PORT))).isEqualTo(401);
+    }
+
+    @Test
+    void shouldApplyTheGatewayRateAndBodyLimitsToReviewLeaseRenewal() throws Exception {
+        ReviewJob job = runningJobOnAttempt(1);
+        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jwtVerifier.verify("job-token")).thenReturn(jobJwt(job, 1));
+        String path = "/internal/llm/runtime/" + job.getId() + "/lease";
+        assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "job-token")))
+                .isEqualTo(200);
+        assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "job-token")))
+                .isEqualTo(429);
+        MockHttpServletRequest oversized = request("POST", path, GATEWAY_PORT);
+        oversized.setContent(new byte[GATEWAY.maxRequestBytes() + 1]);
+        assertThat(answerTo(withToken(oversized, "job-token"))).isEqualTo(413);
     }
 
     /** The turn endpoints a Heph host calls with its turn credential, and their methods. */

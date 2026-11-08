@@ -61,6 +61,9 @@ public interface SandboxManager {
      */
     SandboxResult execute(SandboxSpec spec) throws SandboxException;
 
+    /** Whether the review loop container is running, from the runtime's observed state. */
+    boolean loopRunning(UUID jobId);
+
     /**
      * Request cancellation of a running sandbox.
      *

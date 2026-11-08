@@ -758,3 +758,20 @@ A draining flag and a `NOTIFY` channel would have no reader, so the layer adds n
 - [Option Z](#z-one-loop-host-for-every-loop-rejected) stays rejected.
   Its revisit trigger is now the bench at 64 reviews.
   Reopen it only if Pods or memory are still the first limit.
+
+## Update — 2026-11-08: review loops renew their own leases
+
+A review loop renews its lease through `POST /internal/llm/runtime/{id}/lease`.
+The route uses the attempt token and the sandbox gateway's limits.
+Renewal checks the workspace, attempt number and lease identity on the row, and refuses an expired lease.
+A receipt reports the remaining lease duration on the database clock.
+The loop subtracts the full request duration and uses a monotonic clock for its local deadline.
+
+The trusted loop wrapper renews during execution and result upload.
+A worker renews before the loop starts and after it exits, including capture and composition.
+The Kubernetes watch identifies whether the loop container runs, without an API request on each heartbeat.
+The worker checks a running loop's lease without extending it.
+A loop that cannot renew stops when its last confirmed lease expires.
+
+This closes the lease-renewal tie in decision F.
+Durable completion and portable composition remain separate changes, so the long drain stays.

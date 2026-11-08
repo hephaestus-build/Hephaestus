@@ -336,6 +336,16 @@ public class SandboxAttemptRunner implements SandboxManager {
         }
     }
 
+    @Override
+    public boolean loopRunning(UUID jobId) {
+        var running = new AtomicBoolean();
+        activeSandboxes.computeIfPresent(jobId, (id, handle) -> {
+            running.set(backend.running(handle));
+            return handle;
+        });
+        return running.get();
+    }
+
     /**
      * Registers the attempt's gateway session on its inputs. A review attempt with a declared attempt number is bound
      * to that attempt and image before anything can upload for it. A failed registration removes the input archive.

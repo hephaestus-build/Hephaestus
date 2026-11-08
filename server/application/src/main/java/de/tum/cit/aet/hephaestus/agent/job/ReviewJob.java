@@ -185,8 +185,8 @@ public class ReviewJob {
     private @Nullable Instant startedAt;
 
     /**
-     * Until when the worker that runs this attempt holds it, on the database clock. The worker sets it at the claim and
-     * renews it with its heartbeat. An attempt whose lease expired lost its worker, and the server recovers it.
+     * The attempt's expiry on the database clock. Its loop renews during execution and upload; a worker renews during
+     * Pod startup and result collection too. An expired lease cannot be revived, and the server recovers the attempt.
      */
     @Column(name = "leased_until")
     private @Nullable Instant leasedUntil;
