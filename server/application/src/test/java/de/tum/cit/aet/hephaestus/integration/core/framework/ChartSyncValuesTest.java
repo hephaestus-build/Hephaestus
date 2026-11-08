@@ -14,7 +14,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** An operator gets a value the server would refuse at start as an error at install, not as a failing Pod. */
-class ChartMonitoringValuesTest extends BaseUnitTest {
+class ChartSyncValuesTest extends BaseUnitTest {
 
     private static final Path SCHEMA = Path.of("../../deploy/chart/hephaestus/values.schema.json");
 
@@ -24,7 +24,7 @@ class ChartMonitoringValuesTest extends BaseUnitTest {
         JsonNode schema = JsonMapper.builder()
                 .build()
                 .readTree(Files.readString(SCHEMA))
-                .at("/properties/config/properties/monitoring/properties/" + value);
+                .at("/properties/config/properties/sync/properties/" + value);
         Field field = SyncSchedulerProperties.class.getDeclaredField(value);
 
         assertThat(schema.get("minimum").asLong())

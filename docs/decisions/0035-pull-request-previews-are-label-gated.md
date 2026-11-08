@@ -67,8 +67,8 @@ reviewer wants *in order to* review.
    `application-worker` and `webhook-server`, and overriding `volumes`, `labels` and `depends_on` with
    `!override` — but it inverts the sandbox. Compose merges per key, so the preview inherits every one of the
    reference application server's variables rather than the subset it chooses, and the rendered result
-   arrives with `LEADERBOARD_NOTIFICATION_ENABLED`, `MONITORING_BACKFILL_ENABLED` and
-   `MONITORING_SYNC_CRON` switched on, `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` set (which refuses the
+   arrives with `LEADERBOARD_NOTIFICATION_ENABLED`, `SYNC_BACKFILL_ENABLED` and
+   `SYNC_CRON` switched on, `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` set (which refuses the
    boot), and staging's hostname in `APPLICATION_HOST_URL`. It also inherits `/var/run/docker.sock` on
    the application server unless a `!override` removes it. A preview's posture is "off unless listed";
    inheriting makes it "on unless removed", and a *new* integration would arrive switched on with

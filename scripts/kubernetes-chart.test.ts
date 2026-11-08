@@ -536,3 +536,24 @@ function at(value: unknown, path: readonly string[]): unknown {
 	}
 	return current;
 }
+
+await test("the sync settings use config.sync without the old monitoring group", () => {
+	const valid = install(prepared, operator);
+	assert.equal(
+		validate(
+			merge(valid, {
+				config: {
+					sync: {
+						runOnStartup: false,
+						timeframeDays: 14,
+						syncCron: "0 0 3 * * *",
+						cooldownMinutes: 15,
+					},
+				},
+			}),
+		),
+		true,
+		JSON.stringify(validate.errors),
+	);
+	assert.equal(validate(merge(valid, { config: { monitoring: { runOnStartup: false } } })), false);
+});

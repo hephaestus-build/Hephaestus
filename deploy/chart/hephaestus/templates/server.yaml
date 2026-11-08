@@ -104,14 +104,14 @@ spec:
               value: {{ $config.llmDisplayCurrency | quote }}
             {{- include "hephaestus.env.modelEgress" . | nindent 12 }}
             {{- include "hephaestus.privateCaEnv" . | nindent 12 }}
-            - name: MONITORING_RUN_ON_STARTUP
-              value: {{ $config.monitoring.runOnStartup | quote }}
-            - name: MONITORING_TIMEFRAME
-              value: {{ $config.monitoring.timeframeDays | int | quote }}
-            - name: MONITORING_SYNC_CRON
-              value: {{ $config.monitoring.syncCron | quote }}
-            - name: MONITORING_SYNC_COOLDOWN_IN_MINUTES
-              value: {{ $config.monitoring.cooldownMinutes | int | quote }}
+            - name: SYNC_RUN_ON_STARTUP
+              value: {{ $config.sync.runOnStartup | quote }}
+            - name: SYNC_TIMEFRAME_DAYS
+              value: {{ $config.sync.timeframeDays | int | quote }}
+            - name: SYNC_CRON
+              value: {{ $config.sync.syncCron | quote }}
+            - name: SYNC_COOLDOWN_MINUTES
+              value: {{ $config.sync.cooldownMinutes | int | quote }}
             - name: HEPHAESTUS_AUTH_ISSUER
               value: {{ printf "https://%s" .Values.host | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_AUTH_STATE_COOKIE_KEY") | nindent 12 }}
