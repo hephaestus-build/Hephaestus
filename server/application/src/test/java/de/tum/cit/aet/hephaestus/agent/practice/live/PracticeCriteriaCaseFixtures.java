@@ -272,9 +272,9 @@ final class PracticeCriteriaCaseFixtures {
     }
 
     /**
-     * The change view that the runner derives at its start ({@code writeChangeView} in {@code pi-change.ts}), derived
+     * The change view that the runner derives at its start ({@code writeChangeView} in {@code pi-change.js}), derived
      * here as well, because the staged sources are checked against it before any runner starts. Needs
-     * {@code pi-change.ts} beside the workspace's other files.
+     * {@code pi-change.js} beside the workspace's other files.
      */
     static void deriveChangeView(Path workspace) throws IOException, InterruptedException {
         String context = SandboxLayout.CONTEXT_PREFIX.replaceFirst("/$", "");
@@ -284,7 +284,7 @@ final class PracticeCriteriaCaseFixtures {
                 "node",
                 "--input-type=module",
                 "-e",
-                "import { readChange, readDescription, writeChangeView } from './pi-change.ts';"
+                "import { readChange, readDescription, writeChangeView } from './pi-change.js';"
                         + " const change = readChange('" + context + "');"
                         + " if (change !== null) writeChangeView('.', '" + repository + "', change,"
                         + " readDescription('" + context + "'));");

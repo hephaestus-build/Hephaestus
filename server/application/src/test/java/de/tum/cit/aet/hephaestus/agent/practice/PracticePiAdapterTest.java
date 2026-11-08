@@ -75,9 +75,9 @@ class PracticePiAdapterTest extends BaseUnitTest {
     void shouldStageTheResultNormalizerAndNoPracticeScriptStageWhenBuildingTheSpec() {
         var spec = adapter.buildSandboxSpec(proxyRequest());
 
-        assertThat(spec.inputFiles())
-                .containsKeys("pi-change.ts", "pi-result-normalize.ts", "pi-task-paths.ts")
-                .doesNotContainKeys("pi-practice-scripts.sh", "pi-practice-scripts.ts", "pi-observation-normalize.ts");
+        assertThat(spec.inputFiles().keySet())
+                .contains("pi-change.js", "pi-result-normalize.js", "pi-task-paths.js")
+                .doesNotContain("pi-practice-scripts.sh", "pi-practice-scripts.ts", "pi-observation-normalize.ts");
         assertThat(spec.command().getLast()).doesNotContain("pi-practice-scripts");
     }
 

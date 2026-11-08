@@ -43,7 +43,7 @@ export function guardScriptImports(): void {
 					`A practice script can import only ${[...entries.keys()].join(", ")}, not ${specifier}. Rewrite the script for this API.`,
 				);
 			}
-			return { url, format: "module-typescript", shortCircuit: true };
+			return nextResolve(url, context);
 		},
 	});
 }

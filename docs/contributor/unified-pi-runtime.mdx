@@ -11,6 +11,15 @@ Use this page to change how a conversation turn runs.
 [ADR 0057](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0057-one-heph-conversation-per-developer.md) records the decisions.
 [Runtime roles](/admin/runtime-roles#conversation-turns) gives the operator settings.
 
+`processResources` compiles the trusted Node modules to JavaScript for the server JAR.
+`PracticeRunnerProfile` selects the review's compiled modules.
+The image build compiles the shared toolkit and program child.
+The source remains TypeScript.
+Stored custom practice programs can still use TypeScript.
+
+Release qualification extracts the runtime from the matching application image.
+It runs that runtime with the candidate agent image and records both image references.
+
 ## The ledger
 
 [Practice feedback language § Conversation](./practice-feedback-language.md#conversation) defines the conversation, the thread, the message and the weekly digest.
@@ -542,8 +551,8 @@ If the host is lost after a claim, the worker tries one fresh host before the cl
 
 | Property | Value |
 | --- | --- |
-| Image | The agent image of the release, runtime contract 13 (`SandboxLayout.RUNTIME_CONTRACT_VERSION`). It provides Node and the Pi SDK. |
-| Host script | `heph-host.ts`, its modules, and the system prompt come from the worker JAR. The worker stages them into the workspace (`HephHostSpec`). The image does not hold them. |
+| Image | The agent image of the release, runtime contract 14 (`SandboxLayout.RUNTIME_CONTRACT_VERSION`). It provides Node and the Pi SDK. |
+| Host script | `heph-host.js`, its modules, and the system prompt come from the worker JAR. The worker stages them into the workspace (`HephHostSpec`). The image does not hold them. |
 | Process | `node --max-old-space-size=1024 --permission`, with no child-process grant. |
 | Readable paths | The workspace, `/opt/pi-sdk`, the empty home, and the practice-script library (`/opt/practice-scripts`). The provider helper imports that library through the workspace link that the practice runners also use (`PiRunnerProfile.PRACTICE_SCRIPT_LIBRARY_SETUP`). |
 | Writable paths | Pi's agent directory and the temporary directory only. |

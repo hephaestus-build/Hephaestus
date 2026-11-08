@@ -18,19 +18,19 @@ import java.util.Map;
  */
 public final class HephHostSpec {
 
-    static final String HOST_SCRIPT = "heph-host.ts";
+    static final String HOST_SCRIPT = "heph-host.js";
 
     /** Imported by the host with a relative specifier, so each is staged beside it. */
     static final List<String> SIDECARS = List.of(
-            "heph-host-protocol.ts",
-            "heph-tools.ts",
-            "tool-client.ts",
-            "tool-protocol.ts",
-            "pi-agent-sandbox.ts",
-            "pi-diagnostics.ts",
+            "heph-host-protocol.js",
+            "heph-tools.js",
+            "tool-client.js",
+            "tool-protocol.js",
+            "pi-agent-sandbox.js",
+            "pi-diagnostics.js",
             "pi-diagnostics.json",
-            "pi-error-text.ts",
-            "pi-text.ts",
+            "pi-error-text.js",
+            "pi-text.js",
             SandboxLayout.PROVIDER_HELPER_FILENAME);
 
     /** Node's heap, below the host's limit so that its code, buffers and stacks fit beside it. */

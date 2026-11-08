@@ -7,11 +7,10 @@ import { environmentForGitFixture } from "../../../../../../scripts/lib/git-envi
 import { GOLDEN_INPUTS, GOLDEN_RECORD, stageGoldenWorkspace } from "./golden-review-workspace.ts";
 import { INJECTION, type InjectionSurface } from "./prompt-injection-corpus.ts";
 
-const AGENT = new URL("../../../main/resources/agent/", import.meta.url);
-
 /** A native review workspace. The image supplies the SDK and the practice script toolkit. */
 export function stageSecurityReview(
 	cwd: string,
+	runtime: string,
 	workspaceId: string,
 	surface?: InjectionSurface,
 	marker = "",
@@ -19,7 +18,7 @@ export function stageSecurityReview(
 	// The release job installs no packages. Read this one staged contract value without loading zod.
 	const schemaVersion = Number(
 		/^export const SUPPORTED_SCHEMA_VERSION = (?<version>\d+);$/mu.exec(
-			readFileSync(new URL("pi-task-paths.ts", AGENT), "utf8"),
+			readFileSync(path.join(runtime, "pi-task-paths.js"), "utf8"),
 		)?.groups?.version,
 	);
 	assert.ok(
@@ -29,12 +28,9 @@ export function stageSecurityReview(
 	stageGoldenWorkspace(
 		cwd,
 		schemaVersion,
-		readFileSync(new URL("pi-orchestrator.md", AGENT), "utf8"),
+		readFileSync(path.join(runtime, "pi-orchestrator.md"), "utf8"),
 	);
-	cpSync(AGENT, cwd, {
-		recursive: true,
-		filter: (source) => !source.includes(`${path.sep}agent${path.sep}work`),
-	});
+	cpSync(runtime, cwd, { recursive: true });
 	const write = (file: string, value: string) => {
 		mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true });
 		writeFileSync(path.join(cwd, file), value);

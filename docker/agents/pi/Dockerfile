@@ -21,6 +21,11 @@ COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gat
 COPY --from=agent-runtime tool-protocol.ts tool-client.ts tools-server.ts ./
 RUN pnpm exec tsc -p tsconfig.build.json && pnpm exec node dist/tools-seccomp.js dist
 
+COPY practice-scripts/package.json practice-scripts/child.ts practice-scripts/build.ts practice-scripts/tsconfig.build.json /opt/practice-scripts/
+COPY practice-scripts/lib/ /opt/practice-scripts/lib/
+COPY practice-scripts/kits/ /opt/practice-scripts/kits/
+RUN pnpm exec node /opt/practice-scripts/build.ts
+
 # Debian 13: its fd (>= 8.7) takes the `--no-require-git` Pi's find tool passes outside a repository.
 FROM node:${NODE_VERSION}-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a AS os-packages
 RUN apt-get update -o APT::Update::Error-Mode=any -qq && apt-get upgrade -y -qq && \
@@ -96,13 +101,11 @@ RUN mkdir -p /tmp/abi-check && ln -sf /opt/pi-sdk/node_modules /tmp/abi-check/no
     rm -rf /tmp/abi-check
 
 COPY --from=dependencies /opt/practice-scripts/node_modules /opt/practice-scripts/node_modules
-COPY practice-scripts/package.json practice-scripts/child.ts /opt/practice-scripts/
-COPY practice-scripts/lib/ /opt/practice-scripts/lib/
-COPY practice-scripts/kits/ /opt/practice-scripts/kits/
+COPY --from=gateway /opt/practice-scripts/dist/ /opt/practice-scripts/
 
 # The runner imports the practice script host through a link the runtime creates before Node starts
 # (`PracticeRunnerProfile.setupCommands`): `/workspace/work/practice-scripts/lib` → `/opt/practice-scripts/lib`.
-# Resolving it here, as /workspace/.run-pi.ts does, proves the toolkit and its own dependencies load beside the
+# Resolving it here, as /workspace/.run-pi.js does, proves the toolkit and its own dependencies load beside the
 # Pi SDK, and that a program's process starts under the permissions the host gives it.
 RUN mkdir -p /tmp/host-check/work/practice-scripts/practices && \
     ln -s /opt/pi-sdk/node_modules /tmp/host-check/node_modules && \
@@ -110,12 +113,12 @@ RUN mkdir -p /tmp/host-check/work/practice-scripts/practices && \
     ln -sfn /opt/practice-scripts/kits /tmp/host-check/work/practice-scripts/kits && \
     printf '%s\n' \
       'import { createAgentSession } from "@earendil-works/pi-coding-agent";' \
-      'import { BUILTIN_SCRIPT, runPracticeProgram } from "./work/practice-scripts/lib/core/program-host.ts";' \
-      'import { parseCandidate } from "./work/practice-scripts/lib/core/contract.ts";' \
+      'import { BUILTIN_SCRIPT, runPracticeProgram } from "./work/practice-scripts/lib/core/program-host.js";' \
+      'import { parseCandidate } from "./work/practice-scripts/lib/core/contract.js";' \
       'if (typeof createAgentSession !== "function" || typeof runPracticeProgram !== "function") { throw new Error("the host cannot load the Pi SDK and the toolkit together"); }' \
       'if (typeof BUILTIN_SCRIPT.run !== "function" || parseCandidate({}).ok) { throw new Error("the toolkit contract does not load"); }' \
-      > /tmp/host-check/.run-pi.ts && \
-    node /tmp/host-check/.run-pi.ts && \
+      > /tmp/host-check/.run-pi.js && \
+    node /tmp/host-check/.run-pi.js && \
     rm -rf /tmp/host-check
 
 RUN git config --system core.hooksPath /nonexistent && \
@@ -216,7 +219,7 @@ RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions 
     chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     ln -s /opt/pi-sdk/node_modules /workspace/node_modules
 
-LABEL hephaestus.agent.runtime-contract=13
+LABEL hephaestus.agent.runtime-contract=14
 LABEL hephaestus.agent.node-version=${NODE_VERSION}
 LABEL hephaestus.agent.pi-version=${PI_VERSION}
 

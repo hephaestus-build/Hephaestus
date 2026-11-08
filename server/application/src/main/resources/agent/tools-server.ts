@@ -482,7 +482,7 @@ export function roleOptions(
 	"putRoots" | "scriptEntry" | "programsOnly" | "operations" | "nestedPuts"
 > {
 	if (role === "programs") {
-		return { putRoots: [repos], scriptEntry: "/opt/practice-scripts/child.ts", programsOnly: true };
+		return { putRoots: [repos], scriptEntry: "/opt/practice-scripts/child.js", programsOnly: true };
 	}
 	if (role === "conversation") {
 		const filter = process.env.TOOLS_COMMAND_FILTER;

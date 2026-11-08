@@ -50,7 +50,7 @@ public interface PiRunnerProfile {
     String runnerScript();
 
     /**
-     * Sibling ES-module files the runner imports relatively (e.g. {@code ./pi-result-normalize.ts}).
+     * Sibling ES-module files the runner imports relatively (e.g. {@code ./pi-result-normalize.js}).
      * Each is staged at the workspace root next to the runner so the import resolves. Empty by default.
      */
     default List<String> sidecarScripts() {

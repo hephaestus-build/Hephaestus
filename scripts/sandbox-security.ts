@@ -181,8 +181,30 @@ createServer((request, response) => {
 	}
 }
 
-async function qualify(image: string, reportPath?: string) {
+export async function applicationRuntime(image: string, directory: string): Promise<void> {
+	await mkdir(directory, { recursive: true });
+	const extracted = await mkdtemp(path.join(tmpdir(), "sandbox-runtime-"));
+	try {
+		const created = await output("docker", ["create", "--", image]);
+		const container = created.trim();
+		assert.match(container, /^[a-f0-9]{64}$/u, "Docker must return the created container id");
+		const archive = path.join(extracted, "runner.jar");
+		try {
+			await output("docker", ["cp", `${container}:/workspace/runner.jar`, archive]);
+		} finally {
+			await output("docker", ["rm", container]);
+		}
+		await output("unzip", ["-q", archive, "agent/*", "-d", extracted]);
+		await cp(path.join(extracted, "agent"), directory, { recursive: true });
+	} finally {
+		await rm(extracted, { recursive: true, force: true });
+	}
+}
+
+async function qualify(image: string, applicationImage: string, reportPath?: string) {
 	const work = await mkdtemp(path.join(tmpdir(), "sandbox-security-"));
+	const runtime = path.join(work, "runtime");
+	await applicationRuntime(applicationImage, runtime);
 	const marker = `workspace-a-${randomUUID()}`;
 	const evaluation = path.join(work, "eval");
 	await mkdir(evaluation);
@@ -207,6 +229,7 @@ async function qualify(image: string, reportPath?: string) {
 			await chmod(artifacts, 0o777);
 			stageSecurityReview(
 				input,
+				runtime,
 				surface === "control" ? "101" : "202",
 				injectionSurface(surface),
 				surface === "control" ? marker : "",
@@ -306,7 +329,13 @@ async function qualify(image: string, reportPath?: string) {
 			await writeFile(
 				reportPath,
 				JSON.stringify(
-					{ image, passed, failedCase: passed ? null : currentCase, cases: results },
+					{
+						image,
+						applicationImage,
+						passed,
+						failedCase: passed ? null : currentCase,
+						cases: results,
+					},
 					null,
 					2,
 				),
@@ -324,11 +353,19 @@ async function qualify(image: string, reportPath?: string) {
 if (import.meta.main) {
 	assert.equal(process.platform, "linux", "Run sandbox qualification on a Linux Docker host");
 	const { values } = parseArgs({
-		options: { image: { type: "string" }, report: { type: "string" } },
+		options: {
+			image: { type: "string" },
+			"application-image": { type: "string" },
+			report: { type: "string" },
+		},
 	});
 	assert.ok(
 		values.image !== undefined && values.image !== "",
 		"--image is required; use the release candidate's agent-pi digest",
 	);
-	await qualify(values.image, values.report);
+	assert.ok(
+		values["application-image"] !== undefined && values["application-image"] !== "",
+		"--application-image is required; use the matching application-server digest",
+	);
+	await qualify(values.image, values["application-image"], values.report);
 }

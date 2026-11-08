@@ -22,7 +22,7 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
 
     @Test
     void shouldStageTheHephHostWithTheWorkspaceLayoutTheServerUses() throws IOException {
-        String host = resource("agent/heph-host.ts");
+        String host = resource("agent/heph-host.js");
 
         assertThat(constant(host, "WORKSPACE_ROOT")).isEqualTo("\"" + SandboxLayout.WORKSPACE_ROOT + "\"");
         assertThat(constant(host, "MENTOR_SYSTEM_PROMPT_PATH"))
@@ -32,7 +32,7 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
 
     @Test
     void shouldExitThePracticeRunnerWithTheCodesTheServerReads() throws IOException {
-        String runner = resource("agent/pi-runner.ts");
+        String runner = resource("agent/pi-runner.js");
 
         assertThat(constant(runner, "ENVELOPE_MISMATCH_EXIT"))
                 .isEqualTo(Integer.toString(SandboxLayout.EXIT_ENVELOPE_MISMATCH));
@@ -59,7 +59,7 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
     void shouldLetEverySessionCiteTheSourcesTheRunnerReadsThroughGit() throws IOException {
         String sources = Files.readString(
                 repoFile("docker/agents/practice-scripts/kits/scm/sources.ts"), StandardCharsets.UTF_8);
-        String readable = resource("agent/pi-declared-sources.ts");
+        String readable = resource("agent/pi-declared-sources.js");
 
         assertThat(readable).contains("return new Set([...declared, DIFF_SOURCE, TREE_SOURCE]);");
         assertThat(Set.of(constant(sources, "DIFF_SOURCE"), constant(sources, "TREE_SOURCE")))
