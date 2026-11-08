@@ -6,25 +6,25 @@ runs:
     - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       with:
         node-version-file: ${{ github.action_path }}/../../../package.json
-    - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@7c638c35e9184f6cd568ea06a21efac7b39f5e82
+    - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@6796a5295ee0be086b6406e30a4e46fac99f1278
       with:
         cache: "false"
         tool: cosign-bootstrap
-    - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@7c638c35e9184f6cd568ea06a21efac7b39f5e82
+    - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@6796a5295ee0be086b6406e30a4e46fac99f1278
       with:
         cache: "false"
         tool: cosign
-    - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@7c638c35e9184f6cd568ea06a21efac7b39f5e82
+    - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@6796a5295ee0be086b6406e30a4e46fac99f1278
       with:
         cache: "false"
         tool: cosign
         variant: key
-    - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@7c638c35e9184f6cd568ea06a21efac7b39f5e82
+    - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@6796a5295ee0be086b6406e30a4e46fac99f1278
       with:
         cache: "false"
         tool: cosign
         variant: keyless
-    - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@7c638c35e9184f6cd568ea06a21efac7b39f5e82
+    - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@6796a5295ee0be086b6406e30a4e46fac99f1278
       with:
         cache: "false"
         tool: cosign
