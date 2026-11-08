@@ -50,6 +50,7 @@ export default defineConfig({
 	},
 	plugins: [
 		"@hey-api/typescript",
+		"@hey-api/schemas",
 		"@hey-api/client-fetch",
 		{
 			name: "@tanstack/react-query",

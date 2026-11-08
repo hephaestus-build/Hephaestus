@@ -14,7 +14,7 @@ import org.jspecify.annotations.Nullable;
 
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public record CreatePracticeGroupRequestDTO(
-        @JsonProperty(required = true) @ValidPracticeSlug String slug,
+        @JsonProperty(required = true) @ValidDefinitionSlug String slug,
 
         @JsonProperty(required = true) @NotBlank @Size(max = GroupDefinition.NAME_MAX_LENGTH)
         String name,

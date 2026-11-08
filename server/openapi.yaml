@@ -13015,7 +13015,7 @@ components:
           type: string
           maxLength: 64
           minLength: 0
-          pattern: "[a-z0-9]+(?:-[a-z0-9]+)*"
+          pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*(?![\\s\\S])"
       required:
       - color
       - description
@@ -13190,7 +13190,8 @@ components:
           type: string
           maxLength: 64
           minLength: 0
-          pattern: "[a-z0-9]+(?:-[a-z0-9]+)*"
+          pattern: "^(?!(?:definition-options|feedback|feedback-modes|items|practice-script-needs|releases|results|review-batches|review-context|review-requests|review-schedules|review-settings|reviewed|reviews|scans|standings|tiles|workspace-overview)$)[a-z0-9]+(?:-[a-z0-9]+)*(?![\\\
+            s\\S])"
       required:
       - definition
       - groupSlug
@@ -14145,7 +14146,7 @@ components:
           type: string
           maxLength: 64
           minLength: 0
-          pattern: "[a-z0-9]+(?:-[a-z0-9]+)*"
+          pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*(?![\\s\\S])"
       required:
       - color
       - description
@@ -14176,7 +14177,8 @@ components:
           type: string
           maxLength: 64
           minLength: 0
-          pattern: "[a-z0-9]+(?:-[a-z0-9]+)*"
+          pattern: "^(?!(?:definition-options|feedback|feedback-modes|items|practice-script-needs|releases|results|review-batches|review-context|review-requests|review-schedules|review-settings|reviewed|reviews|scans|standings|tiles|workspace-overview)$)[a-z0-9]+(?:-[a-z0-9]+)*(?![\\\
+            s\\S])"
       required:
       - definition
       - groupSlug
@@ -21301,7 +21303,7 @@ components:
             type: string
             maxLength: 64
             minLength: 0
-            pattern: "[a-z0-9]+(?:-[a-z0-9]+)*"
+            pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*(?![\\s\\S])"
           maxItems: 10000
           minItems: 0
       required:

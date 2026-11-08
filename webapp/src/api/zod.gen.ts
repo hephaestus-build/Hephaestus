@@ -367,7 +367,7 @@ export const zCatalogGroupInput = z.object({
     icon: z.string().min(0).max(64).nullable(),
     name: z.string().min(0).max(128),
     position: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    slug: z.string().min(0).max(64).regex(/[a-z0-9]+(?:-[a-z0-9]+)*/)
+    slug: z.string().min(0).max(64).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*(?![\s\S])/)
 });
 
 export const zCatalogGroupPracticeAction = z.object({
@@ -857,7 +857,7 @@ export const zCreatePracticeGroupRequest = z.object({
     name: z.string().min(0).max(128),
     position: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
     shownToDevelopers: z.boolean(),
-    slug: z.string().min(0).max(64).regex(/[a-z0-9]+(?:-[a-z0-9]+)*/)
+    slug: z.string().min(0).max(64).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*(?![\s\S])/)
 });
 
 export const zCreateResultMarkRequest = z.object({
@@ -3359,7 +3359,7 @@ export const zRemoveResultMarkRequest = z.object({
 });
 
 export const zReorderRequest = z.object({
-    slugs: z.array(z.string().min(0).max(64).regex(/[a-z0-9]+(?:-[a-z0-9]+)*/)).min(0).max(10000)
+    slugs: z.array(z.string().min(0).max(64).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*(?![\s\S])/)).min(0).max(10000)
 });
 
 export const zResearchConsent = z.object({
@@ -4823,7 +4823,7 @@ export const zCatalogPracticeInput = z.object({
     groupSlug: z.string().nullable(),
     kind: z.string().regex(/[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*/),
     position: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    slug: z.string().min(0).max(64).regex(/[a-z0-9]+(?:-[a-z0-9]+)*/)
+    slug: z.string().min(0).max(64).regex(/^(?!(?:definition-options|feedback|feedback-modes|items|practice-script-needs|releases|results|review-batches|review-context|review-requests|review-schedules|review-settings|reviewed|reviews|scans|standings|tiles|workspace-overview)$)[a-z0-9]+(?:-[a-z0-9]+)*(?![\s\S])/)
 });
 
 export const zCatalogPracticeUpdate = z.object({
@@ -4838,7 +4838,7 @@ export const zCreatePracticeRequest = z.object({
     groupSlug: z.string().nullable(),
     kind: z.string().regex(/[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*/),
     position: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    slug: z.string().min(0).max(64).regex(/[a-z0-9]+(?:-[a-z0-9]+)*/)
+    slug: z.string().min(0).max(64).regex(/^(?!(?:definition-options|feedback|feedback-modes|items|practice-script-needs|releases|results|review-batches|review-context|review-requests|review-schedules|review-settings|reviewed|reviews|scans|standings|tiles|workspace-overview)$)[a-z0-9]+(?:-[a-z0-9]+)*(?![\s\S])/)
 });
 
 export const zPracticeReleaseProposal = z.object({

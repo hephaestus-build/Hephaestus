@@ -1,3 +1,5 @@
+import { CreatePracticeGroupRequestSchema, CreatePracticeRequestSchema } from "@/api/schemas.gen";
+
 import type {
 	PracticeDefinitionInput,
 	PracticeDefinitionOptions,
@@ -11,7 +13,6 @@ import type { AboutRole } from "@/components/practice-vocabulary/about-role-labe
 import { hasText } from "@/lib/text";
 
 import { type AppliesWhenDraft, appliesWhenDraftOf, parseAppliesWhen } from "./applies-when";
-import { isValidSlug } from "./constants";
 import {
 	FIGURE_PLACEHOLDER,
 	hasFigurePlaceholder,
@@ -41,6 +42,9 @@ import {
 	type ReviewedByProblem,
 	reviewedByProblem,
 } from "./reviewed-by";
+
+const PRACTICE_SLUG = new RegExp(CreatePracticeRequestSchema.properties.slug.pattern, "u");
+const DEFINITION_SLUG = new RegExp(CreatePracticeGroupRequestSchema.properties.slug.pattern, "u");
 
 // Base UI Select requires a string value for an unassigned group.
 export const NO_GROUP = "__none__";
@@ -322,9 +326,16 @@ export function draftErrors(
 				reveal: reveals.revealScript,
 			},
 		mode === "create" &&
-			!isValidSlug(draft.slug) && {
+			!(
+				draft.slug.length <= CreatePracticeRequestSchema.properties.slug.maxLength &&
+				PRACTICE_SLUG.test(draft.slug)
+			) && {
 				fieldId: FIELD_IDS.slug,
-				message: "Enter an identifier of 3–64 lowercase letters, numbers and single hyphens.",
+				message:
+					draft.slug.length <= CreatePracticeRequestSchema.properties.slug.maxLength &&
+					DEFINITION_SLUG.test(draft.slug)
+						? "This identifier is not available. Choose a different one."
+						: "Enter an identifier of 1–64 lowercase letters, numbers and single hyphens.",
 				reveal: reveals.revealTechnical,
 			},
 	];

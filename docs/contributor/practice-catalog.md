@@ -71,6 +71,10 @@ Reuse also requires the exact practice version and frozen model-slot method.
 ## Changing bundled defaults
 
 Keep stable slugs. A slug identifies a practice rather than its displayed name.
+
+The practice identifier constraints in `DefinitionSlugs` reserve existing API route names.
+`DefinitionSlugsTest` checks the bundled catalog and rejects new static routes that take an accepted identifier.
+
 Supply complete positive criteria and supported evidence requirements.
 A human-only definition has its reason. Guidance-only definitions run no automated script.
 A scan form declares include, exclude and context selections explicitly.

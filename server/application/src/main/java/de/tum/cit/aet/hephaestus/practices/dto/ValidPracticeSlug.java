@@ -20,8 +20,8 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Constraint(validatedBy = {})
 @NotBlank
-@Size(max = 64)
-@Pattern(regexp = "[a-z0-9]+(?:-[a-z0-9]+)*")
+@Size(max = DefinitionSlugs.MAX_LENGTH)
+@Pattern(regexp = DefinitionSlugs.PRACTICE_PATTERN, message = "This identifier is reserved or has an invalid format.")
 public @interface ValidPracticeSlug {
     String message() default "Use a valid practice slug.";
 

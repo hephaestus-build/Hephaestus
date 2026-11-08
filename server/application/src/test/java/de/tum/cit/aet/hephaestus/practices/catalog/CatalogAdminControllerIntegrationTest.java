@@ -271,6 +271,10 @@ class CatalogAdminControllerIntegrationTest extends AbstractWorkspaceIntegration
         var definition = DefinitionTestFixtures.definition();
         return Stream.of(
                 new CatalogPracticeInputDTO(
+                        "scans",
+                        new CatalogPracticeUpdateDTO(
+                                "scm.pull_request", null, DefinitionTestFixtures.authoring(definition), null)),
+                new CatalogPracticeInputDTO(
                         "Uppercase",
                         new CatalogPracticeUpdateDTO(
                                 "scm.pull_request", null, DefinitionTestFixtures.authoring(definition), null)),
@@ -298,6 +302,8 @@ class CatalogAdminControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .expectStatus()
                 .isBadRequest()
                 .expectBody(Void.class);
+        assertThat(entries.findById(new CatalogEntry.Id(CatalogEntryType.PRACTICE, input.slug())))
+                .isEmpty();
     }
 
     @Test
