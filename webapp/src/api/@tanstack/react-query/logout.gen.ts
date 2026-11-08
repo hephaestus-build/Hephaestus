@@ -4,15 +4,15 @@ import type { DefaultError, UseMutationOptions } from '@tanstack/react-query';
 
 import type { Options } from '../../sdk.gen.js';
 import { logout } from '../../sdk/logout.gen.js';
-import type { LogoutData } from '../../types.gen.js';
+import type { LogoutData, LogoutResponse } from '../../types.gen.js';
 
 /**
  * Log out — revoke the current token + clear the cookie
  *
  * An installed-client access token ends its whole session.
  */
-export const logoutMutation = (options?: Partial<Options<LogoutData>>): UseMutationOptions<unknown, DefaultError, Options<LogoutData>> => {
-    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<LogoutData>> = {
+export const logoutMutation = (options?: Partial<Options<LogoutData>>): UseMutationOptions<LogoutResponse, DefaultError, Options<LogoutData>> => {
+    const mutationOptions: UseMutationOptions<LogoutResponse, DefaultError, Options<LogoutData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await logout({
                 ...options,

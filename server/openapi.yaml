@@ -1279,8 +1279,8 @@ paths:
         schema:
           type: string
       responses:
-        "200":
-          description: OK
+        "204":
+          description: Login provider deleted
       summary: Delete a login provider
       tags:
       - Admin
@@ -1443,12 +1443,12 @@ paths:
               $ref: "#/components/schemas/CatalogGroupInput"
         required: true
       responses:
-        "200":
+        "201":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogGroup"
-          description: OK
+          description: Group created; URL in the Location header
       tags:
       - catalog-admin
   /admin/practice-catalog/groups/reorder:
@@ -1624,12 +1624,12 @@ paths:
               $ref: "#/components/schemas/CatalogPracticeInput"
         required: true
       responses:
-        "200":
+        "201":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogPractice"
-          description: OK
+          description: Practice created; URL in the Location header
       tags:
       - catalog-admin
   /admin/practice-catalog/practices/{slug}:
@@ -2489,8 +2489,8 @@ paths:
       description: An installed-client access token ends its whole session.
       operationId: logout
       responses:
-        "200":
-          description: OK
+        "204":
+          description: Session ended
       summary: Log out — revoke the current token + clear the cookie
       tags:
       - Auth
@@ -3065,8 +3065,8 @@ paths:
         schema:
           type: string
       responses:
-        "200":
-          description: OK
+        "204":
+          description: Account deletion requested
       summary: Delete the current account (GDPR Art. 17)
       tags:
       - Account
@@ -3167,12 +3167,12 @@ paths:
     post:
       operationId: requestDataExport
       responses:
-        "200":
+        "202":
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ExportCreated"
-          description: OK
+          description: Export requested; status URL in the Location header
       summary: Request a data export (async)
       tags:
       - Account
@@ -3551,8 +3551,8 @@ paths:
     delete:
       operationId: revokeOtherSessions
       responses:
-        "200":
-          description: OK
+        "204":
+          description: Other sessions revoked
       summary: Revoke all sessions except the current one
       tags:
       - Account
@@ -3583,8 +3583,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: OK
+        "204":
+          description: Session revoked
       summary: Revoke a single session
       tags:
       - Account
@@ -11122,8 +11122,8 @@ paths:
         schema:
           type: string
       responses:
-        "200":
-          description: OK
+        "204":
+          description: Repository removed from the monitor list
       summary: Remove a repository from a workspace monitor list
       tags:
       - workspace
@@ -11169,8 +11169,8 @@ paths:
         schema:
           type: string
       responses:
-        "200":
-          description: OK
+        "201":
+          description: Repository added to the monitor list
       summary: Add a repository to a workspace monitor list
       tags:
       - workspace

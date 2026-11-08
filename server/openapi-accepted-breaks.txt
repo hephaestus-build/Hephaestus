@@ -303,3 +303,15 @@ in API PATCH /workspaces/{workspaceSlug}/llm/models/{id} removed the required pr
 in API POST /admin/llm/call-pools removed the required property `interactiveReserve` from the response with the `201` status
 in API POST /workspaces/{workspaceSlug}/llm/connections/{connectionId}/models removed the required property `callPool/interactiveReserve` from the response with the `201` status
 in API PUT /admin/llm/call-pools/{id} removed the required property `interactiveReserve` from the response with the `200` status
+
+# Correct success documentation to the status codes the server already returns.
+in API DELETE /admin/login-providers/{registrationId} removed the success response with the status `200`
+in API POST /admin/practice-catalog/groups removed the success response with the status `200`
+in API POST /admin/practice-catalog/practices removed the success response with the status `200`
+in API POST /auth/logout removed the success response with the status `200`
+in API DELETE /user removed the success response with the status `200`
+in API POST /user/exports removed the success response with the status `200`
+in API DELETE /user/sessions removed the success response with the status `200`
+in API DELETE /user/sessions/{jti} removed the success response with the status `200`
+in API DELETE /workspaces/{workspaceSlug}/repositories removed the success response with the status `200`
+in API POST /workspaces/{workspaceSlug}/repositories removed the success response with the status `200`

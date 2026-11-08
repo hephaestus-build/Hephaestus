@@ -106,6 +106,7 @@ public class LoginProviderAdminController {
 
     @DeleteMapping("/{registrationId}")
     @Operation(summary = "Delete a login provider", operationId = "adminDeleteLoginProvider")
+    @ApiResponse(responseCode = "204", description = "Login provider deleted")
     @RequiresRecentSignIn
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "LOGIN_PROVIDER_DELETED")
     public ResponseEntity<Void> delete(@PathVariable String registrationId) {

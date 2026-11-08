@@ -4,13 +4,13 @@ import type { DefaultError, UseMutationOptions } from '@tanstack/react-query';
 
 import type { Options } from '../../sdk.gen.js';
 import { removeRepositoryToMonitor } from '../../sdk/removeRepositoryToMonitor.gen.js';
-import type { RemoveRepositoryToMonitorData } from '../../types.gen.js';
+import type { RemoveRepositoryToMonitorData, RemoveRepositoryToMonitorResponse } from '../../types.gen.js';
 
 /**
  * Remove a repository from a workspace monitor list
  */
-export const removeRepositoryToMonitorMutation = (options?: Partial<Options<RemoveRepositoryToMonitorData>>): UseMutationOptions<unknown, DefaultError, Options<RemoveRepositoryToMonitorData>> => {
-    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<RemoveRepositoryToMonitorData>> = {
+export const removeRepositoryToMonitorMutation = (options?: Partial<Options<RemoveRepositoryToMonitorData>>): UseMutationOptions<RemoveRepositoryToMonitorResponse, DefaultError, Options<RemoveRepositoryToMonitorData>> => {
+    const mutationOptions: UseMutationOptions<RemoveRepositoryToMonitorResponse, DefaultError, Options<RemoveRepositoryToMonitorData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await removeRepositoryToMonitor({
                 ...options,

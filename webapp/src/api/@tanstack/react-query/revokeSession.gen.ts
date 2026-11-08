@@ -4,15 +4,15 @@ import type { DefaultError, UseMutationOptions } from '@tanstack/react-query';
 
 import type { Options } from '../../sdk.gen.js';
 import { revokeSession } from '../../sdk/revokeSession.gen.js';
-import type { RevokeSessionData } from '../../types.gen.js';
+import type { RevokeSessionData, RevokeSessionResponse } from '../../types.gen.js';
 
 /**
  * Revoke a single session
  *
  * Any token of an installed-client session, even one it rotated away, ends that session.
  */
-export const revokeSessionMutation = (options?: Partial<Options<RevokeSessionData>>): UseMutationOptions<unknown, DefaultError, Options<RevokeSessionData>> => {
-    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<RevokeSessionData>> = {
+export const revokeSessionMutation = (options?: Partial<Options<RevokeSessionData>>): UseMutationOptions<RevokeSessionResponse, DefaultError, Options<RevokeSessionData>> => {
+    const mutationOptions: UseMutationOptions<RevokeSessionResponse, DefaultError, Options<RevokeSessionData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await revokeSession({
                 ...options,
