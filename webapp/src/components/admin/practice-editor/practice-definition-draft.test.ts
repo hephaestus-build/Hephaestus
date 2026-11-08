@@ -165,12 +165,38 @@ describe("draftErrors", () => {
 			"Enter a name of 3 to 128 characters.",
 			"Enter what to look for.",
 			"Set at least one source to Required. A review cannot run without one.",
-			"Enter an identifier of 3–64 lowercase letters, numbers and single hyphens.",
+			"Enter an identifier of 1–64 lowercase letters, numbers and single hyphens.",
 		]);
 	});
 
 	it("keeps MERGER where the item type offers it", () => {
 		expect(errorsOf(draft({ about: "MERGER" }))).toStrictEqual([]);
 		expect(definitionOf({ about: "MERGER" }).about).toBe("MERGER");
+	});
+});
+
+describe("practice route identifiers", () => {
+	it.each(["scans", "reviews", "definition-options"])(
+		"refuses reserved %s before submit",
+		(slug) => {
+			const errors = draftErrors(draft({ slug }), "create", mockDefinitionOptions, reveals);
+			expect(errors.summary).toContainEqual(
+				expect.objectContaining({
+					message: "This identifier is not available. Choose a different one.",
+				}),
+			);
+		},
+	);
+	it.each(["p", "ab", "scans-summary", "a".repeat(64)])("keeps accepted identifier %s", (slug) => {
+		const errors = draftErrors(draft({ slug }), "create", mockDefinitionOptions, reveals);
+		expect(errors.byField["practice-slug"]).toBeUndefined();
+	});
+	it.each(["A", "p--q", "a".repeat(65), "p\n"])("refuses malformed identifier %s", (slug) => {
+		const errors = draftErrors(draft({ slug }), "create", mockDefinitionOptions, reveals);
+		expect(errors.summary).toContainEqual(
+			expect.objectContaining({
+				message: "Enter an identifier of 1–64 lowercase letters, numbers and single hyphens.",
+			}),
+		);
 	});
 });

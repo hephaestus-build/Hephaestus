@@ -44,6 +44,47 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
     @Autowired
     CatalogCustomizationService customization;
 
+    @Autowired
+    PracticeRepository practices;
+
+    @Autowired
+    PracticeGroupRepository groups;
+
+    @Test
+    @WithAdminUser
+    void shouldRefuseAReservedPracticeIdentifierWithoutChangingGroupIdentifiers() {
+        var owner = persistUser("admin");
+        var workspace = createWorkspace("route-slugs", "Route slugs", "route-org", AccountType.ORG, owner);
+        client.post()
+                .uri("/workspaces/{workspace}/practices", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new CreatePracticeRequestDTO(
+                        "scans",
+                        "scm.pull_request",
+                        DefinitionTestFixtures.authoring(DefinitionTestFixtures.definition()),
+                        null,
+                        null))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody()
+                .jsonPath("$.errors.slug")
+                .exists();
+        assertThat(practices.findByWorkspaceIdAndSlug(workspace.getId(), "scans"))
+                .isEmpty();
+        client.post()
+                .uri("/workspaces/{workspace}/practice-groups", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new CreatePracticeGroupRequestDTO("scans", "Scan work", null, null, null, null, true))
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody(Void.class);
+        assertThat(groups.findByWorkspaceIdAndSlug(workspace.getId(), "scans")).isPresent();
+    }
+
     @Test
     @WithAdminUser
     void shouldPersistAnEventFreeScanWithItsOwnReadRequirements() {

@@ -1,3 +1,5 @@
+import { zCreatePracticeGroupRequest, zCreatePracticeRequest } from "@/api/zod.gen";
+
 import type {
 	PracticeDefinitionInput,
 	PracticeDefinitionOptions,
@@ -11,7 +13,6 @@ import type { AboutRole } from "@/components/practice-vocabulary/about-role-labe
 import { hasText } from "@/lib/text";
 
 import { type AppliesWhenDraft, appliesWhenDraftOf, parseAppliesWhen } from "./applies-when";
-import { isValidSlug } from "./constants";
 import {
 	FIGURE_PLACEHOLDER,
 	hasFigurePlaceholder,
@@ -322,9 +323,11 @@ export function draftErrors(
 				reveal: reveals.revealScript,
 			},
 		mode === "create" &&
-			!isValidSlug(draft.slug) && {
+			!zCreatePracticeRequest.shape.slug.safeParse(draft.slug).success && {
 				fieldId: FIELD_IDS.slug,
-				message: "Enter an identifier of 3–64 lowercase letters, numbers and single hyphens.",
+				message: zCreatePracticeGroupRequest.shape.slug.safeParse(draft.slug).success
+					? "This identifier is not available. Choose a different one."
+					: "Enter an identifier of 1–64 lowercase letters, numbers and single hyphens.",
 				reveal: reveals.revealTechnical,
 			},
 	];

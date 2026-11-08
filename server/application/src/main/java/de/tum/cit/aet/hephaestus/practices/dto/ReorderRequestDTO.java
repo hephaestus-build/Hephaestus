@@ -10,7 +10,7 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public record ReorderRequestDTO(
         @JsonProperty(required = true) @NotNull @Size(max = 10_000)
-        List<@NotNull @ValidPracticeSlug String> slugs) implements ClosedPracticeInput {
+        List<@NotNull @ValidDefinitionSlug String> slugs) implements ClosedPracticeInput {
     public ReorderRequestDTO {
         slugs = List.copyOf(slugs);
     }

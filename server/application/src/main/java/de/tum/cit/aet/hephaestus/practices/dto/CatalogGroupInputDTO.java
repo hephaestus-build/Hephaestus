@@ -9,6 +9,6 @@ import jakarta.validation.constraints.NotNull;
 
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public record CatalogGroupInputDTO(
-        @JsonProperty(required = true) @ValidPracticeSlug String slug,
+        @JsonProperty(required = true) @ValidDefinitionSlug String slug,
         @JsonUnwrapped @NotNull @Valid CatalogGroupUpdateDTO content)
         implements ClosedPracticeInput {}

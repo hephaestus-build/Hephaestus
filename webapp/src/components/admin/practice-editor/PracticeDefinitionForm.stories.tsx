@@ -248,7 +248,7 @@ export const Refused: Story = {
 			"Enter a name of 3 to 128 characters.",
 			"Enter what to look for.",
 			"Set at least one source to Required. A review cannot run without one.",
-			"Enter an identifier of 3–64 lowercase letters, numbers and single hyphens.",
+			"Enter an identifier of 1–64 lowercase letters, numbers and single hyphens.",
 		]);
 		await expect(submit).not.toHaveBeenCalled();
 	},
@@ -259,5 +259,20 @@ export const NarrowViewport: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvasElement }) => {
 		await expectNoOverflowingElement(canvasElement);
+	},
+};
+
+export const ReservedIdentifier: Story = {
+	args: { mode: "create" },
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.type(canvas.getByRole("textbox", { name: /^Name\b/u }), "Scans");
+		await userEvent.click(canvas.getByRole("button", { name: "Create practice" }));
+		const link = canvas.getByRole("link", {
+			name: "This identifier is not available. Choose a different one.",
+		});
+		await userEvent.click(link);
+		await expect(canvas.getByRole("textbox", { name: "Identifier" })).toHaveValue("scans");
+		await expect(canvas.getByRole("textbox", { name: "Identifier" })).toHaveFocus();
+		await expect(submit).not.toHaveBeenCalled();
 	},
 };
