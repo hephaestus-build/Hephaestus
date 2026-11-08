@@ -88,6 +88,8 @@ sequenceDiagram
 
 ### When a release fails
 
+For a release that is already published, use [Recover from a bad published release](./recover-a-published-release).
+
 Release images are promoted **by digest and never rebuilt**.
 A commit rejected by the evidence gate cannot pass on retry.
 Only a new commit can pass.
@@ -292,6 +294,8 @@ registry storage metadata. Only publishing jobs and their reusable-workflow call
 [Vulnerability remediation](./vulnerability-remediation.mdx) is the normative policy for blocking
 findings, scheduled rescans, and exceptions.
 
+[Release artifact provenance](./release-artifact-provenance) gives the per-artifact Build assessment and consumer checks.
+
 ### Nothing may fail for the first time at a release
 
 Pre-merge validation covers the same image subjects and shared evidence checks as release publication.
@@ -310,7 +314,7 @@ which performs every check except signature verification.
 | Each platform digest is a member of its published index                          | No — the preflight resolves and checks index membership over the images its own run pushed                                                                                                                                                         |
 | The validation documents re-derive unchanged                                     | No — the preflight verifies twice, the second time comparing rather than writing                                                                                                                                                                   |
 | SBOM attestation matches the durable evidence                                    | **Yes, structurally.** `cosign attest` creates the attestation during the release. There is nothing to verify before it exists                                                                                                                     |
-| Image index signature and build provenance carry the release's identity          | **Yes, structurally.** The Fulcio certificate identity is the release workflow's, on `refs/heads/main`, and no earlier run can produce one                                                                                                         |
+| Image index signature and build provenance match the release subjects | **Yes, structurally.** The index signature names the reusable image workflow on `refs/heads/main`. Native SLSA v1 build provenance names that workflow and the full source commit, and excludes self-hosted runners. A reused digest can retain its merge-group build provenance. |
 | The manifest names a release version                                             | **Yes, structurally.** Only `plan-release.ts` decides the tag. The preflight substitutes the version the ref carries                                                                                                                               |
 | The bundle describes the images this run built                                   | No — the preflight and `release.yml` resolve subjects through the image build's published commit tag. `ci-contract.test.ts` requires that tag for every supported event of either caller. See [CI/CD § Image identity](./ci-cd.mdx#image-identity) |
 
@@ -569,7 +573,7 @@ Only review stops an early `release-1-0-0`: it decides when 1.0 ships.
 2. Enter prerelease mode as described in [Release candidates](#release-candidates).
 3. In one pull request, add the changeset `release-1-0-0` with `"hephaestus": major`.
    Its summary states what 1.0 promises.
-   Its `**Operators:**` line points to [Upgrade from 0.x to 1.0](/admin/upgrade-to-1-0).
+   Its `**Operators:**` line points to [Upgrade to 1.0](/admin/upgrade-to-1-0).
 4. In the same pull request, add the migration fragment `release-1-0-0` with the `#### 🔴 …` entry that points to the same page.
 5. In the same pull request, replace each pre-1.0 statement with the 1.x statement.
    Find them with `git grep -n -i 'pre-1\.0\|before 1\.0'`.
