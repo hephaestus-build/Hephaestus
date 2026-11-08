@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultSort;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.MockSecurityContextUtils;
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
+import de.tum.cit.aet.hephaestus.testconfig.SqlRequestTrace;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Objects;
@@ -21,11 +22,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.web.reactive.server.WebTestClient;
 
 class ReviewResultListReadCostIntegrationTest extends BaseIntegrationTest {
     @Autowired private ReviewIntegrationData data;
     @Autowired private ReviewResultQueryService results;
     @Autowired private SqlReadMeasurement reads;
+    @Autowired private SqlRequestTrace requests;
+    @Autowired private WebTestClient http;
 
     @BeforeEach
     void clean() {
@@ -72,5 +76,32 @@ class ReviewResultListReadCostIntegrationTest extends BaseIntegrationTest {
         assertThat(larger.value().getContent()).containsAll(small.value().getContent());
         assertThat(larger.cost().statements()).as("small=%s, larger=%s", small.cost(), larger.cost())
                 .isEqualTo(small.cost().statements());
+    }
+
+    @Test
+    void shouldKeepOperatorResultRequestCostBoundedAsThePageGrows() {
+        var scenario = data.scenario();
+        var at = Instant.parse("2026-01-01T00:00:00Z");
+        for (int index = 0; index < 2; index++) {
+            data.result(data.onOtherWork(scenario), ResultOutcome.NOT_MET, at.plusSeconds(index));
+        }
+        var foreign = data.result(data.scenario(), ResultOutcome.NOT_MET, at);
+        var path = "/workspaces/" + scenario.workspace().getWorkspaceSlug() + "/practices/reviews/results?size=32";
+        var small = requests.measure(http, client -> client.get().uri(path)
+                .headers(headers -> headers.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
+                .exchange().expectStatus().isOk().expectBody()
+                .jsonPath("$.content.length()").isEqualTo(2));
+        for (int index = 2; index < 8; index++) {
+            data.result(data.onOtherWork(scenario), ResultOutcome.NOT_MET, at.plusSeconds(index));
+        }
+
+        var larger = requests.measure(http, client -> client.get().uri(path)
+                .headers(headers -> headers.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
+                .exchange().expectStatus().isOk().expectBody()
+                .jsonPath("$.content.length()").isEqualTo(8)
+                .jsonPath("$.content[?(@.id=='" + foreign.getId() + "')]").isEmpty());
+
+        assertThat(larger.statements()).as("small=%s, larger=%s", small.statements(), larger.statements())
+                .isEqualTo(small.statements());
     }
 }
