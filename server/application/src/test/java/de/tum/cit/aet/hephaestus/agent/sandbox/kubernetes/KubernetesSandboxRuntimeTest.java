@@ -838,7 +838,8 @@ class KubernetesSandboxRuntimeTest {
                 List.of("node", "run.ts"),
                 LIMITS,
                 Instant.now().plus(Duration.ofMinutes(7)),
-                gateway -> Map.of()));
+                gateway -> Map.of(),
+                false));
         assertThat(reviews.running(handle)).isFalse();
         String child = startChild(handle.id());
         setStatus(
@@ -882,7 +883,8 @@ class KubernetesSandboxRuntimeTest {
                 List.of("node", "run.ts"),
                 LIMITS,
                 Instant.now().plus(Duration.ofMinutes(7)),
-                gateway -> Map.of()));
+                gateway -> Map.of(),
+                false));
         if (kind == SandboxBackend.Kind.REVIEW) {
             String child = startChild(handle.id());
             setStatus(
