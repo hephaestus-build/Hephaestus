@@ -11535,7 +11535,7 @@ paths:
       summary: Whether a sync is running in this workspace
       tags:
       - Sync
-  /workspaces/{workspaceSlug}/team:
+  /workspaces/{workspaceSlug}/teams:
     get:
       description: Returns all teams in the workspace organization
       operationId: getAllTeams
@@ -11561,8 +11561,8 @@ paths:
       summary: List teams
       tags:
       - Teams
-  /workspaces/{workspaceSlug}/team/{id}/visibility:
-    post:
+  /workspaces/{workspaceSlug}/teams/{id}/visibility:
+    patch:
       description: Show or hide a team in workspace activity
       operationId: updateTeamVisibility
       parameters:
@@ -11581,60 +11581,16 @@ paths:
         schema:
           type: integer
           format: int64
-      - in: query
-        name: hidden
-        required: false
-        schema:
-          type: boolean
       requestBody:
         content:
           application/json:
             schema:
-              type: boolean
+              $ref: "#/components/schemas/VisibilityUpdate"
+        required: true
       responses:
         "200":
           description: OK
       summary: Update team visibility
-      tags:
-      - Teams
-  /workspaces/{workspaceSlug}/team/{teamId}/repositories/{repositoryId}/visibility:
-    post:
-      operationId: updateRepositoryVisibility
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: teamId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - in: path
-        name: repositoryId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - in: query
-        name: hiddenFromContributions
-        required: false
-        schema:
-          type: boolean
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: boolean
-      responses:
-        "200":
-          description: OK
       tags:
       - Teams
   /workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}:
@@ -11672,9 +11628,43 @@ paths:
       summary: Remove a repository label from a team
       tags:
       - workspace
-  /workspaces/{workspaceSlug}/teams/{teamId}/labels/{repositoryId}/{label}:
-    post:
+    put:
       operationId: addLabelToTeam
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: teamId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: labelId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamInfo"
+          description: OK
+      summary: Add a repository label to a team
+      tags:
+      - workspace
+  /workspaces/{workspaceSlug}/teams/{teamId}/repositories/{repositoryId}/visibility:
+    patch:
+      operationId: updateRepositoryVisibility
       parameters:
       - description: Workspace slug
         in: path
@@ -11697,21 +11687,17 @@ paths:
         schema:
           type: integer
           format: int64
-      - in: path
-        name: label
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VisibilityUpdate"
         required: true
-        schema:
-          type: string
       responses:
         "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TeamInfo"
           description: OK
-      summary: Add a repository label to a team
       tags:
-      - workspace
+      - Teams
   /workspaces/{workspaceSlug}/token:
     patch:
       operationId: updateToken
@@ -26559,6 +26545,14 @@ components:
       required:
       - challengeId
       - credentialJson
+    VisibilityUpdate:
+      type: object
+      description: Whether a team or repository is hidden from workspace activity.
+      properties:
+        hidden:
+          type: boolean
+      required:
+      - hidden
     WebVital:
       type: object
       description: One measurement of a page visit

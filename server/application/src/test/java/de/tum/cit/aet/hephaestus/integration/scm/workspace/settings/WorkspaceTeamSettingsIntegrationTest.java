@@ -19,18 +19,21 @@ import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -109,28 +112,27 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
         labelFilterRepository.save(new WorkspaceTeamLabelFilter(workspace, team, unmonitoredLabel));
 
         webTestClient
-                .post()
+                .put()
                 .uri(
-                        "/workspaces/{slug}/teams/{teamId}/labels/{repositoryId}/{label}",
+                        "/workspaces/{slug}/teams/{teamId}/labels/{labelId}",
                         workspace.getWorkspaceSlug(),
                         team.getId(),
-                        unmonitored.getId(),
-                        unmonitoredLabel.getName())
+                        unmonitoredLabel.getId())
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
                 .isNotFound()
                 .expectBody(Void.class);
         webTestClient
-                .post()
+                .patch()
                 .uri(
-                        "/workspaces/{slug}/team/{teamId}/repositories/{repositoryId}/visibility",
+                        "/workspaces/{slug}/teams/{teamId}/repositories/{repositoryId}/visibility",
                         workspace.getWorkspaceSlug(),
                         team.getId(),
                         unmonitored.getId())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(true)
+                .bodyValue(Map.of("hidden", true))
                 .exchange()
                 .expectStatus()
                 .isNotFound()
@@ -165,24 +167,26 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
     void shouldDeleteTheLabelFilterWhenTheLabelIsRemoved() {
         addLabel();
 
-        TeamInfoDTO team = Objects.requireNonNull(webTestClient
-                .delete()
-                .uri(
-                        "/workspaces/{slug}/teams/{teamId}/labels/{labelId}",
-                        workspace.getWorkspaceSlug(),
-                        this.team.getId(),
-                        label.getId())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody(TeamInfoDTO.class)
-                .returnResult()
-                .getResponseBody());
+        for (int attempt = 0; attempt < 2; attempt++) {
+            TeamInfoDTO team = Objects.requireNonNull(webTestClient
+                    .delete()
+                    .uri(
+                            "/workspaces/{slug}/teams/{teamId}/labels/{labelId}",
+                            workspace.getWorkspaceSlug(),
+                            this.team.getId(),
+                            label.getId())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(TeamInfoDTO.class)
+                    .returnResult()
+                    .getResponseBody());
 
-        assertThat(team.labels()).isEmpty();
-        assertThat(labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), this.team.getId()))
-                .isEmpty();
+            assertThat(team.labels()).isEmpty();
+            assertThat(labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), this.team.getId()))
+                    .isEmpty();
+        }
     }
 
     @Test
@@ -215,8 +219,140 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
                         assertThat(settings.isHiddenFromContributions()).isFalse());
     }
 
-    private TeamInfoDTO addLabel() {
-        return Objects.requireNonNull(webTestClient
+    @Test
+    @WithAdminUser
+    void shouldRejectMissingNullAndPrimitiveVisibilityBodiesWithoutChangingSettings() {
+        for (String suffix : List.of(
+                "/" + team.getId() + "/visibility",
+                "/" + team.getId() + "/repositories/" + repository.getId() + "/visibility")) {
+            String path = "/workspaces/" + workspace.getWorkspaceSlug() + "/teams" + suffix;
+            for (String body : List.of("{}", "{\"hidden\":null}", "true")) {
+                webTestClient
+                        .patch()
+                        .uri(path)
+                        .headers(TestAuthUtils.withCurrentUser())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .bodyValue(body)
+                        .exchange()
+                        .expectStatus()
+                        .isBadRequest()
+                        .expectBody(Void.class);
+            }
+            webTestClient
+                    .patch()
+                    .uri(path + "?hidden=true&hiddenFromContributions=true")
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isBadRequest()
+                    .expectBody(Void.class);
+            webTestClient
+                    .post()
+                    .uri(path)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(Map.of("hidden", true))
+                    .exchange()
+                    .expectStatus()
+                    .isEqualTo(405)
+                    .expectBody(Void.class);
+        }
+        assertThat(teamSettingsRepository.findByWorkspaceIdAndTeamId(workspace.getId(), team.getId()))
+                .isEmpty();
+        assertThat(repositorySettingsRepository.findByWorkspaceIdAndTeamIdAndRepositoryId(
+                        workspace.getId(), team.getId(), repository.getId()))
+                .isEmpty();
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldNotAddOrRemoveALabelForAnotherWorkspacesTeam() {
+        Team foreign = createTeam("foreign", "another-org");
+        for (String method : List.of("PUT", "DELETE")) {
+            webTestClient
+                    .method(HttpMethod.valueOf(method))
+                    .uri(
+                            "/workspaces/{slug}/teams/{teamId}/labels/{labelId}",
+                            workspace.getWorkspaceSlug(),
+                            foreign.getId(),
+                            label.getId())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isNotFound()
+                    .expectBody(Void.class);
+        }
+        webTestClient
+                .put()
+                .uri(
+                        "/workspaces/{slug}/teams/{teamId}/labels/{labelId}",
+                        workspace.getWorkspaceSlug(),
+                        team.getId(),
+                        Long.MAX_VALUE)
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+        assertThat(labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), foreign.getId()))
+                .isEmpty();
+        assertThat(labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), team.getId()))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldRefuseTeamChangesFromAWorkspaceMember() {
+        User member = persistUser("team-settings-member-" + System.nanoTime());
+        ensureMembership(workspace, member, Membership.WorkspaceRole.MEMBER);
+        String token = "mock-jwt-member-" + accountId(member);
+        for (String path : List.of(
+                "/teams/" + team.getId() + "/visibility",
+                "/teams/" + team.getId() + "/repositories/" + repository.getId() + "/visibility")) {
+            webTestClient
+                    .patch()
+                    .uri("/workspaces/" + workspace.getWorkspaceSlug() + path)
+                    .headers(headers -> headers.setBearerAuth(token))
+                    .bodyValue(Map.of("hidden", true))
+                    .exchange()
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
+        }
+        for (String method : List.of("PUT", "DELETE")) {
+            webTestClient
+                    .method(HttpMethod.valueOf(method))
+                    .uri(
+                            "/workspaces/{slug}/teams/{teamId}/labels/{labelId}",
+                            workspace.getWorkspaceSlug(),
+                            team.getId(),
+                            label.getId())
+                    .headers(headers -> headers.setBearerAuth(token))
+                    .exchange()
+                    .expectStatus()
+                    .isForbidden()
+                    .expectBody(Void.class);
+        }
+        assertThat(teamSettingsRepository.findByWorkspaceIdAndTeamId(workspace.getId(), team.getId()))
+                .isEmpty();
+        assertThat(repositorySettingsRepository.findByWorkspaceIdAndTeamIdAndRepositoryId(
+                        workspace.getId(), team.getId(), repository.getId()))
+                .isEmpty();
+        assertThat(labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), team.getId()))
+                .isEmpty();
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldLeaveNoLegacyTeamOrLabelRoute() {
+        webTestClient
+                .get()
+                .uri("/workspaces/{slug}/team", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+        webTestClient
                 .post()
                 .uri(
                         "/workspaces/{slug}/teams/{teamId}/labels/{repositoryId}/{label}",
@@ -224,6 +360,23 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
                         team.getId(),
                         repository.getId(),
                         label.getName())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+        assertThat(labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), team.getId()))
+                .isEmpty();
+    }
+
+    private TeamInfoDTO addLabel() {
+        return Objects.requireNonNull(webTestClient
+                .put()
+                .uri(
+                        "/workspaces/{slug}/teams/{teamId}/labels/{labelId}",
+                        workspace.getWorkspaceSlug(),
+                        team.getId(),
+                        label.getId())
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
@@ -235,11 +388,11 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
 
     private void setTeamHidden(boolean hidden) {
         webTestClient
-                .post()
-                .uri("/workspaces/{slug}/team/{id}/visibility", workspace.getWorkspaceSlug(), team.getId())
+                .patch()
+                .uri("/workspaces/{slug}/teams/{id}/visibility", workspace.getWorkspaceSlug(), team.getId())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(hidden)
+                .bodyValue(Map.of("hidden", hidden))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -248,15 +401,15 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
 
     private void setRepositoryHidden(boolean hidden) {
         webTestClient
-                .post()
+                .patch()
                 .uri(
-                        "/workspaces/{slug}/team/{teamId}/repositories/{repositoryId}/visibility",
+                        "/workspaces/{slug}/teams/{teamId}/repositories/{repositoryId}/visibility",
                         workspace.getWorkspaceSlug(),
                         team.getId(),
                         repository.getId())
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(hidden)
+                .bodyValue(Map.of("hidden", hidden))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -266,7 +419,7 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
     private TeamInfoDTO listedTeam() {
         List<TeamInfoDTO> teams = webTestClient
                 .get()
-                .uri("/workspaces/{slug}/team", workspace.getWorkspaceSlug())
+                .uri("/workspaces/{slug}/teams", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()

@@ -9,9 +9,9 @@ import type { AddLabelToTeamData, AddLabelToTeamResponses } from '../types.gen.j
 /**
  * Add a repository label to a team
  */
-export const addLabelToTeam = <ThrowOnError extends boolean = false>(options: Options<AddLabelToTeamData, ThrowOnError>): RequestResult<AddLabelToTeamResponses, unknown, ThrowOnError> => (options.client ?? client).post<AddLabelToTeamResponses, unknown, ThrowOnError>({
+export const addLabelToTeam = <ThrowOnError extends boolean = false>(options: Options<AddLabelToTeamData, ThrowOnError>): RequestResult<AddLabelToTeamResponses, unknown, ThrowOnError> => (options.client ?? client).put<AddLabelToTeamResponses, unknown, ThrowOnError>({
     responseTransformer: addLabelToTeamResponseTransformer,
     security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/workspaces/{workspaceSlug}/teams/{teamId}/labels/{repositoryId}/{label}',
+    url: '/workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}',
     ...options
 });

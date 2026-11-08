@@ -10,9 +10,9 @@ import type { UpdateTeamVisibilityData, UpdateTeamVisibilityResponses } from '..
  *
  * Show or hide a team in workspace activity
  */
-export const updateTeamVisibility = <ThrowOnError extends boolean = false>(options: Options<UpdateTeamVisibilityData, ThrowOnError>): RequestResult<UpdateTeamVisibilityResponses, unknown, ThrowOnError> => (options.client ?? client).post<UpdateTeamVisibilityResponses, unknown, ThrowOnError>({
+export const updateTeamVisibility = <ThrowOnError extends boolean = false>(options: Options<UpdateTeamVisibilityData, ThrowOnError>): RequestResult<UpdateTeamVisibilityResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateTeamVisibilityResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/workspaces/{workspaceSlug}/team/{id}/visibility',
+    url: '/workspaces/{workspaceSlug}/teams/{id}/visibility',
     ...options,
     headers: {
         'Content-Type': 'application/json',

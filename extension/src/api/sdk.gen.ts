@@ -3440,7 +3440,7 @@ export const getWorkspaceSyncProgress = <ThrowOnError extends boolean = false>(o
  */
 export const getAllTeams = <ThrowOnError extends boolean = false>(options: Options<GetAllTeamsData, ThrowOnError>): RequestResult<GetAllTeamsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetAllTeamsResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/workspaces/{workspaceSlug}/team',
+    url: '/workspaces/{workspaceSlug}/teams',
     ...options
 });
 
@@ -3449,19 +3449,9 @@ export const getAllTeams = <ThrowOnError extends boolean = false>(options: Optio
  *
  * Show or hide a team in workspace activity
  */
-export const updateTeamVisibility = <ThrowOnError extends boolean = false>(options: Options<UpdateTeamVisibilityData, ThrowOnError>): RequestResult<UpdateTeamVisibilityResponses, unknown, ThrowOnError> => (options.client ?? client).post<UpdateTeamVisibilityResponses, unknown, ThrowOnError>({
+export const updateTeamVisibility = <ThrowOnError extends boolean = false>(options: Options<UpdateTeamVisibilityData, ThrowOnError>): RequestResult<UpdateTeamVisibilityResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateTeamVisibilityResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/workspaces/{workspaceSlug}/team/{id}/visibility',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-export const updateRepositoryVisibility = <ThrowOnError extends boolean = false>(options: Options<UpdateRepositoryVisibilityData, ThrowOnError>): RequestResult<UpdateRepositoryVisibilityResponses, unknown, ThrowOnError> => (options.client ?? client).post<UpdateRepositoryVisibilityResponses, unknown, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/workspaces/{workspaceSlug}/team/{teamId}/repositories/{repositoryId}/visibility',
+    url: '/workspaces/{workspaceSlug}/teams/{id}/visibility',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -3481,10 +3471,20 @@ export const removeLabelFromTeam = <ThrowOnError extends boolean = false>(option
 /**
  * Add a repository label to a team
  */
-export const addLabelToTeam = <ThrowOnError extends boolean = false>(options: Options<AddLabelToTeamData, ThrowOnError>): RequestResult<AddLabelToTeamResponses, unknown, ThrowOnError> => (options.client ?? client).post<AddLabelToTeamResponses, unknown, ThrowOnError>({
+export const addLabelToTeam = <ThrowOnError extends boolean = false>(options: Options<AddLabelToTeamData, ThrowOnError>): RequestResult<AddLabelToTeamResponses, unknown, ThrowOnError> => (options.client ?? client).put<AddLabelToTeamResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/workspaces/{workspaceSlug}/teams/{teamId}/labels/{repositoryId}/{label}',
+    url: '/workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}',
     ...options
+});
+
+export const updateRepositoryVisibility = <ThrowOnError extends boolean = false>(options: Options<UpdateRepositoryVisibilityData, ThrowOnError>): RequestResult<UpdateRepositoryVisibilityResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateRepositoryVisibilityResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/workspaces/{workspaceSlug}/teams/{teamId}/repositories/{repositoryId}/visibility',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**

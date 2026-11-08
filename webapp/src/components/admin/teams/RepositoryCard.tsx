@@ -15,7 +15,7 @@ export interface RepositoryCardProps {
 	repository: RepositoryInfo;
 	team: TeamInfo;
 	catalogLabels: LabelInfo[];
-	onAddLabel?: (teamId: number, repositoryId: number, label: string) => Promise<void>;
+	onAddLabel?: (teamId: number, labelId: number) => Promise<void>;
 	onRemoveLabel?: (teamId: number, labelId: number) => Promise<void>;
 	onToggleVisibility?: (hidden: boolean) => void | Promise<void>;
 }

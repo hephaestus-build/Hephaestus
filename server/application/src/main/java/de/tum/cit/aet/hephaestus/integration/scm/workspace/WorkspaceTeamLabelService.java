@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamInfoDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserTeamsDTO;
-import de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamLabelFilter;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamSettingsService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -79,37 +78,21 @@ public class WorkspaceTeamLabelService {
 
     // Label Management
 
-    public Optional<TeamInfoDTO> addLabelToTeam(String slug, Long teamId, Long repositoryId, String label) {
+    public Optional<TeamInfoDTO> addLabelToTeam(String slug, Long teamId, Long labelId) {
         Workspace workspace = requireWorkspace(slug);
-        log.debug(
-                "Adding label to team: labelName={}, repositoryId={}, teamId={}, workspaceId={}",
-                LoggingUtils.sanitizeForLog(label),
-                repositoryId,
-                teamId,
-                workspace.getId());
-
-        // Use workspace-scoped label filter settings
-        Optional<WorkspaceTeamLabelFilter> filterOpt =
-                workspaceTeamSettingsService.addLabelFilterByName(workspace, teamId, repositoryId, label);
-
-        if (filterOpt.isEmpty()) {
-            log.warn(
-                    "Skipped label filter addition: reason=teamOrLabelNotFound, teamId={}," + " labelName={}",
-                    teamId,
-                    LoggingUtils.sanitizeForLog(label));
+        if (workspaceTeamSettingsService
+                .addLabelFilter(workspace, teamId, labelId)
+                .isEmpty()) {
             return Optional.empty();
         }
-
-        // Return updated team info with workspace-scoped settings
         return teamRepository
                 .findWithCollectionsById(teamId)
                 .filter(inScope(workspace))
                 .map(team -> createTeamInfoDTOWithWorkspaceSettings(workspace, team));
     }
 
-    public Optional<TeamInfoDTO> addLabelToTeam(
-            WorkspaceContext workspaceContext, Long teamId, Long repositoryId, String label) {
-        return addLabelToTeam(requireSlug(workspaceContext), teamId, repositoryId, label);
+    public Optional<TeamInfoDTO> addLabelToTeam(WorkspaceContext workspaceContext, Long teamId, Long labelId) {
+        return addLabelToTeam(requireSlug(workspaceContext), teamId, labelId);
     }
 
     public Optional<TeamInfoDTO> removeLabelFromTeam(String slug, Long teamId, Long labelId) {
@@ -117,15 +100,13 @@ public class WorkspaceTeamLabelService {
         log.debug(
                 "Removing label from team: labelId={}, teamId={}, workspaceId={}", labelId, teamId, workspace.getId());
 
-        // Use workspace-scoped label filter settings
-        boolean removed = workspaceTeamSettingsService.removeLabelFilter(workspace, teamId, labelId);
-        log.debug("Completed label filter removal: removed={}", removed);
-
-        // Return updated team info with workspace-scoped settings
         return teamRepository
                 .findWithCollectionsById(teamId)
                 .filter(inScope(workspace))
-                .map(team -> createTeamInfoDTOWithWorkspaceSettings(workspace, team));
+                .map(team -> {
+                    workspaceTeamSettingsService.removeLabelFilter(workspace, teamId, labelId);
+                    return createTeamInfoDTOWithWorkspaceSettings(workspace, team);
+                });
     }
 
     public Optional<TeamInfoDTO> removeLabelFromTeam(WorkspaceContext workspaceContext, Long teamId, Long labelId) {

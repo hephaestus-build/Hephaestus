@@ -64,7 +64,7 @@ async function refreshWith(answer: () => Response) {
 	member();
 	let refreshing = false;
 	server.use(
-		http.get("*/workspaces/:workspaceSlug/team", () =>
+		http.get("*/workspaces/:workspaceSlug/teams", () =>
 			refreshing ? answer() : HttpResponse.json([team(1, "Frontend", "Jane Doe")]),
 		),
 	);
@@ -94,7 +94,7 @@ describe("a refresh of the teams page", () => {
 		screen.getByText("Jane Doe");
 		succeed();
 		const retryResponse = deferred<Response>();
-		server.use(http.get("*/workspaces/acme/team", async () => retryResponse.promise));
+		server.use(http.get("*/workspaces/acme/teams", async () => retryResponse.promise));
 		await user.click(screen.getByRole("button", { name: "Retry" }));
 		const retrying = await screen.findByRole("button", { name: "Retrying…" });
 		expect(retrying.hasAttribute("disabled")).toBe(true);
@@ -110,7 +110,7 @@ describe("a refresh of the teams page", () => {
 		let reads = 0;
 		server.use(
 			http.get(
-				"*/workspaces/acme/team",
+				"*/workspaces/acme/teams",
 				() => {
 					reads += 1;
 					return HttpResponse.json([team(1, "Frontend", "Jane Doe")]);
@@ -118,14 +118,14 @@ describe("a refresh of the teams page", () => {
 				{ once: true },
 			),
 			http.get(
-				"*/workspaces/acme/team",
+				"*/workspaces/acme/teams",
 				() => {
 					reads += 1;
 					return HttpResponse.json({ type: "about:blank", status: 403 }, { status: 403 });
 				},
 				{ once: true },
 			),
-			http.get("*/workspaces/acme/team", () => {
+			http.get("*/workspaces/acme/teams", () => {
 				reads += 1;
 				return HttpResponse.json({ type: "about:blank", status: 503 }, { status: 503 });
 			}),
@@ -171,13 +171,13 @@ describe("the teams page", () => {
 		const user = userEvent.setup();
 		member();
 		server.use(
-			http.get("*/workspaces/:workspaceSlug/team", () =>
+			http.get("*/workspaces/:workspaceSlug/teams", () =>
 				HttpResponse.json([team(1, "Frontend", "Jane Doe")]),
 			),
 		);
 		// Added last, so it answers first: the first read fails once and then reads.
 		server.use(
-			http.get("*/workspaces/:workspaceSlug/team", () => new HttpResponse(null, { status: 503 }), {
+			http.get("*/workspaces/:workspaceSlug/teams", () => new HttpResponse(null, { status: 503 }), {
 				once: true,
 			}),
 		);
@@ -192,7 +192,7 @@ describe("the teams page", () => {
 
 	it("says there are no teams when the workspace has none", async () => {
 		member();
-		server.use(http.get("*/workspaces/:workspaceSlug/team", () => HttpResponse.json([])));
+		server.use(http.get("*/workspaces/:workspaceSlug/teams", () => HttpResponse.json([])));
 		renderRouteAtWithRouter("/w/acme/teams");
 
 		await screen.findByText(NONE, undefined, ROUTE_RENDER_WAIT);
@@ -203,13 +203,13 @@ describe("the teams page", () => {
 		const user = userEvent.setup();
 		member();
 		server.use(
-			http.get("*/workspaces/acme/team", () =>
+			http.get("*/workspaces/acme/teams", () =>
 				HttpResponse.json([team(1, "Frontend", "Jane Doe")]),
 			),
-			http.get("*/workspaces/globex/team", () => new HttpResponse(null, { status: 503 }), {
+			http.get("*/workspaces/globex/teams", () => new HttpResponse(null, { status: 503 }), {
 				once: true,
 			}),
-			http.get("*/workspaces/globex/team", () =>
+			http.get("*/workspaces/globex/teams", () =>
 				HttpResponse.json([team(2, "Platform", "Bob Smith")]),
 			),
 		);

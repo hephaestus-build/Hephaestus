@@ -50,7 +50,7 @@ public class UserViewSessionFilter extends OncePerRequestFilter {
                     "/workspaces/{workspaceSlug}",
                     "/workspaces/{workspaceSlug}/members/me",
                     "/workspaces/{workspaceSlug}/connections/catalog",
-                    "/workspaces/{workspaceSlug}/team",
+                    "/workspaces/{workspaceSlug}/teams",
                     "/workspaces/{workspaceSlug}/activity/me",
                     "/workspaces/{workspaceSlug}/activity/me/work",
                     "/workspaces/{workspaceSlug}/activity/people",

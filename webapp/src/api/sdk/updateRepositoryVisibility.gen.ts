@@ -5,9 +5,9 @@ import type { RequestResult } from '../client/index.js';
 import type { Options } from '../sdk.gen.js';
 import type { UpdateRepositoryVisibilityData, UpdateRepositoryVisibilityResponses } from '../types.gen.js';
 
-export const updateRepositoryVisibility = <ThrowOnError extends boolean = false>(options: Options<UpdateRepositoryVisibilityData, ThrowOnError>): RequestResult<UpdateRepositoryVisibilityResponses, unknown, ThrowOnError> => (options.client ?? client).post<UpdateRepositoryVisibilityResponses, unknown, ThrowOnError>({
+export const updateRepositoryVisibility = <ThrowOnError extends boolean = false>(options: Options<UpdateRepositoryVisibilityData, ThrowOnError>): RequestResult<UpdateRepositoryVisibilityResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateRepositoryVisibilityResponses, unknown, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/workspaces/{workspaceSlug}/team/{teamId}/repositories/{repositoryId}/visibility',
+    url: '/workspaces/{workspaceSlug}/teams/{teamId}/repositories/{repositoryId}/visibility',
     ...options,
     headers: {
         'Content-Type': 'application/json',

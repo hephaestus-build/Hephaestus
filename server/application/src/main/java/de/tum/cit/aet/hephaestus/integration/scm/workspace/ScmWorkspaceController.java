@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -129,17 +130,14 @@ public class ScmWorkspaceController {
         return ResponseEntity.ok(workspaceTeamLabelService.getUsersWithTeams(workspaceContext));
     }
 
-    @PostMapping("/teams/{teamId}/labels/{repositoryId}/{label}")
+    @PutMapping("/teams/{teamId}/labels/{labelId}")
     @Operation(summary = "Add a repository label to a team")
     @RequireAtLeastWorkspaceAdmin
     @AuditExempt(reason = "team label filter is a reporting view, not configuration that gates delivery")
     public ResponseEntity<TeamInfoDTO> addLabelToTeam(
-            WorkspaceContext workspaceContext,
-            @PathVariable Long teamId,
-            @PathVariable Long repositoryId,
-            @PathVariable String label) {
+            WorkspaceContext workspaceContext, @PathVariable Long teamId, @PathVariable Long labelId) {
         return workspaceTeamLabelService
-                .addLabelToTeam(workspaceContext, teamId, repositoryId, label)
+                .addLabelToTeam(workspaceContext, teamId, labelId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
