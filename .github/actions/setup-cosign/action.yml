@@ -1,20 +1,33 @@
 name: Install verified Cosign
-description: Install Cosign through the release API with checksum and signature verification
-inputs:
-  cosign-release:
-    description: The Cosign release to verify and install
-    default: v3.1.4
+description: Install Cosign with cached pinned bytes and both upstream signatures
 runs:
   using: composite
   steps:
     - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       with:
         node-version-file: ${{ github.action_path }}/../../../package.json
+    - uses: ./.github/actions/setup-ci-tool
+      with:
+        tool: cosign-bootstrap
+    - uses: ./.github/actions/setup-ci-tool
+      with:
+        tool: cosign
+    - uses: ./.github/actions/setup-ci-tool
+      with:
+        tool: cosign
+        variant: key
+    - uses: ./.github/actions/setup-ci-tool
+      with:
+        tool: cosign
+        variant: keyless
+    - uses: ./.github/actions/setup-ci-tool
+      with:
+        tool: cosign
+        variant: kms
     - name: Verify and install Cosign
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
-        COSIGN_VERSION: ${{ inputs.cosign-release }}
         INSTALL_ONLY_COSIGN: "true"
         ACTION_PATH: ${{ github.action_path }}
       run: node "$ACTION_PATH/../../../scripts/setup-release-security-tools.ts"

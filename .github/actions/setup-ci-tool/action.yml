@@ -1,0 +1,55 @@
+name: Resolve a pinned CI tool
+description: Restore and verify the exact tool bytes, with bounded mirror and upstream fallback
+inputs:
+  tool:
+    description: Tool identifier in the repository pin files
+    required: true
+  variant:
+    description: Optional key, keyless, kms or checksums asset
+    default: ""
+outputs:
+  version:
+    description: Pinned version
+    value: ${{ steps.pin.outputs.version }}
+  name:
+    description: Archive name
+    value: ${{ steps.pin.outputs.name }}
+  sha256:
+    description: Required SHA-256
+    value: ${{ steps.pin.outputs.sha256 }}
+runs:
+  using: composite
+  steps:
+    - name: Read the tool pin
+      id: pin
+      shell: bash
+      env:
+        CI_TOOL: ${{ inputs.tool }}
+        CI_TOOL_VARIANT: ${{ inputs.variant }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: node "$ACTION_PATH/../../../scripts/ci-tool.ts" metadata
+    - name: Restore the pinned tool
+      id: restore
+      continue-on-error: true
+      env:
+        SEGMENT_DOWNLOAD_TIMEOUT_MINS: "1"
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.pin.outputs.directory }}
+        key: ${{ steps.pin.outputs.key }}
+    - name: Verify or fetch the pinned tool
+      id: resolve
+      shell: bash
+      env:
+        CI_TOOL: ${{ inputs.tool }}
+        CI_TOOL_VARIANT: ${{ inputs.variant }}
+        ACTION_PATH: ${{ github.action_path }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: node "$ACTION_PATH/../../../scripts/ci-tool.ts" resolve
+    - name: Save verified tool bytes
+      if: steps.resolve.outputs.verified == 'true' && steps.resolve.outputs.cacheable == 'true' && (steps.restore.outputs.cache-hit != 'true' || steps.resolve.outputs.source != 'cache')
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.pin.outputs.directory }}
+        key: ${{ steps.pin.outputs.key }}

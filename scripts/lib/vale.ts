@@ -39,6 +39,7 @@ export async function installValeBinary(options: {
 	url: string;
 	windows: boolean;
 	allowDownload?: boolean;
+	sourceCache?: string;
 }): Promise<string> {
 	const { windows, ...pin } = options;
 	return installPinnedBinary({ ...pin, executable: windows ? "vale.exe" : "vale" });

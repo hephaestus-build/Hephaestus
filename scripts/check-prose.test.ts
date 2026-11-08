@@ -201,6 +201,7 @@ await test("concurrent Vale installers publish one verified binary and reuse it 
 		assert.ok(address !== null && typeof address !== "string");
 		const options = {
 			cache,
+			sourceCache: `${cache}-sources`,
 			allowDownload: true,
 			version: "test",
 			asset,
@@ -210,7 +211,7 @@ await test("concurrent Vale installers publish one verified binary and reuse it 
 		const source = `
 			import { installValeBinary } from ${JSON.stringify(new URL("lib/vale.ts", import.meta.url).href)};
 			const [cache, version, name, sha256, url] = process.argv.slice(1);
-			console.log(await installValeBinary({ cache, version, asset: { name, sha256 }, url, windows: true, allowDownload: true }));
+			console.log(await installValeBinary({ cache, sourceCache: cache + "-sources", version, asset: { name, sha256 }, url, windows: true, allowDownload: true }));
 		`;
 		await assert.rejects(installValeBinary({ ...options, allowDownload: false }), /is not cached/u);
 		assert.equal(downloads, 0);
@@ -234,7 +235,7 @@ await test("concurrent Vale installers publish one verified binary and reuse it 
 		);
 		const binary = path.join(cache, `vale-test-${asset.sha256}`, "vale.exe");
 		assert.deepEqual(
-			results.map((stdout) => stdout.trim()),
+			results.map((stdout) => stdout.trim().split("\n").at(-1)),
 			Array.from({ length: workers }, () => binary),
 		);
 		assert.equal(downloads, workers);
@@ -262,14 +263,21 @@ await test("concurrent Vale installers publish one verified binary and reuse it 
 		assert.equal(after.ctimeMs, before.ctimeMs);
 
 		await writeFile(binary, "changed executable");
-		await assert.rejects(installValeBinary(options), /executable differs/u);
-		await writeFile(binary, executable);
+		assert.equal(await installValeBinary(options), binary);
+		assert.deepEqual(await readFile(binary), Buffer.from(executable));
 		await writeFile(path.join(path.dirname(binary), asset.name), "changed archive");
-		await assert.rejects(installValeBinary(options), /checksum/u);
+		assert.equal(await installValeBinary(options), binary);
+		assert.equal(
+			createHash("sha256")
+				.update(await readFile(path.join(path.dirname(binary), asset.name)))
+				.digest("hex"),
+			asset.sha256,
+		);
 	} finally {
 		server.closeAllConnections();
 		server.close();
 		await rm(cache, { recursive: true, force: true });
+		await rm(`${cache}-sources`, { recursive: true, force: true });
 	}
 });
 

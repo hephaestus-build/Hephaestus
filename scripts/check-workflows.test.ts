@@ -162,7 +162,11 @@ void test("a native workflow reads a pinned public action's declared metadata on
 		"fetch",
 		async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
 			requested.push(input instanceof Request ? input.url : input.toString());
-			assert.equal(init?.headers, undefined, "no credentials are sent");
+			assert.equal(
+				new Headers(init?.headers).get("authorization"),
+				null,
+				"no credentials are sent",
+			);
 			return requested.at(-1)?.endsWith("/action.yml") === true
 				? new Response(ACTION, { status })
 				: new Response("", { status: 404 });
@@ -205,8 +209,10 @@ void test("a native workflow reads a pinned public action's declared metadata on
 	await check(job(`      - uses: ${pinned}\n        with:\n          required-input: y\n`));
 	assert.deepEqual(requested, [], "a workflow Actionlint reads stays offline");
 
+	requested.length = 0;
 	status = 503;
 	await assert.rejects(check(native(remote())), "unavailable metadata fails rather than passing");
+	assert.equal(requested.length, 3, "unavailable metadata gets a bounded retry");
 });
 
 void test("holds a local action's caller to its declared inputs, inside this repository", async () => {

@@ -27,6 +27,7 @@ jobs:
     permissions:
       contents: read
       checks: write
+      packages: read
     timeout-minutes: 20
     defaults:
       run:
@@ -41,6 +42,15 @@ jobs:
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
+
+      - uses: ./.github/actions/setup-ci-tool
+        if: inputs.leg == 'tooling' || inputs.leg == 'windows'
+        with:
+          tool: shellcheck
+      - uses: ./.github/actions/setup-ci-tool
+        if: inputs.leg == 'tooling' || inputs.leg == 'windows'
+        with:
+          tool: vale
 
       # Content-addressed, so a pull request may save them for its own reruns.
       # Windows task-input tracking cannot reliably invalidate new files, so it runs uncached.

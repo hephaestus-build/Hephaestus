@@ -3,30 +3,31 @@ description: Install the pinned Helm CLI from get.helm.sh after a checksum check
 runs:
   using: composite
   steps:
+    - uses: ./.github/actions/setup-ci-tool
+      id: tool
+      with:
+        tool: helm
     - name: Install Helm
       id: install
       shell: bash
       env:
-        # The one Helm version of CI and the release. Each archive SHA-256 below is the value that
-        # get.helm.sh publishes beside that archive (<archive>.sha256sum) for this version.
-        HELM_VERSION: v4.3.1
+        HELM_VERSION: v${{ steps.tool.outputs.version }}
+        CHECKSUM: ${{ steps.tool.outputs.sha256 }}
+        ARCHIVE: ${{ steps.tool.outputs.name }}
+        ACTION_PATH: ${{ github.action_path }}
         RUNNER_PLATFORM: ${{ runner.os }}/${{ runner.arch }}
       run: |
         set -euo pipefail
         case "$RUNNER_PLATFORM" in
-          Linux/X64) platform=linux-amd64 format=tar.gz binary=helm
-            checksum=0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b ;;
-          Linux/ARM64) platform=linux-arm64 format=tar.gz binary=helm
-            checksum=8cf8f66ecbc252ac8f7f06cca68aba88508ddfde3a6a34feb1678ad1694b4f88 ;;
-          macOS/X64) platform=darwin-amd64 format=tar.gz binary=helm
-            checksum=34bec4eba761ba5c16d1965ee6b8f5b0abe5993974a802274e2a4f0418893d89 ;;
-          macOS/ARM64) platform=darwin-arm64 format=tar.gz binary=helm
-            checksum=6b4e61c8cd27d99e5a801e63ff25dd5c70b36875c2cd659d3e9ce6b76fc23198 ;;
-          Windows/X64) platform=windows-amd64 format=zip binary=helm.exe
-            checksum=fcfd7b796dcf0f225abc40b5636a3b01f55f3de2fb1dfb18475df94e62c14112 ;;
+          Linux/X64) platform=linux-amd64 format=tar.gz binary=helm ;;
+          Linux/ARM64) platform=linux-arm64 format=tar.gz binary=helm ;;
+          macOS/X64) platform=darwin-amd64 format=tar.gz binary=helm ;;
+          macOS/ARM64) platform=darwin-arm64 format=tar.gz binary=helm ;;
+          Windows/X64) platform=windows-amd64 format=zip binary=helm.exe ;;
           *) echo "::error::No pinned Helm archive for $RUNNER_PLATFORM"; exit 1 ;;
         esac
-        archive="helm-${HELM_VERSION}-${platform}.${format}"
+        archive=$ARCHIVE
+        checksum=$CHECKSUM
         # Git Bash on Windows works in POSIX paths; RUNNER_TEMP arrives as a Windows path there.
         runner_temp=$RUNNER_TEMP
         if command -v cygpath > /dev/null; then
@@ -34,8 +35,7 @@ runs:
         fi
         work=$(mktemp -d "$runner_temp/helm-download.XXXXXX")
         trap 'rm -rf "$work"' EXIT
-        curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 2 --retry-max-time 300 \
-          --connect-timeout 15 --max-time 120 -o "$work/$archive" "https://get.helm.sh/$archive"
+        CI_TOOL=helm node "$ACTION_PATH/../../../scripts/ci-tool.ts" file "$work/$archive"
         # macOS has shasum, Linux and Git Bash have sha256sum. The archive is never opened before this.
         if command -v sha256sum > /dev/null; then
           actual=$(sha256sum "$work/$archive" | cut -d' ' -f1)

@@ -16,7 +16,9 @@ for (const scenario of ["http", "network", "body"] as const) {
 		const cache = await mkdtemp(path.join(tmpdir(), "pinned-retry-"));
 		t.after(async () => rm(cache, { recursive: true, force: true }));
 		let calls = 0;
-		t.mock.method(globalThis, "fetch", async () => {
+		t.mock.method(globalThis, "fetch", async (input: Parameters<typeof fetch>[0]) => {
+			const url = input instanceof Request ? input.url : input.toString();
+			if (url.startsWith("https://ghcr.io/")) return new Response(null, { status: 404 });
 			calls += 1;
 			if (calls === 1) {
 				if (scenario === "http") {
@@ -33,6 +35,7 @@ for (const scenario of ["http", "network", "body"] as const) {
 		});
 		const binary = await installPinnedBinary({
 			cache,
+			sourceCache: path.join(cache, "source"),
 			version: "1",
 			asset: { name: "fixture.zip", sha256: createHash("sha256").update(archive).digest("hex") },
 			url: "https://example.invalid/",
@@ -49,7 +52,9 @@ for (const scenario of ["unavailable", "not found", "corrupt"] as const) {
 		const cache = await mkdtemp(path.join(tmpdir(), "pinned-retry-"));
 		t.after(async () => rm(cache, { recursive: true, force: true }));
 		let calls = 0;
-		t.mock.method(globalThis, "fetch", async () => {
+		t.mock.method(globalThis, "fetch", async (input: Parameters<typeof fetch>[0]) => {
+			const url = input instanceof Request ? input.url : input.toString();
+			if (url.startsWith("https://ghcr.io/")) return new Response(null, { status: 404 });
 			calls += 1;
 			if (scenario === "unavailable") {
 				return new Response("unavailable", { status: 504 });
@@ -62,13 +67,14 @@ for (const scenario of ["unavailable", "not found", "corrupt"] as const) {
 		await assert.rejects(
 			installPinnedBinary({
 				cache,
+				sourceCache: path.join(cache, "source"),
 				version: "1",
 				asset: { name: "fixture.zip", sha256: createHash("sha256").update(archive).digest("hex") },
 				url: "https://example.invalid/",
 				executable: "fixture.exe",
 				allowDownload: true,
 			}),
-			scenario === "corrupt" ? /checksum differs/u : /download returned/u,
+			scenario === "corrupt" ? /checksum mismatch/u : /No verified source/u,
 		);
 		assert.equal(calls, scenario === "unavailable" ? 3 : 1);
 		assert.deepEqual(await readdir(cache), [], "no failed download becomes an installed tool");

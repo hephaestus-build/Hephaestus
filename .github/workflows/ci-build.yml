@@ -52,6 +52,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+      packages: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -86,6 +87,11 @@ jobs:
           fi
       # Judges the spec generated above against the latest published release, which it fetches from
       # origin. docs/contributor/ci-cd.mdx § API compatibility.
+      - uses: ./.github/actions/setup-ci-tool
+        if: always()
+        with:
+          tool: oasdiff
+
       - name: API compatibility with the previous release
         id: api-compatibility
         env:

@@ -3,15 +3,9 @@ import { createHash } from "node:crypto";
 import { appendFile, chmod, mkdir, mkdtemp, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { ciToolPin } from "./lib/ci-tool-catalog.ts";
+import { resolveCiTool } from "./lib/ci-tool-resolver.ts";
 import { requiredEnv } from "./lib/env.ts";
-import { downloadReleaseAsset } from "./lib/release-asset.ts";
-
-const BOOTSTRAP_VERSION = "v3.1.3";
-const BOOTSTRAP_SHA = {
-	X64: "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71",
-	ARM64: "c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a",
-};
-const KEY_SHA = "f4cea466e5e887a45da5031757fa1d32655d83420639dc1758749b744179f126";
 
 export function verifyChecksum(bytes: Uint8Array, expected: string): void {
 	if (
@@ -33,20 +27,11 @@ export function checksumFor(text: string, name: string): string {
 	return entries[0].groups.sha256;
 }
 
-function requiredVersion(name: string): string {
-	const value = process.env[name];
-	if (value === undefined || !/^v?\d+\.\d+\.\d+$/u.test(value)) {
-		throw new Error(`${name} must name an explicit version`);
-	}
-	return value;
-}
-
 export async function installReleaseSecurityTools(): Promise<void> {
 	const arch = process.env.RUNNER_ARCH;
 	if (process.platform !== "linux" || (arch !== "X64" && arch !== "ARM64")) {
 		throw new Error("Release security tools require a Linux X64 or ARM64 runner");
 	}
-	const cosignVersion = requiredVersion("COSIGN_VERSION");
 	const onlyCosign = process.env.INSTALL_ONLY_COSIGN === "true";
 	if (!onlyCosign && process.env.INSTALL_SYFT !== "true" && process.env.INSTALL_SYFT !== "false") {
 		throw new Error("install-syft must be true or false");
@@ -56,35 +41,20 @@ export async function installReleaseSecurityTools(): Promise<void> {
 	const directory = await mkdtemp(path.join(runnerTemp, "release-security-tools-"));
 	const bin = path.join(directory, "bin");
 	await mkdir(bin);
-	const save = async (url: string, name: string) => {
-		const bytes = await downloadReleaseAsset(url);
+	const platform = `${process.platform}-${process.arch}`;
+	const save = async (id: string, name: string, variant = platform) => {
+		const pin = await ciToolPin(id, variant);
+		const { bytes } = await resolveCiTool(pin);
 		await writeFile(path.join(directory, name), bytes);
 		return bytes;
 	};
-	const cpu = arch === "X64" ? "amd64" : "arm64";
-	const cosignName = `cosign-linux-${cpu}`;
-	const cosignRelease = `https://github.com/sigstore/cosign/releases/download`;
-	const bootstrap = await save(
-		`${cosignRelease}/${BOOTSTRAP_VERSION}/${cosignName}`,
-		"cosign-bootstrap",
-	);
-	verifyChecksum(bootstrap, BOOTSTRAP_SHA[arch]);
+	await save("cosign-bootstrap", "cosign-bootstrap");
 	const bootstrapPath = path.join(directory, "cosign-bootstrap");
 	await chmod(bootstrapPath, 0o700);
-	await save(`${cosignRelease}/${cosignVersion}/${cosignName}`, "cosign-candidate");
-	const key = await save(
-		`https://raw.githubusercontent.com/sigstore/cosign/${cosignVersion}/release/release-cosign.pub`,
-		"public.key",
-	);
-	verifyChecksum(key, KEY_SHA);
-	await save(
-		`${cosignRelease}/${cosignVersion}/${cosignName}.sigstore.json`,
-		"keyless.sigstore.json",
-	);
-	await save(
-		`${cosignRelease}/${cosignVersion}/${cosignName}-kms.sigstore.json`,
-		"kms.sigstore.json",
-	);
+	await save("cosign", "cosign-candidate");
+	await save("cosign", "public.key", "key");
+	await save("cosign", "keyless.sigstore.json", `${platform}-keyless`);
+	await save("cosign", "kms.sigstore.json", `${platform}-kms`);
 	const run = (program: string, args: string[]) =>
 		execFileSync(program, args, { cwd: directory, stdio: "inherit" });
 	run(bootstrapPath, [
@@ -114,18 +84,11 @@ export async function installReleaseSecurityTools(): Promise<void> {
 		if (tool === "syft" && process.env.INSTALL_SYFT === "false") {
 			continue;
 		}
-		const selectedVersion = requiredVersion(tool === "syft" ? "SYFT_VERSION" : "TRIVY_VERSION");
-		const archive =
-			tool === "syft"
-				? `syft_${selectedVersion}_linux_${cpu}.tar.gz`
-				: `trivy_${selectedVersion}_Linux-${arch === "X64" ? "64bit" : "ARM64"}.tar.gz`;
-		const base = `https://github.com/${tool === "syft" ? "anchore/syft" : "aquasecurity/trivy"}/releases/download/v${selectedVersion}`;
-		const bytes = await save(`${base}/${archive}`, archive);
-		const checksums = await downloadReleaseAsset(
-			`${base}/${tool}_${selectedVersion}_checksums.txt`,
-		);
-		verifyChecksum(bytes, checksumFor(new TextDecoder().decode(checksums), archive));
-		run("tar", ["-xzf", path.join(directory, archive), "-C", bin, tool]);
+		const pin = await ciToolPin(tool);
+		const bytes = await save(tool, pin.name);
+		const checksums = await save(tool, `${tool}-checksums`, "checksums");
+		verifyChecksum(bytes, checksumFor(new TextDecoder().decode(checksums), pin.name));
+		run("tar", ["-xzf", path.join(directory, pin.name), "-C", bin, tool]);
 		run(path.join(bin, tool), [tool === "syft" ? "version" : "--version"]);
 	}
 	await appendFile(githubPath, `${bin}\n`);

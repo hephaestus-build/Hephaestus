@@ -9,7 +9,8 @@ on:
         description: Promote the latest immutable vX.Y.Z-rc.N on the exact main commit, without rebuilding images
         required: true
         type: string
-  workflow_run: # zizmor: ignore[dangerous-triggers] The guard authenticates the completed run before privileged jobs start.
+  workflow_run:
+    # zizmor: ignore[dangerous-triggers] The guard authenticates the completed run before privileged jobs start.
     workflows: ["CI/CD"]
     types: [completed]
     branches: [main]
@@ -184,8 +185,6 @@ jobs:
       - name: Install cosign for candidate verification
         if: needs.release.outputs.candidate != ''
         uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@972e766b362779c7d2115251e8fc589b443a2c97
-        with:
-          cosign-release: v3.1.4
 
       # The images this release promotes, resolved through the same script the pre-merge evidence
       # preflight resolves them with, so the two can never disagree about which artefact is subject.
@@ -531,8 +530,6 @@ jobs:
 
       - name: Install Cosign
         uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@972e766b362779c7d2115251e8fc589b443a2c97
-        with:
-          cosign-release: v3.1.4
 
       # Verifying the durable assets pulls the chart by its locked digest.
       - uses: ./.github/actions/setup-helm

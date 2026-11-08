@@ -17,8 +17,9 @@ import { parseArgs } from "node:util";
 import { readChangesets } from "@changesets/read";
 import { parse } from "yaml";
 
+import { ciToolPin } from "./lib/ci-tool-catalog.ts";
 import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
-import { installPinnedBinary, toolCache, type PinnedAsset } from "./lib/pinned-binary.ts";
+import { installPinnedBinary, toolCache } from "./lib/pinned-binary.ts";
 import { CAPTURE_LIMIT_BYTES, exitStatus, output, run, succeeds } from "./lib/process.ts";
 import { compareVersions, parseVersion } from "./plan-release.ts";
 
@@ -39,46 +40,16 @@ const STABLE_RESPONSES = [
 	"response-media-type-name-changed err",
 ];
 
-const OASDIFF_VERSION = "1.34.1";
-// The upstream checksums.txt and the GitHub release asset digests both state these values.
-const DARWIN: PinnedAsset = {
-	name: "oasdiff_1.34.1_darwin_all.tar.gz",
-	sha256: "64948ba30c5555d3d15b95a7f3eda22fa83c15cf37fd4dad1720c0deb0a07cb5",
-};
-const OASDIFF_ASSETS: Readonly<Record<string, PinnedAsset>> = {
-	"linux-x64": {
-		name: "oasdiff_1.34.1_linux_amd64.tar.gz",
-		sha256: "75775f65b0adebd26a8e013af51a799342dfdc6262d89efa9e3b7bdf89657d90",
-	},
-	"linux-arm64": {
-		name: "oasdiff_1.34.1_linux_arm64.tar.gz",
-		sha256: "e8f99bbf102a4b7f235104da72d0b9d67702e78622d1d4d37169e698ee90a249",
-	},
-	// One universal archive serves both macOS architectures.
-	"darwin-x64": DARWIN,
-	"darwin-arm64": DARWIN,
-	"win32-x64": {
-		name: "oasdiff_1.34.1_windows_amd64.tar.gz",
-		sha256: "15e6f32ece94244534a61ce4fb1d60912e51e67e363a05bb6561d89b28df73bb",
-	},
-	"win32-arm64": {
-		name: "oasdiff_1.34.1_windows_arm64.tar.gz",
-		sha256: "4794300521a2ff76d14205f5141884e6f6052212484caf1d3655c149b314492c",
-	},
-};
+const OASDIFF_PIN = await ciToolPin("oasdiff");
+const OASDIFF_VERSION = OASDIFF_PIN.version;
 
 export async function installOasdiff(): Promise<string> {
-	const asset = OASDIFF_ASSETS[`${process.platform}-${process.arch}`];
-	if (asset === undefined) {
-		throw new Error(
-			`oasdiff ${OASDIFF_VERSION} has no pinned archive for ${process.platform}-${process.arch}.`,
-		);
-	}
+	const pin = OASDIFF_PIN;
 	return installPinnedBinary({
 		cache: toolCache("oasdiff"),
-		version: OASDIFF_VERSION,
-		asset,
-		url: `https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/`,
+		version: pin.version,
+		asset: { name: pin.name, sha256: pin.sha256 },
+		url: pin.url.slice(0, -pin.name.length),
 		executable: process.platform === "win32" ? "oasdiff.exe" : "oasdiff",
 	});
 }

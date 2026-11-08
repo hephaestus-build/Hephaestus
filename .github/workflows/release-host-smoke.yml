@@ -67,8 +67,6 @@ jobs:
 
       - name: Install Cosign
         uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@972e766b362779c7d2115251e8fc589b443a2c97
-        with:
-          cosign-release: v3.1.4
 
       - name: Log in to GitHub Container Registry
         uses: ./.github/actions/ghcr-login

@@ -67,7 +67,12 @@ void test("artifact checks have no registry publishing permissions", async () =>
 	const permissions = workflow.getIn(["jobs", "Build", "permissions"]);
 	assert.ok(isMap(permissions));
 	// This call forwards cancellation permission; the artifact workers keep their own narrow scopes.
-	assert.deepEqual(permissions.toJSON(), { actions: "write", contents: "read", checks: "write" });
+	assert.deepEqual(permissions.toJSON(), {
+		actions: "write",
+		contents: "read",
+		checks: "write",
+		packages: "read",
+	});
 });
 
 const repository = "hephaestus-build/Hephaestus";

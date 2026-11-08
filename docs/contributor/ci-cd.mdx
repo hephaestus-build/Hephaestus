@@ -1392,19 +1392,45 @@ when changing these boundaries, and preserve dependency stats from the single St
 
 ### Release tool downloads
 
-The security-tool installer and pinned repository tools use GitHub's release asset API first when
-`GITHUB_TOKEN` or `GH_TOKEN` is available. The API lookup selects the exact asset of the pinned release.
-The token goes only to `api.github.com`. Redirects and direct release URLs receive no token.
-If the API path is unavailable, the downloader tries the pinned direct release URL.
+The tool pins are in `.github/ci-tools/*.json` and `.vale/toolchain.json`.
+Each asset has a version and a SHA-256. Change the version, source URL and checksum together.
+Renovate proposes version changes. Their matching archive checksums must be verified before merge.
+The resolver never selects a newer release.
 
-Each request retries temporary HTTP and transport failures up to three times, with waits of one and
-two seconds. The timeout is ten seconds for release metadata and 120 seconds for each asset attempt.
-A download failure fails the gate. It never becomes a valid workflow or a clean security scan.
+`setup-ci-tool` restores the GitHub Actions cache with a key made from the tool, version and SHA-256.
+It verifies the restored file before use. A valid hit needs no upstream download.
+A missing or corrupt cache entry falls back to the GHCR mirror, the upstream GitHub API, then the direct URL.
+Every source must match the pinned SHA-256. A mismatch refuses that file and tries the next source.
 
-Cosign keeps the upstream installer's trust chain. The 3.1.3 bootstrap has a pinned SHA-256.
-It verifies the selected binary with both its keyless bundle and its KMS bundle.
-The release public key retains its pinned SHA-256.
-Syft and Trivy archives must match their release checksum files before extraction.
+The log names the source that supplied each verified tool.
+If no source supplies the expected bytes, the gate fails with the tool identity and source failures.
+Cache restore and save are best effort. A verified download is saved for later runs.
 
-Signing jobs use the Cosign installer action at an immutable commit, with no checkout of the build
-branch. Publish and review a new installer commit before updating those action references.
+Mirror and upstream requests make at most three attempts, with waits of one and two seconds.
+The timeout is ten seconds for API metadata and 30 seconds for each asset attempt, including its body.
+The API uses the job token first, then tries the public endpoint without credentials.
+The token stays on `api.github.com` and `github.com`, including redirects between those origins.
+Storage redirects retain their signed URL credentials. Other hosts receive no repository token.
+
+Cosign keeps the upstream installer's trust chain.
+Its 3.1.3 bootstrap and release public key have the same pinned SHA-256 values as before.
+The bootstrap verifies the selected binary with both its keyless bundle and its KMS bundle.
+Syft and Trivy archives also match their pinned release checksum files before extraction.
+
+The mirror is `ghcr.io/hephaestus-build/ci-tools/<tool>:<version>`.
+Pulls use the job token with `packages: read`. The resolver verifies the selected blob against the repository pin.
+
+The `Cache / Mirror pinned CI tools` workflow runs on main when pins change, each week, or by manual dispatch.
+It reads the same pin files, verifies every platform asset, then publishes the version with `packages: write`.
+A failed group leaves the existing version tag unchanged. Other tool groups can still publish.
+
+Its upstream requests allow four attempts of 60 seconds, with waits of five, ten and 15 seconds.
+This longer retry runs outside the pull request gates.
+
+Trivy's advisory databases are changing data, not executable tools.
+They retain the GHCR and ECR fallbacks and the existing freshness checks.
+No pinned tool source uses Docker Hub.
+
+Signing jobs use the Cosign installer action at an immutable commit, with no checkout of the build branch.
+The installer also pins its shared cache action to an immutable commit.
+Publish and review a new installer commit before updating those references.

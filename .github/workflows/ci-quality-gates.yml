@@ -60,6 +60,7 @@ jobs:
       actions: write
       contents: read
       checks: write
+      packages: read
     with:
       leg: server
       pmd_canary: ${{ inputs.pmd_canary }}
@@ -73,6 +74,7 @@ jobs:
       actions: write
       contents: read
       checks: write
+      packages: read
     with:
       leg: tooling
 
@@ -84,6 +86,7 @@ jobs:
       actions: write
       contents: read
       checks: write
+      packages: read
     with:
       leg: webapp
 
@@ -95,6 +98,7 @@ jobs:
       actions: write
       contents: read
       checks: write
+      packages: read
     with:
       leg: extension
 
@@ -106,6 +110,7 @@ jobs:
       actions: write
       contents: read
       checks: write
+      packages: read
     with:
       leg: windows
 

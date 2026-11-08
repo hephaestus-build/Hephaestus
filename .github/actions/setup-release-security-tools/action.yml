@@ -1,5 +1,5 @@
 name: Setup release security tools
-description: Install release security tools
+description: Install pinned and verified release security tools
 inputs:
   install-syft:
     description: Install Syft; Cosign and Trivy are always installed
@@ -10,15 +10,43 @@ runs:
     - uses: ./.github/actions/setup-toolchain
       with:
         install: "none"
+    - uses: ./.github/actions/setup-ci-tool
+      with:
+        tool: cosign-bootstrap
+    - uses: ./.github/actions/setup-ci-tool
+      with:
+        tool: cosign
+    - uses: ./.github/actions/setup-ci-tool
+      with:
+        tool: cosign
+        variant: key
+    - uses: ./.github/actions/setup-ci-tool
+      with:
+        tool: cosign
+        variant: keyless
+    - uses: ./.github/actions/setup-ci-tool
+      with:
+        tool: cosign
+        variant: kms
+    - uses: ./.github/actions/setup-ci-tool
+      if: inputs.install-syft == 'true'
+      with:
+        tool: syft
+    - uses: ./.github/actions/setup-ci-tool
+      if: inputs.install-syft == 'true'
+      with:
+        tool: syft
+        variant: checksums
+    - uses: ./.github/actions/setup-ci-tool
+      with:
+        tool: trivy
+    - uses: ./.github/actions/setup-ci-tool
+      with:
+        tool: trivy
+        variant: checksums
     - name: Install verified release security tools
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ github.token }}
         INSTALL_SYFT: ${{ inputs.install-syft }}
-        # renovate: datasource=github-releases depName=sigstore/cosign
-        COSIGN_VERSION: v3.1.4
-        # renovate: datasource=github-releases depName=anchore/syft
-        SYFT_VERSION: 1.55.0
-        # renovate: datasource=github-releases depName=aquasecurity/trivy
-        TRIVY_VERSION: 0.76.1
+        GITHUB_TOKEN: ${{ github.token }}
       run: node scripts/setup-release-security-tools.ts

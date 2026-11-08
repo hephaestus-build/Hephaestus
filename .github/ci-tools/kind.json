@@ -1,0 +1,14 @@
+{
+	"version": "0.33.0",
+	"url": "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/",
+	"assets": {
+		"linux-x64": {
+			"name": "kind-linux-amd64",
+			"sha256": "aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d"
+		},
+		"linux-arm64": {
+			"name": "kind-linux-arm64",
+			"sha256": "20022bee6cfcd5086cb7234d218e3454e6090022f2a8f55d1fa7fcf42c3867a2"
+		}
+	}
+}

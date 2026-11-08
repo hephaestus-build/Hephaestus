@@ -8,10 +8,10 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promise
 import path from "node:path";
 import { unzipSync } from "fflate";
 
+import { resolveCiTool } from "./ci-tool-resolver.ts";
 import { environmentWithoutGitRepository } from "./git-environment.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
 import { PUSH_CHECK_ENV } from "./push-gates.ts";
-import { downloadReleaseAsset } from "./release-asset.ts";
 
 /**
  * The cache directory for one pinned tool, shared by every worktree of the clone. Each use verifies
@@ -76,6 +76,8 @@ export async function installPinnedBinary(options: {
 	member?: string;
 	/** Fixture installers can allow their local HTTP server during a push check. */
 	allowDownload?: boolean;
+	/** An isolated source cache, such as a fixture's temporary directory. */
+	sourceCache?: string;
 }): Promise<string> {
 	const { cache, version, asset, url, executable } = options;
 	const member = options.member ?? executable;
@@ -96,19 +98,37 @@ export async function installPinnedBinary(options: {
 
 	try {
 		await verifyInstallation();
+		console.info(
+			`CI tool ${path.parse(executable).name}@${version}: source=cache sha256=${asset.sha256}`,
+		);
 		return binary;
-	} catch (error) {
-		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
-			throw error;
-		}
+	} catch {
+		// A derived executable or archive that no longer matches is never run.
+		await rm(directory, { recursive: true, force: true });
 	}
 
-	if (!(options.allowDownload ?? process.env[PUSH_CHECK_ENV] !== "true")) {
-		throw new Error(
-			`${executable} is not cached. Run \`vp run check\` to install the pinned tools before push checks.`,
-		);
+	const allowDownload = options.allowDownload ?? process.env[PUSH_CHECK_ENV] !== "true";
+	let bytes: Uint8Array;
+	try {
+		({ bytes } = await resolveCiTool(
+			{
+				tool: path.parse(executable).name,
+				version,
+				name: asset.name,
+				sha256: asset.sha256,
+				url: `${url}${asset.name}`,
+			},
+			{ cacheRoot: options.sourceCache, offline: !allowDownload },
+		));
+	} catch (error) {
+		if (!allowDownload) {
+			throw new Error(
+				`${executable} is not cached. Run \`vp run check\` to install the pinned tools before push checks.`,
+				{ cause: error },
+			);
+		}
+		throw error;
 	}
-	const bytes = await downloadReleaseAsset(`${url}${asset.name}`);
 	verifyArchive(bytes, asset);
 	const contents = executableFromArchive(bytes, asset.name, member);
 	await mkdir(cache, { recursive: true });

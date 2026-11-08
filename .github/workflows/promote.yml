@@ -55,6 +55,7 @@ jobs:
       contents: write
       deployments: write
       id-token: write
+      packages: read
     env:
       # The deployment record and the channel commit both name who asked and link this run.
       REQUESTED_BY: ${{ github.triggering_actor }}
@@ -88,8 +89,6 @@ jobs:
 
       - uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@972e766b362779c7d2115251e8fc589b443a2c97
         if: ${{ steps.policy.outputs.apply != 'false' }}
-        with:
-          cosign-release: v3.1.4
 
       # Unlike tooling, upstream image pins must come from the deployment target.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

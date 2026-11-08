@@ -20,6 +20,7 @@ jobs:
     permissions:
       security-events: write
       contents: read
+      packages: read
     env:
       # Build and test dependencies execute in CI and can affect shipped artifacts too.
       TRIVY_INCLUDE_DEV_DEPS: "true"

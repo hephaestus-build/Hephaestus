@@ -218,12 +218,13 @@
 		{
 			"description": "Track release security tool versions",
 			"customType": "regex",
-			"managerFilePatterns": ["/^\\.github/actions/setup-release-security-tools/action\\.yml$/"],
+			"managerFilePatterns": ["/^\\.github/ci-tools/(cosign|syft|trivy)\\.json$/"],
 			"matchStrings": [
-				"# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+(?<envName>[A-Z_]+): (?<currentValue>\\S+)"
+				"\"version\":\\s*\"(?<currentValue>[^\"]+)\",[\\s\\S]*?\"url\":\\s*\"https://github\\.com/(?<depName>[\\w.-]+/[\\w.-]+)/releases/download/"
 			],
 			"extractVersionTemplate": "^v(?<version>.*)$",
-			"versioningTemplate": "semver"
+			"versioningTemplate": "semver",
+			"datasourceTemplate": "github-releases"
 		},
 		{
 			"description": "Track the Zizmor CLI version",
