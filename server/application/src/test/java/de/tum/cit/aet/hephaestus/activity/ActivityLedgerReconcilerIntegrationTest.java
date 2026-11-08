@@ -9,9 +9,14 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.config.SpringAsyncConfig;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -31,6 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -74,6 +80,9 @@ class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private WorkspaceRepository workspaces;
+
+    @Autowired
+    private ConnectionRepository connections;
 
     @Autowired
     private RepositoryToMonitorRepository monitors;
@@ -188,11 +197,23 @@ class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldCommitActivityOnTheProducerWhenItsQueueIsFull() throws Exception {
         long prId = issue("PULL_REQUEST", 1, authorId);
+        // Delivery rechecks the source, so the workspace needs the active connection that it reads from.
+        var connection = new Connection(
+                workspaces.findById(workspaceId).orElseThrow(),
+                IntegrationKind.GITHUB,
+                "GitHub",
+                new ConnectionConfig.GitHubPatConfig(
+                        "repair", providers.findById(providerId).orElseThrow().getServerUrl(), Set.of()));
+        connection.setState(IntegrationState.ACTIVE);
+        connections.saveAndFlush(connection);
         try (var context = new AnnotationConfigApplicationContext()) {
             context.setParent(applicationContext);
             context.getEnvironment().setActiveProfiles("default");
             context.register(
-                    SpringAsyncConfig.class, ActivityTransactionConfiguration.class, ActivityEventListener.class);
+                    SpringAsyncConfig.class,
+                    ActivityTransactionConfiguration.class,
+                    ActivityEventListener.class,
+                    ActivityFactDelivery.class);
             context.refresh();
             var pool = context.getBean("activityExecutor", ThreadPoolTaskExecutor.class);
             var started = new CountDownLatch(2);
