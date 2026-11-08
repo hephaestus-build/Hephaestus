@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { once } from "node:events";
+import {
+	cpSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -486,6 +497,204 @@ await test("verification waits for configz and refreshed allocatable after resta
 		3,
 	);
 });
+
+function installerProbe(helm: string) {
+	const fixture = platformWith({
+		// Permit only the release read and sudo credential check, never a host mutation.
+		sudo: `#!/bin/sh
+case "$1" in
+-v) exit 0 ;;
+test) exit 1 ;;
+*helm) shift; exec "$(dirname "$0")/helm" "$@" ;;
+*) echo "unexpected host mutation" >&2; exit 97 ;;
+esac
+`,
+		helm,
+		k3s: "#!/bin/sh\nexit 0\n",
+		// A permitted release stops at the first host check, before any host mutation.
+		awk: "#!/bin/sh\nprintf '1'\n",
+		cosign: "#!/bin/sh\nexit 97\n",
+		getent: "#!/bin/sh\nexit 97\n",
+		ss: "#!/bin/sh\nexit 97\n",
+	});
+	writeFileSync(
+		path.join(fixture.directory, "site.yaml"),
+		"config: {github: {oauthClientId: example}}\n",
+	);
+	return fixture;
+}
+
+await test(
+	"a first install without k3s reaches host checks without reading a release",
+	{ skip: process.platform === "win32" },
+	() => {
+		const fixture = installerProbe(`#!/bin/sh
+case "$1" in
+version) printf 'v4.0.0' ;;
+template) printf 'loginProvider: found' ;;
+*) echo 'unexpected release read' >&2; exit 97 ;;
+esac
+`);
+		try {
+			const bin = path.join(fixture.directory, "bin");
+			rmSync(path.join(bin, "k3s"));
+			// A closed PATH proves the absent-k3s path even on a developer's installed cluster.
+			for (const tool of [
+				"sh",
+				"curl",
+				"jq",
+				"openssl",
+				"sha256sum",
+				"grep",
+				"dirname",
+				"mktemp",
+				"mkdir",
+				"rm",
+			]) {
+				const real = spawnSync("sh", ["-c", 'command -v "$1"', "sh", tool], {
+					encoding: "utf8",
+				}).stdout.trim();
+				assert.ok(real, tool);
+				symlinkSync(real, path.join(bin, tool));
+			}
+			const result = spawnSync(
+				"sh",
+				[
+					path.join(fixture.directory, "k3s-install.sh"),
+					"--version",
+					"0.95.0",
+					"--host",
+					"heph.example.org",
+					"--email",
+					"ops@example.org",
+					"--standard-certificates",
+				],
+				{ encoding: "utf8", timeout: 30_000, env: { ...process.env, PATH: bin } },
+			);
+			assert.equal(result.status, 1, result.stderr);
+			assert.match(result.stderr, /swap is active/u);
+			assert.doesNotMatch(result.stderr, /unexpected/u);
+			assert.equal(existsSync(path.join(bin, "queries")), false);
+		} finally {
+			fixture.done();
+		}
+	},
+);
+
+await test(
+	"real Helm accepts the release probe and reports cluster access failures",
+	{ skip: process.platform === "win32" },
+	async () => {
+		const listener = createServer();
+		const listening = once(listener, "listening");
+		listener.listen(0, "127.0.0.1");
+		await listening;
+		const address = listener.address();
+		assert.ok(address !== null && typeof address !== "string");
+		const closed = once(listener, "close");
+		listener.close();
+		await closed;
+		const realHelm = spawnSync("sh", ["-c", "command -v helm"], { encoding: "utf8" }).stdout.trim();
+		assert.ok(realHelm);
+		const quotedHelm = `'${realHelm.replaceAll("'", String.raw`'\''`)}'`;
+		const fixture = installerProbe(`#!/bin/sh
+if [ "$1" = --kubeconfig ]; then
+  shift 2
+  exec ${quotedHelm} --kubeconfig "$(dirname "$0")/kubeconfig" "$@"
+fi
+exec ${quotedHelm} "$@"
+`);
+		try {
+			writeFileSync(
+				path.join(fixture.directory, "bin", "kubeconfig"),
+				JSON.stringify({
+					apiVersion: "v1",
+					kind: "Config",
+					clusters: [{ name: "closed", cluster: { server: `http://127.0.0.1:${address.port}` } }],
+					contexts: [{ name: "closed", context: { cluster: "closed" } }],
+					"current-context": "closed",
+				}),
+			);
+			const result = installerAt(
+				fixture.directory,
+				"--host",
+				"heph.example.org",
+				"--email",
+				"ops@example.org",
+				"--standard-certificates",
+			);
+			assert.equal(result.status, 1, result.stderr);
+			assert.match(result.stderr, /connect: connection refused/u);
+			assert.match(result.stderr, /cannot read the installed release/u);
+			assert.doesNotMatch(result.stderr, /unknown flag|unexpected host mutation/u);
+		} finally {
+			fixture.done();
+		}
+	},
+);
+
+await test(
+	"the installer refuses release changes and uncertain release state before host changes",
+	{ skip: process.platform === "win32" },
+	() => {
+		const deployed = { status: "deployed", chart: "hephaestus-0.95.0", app_version: "0.95.0" };
+		const cases = [
+			{ releases: [{ ...deployed, chart: "hephaestus-0.94.0", app_version: "0.94.0" }] },
+			{ releases: [{ ...deployed, status: "failed" }] },
+			{ releases: [{ ...deployed, status: "pending-upgrade" }] },
+			{ releases: [{ ...deployed, app_version: "0.94.0" }] },
+			{ releases: [{ ...deployed, chart: "hephaestus-0.94.0" }] },
+			{ releases: [{}] },
+			{ releases: [deployed, deployed] },
+			{ releases: {}, raw: "malformed response" },
+			{ releases: [], status: 1 },
+			{ releases: [deployed], permitted: true },
+			{ releases: [], permitted: true },
+		];
+		for (const scenario of cases) {
+			const fixture = installerProbe(`#!/bin/sh
+case "$1" in
+version) printf 'v4.0.0' ;;
+template) printf 'loginProvider: found' ;;
+--kubeconfig)
+  printf '%s\\n' "$*" >> "$(dirname "$0")/queries"
+  cat "$(dirname "$0")/release.json"
+  exit ${String(scenario.status ?? 0)} ;;
+*) echo "unexpected Helm mutation" >&2; exit 97 ;;
+esac
+`);
+			try {
+				writeFileSync(
+					path.join(fixture.directory, "bin", "release.json"),
+					scenario.raw ?? JSON.stringify(scenario.releases),
+				);
+				const result = installerAt(
+					fixture.directory,
+					"--host",
+					"heph.example.org",
+					"--email",
+					"ops@example.org",
+					"--standard-certificates",
+				);
+				assert.equal(result.status, 1, result.stderr);
+				assert.doesNotMatch(result.stderr, /unexpected .* mutation/u);
+				let expected = /Stopped schema upgrades.*restore the matching backup/u;
+				if (scenario.permitted === true) {
+					expected = /swap is active/u;
+				} else if (scenario.status !== undefined && scenario.status !== 0) {
+					expected = /cannot read the installed release/u;
+				}
+				assert.match(result.stderr, expected);
+				assert.match(
+					readFileSync(path.join(fixture.directory, "bin", "queries"), "utf8"),
+					/list --namespace hephaestus --filter \^hephaestus\$ --output json/u,
+				);
+			} finally {
+				fixture.done();
+			}
+		}
+	},
+);
 
 await test("repeat installs require an explicit certificate choice before changing the host", () => {
 	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-repeat-install-"));
