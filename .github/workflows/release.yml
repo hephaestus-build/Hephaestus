@@ -183,7 +183,7 @@ jobs:
 
       - name: Install cosign for candidate verification
         if: needs.release.outputs.candidate != ''
-        uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@1f4a99eec77bf8504060ba1ca0fba492a809a930
+        uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@5f1fbcd7ce238b35a86a396fc1807e8ce311ea5e
 
       # The images this release promotes, resolved through the same script the pre-merge evidence
       # preflight resolves them with, so the two can never disagree about which artefact is subject.
@@ -532,7 +532,7 @@ jobs:
           install: "none"
 
       - name: Install Cosign
-        uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@1f4a99eec77bf8504060ba1ca0fba492a809a930
+        uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@5f1fbcd7ce238b35a86a396fc1807e8ce311ea5e
 
       # Verifying the durable assets pulls the chart by its locked digest.
       - uses: ./.github/actions/setup-helm

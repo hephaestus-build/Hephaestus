@@ -472,7 +472,7 @@ jobs:
           driver: docker
 
       - name: Install Cosign
-        uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@1f4a99eec77bf8504060ba1ca0fba492a809a930
+        uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@5f1fbcd7ce238b35a86a396fc1807e8ce311ea5e
 
       # The merge queue squashes, so a push to the default branch carries the commit its merge group
       # already built, signed, attested and scanned. That image is the one that was tested, so it

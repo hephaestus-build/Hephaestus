@@ -178,7 +178,7 @@ jobs:
       contents: read
     steps:
       - name: Install Cosign
-        uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@1f4a99eec77bf8504060ba1ca0fba492a809a930
+        uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@5f1fbcd7ce238b35a86a396fc1807e8ce311ea5e
 
       - name: Log in to Container Registry
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
