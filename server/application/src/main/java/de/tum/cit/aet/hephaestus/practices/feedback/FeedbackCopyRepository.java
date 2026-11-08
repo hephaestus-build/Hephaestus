@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
@@ -17,6 +18,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Transactional
 public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID> {
+
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository$CopyCount(
+            c.feedbackId, c.state, COUNT(c), COUNT(c.body))
+        FROM FeedbackCopy c WHERE c.workspaceId = :workspaceId AND c.feedbackId IN :feedbackIds
+        GROUP BY c.feedbackId, c.state
+        """)
+    List<CopyCount> copyCounts(long workspaceId, Collection<UUID> feedbackIds);
+
+    record CopyCount(UUID feedbackId, FeedbackCopyState state, long count, long bodyCount) {}
 
     /**
      * Whether copy {@code c} rests on a result marked incorrect. The composition trace names each copy's exact support.

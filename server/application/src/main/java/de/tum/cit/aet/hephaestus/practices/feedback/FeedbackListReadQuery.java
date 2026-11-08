@@ -4,13 +4,13 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackCopyCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponseRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDeveloperDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackLocation;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackResolution;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.List;
@@ -38,7 +38,8 @@ public class FeedbackListReadQuery {
     private final FeedbackQueryRepository queries;
     private final FeedbackBasisRead basis;
     private final ProductReferenceQuery references;
-    private final FeedbackListReadRepository rows;
+    private final FeedbackCopyRepository copies;
+    private final FeedbackResponseRepository responses;
     private final FeedbackVisibilityService visibility;
     private final ObjectMapper mapper;
 
@@ -62,15 +63,13 @@ public class FeedbackListReadQuery {
 
     private Facts facts(long workspaceId, List<Feedback> feedback) {
         var ids = feedback.stream().map(Feedback::getId).toList();
-        var copies = rows.copyCounts(workspaceId, ids).stream()
-                .collect(Collectors.groupingBy(FeedbackListReadRepository.CopyCount::feedbackId));
-        var copyFacts = copies.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, entry -> copyFacts(entry.getValue())));
-        var disagreed = rows.responseTimes(workspaceId, ids).stream()
-                .filter(row -> row.resolution() == FeedbackResolution.DISAGREE)
-                .collect(Collectors.toMap(
-                        FeedbackListReadRepository.ResponseTime::feedbackId,
-                        FeedbackListReadRepository.ResponseTime::createdAt));
+        var copyFacts = copies.copyCounts(workspaceId, ids).stream()
+                .collect(Collectors.groupingBy(FeedbackCopyRepository.CopyCount::feedbackId,
+                        Collectors.collectingAndThen(Collectors.toList(), FeedbackListReadQuery::copyFacts)));
+        var disagreed = responses.responseTimes(workspaceId, ids).stream()
+                .filter(row -> row.disagreedAt() != null)
+                .collect(Collectors.toMap(FeedbackResponseRepository.ResponseTime::feedbackId,
+                        row -> Objects.requireNonNull(row.disagreedAt())));
         return new Facts(
                 references.items(
                         workspaceId,
@@ -91,7 +90,7 @@ public class FeedbackListReadQuery {
                 disagreed);
     }
 
-    private static CopyFacts copyFacts(List<FeedbackListReadRepository.CopyCount> rows) {
+    private static CopyFacts copyFacts(List<FeedbackCopyRepository.CopyCount> rows) {
         var counts = new EnumMap<FeedbackCopyState, Integer>(FeedbackCopyState.class);
         rows.forEach(row -> counts.put(row.state(), Math.toIntExact(row.count())));
         return new CopyFacts(
@@ -102,7 +101,7 @@ public class FeedbackListReadQuery {
                         counts.getOrDefault(FeedbackCopyState.FAILED, 0),
                         counts.getOrDefault(FeedbackCopyState.WITHHELD, 0),
                         counts.getOrDefault(FeedbackCopyState.RETRACTED, 0)),
-                rows.stream().anyMatch(row -> row.bodyPresent() != 0));
+                rows.stream().anyMatch(row -> row.bodyCount() > 0));
     }
 
     private static ReviewFeedbackDTO summary(Feedback row, FeedbackLocation location, Facts facts) {

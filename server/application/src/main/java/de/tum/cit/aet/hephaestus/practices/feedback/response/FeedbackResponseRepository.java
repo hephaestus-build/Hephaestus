@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.response;
 
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackResolution;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -34,6 +36,17 @@ public interface FeedbackResponseRepository extends JpaRepository<FeedbackRespon
 
         long getCount();
     }
+
+    @Query(value = """
+        SELECT DISTINCT ON (r.feedback_id) r.feedback_id,
+          CASE WHEN r.resolution = 'DISAGREE' THEN r.created_at END AS disagreed_at
+         FROM feedback_response r
+         WHERE r.workspace_id = :workspaceId AND r.feedback_id IN (:feedbackIds)
+         ORDER BY r.feedback_id, r.created_at DESC, r.id::text DESC
+        """, nativeQuery = true)
+    List<ResponseTime> responseTimes(long workspaceId, Collection<UUID> feedbackIds);
+
+    record ResponseTime(UUID feedbackId, @Nullable Instant disagreedAt) {}
 
     @Query(value = """
         SELECT DISTINCT ON (r.feedback_id) r.* FROM feedback_response r

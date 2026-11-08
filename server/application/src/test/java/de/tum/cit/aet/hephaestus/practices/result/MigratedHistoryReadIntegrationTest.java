@@ -22,9 +22,13 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.QueryPlans;
+import de.tum.cit.aet.hephaestus.testconfig.SqlRequestTrace;
+import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -82,6 +86,12 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     EntityManagerFactory entities;
+
+    @Autowired
+    SqlRequestTrace requests;
+
+    @Autowired
+    QueryPlans plans;
 
     @MockitoBean
     ScmItemSourceAccess source;
@@ -515,6 +525,48 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
         var conflicted = List.of(stored(older), stored(newer));
         assertThat(authorization.permitsHumanStanding(workspaceId, conflicted)).containsExactly(newer.getId());
         assertThat(singleReads(workspaceId, conflicted)).containsExactly(newer.getId());
+    }
+
+    @Test
+    void shouldKeepPermittedFeedbackRequestCostBoundedWithRealEvidenceAuthorization() {
+        var result = data.result(scenario, ResultOutcome.MET, Instant.now());
+        receipt(producingJob(result), "{\"dependencies\":\"COMPLETE\",\"identities\":[],\"repositories\":[]}");
+        identity(scenario.account());
+        assertThat(visibility.permitsHistory(scenario.workspace().getId(), List.of(stored(result)),
+                SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)).containsExactly(result.getId());
+        // Several feedback entries can quote the same result; authorization must read that support once.
+        for (int index = 0; index < 2; index++) visibleFeedback(result);
+        var small = measuredFeedbackPage(2);
+        for (int index = 2; index < 8; index++) visibleFeedback(result);
+
+        var larger = measuredFeedbackPage(8);
+
+        assertThat(larger.statements()).as("small=%s, larger=%s", small.statements(), larger.statements())
+                .isEqualTo(small.statements());
+        assertThat(plans.fullScans(small.sql())).isEmpty();
+        assertThat(plans.fullScans(larger.sql())).isEmpty();
+    }
+
+    private SqlStatementCounter.Measurement<WebTestClient.BodyContentSpec> measuredFeedbackPage(int count) {
+        return requests.measure(http, client -> client.get()
+                .uri("/workspaces/" + scenario.workspace().getWorkspaceSlug() + "/practices/reviews/feedback?size=32")
+                .headers(headers -> headers.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
+                .exchange().expectStatus().isOk().expectBody()
+                .jsonPath("$.content.length()").isEqualTo(count)
+                .jsonPath("$.content[*].bodyPreview").isEqualTo(Collections.nCopies(count, "Visible feedback."))
+                .jsonPath("$.content[?(@.textHidden==true)]").isEmpty());
+    }
+
+    private void visibleFeedback(Result result) {
+        var id = UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at)
+            VALUES(?,?,?,?,?,'ON_WORK','DELIVERED','Visible feedback.',now(),now())
+            """, id, scenario.workspace().getId(), result.getReviewId(), result.getItemId(), result.getDeveloperId());
+        jdbc.update("""
+            INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)
+            VALUES(?,?,?,?,?,0)
+            """, UUID.randomUUID(), scenario.workspace().getId(), id, result.getId(), result.getDeveloperId());
     }
 
     @ParameterizedTest

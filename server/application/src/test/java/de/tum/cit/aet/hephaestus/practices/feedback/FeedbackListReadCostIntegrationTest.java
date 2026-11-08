@@ -20,6 +20,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -48,7 +49,8 @@ class FeedbackListReadCostIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcClient jdbc;
 
-    @Autowired private QueryPlans plans;
+    @Autowired
+    private QueryPlans plans;
 
     private ReviewIntegrationData.Scenario scenario;
     private final List<UUID> ids = new ArrayList<>();
@@ -161,26 +163,59 @@ class FeedbackListReadCostIntegrationTest extends BaseIntegrationTest {
                 INSERT INTO feedback_response(id,workspace_id,feedback_id,resolution,comment,created_at)
                 VALUES(:id,:ws,:feedback,:resolution,'Recorded response.',:at)
                 """)
-                    .param("id", response).param("ws", scenario.workspace().getId()).param("feedback", id)
+                    .param("id", response)
+                    .param("ws", scenario.workspace().getId())
+                    .param("feedback", id)
                     .param("resolution", response.toString().startsWith("7") ? "DISAGREE" : "ADDRESSED")
-                    .param("at", Timestamp.from(at)).update();
+                    .param("at", Timestamp.from(at))
+                    .update();
         }
         var first = feedback.list(scenario.workspace().getId(), ALL, PageRequest.of(0, 32));
-        assertThat(first.getContent().stream().filter(row -> row.id().equals(id)).findFirst().orElseThrow().disagreedAt()).isNull();
+        assertThat(row(first, id).disagreedAt()).isNull();
         jdbc.sql("""
             INSERT INTO feedback_response(id,workspace_id,feedback_id,resolution,comment,created_at)
             VALUES(:id,:ws,:feedback,'DISAGREE','Recorded disagreement.',:at)
             """)
-                .param("id", UUID.randomUUID()).param("ws", scenario.workspace().getId()).param("feedback", id)
-                .param("at", Timestamp.from(at.plusSeconds(1))).update();
+                .param("id", UUID.randomUUID())
+                .param("ws", scenario.workspace().getId())
+                .param("feedback", id)
+                .param("at", Timestamp.from(at.plusSeconds(1)))
+                .update();
         var disagreed = feedback.list(scenario.workspace().getId(), ALL, PageRequest.of(0, 32));
-        assertThat(disagreed.getContent().stream().filter(row -> row.id().equals(id)).findFirst().orElseThrow().disagreedAt())
-                .isEqualTo(at.plusSeconds(1));
+        assertThat(row(disagreed, id).disagreedAt()).isEqualTo(at.plusSeconds(1));
         jdbc.sql("INSERT INTO feedback_response(id,workspace_id,feedback_id,created_at) VALUES(:id,:ws,:feedback,:at)")
-                .param("id", UUID.randomUUID()).param("ws", scenario.workspace().getId()).param("feedback", id)
-                .param("at", Timestamp.from(at.plusSeconds(2))).update();
+                .param("id", UUID.randomUUID())
+                .param("ws", scenario.workspace().getId())
+                .param("feedback", id)
+                .param("at", Timestamp.from(at.plusSeconds(2)))
+                .update();
         var cleared = feedback.list(scenario.workspace().getId(), ALL, PageRequest.of(0, 32));
-        assertThat(cleared.getContent().stream().filter(row -> row.id().equals(id)).findFirst().orElseThrow().disagreedAt()).isNull();
+        assertThat(row(cleared, id).disagreedAt()).isNull();
+    }
+
+    @Test
+    void shouldReflectWithdrawalAndLaterRestoration() {
+        for (var id : ids) decision(id, "WITHDRAW", AT.plusSeconds(10));
+        decision(ids.getLast(), "RESTORE", AT.plusSeconds(11));
+
+        var page = feedback.list(scenario.workspace().getId(), ALL, PageRequest.of(0, 32));
+
+        assertThat(row(page, ids.getFirst()).withdrawn()).isTrue();
+        assertThat(row(page, ids.getLast()).withdrawn()).isFalse();
+    }
+
+    private void decision(UUID id, String action, Instant at) {
+        jdbc.sql("""
+            INSERT INTO feedback_decision(id,workspace_id,feedback_id,action,actor_account_id,note,decided_at)
+            VALUES(:id,:ws,:feedback,:action,:actor,'Recorded visibility decision.',:at)
+            """)
+                .param("id", UUID.randomUUID()).param("ws", scenario.workspace().getId())
+                .param("feedback", id).param("action", action).param("actor", scenario.account().getId())
+                .param("at", Timestamp.from(at)).update();
+    }
+
+    private static ReviewFeedbackDTO row(Page<ReviewFeedbackDTO> page, UUID id) {
+        return page.getContent().stream().filter(row -> row.id().equals(id)).findFirst().orElseThrow();
     }
 
     private UUID recordedFeedback(ReviewIntegrationData.Scenario owner, int index) {
