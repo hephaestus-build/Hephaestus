@@ -52,6 +52,10 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
                     """, nativeQuery = true)
     void enqueue(@Param("request") Request request);
 
+    /** PostgreSQL delivers the pool-id hint to every worker only after the admission transaction commits. */
+    @Query(value = "SELECT 1 FROM (SELECT pg_notify(:channel, :payload)) sent", nativeQuery = true)
+    int notifyPool(@Param("channel") String channel, @Param("payload") String payload);
+
     /** Uses database time and includes every workspace and worker in this endpoint pool. */
     @Query(value = """
             SELECT EXISTS (SELECT 1 FROM llm_call_permit q WHERE q.pool_id=p.id
