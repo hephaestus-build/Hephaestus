@@ -2,13 +2,14 @@
 id: unified-pi-runtime
 sidebar_position: 3
 title: Conversation runtime
-description: How a conversation turn runs, from the ledger in PostgreSQL to the conversation host on a worker, and how each turn rebuilds and limits its context.
+description: How a conversation turn runs, from the ledger in PostgreSQL to the conversation loop, and how each turn rebuilds and limits its context.
 ---
 
 # Conversation runtime
 
 Use this page to change how a conversation turn runs.
-[ADR 0057](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0057-one-heph-conversation-per-developer.md) records the decisions.
+[ADR 0057](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0057-one-heph-conversation-per-developer.md) records the decisions about the ledger and the context.
+[ADR 0068](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md) records where the loop and the tools run.
 [Runtime roles](/admin/runtime-roles#conversation-turns) gives the operator settings.
 
 `processResources` compiles the trusted Node modules to JavaScript for the server JAR.
@@ -22,7 +23,7 @@ Stored custom practice programs can still use TypeScript.
 ## The ledger
 
 [Practice feedback language § Conversation](./practice-feedback-language.md#conversation) defines the conversation, the thread, the message and the weekly digest.
-[Practice review glossary § Runtime terms](./practice-review-glossary.mdx#runtime-terms) defines the turn, the conversation host and the context document.
+[Practice review glossary § Runtime terms](./practice-review-glossary.mdx#runtime-terms) defines the turn, the conversation loop and the context document.
 
 PostgreSQL holds all Hephaestus state in three workspace-scoped tables:
 
@@ -35,7 +36,7 @@ PostgreSQL holds all Hephaestus state in three workspace-scoped tables:
 A thread is a `mentor_conversation` row with `parent_conversation_id` and `parent_entry_id`.
 It forks the main conversation at that entry.
 The `mentor` module owns these tables, their services, and the path builder.
-The `agent.mentor` packages own admission, dispatch, the host, and the web API.
+The `agent.mentor` packages own admission, turn assignment, the tools Pods, and the web API.
 
 An entry that Pi wrote keeps the Pi session entry verbatim in `payload`.
 The server derives the kind from the Pi entry (`MentorPiEntries.kind`).
@@ -64,7 +65,7 @@ When a person claims the account, `MentorAccountAbsorptionContributor` moves the
 If both accounts have a main conversation in a workspace, it merges them:
 
 1. The entries of the absorbed main conversation follow the entries of the claiming main conversation, in their own order. They get new `seq` values and keep their ids, so threads, turns, and feedback copies still find them.
-2. Its turns and threads move to the claiming main conversation. Before they move, a running attempt of the absorbed conversation goes back to the queue (`MentorTurnService.requeueRunning`), as for an expired lease. Its host loses the lease, so the ledger refuses its later writes. The attempt is billed, and its feedback claims get `UNCONFIRMED` receipts (`MentorLedgerEvents.AttemptTakenBack`).
+2. Its turns and threads move to the claiming main conversation. Before they move, a running attempt of the absorbed conversation goes back to the queue (`MentorTurnService.requeueRunning`), as for an expired lease. Its conversation loop loses the lease, so the ledger refuses its later writes. The attempt is billed, and its feedback claims get `UNCONFIRMED` receipts (`MentorLedgerEvents.AttemptTakenBack`).
 3. Its summaries are erased, so the next turn summarizes the merged conversation again.
 4. Its Slack identity moves only if the claiming main conversation has none.
 5. The absorbed conversation row is deleted.
@@ -72,10 +73,10 @@ If both accounts have a main conversation in a workspace, it merges them:
 ## Turn lifecycle
 
 1. The server writes the question entry and a `QUEUED` turn in one transaction (`MentorTurnService.submit`). The client `requestId` makes a repeat return the same rows. [Personal data](#personal-data) tells when the server refuses the write.
-2. A worker claims the first queued turn of a conversation that has no running turn (`MentorTurnStarter.startNext`). The order in a conversation is the `seq` of the questions, which the server gives under the lock of the conversation. The clock of a server does not decide it. The turn becomes `RUNNING` with a lease.
+2. The conversation loop pulls an assignment from a worker ([Turn assignment](#turn-assignment)). The worker claims the first queued turn of a conversation that has no running turn (`MentorTurnStarter.startNext`). The order in a conversation is the `seq` of the questions, which the server gives under the lock of the conversation. The clock of a server does not decide it. The turn becomes `RUNNING` with a lease.
 3. The worker admits the turn (`MentorAdmission.admit`) and freezes the model and price in `mentor_turn.admission`. A refusal ends the turn `FAILED` with the refusal text.
-4. The worker sends `start` to its conversation host. The host reads the context and runs Pi. While Pi works, the host reports the partial answer.
-5. The host ends the turn as `DONE`, `STOPPED`, or `FAILED` (`MentorTurnCompletion.end`). The end carries all Pi entries of the turn, and the worker stores them in one transaction.
+4. The worker answers the pull with the attempt and its token. The loop reads the context and runs Pi. While Pi works, the loop reports the partial answer. Each call of the attempt can reach a different worker.
+5. The loop ends the turn as `DONE`, `STOPPED`, or `FAILED` (`MentorTurnCompletion.end`). The end carries all Pi entries of the turn. The worker that receives the end stores them in one transaction.
    A model call that Pi retried or recovered stays out, with the `context_edit` that leaves it out of the model's view (`heph-host.ts` `withoutOmitted`). The worker bills the attempt from the proxy's row counters.
 6. In the transaction of the end, the worker records the receipts that the attempt's claims are due. After the end commits, it stores them ([Delivery of shown feedback](#delivery-of-shown-feedback)).
 
@@ -92,22 +93,23 @@ Two facts decide the reason, and both are rows:
 
 - A worker may start the turn. The SQL rule is the same as the claim (`MentorTurnRepository.CLAIMABLE`), so the two cannot disagree.
 - The turns that hold a Hephaestus slot are at least `hephaestus.mentor.turn.capacity`.
-  A turn holds a slot while it runs, and while it is stopped and its host still commits the answer (`MentorTurnRepository.countHeld`).
+  A turn holds a slot while it runs, and while it is stopped and its loop still commits the answer (`MentorTurnRepository.countHeld`).
 
-The capacity is the number of turns that all workers together run at once.
-The Helm chart sets it on the server to `worker.replicas` multiplied by `worker.conversationTurns`.
-The chart helper `hephaestus.conversationTurns` resolves `worker.conversationTurns` for the server and the workers, so the two numbers agree.
+The capacity is the number of turns that the whole installation runs at once.
+The Helm chart sets it from `conversationLoop.turns` on the server, on each worker and on each loop replica.
+The chart helper `hephaestus.conversationTurns` resolves the value once, so the numbers agree.
+A claim locks the claims and counts the turns with a live lease in the installation (`MentorTurnService.claimNext`).
+It claims no turn while that count is at the capacity.
 
 - `FREE_HEPH`: a worker may start the turn, and every Hephaestus slot of the deployment is taken.
 - No value: the server knows no reason.
   The turn starts at once, waits behind an earlier question of its conversation, or the server has no capacity.
 
-A turn whose worker stopped holds its slot until the lease reaper takes it back.
-During a rollout, the turns of the draining workers count too.
-Thus, for a short time, a question can show `FREE_HEPH` while a new worker has a free slot.
-It starts at the next claim.
+A turn whose loop stopped holds its slot until the lease reaper takes it back.
+Thus, for a short time, a question can show `FREE_HEPH` while a loop has room.
+It starts at the next pull.
 
-All workspaces share the workers' Hephaestus slots.
+All workspaces share the installation's Hephaestus slots.
 Thus, `FREE_HEPH` depends on turns of other workspaces.
 It tells a member only that every slot answers some question, never whose question it is.
 
@@ -126,11 +128,11 @@ The process that commits the change publishes it, also a worker without the capa
 
 ### Leases and retries
 
-The worker renews the lease every third of `hephaestus.mentor.turn.lease`, while the turn runs on a live host.
-The renewal tick has a thread of its own (`HephHostConfiguration.hephTurnTicks`).
-No sandbox call runs on that thread, so a stalled Kubernetes API cannot expire the lease of a turn that runs well.
-Each host call checks that the attempt runs on this worker (`MentorLeaseLostException`).
-The worker knows that without a read: a lost lease, the end, and a lost host remove the attempt.
+The conversation loop renews the lease of each running attempt every 5 seconds with `POST lease` (`LEASE_INTERVAL_MS` in `heph-host.ts`).
+The lease is `hephaestus.mentor.turn.lease`, 60 seconds by default.
+No worker holds a turn in its memory.
+Each turn call reads the turn's row and its lease (`HephTurns.held`).
+A call of an attempt that lost its lease or ended gets `409` with `MENTOR_LEASE_LOST`.
 Each write of the attempt is also conditional on the attempt and its lease.
 
 The end is the only write of the turn's entries.
@@ -138,24 +140,27 @@ An attempt that crashes or loses its lease stores no entries.
 Thus, its retry starts from the same path as the first attempt.
 
 The worker can fail to answer a context read or an end, with a network error or a `5xx`.
-Then the host sends the call again, after 1, 2, and 4 seconds.
+Then the loop sends the call again, after 1, 2, and 4 seconds.
 The end releases the lease, so the worker answers a repeated end with `409` and stores nothing twice.
 
 `MentorTurnLeaseReaper` (server role) takes back an expired lease:
 
 - A running turn on its first attempt returns to `QUEUED` with the same key. Its partial answer is cleared.
 - A running turn that loses its second lease ends `FAILED`.
-- A stopped turn whose host did not end it stays `STOPPED`, without an answer.
+- A stopped turn whose loop did not end it stays `STOPPED`, without an answer.
 
 The reaper bills the lost attempt from the proxy's record.
 
 The reaper can return a turn to the queue.
-Its `QUEUED` notification names the attempt that lost the lease.
-A worker acts on that notification only when it runs that attempt.
-Then the worker sends `stop` with the reason `lease` for that attempt, before it starts the retry.
+Its notification names the attempt that lost the lease.
+Every worker then seals the model calls in flight of that attempt (`HephTurns.turnChanged`).
+The next call of the attempt gets `409`, and the loop stops it without a call to the worker.
 
-Each command to the host names the attempt.
-A host that gets `start` for a later attempt of a turn that it runs stops the earlier attempt first.
+A loop that is gone renews nothing.
+The lease of each of its attempts then expires, and the reaper decides about the turn.
+
+Each assignment names the attempt.
+A loop that gets a later attempt of a turn that it runs stops the earlier attempt first (`createHephHost`).
 The earlier attempt then ends without a call to the worker.
 
 ### Stop and deadline
@@ -163,36 +168,41 @@ The earlier attempt then ends without a call to the worker.
 A developer stops a turn with `PATCH …/mentor/turns/{turnId}/status`.
 
 - A queued turn becomes `STOPPED` and never runs. The question stays without an answer.
-- A running turn becomes `STOPPED` at once, but it keeps its lease. The host aborts Pi and ends the turn with the cut-off answer.
+- A running turn becomes `STOPPED` at once, but it keeps its lease. Every worker seals the attempt's model calls in flight. The next call of the attempt gets `409` with `MENTOR_TURN_STOPPED` and `stop: developer`. The loop then aborts Pi and ends the turn with the cut-off answer.
 
-The next queued turn of that conversation starts after the host ends the stopped turn, or after the lease expires.
+The next queued turn of that conversation starts after the loop ends the stopped turn, or after the lease expires.
 An abort can leave a tool call without its result.
-The host stores no result for it.
+The loop stores no result for it.
 In the stopped turn, Pi gives each open tool call a result when it builds a request (`transformMessages`).
 For later turns, the path builder removes the tool calls from the cut-off answer (`MentorContextPathBuilder.keepCutOffAnswer`).
 
 The deadline of a turn is the LLM timeout of the conversation model binding, at most 15 minutes (`AgentBindingLimits.MAX_HEPH_TURN_SECONDS`).
 The deadline is the hard ceiling of a turn that keeps making progress.
-A stall ends a turn earlier: the worker's LLM proxy cuts a silent model call (`LlmProxyService`, `upstream_stalled`), and the host ends the turn as `STALLED`.
+A stall ends a turn earlier: the worker's LLM proxy cuts a silent model call (`LlmProxyService`, `upstream_stalled`), and the loop ends the turn as `STALLED`.
 The proxy cuts a review's streamed call on the same bounds, and the review runner retries it ([Runtime roles](/admin/runtime-roles)).
 Set the ceiling above the time of a few of the slowest model calls, because an answer takes a few calls.
-A worker runs few turns at once, so a turn as long as a review would keep every question queued behind it waiting.
+An installation runs few turns at once, so a turn as long as a review would keep every question queued behind it waiting.
 
 The proxy puts no stream limit on a conversation call.
 The idle bounds and the turn's stop end the call. Its exchange waits until a minute past the ceiling, so the turn's deadline stop comes first.
 
-At the deadline, the worker sends `stop` with the reason `deadline`.
+The attempt's token carries the deadline.
+After the deadline, each call of the attempt except its end gets `409` with `MENTOR_TURN_STOPPED` and `stop: deadline`.
+A lease call still renews the lease, so that the loop can end the attempt.
 
-If the host does not end the turn within `HephTurnDispatcher.STOP_GRACE` after a `developer` or `deadline` stop, the worker ends it.
-A turn that the developer stopped then stays `STOPPED`.
-A `lease` stop has no such wait: the worker no longer counts the attempt, and the reaper decides about the turn.
+The next lease call ends an attempt that its loop did not end in time (`HephTurns.lease`):
+
+- 30 seconds (`HephTurns.STOP_GRACE`) after a developer's stop, the turn stays `STOPPED`.
+- 30 seconds after the deadline, the turn ends `FAILED` with "Hephaestus took too long to reply and stopped. Try again."
+
+A lost lease has no such wait: the reaper decides about the turn.
 
 A turn also ends after 40 model calls, retries included (`MAX_TURN_MODEL_CALLS` in `heph-host.ts`).
 A turn that keeps calling loops on a tool or on a failing call.
 The worker logs one line for each model call and each tool call of a turn.
 The line names the tool, the outcome and the duration, never the words.
 
-A turn gets a context folder only while the worker can start tools Pods.
+A turn gets a context folder only while the worker that serves its context can start tools Pods.
 Without one, the turn has no `read`, `bash` or `load_context` tool, and its situation says so (`HephTurnContexts.NO_CONTEXT_FOLDER`).
 
 ### How a turn fails
@@ -202,16 +212,16 @@ Its question stays in the path with a marker ([The path](#the-path)), and the de
 
 | Cause | Who ends the turn | Text for the developer |
 | --- | --- | --- |
-| Admission refuses the turn. The causes are no model, no AI choice, budget, unpriced usage, and a model below Hephaestus's smallest model ([Limits](#limits)). A requested erasure of the developer's personal data is also a cause. | The worker, before the host runs (`MentorTurnStarter`). | The refusal text. |
-| After a claim, the host does not start, or its channel does not open within `HephTurnDispatcher.HOST_READY_TIMEOUT`, on two hosts in a row. | The worker. | "Hephaestus could not start. Try again in a moment." |
-| The deadline passes. | The host, with the reason `DEADLINE`. If the host is silent for `STOP_GRACE`, the worker. | "Hephaestus took too long to reply and stopped. Try again." |
-| The turn reaches its model call limit. | The host, with the reason `ERROR` and the detail `call_limit`. | "Hephaestus could not finish this reply. Try again." |
-| The provider of a model call sends no response headers within `hephaestus.mentor.turn.model-first-byte-timeout`, or its stream sends no byte for `model-idle-timeout`, or its breaker refuses the call. The proxy answers with the code `upstream_stalled` or `upstream_paused`. | The host, with the reason `STALLED`. | "Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment." |
-| The provider breaker of the admitted model's connection is open ([Runtime roles](/admin/runtime-roles#provider-breaker)). | The worker, before the host runs (`MentorTurnStarter`). | "Hephaestus's AI model is not responding right now, so Hephaestus did not start this reply. Try again in a few minutes." |
-| Pi writes no answer, or the model call fails. | The host, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
-| The conversation stays too long after compaction. | The host, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
-| The worker refuses the end with `400`, for example for too many entries. | The host, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
-| The worker refuses the end with `413` again, after the host replaced its documents with read notes. | The host, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
+| Admission refuses the turn. The causes are no model, no AI choice, budget, unpriced usage, and a model below Hephaestus's smallest model ([Limits](#limits)). A requested erasure of the developer's personal data is also a cause. | The worker, before the loop runs the turn (`MentorTurnStarter`). | The refusal text. |
+| After a claim, the worker cannot start the attempt, for example it cannot issue the attempt's token. | The worker (`HephTurns.begin`). | "Hephaestus could not start. Try again in a moment." |
+| The deadline passes. | The loop, with the reason `DEADLINE`. If the loop does not end it within `STOP_GRACE`, the next lease call. | "Hephaestus took too long to reply and stopped. Try again." |
+| The turn reaches its model call limit. | The loop, with the reason `ERROR` and the detail `call_limit`. | "Hephaestus could not finish this reply. Try again." |
+| The provider of a model call sends no response headers within `hephaestus.mentor.turn.model-first-byte-timeout`, or its stream sends no byte for `model-idle-timeout`, or its breaker refuses the call. The proxy answers with the code `upstream_stalled` or `upstream_paused`. | The loop, with the reason `STALLED`. | "Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment." |
+| The provider breaker of the admitted model's connection is open ([Runtime roles](/admin/runtime-roles#provider-breaker)). | The worker, before the loop runs the turn (`MentorTurnStarter`). | "Hephaestus's AI model is not responding right now, so Hephaestus did not start this reply. Try again in a few minutes." |
+| Pi writes no answer, or the model call fails. | The loop, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
+| The conversation stays too long after compaction. | The loop, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
+| The worker refuses the end with `400`, for example for too many entries. | The loop, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
+| The worker refuses the end with `413` again, after the loop replaced its documents with read notes. | The loop, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
 | The second attempt loses its lease. | `MentorTurnLeaseReaper`. | "Hephaestus could not finish this reply. Try again." |
 
 "Pi writes no answer" includes a last message with no words (`empty_answer`).
@@ -220,16 +230,15 @@ After them, it called only `link_result`, `link_problem` or `show_feedback`, and
 The prompt asks Hephaestus to end there without more text, so that turn ends done.
 
 An attempt that loses its lease does not fail by itself.
-The host stops it without a call to the worker, and the reaper decides (see [Leases and retries](#leases-and-retries)).
+The loop stops it without a call to the worker, and the reaper decides (see [Leases and retries](#leases-and-retries)).
 
-The worker logs each attempt that fails on it at `WARN`, with the reason and the host's `detail`.
+The worker that receives a failed end logs it at `WARN`, with the reason and the loop's `detail`.
 The `detail` is a kind of failure from a closed set, for example `model_error`, `context_overflow` or `worker_refused` (`FAILURE_DETAILS` in `heph-host-protocol.ts` and in `HephTurnController`).
 It is never the text of the model provider, a tool, or the worker.
 The worker logs a `detail` outside the set as `unrecognized`.
 
-The host writes the same kind to its own output (`failureSummary`), with the worker's HTTP status when the worker answered.
+The loop writes the same kind to its own log (`failureSummary`), with the worker's HTTP status when the worker answered.
 It never writes a failure's message, name, or stack, because any of them can carry the words of the worker's answer.
-The worker does not read the host's output ([The conversation host](#the-conversation-host)).
 
 The worker logs an admission refusal at `INFO`.
 The reaper on the server role logs a lost second attempt at `INFO`.
@@ -251,7 +260,7 @@ The `text` appears in the answer where Hephaestus calls the tool.
 | `show_feedback` | `POST show-feedback` | Prepared conversation feedback of the developer. The call claims its copy. | The worker settles the copy when the attempt ends. |
 
 Each endpoint answers `200` with the id, or `422` with a `detail`.
-After a `422`, the host fails the tool call, and the answer shows nothing for it.
+After a `422`, the loop fails the tool call, and the answer shows nothing for it.
 A link alone never delivers feedback.
 
 Prepared conversation feedback is `READY` feedback with the destination `CONVERSATION`.
@@ -381,7 +390,7 @@ Slack sends `agent_session_stopped`, and `SlackAgentSessionStoppedMessageHandler
   When `streaming_message_ts` names streams, one of them must also be the question's `slack_stream_ts`.
   Queued follow-ups and the main conversation stay as they are, and a turn that already ended stays unchanged.
 - The stop writes only to the ledger. It calls no Slack API.
-  The host aborts the turn on its own time, as for a stop in the app. The turn's end then ends the stream and the session's status.
+  The loop learns of the stop at the attempt's next call. It then aborts the turn, as for a stop in the app. The turn's end then ends the stream and the session's status.
 
 The time check has no margin.
 It compares Slack's clock (`event_ts`) with the database's clock (the attempt's `started_at`).
@@ -527,81 +536,76 @@ A disconnect takes the lifecycle lock of the Slack connection before it erases.
 A Slack question is stored in one transaction that takes the same lock and checks that the connection is still active for the Slack team (`SlackWorkspaceResolver.whileConnected`).
 Thus, a question that arrives during a disconnect is either not stored or erased by it.
 
-## The conversation host
+## The conversation loop
 
-Each worker runs one conversation host Pod (`HephHost`, `HephHostSpec`).
-A worker with Hephaestus capacity starts its host before it claims a turn, also when no turn is queued.
-The host is ready when it opens its command channel.
-The worker's readiness includes `hephTurnDispatcher`, so a rolling update keeps the old worker until the replacement host is ready.
+The [conversation loop](/contributor/practice-review-glossary#runtime-terms) runs every conversation turn of the installation, one in-memory Pi session for each turn.
+It is a chart-managed Deployment, `<release>-conversation-loop` (`conversation-loop.yaml`).
+It holds no state of its own: each turn rebuilds its session from the ledger.
+Any worker serves any call of any turn, because each call reads the turn's row.
 
-A channel that does not open is tried again after 1, 2, 4 and 8 seconds (`runCommands`), then the host exits.
-Until a host is ready, turns stay queued without spending an attempt.
+| Property | Value |
+| --- | --- |
+| Program | `heph-host.ts` and its modules, compiled to JavaScript in `/opt/pi-sdk` of the agent image (`docker/agents/pi/Dockerfile`). No worker stages it. |
+| Process | `node --permission`, with no child-process grant. It reads only `/opt/pi-sdk` and `/tmp/heph-loop`, and writes only `/tmp/heph-loop`. |
+| Pod | In the release namespace and the roles PriorityClass tier. No service account token, the Restricted security settings, a read-only root file system, and one `emptyDir` at `/tmp/heph-loop`. |
+| System prompt | `GET context` returns it. The worker builds it from `agent/mentor/system.md` and the [shared feedback writing guide](./practice-feedback-language.md#writing-feedback) (`HephTurnContexts.SYSTEM_PROMPT`). |
+| Credentials | `HEPHAESTUS_CONVERSATION_LOOP_SECRET` for the assignment pull, and one attempt token for each turn attempt. |
+| Network | No ingress. Egress only to the gateway port of the workers and to TCP port 7100 of tools Pods. |
+| Capacity | At most `HEPHAESTUS_MENTOR_TURN_CAPACITY` turns in each replica. |
+| Probes | Readiness: the file `/tmp/heph-loop/ready`, written at start and removed on SIGTERM. Liveness: the file `alive`, touched at each pull. |
+| Tools | `link_result`, `link_problem`, `show_feedback`, `search_conversation`, and `read`, `bash` and `load_context` when the worker can serve them ([Context folder](#context-folder)). The loop runs the three against the attempt's tools Pod. |
+
+The loop updates with RollingUpdate, one surge replica and none unavailable, so a new replica is ready before an old one stops.
+On SIGTERM, it pulls no more turns and ends its running turns.
+Its grace period of 960 seconds is the longest turn, 900 seconds, plus 30 seconds to end it and 30 seconds to stop.
+
+The loop writes each failure as a kind from a closed set, never as the words of a turn ([How a turn fails](#how-a-turn-fails)).
+No worker reads the loop's log.
+
+### Turn assignment
+
+The loop pulls each attempt with `POST /internal/llm/turn-assignments` (`HephTurnAssignmentController`, hidden from OpenAPI).
+It sends the pull to the gateway Service `<release>-sandbox-gateway`, which picks a worker.
+It presents `HEPHAESTUS_CONVERSATION_LOOP_SECRET` as its bearer token.
+That credential reaches only this path, and no other credential reaches it (`JobTokenAuthenticationProvider`).
+
+`HephTurns.assign` claims a turn and waits up to 20 seconds for one (`HephTurns.PULL_WAIT`).
+A `mentor_ledger` notification from PostgreSQL wakes a waiting pull.
+`MentorLedgerNotifications` sends `NOTIFY` before commit, so PostgreSQL delivers it only on commit.
+
+| Answer | Meaning | The loop |
+| --- | --- | --- |
+| `200` | One attempt: `turnId`, `attempt`, `token` and `deadline`. The token is the attempt's `AttemptJwt` of kind `TURN`. | Starts the turn. |
+| `204` | No turn may start now. | Pulls again. |
+| `503` | This worker stops, or its claim failed. | Waits 0.5, 1, 2, then 4 seconds, and pulls again, maybe from another worker. |
+
+The loop pulls only while it runs fewer turns than its capacity.
+A stopping worker hands out no more turns and removes nothing.
+The other workers serve the calls of its turns.
+
+A pull whose answer the loop does not receive leaves a claimed turn that no loop runs.
+Its lease expires after 60 seconds, and the reaper takes it back.
+Thus, a lost answer costs one lease and one attempt.
 
 Server maintenance ends overdue queued questions without claiming an attempt.
 The [queue startup budget](/admin/runtime-roles#conversation-turn-capacity) uses the stored `mentor_turn.queued_at` time, so a restart cannot extend it.
 
 A lease retry records a new queue time. A worker restart does not.
-The reaper locks the turn and checks its eligibility again, so a question that a ready worker claimed stays with that worker.
+The reaper locks the turn and checks its eligibility again, so a question that a worker claimed stays claimed.
 
 The developer gets "Hephaestus could not start. Try again in a moment."
 The turn records `start_wait_expired` and spends no new attempt or model call.
 
-If the host is lost after a claim, the worker tries one fresh host before the claimed turn fails.
-
-| Property | Value |
-| --- | --- |
-| Image | The agent image of the release, runtime contract 14 (`SandboxLayout.RUNTIME_CONTRACT_VERSION`). It provides Node and the Pi SDK. |
-| Host script | `heph-host.js`, its modules, and the system prompt come from the worker JAR. The worker stages them into the workspace (`HephHostSpec`). The image does not hold them. |
-| Process | `node --max-old-space-size=1024 --permission`, with no child-process grant. |
-| Readable paths | The workspace, `/opt/pi-sdk`, the empty home, and the practice-script library (`/opt/practice-scripts`). The provider helper imports that library through the workspace link that the practice runners also use (`PiRunnerProfile.PRACTICE_SCRIPT_LIBRARY_SETUP`). |
-| Writable paths | Pi's agent directory and the temporary directory only. |
-| Limits | `HephHostSpec.LIMITS`. [Runtime roles](/admin/runtime-roles#the-conversation-host) gives the values. |
-| Network | NetworkPolicy permits only the worker's Sandbox Gateway and TCP port 7100 of tools Pods. |
-| Pod label | `hephaestus.build/sandbox-kind=host`. `SESSION_ID` is the host id. |
-| Tools | `link_result`, `link_problem`, `show_feedback`, `search_conversation`, and `read`, `bash` and `load_context` when the worker can serve them ([Context folder](#context-folder)). The host runs the three against the attempt's tools Pod. |
-
-The sandbox SPI `agent.sandbox.spi.HostSandbox` launches the host.
-`SandboxHosts` implements it on the sandbox backend that runs practice reviews (`KubernetesSandboxBackend`).
-
-A host that does not open its channel in time fails the claimed turn ([How a turn fails](#how-a-turn-fails)).
-[Runtime roles](/admin/runtime-roles#the-conversation-host) gives the timeouts and the ping interval of the host.
-
-A closed channel means that the host is gone.
-The worker pings the channel on each dispatcher tick, and the WebSocket client of the host answers each ping.
-A host that leaves `HephHost.UNANSWERED_PINGS` pings in a row without an answer is also gone, and the worker closes its channel (`HephHost.ping`).
-The worker removes a gone host and leaves its turns to their leases.
-The next turn starts a new host.
-`SandboxReconciler` removes a host whose worker is gone.
-
-The worker never reads the host's output, and it does not copy it into its own log (`SandboxHosts.remove`).
-Pi, Node, and the host itself can all write to that output, so it can hold the conversation, a provider's answer, or a credential.
-The worker logs the removal with the host's id, and the class of a removal step that fails.
-When a host cannot start, the worker logs the cause that it knows itself.
-For example, it logs the hostname rule or the exit code of the workspace setup.
-
-On drain, the worker stops claiming turns.
-It waits up to `HephTurnDispatcher.DRAIN_TIMEOUT` for running turns, then removes the host.
-
-### Command channel
-
-The host opens one WebSocket to its worker: `GET /internal/llm/runtime/{hostId}/commands` on the gateway port.
-It authenticates with the gateway-session token of the host.
-The worker accepts that token once, and only for the current host id.
-
-The worker sends WebSocket pings and two JSON frames.
-`heph-host-protocol.ts` parses them and ignores any other frame.
-
-- `{"type":"start","turnId","attempt","token"}`. The token is the attempt's `AttemptJwt` of kind `TURN`.
-- `{"type":"stop","turnId","attempt","reason"}`. The reason is `developer`, `deadline`, or `lease`.
-
 ### Turn endpoints
 
-The host calls the worker over HTTP with the turn's attempt token (`HephTurnController`, hidden from OpenAPI).
+The loop calls the workers over HTTP with the attempt's token, through the gateway Service (`HephTurnController`, hidden from OpenAPI).
+Each call can reach another worker.
 All paths start with `/internal/llm/turn/{turnId}/`.
 
 | Method and path | Purpose |
 | --- | --- |
-| `GET context` | The session id, the stored path, the prompt, the model, and the situation. |
+| `POST lease` | Renews the attempt's lease. `409` when the attempt must stop or lost its lease ([Stop and deadline](#stop-and-deadline)). |
+| `GET context` | The session id, the stored path, the prompt, the model, the situation, and the system prompt. |
 | `POST link-result` | Admits one result for the answer (`{resultId}`). A refused result gets `422`. |
 | `POST link-problem` | Admits one problem for the answer (`{problemId}`). A refused problem gets `422`. |
 | `POST show-feedback` | Claims the copy of one piece of prepared conversation feedback for the attempt (`{feedbackId}`). A refused claim gets `422` ([Delivery of shown feedback](#delivery-of-shown-feedback)). |
@@ -611,31 +615,31 @@ All paths start with `/internal/llm/turn/{turnId}/`.
 | `POST end` | Ends the turn with `DONE`, `STOPPED`, or `FAILED`, with the Pi entries that the turn appended ([Limits](#limits)). A failed end carries a `detail`, a kind of failure for the worker log ([How a turn fails](#how-a-turn-fails)). The end first waits up to 10 seconds for the proxy to record the attempt's model calls (`ProxyCallsInFlight`). An end without an answer cancels them first. |
 
 An end larger than the gateway's request bound gets `413`.
-The host then sends the end again, with each `read`, `bash` and `load_context` result replaced by its note (see [Tool results](#tool-results)).
+The loop then sends the end again, with each `read`, `bash` and `load_context` result replaced by its note (see [Tool results](#tool-results)).
 The next turn reads the notes instead of this turn's results, and reads again what it needs.
 
-The worker builds the fixed context documents of an attempt once, when the host reads the context.
-The worker serves that build, and the host puts it into the tools Pod, so one attempt sees one set of documents.
+Each worker builds the fixed context documents of an attempt once, at the first call that needs them, and keeps the build in its memory.
+The loop puts the build that it reads into the tools Pod.
+Another worker builds the documents again, so an attempt whose calls reach two workers can read two builds of the same question.
 The worker builds an item document, for example the detail of one issue, when Hephaestus reads it ([Documents and loads](#documents-and-loads)).
 The end drops the build.
 A build that no call reads for 15 minutes expires, and a later read builds it again for the same question.
 
-The proxy authentication of the worker (`JobTokenAuthenticationProvider`) knows two credentials: an attempt token (`AttemptJwt`) and the gateway-session token of a conversation host.
-An attempt token names only its kind (`REVIEW` or `TURN`), the attempt's id, its workspace and its attempt number.
-A review token also carries its work deadline.
+The proxy authentication of the worker (`JobTokenAuthenticationProvider`) knows two credentials: an attempt token (`AttemptJwt`) and the assignment credential of the conversation loop.
+An attempt token names only its kind (`REVIEW` or `TURN`), the attempt's id, its workspace, its attempt number, its lease and its work deadline.
 The kind decides which row the id names: a review job or a conversation turn.
-A turn's conversation and account come from the turn that this worker claimed, never from the token.
+A turn's conversation and account come from the turn's row, never from the token.
 Each credential becomes a `ProxyIdentity`.
 
 A turn token reaches the model and its own turn paths only.
 A turn path that names another turn gets `401`.
-On a model call, the turn row must be leased by this worker with the same attempt and workspace.
+On a model call, the turn row must hold the attempt's live lease, with the same attempt and workspace.
 Otherwise the call gets `409`.
 
 On a turn path, the provider reads no row.
-The endpoint checks that the attempt runs on this worker, and takes the turn's conversation and account from it.
+The endpoint reads the turn's row and its lease, and takes the turn's conversation and account from it.
 A lost lease gets `409` there too.
-A host's gateway-session token reaches only `GET /internal/llm/runtime/{hostId}/commands` of its own host.
+The loop's credential reaches only `POST /internal/llm/turn-assignments`.
 `ProxyRoutingService` bills each model call of a turn to that turn (`BilledAttempt` with `MENTOR_TURN`).
 
 The LLM proxy cuts a conversation model call whose provider stays silent (`LlmProxyService.Bounds`).
@@ -648,7 +652,7 @@ An unfinished event longer than 1 MiB fails the stream.
 Both carry an error whose message starts with `upstream_stalled`.
 A call that the connection's breaker refuses gets `503` with `upstream_paused` (`LlmConnectionHealth`).
 
-The host fails the turn on either code and does not let Pi retry the call.
+The loop fails the turn on either code and does not let Pi retry the call.
 An end without an answer cancels the attempt's calls in flight (`ProxyCallsInFlight.cancel`), so a silent provider cannot hold it.
 
 A partial answer is one lease read and its `NOTIFY` frames, in one short transaction (`MentorTurnService.updatePartial`).
@@ -662,15 +666,15 @@ A snapshot equal to the one that the attempt sent last is sent again only after 
 An attempt that ends without its entries gives its last sent snapshot to the end, which classifies its `show_feedback` calls.
 
 The proxy records a model call's usage after it relayed the whole response.
-The host can read the end of the answer earlier and end the turn.
+The loop can read the end of the answer earlier and end the turn.
 Thus, the end waits for the attempt's calls, or the fence on the turn row would drop the last call as late.
 
 ### Context folder
 
 Hephaestus reads its [context folder](/contributor/practice-review-glossary#runtime-terms) with the tools `read`, `bash` and `load_context`.
-The folder is the tools workspace of a [tools Pod](/contributor/practice-review-glossary#runtime-terms) on the worker, not in the host.
+The folder is the tools workspace of a [tools Pod](/contributor/practice-review-glossary#runtime-terms) in the sandbox namespace, not in the loop.
 The worker serves INDEX.md, FIELDS.md and the context documents from the memory of the attempt.
-[ADR 0057 § Context folder and turn sandbox](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0057-one-heph-conversation-per-developer.md#context-folder-and-turn-sandbox) gives the decision.
+[ADR 0068 § The tools Pod](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md#the-tools-pod) gives the decision.
 
 The folder has this layout:
 
@@ -691,10 +695,10 @@ INDEX.md lists the documents for the model.
 FIELDS.md (`agent/mentor/fields.md`) explains each document's fields, with one section for each document.
 Hephaestus reads a section only when it needs it, so the system prompt that each model call sends stays short.
 `ContextFolderIndexTest` keeps one section for each fixed document.
-The host holds no list of document keys.
+The loop holds no list of document keys.
 
-The host offers the three tools only when `GET context` returns `contextFolder: true` (`TurnContextFolder.available`).
-The value is `false` after the worker failed to start a tools Pod.
+The loop offers the three tools only when `GET context` returns `contextFolder: true` (`TurnContextFolder.available`).
+The value is `false` after the worker that serves the context failed to start a tools Pod.
 For example, the cluster could not schedule the Pod or pull the agent image.
 No setting turns the tools on or off.
 
@@ -703,17 +707,17 @@ No setting turns the tools on or off.
 `HephTurnSandboxController` serves five endpoints under `/internal/llm/turn/{turnId}/sandbox/`, with the turn's attempt token.
 Each endpoint checks that the attempt holds the lease, as the other turn endpoints do.
 A refusal that the model must read is `200` with `{"ok": false, "error", "detail"}`.
-The host returns `detail` as the error text of the tool.
+The loop returns `detail` as the error text of the tool.
 
 | Endpoint | Does |
 | --- | --- |
 | `POST document` | Returns one page of INDEX.md, FIELDS.md or a context document from the memory of the attempt, with the notices of Pi 1.0 `read`. |
 | `GET documents` | Returns the attempt's built documents as one tar, rooted at `inputs/`. |
 | `POST bind` | Binds the attempt's tools Pod and returns its id, address, port and nonce. It waits while the conversations quota has no room. |
-| `POST discard` | Removes a tools Pod that failed its host. The next `bind` gets a new one. |
+| `POST discard` | Removes a tools Pod that failed the loop. The next `bind` gets a new one. |
 | `POST load` | Prepares one item through the loader that owns the path prefix. It returns the item as a tar. The `Hephaestus-Load` header holds the path, the resolved ref, the SHA, and how to cite it. |
 
-The host runs the three tools against the tools Pod over [tool protocol v1](/contributor/practice-review-glossary#runtime-terms) (`heph-tools.ts`):
+The loop runs the three tools against the tools Pod over [tool protocol v1](/contributor/practice-review-glossary#runtime-terms) (`heph-tools.ts`):
 
 | Tool | Does |
 | --- | --- |
@@ -722,8 +726,8 @@ The host runs the three tools against the tools Pod over [tool protocol v1](/con
 | `load_context {path}` | Asks `load` for the item and puts its tar into the tools Pod at the path. Then it runs the loader's summary command there. |
 
 The first `bash`, the first `load_context`, or the first `read` of another file binds the tools Pod.
-The host checks that the Pod's `hello` returns the nonce, and then puts the documents under `inputs/`.
-A Pod that fails a call can hold a partial put, so the host discards it.
+The loop checks that the Pod's `hello` returns the nonce, and then puts the documents under `inputs/`.
+A Pod that fails a call can hold a partial put, so the loop discards it.
 
 These rules apply to the tools:
 
@@ -745,14 +749,14 @@ These rules apply to the tools:
 | `INVALID_PATH` | `load_context` | No loader owns the path. |
 | `TIMEOUT` | all | The turn ended or its deadline passed before the tools Pod or the load was ready. |
 | `UNAVAILABLE` | all | The worker cannot start a tools Pod now, the tools Pod failed, or the mirror cannot load the repository. |
-| `CONTEXT_CHANGED` | `read` of a file in the tools Pod, `bash`, `load_context` | The workspace's data changed and the worker removed the tools Pod. The next call gets a new one. |
+| `CONTEXT_CHANGED` | `read` of a file in the tools Pod, `bash`, `load_context` | The workspace's data changed and a worker revoked the tools Pod. The next call gets a new one. |
 
-The request fixtures `sandbox-document`, `sandbox-discard` and `sandbox-load` in `agent/heph-turn-contract/` bind the host and the controller.
+The request fixtures `sandbox-document`, `sandbox-discard` and `sandbox-load` in `agent/heph-turn-contract/` bind the loop and the controller.
 `heph-turn-api.spec.ts` and `HephTurnGatewayIntegrationTest` both read them.
 
 #### Tools Pods
 
-`TurnSandboxes` owns the tools Pods of one worker.
+`ConversationToolsPods` owns the tools Pods of the installation, one row each in `conversation_tools_pod`.
 `KubernetesToolsPods` starts each one as a Job (`backoffLimit: 0`) in the sandbox namespace, named `hephaestus-tools-<id>`.
 
 | Property | Value |
@@ -760,42 +764,49 @@ The request fixtures `sandbox-document`, `sandbox-discard` and `sandbox-load` in
 | Image and policy | The release's agent image, under the Restricted Pod Security Standard, with user namespaces. The isolation init container runs first. |
 | Process | One container, `tools`, runs only the tools program of tool protocol v1, as user 1001. The launcher starts it without the review side's socket filter, because it listens on TCP. Each command starts under that filter, so it cannot open a network socket. Commands run as the same user. |
 | Folder | `/tmp/tools/workspace`, on the one `/tmp` volume on the node's disk |
-| Network | Ingress on TCP port 7100 from conversation hosts only. No egress and no DNS. |
-| Credentials | No service account token and no credential. The worker writes a fresh nonce into the Pod spec. |
+| Network | Ingress on TCP port 7100 from the conversation loop only. No egress and no DNS. |
+| Credentials | No service account token and no credential. The worker writes a fresh nonce into the Pod spec and into the Pod's row. |
 | Limits | The tools Pod row of the [Pod-kind resource table](/admin/kubernetes#sandbox-sizes). The kubelet sets the process limit |
-| Labels | `hephaestus.build/sandbox-kind=tools`, the sandbox id, and the creating worker's id |
+| Labels | `hephaestus.build/sandbox-kind=tools`, the sandbox id, and the labels of the worker that created it. No cleanup reads the worker labels. |
 
-A tools Pod has three states: `POOLED`, `ASSIGNED` and `REMOVED`.
-The worker keeps 2 tools Pods in the pool (`HephHostConfiguration.SANDBOX_POOL`).
-The first `bind` of an attempt takes one from the pool, or starts one if the pool is empty.
-The pool then fills again in the background.
+A row is pooled, with no turn, or bound to one attempt (`turn_id`, `attempt`).
+The installation keeps 2 started Pods in the pool (`HephTurnConfiguration.SANDBOX_POOL`).
+Any worker fills the pool in the background.
+It counts and inserts a pooled row under the advisory lock `conversation-tools-pool`, so two workers do not fill it twice.
 
-An assigned tools Pod never goes back to the pool.
-The assignment exists only in the memory of the worker.
-The worker runs no command in a tools Pod: the host dials it.
+The first `bind` of an attempt takes a pooled Pod, or starts one bound to the attempt.
+Each bind is fenced on the attempt's live lease, so an attempt without one binds nothing.
+The row of a new Pod comes before its Job, so no cleanup removes the Job as unknown.
+A parallel call of the attempt waits for the Pod that the first call starts, maybe on another worker.
 
-The worker removes the tools Pod of an attempt by deleting its Job on each path that seals the attempt's model calls:
+A bound Pod never goes back to the pool.
+No worker runs a command in a tools Pod: the loop dials it.
 
-- The end of the turn from the host (`finish`).
-- A lost lease.
-- A lost host.
-- The claim of a retry, for the earlier attempt.
+The end of the attempt removes its row and deletes its Job (`ConversationToolsPods.ended`).
+A discard from the loop does the same for one Pod.
+One rule removes all other Pods (`ConversationToolsPods.reap`).
+It runs at startup and every 60 seconds on each worker, and removes these Pods:
 
-A command that runs at that time ends with the container.
-A load that runs at that time is abandoned.
-The worker also deletes the Job when the host discards the Pod.
+- A Pod whose attempt holds no live lease.
+- A pooled Pod older than 1 hour (`POOL_LIFE`).
+- A Pod that did not start within 3 minutes (`START_GRACE`).
+- A tools Job that no row names, when it is older than 3 minutes.
 
-The reconciler (`TurnSandboxes.reconcile`) runs at startup and every 60 seconds on the worker.
-It removes the tools Pods of this worker that it does not know, and the assigned tools Pods of attempts that no longer run here.
-It also removes a tools Pod whose creating worker no longer has a live heartbeat.
-It never removes a tools Pod of a live other worker.
+Each step is idempotent, so every worker can run it.
+A worker that stops removes no Pod: the other workers serve the calls of its attempts, with their Pods.
+A worker roll does not remove the tools Pod of a live turn.
 `SandboxReconciler` ignores tools Pods.
 
-The same worker identity and lease rules apply to host development.
+A command that runs when its Pod goes ends with the container.
+A load that runs then is abandoned: it reads the attempt's lease at most every 2 seconds.
+
+The same rules apply to host development.
 The worktree's restricted namespace keeps its Pods separate from the other edit loops.
 
-A change to what a workspace's turns may read sends `MentorLedgerEvents.ContextChanged` over the ledger `NOTIFY` channel.
-The listener of each worker then removes every tools Pod of that workspace (`releaseWorkspace`).
+A change to what a workspace's turns may read publishes `MentorLedgerEvents.ContextChanged`.
+The transaction of the change marks the bound rows of that workspace revoked (`ConversationToolsPodRevocations`).
+The event also goes over the ledger `NOTIFY` channel, and the listener on each worker then deletes the Jobs of the revoked rows.
+A worker that missed notifications, for example a worker that starts, revokes nothing: the rows already carry each revocation.
 These changes send it:
 
 - The erasure of a person (`MentorToolResultCopyPersonDataStore`).
@@ -803,18 +814,18 @@ These changes send it:
 - A change of monitored repositories, and the erasure of a mirror (`MentorContextChanges`).
 - A changed AI choice of an account, for each workspace of the account (`AiChoiceChangedEvent`).
 
-The next call of the running attempt gets `CONTEXT_CHANGED` once.
-The call after it gets a new tools Pod.
+The next bind of the running attempt gets `CONTEXT_CHANGED` once.
+The bind after it gets a new tools Pod.
 
 #### Documents and loads
 
-`GET documents` gives the attempt's built documents as one tar, and the host puts it under `inputs/` in the tools Pod.
-A load gives one tar, and the host puts it at its path, for example `repos/<host>/<path>`.
+`GET documents` gives the attempt's built documents as one tar, and the loop puts it under `inputs/` in the tools Pod.
+A load gives one tar, and the loop puts it at its path, for example `repos/<host>/<path>`.
 A second load of the same path replaces that directory with all its contents.
-The host announces the size and the SHA-256 of each tar. The tools program checks both before it extracts.
+The loop announces the size and the SHA-256 of each tar. The tools program checks both before it extracts.
 The tools program extracts each put read-only.
 
-`HephTurnContexts` builds the fixed documents once for each attempt, as JSON with times in the developer's time zone.
+`HephTurnContexts` builds the fixed documents once for each attempt on each worker, as JSON with times in the developer's time zone.
 The worker serves them with indentation, so that `read` can page them by line.
 
 An item document is lazy.
@@ -844,7 +855,7 @@ Without Git mirrors (`GIT_CHECKOUT_ENABLED`), INDEX.md has no `repos/` section.
 
 | Limit | Value |
 | --- | --- |
-| Loads in one attempt | 5 (`TurnContextFolder.MAX_LOADS_PER_ATTEMPT`) |
+| Loads in one attempt | 5 (`TurnContextFolder.MAX_LOADS_PER_ATTEMPT`), counted in `mentor_turn.tools_loads` |
 | Loads at once on one worker | 2 (`TurnContextFolder.LOADS_AT_ONCE`) |
 | Time of a load | The time left in the turn |
 | Size of a checkout | The checkout bound of a review (`GIT_MAX_SNAPSHOT_BYTES`) |
@@ -852,20 +863,13 @@ Without Git mirrors (`GIT_CHECKOUT_ENABLED`), INDEX.md has no `repos/` section.
 #### Live qualification
 
 `KubernetesSandboxLiveTest` runs a tools Pod on the real Kubernetes adapters.
-The Pod serves its host on TCP only, and goes with its Job and at the end of its attempt.
-`heph-tools.spec.ts` covers the host's tools against a real tools side on TCP.
+The Pod serves the loop on TCP only, and goes with its Job and at the end of its attempt.
+`heph-tools.spec.ts` covers the loop's tools against a real tools side on TCP.
 Run it through the [Kubernetes live suite](./testing#live-external-service-tests).
 Timings from the retired Docker backend do not describe this runtime.
 
 The output of each tool is untrusted data from the workspace.
 After the turn, the results follow the rules of [Tool results](#tool-results).
-
-### Dispatch
-
-`HephTurnDispatcher` runs on the worker role.
-It claims turns while fewer than `hephaestus.worker.capacity.mentor-max` turns run on this worker.
-A `mentor_ledger` notification from PostgreSQL wakes it, with a timed backstop.
-`MentorLedgerNotifications` sends `NOTIFY` before commit, so PostgreSQL delivers it only on commit.
 
 ## Live updates
 
@@ -905,15 +909,15 @@ A stream whose queue of 256 events overflows gets a new snapshot.
 
 ## Context of a turn
 
-The host rebuilds the Pi session of a turn from rows.
-Nothing about a conversation stays in the host after the turn.
+The loop rebuilds the Pi session of a turn from rows.
+Nothing about a conversation stays in the loop after the turn.
 The request has four parts, in this order:
 
 1. The system prompt `agent/mentor/system.md` and the [shared feedback writing guide](./practice-feedback-language.md#writing-feedback). They are the same for each turn.
-   `HephHostSpecTest` keeps the two together at 15 KiB or less, because each model call sends them again.
-2. The tools. They are the same for each turn of one worker.
+   `HephTurnContexts.SYSTEM_PROMPT` joins them, and `GET context` returns it. `HephTurnControllerIntegrationTest` keeps the two together at 15 KiB or less, because each model call sends them again.
+2. The tools. They are the same for each turn.
 3. The path from the server (`MentorContextPathBuilder`). It is the same bytes for each turn of one conversation, until it changes.
-4. The situation (`MentorSituation`). The host adds it as the last message and never stores it.
+4. The situation (`MentorSituation`). The loop adds it as the last message and never stores it.
 
 The first three parts form a stable prefix for the prompt cache.
 The Anthropic cache breakpoint sits on the last stored message, before the situation.
@@ -934,7 +938,7 @@ The server renders each question and weekly digest as a Pi user message with a p
 The time zone is the developer's `account.time_zone`, or UTC.
 A stopped answer ends with `[stopped by the developer]`.
 A failed turn adds `[no answer: the turn failed]` to its question.
-`forTurn` returns the prompt that the host must pass to `session.prompt()` unchanged.
+`forTurn` returns the prompt that the loop must pass to `session.prompt()` unchanged.
 
 ### The situation
 
@@ -990,7 +994,7 @@ Each document obeys these rules:
 - It reads no repository that a team hides from contributions.
 - It reads a related item, such as the parent of an issue, under the scope of that issue.
 - It dates each item and names its repository.
-- The host writes each time in the developer's time zone with its weekday and offset, for example `Mon 2026-10-12 14:41 +02:00` (`ContextTimes`).
+- The loop writes each time in the developer's time zone with its weekday and offset, for example `Mon 2026-10-12 14:41 +02:00` (`ContextTimes`).
   Hephaestus does not calculate a weekday.
 - Each item whose web page Hephaestus stores carries that whole `url`: work, reviews, comments, commits and documents. Hephaestus copies a link and never builds one. Slack messages and delivered feedback have no stored page.
 - It fits its own size limit. When it leaves something out, it says so (`truncated`, `omittedThreads`, `omittedPractices`, `omittedForSize`).
@@ -1001,7 +1005,7 @@ Each document obeys these rules:
 
 ### The stage
 
-The host sets the `stage` of each partial answer from the tool call in progress.
+The loop sets the `stage` of each partial answer from the tool call in progress.
 `turnStage` in `heph-host.ts` is the only place that holds the labels.
 A `read` or `bash` call that names a context document gets the label of that document, for example "Reading your practice feedback…".
 A call that names `repos/` or runs `git` gets "Reading the repository…".
@@ -1017,7 +1021,7 @@ Slack shows 👀 and the streamed text, not the stage.
 
 ### Tool results
 
-When a turn settles, the host appends Pi `context_edit` entries.
+When a turn settles, the loop appends Pi `context_edit` entries.
 They replace each older `read`, `bash` and `load_context` result with a note: the tool, its path or command, the time, and a hint to read again.
 Only the latest turn's results of these tools stay verbatim.
 A `load_context` note says that each turn has a new context folder, so Hephaestus must load the repository again.
@@ -1028,16 +1032,16 @@ A `fetch_context` result that a development build stored before this change is n
 
 Hephaestus uses Pi's own compaction, with Pi's default summary prompt.
 
-- **Before the prompt.** Above the working trigger, the host compacts the stored conversation before it sends the question. The trigger is 49,152 tokens, or less for a small window. The status line shows *Thinking…* while the host compacts, and the summary call counts against the turn. If the conversation stays too long, the turn fails.
-- **Thinking off.** Every summary call runs with thinking off. A reasoning model would otherwise spend Pi's summary output limit on thinking and leave the summary unfinished. The host sets the level on the agent state for the summary only, so the conversation stores no level change. Pi maps the level to each API's standard reasoning control and sends no provider-specific field. A model server that thinks by default keeps thinking ([AI providers](/admin/ai-providers#models-that-think-by-default)).
+- **Before the prompt.** Above the working trigger, the loop compacts the stored conversation before it sends the question. The trigger is 49,152 tokens, or less for a small window. The status line shows *Thinking…* while the loop compacts, and the summary call counts against the turn. If the conversation stays too long, the turn fails.
+- **Thinking off.** Every summary call runs with thinking off. A reasoning model would otherwise spend Pi's summary output limit on thinking and leave the summary unfinished. The loop sets the level on the agent state for the summary only, so the conversation stores no level change. Pi maps the level to each API's standard reasoning control and sends no provider-specific field. A model server that thinks by default keeps thinking ([AI providers](/admin/ai-providers#models-that-think-by-default)).
 - **A failed summary.** If Pi cannot write the summary, the history stays whole. The question goes out while the conversation fits the model's window, and the next turn compacts again. Thus, one failed summary never fails every later question of the conversation.
 - **The trigger.** `mentorCompaction` starts with a reserve of min(16,384, a quarter of the window). The trigger is the smaller of 49,152 tokens and the window less that reserve. Pi's reserve is then the window less the trigger. For a window of 128,000 tokens, it is 78,848 tokens. The reserve also caps the summary's output.
 - **Recent messages.** Pi keeps recent messages up to a target. The target is the smallest of 20,000 tokens, half the trigger and a sixth of the window. It is not a bound. Pi keeps a message whole and a tool call with its results. Thus, one long message can exceed the target.
-- **Room to answer.** After a summary, the host estimates the messages and the fixed prompt. The answer needs min(output limit, an eighth of the window). If that does not fit the window, the turn fails with "still too long after shortening it".
+- **Room to answer.** After a summary, the loop estimates the messages and the fixed prompt. The answer needs min(output limit, an eighth of the window). If that does not fit the window, the turn fails with "still too long after shortening it".
 - **A repeat.** A conversation that stays past the trigger after its summary is shortened again on the next turn. Nothing guarantees that one summary is enough.
 - **A kept summary.** A turn that fails after its summary still stores that summary. The next turn starts from it. It summarises again only if the conversation is still past the trigger.
 - **During the turn.** Pi checks the trigger again before each model request.
-  The host cancels that compaction: the next question compacts before its prompt instead.
+  The loop cancels that compaction: the next question compacts before its prompt instead.
   A summary inside the turn can replace the files that the turn read.
   An answer then cites files that it no longer sees.
   A summary can also split an older turn.
@@ -1045,7 +1049,7 @@ Hephaestus uses Pi's own compaction, with Pi's default summary prompt.
   If the model runs out of room during the answer, Pi's overflow recovery still compacts the conversation.
 
 Pi's own check before a prompt reads only the usage of its last answer.
-The host also counts what the ledger holds after that answer, for example the question of a failed turn.
+The loop also counts what the ledger holds after that answer, for example the question of a failed turn.
 The summary is one of the turn's entries, so the end of the turn stores it.
 The server stores it as a `SUMMARY` entry, with `fromSeq` and `toSeq` of the entries that it covers.
 
@@ -1094,7 +1098,7 @@ The [data map](/admin/dsms/personal-data-map) owns the inventory of person data.
 ## Limits
 
 This table gives the fixed limits that only contributors change.
-[Runtime roles](/admin/runtime-roles#conversation-turns) gives the operator settings and their defaults, the limits and timeouts of the host, and the stream limits.
+[Runtime roles](/admin/runtime-roles#conversation-turns) gives the operator settings and their defaults, the limits and timeouts of the loop, and the stream limits.
 [Runtime roles](/admin/runtime-roles#configuration-cheatsheet) gives the request bound of the gateway (`SANDBOX_API_MAX_REQUEST_BYTES`).
 
 | Limit | Value | Where |
@@ -1103,7 +1107,7 @@ This table gives the fixed limits that only contributors change.
 | One `read` page, or the output that `bash` returns | 2,000 lines or 50 KB | `PiText` and `heph-tools.ts` |
 | Time of one `bash` command | 60 seconds | `heph-tools.ts` (`MAX_COMMAND_MS`) |
 | Loads in one attempt | 5 | `TurnContextFolder.MAX_LOADS_PER_ATTEMPT` |
-| Empty tools Pods on one worker | 2 | `HephHostConfiguration.SANDBOX_POOL` |
+| Started tools Pods in the pool of the installation | 2 | `HephTurnConfiguration.SANDBOX_POOL` |
 | Partial answer interval | 250 ms | `heph-host.ts` |
 | Wait of an end for the attempt's model calls | 10 seconds | `ProxyCallsInFlight.SETTLE_WAIT` |
 | Smallest conversation model | 32,768 tokens of context, 4,096 tokens of output | `AgentBindingLimits` |
@@ -1115,7 +1119,7 @@ This table gives the fixed limits that only contributors change.
 
 ## Billing
 
-The host reports no usage.
+The loop reports no usage.
 The worker bills each attempt from the LLM proxy's counters on the `mentor_turn` row, priced at the frozen admission rates.
 The ledger row in `llm_usage_event` has the turn id and the attempt number.
 A summary call during the turn counts against the turn's budget.

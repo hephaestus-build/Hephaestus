@@ -104,7 +104,7 @@ jobs:
       contents: read
       actions: read
       packages: read
-    timeout-minutes: 45
+    timeout-minutes: 60
     runs-on: ${{ inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     env:
       # One node image per minor, pinned by digest.
@@ -165,6 +165,15 @@ jobs:
           node scripts/kubernetes-cluster.ts upgrade --work "$work" $PROFILES --set "release.version=v0.0.1-cluster"
           node scripts/kubernetes-cluster.ts verify
           node scripts/kubernetes-cluster.ts request --work "$work"
+      # A conversation turn runs bash in its tools Pod through a worker roll and then a loop roll.
+      # The fake model provider runs in the Pod network, which k3s gives 10.42.0.0/16.
+      - name: Keep a conversation turn through a worker roll and a loop roll
+        if: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086 # PROFILES is a list of flags.
+          node scripts/kubernetes-cluster.ts turn-roll --work "$RUNNER_TEMP/kubernetes-cluster" $PROFILES \
+            --set "release.version=v0.0.1-cluster" --pod-cidr 10.42.0.0/16
       - name: Qualify the sandbox adapters in the chart worker Pod
         if: ${{ inputs.application-artifact != '' && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
         run: |
@@ -189,6 +198,7 @@ jobs:
           kubectl -n hephaestus logs -l app.kubernetes.io/component=postgresql --all-containers --tail=200 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --tail=300 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=server --tail=300 --prefix || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=conversation-loop --tail=300 --prefix || true
           kubectl -n hephaestus get jobs,cronjobs -o wide || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=postgresql-backup --tail=200 --prefix || true
           kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true

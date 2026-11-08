@@ -1,6 +1,6 @@
 /** Host edit loops share k3d, but each port set owns its sandbox namespace and chart-derived quota. */
-import { createHash } from "node:crypto";
-import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { createHash, randomBytes } from "node:crypto";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import path from "node:path";
 
@@ -58,7 +58,9 @@ export function hostWorkerEnvironment(rendered: string): Record<string, string> 
 				(entry) =>
 					typeof entry.name === "string" &&
 					typeof entry.value === "string" &&
-					/^(?:AGENT_|SANDBOX_|HEPHAESTUS_(?:WORKER_|AGENT_|SANDBOX_))/u.test(entry.name),
+					/^(?:AGENT_|SANDBOX_|HEPHAESTUS_(?:WORKER_|AGENT_|SANDBOX_|MENTOR_TURN_CAPACITY$))/u.test(
+						entry.name,
+					),
 			)
 			.map((entry) => [
 				asString(entry.name, "variable name"),
@@ -105,23 +107,47 @@ export function hostValues(namespace: string, address: string): Record<string, u
 			commit: "0".repeat(40),
 			api: { address, port: 6443 },
 		}),
+		conversationLoop: { replicas: 1, turns: 1 },
 		worker: {
 			enabled: true,
 			replicas: 1,
-			conversationTurns: 1,
 			rolloutStrategy: "Recreate",
 			sandbox: { namespace, reviewMemory: oneReviewMemory() },
 		},
 	};
 }
 
-/** Select the chart's sandbox contract, without installing its roles, Services or databases. */
+/** The loop's credential for its turn pulls. The script makes it once for each port set, in this file. */
+export async function conversationLoopSecret(file: string): Promise<string> {
+	try {
+		await writeFile(file, randomBytes(32).toString("hex"), { flag: "wx", mode: 0o600 });
+	} catch (error) {
+		if (!isRecord(error) || error.code !== "EEXIST") {
+			throw error;
+		}
+	}
+	await chmod(file, 0o600);
+	const text = await readFile(file, "utf8");
+	const secret = text.trim();
+	if (!/^[0-9a-f]{64}$/u.test(secret)) {
+		throw new Error(
+			`${file} must hold 64 lowercase hex characters. Delete it to make a new secret.`,
+		);
+	}
+	return secret;
+}
+
+/**
+ * Select the chart's sandbox contract and its conversation loop, without its other roles, Services or
+ * databases. A loop on the host cannot reach the tools Pods, so the loop runs in k3d, in the release
+ * namespace that the chart renders for. Thus the chart's tools policy admits it as it is.
+ */
 export function hostResources(
 	rendered: string,
 	namespace: string,
-	address: string,
-	port: number,
+	host: { address: string; port: number; image: string; loopSecret: string },
 ): unknown[] {
+	const { address, port } = host;
 	if (isIP(address) !== 4) {
 		throw new Error("k3d must report an IPv4 address for host.k3d.internal");
 	}
@@ -133,40 +159,90 @@ export function hostResources(
 			return document.toJS() as unknown;
 		})
 		.filter(isRecord);
-	const selected = resources.filter((resource) => {
+	const loopName = `${RELEASE}-conversation-loop`;
+	const sandbox = resources.filter((resource) => {
 		const metadata = asRecord(resource.metadata, "resource metadata");
 		return (
 			(metadata.namespace === namespace &&
 				["ResourceQuota", "Role", "RoleBinding", "NetworkPolicy"].includes(
 					String(resource.kind),
 				)) ||
-			(resource.kind === "PriorityClass" &&
-				String(metadata.name).startsWith(`${namespace}-`) &&
-				!String(metadata.name).endsWith("-roles"))
+			(resource.kind === "PriorityClass" && String(metadata.name).startsWith(`${namespace}-`))
 		);
 	});
-	for (const resource of selected) {
+	const loop = resources.filter(
+		(resource) =>
+			["Deployment", "ServiceAccount", "NetworkPolicy"].includes(String(resource.kind)) &&
+			asRecord(resource.metadata, "resource metadata").name === loopName,
+	);
+	if (
+		sandbox.filter((resource) => resource.kind === "ResourceQuota").length !== 3 ||
+		sandbox.filter((resource) => resource.kind === "NetworkPolicy").length !== 3 ||
+		sandbox.filter((resource) => resource.kind === "RoleBinding").length !== 1 ||
+		loop.length !== 3
+	) {
+		throw new Error(
+			"The chart no longer supplies the expected sandbox quota, policies, worker authority and conversation loop",
+		);
+	}
+	// The gateway runs on the host here. The other rules keep the chart's selectors.
+	const gateway = {
+		to: [{ ipBlock: { cidr: `${address}/32` } }],
+		ports: [{ protocol: "TCP", port }],
+	};
+	for (const resource of sandbox) {
 		if (resource.kind === "RoleBinding") {
 			resource.subjects = [{ kind: "ServiceAccount", name: "host-worker", namespace }];
 		}
-		// The gateway runs on the host here. The other policies keep the chart's rules, which name only sandbox Pods.
 		if (
 			resource.kind === "NetworkPolicy" &&
 			asRecord(resource.metadata, "metadata").name === `${RELEASE}-sandbox-gateway`
 		) {
-			asRecord(resource.spec, "network policy").egress = [
-				{ to: [{ ipBlock: { cidr: `${address}/32` } }], ports: [{ protocol: "TCP", port }] },
-			];
+			asRecord(resource.spec, "network policy").egress = [gateway];
 		}
 	}
-	if (
-		selected.filter((resource) => resource.kind === "ResourceQuota").length !== 3 ||
-		selected.filter((resource) => resource.kind === "NetworkPolicy").length !== 4 ||
-		selected.filter((resource) => resource.kind === "RoleBinding").length !== 1
-	) {
-		throw new Error(
-			"The chart no longer supplies the expected sandbox quota, policies and worker authority",
-		);
+	let secretRef: Record<string, unknown> = {};
+	for (const resource of loop) {
+		asRecord(resource.metadata, "metadata").namespace = `${namespace}-host`;
+		if (resource.kind === "NetworkPolicy") {
+			const spec = asRecord(resource.spec, "loop policy");
+			const egress = asArray(spec.egress, "loop egress");
+			const workers = egress.filter((rule) =>
+				asArray(asRecord(rule, "rule").to, "peers").some((peer) => {
+					const selector = asRecord(peer, "peer").podSelector;
+					return (
+						isRecord(selector) &&
+						isRecord(selector.matchLabels) &&
+						selector.matchLabels["app.kubernetes.io/component"] === "worker"
+					);
+				}),
+			);
+			if (workers.length !== 1) {
+				throw new Error("The chart's loop policy no longer names the workers' gateway once");
+			}
+			spec.egress = egress.map((rule) => (rule === workers[0] ? gateway : rule));
+		}
+		if (resource.kind === "Deployment") {
+			const template = asRecord(asRecord(resource.spec, "loop").template, "loop template");
+			const container = asRecord(
+				asArray(asRecord(template.spec, "loop Pod").containers, "containers")[0],
+				"loop container",
+			);
+			container.image = host.image;
+			const env = asArray(container.env, "loop environment").map((entry) =>
+				asRecord(entry, "variable"),
+			);
+			const proxy = env.find((entry) => entry.name === "LLM_PROXY_URL");
+			const secret = env.find((entry) => entry.name === "HEPHAESTUS_CONVERSATION_LOOP_SECRET");
+			if (proxy === undefined || secret === undefined) {
+				throw new Error("The chart's loop no longer reads LLM_PROXY_URL and its secret");
+			}
+			proxy.value = `http://${address}:${port}/internal/llm`;
+			secretRef = asRecord(
+				asRecord(secret.valueFrom, "secret source").secretKeyRef,
+				"secret reference",
+			);
+		}
 	}
 	return [
 		{
@@ -175,7 +251,17 @@ export function hostResources(
 			metadata: { name: "host-worker", namespace },
 			automountServiceAccountToken: false,
 		},
-		...selected,
+		...sandbox,
+		{
+			apiVersion: "v1",
+			kind: "Secret",
+			metadata: { name: asString(secretRef.name, "secret name"), namespace: `${namespace}-host` },
+			type: "Opaque",
+			data: {
+				[asString(secretRef.key, "secret key")]: Buffer.from(host.loopSecret).toString("base64"),
+			},
+		},
+		...loop,
 	];
 }
 
@@ -222,12 +308,16 @@ export async function prepareHost(): Promise<NodeJS.ProcessEnv> {
 	const ports = hostPorts(env);
 	const work = path.join(WORK, ports.namespace);
 	const admin = await ensureDevCluster();
-	await claimDevNamespace(admin, ports.namespace, ROOT, {
-		"pod-security.kubernetes.io/enforce": "restricted",
-		"hephaestus.build/dev-host": "true",
-	});
+	// The sandbox namespace, and the release namespace where the conversation loop runs.
+	for (const namespace of [ports.namespace, `${ports.namespace}-host`]) {
+		await claimDevNamespace(admin, namespace, ROOT, {
+			"pod-security.kubernetes.io/enforce": "restricted",
+			"hephaestus.build/dev-host": "true",
+		});
+	}
 	await mkdir(work, { recursive: true, mode: 0o700 });
 	await chmod(work, 0o700);
+	const loopSecret = await conversationLoopSecret(path.join(work, "conversation-loop-secret"));
 	const address = hostAddress(
 		await output("docker", ["exec", "k3d-hephaestus-server-0", "cat", "/etc/hosts"]),
 	);
@@ -245,7 +335,43 @@ export async function prepareHost(): Promise<NodeJS.ProcessEnv> {
 		"-f",
 		file,
 	]);
-	const resources = hostResources(rendered, ports.namespace, address, ports.gateway);
+	const tag = `dev-${createHash("sha256").update(ROOT).digest("hex").slice(0, 12)}`;
+	const local = `localhost:5111/hephaestus-build/agent-pi:${tag}`;
+	await run(
+		"docker",
+		[
+			"build",
+			"--quiet",
+			"-t",
+			local,
+			"--build-context",
+			"agent-runtime=server/application/src/main/resources/agent",
+			"-f",
+			"docker/agents/pi/Dockerfile",
+			"docker/agents",
+		],
+		{ cwd: ROOT, stdout: "ignore" },
+	);
+	await run("docker", ["push", "--quiet", local], { stdout: "ignore" });
+	const digests = asArray(
+		parseJson(
+			await output("docker", ["image", "inspect", "--format", "{{json .RepoDigests}}", local]),
+		),
+		"image digests",
+	);
+	const digest = digests
+		.map((value) => asString(value, "image digest"))
+		.find((value) => value.startsWith("localhost:5111/"));
+	if (digest === undefined) {
+		throw new Error("The local registry supplied no agent image digest");
+	}
+	const image = digest.replace("localhost:5111/", "ghcr.io/");
+	const resources = hostResources(rendered, ports.namespace, {
+		address,
+		port: ports.gateway,
+		image,
+		loopSecret,
+	});
 
 	await output(
 		"kubectl",
@@ -308,36 +434,6 @@ export async function prepareHost(): Promise<NodeJS.ProcessEnv> {
 		{ mode: 0o600 },
 	);
 	await chmod(kubeconfig, 0o600);
-	const tag = `dev-${createHash("sha256").update(ROOT).digest("hex").slice(0, 12)}`;
-	const local = `localhost:5111/hephaestus-build/agent-pi:${tag}`;
-	await run(
-		"docker",
-		[
-			"build",
-			"--quiet",
-			"-t",
-			local,
-			"--build-context",
-			"agent-runtime=server/application/src/main/resources/agent",
-			"-f",
-			"docker/agents/pi/Dockerfile",
-			"docker/agents",
-		],
-		{ cwd: ROOT, stdout: "ignore" },
-	);
-	await run("docker", ["push", "--quiet", local], { stdout: "ignore" });
-	const digests = asArray(
-		parseJson(
-			await output("docker", ["image", "inspect", "--format", "{{json .RepoDigests}}", local]),
-		),
-		"image digests",
-	);
-	const digest = digests
-		.map((value) => asString(value, "image digest"))
-		.find((value) => value.startsWith("localhost:5111/"));
-	if (digest === undefined) {
-		throw new Error("The local registry supplied no agent image digest");
-	}
 	return {
 		...env,
 		...hostWorkerEnvironment(rendered),
@@ -350,8 +446,8 @@ export async function prepareHost(): Promise<NodeJS.ProcessEnv> {
 		HEPHAESTUS_SANDBOX_KUBERNETES_POD_IP: address,
 		HEPHAESTUS_SANDBOX_KUBERNETES_CONVERSATION_PRIORITY_CLASS: `${ports.namespace}-host-${RELEASE}-conversations`,
 		HEPHAESTUS_SANDBOX_KUBERNETES_REVIEW_PRIORITY_CLASS: `${ports.namespace}-host-${RELEASE}-reviews`,
-		HEPHAESTUS_AGENT_IMAGE_REFERENCE: digest.replace("localhost:5111/", "ghcr.io/"),
-		HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX: "1",
+		HEPHAESTUS_AGENT_IMAGE_REFERENCE: image,
+		HEPHAESTUS_CONVERSATION_LOOP_SECRET: loopSecret,
 		SANDBOX_MAX_CONCURRENT: "1",
 	};
 }
@@ -382,6 +478,7 @@ if (import.meta.main) {
 			const { namespace } = hostPorts(await environment());
 			const admin = await requireDevCluster();
 			await ownsDevNamespace(admin, namespace, ROOT);
+			await ownsDevNamespace(admin, `${namespace}-host`, ROOT);
 			await run("kubectl", [
 				"--kubeconfig",
 				admin,
@@ -390,6 +487,7 @@ if (import.meta.main) {
 				"delete",
 				"namespace",
 				namespace,
+				`${namespace}-host`,
 				"--ignore-not-found",
 				"--wait=true",
 			]);

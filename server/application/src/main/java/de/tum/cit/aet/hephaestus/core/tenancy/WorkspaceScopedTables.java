@@ -67,6 +67,8 @@ public class WorkspaceScopedTables {
             "worker_registry",
             // Fleet-wide public keys that verify attempt tokens; a token's workspace is a signed claim
             "attempt_public_key",
+            // Installation-wide tools Pods; a bound row names its turn's workspace and is fenced on the turn's lease
+            "conversation_tools_pod",
             // Instance-scoped OAuth login providers (sign-in options); shared across all
             // workspaces
             "login_provider",

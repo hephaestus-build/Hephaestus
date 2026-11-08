@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeToolsPods;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextGenerations;
@@ -34,7 +35,6 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
+import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
@@ -60,6 +61,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.persistence.EntityManager;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -97,7 +99,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The worker endpoints a Hephaestus host calls for one turn. The worker role is off in the test context, so the controller
+ * The worker endpoints the conversation loop calls for one turn. The worker role is off in the test context, so the controller
  * is built by hand from the context's own beans. The gateway client sends the contract files in
  * {@code heph-turn-contract/} with a signed turn credential, authenticated by the gateway's own filter, and maps
  * errors with the production controller advice. The direct client passes an authenticated credential as the gateway
@@ -108,7 +110,6 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private EntityManager entityManager;
 
-    /** The worker id of {@link WorkerPropertiesFixtures#minimal}. */
     private static final String QUESTION = "How should I pin the deployment image?";
 
     private static final String TURN_PATH = "/internal/llm/turn/{turnId}/";
@@ -149,7 +150,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private JsonMapper mapper;
 
     private final ProxyCallsInFlight callsInFlight = new ProxyCallsInFlight(12);
-    private HephTurnDispatcher dispatcher;
+    private HephTurns hephTurns;
     private HephTurnController controller;
     private MockMvc gateway;
     private MockMvc direct;
@@ -178,8 +179,16 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()));
         authentication = HephTurnFixtures.authenticated(attempt);
-        dispatcher = mock(HephTurnDispatcher.class);
-        when(dispatcher.running(turn.getId(), turn.getAttempt())).thenReturn(Optional.of(attempt));
+        hephTurns = HephTurnFixtures.turns(
+                beans,
+                mock(MentorLedgerNotifications.class),
+                callsInFlight,
+                HephTurnFixtures.toolsPods(beans, new FakeToolsPods()),
+                issuer,
+                Clock.systemUTC(),
+                new SimpleMeterRegistry(),
+                Integer.MAX_VALUE,
+                Duration.ofMillis(100));
         controller = controller(HephTurnFixtures.contexts(beans));
         gateway = gateway(controller);
         direct = MockMvcBuilders.standaloneSetup(controller)
@@ -209,7 +218,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private HephTurnController controller(HephTurnContexts contexts) {
-        return new HephTurnController(contexts, completion, dispatcher, callsInFlight);
+        return new HephTurnController(contexts, completion, hephTurns, callsInFlight);
     }
 
     /** The controller behind the gateway's own credential filter. */
@@ -239,14 +248,16 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         return UUID.randomUUID().toString().substring(0, 8);
     }
 
-    /** The signed credential the worker issues for this attempt of the turn. */
+    /** The signed credential the worker issues for this attempt of the turn, with five minutes of work left. */
     private String credential(int attempt) {
+        Instant deadline = Instant.now().plus(Duration.ofMinutes(5));
         return issuer.issueForTurn(
                 turn.getId(),
                 workspace.getId(),
                 attempt,
                 Objects.requireNonNull(turn.getLeaseId()),
-                Instant.now().plus(Duration.ofMinutes(5)));
+                deadline,
+                deadline.plus(Duration.ofMinutes(1)));
     }
 
     private ResultActions call(String method, String endpoint, int attempt, String body) throws Exception {
@@ -340,7 +351,83 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         // A null field is left out of the response; the host reads a missing one as null.
         assertThat(fieldNames(mapper.readTree(served), ""))
                 .isSubsetOf(fieldNames(mapper.readTree(contract("context.response.json")), ""))
-                .contains("sessionId", "entries", "prompt", "situation", "model.apiProtocol", "model.modelId");
+                .contains(
+                        "sessionId",
+                        "entries",
+                        "prompt",
+                        "situation",
+                        "model.apiProtocol",
+                        "model.modelId",
+                        "systemPrompt");
+    }
+
+    /**
+     * Every model call of a turn sends the system prompt again. Detail that only some answers need belongs in the
+     * context folder's {@code FIELDS.md}, which Heph reads on demand. The tool descriptions are sent with every call
+     * too, and this budget does not count them.
+     */
+    @Test
+    void shouldKeepTheSystemPromptWithinItsBudgetWhenItServesTheContext() {
+        assertThat(HephTurnContexts.SYSTEM_PROMPT.getBytes(StandardCharsets.UTF_8).length)
+                .as("system prompt bytes")
+                .isLessThanOrEqualTo(15 * 1024);
+        assertThat(HephTurnFixtures.contexts(beans).context(attempt).systemPrompt())
+                .isEqualTo(HephTurnContexts.SYSTEM_PROMPT);
+    }
+
+    @Test
+    void shouldRenewTheLeaseOnTheTurnRowWhenTheLoopRenewsIt() throws Exception {
+        Instant claimedUntil = Objects.requireNonNull(reloaded().getLeasedUntil());
+
+        call("POST", "lease", turn.getAttempt(), "").andExpect(status().isNoContent());
+
+        assertThat(reloaded().getLeasedUntil()).isNotNull().isNotEqualTo(claimedUntil);
+        assertThat(reloaded().getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+    }
+
+    @Test
+    void shouldAnswerThatTheTurnStoppedAndStillTakeItsEndWhenTheDeveloperStopsIt() throws Exception {
+        turns.stop(workspace.getId(), turn.getId());
+
+        call("PUT", "partial", turn.getAttempt(), """
+                        {"activity":"writing","tool":null,"messages":[]}""")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type")
+                        .value(ProblemType.MENTOR_TURN_STOPPED.uri().toString()))
+                .andExpect(jsonPath("$.stop").value("developer"));
+        call("POST", "lease", turn.getAttempt(), "")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.stop").value("developer"));
+        call("POST", "end", turn.getAttempt(), """
+                        {"outcome":"STOPPED","entries":[%s],"reason":null}""".formatted(
+                                piMessage("s0a1b2c3", "question", assistantText("First, tag the"))))
+                .andExpect(status().isNoContent());
+
+        MentorTurn stopped = reloaded();
+        assertThat(stopped.getStatus()).isEqualTo(MentorTurn.Status.STOPPED);
+        assertThat(stopped.isLeased()).isFalse();
+        assertThat(stored("s0a1b2c3").getText()).isEqualTo("First, tag the");
+    }
+
+    @Test
+    void shouldAnswerThatTheDeadlinePassedAndStillTakeTheEndWhenTheAttemptRunsPastIt() throws Exception {
+        Authentication late =
+                HephTurnFixtures.authenticated(attempt, Instant.now().minusSeconds(1));
+
+        direct.perform(put(TURN_PATH + "partial", turn.getId())
+                        .principal(late)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"activity":"writing","tool":null,"messages":[]}"""))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.stop").value("deadline"));
+        direct.perform(post(TURN_PATH + "end", turn.getId())
+                        .principal(late)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(contract("end-deadline.request.json")))
+                .andExpect(status().isNoContent());
+
+        assertThat(reloaded().getStatus()).isEqualTo(MentorTurn.Status.FAILED);
     }
 
     /** A turn that this worker cannot give a folder is told so, or its instructions would send it to read files. */
@@ -499,22 +586,27 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Test
     void shouldRefuseATokenOfAnotherWorkspaceAndReadOrWriteNothingOfTheTurn() throws Exception {
+        Instant deadline = Instant.now().plus(Duration.ofMinutes(5));
         String foreign = issuer.issueForTurn(
                 turn.getId(),
                 workspace.getId() + 1,
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()),
-                Instant.now().plus(Duration.ofMinutes(5)));
+                deadline,
+                deadline.plus(Duration.ofMinutes(1)));
         int entries = MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId())
                 .size();
 
+        // The turn's row holds no lease for that workspace, as for an attempt that ended.
         gateway.perform(get(TURN_PATH + "context", turn.getId()).header(HttpHeaders.AUTHORIZATION, "Bearer " + foreign))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type")
+                        .value(ProblemType.MENTOR_LEASE_LOST.uri().toString()));
         gateway.perform(post(TURN_PATH + "end", turn.getId())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + foreign)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(contract("end.request.json")))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isConflict());
 
         assertThat(reloaded().getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
         assertThat(MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId()))
@@ -549,8 +641,8 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
-        assertThat(ended.getError()).isEqualTo(HephTurnDispatcher.TOOK_TOO_LONG);
-        assertThat(ended.getFailureCause()).isEqualTo("its Hephaestus host reported DEADLINE: deadline");
+        assertThat(ended.getError()).isEqualTo(HephTurns.TOOK_TOO_LONG);
+        assertThat(ended.getFailureCause()).isEqualTo("its conversation loop reported DEADLINE: deadline");
         assertThat(ended.getFailedCall())
                 .as("no model call of the attempt failed")
                 .isNull();
@@ -573,7 +665,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
-        assertThat(ended.getFailureCause()).isEqualTo("its Hephaestus host reported ERROR: provider_unavailable");
+        assertThat(ended.getFailureCause()).isEqualTo("its conversation loop reported ERROR: provider_unavailable");
         assertThat(ended.getFailedCall()).isEqualTo("upstream_status");
         assertThat(ended.getFailedCallStatus()).isEqualTo(503);
         assertThat(callsInFlight.lastFailed(turn.getId(), turn.getAttempt()))
@@ -594,7 +686,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .when(failingOnce)
                 .end(anyLong(), any(), anyInt(), any(), any());
         gateway = gateway(
-                new HephTurnController(HephTurnFixtures.contexts(beans), failingOnce, dispatcher, callsInFlight));
+                new HephTurnController(HephTurnFixtures.contexts(beans), failingOnce, hephTurns, callsInFlight));
         String end = """
                 {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider_unavailable"}""";
 
@@ -612,7 +704,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         call("POST", "end", turn.getAttempt(), """
                         {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider said: rate limited for alice@example.com"}""").andExpect(status().isNoContent());
 
-        assertThat(reloaded().getFailureCause()).isEqualTo("its Hephaestus host reported ERROR: unrecognized");
+        assertThat(reloaded().getFailureCause()).isEqualTo("its conversation loop reported ERROR: unrecognized");
     }
 
     @Test
@@ -624,8 +716,8 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
-        assertThat(ended.getError()).isEqualTo(HephTurnDispatcher.MODEL_STOPPED_ANSWERING);
-        assertThat(output.getAll()).contains("failed: its Hephaestus host reported STALLED: upstream_stalled");
+        assertThat(ended.getError()).isEqualTo(HephTurns.MODEL_STOPPED_ANSWERING);
+        assertThat(output.getAll()).contains("failed: its conversation loop reported STALLED: upstream_stalled");
     }
 
     /**
@@ -644,10 +736,10 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
-        assertThat(ended.getError()).isEqualTo(HephTurnDispatcher.COULD_NOT_FINISH);
+        assertThat(ended.getError()).isEqualTo(HephTurns.COULD_NOT_FINISH);
         assertThat(output.getAll())
                 .contains("conversation turn " + turn.getId() + " attempt " + turn.getAttempt()
-                        + " failed: its Hephaestus host reported ERROR: unrecognized")
+                        + " failed: its conversation loop reported ERROR: unrecognized")
                 .doesNotContain(key)
                 .doesNotContain(quoted);
     }

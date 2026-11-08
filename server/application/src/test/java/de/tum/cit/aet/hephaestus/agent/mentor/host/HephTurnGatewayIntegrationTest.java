@@ -15,10 +15,9 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeToolsPods;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
+import de.tum.cit.aet.hephaestus.agent.proxy.ConversationLoopProperties;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -28,6 +27,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
+import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
@@ -43,6 +43,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
@@ -73,7 +74,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
 
 /**
- * Every endpoint that a Hephaestus host calls, over real HTTP through the worker's real gateway connector and its real
+ * Every endpoint that the conversation loop calls, over real HTTP through the worker's real gateway connector and its real
  * security chain, with a signed turn credential. A request without a body carries no {@code Content-Length}, as the
  * host's {@code fetch} sends it. The worker role is off in the test context, so the gateway runs as a small
  * application of its own, wired from the test context's beans.
@@ -109,6 +110,9 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private final AttemptTokenVerifier verifier =
             new AttemptTokenVerifier(AttemptKeyFixtures.keyring(KEY), new SimpleMeterRegistry());
 
+    /** The loop's credential, as the test profile sets it. */
+    private static final String LOOP_SECRET = "0123456789abcdef".repeat(4);
+
     private final MentorTurnRepository gatewayTurnReads = mock(MentorTurnRepository.class);
     private final HttpClient http = HttpClient.newHttpClient();
     private ConfigurableApplicationContext gateway;
@@ -129,13 +133,26 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         turn = MentorTurnStarts.askAndStart(
                 turns, metrics, workspace.getId(), conversation.getId(), "How should I pin the image?");
 
-        HephTurnDispatcher dispatcher = runningHere();
+        var callsInFlight = new ProxyCallsInFlight(12);
+        var toolsPods = HephTurnFixtures.toolsPods(beans, new FakeToolsPods());
+        HephTurns served = HephTurnFixtures.turns(
+                beans,
+                mock(MentorLedgerNotifications.class),
+                callsInFlight,
+                toolsPods,
+                issuer,
+                Clock.systemUTC(),
+                new SimpleMeterRegistry(),
+                Integer.MAX_VALUE,
+                Duration.ofMillis(100));
         HephTurnContexts contexts = HephTurnFixtures.contexts(beans);
-        var controller = new HephTurnController(contexts, completion, dispatcher, new ProxyCallsInFlight(12));
-        var sandboxController = new HephTurnSandboxController(
-                contexts,
-                dispatcher,
-                HephTurnFixtures.folder(beans, new TurnSandboxes(new FakeToolsPods(), 0, new SimpleMeterRegistry())));
+        var controller = new HephTurnController(contexts, completion, served, callsInFlight);
+        var sandboxController =
+                new HephTurnSandboxController(contexts, served, HephTurnFixtures.folder(beans, toolsPods));
+        // No turn waits for this loop; which other tests left queued is not this test's to claim.
+        HephTurns idle = mock(HephTurns.class);
+        when(idle.assign()).thenReturn(Optional.empty());
+        var assignments = new HephTurnAssignmentController(idle);
         var application = new SpringApplication(
                 GatewayApplication.class,
                 Class.forName("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig"));
@@ -143,14 +160,16 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
             var factory = context.getBeanFactory();
             factory.registerSingleton("hephTurnController", controller);
             factory.registerSingleton("hephTurnSandboxController", sandboxController);
+            factory.registerSingleton("hephTurnAssignmentController", assignments);
             factory.registerSingleton("reviewJobRepository", jobRepository);
             factory.registerSingleton("agentRuns", agentRuns);
             // The turn endpoints read no turn row on the gateway; a model call would.
             factory.registerSingleton("mentorTurnRepository", gatewayTurnReads);
             factory.registerSingleton("attemptTokenVerifier", verifier);
             factory.registerSingleton("sandboxGatewaySessions", new SandboxGatewaySessions());
+            factory.registerSingleton("conversationLoopProperties", new ConversationLoopProperties(LOOP_SECRET));
             factory.registerSingleton("proxyAccounting", mock(ProxyAccounting.class));
-            factory.registerSingleton("workerProperties", WorkerPropertiesFixtures.minimal("4"));
+            factory.registerSingleton("workerProperties", WorkerPropertiesFixtures.withDrain(Duration.ofMinutes(1)));
             factory.registerSingleton("agentControllerAdvice", new AgentControllerAdvice());
             factory.registerSingleton("globalControllerAdvice", new GlobalControllerAdvice());
         });
@@ -186,6 +205,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 Arguments.of("POST", "sandbox/bind", "{}", 200),
                 Arguments.of("POST", "sandbox/discard", "sandbox-discard.request.json", 204),
                 Arguments.of("POST", "sandbox/load", "sandbox-load.request.json", 200),
+                Arguments.of("POST", "lease", "{}", 204),
                 Arguments.of("POST", "end", "end.request.json", 204));
     }
 
@@ -233,7 +253,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     void shouldRefuseTheTurnCredentialWhenItCallsAReviewRuntimeEndpoint() throws Exception {
-        for (String path : new String[] {"", "/workspace", "/commands"}) {
+        for (String path : new String[] {"", "/workspace"}) {
             HttpRequest request = HttpRequest.newBuilder(URI.create(
                             "http://localhost:" + gatewayPort + "/internal/llm/runtime/" + turn.getId() + path))
                     .header("Authorization", "Bearer " + credential())
@@ -247,36 +267,40 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         }
     }
 
-    /** A dispatcher that runs this test's attempt, as the worker's does once it started the turn on its host. */
-    private HephTurnDispatcher runningHere() {
-        HephTurnDispatcher dispatcher = mock(HephTurnDispatcher.class);
-        when(dispatcher.running(turn.getId(), turn.getAttempt()))
-                .thenReturn(Optional.of(new TurnAttempt(
-                        turn.getId(),
-                        workspace.getId(),
-                        developer,
-                        conversation.getId(),
-                        turn.getAttempt(),
-                        Objects.requireNonNull(turn.getLeaseId()))));
-        when(dispatcher.deadline(turn.getId(), turn.getAttempt()))
-                .thenReturn(Instant.now().plusSeconds(300));
-        return dispatcher;
-    }
-
     private HttpRequest.Builder turnRequest(String endpoint) {
         return HttpRequest.newBuilder(URI.create(
                         "http://localhost:" + gatewayPort + "/internal/llm/turn/" + turn.getId() + "/" + endpoint))
                 .header("Authorization", "Bearer " + credential());
     }
 
-    /** The signed credential the worker issues for this attempt of the turn. */
+    /** The signed credential the worker issues for this attempt of the turn, with five minutes of work left. */
     private String credential() {
+        Instant deadline = Instant.now().plus(Duration.ofMinutes(5));
         return issuer.issueForTurn(
                 turn.getId(),
                 workspace.getId(),
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()),
-                Instant.now().plus(Duration.ofMinutes(5)));
+                deadline,
+                deadline.plus(Duration.ofMinutes(1)));
+    }
+
+    private HttpResponse<String> pullAssignment(String credential) throws Exception {
+        return http.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/internal/llm/turn-assignments"))
+                        .header("Authorization", "Bearer " + credential)
+                        .POST(HttpRequest.BodyPublishers.noBody())
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    void shouldAnswerTheLoopsAssignmentPullOnlyWithTheLoopsCredential() throws Exception {
+        assertThat(pullAssignment(LOOP_SECRET).statusCode()).isEqualTo(204);
+        assertThat(pullAssignment(credential()).statusCode())
+                .as("a turn credential pulls no turn")
+                .isEqualTo(401);
+        assertThat(pullAssignment("f".repeat(64)).statusCode()).isEqualTo(401);
     }
 
     private static String contract(String name) throws IOException {

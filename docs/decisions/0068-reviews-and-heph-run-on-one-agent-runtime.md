@@ -809,6 +809,56 @@ The proxy meters each accepted request, including an abandoned response.
 An HTTP error from a provider keeps the existing model retry behavior.
 Cancellation and lease loss stop the wait.
 
+## Update — 2026-11-08: the conversation loop runs as a Deployment
+
+This update amends § The tools Pod, § The Heph loop, § Capacity and § What goes for the layer that adds the Heph loop Deployment.
+The [glossary](../contributor/practice-review-glossary.mdx#runtime-terms) calls the Heph loop the **conversation loop**, and the chart and the code use that name.
+
+- **One pool for the installation, in PostgreSQL.** This replaces the § The tools Pod rule that pooled Pods carry the label of their owner worker.
+  The table `conversation_tools_pod` records every tools Pod and the attempt that holds it.
+  One pool of 2 started Pods waits for the whole installation. Any worker fills it under an advisory lock.
+  Each bind is fenced on the attempt's live lease.
+  Reason: the worker is a Deployment, so its Pod names change at each roll, and `worker_registry` goes. An owner label would name a Pod that is gone.
+- **One cleanup rule.** This replaces "Pooled Pods also go at their owner's start" in § What goes.
+  Every 60 seconds, each worker removes a Pod whose attempt holds no live lease.
+  It also removes a pooled Pod older than 1 hour.
+  It also removes a Pod that did not start within 5 minutes, and a tools Job that no row names.
+  It deletes a revoked Pod again at each run, until a bind takes its row.
+  A worker that stops removes nothing, so a worker roll keeps the tools Pod of a live turn.
+- **Control has no channel.** Any worker serves any call of a turn, because each call reads the turn's row and its lease.
+  A stop or a lost lease makes the attempt's next call answer `409`. Every worker seals the attempt's model calls in flight.
+  The next lease call ends an attempt that its loop did not end in time.
+  The loop has 30 seconds after a stop or after the deadline.
+- **Preferred anti-affinity.** § The Heph loop asks for 2 replicas with anti-affinity on several nodes.
+  The anti-affinity is preferred, not required, so a cluster with one free node still runs both replicas.
+  The single-node profile runs 1 replica, and a second one only during a rollout.
+- **The turn count is for the installation.** `conversationLoop.turns` replaces `worker.conversationTurns`.
+  The server, the claim on each worker and each loop replica read the one count.
+- **The cap on model calls in flight for each attempt stays on each worker.** A worker counts only the calls that reach it.
+  Thus, N workers allow N times the calls of one attempt.
+  One shared count would add a database write to each model call. The call pool still bounds the provider's calls.
+- **A lost assignment answer costs one lease.** A worker claims the turn before it answers the pull.
+  If the loop does not receive the answer, no loop runs the turn.
+  Its lease expires after 60 seconds, and the reaper takes it back as a retry.
+  A two-step hand-off would add a state and a call to every turn for a rare loss.
+- **The system prompt comes from the turn's context.** The worker builds it from `system.md` and the feedback writing guide, and `GET context` returns it.
+  Thus, the prompt has one source, and the agent image holds only the loop's code.
+- **The loop has no user namespace and no sandbox RuntimeClass.** It runs only the code of the agent image.
+  Untrusted code runs only in tools Pods, which keep every sandbox control.
+  The threat model states what the loop holds and what it parses.
+- **Turn calls are fenced on the lease, not on the work deadline.** A turn's model calls stay possible after its deadline until the lease ends.
+  The next lease call after the deadline answers the stop, and 30 seconds later it ends the attempt.
+  Thus, the deadline ends the lease at a renewal.
+  No turn works longer than its deadline, 30 seconds and one renewal interval.
+- **One loop replica on the single-node profile.** When it fails, its turns stop renewing their leases.
+  The reaper takes each one back as a retry when its lease has expired.
+  The lease lasts 60 seconds, and the reaper looks every 15 seconds.
+  Thus, a retry is ready about 95 seconds after the last renewal.
+  The restarted loop then pulls the retry.
+- **Documents stay on the worker endpoints for now.** Each worker builds the documents of an attempt in its own memory.
+  An attempt whose calls reach two workers can read two builds of its question.
+  A later layer can move the documents into the loop, as § The Heph loop decides.
+
 ## Update — 2026-11-09: superseded in part by ADR 0079
 
 [ADR 0079](0079-one-agent-system.md) supersedes the placement of this decision. One runtime for reviews and conversations stays, and so does PostgreSQL as the only truth.

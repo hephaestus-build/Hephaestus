@@ -39,7 +39,13 @@ class AttemptKeyringTest extends BaseUnitTest {
     @Test
     void shouldVerifyATurnTokenOfAnotherWorkerOnThisWorker() {
         UUID turn = UUID.randomUUID();
-        String token = issuerA.issueForTurn(turn, 42L, 1, LEASE, Instant.now().plusSeconds(300));
+        String token = issuerA.issueForTurn(
+                turn,
+                42L,
+                1,
+                LEASE,
+                Instant.now().plusSeconds(300),
+                Instant.now().plusSeconds(360));
 
         workerB.refresh();
 

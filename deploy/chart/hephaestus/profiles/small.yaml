@@ -48,19 +48,23 @@ worker:
   databasePool: { maximumPoolSize: 24, minimumIdle: 2 }
   enabled: true
   replicas: 1
-  # Drain the old worker before its replacement starts so the node holds 32 resident turns.
+  # Drain the old worker before its replacement starts.
   # Reviews and conversations pause during the drain and replacement.
   rolloutStrategy: Recreate
   # The upgrade's Helm timeout must cover this drain, the shutdown and the new worker's start: past
   # it, Helm rolls the release back. A chart test compares the three with the documented 20 minutes.
   drainTimeoutSeconds: 600
   sandbox:
-    # Five reviews of 384 MiB. Each review beyond them takes 50m of CPU from the 32 resident turns
+    # Five reviews of 384 MiB. Each review beyond them takes 50m of CPU from the 29 resident turns
     # while a backup runs.
     reviewMemory: 1920Mi
-  # The CPU budget admits 32 resident turns. The tools quota stays at eight plus two warm Pods.
-  conversationTurns: auto
   gitCache:
     sizeLimit: 10Gi
   resources:
     limits: { ephemeral-storage: 12Gi }
+# One node: one loop, and a second one only while it rolls out.
+conversationLoop:
+  replicas: 1
+  # The CPU budget admits 31 resident turns, and 29 while a backup runs. The tools quota stays at
+  # eight plus two warm Pods.
+  turns: auto

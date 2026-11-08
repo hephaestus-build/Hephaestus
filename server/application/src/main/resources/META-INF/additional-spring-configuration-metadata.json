@@ -358,7 +358,7 @@
     {
       "name": "hephaestus.mentor.turn.capacity",
       "type": "java.lang.Integer",
-      "description": "The conversation turns that all workers together run at once: the number of workers times the conversation turns of each. While every one of them runs a turn, a question that could start next says that Hephaestus is answering other questions. Unset, no question says why it waits. The Helm chart sets it. Must be at least 1 when set."
+      "description": "The conversation turns that the installation runs at once. Every worker's claim keeps to it, and each conversation loop replica runs at most this many. While that many turns run, a question that could start next says that Hephaestus is answering other questions. Unset, no question says why it waits and no claim has a cap. The Helm chart sets it from the turn count of the conversation loop. Must be at least 1 when set."
     }
   ],
   "hints": [

@@ -1,10 +1,10 @@
-// heph-host-protocol.ts — what the Heph host and its worker exchange.
+// heph-host-protocol.ts — what the conversation loop and the workers exchange.
 //
-// Commands arrive over one WebSocket the host opens to its gateway session
-// (`${SANDBOX_RUNTIME_URL}/commands`). Everything a turn reads or writes goes over HTTP to
-// `${LLM_PROXY_URL}/turn/<turnId>/...` with the turn's own credential. The Java counterparts:
-//   commands                → HephTurnDispatcher, HephHostChannelConfiguration
-//   turn endpoints          → HephTurnController
+// The loop pulls each turn attempt from `${LLM_PROXY_URL}/turn-assignments` with its own credential. Everything a
+// turn reads or writes goes over HTTP to `${LLM_PROXY_URL}/turn/<turnId>/...` with the attempt's own credential, on
+// whichever worker the gateway Service picks. The Java counterparts:
+//   assignments          → HephTurnAssignmentController, HephTurns
+//   turn endpoints       → HephTurnController
 //   tools Pod endpoints  → HephTurnSandboxController
 
 /** The tools that work in the turn's context folder. Heph has them only in a turn whose context sets `contextFolder`. */
@@ -129,51 +129,39 @@ export function asLoadAnswer(value: unknown): SandboxLoadAnswer | null {
 	};
 }
 
-/** Why the worker stops a turn: the developer stopped it, its deadline passed, or the attempt lost its lease. */
+/** Why a turn attempt stops: the developer stopped it, its deadline passed, or the attempt lost its lease. */
 export type StopReason = "developer" | "deadline" | "lease";
 
 /**
- * A command the worker sends the host. A command names the attempt it is for: a turn whose lease expired runs again as
- * a later attempt, and a command for one attempt never acts on another.
+ * A turn attempt that a worker hands the loop, with the attempt's credential. A turn whose lease expired runs again as
+ * a later attempt, with a credential of its own.
  */
-export type HostCommand =
-	| { type: "start"; turnId: string; attempt: number; token: string }
-	| { type: "stop"; turnId: string; attempt: number; reason: StopReason };
+export interface Assignment {
+	turnId: string;
+	attempt: number;
+	token: string;
+}
 
 /** Narrowing predicate for parsed JSON, used instead of a cast. */
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
-/** The only place command bytes become values; anything else is ignored. */
-export function parseCommand(text: string): HostCommand | null {
-	let value: unknown;
-	try {
-		value = JSON.parse(text);
-	} catch {
-		return null;
-	}
+/** The only place an assignment's bytes become values; anything else is ignored. */
+export function asAssignment(value: unknown): Assignment | null {
 	if (
 		!isRecord(value) ||
 		typeof value.turnId !== "string" ||
 		value.turnId === "" ||
 		typeof value.attempt !== "number" ||
 		!Number.isInteger(value.attempt) ||
-		value.attempt < 1
+		value.attempt < 1 ||
+		typeof value.token !== "string" ||
+		value.token === ""
 	) {
 		return null;
 	}
-	const { turnId, attempt } = value;
-	if (value.type === "start" && typeof value.token === "string" && value.token !== "") {
-		return { type: "start", turnId, attempt, token: value.token };
-	}
-	if (
-		value.type === "stop" &&
-		(value.reason === "developer" || value.reason === "deadline" || value.reason === "lease")
-	) {
-		return { type: "stop", turnId, attempt, reason: value.reason };
-	}
-	return null;
+	return { turnId: value.turnId, attempt: value.attempt, token: value.token };
 }
 
 /** The model a turn runs with, as the worker admitted it. */
@@ -196,8 +184,10 @@ export interface TurnContext {
 	model: TurnModel;
 	/** The transient message appended after the path on every model request; never stored. */
 	situation: string;
-	/** The worker serves `read`, `bash` and `load_context` for this turn. The host reads a missing field as `false`. */
+	/** The worker serves `read`, `bash` and `load_context` for this turn. The loop reads a missing field as `false`. */
 	contextFolder: boolean;
+	/** Heph's system prompt for the turn's session. */
+	systemPrompt: string;
 }
 
 /** What a partial answer keeps of one assistant message: its text, and the calls that show feedback. */

@@ -35,7 +35,7 @@ export const TURN_MS = 180_000;
 const RESOURCES = new URL("../../../../main/resources/agent/mentor/", import.meta.url);
 export const FIELDS = readFileSync(new URL("fields.md", RESOURCES), "utf8");
 
-/** The prompt HephHostSpec stages, system.md then the writing guide, or the whole prompt a comparison names. */
+/** The prompt HephTurnContexts serves, system.md then the writing guide, or the whole prompt a comparison names. */
 function systemPrompt(): string {
 	const override = env.HEPHAESTUS_LIVE_HEPH_SYSTEM_PROMPT_FILE;
 	if (override !== undefined) {
@@ -389,7 +389,12 @@ export async function ask(
 		appended?: (stored: readonly SessionEntry[]) => void;
 	},
 ): Promise<Reply & { looked: string[]; linked: [LinkToolName, string][] }> {
-	const worker = fakeWorker(context, reader(folder), undefined, link);
+	const worker = fakeWorker(
+		{ ...context, systemPrompt: systemPrompt() },
+		reader(folder),
+		undefined,
+		link,
+	);
 	const api = worker.api();
 	const exec = executor(folder);
 	const end = await runTurn(
@@ -413,7 +418,6 @@ export async function ask(
 		},
 		models,
 		250,
-		systemPrompt(),
 	);
 	assert.equal(end.outcome, "DONE", `the turn ended ${end.outcome}: ${end.detail ?? ""}`);
 	repository?.appended?.(worker.appended);

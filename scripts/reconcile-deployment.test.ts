@@ -1431,6 +1431,23 @@ await test(
 			);
 			kubectl("create", "namespace", namespace);
 			kubectl("create", "namespace", `${namespace}-sandboxes`);
+			// A tools Pod that a stopped worker left: no worker reaps it, so the stop removes it.
+			kubectl(
+				"create",
+				"job",
+				"tools-left",
+				"--namespace",
+				`${namespace}-sandboxes`,
+				"--image=registry.k8s.io/pause:3.10",
+			);
+			kubectl(
+				"label",
+				"job",
+				"tools-left",
+				"--namespace",
+				`${namespace}-sandboxes`,
+				"hephaestus.build/sandbox-kind=tools",
+			);
 			helm("install", "hephaestus", source, "--namespace", namespace, "--wait", "--timeout", "30s");
 			await writeFile(
 				path.join(source, "Chart.yaml"),
@@ -1463,6 +1480,10 @@ await test(
 				},
 			});
 			assert.equal(result.status, 0, result.stderr);
+			assert.equal(
+				kubectl("get", "jobs", "--namespace", `${namespace}-sandboxes`, "--output", "name").trim(),
+				"",
+			);
 			const proof = asRecord(
 				parseJson(kubectl("get", "configmap", "transition-proof", "-n", namespace, "-o", "json")),
 				"transition proof",

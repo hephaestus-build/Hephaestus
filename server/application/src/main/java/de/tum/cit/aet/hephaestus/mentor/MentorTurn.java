@@ -211,6 +211,11 @@ public class MentorTurn implements Persistable<UUID> {
     @Column(name = "finished_at")
     private Instant finishedAt;
 
+    /** The items that the current attempt loaded into its context folder, on any worker. */
+    @Column(name = "tools_loads", nullable = false)
+    @ColumnDefault("0")
+    private int toolsLoads;
+
     @Transient
     private boolean fresh;
 
@@ -243,6 +248,7 @@ public class MentorTurn implements Persistable<UUID> {
         this.leaseId = UUID.randomUUID();
         this.leasedUntil = leaseEnd;
         this.startedAt = now;
+        this.toolsLoads = 0;
         this.admission = null;
         this.error = null;
         this.failureCause = null;

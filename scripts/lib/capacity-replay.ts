@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { asArray, asRecord, asString } from "./json.ts";
+import { asArray, asRecord, asString, isRecord } from "./json.ts";
 
 export interface ReplaySample {
 	ttftMs: number;
@@ -136,4 +136,49 @@ export function sensitivityGrid() {
 			})),
 		),
 	);
+}
+
+/**
+ * The most `bash` calls of one turn-roll turn. At 30 s each, they fill about the 900 s that a turn
+ * may run, and they stay below the 40 model calls of a turn (`MAX_TURN_MODEL_CALLS` in
+ * `heph-host.ts`), with room for retries.
+ */
+export const ROLL_CALL_LIMIT = 28;
+
+/** The output that the turn-roll command of call `ordinal` prints. */
+export const rollOutput = (ordinal: number) => `rolled-${ordinal}`;
+
+function messageText(content: unknown): string {
+	if (typeof content === "string") {
+		return content;
+	}
+	return Array.isArray(content)
+		? content
+				.map((part: unknown) => (isRecord(part) && typeof part.text === "string" ? part.text : ""))
+				.join("")
+		: "";
+}
+
+/**
+ * The turn-roll script for one model call: a `bash` command that runs for 30 s, again after each
+ * result, until the drill releases the turn. Then a text that repeats each output the commands
+ * printed, so the answer shows which `bash` calls succeeded.
+ */
+export function rollStep(
+	messages: readonly unknown[],
+	released: boolean,
+): { command: string } | { text: string } {
+	const rows = messages
+		.map((message) => asRecord(message, "message"))
+		// The loop sends the turn's situation as the last message, after the results
+		// (docs/contributor/unified-pi-runtime.mdx § Context of a turn).
+		.filter((row) => !(row.role === "user" && messageText(row.content).startsWith("<situation>")));
+	const question = rows.findLastIndex((row) => row.role === "user");
+	const results = rows.slice(question + 1).filter((row) => row.role === "tool");
+	if (!released && results.length < ROLL_CALL_LIMIT) {
+		// Below the 60 s that one command may run (`MAX_COMMAND_MS` in `heph-tools.ts`).
+		return { command: `sleep 30; echo ${rollOutput(results.length + 1)}` };
+	}
+	const outputs = results.flatMap((row) => messageText(row.content).match(/rolled-\d+/gu) ?? []);
+	return { text: `The commands printed: ${outputs.join(" ")}.` };
 }

@@ -125,7 +125,6 @@ public class SandboxReconciler {
                 Integer attempt = sandbox.attempt();
                 yield current == null ? !isYoung(sandbox.created()) : attempt != null && attempt < current;
             }
-            case HOST -> sandbox.creatorGone();
         };
     }
 

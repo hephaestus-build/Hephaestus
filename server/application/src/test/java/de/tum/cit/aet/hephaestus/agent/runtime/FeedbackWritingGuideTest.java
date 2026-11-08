@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnDispatcher;
+import de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurns;
 import de.tum.cit.aet.hephaestus.practices.feedback.PracticePageFeedbackBody;
 import java.io.IOException;
 import java.io.InputStream;
@@ -61,7 +61,7 @@ class FeedbackWritingGuideTest {
     @Test
     void shouldUseNoInternalTermsInTheTextHephaestusWritesItself() throws IllegalAccessException {
         List<String> fixed = new ArrayList<>();
-        for (Field field : HephTurnDispatcher.class.getDeclaredFields()) {
+        for (Field field : HephTurns.class.getDeclaredFields()) {
             if (Modifier.isStatic(field.getModifiers()) && field.getType() == String.class) {
                 field.setAccessible(true);
                 fixed.add((String) Objects.requireNonNull(field.get(null)));

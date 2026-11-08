@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
-import de.tum.cit.aet.hephaestus.agent.job.WorkerRegistryRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
@@ -16,6 +15,7 @@ import io.fabric8.kubernetes.client.okhttp.OkHttpClientFactory;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
+import java.time.Clock;
 import java.time.Duration;
 import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
@@ -79,11 +79,6 @@ public class KubernetesSandboxConfiguration {
     }
 
     @Bean
-    public KubernetesLiveWorkers kubernetesLiveWorkers(WorkerRegistryRepository registry) {
-        return new KubernetesLiveWorkers(registry);
-    }
-
-    @Bean
     public KubernetesPods kubernetesPods(
             KubernetesClient sandboxKubernetesClient,
             KubernetesWorker worker,
@@ -118,10 +113,9 @@ public class KubernetesSandboxConfiguration {
             KubernetesPods pods,
             KubernetesSandboxJobs reviewJobs,
             KubernetesWorker worker,
-            KubernetesLiveWorkers liveWorkers,
             SandboxExits exits,
             KubernetesSandboxCache cache) {
-        return new KubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits, cache);
+        return new KubernetesSandboxBackend(pods, reviewJobs, worker, exits, cache);
     }
 
     @Bean
@@ -129,10 +123,10 @@ public class KubernetesSandboxConfiguration {
             KubernetesPods pods,
             KubernetesSandboxJobs jobs,
             AgentImageProperties agentImageProperties,
-            KubernetesLiveWorkers liveWorkers,
             SandboxExits exits,
-            KubernetesSandboxCache cache) {
-        return new KubernetesToolsPods(pods, jobs, agentImageProperties.reference(), liveWorkers, exits, cache);
+            KubernetesSandboxCache cache,
+            Clock clock) {
+        return new KubernetesToolsPods(pods, jobs, agentImageProperties.reference(), exits, cache, clock);
     }
 
     @Bean

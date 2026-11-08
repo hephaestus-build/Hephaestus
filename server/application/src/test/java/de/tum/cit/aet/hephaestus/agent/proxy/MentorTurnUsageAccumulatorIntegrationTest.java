@@ -126,7 +126,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        return turns.claimNext(lease).orElseThrow();
+        return turns.claimNext(lease, Integer.MAX_VALUE).orElseThrow();
     }
 
     private Instant measuredDate(MentorTurn turn, int attempt) {
@@ -165,7 +165,8 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 Timestamp.from(earlierMonth),
                 turn.getId(),
                 first.number());
-        MentorTurn retried = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn retried =
+                turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
         attemptUsage.admit(
                 retried.getWorkspaceId(),
                 retried.getId(),
@@ -398,7 +399,8 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
         transactionTemplate.executeWithoutResult(
                 tx -> assertThat(turns.requeueRunning(workspace.getId(), conversation.getId()))
                         .isPresent());
-        MentorTurn retried = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn retried =
+                turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
         assertThat(retried.getAttempt()).isEqualTo(first.number() + 1);
         // The retry runs on other rates and another purse.
         var otherPrice = new LlmPriceSnapshot(

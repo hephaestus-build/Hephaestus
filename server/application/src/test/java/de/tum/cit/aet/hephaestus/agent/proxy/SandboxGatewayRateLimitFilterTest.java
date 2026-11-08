@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
@@ -12,9 +13,11 @@ import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
@@ -59,7 +62,7 @@ class SandboxGatewayRateLimitFilterTest extends BaseUnitTest {
         MockHttpServletResponse exhausted = new MockHttpServletResponse();
         filter.doFilter(new MockHttpServletRequest("POST", "/internal/llm/responses"), exhausted, this::serve);
 
-        authenticate("host-session:" + UUID.randomUUID());
+        authenticate("another caller " + UUID.randomUUID());
         MockHttpServletResponse other = new MockHttpServletResponse();
         filter.doFilter(new MockHttpServletRequest(), other, this::serve);
 
@@ -156,10 +159,22 @@ class SandboxGatewayRateLimitFilterTest extends BaseUnitTest {
                 request -> TURN_BOOKKEEPING.equals(request.getRequestURI()));
     }
 
-    private void authenticate(String principalDescription) {
-        var session = UUID.nameUUIDFromBytes(principalDescription.getBytes(StandardCharsets.UTF_8));
+    /** Authenticates a turn attempt that {@code caller} names: the same name is the same caller. */
+    private void authenticate(String caller) {
+        var now = Instant.now();
+        var turn = new AttemptJwt(
+                AttemptJwt.Kind.TURN,
+                UUID.nameUUIDFromBytes(caller.getBytes(StandardCharsets.UTF_8)),
+                7L,
+                1,
+                UUID.randomUUID(),
+                Set.of(),
+                "jti",
+                now,
+                now.plusSeconds(60),
+                now.plusSeconds(30));
         SecurityContextHolder.getContext()
-                .setAuthentication(new TestingAuthenticationToken(ProxyIdentity.hostSession(session), null));
+                .setAuthentication(new TestingAuthenticationToken(ProxyIdentity.of(turn), null));
     }
 
     private void serve(ServletRequest request, ServletResponse response) {

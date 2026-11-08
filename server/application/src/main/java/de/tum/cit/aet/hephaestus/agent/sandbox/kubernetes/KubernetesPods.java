@@ -233,15 +233,6 @@ public class KubernetesPods {
             ATTEMPT_VOLUMES.size() + SCRATCH_PATHS.size(),
             30);
 
-    /** The Heph host, in the same volumes as a review. It is idle between turns, so it requests 50m of its one CPU. */
-    static final Size HOST = new Size(
-            256 * MIB,
-            SandboxLayout.HEPH_HOST_MEMORY_BYTES,
-            256 * MIB,
-            SandboxLayout.SCRATCH_BYTES,
-            ATTEMPT_VOLUMES.size() + SCRATCH_PATHS.size(),
-            50);
-
     /**
      * A conversation's tools Pod: the tools program and the commands of one turn attempt. Its one volume, {@code /tmp},
      * holds the tools workspace, where the turn's documents and the repositories it loads land, and the spill files. It
@@ -511,11 +502,11 @@ public class KubernetesPods {
         return exit != null && exit != 0;
     }
 
-    /** A Heph host or tools Pod is a conversation; a review and every probe Pod rank below it. */
+    /** A tools Pod is a conversation; a review and every probe Pod rank below it. */
     private static @Nullable String priorityClass(Workload workload, KubernetesSandboxProperties properties) {
         String kind = workload.labels().get(KubernetesWorker.SANDBOX_KIND);
-        boolean conversation = !workload.labels().containsKey(KubernetesWorker.PROBE)
-                && (KubernetesWorker.KIND_HOST.equals(kind) || KubernetesWorker.KIND_TOOLS.equals(kind));
+        boolean conversation =
+                !workload.labels().containsKey(KubernetesWorker.PROBE) && KubernetesWorker.KIND_TOOLS.equals(kind);
         String name = conversation ? properties.conversationPriorityClass() : properties.reviewPriorityClass();
         return name.isEmpty() ? null : name;
     }

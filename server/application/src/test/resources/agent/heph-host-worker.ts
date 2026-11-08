@@ -124,6 +124,7 @@ export function fakeWorker(
 				partials.push(structuredClone(snapshot));
 				onPartial?.(snapshot);
 			},
+			lease: async () => undefined,
 			end: async (end) => {
 				check();
 				open = false;
@@ -136,13 +137,18 @@ export function fakeWorker(
 	};
 }
 
-export function contextOf(entries: unknown[], prompt: string): TurnContext {
+export function contextOf(
+	entries: unknown[],
+	prompt: string,
+	systemPrompt = "You are Hephaestus.",
+): TurnContext {
 	return {
 		sessionId: crypto.randomUUID(),
 		entries,
 		prompt,
 		situation: SITUATION,
 		contextFolder: true,
+		systemPrompt,
 		model: {
 			apiProtocol: "openai-completions",
 			modelId: "faux",
@@ -153,16 +159,10 @@ export function contextOf(entries: unknown[], prompt: string): TurnContext {
 	};
 }
 
-export function hostFor(
-	worker: FakeWorker,
-	models: ModelFactory,
-	partialIntervalMs = 10,
-	systemPrompt = "You are Hephaestus.",
-) {
+export function hostFor(worker: FakeWorker, models: ModelFactory, partialIntervalMs = 10) {
 	return createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt,
 		turnApi: () => worker.api(),
 		models,
 		partialIntervalMs,
@@ -173,9 +173,8 @@ export async function runTurn(
 	worker: FakeWorker,
 	models: ModelFactory,
 	partialIntervalMs = 10,
-	systemPrompt?: string,
 ): Promise<TurnEnd> {
-	const host = hostFor(worker, models, partialIntervalMs, systemPrompt);
+	const host = hostFor(worker, models, partialIntervalMs);
 	host.start(crypto.randomUUID(), 1, "turn-token");
 	const end = await worker.waitForEnd();
 	await host.idle();

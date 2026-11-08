@@ -275,7 +275,7 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
     /** Claims turns until this one starts. A turn of another test that starts first rolls back with this test. */
     private MentorTurn start(UUID turnId) {
         while (true) {
-            MentorTurn claimed = turns.claimNext(LEASE).orElseThrow();
+            MentorTurn claimed = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
             if (claimed.getId().equals(turnId)) {
                 return claimed;
             }

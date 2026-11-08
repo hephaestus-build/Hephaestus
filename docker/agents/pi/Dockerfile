@@ -19,6 +19,9 @@ WORKDIR /opt/pi-sdk
 RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts pi/tools-seccomp.ts ./
 COPY --from=agent-runtime tool-protocol.ts tool-client.ts tools-server.ts ./
+# The conversation loop: its Deployment runs it from the image, so no worker stages it.
+COPY --from=agent-runtime heph-host.ts heph-host-protocol.ts heph-tools.ts pi-agent-sandbox.ts pi-diagnostics.ts \
+    pi-diagnostics.json pi-error-text.ts pi-provider.ts pi-text.ts ./
 RUN pnpm exec tsc -p tsconfig.build.json && pnpm exec node dist/tools-seccomp.js dist
 
 COPY practice-scripts/package.json practice-scripts/child.ts practice-scripts/build.ts practice-scripts/tsconfig.build.json /opt/practice-scripts/
@@ -220,7 +223,7 @@ RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions 
     chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     ln -s /opt/pi-sdk/node_modules /workspace/node_modules
 
-LABEL hephaestus.agent.runtime-contract=14
+LABEL hephaestus.agent.runtime-contract=15
 LABEL hephaestus.agent.node-version=${NODE_VERSION}
 LABEL hephaestus.agent.pi-version=${PI_VERSION}
 

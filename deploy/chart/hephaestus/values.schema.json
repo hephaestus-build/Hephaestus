@@ -681,7 +681,6 @@
 			"required": [
 				"enabled",
 				"replicas",
-				"conversationTurns",
 				"drainTimeoutSeconds",
 				"rolloutStrategy",
 				"runtime",
@@ -697,10 +696,6 @@
 				},
 				"enabled": { "type": "boolean" },
 				"replicas": { "type": "integer", "minimum": 0, "maximum": 16 },
-				"conversationTurns": {
-					"description": "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX: auto, or the conversation turns that one worker runs at once. The server's HEPHAESTUS_MENTOR_TURN_CAPACITY is replicas times this.",
-					"oneOf": [{ "const": "auto" }, { "type": "integer", "minimum": 0, "maximum": 64 }]
-				},
 				"drainTimeoutSeconds": { "type": "integer", "minimum": 0, "maximum": 86400 },
 				"rolloutStrategy": { "enum": ["RollingUpdate", "Recreate"] },
 				"runtime": {
@@ -797,6 +792,20 @@
 						}
 					}
 				}
+			}
+		},
+		"conversationLoop": {
+			"description": "The Deployment that runs every conversation turn of the installation. It runs with the workers.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["replicas", "turns", "resources"],
+			"properties": {
+				"replicas": { "type": "integer", "minimum": 1, "maximum": 8 },
+				"turns": {
+					"description": "HEPHAESTUS_MENTOR_TURN_CAPACITY: auto, or the conversation turns that the whole installation runs at once. The server, each worker and each loop replica get this one count.",
+					"oneOf": [{ "const": "auto" }, { "type": "integer", "minimum": 0, "maximum": 64 }]
+				},
+				"resources": { "$ref": "#/definitions/resources" }
 			}
 		},
 		"config": {

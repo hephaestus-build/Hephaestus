@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
@@ -20,6 +19,6 @@ public final class SandboxGatewayFixtures {
     public static Filter credentialFilter(
             ReviewJobRepository jobs, AgentRuns runs, MentorTurnRepository turns, AttemptTokenVerifier verifier) {
         return new JobTokenAuthenticationFilter(
-                jobs, runs, turns, new SandboxGatewaySessions(), verifier, Mockito.mock(ProxyAccounting.class));
+                jobs, runs, turns, new ConversationLoopProperties(null), verifier, Mockito.mock(ProxyAccounting.class));
     }
 }

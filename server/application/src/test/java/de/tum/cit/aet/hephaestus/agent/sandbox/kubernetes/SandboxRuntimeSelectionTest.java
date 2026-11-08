@@ -11,10 +11,8 @@ import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerPropertiesConfiguration;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxHosts;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntimeConfiguration;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
@@ -87,7 +85,6 @@ class SandboxRuntimeSelectionTest {
             assertThat(context.getBean(KubernetesClient.class).getHttpClient()).isInstanceOf(OkHttpClientImpl.class);
             assertThat(context.getBean(SandboxBackend.class)).isInstanceOf(KubernetesSandboxBackend.class);
             assertThat(context.getBean(SandboxManager.class)).isInstanceOf(SandboxAttemptRunner.class);
-            assertThat(context.getBean(HostSandbox.class)).isInstanceOf(SandboxHosts.class);
             assertThat(context.getBean(ToolsPods.class)).isInstanceOf(KubernetesToolsPods.class);
             assertThat(context)
                     .hasSingleBean(KubernetesSandboxJobs.class)
@@ -105,7 +102,6 @@ class SandboxRuntimeSelectionTest {
             assertThat(context)
                     .doesNotHaveBean(SandboxBackend.class)
                     .doesNotHaveBean(SandboxManager.class)
-                    .doesNotHaveBean(HostSandbox.class)
                     .doesNotHaveBean(ToolsPods.class)
                     .doesNotHaveBean("sandboxKubernetesClient");
         });

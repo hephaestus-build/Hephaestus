@@ -90,7 +90,15 @@ public class MentorTurnProgress {
         if (turn.getStatus() != MentorTurn.Status.RUNNING) {
             return null;
         }
-        Snapshot snapshot = snapshots.getIfPresent(new Attempt(turn.getWorkspaceId(), turn.getId(), turn.getAttempt()));
+        return snapshot(turn.getWorkspaceId(), turn.getId(), turn.getAttempt());
+    }
+
+    /**
+     * The newest partial answer of the attempt that this process heard, running or stopped, or {@code null}: what
+     * readers may have seen when the attempt ends.
+     */
+    public @Nullable JsonNode snapshot(long workspaceId, UUID turnId, int attempt) {
+        Snapshot snapshot = snapshots.getIfPresent(new Attempt(workspaceId, turnId, attempt));
         if (snapshot == null) {
             return null;
         }
@@ -196,9 +204,13 @@ public class MentorTurnProgress {
         }
     }
 
-    /** Forgets the turn's partial answers once it no longer runs. */
+    /**
+     * Forgets the turn's partial answers once it no longer runs. A stopped turn keeps them: its end, on any worker,
+     * reads what readers may have seen. Its end changes nothing that a later change could tell, so they go when they
+     * expire.
+     */
     void changed(MentorLedgerEvents.TurnChanged change) {
-        if (change.status() == MentorTurn.Status.RUNNING) {
+        if (change.status() == MentorTurn.Status.RUNNING || change.status() == MentorTurn.Status.STOPPED) {
             return;
         }
         snapshots.asMap().keySet().removeIf(key -> key.turnId().equals(change.turnId()));

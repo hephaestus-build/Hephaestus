@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
@@ -124,8 +123,9 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     private String token(UUID turnId, long workspaceId, int attempt, UUID leaseId) {
+        Instant deadline = Instant.now().plus(Duration.ofMinutes(5));
         return jwtIssuer.issueForTurn(
-                turnId, workspaceId, attempt, leaseId, Instant.now().plus(Duration.ofMinutes(5)));
+                turnId, workspaceId, attempt, leaseId, deadline, deadline.plus(Duration.ofMinutes(1)));
     }
 
     private String token() {
@@ -137,7 +137,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
                 jobRepository,
                 agentRuns,
                 turnRepository,
-                new SandboxGatewaySessions(),
+                new ConversationLoopProperties(null),
                 jwtVerifier,
                 Mockito.mock(ProxyAccounting.class));
         var request = new MockHttpServletRequest(method, path);

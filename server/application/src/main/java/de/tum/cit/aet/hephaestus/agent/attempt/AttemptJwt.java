@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
 
 /**
  * The credential of one attempt: of a review job, or of a Heph turn. It names the attempt, its lease and its workspace. The
@@ -24,7 +23,7 @@ public record AttemptJwt(
         String jti,
         Instant issuedAt,
         Instant expiresAt,
-        @Nullable Instant workDeadline) {
+        Instant workDeadline) {
 
     /** What the attempt runs. */
     public enum Kind {
@@ -38,14 +37,13 @@ public record AttemptJwt(
         switch (kind) {
             case REVIEW -> {
                 if (attempt < 0) throw new IllegalArgumentException("a review attempt must not be negative");
-                // Order only: a passed work deadline still authenticates, so the attempt can return its result.
-                if (workDeadline == null || workDeadline.isBefore(issuedAt) || workDeadline.isAfter(expiresAt))
-                    throw new IllegalArgumentException("work deadline must not be before issue or after expiry");
             }
             case TURN -> {
                 if (attempt < 1) throw new IllegalArgumentException("a claimed turn attempt counts from 1");
-                if (workDeadline != null) throw new IllegalArgumentException("a turn attempt has no work deadline");
             }
         }
+        // Order only: a passed work deadline still authenticates, so the attempt can return its result or end.
+        if (workDeadline == null || workDeadline.isBefore(issuedAt) || workDeadline.isAfter(expiresAt))
+            throw new IllegalArgumentException("work deadline must not be before issue or after expiry");
     }
 }

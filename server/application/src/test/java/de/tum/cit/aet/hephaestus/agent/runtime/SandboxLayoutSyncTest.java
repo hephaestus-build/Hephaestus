@@ -21,16 +21,6 @@ import org.junit.jupiter.api.Test;
 class SandboxLayoutSyncTest extends BaseUnitTest {
 
     @Test
-    void shouldStageTheHephHostWithTheWorkspaceLayoutTheServerUses() throws IOException {
-        String host = resource("agent/heph-host.js");
-
-        assertThat(constant(host, "WORKSPACE_ROOT")).isEqualTo("\"" + SandboxLayout.WORKSPACE_ROOT + "\"");
-        assertThat(constant(host, "MENTOR_SYSTEM_PROMPT_PATH"))
-                .isEqualTo("\"" + SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH + "\"");
-        assertThat(constant(host, "PI_AGENT_DIR")).isEqualTo("\"" + SandboxLayout.PI_AGENT_DIR + "\"");
-    }
-
-    @Test
     void shouldExitThePracticeRunnerWithTheCodesTheServerReads() throws IOException {
         String runner = resource("agent/pi-runner.js");
 

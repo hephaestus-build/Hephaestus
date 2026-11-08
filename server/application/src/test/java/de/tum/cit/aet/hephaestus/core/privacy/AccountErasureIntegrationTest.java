@@ -991,7 +991,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        var ownedTurn = mentorTurns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+        var ownedTurn =
+                mentorTurns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
         var model = LlmCatalogTestFixtures.admittedMentorConfig();
         assertThat(mentorAttemptUsage.admit(
                         firstWorkspace,
@@ -1578,7 +1579,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        MentorTurn turn = mentorTurns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn turn =
+                mentorTurns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
         var llm = LlmCatalogTestFixtures.admittedMentorConfig();
         var admitted = MentorTurnAdmission.of(llm, Objects.requireNonNull(llm.priceSnapshot()));
         String measurements = "SELECT count(*) FROM mentor_turn_attempt_usage WHERE turn_id=?";
@@ -1679,7 +1681,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        MentorTurn turn = mentorTurns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn turn =
+                mentorTurns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
         var llm = LlmCatalogTestFixtures.admittedMentorConfig();
         assertThat(mentorAttemptUsage.admit(
                         turn.getWorkspaceId(),

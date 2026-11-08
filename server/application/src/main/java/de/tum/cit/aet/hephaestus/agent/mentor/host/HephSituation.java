@@ -34,7 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 @ConditionalOnWorkerRole
-@Profile(HephHostConfiguration.PROFILES)
+@Profile(HephTurnConfiguration.PROFILES)
 @RequiredArgsConstructor
 public class HephSituation {
 

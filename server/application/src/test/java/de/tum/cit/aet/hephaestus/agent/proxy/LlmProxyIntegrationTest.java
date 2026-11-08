@@ -29,7 +29,6 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.FrozenCharge;
 import de.tum.cit.aet.hephaestus.agent.job.PracticeScriptCallUsage;
 import de.tum.cit.aet.hephaestus.agent.job.PracticeScriptKindTotal;
@@ -193,7 +192,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 jobRepository,
                 agentRuns,
                 turnRepository,
-                new SandboxGatewaySessions(),
+                new ConversationLoopProperties(null),
                 jwtVerifier,
                 Mockito.mock(ProxyAccounting.class));
         User owner = persistUser("proxy-owner");

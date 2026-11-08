@@ -1,12 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.sandbox;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoadException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import java.io.IOException;
 import java.io.Serial;
 import java.nio.charset.StandardCharsets;
@@ -34,7 +33,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -46,10 +46,10 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The worker's half of Heph's context folder for one turn attempt. It serves {@code INDEX.md}, {@code FIELDS.md} and
- * the context documents from the attempt's memory, binds the attempt's tools Pod ({@link TurnSandboxes}), and prepares
- * what {@code load_context} loads. The host puts the documents and each load into the tools Pod and runs every
- * command there itself: this worker runs none. A refusal is an answer with {@code ok: false}, never an HTTP error, so
- * the host passes its {@code detail} to the model.
+ * the context documents from the attempt's memory, binds the attempt's tools Pod ({@link ConversationToolsPods}), and
+ * prepares what {@code load_context} loads. The conversation loop puts the documents and each load into the tools Pod
+ * and runs every command there itself: this worker runs none. A refusal is an answer with {@code ok: false}, never an
+ * HTTP error, so the loop passes its {@code detail} to the model.
  */
 @WorkspaceAgnostic("The turn credential binds the workspace and the developer of every call")
 public class TurnContextFolder {
@@ -61,20 +61,25 @@ public class TurnContextFolder {
 
     private static final JsonNodeFactory NODES = JsonNodeFactory.instance;
 
-    private final TurnSandboxes sandboxes;
+    /** How often a running load reads whether its attempt still holds its lease. */
+    private static final Duration LEASE_CHECK = Duration.ofSeconds(2);
+
+    private final ConversationToolsPods sandboxes;
+    private final MentorTurnRepository turns;
     private final ObjectProvider<ContextLoader> loaders;
     private final Clock clock;
     private final Semaphore loading = new Semaphore(LOADS_AT_ONCE);
 
-    /** The loads of each attempt; an attempt ends within its deadline. */
-    private final Cache<TurnSandboxes.Attempt, AtomicInteger> loads =
-            Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
-
     /** Loads run here, so that an attempt's end can stop waiting for one; each takes a virtual thread. */
     private final ExecutorService preparations = Executors.newVirtualThreadPerTaskExecutor();
 
-    public TurnContextFolder(TurnSandboxes sandboxes, ObjectProvider<ContextLoader> loaders, Clock clock) {
+    public TurnContextFolder(
+            ConversationToolsPods sandboxes,
+            MentorTurnRepository turns,
+            ObjectProvider<ContextLoader> loaders,
+            Clock clock) {
         this.sandboxes = sandboxes;
+        this.turns = turns;
         this.loaders = loaders;
         this.clock = clock;
     }
@@ -172,11 +177,10 @@ public class TurnContextFolder {
      * while the tools quota has no room.
      */
     public ObjectNode bind(TurnAttempt turn, Instant deadline) {
-        TurnSandboxes.Sandbox sandbox;
+        ToolsPods.Started pod;
         try {
-            sandbox = sandboxes.acquire(
-                    attempt(turn), turn.workspaceId(), () -> !clock.instant().isBefore(deadline));
-        } catch (TurnSandboxes.ContextChanged changed) {
+            pod = sandboxes.bind(turn, () -> !clock.instant().isBefore(deadline));
+        } catch (ConversationToolsPods.ContextChanged changed) {
             return refusal(
                     "CONTEXT_CHANGED", "The context folder changed. Read it again; repositories must be loaded again.");
         } catch (SandboxException failed) {
@@ -188,12 +192,6 @@ public class TurnContextFolder {
                     turn.turnId(),
                     failed.getClass().getSimpleName());
             return refusal("UNAVAILABLE", "This worker cannot run the context folder now. Do not retry.");
-        }
-        ToolsPods.Started pod;
-        try {
-            pod = sandbox.started();
-        } catch (SandboxException removed) {
-            return refusal("TIMEOUT", "The answer ended before the tools were ready.");
         }
         return NODES.objectNode()
                 .put("ok", true)
@@ -207,7 +205,7 @@ public class TurnContextFolder {
      * After a tools Pod failed its host, the attempt's next bind gets a new one: what the old one holds may be partial.
      */
     public void discard(TurnAttempt turn, String id) {
-        sandboxes.discard(attempt(turn), id);
+        sandboxes.discard(turn, id);
     }
 
     /**
@@ -223,15 +221,17 @@ public class TurnContextFolder {
             return new Refused(
                     refusal("INVALID_PATH", "Nothing can be loaded at " + requested + ". INDEX.md lists what can."));
         }
-        TurnSandboxes.Attempt attempt = attempt(turn);
-        if (Objects.requireNonNull(loads.get(attempt, key -> new AtomicInteger()))
-                        .incrementAndGet()
-                > MAX_LOADS_PER_ATTEMPT) {
+        if (turns.countToolsLoad(
+                        turn.turnId(), turn.workspaceId(), turn.attempt(), turn.leaseId(), MAX_LOADS_PER_ATTEMPT)
+                == 0) {
             return new Refused(
-                    refusal("BUDGET_EXHAUSTED", "This answer already loaded " + MAX_LOADS_PER_ATTEMPT + " items."));
+                    turns.hasLiveLease(turn.turnId(), turn.workspaceId(), turn.attempt(), turn.leaseId())
+                            ? refusal(
+                                    "BUDGET_EXHAUSTED",
+                                    "This answer already loaded " + MAX_LOADS_PER_ATTEMPT + " items.")
+                            : refusal("TIMEOUT", "The answer ended before " + requested + " could load."));
         }
-        BooleanSupplier abandoned =
-                () -> sandboxes.ended(attempt) || left(deadline).isNegative();
+        BooleanSupplier abandoned = abandoned(turn, deadline);
         long started = System.nanoTime();
         Path archive = null;
         try (ContextLoader.Loaded loaded = prepare(turn, deadline, owner.get(), requested, abandoned)) {
@@ -388,8 +388,19 @@ public class TurnContextFolder {
         return LOADS_AT_ONCE - loading.availablePermits();
     }
 
-    private static TurnSandboxes.Attempt attempt(TurnAttempt turn) {
-        return new TurnSandboxes.Attempt(turn.turnId(), turn.attempt());
+    /** Whether a load outlived its turn's deadline or its attempt's lease; reads the lease at most every 2 s. */
+    private BooleanSupplier abandoned(TurnAttempt turn, Instant deadline) {
+        var checked = new AtomicReference<Instant>(clock.instant());
+        var lost = new AtomicBoolean();
+        return () -> {
+            if (left(deadline).isNegative() || lost.get()) return true;
+            Instant now = clock.instant();
+            Instant last = checked.get();
+            if (Duration.between(last, now).compareTo(LEASE_CHECK) >= 0 && checked.compareAndSet(last, now)) {
+                lost.set(!turns.hasLiveLease(turn.turnId(), turn.workspaceId(), turn.attempt(), turn.leaseId()));
+            }
+            return lost.get();
+        };
     }
 
     private Duration left(Instant deadline) {

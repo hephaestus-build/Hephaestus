@@ -59,6 +59,8 @@ spring:
 
 # Disable workspace bootstrapping during tests to prevent API calls
 hephaestus:
+    conversation-loop:
+        secret: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     auth:
         passkeys:
             rp-id: localhost

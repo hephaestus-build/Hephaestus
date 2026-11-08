@@ -38,7 +38,6 @@ public class SandboxExits {
     /** What the sandbox ran. */
     public enum Kind {
         REVIEW,
-        HOST,
         TOOLS,
         PROBE;
 

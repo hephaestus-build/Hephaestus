@@ -1,0 +1,158 @@
+{{- /*
+The conversation loop runs every conversation turn of the installation, one Pi session for each turn
+(ADR 0068 § The Heph loop). It pulls turn assignments from the workers' gateway and dials the tools
+Pods. Conversations need workers, so the loop runs only with them, and only when turns may run.
+*/}}
+{{- $turns := int (include "hephaestus.conversationTurns" .) }}
+{{- if and .Values.worker.enabled (gt $turns 0) }}
+{{- $name := include "hephaestus.name" (dict "root" . "component" "conversation-loop") }}
+{{- $loop := .Values.conversationLoop }}
+{{- $port := include "hephaestus.gatewayPort" . | int }}
+{{- $sandboxes := include "hephaestus.sandboxNamespace" (dict "root" .) }}
+{{- $scratch := "/tmp/heph-loop" }}
+# The loop listens on no port. It reaches the workers' gateway and the tools port of tools Pods, and
+# nothing else. The release's DNS policy resolves the gateway's name.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "conversation-loop") | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  egress:
+    - to:
+        {{- include "hephaestus.componentPeer" (dict "root" . "component" "worker") | nindent 8 }}
+      ports:
+        - port: {{ $port }}
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $sandboxes }}
+          podSelector:
+            matchLabels:
+              hephaestus.build/sandbox-kind: tools
+      ports:
+        - port: {{ include "hephaestus.toolsPort" . }}
+          protocol: TCP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "conversation-loop") | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "conversation-loop") | nindent 4 }}
+spec:
+  replicas: {{ $loop.replicas }}
+  # A new loop is ready before an old one stops, so no turn waits for a cold start.
+  minReadySeconds: 5
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "conversation-loop") | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "conversation-loop") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $name }}
+      # The loop calls no Kubernetes API.
+      automountServiceAccountToken: false
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
+      enableServiceLinks: false
+      # The agent image's user.
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 1000 "group" 1000) | nindent 8 }}
+      # On SIGTERM the loop pulls no more turns and ends its running ones. A turn runs for at most 900 s
+      # (AgentBindingLimits.MAX_HEPH_TURN_SECONDS). A loop has 30 s more to end it (HephTurns.STOP_GRACE),
+      # and then 30 s to stop.
+      terminationGracePeriodSeconds: {{ add 900 30 30 }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    {{- include "hephaestus.selectorLabels" (dict "root" . "component" "conversation-loop") | nindent 20 }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "hephaestus.selectorLabels" (dict "root" . "component" "conversation-loop") | nindent 14 }}
+      containers:
+        - name: conversation-loop
+          image: {{ include "hephaestus.image" (dict "root" . "name" "agent-pi") | quote }}
+          imagePullPolicy: IfNotPresent
+          # Node's permission model: the loop reads only its code and its scratch directory, and writes only
+          # the scratch directory. Without --allow-child-process, it starts no process.
+          command:
+            - node
+            - --disable-sigusr1
+            - --enable-source-maps
+            - --permission
+            - --allow-fs-read=/opt/pi-sdk
+            - --allow-fs-read={{ $scratch }}
+            - --allow-fs-write={{ $scratch }}
+            - /opt/pi-sdk/heph-host.js
+          env:
+            - name: LLM_PROXY_URL
+              value: {{ printf "http://%s.%s.svc:%d/internal/llm" (include "hephaestus.name" (dict "root" . "component" "sandbox-gateway")) .Release.Namespace $port | quote }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_CONVERSATION_LOOP_SECRET") | nindent 12 }}
+            # Each replica runs at most this many turns. The workers keep the same cap for the installation.
+            - name: HEPHAESTUS_MENTOR_TURN_CAPACITY
+              value: {{ $turns | quote }}
+            - name: HOME
+              value: {{ $scratch | quote }}
+            - name: PI_CODING_AGENT_DIR
+              value: {{ printf "%s/.pi" $scratch | quote }}
+          # The loop writes the ready file at its start and removes it on SIGTERM.
+          readinessProbe:
+            exec:
+              command: ["test", "-f", "{{ $scratch }}/ready"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # The loop touches the alive file at each pull, at least once a minute while it waits for room.
+          livenessProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - process.exit(Date.now()-require('node:fs').statSync('{{ $scratch }}/alive').mtimeMs<120000?0:1)
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            {{- toYaml $loop.resources | nindent 12 }}
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: scratch
+              mountPath: {{ $scratch }}
+      volumes:
+        # Pi's agent directory and the probe files. Documents stay in the loop's memory.
+        - name: scratch
+          emptyDir:
+            sizeLimit: 256Mi
+{{- end }}

@@ -59,7 +59,7 @@ public final class MentorTurnStarts {
                 conversationId,
                 new MentorTurnService.Question(MentorTurn.Surface.APP, question, requestId, null, null));
         MentorTurn started = admitting(turns, metrics)
-                .startNext(Duration.ofMinutes(5))
+                .startNext(Duration.ofMinutes(5), Integer.MAX_VALUE)
                 .orElseThrow()
                 .turn();
         if (!started.getRequestId().equals(requestId)) {

@@ -50,6 +50,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
      * {@code pull_request_requested_reviewers} carry a {@code user_id} and are mapped.
      */
     private static final Set<String> NOT_PERSONAL_DATA = Set.of(
+            // A conversation tools Pod: its name, nonce, address and the ids of the turn attempt that holds it.
+            "conversation_tools_pod",
             // The queue points at a commit and holds no email and no user.
             "commit_identity_resolution",
             // GitHub locators left after a product feedback erasure: repository, installation, a random marker.

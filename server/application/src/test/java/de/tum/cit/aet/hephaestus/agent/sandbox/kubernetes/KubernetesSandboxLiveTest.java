@@ -12,16 +12,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import de.tum.cit.aet.hephaestus.agent.gateway.LiveSandboxGateway;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.AgentImageReferenceGuard;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxHosts;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
@@ -59,12 +56,10 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -224,9 +219,7 @@ class KubernetesSandboxLiveTest {
     private SandboxExits exits;
     private KubernetesSandboxCache cache;
     private SandboxBackend backend;
-    private KubernetesLiveWorkers liveWorkers;
     private SandboxManager reviews;
-    private HostSandbox hosts;
 
     @BeforeAll
     void requireTheQualifiedWorker() throws Exception {
@@ -296,7 +289,6 @@ class KubernetesSandboxLiveTest {
         requireServiceAccountClient(client.getConfiguration());
         // The ledger id of this run's worker process, unique as the production one is.
         worker = new KubernetesWorker(properties, "live-" + UUID.randomUUID(), gatewayProperties.port());
-        liveWorkers = KubernetesFixtures.live(worker.workerId());
         requireNoAuthorityInItsOwnNamespace();
         pods = configuration.kubernetesPods(client, worker, sandbox, agentImage);
         workspaces = new SandboxWorkspaceManager(Path.of(System.getProperty("java.io.tmpdir")));
@@ -306,9 +298,8 @@ class KubernetesSandboxLiveTest {
         reviewJobs = configuration.kubernetesSandboxJobs(client, worker);
         exits = configuration.sandboxExits(pods, meters);
         cache = configuration.kubernetesSandboxCache(client, worker);
-        backend = configuration.kubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits, cache);
+        backend = configuration.kubernetesSandboxBackend(pods, reviewJobs, worker, exits, cache);
         reviews = new SandboxAttemptRunner(backend, workspaces, gateway.sessions(), meters);
-        hosts = new SandboxHosts(backend, workspaces, gateway.sessions(), agentImage.reference());
 
         String managementPort = System.getenv("MANAGEMENT_PORT");
         KubernetesIsolationProbe probe = configuration.kubernetesIsolationProbe(
@@ -633,12 +624,7 @@ class KubernetesSandboxLiveTest {
             Pod pod = awaitPodOf(job, candidate -> KubernetesPods.running(candidate, KubernetesPods.LOOP), running);
 
             new KubernetesSandboxBackend(
-                            pods,
-                            reviewJobs,
-                            worker,
-                            liveWorkers,
-                            new SandboxExits(pods, new SimpleMeterRegistry()),
-                            cache)
+                            pods, reviewJobs, worker, new SandboxExits(pods, new SimpleMeterRegistry()), cache)
                     .kill(new SandboxBackend.Handle(name));
 
             SandboxResult result = running.get(pods.stopGraceSeconds() + 90, TimeUnit.SECONDS);
@@ -775,155 +761,45 @@ class KubernetesSandboxLiveTest {
         log.info("TIMING Job created to it and its Pod removed by the TTL controller: {} ms", millis(started));
     }
 
-    // --- The Heph host ---
-
-    @Test
-    void shouldStartAHostOnTheFilesTheGatewayServedAndRemoveIt() throws Exception {
-        byte[] payload = synthetic(8192);
-        String expected = sha256(payload) + "  /workspace/payload.bin\n";
-        ResourceLimits limits = limits(Duration.ofMinutes(3));
-
-        long started = System.nanoTime();
-        HostSandbox.Host host = hosts.launch(
-                UUID.randomUUID(),
-                new HostSandbox.HostSpec(
-                        Map.of("payload.bin", payload),
-                        Map.of(),
-                        List.of("sh", "-c", "sha256sum /workspace/payload.bin && exec sleep 3600"),
-                        limits));
-        log.info("TIMING host launch to its process running: {} ms", millis(started));
-        String name = "hephaestus-host-" + host.id();
-        track(name);
-        String uid;
-        try {
-            Pod pod = present(name);
-            uid = pod.getMetadata().getUid();
-            requireCustody(pod, KubernetesWorker.KIND_HOST);
-            assertThat(pod.getMetadata().getLabels())
-                    .containsEntry(KubernetesWorker.SESSION_ID, host.id().toString());
-            requireHardened(pod);
-            requireBounds(container(pod.getSpec().getContainers(), KubernetesPods.LOOP), limits, KubernetesPods.HOST);
-            assertThat(hosts.isRunning(host)).isTrue();
-            // The host API returns no output: the Pod's log is where its process reports.
-            assertThat(awaitLog(name, expected, Duration.ofMinutes(1)))
-                    .as("the host's process read the exact bytes of its file")
-                    .contains(expected);
-        } finally {
-            hosts.remove(host);
-        }
-        assertThat(hosts.isRunning(host)).isFalse();
-        awaitGone(name, uid);
-    }
-
     // --- Conversation tools Pods ---
 
-    /**
-     * The client a host Pod runs: it dials the tools Pod on TCP, checks the nonce, puts an archive and runs a command
-     * in it, and prints what it saw. A wrong nonce must not open a connection.
-     */
-    private static final String TOOLS_CLIENT = """
-            import { execFileSync } from "node:child_process";
-            import { createHash } from "node:crypto";
-            import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-            import { ToolClient } from "/opt/pi-sdk/tool-client.js";
-
-            const [host, port, nonce] = process.argv.slice(2);
-            const address = { host, port: Number(port) };
-            try {
-              (await ToolClient.open(address, "not-" + nonce)).close();
-              console.log("NONCE-ACCEPTED");
-            } catch {
-              console.log("NONCE-REFUSED");
-            }
-            const tools = await ToolClient.open(address, nonce);
-            mkdirSync("/tmp/load", { recursive: true });
-            writeFileSync("/tmp/load/README.md", "# API\\n");
-            execFileSync("tar", ["-c", "-f", "/tmp/load.tar", "-C", "/tmp/load", "README.md"]);
-            const bytes = readFileSync("/tmp/load.tar");
-            await tools.put("/tmp/tools/workspace/repos/github.com/acme/api", {
-              bytes: (async function* () { yield bytes; })(),
-              size: bytes.length,
-              sha256: createHash("sha256").update(bytes).digest("hex"),
-            });
-            let out = "";
-            const exit = await tools.exec(
-              { command: "cat repos/github.com/acme/api/README.md; id -u", cwd: "/tmp/tools/workspace", timeoutMs: 30000 },
-              (chunk) => { out += chunk.toString("utf8"); },
-            );
-            console.log("TOOLS-EXIT " + exit.code + " " + out.replace(/\\n/g, "|"));
-            tools.close();
-            """;
-
     private KubernetesToolsPods toolsPods() {
-        return new KubernetesToolsPods(pods, reviewJobs, agentImage.reference(), liveWorkers, exits, cache);
+        return new KubernetesToolsPods(pods, reviewJobs, agentImage.reference(), exits, cache, Clock.systemUTC());
     }
 
     @Test
-    void shouldServeAToolsPodToItsHostOnTcpOnlyAndRemoveItWithItsJob() throws Exception {
+    void shouldStartAToolsPodAndRemoveItWithItsJob() throws Exception {
         KubernetesToolsPods tools = toolsPods();
         String sandboxId = UUID.randomUUID().toString();
         String name = "hephaestus-tools-" + sandboxId;
         ResourceLimits limits = limits(Duration.ofMinutes(10));
 
         long started = System.nanoTime();
-        ToolsPods.Started pod = tools.create(sandboxId, limits);
+        String nonce = UUID.randomUUID().toString();
+        ToolsPods.Started pod = tools.create(sandboxId, nonce, limits);
         log.info("TIMING tools Pod create to its tools program running: {} ms", millis(started));
         assertThat(pod.id()).isEqualTo(name);
+        assertThat(pod.nonce()).isEqualTo(nonce);
         Pod running = Objects.requireNonNull(reviewJobs.podOf(name));
         track(running.getMetadata().getName());
         String uid = running.getMetadata().getUid();
         requireCustody(running, KubernetesWorker.KIND_TOOLS);
         requireHardened(running);
         try {
-            HostSandbox.Host host = hosts.launch(
-                    UUID.randomUUID(),
-                    new HostSandbox.HostSpec(
-                            Map.of("client.mjs", TOOLS_CLIENT.getBytes(UTF_8)),
-                            Map.of(),
-                            List.of(
-                                    "sh",
-                                    "-c",
-                                    "node /workspace/client.mjs \"$0\" \"$1\" \"$2\" && exec sleep 3600",
-                                    pod.host(),
-                                    Integer.toString(pod.port()),
-                                    pod.nonce()),
-                            limits(Duration.ofMinutes(3))));
-            String hostName = "hephaestus-host-" + host.id();
-            track(hostName);
-            try {
-                assertThat(awaitLog(hostName, "TOOLS-EXIT", Duration.ofMinutes(2)))
-                        .as("the host reached the tools Pod on TCP, put a load and ran a command as the tools user")
-                        .contains("NONCE-REFUSED")
-                        .contains("TOOLS-EXIT 0 # API|1001|");
-            } finally {
-                hosts.remove(host);
-            }
+            assertThat(tools.list())
+                    .as("the installation's tools Jobs, by name")
+                    .anySatisfy(listed -> assertThat(listed.name()).isEqualTo(name));
         } finally {
             tools.remove(name);
         }
         awaitGone(running.getMetadata().getName(), uid);
-    }
-
-    @Test
-    void shouldRemoveTheToolsPodOfAnAttemptWhenTheAttemptEnds() throws Exception {
-        KubernetesToolsPods tools = toolsPods();
-        try (TurnSandboxes sandboxes = new TurnSandboxes(tools, 0, new SimpleMeterRegistry())) {
-            var attempt = new TurnSandboxes.Attempt(UUID.randomUUID(), 1);
-            ToolsPods.Started pod = sandboxes.acquire(attempt, 1L, () -> false).started();
-            Pod running = Objects.requireNonNull(reviewJobs.podOf(pod.id()));
-            track(running.getMetadata().getName());
-
-            sandboxes.release(attempt.turnId(), attempt.number());
-
-            awaitGone(running.getMetadata().getName(), running.getMetadata().getUid());
-            // A Foreground delete keeps the Job, with its finalizer, until its Pod is gone.
-            client.batch()
-                    .v1()
-                    .jobs()
-                    .inNamespace(worker.namespace())
-                    .withName(pod.id())
-                    .waitUntilCondition(Objects::isNull, 1, TimeUnit.MINUTES);
-        }
+        // A Foreground delete keeps the Job, with its finalizer, until its Pod is gone.
+        client.batch()
+                .v1()
+                .jobs()
+                .inNamespace(worker.namespace())
+                .withName(name)
+                .waitUntilCondition(Objects::isNull, 1, TimeUnit.MINUTES);
     }
 
     // --- Preconditions ---
@@ -1012,10 +888,6 @@ class KubernetesSandboxLiveTest {
 
     private void track(String name) {
         created.add(name);
-    }
-
-    private Pod present(String name) {
-        return Objects.requireNonNull(pods.get(name), () -> "Pod " + name + " exists");
     }
 
     /** Waits for the review Job of the name to exist; a failed execution is reported with the wait. */
@@ -1217,17 +1089,6 @@ class KubernetesSandboxLiveTest {
         log.info("TIMING Pod gone: {} ms", millis(started));
     }
 
-    /** The container's log once it holds {@code expected}, or as it is at the timeout. */
-    private String awaitLog(String name, String expected, Duration timeout) throws InterruptedException {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        String text = pods.logs(name, KubernetesPods.LOOP);
-        while (!text.contains(expected) && System.nanoTime() < deadline) {
-            Thread.sleep(200);
-            text = pods.logs(name, KubernetesPods.LOOP);
-        }
-        return text;
-    }
-
     /** The custody labels of a sandbox Pod: Hephaestus, the kind, this worker Pod and this process. */
     private void requireCustody(Pod pod, String kind) {
         Map<String, String> labels = labelsOf(pod);
@@ -1346,8 +1207,7 @@ class KubernetesSandboxLiveTest {
      */
     private void removeCreated() {
         Set<String> left = new LinkedHashSet<>(created);
-        for (String kind :
-                List.of(KubernetesWorker.KIND_REVIEW, KubernetesWorker.KIND_HOST, KubernetesWorker.KIND_TOOLS)) {
+        for (String kind : List.of(KubernetesWorker.KIND_REVIEW, KubernetesWorker.KIND_TOOLS)) {
             for (Pod pod : pods.list(kind)) {
                 if (worker.createdBySelf(labelsOf(pod))) {
                     left.add(pod.getMetadata().getName());
@@ -1425,10 +1285,6 @@ class KubernetesSandboxLiveTest {
             bytes[index] = (byte) (index * 31 + 7);
         }
         return bytes;
-    }
-
-    private static String sha256(byte[] content) throws NoSuchAlgorithmException {
-        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
     }
 
     /**

@@ -106,15 +106,11 @@ public class AttemptTokenVerifier {
         if (id == null || workspaceId == null || attempt == null || leaseId == null) {
             throw new AttemptTokenInvalidException("missing or invalid attempt binding claim", "claim");
         }
-        // A review credential without its signed work deadline has no defined work time. The JWT leeway applies to
-        // the credential's own times, never to this claim.
+        // A credential without its signed work deadline has no defined work time. The JWT leeway applies to the
+        // credential's own times, never to this claim.
         Instant workDeadline = numericDateClaim(verified, AttemptTokenIssuer.WORK_DEADLINE_CLAIM);
-        if ((kind == AttemptJwt.Kind.REVIEW) != (workDeadline != null)
-                || (workDeadline == null
-                        && !verified.getClaim(AttemptTokenIssuer.WORK_DEADLINE_CLAIM)
-                                .isMissing())) {
-            throw new AttemptTokenInvalidException(
-                    "a review token, and only a review token, has a work_deadline", "claim");
+        if (workDeadline == null) {
+            throw new AttemptTokenInvalidException("missing or invalid work_deadline claim", "claim");
         }
         try {
             return new AttemptJwt(

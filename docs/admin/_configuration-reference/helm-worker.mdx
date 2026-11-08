@@ -2,7 +2,6 @@
 
 | Key | Type | Default | Required in object | Constraints |
 | --- | --- | --- | --- | --- |
-| `worker.conversationTurns` | string or integer | `8` | yes | HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX: auto, or the conversation turns that one worker runs at once. The server's HEPHAESTUS_MENTOR_TURN_CAPACITY is replicas times this. |
 | `worker.databasePool.maximumPoolSize` | integer | `32` | yes | `minimum: 1. maximum: 400` |
 | `worker.databasePool.minimumIdle` | integer | `5` | yes | `minimum: 0. maximum: 400` |
 | `worker.drainTimeoutSeconds` | integer | `1800` | yes | `minimum: 0. maximum: 86400` |

@@ -38,16 +38,30 @@ public class AttemptTokenIssuer {
      */
     public String issueForReview(
             UUID id, Long workspaceId, int attempt, UUID leaseId, Instant workDeadline, Instant expiresAt) {
-        if (!workDeadline.isAfter(Instant.now()) || workDeadline.isAfter(expiresAt))
-            throw new IllegalArgumentException("workDeadline must be in the future and not after expiresAt");
-        return claims(AttemptJwt.Kind.REVIEW, id, workspaceId, attempt, leaseId, expiresAt)
-                .withClaim(WORK_DEADLINE_CLAIM, workDeadline)
-                .sign(algorithm());
+        return issue(AttemptJwt.Kind.REVIEW, id, workspaceId, attempt, leaseId, workDeadline, expiresAt);
     }
 
-    /** A turn attempt's credential that stays valid until {@code expiresAt}, which the caller derives from the turn. */
-    public String issueForTurn(UUID id, Long workspaceId, int attempt, UUID leaseId, Instant expiresAt) {
-        return claims(AttemptJwt.Kind.TURN, id, workspaceId, attempt, leaseId, expiresAt)
+    /**
+     * A turn attempt's credential. Its work ends at the turn's deadline; it stays valid until {@code expiresAt}, so the
+     * attempt can still end after a stop.
+     */
+    public String issueForTurn(
+            UUID id, Long workspaceId, int attempt, UUID leaseId, Instant workDeadline, Instant expiresAt) {
+        return issue(AttemptJwt.Kind.TURN, id, workspaceId, attempt, leaseId, workDeadline, expiresAt);
+    }
+
+    private String issue(
+            AttemptJwt.Kind kind,
+            UUID id,
+            Long workspaceId,
+            int attempt,
+            UUID leaseId,
+            Instant workDeadline,
+            Instant expiresAt) {
+        if (!workDeadline.isAfter(Instant.now()) || workDeadline.isAfter(expiresAt))
+            throw new IllegalArgumentException("workDeadline must be in the future and not after expiresAt");
+        return claims(kind, id, workspaceId, attempt, leaseId, expiresAt)
+                .withClaim(WORK_DEADLINE_CLAIM, workDeadline)
                 .sign(algorithm());
     }
 

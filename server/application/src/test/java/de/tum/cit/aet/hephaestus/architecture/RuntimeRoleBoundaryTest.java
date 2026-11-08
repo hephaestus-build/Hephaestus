@@ -64,8 +64,11 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     RuntimeRole.WORKER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntimeConfiguration", RuntimeRole.WORKER_PROPERTY),
-            // Heph turns run on a worker's Heph host, in its sandbox, behind its gateway.
-            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephHostConfiguration", RuntimeRole.WORKER_PROPERTY),
+            // Every worker hands conversation turns to the conversation loop and serves their calls behind its gateway.
+            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnConfiguration", RuntimeRole.WORKER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnAssignmentController",
+                    RuntimeRole.WORKER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnController", RuntimeRole.WORKER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnContexts", RuntimeRole.WORKER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenConfiguration", RuntimeRole.WORKER_PROPERTY),

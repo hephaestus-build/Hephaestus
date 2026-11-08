@@ -7,7 +7,12 @@ import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { isRecord, type PartialMessage } from "../../../main/resources/agent/heph-host-protocol.ts";
+import {
+	isRecord,
+	type PartialMessage,
+	type PartialSnapshot,
+	type StopReason,
+} from "../../../main/resources/agent/heph-host-protocol.ts";
 import {
 	declaredSize,
 	httpTurnApi,
@@ -35,9 +40,13 @@ interface Answer {
 	body?: unknown;
 }
 
-/** A worker that answers each request with the next of `answers` and records what it received. */
-async function fakeWorker(answers: Answer[]) {
+/**
+ * A worker that answers each request with the next of `answers` and records what it received, and each stop that the
+ * api reports.
+ */
+async function fakeWorker(answers: Answer[], unknownKeyDelayMs = 0) {
 	const received: Received[] = [];
+	const stops: StopReason[] = [];
 	const server = createServer((request, response) => {
 		// Another local process can probe a newly opened port. It carries no credential.
 		if (request.headers.authorization === undefined) {
@@ -74,8 +83,18 @@ async function fakeWorker(answers: Answer[]) {
 	}
 	return {
 		received,
+		stops,
 		// Repeats wait no time here; the delays are the host's to choose.
-		api: httpTurnApi(`http://127.0.0.1:${address.port}`, "turn-1", "turn-token", [0, 0, 0]),
+		api: httpTurnApi(
+			`http://127.0.0.1:${address.port}`,
+			"turn-1",
+			"turn-token",
+			(reason) => {
+				stops.push(reason);
+			},
+			[0, 0, 0],
+			unknownKeyDelayMs,
+		),
 		close: () => server.close(),
 	};
 }
@@ -172,7 +191,7 @@ void test("the host sends its partial answer, searches, document reads and end i
 		assert.deepEqual(
 			worker.received.map(({ method, path, authorization }) => [method, path, authorization]),
 			[
-				["PUT", "/turn/turn-1/partial", "Bearer turn-token"],
+				["PUT", "/turn/turn-1/partial?first=true", "Bearer turn-token"],
 				["POST", "/turn/turn-1/search", "Bearer turn-token"],
 				["POST", "/turn/turn-1/sandbox/document", "Bearer turn-token"],
 				["POST", "/turn/turn-1/end", "Bearer turn-token"],
@@ -199,7 +218,7 @@ void test("the host reads the context the worker serves", async () => {
 	}
 });
 
-void test("a 409 means the attempt lost its lease, on every call", async () => {
+void test("a 409 without a stop means the attempt lost its lease, on every call", async () => {
 	const worker = await fakeWorker([{ status: 409 }, { status: 409 }, { status: 409 }]);
 	try {
 		await assert.rejects(
@@ -213,6 +232,109 @@ void test("a 409 means the attempt lost its lease, on every call", async () => {
 		await assert.rejects(worker.api.context(), isLeaseLost);
 		// Not repeated, as an unanswered call would be.
 		assert.equal(worker.received.length, 3);
+		assert.deepEqual(worker.stops, ["lease", "lease", "lease"]);
+	} finally {
+		worker.close();
+	}
+});
+
+/** The worker's ProblemDetail for an attempt that must stop. */
+function problem(stop: unknown): Answer {
+	return { status: 409, body: { type: "about:blank", title: "Conflict", status: 409, stop } };
+}
+
+void test("a 409 that names a stop reports that stop before the call fails as no longer the attempt's", async () => {
+	const worker = await fakeWorker([problem("developer"), problem("deadline"), problem("bored")]);
+	try {
+		const { signal } = new AbortController();
+		await assert.rejects(worker.api.read({ path: "INDEX.md" }, signal), isLeaseLost);
+		await assert.rejects(worker.api.context(), {
+			message: "turn turn-1 must stop: deadline",
+		});
+		await assert.rejects(worker.api.search({ query: "pin" }, signal), isLeaseLost);
+
+		assert.equal(worker.received.length, 3);
+		assert.deepEqual(worker.stops, ["developer", "deadline", "lease"]);
+	} finally {
+		worker.close();
+	}
+});
+
+void test("a 401 is sent once more after a wait, and a second 401 fails the call", async () => {
+	const served = contract("context.response.json");
+	const worker = await fakeWorker(
+		[{ status: 401 }, { status: 200, body: served }, { status: 401 }, { status: 401 }],
+		20,
+	);
+	try {
+		const asked = performance.now();
+		assert.deepEqual(await worker.api.context(), served);
+		const waited = performance.now() - asked;
+		await assert.rejects(
+			worker.api.end({ outcome: "DONE", entries: [], reason: null, detail: null }),
+			(error) => error instanceof WorkerStatusError && error.status === 401,
+		);
+
+		// A timer may fire a millisecond before the clock reads its delay.
+		assert.ok(waited >= 19, `waited ${waited} ms before the second try`);
+		assert.deepEqual(
+			worker.received.map(({ method, path }) => `${method} ${path}`),
+			[
+				"GET /turn/turn-1/context",
+				"GET /turn/turn-1/context",
+				"POST /turn/turn-1/end",
+				"POST /turn/turn-1/end",
+			],
+		);
+	} finally {
+		worker.close();
+	}
+});
+
+void test("only the first partial answer the worker took is marked first", async () => {
+	const worker = await fakeWorker([{ status: 503 }, { status: 204 }, { status: 204 }]);
+	const snapshot: PartialSnapshot = {
+		activity: "thinking",
+		tool: null,
+		stage: "Thinking…",
+		messages: [],
+	};
+	try {
+		await assert.rejects(worker.api.partial(snapshot));
+		await worker.api.partial(snapshot);
+		await worker.api.partial(snapshot);
+
+		assert.deepEqual(
+			worker.received.map(({ method, path }) => `${method} ${path}`),
+			[
+				"PUT /turn/turn-1/partial?first=true",
+				"PUT /turn/turn-1/partial?first=true",
+				"PUT /turn/turn-1/partial",
+			],
+		);
+	} finally {
+		worker.close();
+	}
+});
+
+void test("a lease renewal posts to the turn's lease, and a stop or a failure it gets does not fail it", async () => {
+	const worker = await fakeWorker([
+		{ status: 204 },
+		{ status: 409, body: { type: "about:blank", status: 409, stop: "developer" } },
+		{ status: 409 },
+		{ status: 500 },
+	]);
+	try {
+		await worker.api.lease();
+		await worker.api.lease();
+		await worker.api.lease();
+		await worker.api.lease();
+
+		assert.deepEqual(
+			worker.received.map(({ method, path, authorization }) => [method, path, authorization]),
+			Array.from({ length: 4 }, () => ["POST", "/turn/turn-1/lease", "Bearer turn-token"]),
+		);
+		assert.deepEqual(worker.stops, ["developer", "lease"]);
 	} finally {
 		worker.close();
 	}
@@ -319,6 +441,7 @@ void test("a command the worker did not answer is not run again", async () => {
 		);
 		assert.equal(worker.received.length, 1);
 		await assert.rejects(worker.api.read({ path: "INDEX.md" }, signal), isLeaseLost);
+		assert.deepEqual(worker.stops, ["lease"]);
 	} finally {
 		worker.close();
 	}
@@ -442,7 +565,13 @@ async function archiveWorker(sized: boolean) {
 	const address = server.address();
 	assert.ok(address !== null && typeof address !== "string");
 	return {
-		api: httpTurnApi(`http://127.0.0.1:${address.port}`, "turn-1", "turn-token", [0, 0, 0]),
+		api: httpTurnApi(
+			`http://127.0.0.1:${address.port}`,
+			"turn-1",
+			"turn-token",
+			() => undefined,
+			[0, 0, 0],
+		),
 		close: () => server.close(),
 	};
 }

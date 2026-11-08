@@ -36,6 +36,35 @@ function trend(values: number[]) {
 	};
 }
 
+/**
+ * Asks one question at `base`, a workspace's `/mentor` path, as the owner of `token`: the ids of the
+ * turn and of the question, or the refusal's `HTTP_<status>`.
+ */
+export async function submitTurn(
+	base: string,
+	token: string,
+	question: { requestId: string; text: string; parentEntryId?: string },
+	signal?: AbortSignal,
+): Promise<{ id: string; questionId: string } | { status: string }> {
+	const response = await fetch(`${base}/turns`, {
+		method: "POST",
+		headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+		signal,
+		body: JSON.stringify(question),
+	});
+	if (!response.ok) {
+		await response.arrayBuffer();
+		return { status: `HTTP_${response.status}` };
+	}
+	const body = asRecord(parseJson(await response.text()), "submission");
+	const { id } = asRecord(body.turn, "turn");
+	const questionId = asRecord(body.question, "question").id;
+	if (typeof id !== "string" || typeof questionId !== "string") {
+		throw new Error("MISSING_TURN_ID");
+	}
+	return { id, questionId };
+}
+
 /** Finite open cohort: initial arrivals ignore completions; later turns follow each person's conversation. */
 export async function runCapacityChat(options: {
 	base: string;
@@ -228,30 +257,24 @@ export async function runCapacityChat(options: {
 								turn.completion.resolve("TIMEOUT");
 							}, options.turnTimeoutMs ?? 600_000);
 							try {
-								const response = await fetch(`${base}/turns`, {
-									method: "POST",
-									headers: headers(user),
-									signal: AbortSignal.any([
-										abort.signal,
-										AbortSignal.timeout(options.turnTimeoutMs ?? 600_000),
-									]),
-									body: JSON.stringify({
+								const submitted = await submitTurn(
+									base,
+									tokens[user] ?? "",
+									{
 										requestId: turn.requestId,
 										text: `capacity-bench:${turn.requestId} capacity-replay:${options.runLabel ?? "test"}:${user}:${index} Describe one practice in this synthetic course.`,
 										...(parent === null ? {} : { parentEntryId: parent }),
-									}),
-								});
-								if (!response.ok) {
-									await response.arrayBuffer();
-									turn.status = `HTTP_${response.status}`;
+									},
+									AbortSignal.any([
+										abort.signal,
+										AbortSignal.timeout(options.turnTimeoutMs ?? 600_000),
+									]),
+								);
+								if ("status" in submitted) {
+									turn.status = submitted.status;
 									throw new Error(turn.status);
 								}
-								const body = asRecord(parseJson(await response.text()), "submission");
-								const { id } = asRecord(body.turn, "turn");
-								const questionId = asRecord(body.question, "question").id;
-								if (typeof id !== "string" || typeof questionId !== "string") {
-									throw new Error("MISSING_TURN_ID");
-								}
+								const { id, questionId } = submitted;
 								turn.id = id;
 								turn.questionId = questionId;
 								parent ??= questionId;

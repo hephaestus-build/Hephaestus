@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
@@ -37,7 +38,7 @@ import tools.jackson.databind.node.ObjectNode;
 @RequestMapping("/internal/llm/turn/{turnId}/sandbox")
 @PreAuthorize("isAuthenticated()")
 @ConditionalOnWorkerRole
-@Profile(HephHostConfiguration.PROFILES)
+@Profile(HephTurnConfiguration.PROFILES)
 @WorkspaceAgnostic("The turn credential binds the workspace, the developer and the conversation of every call")
 public class HephTurnSandboxController {
 
@@ -50,13 +51,12 @@ public class HephTurnSandboxController {
     static final MediaType ARCHIVE = MediaType.parseMediaType("application/x-tar");
 
     private final HephTurnContexts contexts;
-    private final HephTurnDispatcher dispatcher;
+    private final HephTurns turns;
     private final TurnContextFolder folder;
 
-    public HephTurnSandboxController(
-            HephTurnContexts contexts, HephTurnDispatcher dispatcher, TurnContextFolder folder) {
+    public HephTurnSandboxController(HephTurnContexts contexts, HephTurns turns, TurnContextFolder folder) {
         this.contexts = contexts;
-        this.dispatcher = dispatcher;
+        this.turns = turns;
         this.folder = folder;
     }
 
@@ -69,7 +69,7 @@ public class HephTurnSandboxController {
     @PostMapping("/document")
     public ObjectNode document(
             @PathVariable UUID turnId, @Valid @RequestBody DocumentRequest request, Authentication authentication) {
-        TurnAttempt turn = HephTurnController.turn(dispatcher, turnId, authentication);
+        TurnAttempt turn = HephTurnController.turn(turns, turnId, authentication);
         return HephToolCalls.logged(
                 turn,
                 "read",
@@ -78,31 +78,29 @@ public class HephTurnSandboxController {
                 HephTurnSandboxController::outcome);
     }
 
-    /** The attempt's built documents as one archive, which the host puts into its tools Pod. */
+    /** The attempt's built documents as one archive, which the loop puts into its tools Pod. */
     @GetMapping("/documents")
     public ResponseEntity<byte[]> documents(@PathVariable UUID turnId, Authentication authentication) {
-        TurnAttempt turn = HephTurnController.turn(dispatcher, turnId, authentication);
+        TurnAttempt turn = HephTurnController.turn(turns, turnId, authentication);
         return ResponseEntity.ok().contentType(ARCHIVE).body(folder.documentsArchive(contexts.folderDocuments(turn)));
     }
 
     /** The attempt's tools Pod: its address and nonce, or a refusal. */
     @PostMapping("/bind")
     public ObjectNode bind(@PathVariable UUID turnId, Authentication authentication) {
-        TurnAttempt turn = HephTurnController.turn(dispatcher, turnId, authentication);
+        AttemptJwt token = HephTurnController.token(turnId, authentication);
+        TurnAttempt turn = turns.held(token, false);
         return HephToolCalls.logged(
-                turn,
-                "bind",
-                () -> folder.bind(turn, dispatcher.deadline(turn.turnId(), turn.attempt())),
-                HephTurnSandboxController::outcome);
+                turn, "bind", () -> folder.bind(turn, token.workDeadline()), HephTurnSandboxController::outcome);
     }
 
     public record DiscardRequest(@NotBlank @Size(max = 253) String id) {}
 
-    /** The host found the attempt's tools Pod broken: the next bind gets a new one. */
+    /** The loop found the attempt's tools Pod broken: the next bind gets a new one. */
     @PostMapping("/discard")
     public ResponseEntity<Void> discard(
             @PathVariable UUID turnId, @Valid @RequestBody DiscardRequest request, Authentication authentication) {
-        TurnAttempt turn = HephTurnController.turn(dispatcher, turnId, authentication);
+        TurnAttempt turn = HephTurnController.turn(turns, turnId, authentication);
         folder.discard(turn, request.id());
         return ResponseEntity.noContent().build();
     }
@@ -116,11 +114,12 @@ public class HephTurnSandboxController {
     @PostMapping("/load")
     public ResponseEntity<?> load(
             @PathVariable UUID turnId, @Valid @RequestBody LoadRequest request, Authentication authentication) {
-        TurnAttempt turn = HephTurnController.turn(dispatcher, turnId, authentication);
+        AttemptJwt token = HephTurnController.token(turnId, authentication);
+        TurnAttempt turn = turns.held(token, false);
         TurnContextFolder.Load load = HephToolCalls.logged(
                 turn,
                 "load",
-                () -> folder.load(turn, dispatcher.deadline(turn.turnId(), turn.attempt()), request.path()),
+                () -> folder.load(turn, token.workDeadline(), request.path()),
                 answered -> outcome(
                         switch (answered) {
                             case TurnContextFolder.Refused refused -> refused.answer();

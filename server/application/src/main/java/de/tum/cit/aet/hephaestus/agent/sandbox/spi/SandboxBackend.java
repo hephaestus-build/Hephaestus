@@ -94,9 +94,7 @@ public interface SandboxBackend {
 
     enum Kind {
         /** A practice review attempt: it runs to its own end within its deadlines. */
-        REVIEW,
-        /** A Heph host: it runs until it is removed. */
-        HOST
+        REVIEW
     }
 
     enum Stage {
@@ -149,18 +147,16 @@ public interface SandboxBackend {
     /**
      * A sandbox as {@link #list} finds it.
      *
-     * @param id the review job, or the Heph host, it serves
+     * @param id the review job it serves
      * @param attempt the claimed attempt it runs, when it recorded one
      * @param created when its newest part was created; null when the runtime does not say, which counts as now
-     * @param creatorGone whether the worker that launched it is positively gone: a Heph host is useless without it
      */
     record Listed(
             Handle handle,
             Kind kind,
             UUID id,
             @Nullable Integer attempt,
-            @Nullable Instant created,
-            boolean creatorGone) {}
+            @Nullable Instant created) {}
 
     /**
      * @param timedOut whether the deadline passed before the stage

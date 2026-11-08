@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import type { Socket } from "node:net";
 import test from "node:test";
 import timers, { setTimeout as sleep } from "node:timers/promises";
 
@@ -14,12 +12,14 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import {
+	asAssignment,
 	CONTEXT_FOLDER_TOOL_NAMES,
 	HEPH_TOOL_NAMES,
 	isRecord,
-	parseCommand,
+	type PartialSnapshot,
 	type SandboxExecAnswer,
 	type SandboxReadAnswer,
+	type StopReason,
 	type TurnEnd,
 } from "../../../main/resources/agent/heph-host-protocol.ts";
 import {
@@ -27,11 +27,12 @@ import {
 	createHephHost,
 	failureSummary,
 	httpTurnApi,
+	leaseLost,
 	type LinkAnswer,
 	type ModelFactory,
 	partialStream,
 	proxyModels,
-	runCommands,
+	pullTurns,
 	THINKING_STAGE,
 	tooLarge,
 	turnStage,
@@ -388,6 +389,28 @@ void test("the situation reaches every model request last and is never stored", 
 	assert.deepEqual(tool?.messages, [{ content: [{ type: "text", text: "let me look" }] }]);
 });
 
+void test("a turn's session runs with the system prompt of its context", async () => {
+	const requests: FauxRequest[] = [];
+	const worker = fakeWorker(contextOf([], "question", "You are Hephaestus, for this workspace."));
+
+	const end = await runTurn(
+		worker,
+		fauxModels([
+			(context) => {
+				requests.push(context);
+				return faux.fauxAssistantMessage("done");
+			},
+		]),
+	);
+
+	assert.equal(end.outcome, "DONE");
+	// Pi's request carries the system prompt as the preamble of its leading system message.
+	const [first] = requests[0]?.messages ?? [];
+	assert.ok(isRecord(first) && isRecord(first.sections));
+	assert.equal(first.role, "system");
+	assert.equal(first.sections.preamble, "You are Hephaestus, for this workspace.");
+});
+
 void test("text before a tool call stays in its message, and a message without a tool call ends the turn as written", async () => {
 	// The host shows what the model wrote and adds nothing: a turn that ends on a sentence about a next read ended
 	// because the model stopped there, not because the host cut it off (system.md § Your context has the rule).
@@ -701,7 +724,6 @@ void test("a page and an output the worker cut reach the model as the worker wro
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Hephaestus.",
 		turnApi: () => ({
 			...api,
 			exec: async (request) => {
@@ -764,7 +786,6 @@ void test("a failed, timed out or silent command reads as Pi's bash words it, an
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Hephaestus.",
 		turnApi: () => ({
 			...api,
 			exec: async (request) => {
@@ -1357,11 +1378,11 @@ void test("a conversation on the smallest window Hephaestus takes is shortened, 
 		return faux.fauxAssistantMessage("the answer");
 	};
 	const limits = { contextWindow: 32_768, maxTokens: 8192 };
+	const systemPrompt = `You are Hephaestus. ${"p".repeat(24_000)}`;
 	const runAt32k = async (worker: FakeWorker) => {
 		const host = createHephHost({
 			cwd: CWD,
 			agentDir: AGENT_DIR,
-			systemPrompt: `You are Hephaestus. ${"p".repeat(24_000)}`,
 			turnApi: () => worker.api(),
 			models: fauxModels([step, step, step, step], 100_000, false, limits),
 			partialIntervalMs: 10,
@@ -1372,7 +1393,7 @@ void test("a conversation on the smallest window Hephaestus takes is shortened, 
 		return end;
 	};
 
-	const first = fakeWorker(contextOf(earlier, "the question"));
+	const first = fakeWorker(contextOf(earlier, "the question", systemPrompt));
 	const end = await runAt32k(first);
 
 	assert.equal(end.outcome, "DONE", end.detail ?? "");
@@ -1382,7 +1403,7 @@ void test("a conversation on the smallest window Hephaestus takes is shortened, 
 		"the summary is stored",
 	);
 	for (const question of ["the next question", "and one more"]) {
-		const next = fakeWorker(contextOf(first.ledger(), question));
+		const next = fakeWorker(contextOf(first.ledger(), question, systemPrompt));
 		const later = await runAt32k(next);
 		assert.equal(later.outcome, "DONE", later.detail ?? "");
 		first.appended.push(...next.appended);
@@ -1862,7 +1883,6 @@ void test("a stop before the session exists ends the turn stopped without a mode
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Hephaestus.",
 		turnApi: () => ({
 			...api,
 			context: async () => {
@@ -1948,7 +1968,6 @@ void test("two conversations run at once, each with its own credential on its ow
 		const host = createHephHost({
 			cwd: CWD,
 			agentDir: AGENT_DIR,
-			systemPrompt: "You are Hephaestus.",
 			turnApi: (turnId) => (turnId === "main" ? main : thread).api(),
 			models: proxyModels(proxy.url, AGENT_DIR),
 		});
@@ -1993,7 +2012,6 @@ void test("a summary asks for thinking off through the standard control only, wi
 		const host = createHephHost({
 			cwd: CWD,
 			agentDir: AGENT_DIR,
-			systemPrompt: "You are Hephaestus.",
 			turnApi: () => worker.api(),
 			models: proxyModels(proxy.url, AGENT_DIR),
 		});
@@ -2051,7 +2069,6 @@ async function turnAgainst(proxyUrl: string, protocol = "openai-completions"): P
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Hephaestus.",
 		turnApi: () => worker.api(),
 		models: proxyModels(proxyUrl, AGENT_DIR),
 	});
@@ -2173,45 +2190,58 @@ void test("the cache breakpoint moves from the situation to the end of the store
 	);
 });
 
-void test("only well-formed commands are acted on", () => {
-	assert.deepEqual(parseCommand('{"type":"start","turnId":"t","attempt":1,"token":"k"}'), {
-		type: "start",
-		turnId: "t",
-		attempt: 1,
-		token: "k",
-	});
-	assert.deepEqual(parseCommand('{"type":"stop","turnId":"t","attempt":2,"reason":"developer"}'), {
-		type: "stop",
+void test("only an assignment with a turn, a whole attempt from 1 and a credential is started", () => {
+	assert.deepEqual(asAssignment({ turnId: "t", attempt: 2, token: "k", type: "start" }), {
 		turnId: "t",
 		attempt: 2,
-		reason: "developer",
+		token: "k",
 	});
-	assert.equal(parseCommand('{"type":"stop","turnId":"t","attempt":1,"reason":"bored"}'), null);
-	assert.equal(parseCommand('{"type":"start","turnId":"t","attempt":1}'), null);
-	assert.equal(parseCommand('{"type":"start","turnId":"t","token":"k"}'), null);
-	assert.equal(parseCommand("not json"), null);
+	for (const refused of [
+		{ turnId: "", attempt: 1, token: "k" },
+		{ attempt: 1, token: "k" },
+		{ turnId: "t", attempt: 0, token: "k" },
+		{ turnId: "t", attempt: 1.5, token: "k" },
+		{ turnId: "t", attempt: "1", token: "k" },
+		{ turnId: "t", attempt: 1, token: "" },
+		{ turnId: "t", attempt: 1 },
+		null,
+		"t",
+		[],
+	]) {
+		assert.equal(asAssignment(refused), null, JSON.stringify(refused));
+	}
 });
 
-/** A fake worker whose `read` waits until the turn is stopped, and the host running one turn on it. */
-async function turnInATool(worker?: FakeWorker) {
+/**
+ * A fake worker whose `read` waits until the turn is stopped, and the host running one turn on it. Each lease renewal
+ * once the read started runs `lease` with the stop that the turn's calls report to.
+ */
+async function turnInATool(
+	lease: (onStop: (reason: StopReason) => void) => void = () => undefined,
+	leaseIntervalMs?: number,
+) {
 	const toolStarted = Promise.withResolvers<undefined>();
-	const blocked =
-		worker ??
-		fakeWorker(contextOf([], "question"), async (_request, signal) => {
-			toolStarted.resolve(undefined);
-			const aborted = Promise.withResolvers<SandboxReadAnswer>();
-			signal.addEventListener("abort", () => aborted.reject(new Error("stopped")));
-			return aborted.promise;
-		});
+	let inTool = false;
+	const blocked = fakeWorker(contextOf([], "question"), async (_request, signal) => {
+		inTool = true;
+		toolStarted.resolve(undefined);
+		const aborted = Promise.withResolvers<SandboxReadAnswer>();
+		signal.addEventListener("abort", () => aborted.reject(new Error("stopped")));
+		return aborted.promise;
+	});
 	let ends = 0;
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Hephaestus.",
-		turnApi: () => {
+		turnApi: (_turnId, _token, onStop) => {
 			const api = blocked.api();
 			return {
 				...api,
+				lease: async () => {
+					if (inTool) {
+						lease(onStop);
+					}
+				},
 				end: async (end) => {
 					ends += 1;
 					await api.end(end);
@@ -2225,6 +2255,7 @@ async function turnInATool(worker?: FakeWorker) {
 					{ stopReason: "toolUse" },
 				),
 		]),
+		leaseIntervalMs,
 	});
 	const turnId = crypto.randomUUID();
 	host.start(turnId, 1, "turn-token");
@@ -2259,6 +2290,110 @@ void test("a stop for a lost lease ends the turn without a word to the worker", 
 	assert.equal(ends(), 0);
 });
 
+void test("a running turn renews its lease, and renews it no more once it ended", async () => {
+	let leases = 0;
+	const renewed = Promise.withResolvers<undefined>();
+	const { host, turnId, worker } = await turnInATool(() => {
+		leases += 1;
+		if (leases === 2) {
+			renewed.resolve(undefined);
+		}
+	}, 5);
+	await renewed.promise;
+
+	host.stop(turnId, 1, "developer");
+	const end = await worker.waitForEnd();
+	await host.idle();
+	const renewals = leases;
+	await sleep(50);
+
+	assert.equal(end.outcome, "STOPPED");
+	assert.equal(leases, renewals);
+});
+
+void test("a stop that the worker answers a lease renewal with ends the turn stopped with its tool call", async () => {
+	const { host, worker, ends } = await turnInATool((onStop) => onStop("developer"), 5);
+
+	const end = await worker.waitForEnd();
+	await host.idle();
+
+	assert.equal(end.outcome, "STOPPED");
+	assert.equal(ends(), 1);
+	const calls = messages(worker.appended, "assistant").flatMap((entry) =>
+		entry.message.role === "assistant"
+			? entry.message.content.filter((block) => block.type === "toolCall")
+			: [],
+	);
+	assert.notEqual(calls.length, 0);
+});
+
+void test("a deadline that the worker answers a lease renewal with ends the turn failed and sends none of its entries", async () => {
+	const { host, worker } = await turnInATool((onStop) => onStop("deadline"), 5);
+
+	const end = await worker.waitForEnd();
+	await host.idle();
+
+	assert.deepEqual(end, {
+		outcome: "FAILED",
+		entries: [],
+		reason: "DEADLINE",
+		detail: "deadline",
+	});
+});
+
+void test("an unchanged partial answer is sent again, and no more once the stream stopped", async () => {
+	const sent: PartialSnapshot[] = [];
+	const api: TurnApi = {
+		...fakeWorker(contextOf([], "question")).api(),
+		partial: async (snapshot) => {
+			sent.push(snapshot);
+		},
+	};
+	const partials = partialStream(api, 5, 40);
+	partials.observe({ type: "turn_start" });
+	await timers.setTimeout(150);
+	assert.ok(sent.length >= 2, `sent ${sent.length}`);
+	assert.ok(sent.every((snapshot) => snapshot.stage === sent[0]?.stage));
+
+	partials.stop();
+	await partials.settled();
+	const count = sent.length;
+	await timers.setTimeout(150);
+	assert.equal(sent.length, count);
+});
+
+void test("a stop that the turn's first call learns of ends the turn stopped, not abandoned", async () => {
+	const worker = fakeWorker(contextOf([], "question"));
+	const host = createHephHost({
+		cwd: CWD,
+		agentDir: AGENT_DIR,
+		turnApi: (_turnId, _token, onStop) => ({
+			...worker.api(),
+			context: async () => {
+				// As httpTurnApi does with a 409 that names a stop: report it, then fail the call.
+				onStop("developer");
+				throw leaseLost("the turn must stop");
+			},
+		}),
+		models: fauxModels([]),
+	});
+	host.start(crypto.randomUUID(), 1, "turn-token");
+
+	const end = await worker.waitForEnd();
+	await host.idle();
+
+	assert.equal(end.outcome, "STOPPED");
+});
+
+void test("a lost lease that a renewal learns of ends the turn without a word to the worker", async () => {
+	const { host, ends } = await turnInATool((onStop) => onStop("lease"), 5);
+
+	await host.idle();
+
+	assert.equal(host.running, 0);
+	assert.equal(ends(), 0);
+});
+
 void test("a later attempt of a running turn stops the earlier one and then runs with its own credential", async () => {
 	const toolStarted = Promise.withResolvers<undefined>();
 	const first = fakeWorker(contextOf([], "question"), async (_request, signal) => {
@@ -2270,12 +2405,15 @@ void test("a later attempt of a running turn stops the earlier one and then runs
 	const second = fakeWorker(contextOf([], "question"));
 	const credentials: string[] = [];
 	let firstEnds = 0;
+	let stopFirst: ((reason: StopReason) => void) | undefined;
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Hephaestus.",
-		turnApi: (_turnId, token) => {
+		turnApi: (_turnId, token, onStop) => {
 			credentials.push(token);
+			if (token === "attempt-1") {
+				stopFirst = onStop;
+			}
 			const api = (token === "attempt-1" ? first : second).api();
 			return token === "attempt-1"
 				? {
@@ -2302,6 +2440,9 @@ void test("a later attempt of a running turn stops the earlier one and then runs
 
 	host.start(turnId, 2, "attempt-2");
 	host.start(turnId, 1, "attempt-1");
+	// A stop that a call of the lost attempt learns of is for that attempt only.
+	assert.ok(stopFirst !== undefined);
+	stopFirst("developer");
 	const end = await second.waitForEnd();
 	await host.idle();
 
@@ -2320,7 +2461,6 @@ void test("an end the worker refuses for its size is sent again with the context
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Hephaestus.",
 		turnApi: () => {
 			const api = worker.api();
 			return {
@@ -2362,148 +2502,224 @@ void test("an end the worker refuses for its size is sent again with the context
 	assert.ok(next.appended.every((entry) => entry.type !== "context_edit"));
 });
 
-/** One final, unmasked server frame with a payload shorter than 126 bytes. */
-function frame(opcode: number, payload = ""): Buffer {
-	const bytes = Buffer.from(payload);
-	return Buffer.concat([Buffer.from([0x80 + opcode, bytes.length]), bytes]);
-}
+type PullAnswer = { status: 200; body: unknown } | { status: 204 | 401 | 503 };
 
-void test("the command channel carries the host's credential, runs its commands, answers pings and ends when it closes", async () => {
-	const server = createServer();
-	const connected = Promise.withResolvers<{
-		authorization: string | undefined;
-		path: string | undefined;
-		client: Socket;
-	}>();
-	server.on("upgrade", (request: IncomingMessage, client: Socket) => {
-		const accept = createHash("sha1")
-			.update(`${String(request.headers["sec-websocket-key"])}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
-			.digest("base64");
-		client.write(
-			"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" +
-				`Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
-		);
-		connected.resolve({ authorization: request.headers.authorization, path: request.url, client });
-	});
-	server.listen(0, "127.0.0.1");
-	await once(server, "listening");
-	const address = server.address();
-	assert.ok(address !== null && typeof address === "object");
-	const commands: string[] = [];
-	const started = Promise.withResolvers<undefined>();
-	const stopped = Promise.withResolvers<undefined>();
-	try {
-		const channel = runCommands(
-			`http://127.0.0.1:${address.port}/internal/llm/runtime/host-1`,
-			"host-token",
-			{
-				start: (turnId, attempt, token) => {
-					commands.push(`start ${turnId} ${attempt} ${token}`);
-					started.resolve(undefined);
-				},
-				stop: (turnId, attempt, reason) => {
-					commands.push(`stop ${turnId} ${attempt} ${reason}`);
-					stopped.resolve(undefined);
-				},
-			},
-		);
-		const { authorization, path, client } = await connected.promise;
-		assert.equal(authorization, "Bearer host-token");
-		assert.equal(path, "/internal/llm/runtime/host-1/commands");
-
-		client.write(
-			frame(0x1, JSON.stringify({ type: "start", turnId: "t1", attempt: 1, token: "turn-token" })),
-		);
-		await started.promise;
-		client.write(
-			frame(0x1, JSON.stringify({ type: "stop", turnId: "t1", attempt: 1, reason: "developer" })),
-		);
-		await stopped.promise;
-		// The worker declares a host lost that answers no ping; Node's client answers without host code.
-		client.write(frame(0x9));
-		const received: unknown[] = await once(client, "data");
-		const pong = received[0];
-		assert.ok(Buffer.isBuffer(pong));
-		assert.equal(pong[0], 0x8a, "a final pong frame");
-		client.destroy();
-		await channel;
-
-		assert.deepEqual(commands, ["start t1 1 turn-token", "stop t1 1 developer"]);
-	} finally {
-		server.closeAllConnections();
-		server.close();
-	}
-});
-
-void test("a command channel that did not open is tried again, and the host runs commands once it opens", async () => {
-	const server = createServer();
-	let upgrades = 0;
-	const connected = Promise.withResolvers<Socket>();
-	server.on("upgrade", (request: IncomingMessage, client: Socket) => {
-		upgrades += 1;
-		if (upgrades === 1) {
-			// As a worker that cannot take the host yet: the first try is refused before it opens.
-			client.end("HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n");
+/**
+ * The workers' gateway as the loop pulls from it: each pull gets the next of `answers`, and a pull past them waits
+ * until the server closes. Each pull is recorded with its credential and the time it arrived.
+ */
+async function gateway(answers: (PullAnswer | Promise<PullAnswer>)[]) {
+	const pulls: { method: string; path: string; authorization: string; at: number }[] = [];
+	const server = createServer((request, response) => {
+		pulls.push({
+			method: request.method ?? "",
+			path: request.url ?? "",
+			authorization: request.headers.authorization ?? "",
+			at: performance.now(),
+		});
+		const answer = answers.shift();
+		if (answer === undefined) {
 			return;
 		}
-		const accept = createHash("sha1")
-			.update(`${String(request.headers["sec-websocket-key"])}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
-			.digest("base64");
-		client.write(
-			"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" +
-				`Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
-		);
-		connected.resolve(client);
+		void (async () => {
+			const { status, ...rest } = await answer;
+			if ("body" in rest) {
+				response
+					.writeHead(status, { "content-type": "application/json" })
+					.end(JSON.stringify(rest.body));
+			} else {
+				response.writeHead(status).end();
+			}
+		})();
 	});
 	server.listen(0, "127.0.0.1");
 	await once(server, "listening");
 	const address = server.address();
 	assert.ok(address !== null && typeof address === "object");
-	const started = Promise.withResolvers<string>();
-	try {
-		const channel = runCommands(
-			`http://127.0.0.1:${address.port}/internal/llm/runtime/host-1`,
-			"host-token",
-			{ start: (turnId) => started.resolve(turnId), stop: () => undefined },
-			[10, 10],
-		);
-		const client = await connected.promise;
-		client.write(
-			frame(0x1, JSON.stringify({ type: "start", turnId: "t1", attempt: 1, token: "turn-token" })),
-		);
-		assert.equal(await started.promise, "t1");
-		client.destroy();
-		await channel;
+	return {
+		url: `http://127.0.0.1:${address.port}/internal/llm`,
+		pulls,
+		close: () => {
+			server.closeAllConnections();
+			server.close();
+		},
+	};
+}
 
-		assert.equal(upgrades, 2, "a channel that opened and closed is not tried again");
+/** A host that records each start and runs each turn until the test ends one. */
+function pullingHost() {
+	const started: string[] = [];
+	let ended = Promise.withResolvers<undefined>();
+	const host = {
+		running: 0,
+		start: (turnId: string, attempt: number, token: string) => {
+			started.push(`${turnId} ${attempt} ${token}`);
+			host.running += 1;
+		},
+		settled: async () => ended.promise,
+	};
+	const endTurn = () => {
+		host.running -= 1;
+		ended.resolve(undefined);
+		ended = Promise.withResolvers<undefined>();
+	};
+	return { host, started, endTurn };
+}
+
+async function until(condition: () => boolean): Promise<void> {
+	while (!condition()) {
+		await sleep(2);
+	}
+}
+
+function assignment(turnId: string, attempt: number, token: string): PullAnswer {
+	return { status: 200, body: { turnId, attempt, token } };
+}
+
+/** The time between each pull and the one before it. */
+function intervals(times: readonly number[]): number[] {
+	return times.slice(1).map((time, index) => time - (times[index] ?? time));
+}
+
+void test("the loop starts each assignment with its credential, and pulls again at once after a pull without one", async () => {
+	const worker = await gateway([
+		assignment("t1", 1, "k1"),
+		{ status: 204 },
+		{ status: 200, body: { turnId: "t2", attempt: 0, token: "k" } },
+		assignment("t2", 3, "k2"),
+	]);
+	const { host, started } = pullingHost();
+	const stopping = new AbortController();
+	try {
+		const pulling = pullTurns(worker.url, "loop-secret", host, 10, stopping.signal);
+		await until(() => worker.pulls.length === 5);
+		stopping.abort();
+		worker.close();
+		await pulling;
+
+		assert.deepEqual(started, ["t1 1 k1", "t2 3 k2"], "a malformed assignment is not started");
+		for (const pull of worker.pulls) {
+			assert.deepEqual(
+				[pull.method, pull.path, pull.authorization],
+				["POST", "/internal/llm/turn-assignments", "Bearer loop-secret"],
+			);
+		}
 	} finally {
-		server.closeAllConnections();
-		server.close();
+		stopping.abort();
+		worker.close();
 	}
 });
 
-void test("a command channel that never opens ends after its tries", async () => {
-	const server = createServer();
-	let upgrades = 0;
-	server.on("upgrade", (_request: IncomingMessage, client: Socket) => {
-		upgrades += 1;
-		client.end("HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n");
-	});
-	server.listen(0, "127.0.0.1");
-	await once(server, "listening");
-	const address = server.address();
-	assert.ok(address !== null && typeof address === "object");
+void test("a pull that a worker refuses waits longer after each refusal in a row, up to the last delay", async () => {
+	const worker = await gateway([
+		{ status: 503 },
+		{ status: 401 },
+		{ status: 503 },
+		assignment("t1", 1, "k1"),
+	]);
+	const { host, started } = pullingHost();
+	const stopping = new AbortController();
 	try {
-		await runCommands(
-			`http://127.0.0.1:${address.port}/internal/llm/runtime/host-1`,
-			"host-token",
-			{ start: () => undefined, stop: () => undefined },
-			[10, 10],
+		const pulling = pullTurns(
+			worker.url,
+			"loop-secret",
+			host,
+			10,
+			stopping.signal,
+			undefined,
+			[20, 40],
 		);
+		await until(() => worker.pulls.length === 5);
+		stopping.abort();
+		worker.close();
+		await pulling;
 
-		assert.equal(upgrades, 3);
+		assert.deepEqual(started, ["t1 1 k1"]);
+		const [first = 0, second = 0, third = 0] = intervals(worker.pulls.map(({ at }) => at));
+		// A timer may fire a millisecond before the clock reads its delay.
+		assert.ok(first >= 19, `waited ${first} ms after the first refusal`);
+		assert.ok(second >= 39, `waited ${second} ms after the second refusal`);
+		assert.ok(third >= 39, `waited ${third} ms after the third refusal`);
 	} finally {
-		server.closeAllConnections();
-		server.close();
+		stopping.abort();
+		worker.close();
+	}
+});
+
+void test("a pull that reaches no worker waits longer after each failure in a row, up to the last delay", async () => {
+	const unreachable = await gateway([]);
+	unreachable.close();
+	const beats: number[] = [];
+	const { host } = pullingHost();
+	const stopping = new AbortController();
+	const pulling = pullTurns(
+		unreachable.url,
+		"loop-secret",
+		host,
+		10,
+		stopping.signal,
+		() => {
+			beats.push(performance.now());
+		},
+		[20, 40],
+	);
+	await until(() => beats.length === 4);
+	stopping.abort();
+	await pulling;
+
+	const [first = 0, second = 0, third = 0] = intervals(beats);
+	assert.ok(first >= 19, `waited ${first} ms after the first failure`);
+	assert.ok(second >= 39, `waited ${second} ms after the second failure`);
+	assert.ok(third >= 39, `waited ${third} ms after the third failure`);
+});
+
+void test("a loop without room for another turn pulls none until one of its turns ends", async () => {
+	const worker = await gateway([assignment("t1", 1, "k1"), assignment("t2", 1, "k2")]);
+	const { host, started, endTurn } = pullingHost();
+	const stopping = new AbortController();
+	try {
+		const pulling = pullTurns(worker.url, "loop-secret", host, 1, stopping.signal);
+		await until(() => started.length === 1);
+		await sleep(50);
+		assert.equal(worker.pulls.length, 1, "no pull while the loop runs as many turns as it takes");
+
+		endTurn();
+		await until(() => started.length === 2);
+		stopping.abort();
+		endTurn();
+		await pulling;
+
+		assert.deepEqual(started, ["t1 1 k1", "t2 1 k2"]);
+		assert.equal(worker.pulls.length, 2);
+	} finally {
+		stopping.abort();
+		worker.close();
+	}
+});
+
+void test("a loop told to stop ends after the pull in flight and starts the turn that pull brought", async () => {
+	const answered = Promise.withResolvers<PullAnswer>();
+	const worker = await gateway([answered.promise]);
+	const { host, started } = pullingHost();
+	const stopping = new AbortController();
+	try {
+		let ended = false;
+		const pulling = (async () => {
+			await pullTurns(worker.url, "loop-secret", host, 10, stopping.signal);
+			ended = true;
+		})();
+		await until(() => worker.pulls.length === 1);
+		stopping.abort();
+		await sleep(20);
+		assert.equal(ended, false, "the loop waits for the pull in flight");
+
+		answered.resolve(assignment("t1", 1, "k1"));
+		await pulling;
+
+		assert.deepEqual(started, ["t1 1 k1"]);
+		assert.equal(worker.pulls.length, 1);
+	} finally {
+		stopping.abort();
+		worker.close();
 	}
 });

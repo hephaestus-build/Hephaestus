@@ -99,8 +99,10 @@ A missing or invalid manifest, an unknown provider instance, or an incomplete er
    Only its mounted path goes in configuration.
 3. If restored receipts name mounted evidence stores, make their original volumes available for cleanup.
    Use one isolated maintenance worker only for evidence deletion.
-   A maintenance worker can run with `HEPHAESTUS_AGENT_ENABLED=false`, `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX=0`, `HEPHAESTUS_RUNTIME_SERVER_ENABLED=false` and `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false`.
-   This permits its deletion poll without claiming reviews or conversation turns.
+   A maintenance worker can run with `HEPHAESTUS_AGENT_ENABLED=false`, `HEPHAESTUS_RUNTIME_SERVER_ENABLED=false` and `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false`.
+   This permits its deletion poll without claiming reviews.
+   It claims a conversation turn only when a conversation loop pulls one from it.
+   Do not let a conversation loop reach it.
    Keep provider egress denied.
    An unavailable store keeps recovery blocked.
    Follow [An evidence store is offline](./production-operations-runbook#an-evidence-store-is-offline).

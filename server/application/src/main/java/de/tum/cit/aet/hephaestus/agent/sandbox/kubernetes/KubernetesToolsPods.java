@@ -10,13 +10,12 @@ import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceQuota;
 import io.fabric8.kubernetes.api.model.batch.v1.Job;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import org.jspecify.annotations.Nullable;
@@ -42,8 +41,8 @@ public class KubernetesToolsPods implements ToolsPods {
     private final KubernetesWorker worker;
     private final String image;
     private final SandboxExits exits;
-    private final KubernetesLiveWorkers liveWorkers;
     private final KubernetesSandboxCache cache;
+    private final Clock clock;
     private final ReentrantLock quotaAdmission = new ReentrantLock();
     private @Nullable Long quotaRefusedAt;
 
@@ -51,22 +50,16 @@ public class KubernetesToolsPods implements ToolsPods {
             KubernetesPods pods,
             KubernetesSandboxJobs jobs,
             String image,
-            KubernetesLiveWorkers liveWorkers,
             SandboxExits exits,
-            KubernetesSandboxCache cache) {
+            KubernetesSandboxCache cache,
+            Clock clock) {
         this.pods = pods;
         this.jobs = jobs;
         this.worker = jobs.worker();
         this.image = image;
-        this.liveWorkers = liveWorkers;
         this.exits = exits;
         this.cache = cache;
-    }
-
-    /** The worker's Pod name: a restarted worker container keeps it, so its next start removes what a crash left. */
-    @Override
-    public String workerInstance() {
-        return KubernetesWorker.labelValue(worker.properties().podName());
+        this.clock = clock;
     }
 
     @Override
@@ -75,15 +68,14 @@ public class KubernetesToolsPods implements ToolsPods {
     }
 
     @Override
-    public Started create(String sandboxId, ResourceLimits limits) {
+    public Started create(String sandboxId, String nonce, ResourceLimits limits) {
         if (!sandboxId.matches(KubernetesSandboxProperties.DNS_LABEL)) {
             throw new IllegalArgumentException("A tools Pod id must be a DNS label");
         }
         worker.requireIsolation();
-        String name = "hephaestus-tools-" + sandboxId;
+        String name = ToolsPods.name(sandboxId);
         Map<String, String> labels = worker.labels(KubernetesWorker.KIND_TOOLS);
         labels.put(KubernetesWorker.SANDBOX_ID, sandboxId);
-        String nonce = UUID.randomUUID().toString();
         Pod template = pods.toolsPod(
                 new KubernetesPods.Workload(name, labels, image, HOSTNAME),
                 limits,
@@ -188,36 +180,16 @@ public class KubernetesToolsPods implements ToolsPods {
         }
     }
 
-    /**
-     * The tools Jobs of every worker, each with whether its worker is gone and whether it ended. When the registry
-     * cannot be read, no worker is gone.
-     */
+    /** The tools Jobs of the installation, whichever worker created them. */
     @Override
     public List<Listed> list() {
-        Optional<Set<String>> live = liveWorkers.labels();
+        Instant now = clock.instant();
         return jobs.list(KubernetesWorker.KIND_TOOLS).stream()
                 .map(job -> {
-                    Map<String, String> labels = job.getMetadata().getLabels();
-                    String process = labels.getOrDefault(KubernetesWorker.WORKER_ID, "");
-                    return new Listed(
-                            job.getMetadata().getName(),
-                            labels.getOrDefault(KubernetesWorker.SANDBOX_ID, ""),
-                            labels.getOrDefault(KubernetesWorker.WORKER_POD, ""),
-                            live.isPresent() && !live.get().contains(process),
-                            ended(job));
+                    String created = job.getMetadata().getCreationTimestamp();
+                    Duration age = created == null ? Duration.ZERO : Duration.between(Instant.parse(created), now);
+                    return new Listed(job.getMetadata().getName(), age);
                 })
                 .toList();
-    }
-
-    private static boolean ended(Job job) {
-        var status = job.getStatus();
-        if (status == null) return false;
-        if (Objects.requireNonNullElse(status.getSucceeded(), 0) > 0
-                || Objects.requireNonNullElse(status.getFailed(), 0) > 0) return true;
-        return status.getConditions() != null
-                && status.getConditions().stream()
-                        .anyMatch(condition ->
-                                ("Complete".equals(condition.getType()) || "Failed".equals(condition.getType()))
-                                        && "True".equals(condition.getStatus()));
     }
 }

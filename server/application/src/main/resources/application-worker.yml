@@ -46,6 +46,10 @@ hephaestus:
         worker:
             enabled: true
 
+    # No default: a worker without the loop's credential does not start.
+    conversation-loop:
+        secret: ${HEPHAESTUS_CONVERSATION_LOOP_SECRET}
+
     sync:
         nats:
             enabled: false
