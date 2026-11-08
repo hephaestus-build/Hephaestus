@@ -241,7 +241,7 @@ interface AddedComment {
 
 const AROUND = 6;
 
-function addedComments(change: ReadonlyMap<string, DiffFile>): AddedComment[] {
+export function addedComments(change: ReadonlyMap<string, DiffFile>): AddedComment[] {
 	const found: AddedComment[] = [];
 	for (const [path, file] of change) {
 		const language = languageOf(path);
@@ -286,7 +286,7 @@ function addedComments(change: ReadonlyMap<string, DiffFile>): AddedComment[] {
 	return found;
 }
 
-const commentKinds: QuestionSet<AddedComment> = {
+export const commentKinds: QuestionSet<AddedComment> = {
 	name: "comment kind",
 	noun: "added code comment with the code around it",
 	question: "What kind of comment is it, judged against the code around it?",

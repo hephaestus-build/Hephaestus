@@ -619,6 +619,31 @@ export default definePracticeScript({ meta: {}, run: async (ctx) => ctx.review({
 		});
 	}
 
+	for (const meta of [
+		{ models: { chat: "required" } },
+		{ models: { chat: "optional" } },
+		{ models: {} },
+	]) {
+		void test(`a stored script with nonempty metadata ${JSON.stringify(meta)} is invalid before model binding`, async () => {
+			const ws = await workspace(
+				{
+					importer: `import { definePracticeScript } from "@hephaestus/practice-scripts";
+export default definePracticeScript({ meta: ${JSON.stringify(meta)}, run: async (ctx) => ctx.review() });`,
+				},
+				stagePracticeScripts,
+			);
+			const { outcome, reviews } = await run(ws, "importer", {
+				models: { chat: new MockLanguageModelV4({}) },
+			});
+			assert.equal(outcome.status, "failed");
+			assert.equal(outcome.stopReason, "invalid-program");
+			assert.match(outcome.error ?? "", /must declare empty meta/u);
+			assert.deepEqual(outcome.models, []);
+			assert.deepEqual(outcome.calls, calls(0));
+			assert.deepEqual(reviews, []);
+		});
+	}
+
 	void test("a script with a name in the export map runs", async () => {
 		const ws = await workspace(
 			{

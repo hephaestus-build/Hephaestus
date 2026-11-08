@@ -851,226 +851,30 @@ An inconclusive test returns no value and changes no stored capability.
 
 ## Models for practice scripts
 
-A practice's script is the review program of that practice.
-It can prepare the places that the review must check, or decide parts of the practice itself.
-A script can ask models to rate or find those places.
-It never writes feedback, and the server checks every result before it records it.
-[Write a practice script](./practice-scripts.mdx) tells how to write one.
+A practice script prepares captured evidence for a review.
+Keep its `meta` empty and call `ctx.review`.
+The public script context has no model slots or direct model helpers.
+[Write a practice script](./practice-scripts.mdx) owns the author procedure.
 
-A script can use four kinds of model.
-The chat model is always the practice review's own model.
-You assign the three other kinds on **AI models**, under **Models for practice scripts**:
-
-| Purpose             | API in the connection form         | `apiProtocol`        | Endpoint the proxy calls     | Example providers                                                                   |
-| ------------------- | ---------------------------------- | -------------------- | ---------------------------- | ----------------------------------------------------------------------------------- |
-| **Decision model**  | **Decisions API**                  | `openai-decisions`   | `{baseUrl}/decisions`        | The [OpenAI Decisions API](https://developers.openai.com/api/docs/guides/decisions) |
-| **Decision model**  | **Chat Completions API**           | `openai-completions` | `{baseUrl}/chat/completions` | A chat model that returns `top_logprobs`, such as a vLLM deployment                 |
-| **Embedding model** | **Embeddings API**                 | `openai-embeddings`  | `{baseUrl}/embeddings`       | OpenAI, Azure OpenAI, vLLM                                                          |
-| **Reranking model** | **Rerank API (Cohere-compatible)** | `cohere-rerank`      | `{baseUrl}/rerank`           | Cohere, Jina, vLLM                                                                  |
-
-The **Decision model** accepts a model on a Decisions API or a Chat Completions API connection.
-With a chat completions model, Hephaestus reads each answer from the token log probabilities.
-That model must return `top_logprobs`.
-If the model has a reasoning effort, Hephaestus sends `reasoning_effort: none` for these calls, and the model must accept it.
-The model must give its answer without reasoning first.
-A model that always reasons, such as gpt-oss, cannot serve this purpose, and its calls stay not rated.
-
-These purposes are optional.
-If you assign none of them, nothing breaks:
-
-- Practice reviews run without them.
-- A script that requires a missing model does not run. Its practice has no result in that review.
-- A script that can work without the model continues without it, and tells the review what it could not rate.
-
-The bundled practice scripts call none of these models.
-Assign one when a customized practice script uses it.
-
-A host that loads models on demand can take minutes to load a model after a pause.
-A call from a practice script that waits longer than its script's deadline is not rated.
-On such a host, keep the models for practice scripts loaded, or expect calls that are not rated after a pause.
-
-### Assign a model for practice scripts
-
-1. Create the connection.
-   An instance admin uses **Instance administration → AI models**.
-   A workspace admin uses **Your providers** at the bottom of the workspace's **AI models** page.
-   Under each provider's name, an icon for each kind of model that its API serves comes before the API's name.
-2. In **API**, choose the API from the table above.
-   The three APIs for practice scripts are under **For practice scripts**.
-3. Do steps 2 to 6 of [the staged flow](#1-the-staged-flow-and-why-it-is-staged).
-   These steps test the connection, add and price the model, and enable both.
-   For an instance model, also do step 7 and share it.
-   If the probe cannot list the models, enter the model ID yourself.
-4. Open the workspace's **AI models** page.
-   Under **Models for practice scripts**, open the row of the purpose, such as **Embedding model**.
-5. Choose a model for each tier that must have one, and select **Save assignment**.
-
-Each purpose offers only the models that can serve it.
-A model that you add under **Your providers** appears in the list at once.
-When no model can serve the purpose, the model list tells you what to do:
-
-- If the workspace can add its own providers, it sends you to **Your providers**.
-  An example is `No embedding model yet. Connect a provider with the Embeddings API under Your providers, then add its model.`
-  The link **Your providers** scrolls to that section.
-- If not, it tells you to ask an instance admin to share a model.
-
-The list also gives two warnings:
-
-- For a decision model with a reasoning effort: a decision needs a model that answers at once with token probabilities.
-- For a reranking model without **No metered API cost**: some providers bill search units or report no tokens.
-  Their calls have no price.
-  For a self-hosted reranker, set **No metered API cost** on the model.
-  The workspace sets it on its own model.
-  On a shared model, only an instance admin can set it, so the warning tells you to ask one.
-  See the caution in [Usage by practice](#usage-by-practice).
-
-A **Cloud** model of a purpose for practice scripts is not used while **Practice reviews** has no ready **Cloud** model.
-Then its form shows this note:
-
-```text
-Cloud members’ reviews run on an In-house model, so this model is not used. Assign a Cloud model for practice reviews to use it.
-```
-
-[Privacy](#privacy) gives the rule.
-
-Through the API, the connection field is `apiProtocol`, with the values in the table.
-The server refuses a model of the wrong kind for a purpose with HTTP 400.
-For example:
-
-```text
-This is a chat model. Choose an embedding model here.
-```
-
-### Which practices use a model for practice scripts
-
-A script declares its models in its code, as **required** or **optional**.
-Hephaestus reads that declaration only when a review runs the script.
-Thus, a practice's needs appear only after a review in which the script declared its models.
-A script that fails before it declares them says nothing about them.
-After a change to the script, the needs appear again after the next review.
-
-Each purpose row under **Models for practice scripts** shows these facts:
-
-- **The collapsed row**: one column for each tier, **In-house** and **Cloud**.
-  While the member choice is optional, a third column, **Not chosen**, shows the model for members who have not chosen.
-  A cell shows the model that serves that tier, or "—" when none does.
-  A house icon after a model marks an In-house model that serves a less strict tier.
-  **Not used** after a muted model in the **Cloud** cell means that Cloud members do not get it.
-  Their reviews run on an In-house model.
-- **Below the purpose name**: **Used by 2 practices** or **No practice uses it**.
-- **The status badge**, only when the row needs a decision:
-  - **Not set for some members**: some members get no model for this purpose. The tier columns show which.
-  - **Not set**: no member gets a model for this purpose.
-  - **Needs attention**: an assigned model cannot run, or a practice requires a model that some members do not get.
-  - **Off**: practice reviews are off, so no model for practice scripts is used.
-
-  While practice reviews are on, a purpose that serves every member shows no badge.
-  A purpose for practice scripts that no practice uses also shows no badge then, whatever it assigns.
-
-- **Used by**, when you open the row: each practice that uses the model.
-  A practice that requires the model shows **Required**.
-  A practice that uses the model only when it is available shows no badge.
-  The practices whose required model some members do not get come first.
-  Below each of them, a line such as **Not set for In-house members** names the members without a model.
-  The note **As of each practice’s newest review.** tells you where the list comes from.
-  The list shows five practices, and **Show all** shows the rest.
-
-A row with **Needs attention** opens when the page loads.
-Practices can require the model while some members do not get one.
-Then the row shows a warning with the count of those practices and the tier, for example:
-
-```text
-2 practices need a decision model for In-house members. Until you assign one, their practice scripts do not run, and those practices have no result.
-```
-
-**Used by** names the practices.
-Until you assign a model for that tier, the script does not run for those members' work.
-
-Add `?purpose=` to the address of **AI models** to open one row and scroll to it, such as `?purpose=PRACTICE_EMBEDDING`.
-The values are `PRACTICE_REVIEW`, `MENTOR`, `PRACTICE_DECISION`, `PRACTICE_EMBEDDING` and `PRACTICE_RERANKING`.
-Links such as **Assign a decision model** and **Check the decision model** use this address.
-
-The same needs appear for one practice under **Practice setup**:
-
-- An alert at the top says when some members do not get a model that the script requires.
-  An example is `The practice script does not run for In-house members’ work: no decision model is assigned for them.`
-  **Assign a decision model** opens the purpose row.
-- The item **Practice script** shows the needs above the script's code.
-  Each need is one row with the kind of model, such as **Decision model**.
-  The review's own chat model has no row, because it always runs the review.
-  A model that the script requires shows **Required**.
-  A line with tier icons names the members without a model, such as **Not set for In-house members**.
-  A link beside the line opens the purpose row.
-- `It uses no model.` when the script declares no model.
-- `It uses only the review model.` when the script declares only the chat model.
-- `Its models show after its next review.` when no review has run the script, or the script failed each time before it declared its models.
-- `The script changed. Its models show after its next review.` when the newest review that reported the needs ran an earlier version of the script.
-
-Below the needs, **As of the review on**, with a date such as 3 Oct, opens the review that reported them.
-[Practice review operations](./practice-review-operations.mdx#practice-scripts) tells you how to read what a script did in one review.
+Configure the practice review model in **AI models**.
+The review uses that model and its workspace budget.
+Decision, embedding and reranking assignments under **Models for practice scripts** have no effect on public scripts.
+Do not configure those purposes for a public script.
+Before an upgrade, remove model declarations from custom script metadata and validate each script.
 
 ### Privacy
 
-A model for practice scripts follows the same data-handling rules as the review model.
-For each review, Hephaestus chooses each model for practice scripts through the reviewed developer's AI choice, like the review model.
-A model for practice scripts is at least as strict as the review's own model.
-If a developer's review runs on an In-house model, the scripts of that review use only In-house models.
-The description of **Models for practice scripts** on **AI models** states this rule.
-
-If no row of a purpose fits, the slot stays empty, and the review runs without it.
-The proxy checks the developer's AI choice again before each call.
-
-A script sends parts of the reviewed work to the model, such as added code and comments.
-Declare **Operated by** for a model for practice scripts with the same care as for a review model.
+Review sessions follow the developer's account-wide AI choice and the review's stricter model tier.
+A script cannot bypass that choice by declaring a model.
+The child process has no provider credential.
 
 ### Cost and limits
 
-Price a model for practice scripts like any other model.
-Its calls count against the shared-model budget or the provider cap of the purse that pays for it.
-
-| Model                          | How Hephaestus bills it                                                                                                                                                                                            |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Chat                           | On the review's own usage row, with the review's price.                                                                                                                                                            |
-| Decision, embedding, reranking | One usage row for each kind and review attempt, with the price frozen when the attempt was admitted. The source types are `PRACTICE_SCRIPT_DECISION`, `PRACTICE_SCRIPT_EMBEDDING` and `PRACTICE_SCRIPT_RERANKING`. |
-
-A cached prompt token costs the cache rate of its model, as on the review's own usage row.
-
-One review attempt has two limits for the direct model calls of all its practice scripts together.
-A direct model call is a call that a script makes through one of its model slots.
-The review sessions that a script opens with `ctx.review()` are not direct calls.
-They count against the work budget of the review, as [Practice review operations](./practice-review-operations.mdx) tells.
-
-| Limit                          | What it counts                                                                                 | Default | Environment variable and property                                                                                           |
-| ------------------------------ | ---------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Direct model token limit       | Input tokens, cached ones included, and output tokens of all direct calls, chat calls included | 200 000 | `PRACTICE_REVIEW_DIRECT_MODEL_TOKENS_PER_ATTEMPT`, `hephaestus.practice-review.direct-model-tokens-per-attempt`             |
-| Direct model search unit limit | The search units that direct reranking calls billed                                            | 1 000   | `PRACTICE_REVIEW_DIRECT_MODEL_SEARCH_UNITS_PER_ATTEMPT`, `hephaestus.practice-review.direct-model-search-units-per-attempt` |
-
-Only an operator can change them.
-Some reranking providers, such as Cohere, bill a call in search units and report no tokens.
-A search unit is not converted to tokens, because one search unit can hold a few tokens or many thousands.
-Thus, search units have a limit of their own.
-
-The shared-model budget and the provider cap show on **AI usage**.
-The two direct model limits also bound spend on a workspace's own provider that has no provider cap.
-
-The practice script host checks the direct model token limit before each call.
-It cannot know the search units of a call before the provider answers, so only the proxy counts them.
-The proxy enforces both limits.
-When a direct model limit, the shared-model budget or the provider cap is spent, the proxy refuses further direct calls with HTTP 402.
-The scripts then report the rest as not rated with `budget`.
-
-The proxy counts only calls that have returned.
-Thus, each call that is in flight when a limit is reached can pass.
-The attempt can then end above the limit by the usage of those calls.
-The same applies to the shared-model budget and the provider cap.
-The host sends at most 4 direct calls at the same time.
-
-The proxy also limits the model calls in flight for each attempt ([Runtime roles](./runtime-roles.mdx#model-calls-in-flight-for-each-attempt)).
-Thus, after a limit is spent, at most that many calls can still pass.
-
-Each call from a practice script names the practice whose script makes it.
-The proxy refuses a call without a practice with HTTP 400.
-The [workspace ABI](/contributor/agent/agent-workspace-abi#practice-script-validation-and-limits) gives the header, and [Practice review operations](./practice-review-operations.mdx#practice-script-metrics) gives the metric that counts these refusals.
+The review sessions that a script opens with `ctx.review()` count against the work budget of the review.
+[Practice review operations](./practice-review-operations.mdx) owns those limits.
+The direct-model token and search-unit settings do not apply to public scripts, because these scripts make no direct model calls.
+Existing direct-model usage remains in **AI usage**.
+The tables below describe those stored usage records.
 
 ### Usage by practice
 

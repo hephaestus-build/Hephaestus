@@ -200,6 +200,10 @@ The workspace configures the review model and its budget.
 The public script context exposes neither model calls nor budget controls.
 Keep `meta` empty.
 
+The host refuses nonempty metadata before it binds a model.
+The child process has no job token or provider secret.
+A failed or unreported provider call keeps its reservation.
+
 Summary length is at most 160 UTF-16 code units. Candidate output is at most 131,072 UTF-8 bytes.
 A result has at most 50 problems. A problem has at most 20 citations.
 Open questions have a limit of 20.

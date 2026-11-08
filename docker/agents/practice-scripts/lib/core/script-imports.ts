@@ -25,11 +25,13 @@ function publicEntries(): ReadonlyMap<string, string> {
 	);
 }
 
-const isScript = (parentURL: string | undefined) =>
-	parentURL?.startsWith("file:") === true &&
-	path.basename(path.dirname(fileURLToPath(parentURL))) === "practices";
+export const isPracticeScriptPath = (file: string): boolean =>
+	path.basename(path.dirname(file)) === "practices";
 
-/** Resolve a practice script's imports through the export map. Files in a `practices` folder are scripts. */
+const isScript = (parentURL: string | undefined) =>
+	parentURL?.startsWith("file:") === true && isPracticeScriptPath(fileURLToPath(parentURL));
+
+/** Resolve stored scripts in `practices` through the export map; private toolkit fixtures stage elsewhere. */
 export function guardScriptImports(): void {
 	const entries = publicEntries();
 	registerHooks({

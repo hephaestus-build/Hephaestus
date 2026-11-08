@@ -34,6 +34,7 @@ import {
 import { isJsonObject } from "./json.ts";
 import { modelCall, type ModelBudget } from "./models-host.ts";
 import { reasonOf, UnratedError } from "./practice-script.ts";
+import { isPracticeScriptPath } from "./script-imports.ts";
 
 const CHILD_HEAP_MB = 256;
 /** A program's process is killed this long after its deadline, so a program that unwinds still returns. */
@@ -509,6 +510,13 @@ export async function runCustomProgram(
 		const parsed = parseMeta(value);
 		if ("error" in parsed) {
 			fail("invalid-program", parsed.error);
+			return;
+		}
+		if (isPracticeScriptPath(modulePath) && Object.keys(parsed.meta).length > 0) {
+			fail(
+				"invalid-program",
+				"A practice script must declare empty meta. Rewrite the script for this API.",
+			);
 			return;
 		}
 		meta = parsed.meta;

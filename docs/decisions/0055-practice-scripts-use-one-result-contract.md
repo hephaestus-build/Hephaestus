@@ -33,7 +33,10 @@ A null script uses the built-in script. An invalid script never falls back.
 
 The host owns identity, one job credential, deadline, governed model requests and trusted read receipts.
 Custom child processes have no credentials and use typed host IPC.
-Model access follows declared slots and the developer's AI ceiling.
+
+Public scripts keep `meta` empty and prepare evidence for `ctx.review`.
+The host refuses a metadata field before model binding.
+Public scripts expose no direct model calls. Review sessions follow the developer's AI ceiling.
 The frozen method retains all bound slots and epoch independently of job retention.
 
 Candidate admission is atomic. One refused citation or child withholds the complete candidate.

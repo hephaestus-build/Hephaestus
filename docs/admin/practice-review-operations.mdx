@@ -86,7 +86,8 @@ The runner assigns any remainder in catalog order.
 A practice cannot spend another practice's reservation.
 Unused reservations remain unused.
 Each model request is capped at the practice's remaining output tokens.
-The direct model account stays shared across all practice scripts in the review attempt.
+
+Public practice scripts prepare evidence and open reviews. They make no direct model calls.
 
 Higher concurrency can cover more practices before the deadline when model response time limits progress.
 It also increases peak memory use and simultaneous model requests.
@@ -103,8 +104,7 @@ The model proxy also holds each review attempt to twice that budget for all its 
 Past it, the proxy refuses the attempt's next model call with `403`.
 
 A practice script that calls `ctx.review()` opens review sessions, and their calls count against the budget of that practice.
-The direct model calls of practice scripts have their own limits for each review attempt: a token limit and a search unit limit.
-[Cost and limits](./ai-providers.mdx#cost-and-limits) owns their settings and defaults.
+[Cost and limits](./ai-providers.mdx#cost-and-limits) owns model usage and prices.
 [Practice scripts](#practice-scripts) tells you how to read what each practice script did.
 
 The defaults cap excessive work at several times a set's normal use.
