@@ -11,7 +11,7 @@
  * Ready needs every check that the base branch's rules require, by name, present and green on two
  * equal polls, an approval, no unresolved thread, no draft, and a mergeable state. On a base without
  * rules, such as a stacked pull request's, every check counts as required. Every failed check is an
- * event.
+ * event. Cancellations are separate events.
  *
  * Exit codes: 0 ready or merged; 1 only action can make it ready (a failed required check, a
  * conflict, changes requested, an unresolved thread or a draft on a green head, closed, or GitHub
@@ -27,7 +27,7 @@ import { output } from "./lib/process.ts";
 
 export interface Check {
 	readonly name: string;
-	readonly state: "pass" | "fail" | "pending";
+	readonly state: "pass" | "fail" | "pending" | "cancelled";
 	readonly url: string;
 }
 
@@ -105,7 +105,8 @@ export function evaluate(pr: Snapshot, memory: Memory): Verdict {
 		.map((check) => `${check.name}=${check.state}`)
 		.toSorted()
 		.join(",");
-	const next: Memory = { seen, first: false, checks: states };
+	const current = `${pr.head}:${states}`;
+	const next: Memory = { seen, first: false, checks: current };
 	const stop = (exit: 0 | 1, line: string): Verdict => ({
 		lines: lines.includes(line) ? lines : [...lines, line],
 		memory: next,
@@ -126,11 +127,23 @@ export function evaluate(pr: Snapshot, memory: Memory): Verdict {
 	for (const check of pr.checks.filter(({ state }) => state === "fail")) {
 		emit(`fail:${pr.head}:${check.name}`, `check failed: ${check.name} ${check.url}`.trimEnd());
 	}
+	for (const check of pr.checks.filter(({ state }) => state === "cancelled")) {
+		emit(
+			`cancelled:${pr.head}:${check.name}`,
+			`check cancelled: ${check.name} ${check.url}`.trimEnd(),
+		);
+	}
 	// A check that has not registered yet is absent, never green, so the gate is a list of names.
 	// A base without rules, such as a stacked pull request's, gates on every check it has.
 	const gate =
 		pr.requiredNames.length > 0 ? pr.requiredNames : pr.checks.map((check) => check.name);
-	const stateOf = (name: string) => pr.checks.find((check) => check.name === name)?.state;
+	// Different workflows or apps can use the same required name. Each must pass.
+	const stateOf = (name: string): Check["state"] | undefined => {
+		const results = new Set(
+			pr.checks.filter((check) => check.name === name).map((check) => check.state),
+		);
+		return (["fail", "cancelled", "pending", "pass"] as const).find((state) => results.has(state));
+	};
 	const failed = gate.find((name) => stateOf(name) === "fail");
 	if (pr.mergeState === "DIRTY") {
 		return stop(1, "conflicts with its base: rebase it");
@@ -138,9 +151,13 @@ export function evaluate(pr: Snapshot, memory: Memory): Verdict {
 	if (failed !== undefined) {
 		return stop(1, `required check failed: ${failed}`);
 	}
+	const cancelled = gate.find((name) => stateOf(name) === "cancelled");
+	if (cancelled !== undefined) {
+		return stop(1, `required check cancelled: ${cancelled}`);
+	}
 	// A check registers a few seconds after a push, so only two equal polls call the checks done.
 	const done =
-		gate.length > 0 && gate.every((name) => stateOf(name) === "pass") && states === memory.checks;
+		gate.length > 0 && gate.every((name) => stateOf(name) === "pass") && current === memory.checks;
 	if (!done) {
 		return { lines, memory: next };
 	}
@@ -161,7 +178,9 @@ const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
         ... on RequiredStatusChecksParameters { requiredStatusChecks { context } }
       } } } }
       commits(last: 1) { totalCount nodes { commit { statusCheckRollup { contexts(first: 100) { totalCount nodes {
-        ... on CheckRun { name status conclusion detailsUrl }
+        ... on CheckRun { name status conclusion detailsUrl
+          checkSuite { app { id } workflowRun { event runNumber workflow { id } } }
+        }
         ... on StatusContext { context state targetUrl }
       } } } } } }
       comments(last: 100) { totalCount nodes { id url author { login } } }
@@ -195,8 +214,42 @@ function statusState(state: string): Check["state"] {
 	return state === "PENDING" || state === "EXPECTED" ? "pending" : "fail";
 }
 
-const conclusionState = (conclusion: string): Check["state"] =>
-	["SUCCESS", "NEUTRAL", "SKIPPED"].includes(conclusion) ? "pass" : "fail";
+function conclusionState(conclusion: string): Check["state"] {
+	if (conclusion === "CANCELLED") {
+		return "cancelled";
+	}
+	return ["SUCCESS", "NEUTRAL", "SKIPPED"].includes(conclusion) ? "pass" : "fail";
+}
+
+/** A rollup can retain multiple workflow runs on one head, including superseded cancellations. */
+function currentChecks(contexts: Record<string, unknown>[]): Check[] {
+	const runs = contexts.map((node) => {
+		const suite = isRecord(node.checkSuite) ? node.checkSuite : undefined;
+		const run = isRecord(suite?.workflowRun) ? suite.workflowRun : undefined;
+		if (run === undefined) {
+			return { node, key: undefined, number: 0 };
+		}
+		const number = run.runNumber;
+		if (typeof number !== "number" || !Number.isSafeInteger(number) || number < 1) {
+			throw new Error("Invalid workflow run number");
+		}
+		const key = JSON.stringify([
+			asString(asRecord(suite?.app, "check app").id, "app id"),
+			asString(asRecord(run.workflow, "workflow").id, "workflow id"),
+			asString(run.event, "workflow event"),
+		]);
+		return { node, key, number };
+	});
+	const latest = new Map<string, number>();
+	for (const { key, number } of runs) {
+		if (key !== undefined) {
+			latest.set(key, Math.max(number, latest.get(key) ?? 0));
+		}
+	}
+	return runs
+		.filter(({ key, number }) => key === undefined || latest.get(key) === number)
+		.map(({ node }) => toCheck(node));
+}
 
 function toCheck(node: Record<string, unknown>): Check {
 	if (typeof node.context === "string") {
@@ -259,7 +312,7 @@ export function parse(response: unknown): Snapshot {
 		mine: new Set([login(pr), asString(asRecord(data.viewer, "viewer").login, "viewer")]),
 		notes,
 		unresolved,
-		checks: isRecord(rollup) ? nodes(rollup.contexts, "checks").map(toCheck) : [],
+		checks: isRecord(rollup) ? currentChecks(nodes(rollup.contexts, "checks")) : [],
 		requiredNames: requiredNames(pr.baseRef),
 	};
 }

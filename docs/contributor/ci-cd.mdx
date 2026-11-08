@@ -257,6 +257,20 @@ Read the `CI Status Gate` summary for each prerequisite's result.
 It lists every leg, including skipped legs.
 Read the `Detect changes` log for filters matched by the diff.
 
+`vp run pr:wait <number>` uses the latest run number for each workflow, event, and app.
+A superseded run on the same commit does not replace the current result.
+The watcher reports cancellations separately from failures.
+
+A cancelled required check needs action.
+On a base with required checks, an optional cancellation does not block readiness.
+On a base without required checks, every reported check must pass.
+Checks with the same required name in different workflows or apps must all pass.
+
+The watcher waits while GitHub reports `BLOCKED` or `UNKNOWN`, even when every required check passes.
+If a required check is absent, inspect the run before you rerun its gate.
+`All CI Passed` is a separate status.
+The ruleset still requires `CI Status Gate`.
+
 A required context may be filtered because a ruleset accepts a skipped check as satisfied. The check
 still reports `skipped`, not `success`. A workflow that never triggers reports nothing.
 A pending required context blocks the queue indefinitely.

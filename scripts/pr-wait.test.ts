@@ -70,6 +70,14 @@ await test("checks are not done until two polls agree", () => {
 	assert.equal(evaluate(snapshot({ reviewDecision: "APPROVED" }), fresh).exit, undefined);
 });
 
+await test("a new head must settle again even when its check states match the previous head", () => {
+	const previous = settled(snapshot({ reviewDecision: "APPROVED" }));
+	const pr = snapshot({ head: "123456abcdef", reviewDecision: "APPROVED" });
+	const first = evaluate(pr, previous.memory);
+	assert.equal(first.exit, undefined);
+	assert.equal(evaluate(pr, first.memory).exit, 0);
+});
+
 await test("green required checks, an approval and no open thread are ready", () => {
 	const verdict = settled(snapshot({ reviewDecision: "APPROVED" }));
 	assert.equal(verdict.exit, 0);
@@ -118,6 +126,27 @@ await test("a required check that has not registered yet holds the watch, even w
 	assert.equal(settled(pr).exit, undefined);
 });
 
+await test("a cancelled optional check is a cancellation event; a required one needs action", () => {
+	const cancelled: Check = { name: "Validate PR", state: "cancelled", url: "https://ci/2" };
+	const pr = snapshot({ checks: [gate, cancelled], reviewDecision: "APPROVED" });
+	const first = evaluate(pr, fresh);
+	assert.deepEqual(first.lines, ["check cancelled: Validate PR https://ci/2"]);
+	assert.equal(evaluate(pr, first.memory).exit, 0);
+	const required = evaluate({ ...pr, requiredNames: [cancelled.name] }, fresh);
+	assert.equal(required.exit, 1);
+	assert.equal(required.lines.at(-1), "required check cancelled: Validate PR");
+});
+
+await test("every current check with a required name must pass, regardless of order", () => {
+	for (const state of ["fail", "pending", "cancelled"] as const) {
+		const checks: Check[] = [gate, { ...gate, state, url: "https://ci/other" }];
+		for (const ordered of [checks, checks.toReversed()]) {
+			const verdict = settled(snapshot({ checks: ordered, reviewDecision: "APPROVED" }));
+			assert.equal(verdict.exit, state === "pending" ? undefined : 1);
+		}
+	}
+});
+
 await test("approved and green is not ready while GitHub still calls the merge blocked", () => {
 	assert.equal(
 		settled(snapshot({ reviewDecision: "APPROVED", mergeState: "BLOCKED" })).exit,
@@ -136,6 +165,7 @@ await test("a stacked pull request gates on every check it has", () => {
 	assert.equal(settled(stacked("pending")).exit, undefined);
 	assert.equal(settled(stacked("pass")).exit, 0);
 	assert.equal(evaluate(stacked("fail"), fresh).exit, 1);
+	assert.equal(evaluate(stacked("cancelled"), fresh).exit, 1);
 	assert.equal(settled(snapshot({ requiredNames: [], checks: [] })).exit, undefined);
 });
 
@@ -174,6 +204,93 @@ const response = (pullRequest: Record<string, unknown>) => ({
 });
 
 const threadComment = (id: string) => ({ id, url: `https://t/${id}`, author: { login: "rev" } });
+
+const workflowCheck = (
+	runNumber: number,
+	conclusion: string,
+	workflow = "policy",
+	event = "pull_request_target",
+	app = "actions",
+) => ({
+	name: "Validate PR",
+	status: conclusion === "PENDING" ? "QUEUED" : "COMPLETED",
+	conclusion: conclusion === "PENDING" ? null : conclusion,
+	detailsUrl: `https://ci/${runNumber}`,
+	checkSuite: { app: { id: app }, workflowRun: { runNumber, event, workflow: { id: workflow } } },
+});
+
+const withChecks = (checks: unknown[]) =>
+	response({
+		commits: connection([{ commit: { statusCheckRollup: { contexts: connection(checks) } } }]),
+	});
+
+await test("a newer policy run replaces a cancelled same-head run in either API order", () => {
+	const checks = [workflowCheck(12, "CANCELLED"), workflowCheck(13, "SUCCESS")];
+	for (const ordered of [checks, checks.toReversed()]) {
+		const pr = parse(withChecks(ordered));
+		assert.deepEqual(pr.checks, [{ name: "Validate PR", state: "pass", url: "https://ci/13" }]);
+		const verdict = settled({ ...pr, requiredNames: ["Validate PR"], reviewDecision: "APPROVED" });
+		assert.deepEqual([verdict.exit, verdict.lines], [0, ["ready on abcdef1: review approved"]]);
+	}
+});
+
+await test("a newer queued, cancelled or failed run cannot inherit an earlier pass", () => {
+	for (const conclusion of ["PENDING", "CANCELLED", "FAILURE"]) {
+		const pr = parse(withChecks([workflowCheck(12, "SUCCESS"), workflowCheck(13, conclusion)]));
+		assert.notEqual(
+			settled({ ...pr, requiredNames: ["Validate PR"], reviewDecision: "APPROVED" }).exit,
+			0,
+		);
+	}
+});
+
+await test("a new workflow run cannot inherit a required job that has not registered yet", () => {
+	const pr = parse(
+		withChecks([
+			workflowCheck(12, "SUCCESS"),
+			{ ...workflowCheck(13, "PENDING"), name: "Detect changes" },
+		]),
+	);
+	assert.deepEqual(
+		pr.checks.map(({ name }) => name),
+		["Detect changes"],
+	);
+	assert.equal(
+		settled({ ...pr, requiredNames: ["Validate PR"], reviewDecision: "APPROVED" }).exit,
+		undefined,
+	);
+});
+
+await test("checks from different apps, workflows and events do not replace each other", () => {
+	const pr = parse(
+		withChecks([
+			workflowCheck(12, "FAILURE", "other"),
+			workflowCheck(12, "FAILURE", "policy", "push"),
+			workflowCheck(12, "FAILURE", "policy", "pull_request_target", "other-app"),
+			workflowCheck(13, "SUCCESS"),
+			{
+				name: "Validate PR",
+				status: "COMPLETED",
+				conclusion: "FAILURE",
+				detailsUrl: "https://ci/external",
+				checkSuite: { workflowRun: null },
+			},
+			{ context: "Validate PR", state: "FAILURE", targetUrl: "https://ci/status" },
+		]),
+	);
+	assert.equal(pr.checks.length, 6);
+	assert.equal(
+		settled({ ...pr, requiredNames: ["Validate PR"], reviewDecision: "APPROVED" }).exit,
+		1,
+	);
+});
+
+await test("an invalid workflow run number stops the watch", () => {
+	assert.throws(
+		() => parse(withChecks([workflowCheck(0, "SUCCESS")])),
+		/Invalid workflow run number/u,
+	);
+});
 
 await test("a check run and a commit status map to pass, fail or pending; the rules name the required", () => {
 	const contexts = connection([
