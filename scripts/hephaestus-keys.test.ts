@@ -231,17 +231,46 @@ await test(
 	},
 );
 
-await test("a new client secret replaces the stored one and asks for a restart", { skip }, () => {
-	const first = run({ env: { GITHUB_OAUTH_CLIENT_SECRET: "old-client-secret" } });
-	const result = run({
-		cluster: { secret: encoded(first.secret) },
-		env: { GITHUB_OAUTH_CLIENT_SECRET: "new-client-secret" },
-	});
-	assert.equal(result.status, 0, result.output);
-	assert.equal(result.stdout.trim(), "Changed GITHUB_OAUTH_CLIENT_SECRET");
-	assert.equal(result.secret.GITHUB_OAUTH_CLIENT_SECRET, "new-client-secret");
-	assert.ok(!result.output.includes("client-secret"));
-});
+await test(
+	"a changed OAuth seed points to login-provider rotation without exposing the secret",
+	{ skip },
+	() => {
+		const first = run({ env: { GITHUB_OAUTH_CLIENT_SECRET: "old-client-secret" } });
+		const result = run({
+			cluster: { secret: encoded(first.secret) },
+			env: { GITHUB_OAUTH_CLIENT_SECRET: "new-client-secret" },
+		});
+		assert.equal(result.status, 0, result.output);
+		assert.equal(result.stdout.trim(), "Changed GITHUB_OAUTH_CLIENT_SECRET");
+		assert.equal(result.secret.GITHUB_OAUTH_CLIENT_SECRET, "new-client-secret");
+		assert.match(
+			result.output,
+			/A login provider that already exists keeps its database credential/u,
+		);
+		assert.match(result.output, /Instance administration \/ Login providers/u);
+		assert.match(result.output, /secret-custody#login-provider-secrets/u);
+		assert.ok(!result.output.includes("client-secret"));
+	},
+);
+
+await test(
+	"an existing Secret without an OAuth key receives the missing startup credential",
+	{ skip },
+	() => {
+		const first = run();
+		assert.equal(first.secret.GITHUB_OAUTH_CLIENT_SECRET, undefined);
+		const result = run({
+			cluster: { secret: encoded(first.secret) },
+			env: { GITHUB_OAUTH_CLIENT_SECRET: "new-client-secret" },
+		});
+		assert.equal(result.status, 0, result.output);
+		assert.equal(result.secret.GITHUB_OAUTH_CLIENT_SECRET, "new-client-secret");
+		// The installer already uses this signal to restart the server and seed a missing provider.
+		assert.equal(result.stdout.trim(), "Changed GITHUB_OAUTH_CLIENT_SECRET");
+		assert.match(result.output, /for an existing provider/u);
+		assert.ok(!result.output.includes("new-client-secret"));
+	},
+);
 
 await test(
 	"a value with quotes, '=', '#', '$' or spaces is stored exactly, on create and on patch",
