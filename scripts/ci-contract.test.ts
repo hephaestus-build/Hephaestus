@@ -1334,6 +1334,11 @@ void describe("CI contract", () => {
 			"server/gradle/libs.versions.toml",
 			"server/gradle/wrapper/gradle-wrapper.properties",
 			".java-version",
+			"package.json",
+			"pnpm-lock.yaml",
+			"tsconfig.agent-runtime.json",
+			"scripts/compile-agent-runtime.ts",
+			".github/actions/setup-toolchain/action.yml",
 			".github/actions/setup-caches/action.yml",
 			".github/workflows/cache-gradle.yml",
 		]) {
@@ -1900,6 +1905,49 @@ void describe("CI contract", () => {
 		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
 		assert.match(job(orchestrator, "Test"), /uses: \.\/\.github\/workflows\/ci-tests.yml/u);
 		assert.match(job(orchestrator, "all-ci-passed"), /needs\.Test\.result/u);
+	});
+
+	void test("every Gradle build installs the trusted runtime compiler first", async () => {
+		for (const [file, source] of await workflowSources()) {
+			const jobs = parseDocument(source).get("jobs");
+			assert.ok(isMap(jobs), file);
+			for (const { key, value } of jobs.items) {
+				if (!isMap(value)) {
+					continue;
+				}
+				const steps = value.get("steps");
+				if (!isSeq(steps)) {
+					continue;
+				}
+				let installed = false;
+				for (const declaration of steps.items) {
+					if (!isMap(declaration)) {
+						continue;
+					}
+					if (
+						declaration.get("uses") === "./.github/actions/setup-toolchain" &&
+						declaration.getIn(["with", "install"]) === "frozen" &&
+						declaration.get("if") === undefined
+					) {
+						installed = true;
+					}
+					const command = declaration.get("run");
+					if (typeof command !== "string" || !/\.\/gradlew\b/u.test(command)) {
+						continue;
+					}
+					// Dependency reporting resolves metadata without running the resource build.
+					if (
+						/^\.\/gradlew dependencies buildEnvironment --no-configuration-cache\s*$/u.test(command)
+					) {
+						continue;
+					}
+					assert.ok(
+						installed,
+						`${file}:${String(key)} must install frozen dependencies before Gradle`,
+					);
+				}
+			}
+		}
 	});
 
 	void test("packages the server once and runs every artifact gate against it", async () => {
@@ -3158,7 +3206,15 @@ void describe("CI contract", () => {
 		);
 		for (const source of [job(release, "tag-images"), preflight]) {
 			assert.match(source, /node scripts\/resolve-release-images\.ts /u);
-			assert.match(source, /node scripts\/sandbox-security\.ts --image "\$IMAGE"/u);
+			assert.match(
+				source,
+				/node scripts\/sandbox-security\.ts --image "\$IMAGE" --application-image "\$APPLICATION_IMAGE"/u,
+			);
+			assert.match(source, /docker pull "\$APPLICATION_IMAGE"/u);
+			assert.match(
+				source,
+				/APPLICATION_IMAGE: ghcr\.io\/hephaestus-build\/application-server@\$\{\{ steps\.(?:retag|release-evidence)\.outputs\.application-server-digest \}\}/u,
+			);
 			assert.match(source, /node scripts\/generate-release-evidence\.ts evidence \\/u);
 			assert.match(
 				source,

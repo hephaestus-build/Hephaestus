@@ -16,7 +16,7 @@ await test("the trusted runtime build emits JavaScript and removes obsolete file
 			process.execPath,
 			[path.join(repository, "scripts/compile-agent-runtime.ts"), output],
 			{
-				cwd: repository,
+				cwd: root,
 				encoding: "utf8",
 				timeout: 30_000,
 			},
@@ -28,6 +28,16 @@ await test("the trusted runtime build emits JavaScript and removes obsolete file
 		assert.ok(files.includes("heph-host.js"));
 		assert.ok(!files.some((file) => file.endsWith(".ts")));
 		await assert.rejects(readFile(path.join(output, "obsolete.js")), { code: "ENOENT" });
+		const refused = spawnSync(
+			process.execPath,
+			[path.join(repository, "scripts/compile-agent-runtime.ts"), "."],
+			{ cwd: root, encoding: "utf8", timeout: 30_000 },
+		);
+		assert.ifError(refused.error);
+		assert.notEqual(refused.status, 0);
+		assert.match(refused.stderr, /absolute runtime output directory/u);
+		const retained = await readFile(path.join(output, "pi-runner.js"), "utf8");
+		assert.ok(retained.length > 0);
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

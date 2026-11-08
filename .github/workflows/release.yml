@@ -231,6 +231,7 @@ jobs:
         run: |
           set -euo pipefail
           docker pull "$IMAGE"
+          docker pull "$APPLICATION_IMAGE"
           node scripts/sandbox-security.ts --image "$IMAGE" --application-image "$APPLICATION_IMAGE" --report "$RUNNER_TEMP/sandbox-security.json"
 
       - uses: ./.github/actions/setup-release-security-tools

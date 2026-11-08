@@ -5,16 +5,14 @@ import path from "node:path";
 import { isJsonObject } from "./lib/core/json.ts";
 
 const output = path.join(import.meta.dirname, "dist");
+const compiler = process.argv[2];
+if (compiler === undefined || !path.isAbsolute(compiler)) {
+	throw new Error("Expected the absolute TypeScript compiler path");
+}
 await rm(output, { recursive: true, force: true });
 const compiled = spawnSync(
 	process.execPath,
-	[
-		path.resolve("node_modules/typescript/bin/tsc"),
-		"-p",
-		path.join(import.meta.dirname, "tsconfig.build.json"),
-		"--outDir",
-		output,
-	],
+	[compiler, "-p", path.join(import.meta.dirname, "tsconfig.build.json"), "--outDir", output],
 	{ stdio: "inherit" },
 );
 if (compiled.error !== undefined) {

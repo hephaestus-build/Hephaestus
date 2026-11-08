@@ -24,7 +24,7 @@ RUN pnpm exec tsc -p tsconfig.build.json && pnpm exec node dist/tools-seccomp.js
 COPY practice-scripts/package.json practice-scripts/child.ts practice-scripts/build.ts practice-scripts/tsconfig.build.json /opt/practice-scripts/
 COPY practice-scripts/lib/ /opt/practice-scripts/lib/
 COPY practice-scripts/kits/ /opt/practice-scripts/kits/
-RUN pnpm exec node /opt/practice-scripts/build.ts
+RUN pnpm exec node /opt/practice-scripts/build.ts /opt/pi-sdk/node_modules/typescript/bin/tsc
 
 # Debian 13: its fd (>= 8.7) takes the `--no-require-git` Pi's find tool passes outside a repository.
 FROM node:${NODE_VERSION}-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a AS os-packages
@@ -108,6 +108,7 @@ COPY --from=gateway /opt/practice-scripts/dist/ /opt/practice-scripts/
 # Resolving it here, as /workspace/.run-pi.js does, proves the toolkit and its own dependencies load beside the
 # Pi SDK, and that a program's process starts under the permissions the host gives it.
 RUN mkdir -p /tmp/host-check/work/practice-scripts/practices && \
+    printf '{"type":"module"}\n' > /tmp/host-check/package.json && \
     ln -s /opt/pi-sdk/node_modules /tmp/host-check/node_modules && \
     ln -sfn /opt/practice-scripts/lib /tmp/host-check/work/practice-scripts/lib && \
     ln -sfn /opt/practice-scripts/kits /tmp/host-check/work/practice-scripts/kits && \
@@ -118,7 +119,7 @@ RUN mkdir -p /tmp/host-check/work/practice-scripts/practices && \
       'if (typeof createAgentSession !== "function" || typeof runPracticeProgram !== "function") { throw new Error("the host cannot load the Pi SDK and the toolkit together"); }' \
       'if (typeof BUILTIN_SCRIPT.run !== "function" || parseCandidate({}).ok) { throw new Error("the toolkit contract does not load"); }' \
       > /tmp/host-check/.run-pi.js && \
-    node /tmp/host-check/.run-pi.js && \
+    node --no-experimental-strip-types /tmp/host-check/.run-pi.js && \
     rm -rf /tmp/host-check
 
 RUN git config --system core.hooksPath /nonexistent && \

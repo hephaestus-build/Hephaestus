@@ -807,9 +807,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
-        if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         with:
-          install: "none"
+          install: "frozen"
       - name: Find the exact-commit merge-queue build
         id: reuse
         if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
@@ -1230,6 +1229,7 @@ jobs:
         run: |
           set -euo pipefail
           docker pull "$IMAGE"
+          docker pull "$APPLICATION_IMAGE"
           node scripts/sandbox-security.ts --image "$IMAGE" --application-image "$APPLICATION_IMAGE" --report "$RUNNER_TEMP/sandbox-security.json"
 
       - name: Retain sandbox qualification summary

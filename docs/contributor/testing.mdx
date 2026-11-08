@@ -349,7 +349,7 @@ node scripts/sandbox-security.ts --image <agent-pi-reference> \
 ```
 
 Use image digests from the same candidate release for both references.
-Qualification extracts the compiled runtime from the application image without starting it.
+Qualification reads `agent/` from the Paketo image's `/workspace/runner.jar` without starting the image.
 The qualification report records both image references.
 
 Docker's default bridge must permit traffic between containers. The probe collector publishes no host port.

@@ -91,7 +91,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
         with:
-          install: "none"
+          install: "frozen"
       # The 20 runners are shared with the merge queue, which carries accepted work. A busy queue is
       # not a defect in main, so the benchmark skips that night instead of failing.
       - name: Wait while merge-group jobs are queued

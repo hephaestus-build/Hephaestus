@@ -17,8 +17,8 @@ let artifact = "";
 let practices = "";
 let dependencies = "";
 
-function runNode(entry: string, flags: string[] = []) {
-	const result = spawnSync(process.execPath, [...flags, entry], {
+function runNode(entry: string, flags: string[] = [], args: string[] = []) {
+	const result = spawnSync(process.execPath, [...flags, entry, ...args], {
 		cwd: repository,
 		encoding: "utf8",
 		timeout: 20_000,
@@ -38,7 +38,11 @@ before(async () => {
 		filter: (file) => !["node_modules", "dist"].includes(path.basename(file)),
 	});
 	await symlink(path.join(repository, "node_modules"), path.join(source, "node_modules"));
-	const built = runNode(path.join(source, "build.ts"));
+	const built = runNode(
+		path.join(source, "build.ts"),
+		[],
+		[path.join(repository, "node_modules/typescript/bin/tsc")],
+	);
 	assert.equal(built.status, 0, built.stderr);
 	artifact = path.join(source, "dist");
 	practices = path.join(root, "stage/practices");
@@ -56,7 +60,11 @@ after(async () => {
 
 void test("the image build removes obsolete JavaScript before rebuilding", async () => {
 	await writeFile(path.join(artifact, "obsolete.js"), "obsolete");
-	const built = runNode(path.join(source, "build.ts"));
+	const built = runNode(
+		path.join(source, "build.ts"),
+		[],
+		[path.join(repository, "node_modules/typescript/bin/tsc")],
+	);
 	assert.equal(built.status, 0, built.stderr);
 	await assert.rejects(readFile(path.join(artifact, "obsolete.js")), { code: "ENOENT" });
 });
