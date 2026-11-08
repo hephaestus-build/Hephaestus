@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.notification.email;
 
 import de.tum.cit.aet.hephaestus.config.ApplicationProperties;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import java.net.URI;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -8,21 +9,16 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Component
 public class EmailUnsubscribeLinks {
     private final ApplicationProperties properties;
+    private final PublicApiUrls apiUrls;
 
-    public EmailUnsubscribeLinks(ApplicationProperties properties) {
+    public EmailUnsubscribeLinks(ApplicationProperties properties, PublicApiUrls apiUrls) {
         this.properties = properties;
+        this.apiUrls = apiUrls;
     }
 
     public String url(String token) {
-        String host = properties.hostUrl();
-        if (host == null || host.isBlank()) {
-            throw new IllegalStateException("A public host URL is required for email unsubscribe links");
-        }
-        return publicBase(host)
-                .pathSegment("notifications", "unsubscribe", token)
-                .build()
-                .encode()
-                .toUriString();
+        URI target = apiUrls.uri("/notifications/unsubscribe/{token}", token);
+        return publicBase(target.toString()).build(true).toUriString();
     }
 
     public String confirmationUrl(String token) {

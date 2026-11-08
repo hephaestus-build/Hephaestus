@@ -53,7 +53,7 @@ public class LoginProviderAdminController {
 
     public LoginProviderAdminController(LoginProviderService loginProviderService, AuthProperties authProperties) {
         this.loginProviderService = loginProviderService;
-        this.callbackBase = authProperties.oauthCallbackBase();
+        this.callbackBase = authProperties.apiBaseUrl();
     }
 
     @GetMapping

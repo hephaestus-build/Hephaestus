@@ -830,7 +830,8 @@ See [email configuration](./production-setup#email).
 Unsubscribe URLs contain narrowly scoped bearer capabilities.
 A local Mailpit MIME test alone cannot prove DNS or DKIM configuration.
 
-1. Redact `/notifications/unsubscribe/*` in reverse-proxy access logs.
+1. Redact `/api/notifications/unsubscribe/*` in public reverse-proxy access logs.
+   Also redact `/notifications/unsubscribe/*` on the application server and for requests from earlier emails.
 2. Never retain the public confirmation page's `token` query.
 3. With a real message, validate the externally reachable HTTPS POST path.
 4. Validate DKIM coverage of both unsubscribe headers.

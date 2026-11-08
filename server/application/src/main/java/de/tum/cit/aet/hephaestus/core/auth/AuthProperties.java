@@ -13,7 +13,7 @@ import org.springframework.web.util.UriComponentsBuilder;
  * Authentication configuration. Operator guidance: {@code docs/admin/configuration-readiness.mdx}.
  *
  * @param issuer canonical {@code iss} claim
- * @param apiBasePath public prefix stripped by the reverse proxy, prepended to browser-facing OAuth
+ * @param apiBasePath public prefix stripped by the reverse proxy, prepended to public API
  *                   URLs. Tomcat's native forwarded-header support does not restore
  *                   {@code X-Forwarded-Prefix}; see {@code ProxyTrustGuard} before changing that strategy.
  * @param audience expected {@code aud} claim
@@ -86,8 +86,8 @@ public record AuthProperties(
         apiBasePath = normalizeApiBasePath(apiBasePath);
     }
 
-    /** OAuth callbacks use the configured API origin, never a request Host or forwarded host. */
-    public String oauthCallbackBase() {
+    /** Public API URLs use the configured API origin, never a request Host or forwarded host. */
+    public String apiBaseUrl() {
         return UriComponentsBuilder.fromUri(issuer)
                 .replacePath(apiBasePath)
                 .replaceQuery(null)

@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.config.ApplicationProperties;
+import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.net.URI;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -12,8 +15,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 class EmailUnsubscribeLinksTest extends BaseUnitTest {
     @Test
     void shouldPreserveDeploymentBasePathsAndEncodeTokens() {
-        var links = new EmailUnsubscribeLinks(new ApplicationProperties(
-                "https://example.org/api", new ApplicationProperties.Webapp("https://example.org/app")));
+        var links = links("https://example.org/api", "https://example.org/app", "/api");
         assertThat(links.url("opaque/token"))
                 .isEqualTo("https://example.org/api/notifications/unsubscribe/opaque%2Ftoken");
         assertThat(links.confirmationUrl("opaque&token"))
@@ -23,7 +25,7 @@ class EmailUnsubscribeLinksTest extends BaseUnitTest {
     @ParameterizedTest
     @ValueSource(strings = {"http://localhost:8080", "http://127.0.0.1:8080", "http://[::1]:8080"})
     void shouldAllowLoopbackMailpitLinks(String base) {
-        var links = new EmailUnsubscribeLinks(new ApplicationProperties(base, new ApplicationProperties.Webapp(base)));
+        var links = links(base, base, "");
         assertThat(links.url("token")).startsWith(base + "/notifications/unsubscribe/");
         assertThat(links.confirmationUrl("token")).startsWith(base + "/unsubscribe?");
     }
@@ -39,8 +41,33 @@ class EmailUnsubscribeLinksTest extends BaseUnitTest {
                 "ftp://example.org"
             })
     void shouldRejectUnsafePublicUrlsForBothUnsubscribeSurfaces(String base) {
-        var links = new EmailUnsubscribeLinks(new ApplicationProperties(base, new ApplicationProperties.Webapp(base)));
-        assertThatThrownBy(() -> links.url("token")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> links.confirmationUrl("token")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> links(base, "https://example.org", "").url("token"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> links("https://example.org", base, "").confirmationUrl("token"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void shouldUseThePublicApiPrefixWhenTheNotificationBaseIsTheInstanceOrigin() {
+        var links = links("https://example.org", "https://example.org", "/api");
+        assertThat(links.url("token")).isEqualTo("https://example.org/api/notifications/unsubscribe/token");
+        assertThat(links.confirmationUrl("token")).isEqualTo("https://example.org/unsubscribe?token=token");
+    }
+
+    @Test
+    void shouldKeepApiAndWebappOriginsSeparateInLocalDevelopment() {
+        var properties = new ApplicationProperties(
+                "http://localhost:4200", new ApplicationProperties.Webapp("http://localhost:4200"));
+        var links = new EmailUnsubscribeLinks(
+                properties,
+                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("http://localhost:8080"), "")));
+        assertThat(links.url("token")).isEqualTo("http://localhost:8080/notifications/unsubscribe/token");
+        assertThat(links.confirmationUrl("token")).isEqualTo("http://localhost:4200/unsubscribe?token=token");
+    }
+
+    private static EmailUnsubscribeLinks links(String server, String webapp, String apiBasePath) {
+        var properties = new ApplicationProperties(server, new ApplicationProperties.Webapp(webapp));
+        return new EmailUnsubscribeLinks(
+                properties, new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(server), apiBasePath)));
     }
 }

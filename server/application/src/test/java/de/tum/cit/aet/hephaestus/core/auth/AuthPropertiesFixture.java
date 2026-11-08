@@ -23,6 +23,11 @@ public final class AuthPropertiesFixture {
         return build(apiBasePath, Map.of(), Duration.ofMinutes(5));
     }
 
+    /** Defaults with the configured public API origin and prefix. */
+    public static AuthProperties withApiBase(URI issuer, String apiBasePath) {
+        return build(issuer, apiBasePath, Map.of(), Duration.ofMinutes(5), List.of(), true);
+    }
+
     /** Defaults with the given recent-sign-in window. */
     public static AuthProperties withStepUpMaxAge(Duration stepUpMaxAge) {
         return build("", Map.of(), stepUpMaxAge);
@@ -61,8 +66,24 @@ public final class AuthPropertiesFixture {
             Duration stepUpMaxAge,
             List<String> browserExtensionIds,
             boolean assuranceEnforced) {
-        return new AuthProperties(
+        return build(
                 URI.create("http://localhost:8080"),
+                apiBasePath,
+                providers,
+                stepUpMaxAge,
+                browserExtensionIds,
+                assuranceEnforced);
+    }
+
+    private static AuthProperties build(
+            URI issuer,
+            String apiBasePath,
+            Map<String, AuthProperties.LoginProviderSeed> providers,
+            Duration stepUpMaxAge,
+            List<String> browserExtensionIds,
+            boolean assuranceEnforced) {
+        return new AuthProperties(
+                issuer,
                 apiBasePath,
                 "hephaestus-spa",
                 Duration.ofHours(24),

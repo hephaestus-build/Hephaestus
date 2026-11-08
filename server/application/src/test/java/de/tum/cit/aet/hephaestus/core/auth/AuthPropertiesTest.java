@@ -121,7 +121,7 @@ class AuthPropertiesTest extends BaseUnitTest {
         var binder = new Binder(
                 ConfigurationPropertySources.from(sources), new PropertySourcesPlaceholdersResolver(sources));
         var configured = binder.bindOrCreate("hephaestus.auth", Bindable.of(AuthProperties.class));
-        assertThat(configured.oauthCallbackBase()).isEqualTo(expected);
+        assertThat(configured.apiBaseUrl()).isEqualTo(expected);
     }
 
     @ParameterizedTest
