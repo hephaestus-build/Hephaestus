@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.IssueWithComme
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.DiscussionReads;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubClosingIssueClient;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.EmbeddedReviewThreadsDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.EmbeddedReviewsDTO;
@@ -157,6 +158,7 @@ public class GitHubHistoricalBackfillService {
     private final GitHubIssueProcessor issueProcessor;
     private final GitHubIssueCommentProcessor issueCommentProcessor;
     private final GitHubPullRequestProcessor prProcessor;
+    private final GitHubClosingIssueClient closingIssueClient;
     private final GitHubPullRequestReviewProcessor reviewProcessor;
     private final GitHubPullRequestReviewSyncService reviewSyncService;
     private final GitHubPullRequestReviewCommentSyncService reviewCommentSyncService;
@@ -177,6 +179,7 @@ public class GitHubHistoricalBackfillService {
             GitHubIssueProcessor issueProcessor,
             GitHubIssueCommentProcessor issueCommentProcessor,
             GitHubPullRequestProcessor prProcessor,
+            GitHubClosingIssueClient closingIssueClient,
             GitHubPullRequestReviewProcessor reviewProcessor,
             GitHubPullRequestReviewSyncService reviewSyncService,
             GitHubPullRequestReviewCommentSyncService reviewCommentSyncService,
@@ -195,6 +198,7 @@ public class GitHubHistoricalBackfillService {
         this.issueProcessor = issueProcessor;
         this.issueCommentProcessor = issueCommentProcessor;
         this.prProcessor = prProcessor;
+        this.closingIssueClient = closingIssueClient;
         this.reviewProcessor = reviewProcessor;
         this.reviewSyncService = reviewSyncService;
         this.reviewCommentSyncService = reviewCommentSyncService;
@@ -1199,6 +1203,7 @@ public class GitHubHistoricalBackfillService {
         List<PullRequestWithReviewThreads> pullRequests = new ArrayList<>();
         Map<String, SyncResult.Status> threadReads = new HashMap<>();
         for (var node : connection.getNodes()) {
+            closingIssueClient.completeReferences(scopeId, node);
             PullRequestWithReviewThreads prData = PullRequestWithReviewThreads.fromPullRequest(node);
             if (prData == null || prData.pullRequest() == null) {
                 continue;

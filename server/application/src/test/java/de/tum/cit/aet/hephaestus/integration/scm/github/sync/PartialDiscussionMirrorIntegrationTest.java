@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewThreadContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCaptureFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
@@ -32,6 +33,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionCl
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GraphQlPaginationHelper;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssue;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueCommentConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueConnection;
@@ -44,9 +47,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequ
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestReviewThreadConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestState;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubClosingIssueClient;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewProcessor;
@@ -188,6 +193,8 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
         var classifier = context.getBean(GitHubExceptionClassifier.class);
         var coordinator = context.getBean(GitHubGraphQlSyncCoordinator.class);
         var repositories = context.getBean(RepositoryRepository.class);
+        var closingIssues =
+                new GitHubClosingIssueClient(clients, properties, new GraphQlPaginationHelper(clients, coordinator));
         var reviews = transactional(
                 GitHubPullRequestReviewSyncService.class,
                 new GitHubPullRequestReviewSyncService(
@@ -224,6 +231,7 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
                 pullRequests,
                 clients,
                 context.getBean(GitHubPullRequestProcessor.class),
+                closingIssues,
                 reviews,
                 reviewComments,
                 context.getBean(GitHubIssueCommentProcessor.class),
@@ -243,6 +251,7 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
                 context.getBean(GitHubIssueProcessor.class),
                 context.getBean(GitHubIssueCommentProcessor.class),
                 context.getBean(GitHubPullRequestProcessor.class),
+                closingIssues,
                 context.getBean(GitHubPullRequestReviewProcessor.class),
                 reviews,
                 reviewComments,
@@ -262,6 +271,76 @@ class PartialDiscussionMirrorIntegrationTest extends BaseIntegrationTest {
         factory.setProxyTargetClass(true);
         factory.addAdvice(new TransactionInterceptor(manager, new AnnotationTransactionAttributeSource()));
         return type.cast(factory.getProxy());
+    }
+
+    @Test
+    void shouldStoreClosingLinksBeyondTheEmbeddedFiftyReferences() {
+        jdbc.update("""
+                INSERT INTO issue(issue_type,native_id,provider_id,repository_id,number,title,state,comments_count,is_locked,created_at,updated_at)
+                SELECT 'ISSUE',? + n,r.provider_id,r.id,n,'Closing target','OPEN',0,false,now(),now()
+                FROM repository r CROSS JOIN generate_series(101,151) AS numbers(n) WHERE r.id=?
+                """, base + 10000, repositoryId);
+        stubPage("GetRepositoryPullRequests", pullRequestWithClosingReferences());
+        var spec = mock(RequestSpec.class);
+        when(client.documentName("GetPullRequestClosingIssues")).thenReturn(spec);
+        when(spec.variable(anyString(), any())).thenReturn(spec);
+        answerRecordingTheTransaction(
+                spec,
+                valid("node.closingIssuesReferences", GHIssueConnection.class, closingReferences(151, 151, false)));
+
+        SyncResult result = sync.syncForRepository(workspaceId, repositoryId, null, null, null);
+
+        assertThat(result.status()).isEqualTo(SyncResult.Status.COMPLETED);
+        long pullId = pullRequests
+                .findByRepositoryIdAndNumber(repositoryId, NUMBER)
+                .orElseThrow()
+                .getId();
+        assertThat(pullRequests.findClosingIssuesById(pullId))
+                .extracting(Issue::getNumber)
+                .containsExactlyInAnyOrderElementsOf(
+                        IntStream.rangeClosed(101, 151).boxed().toList());
+        assertThat(askedInTransaction).containsExactly(false);
+    }
+
+    @Test
+    void shouldLeaveThePullRequestPageUnwrittenWhenClosingReferencesCannotBeCompleted() {
+        stubPage("GetRepositoryPullRequests", pullRequestWithClosingReferences());
+        var spec = mock(RequestSpec.class);
+        when(client.documentName("GetPullRequestClosingIssues")).thenReturn(spec);
+        when(spec.variable(anyString(), any())).thenReturn(spec);
+        when(spec.execute()).thenReturn(Mono.error(new IllegalStateException("unavailable")));
+
+        SyncResult result = sync.syncForRepository(workspaceId, repositoryId, null, null, null);
+
+        assertThat(result.status()).isEqualTo(SyncResult.Status.ABORTED_ERROR);
+        assertThat(pullRequests.findByRepositoryIdAndNumber(repositoryId, NUMBER))
+                .isEmpty();
+    }
+
+    private GHPullRequest pullRequestWithClosingReferences() {
+        var pr = pullRequest();
+        pr.getReviewThreads().setNodes(List.of());
+        pr.getReviewThreads().setTotalCount(0);
+        pr.getReviewThreads().setPageInfo(page(false, null));
+        pr.setClosingIssuesReferences(closingReferences(101, 150, true));
+        pr.setRepository(pr.getClosingIssuesReferences().getNodes().getFirst().getRepository());
+        return pr;
+    }
+
+    private GHIssueConnection closingReferences(int from, int to, boolean more) {
+        var repository = new GHRepository();
+        repository.setNameWithOwner(repositoryName);
+        var connection = new GHIssueConnection();
+        connection.setNodes(IntStream.rangeClosed(from, to)
+                .mapToObj(number -> {
+                    var issue = new GHIssue();
+                    issue.setNumber(number);
+                    issue.setRepository(repository);
+                    return issue;
+                })
+                .toList());
+        connection.setPageInfo(page(more, "after-" + to));
+        return connection;
     }
 
     /** A provider with six threads: the first page holds five resolved ones. The sixth, still open, never arrives. */

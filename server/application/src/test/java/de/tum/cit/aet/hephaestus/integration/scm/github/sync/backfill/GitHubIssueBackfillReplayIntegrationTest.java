@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncPropert
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubClosingIssueClient;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewSyncService;
@@ -79,6 +80,7 @@ class GitHubIssueBackfillReplayIntegrationTest extends BaseIntegrationTest {
                 application.getBean(GitHubIssueProcessor.class),
                 mock(GitHubIssueCommentProcessor.class),
                 mock(GitHubPullRequestProcessor.class),
+                mock(GitHubClosingIssueClient.class),
                 mock(GitHubPullRequestReviewProcessor.class),
                 mock(GitHubPullRequestReviewSyncService.class),
                 mock(GitHubPullRequestReviewCommentSyncService.class),

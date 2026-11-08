@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest;
 
+import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.MAX_PAGINATION_PAGES;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -14,6 +16,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillStateProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncCursorKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
@@ -55,6 +58,7 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.GraphQlClient.RequestSpec;
 import org.springframework.graphql.client.HttpGraphQlClient;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -148,6 +152,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
                 pullRequestRepository,
                 graphQlClientProvider,
                 pullRequestProcessor,
+                mock(GitHubClosingIssueClient.class),
                 reviewSyncService,
                 reviewCommentSyncService,
                 issueCommentProcessor,
@@ -207,7 +212,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
         return pr;
     }
 
-    private void stubSinglePrPage(GHPullRequest prNode) {
+    private GHPullRequestConnection stubSinglePrPage(GHPullRequest prNode) {
         GHPullRequestConnection connection = new GHPullRequestConnection();
         connection.setNodes(List.of(prNode));
         connection.setTotalCount(1);
@@ -227,6 +232,31 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
         when(requestSpec.execute()).thenReturn(Mono.just(response));
 
         when(repositoryRepository.findById(REPO_ID)).thenReturn(Optional.of(createRepository()));
+        return connection;
+    }
+
+    @Test
+    void shouldAbortWhenThePageLimitIsReachedSoTheSyncTimeDoesNotAdvance() {
+        GHPullRequest node = createGHPullRequest(createCommentConnection(List.of(), 0, false, null));
+        GHPullRequestConnection connection = stubSinglePrPage(node);
+        connection.setTotalCount(MAX_PAGINATION_PAGES + 1);
+        when(pullRequestProcessor.process(any(), any())).thenReturn(createPullRequest());
+        connection.getPageInfo().setHasNextPage(true);
+        connection.getPageInfo().setEndCursor("next");
+        stubCheckpointTransactions();
+
+        SyncResult result = service.syncForRepository(SCOPE_ID, REPO_ID, 52L, null, null);
+
+        assertThat(result.status()).isEqualTo(SyncResult.Status.ABORTED_ERROR);
+        assertThat(result.isCompleted()).isFalse();
+        verify(backfillStateProvider, atLeastOnce()).updateSyncCursor(52L, SyncCursorKind.PULL_REQUEST, "next");
+        verify(backfillStateProvider, never()).updateSyncCursor(52L, SyncCursorKind.PULL_REQUEST, null);
+    }
+
+    private void stubCheckpointTransactions() {
+        var manager = mock(PlatformTransactionManager.class);
+        when(manager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        when(transactionTemplate.getTransactionManager()).thenReturn(manager);
     }
 
     @Nested

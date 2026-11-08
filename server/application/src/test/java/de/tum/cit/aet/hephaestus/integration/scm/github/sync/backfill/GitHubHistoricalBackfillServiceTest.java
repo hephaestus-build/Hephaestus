@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncPropert
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubClosingIssueClient;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewSyncService;
@@ -184,6 +185,7 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
                 issueProcessor,
                 issueCommentProcessor,
                 prProcessor,
+                mock(GitHubClosingIssueClient.class),
                 reviewProcessor,
                 reviewSyncService,
                 reviewCommentSyncService,

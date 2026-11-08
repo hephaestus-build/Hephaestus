@@ -1,0 +1,24 @@
+query GetPullRequestClosingIssues($id: ID!, $after: String!) {
+    rateLimit {
+        cost
+        limit
+        remaining
+        resetAt
+    }
+    node(id: $id) {
+        ... on PullRequest {
+            closingIssuesReferences(first: 100, after: $after) {
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
+                nodes {
+                    number
+                    repository {
+                        nameWithOwner
+                    }
+                }
+            }
+        }
+    }
+}

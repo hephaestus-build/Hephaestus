@@ -73,6 +73,10 @@ query GetRepositoryPullRequestsHistorical(
                     nameWithOwner
                 }
                 closingIssuesReferences(first: 50) {
+                    pageInfo {
+                        hasNextPage
+                        endCursor
+                    }
                     nodes {
                         number
                         repository {
