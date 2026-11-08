@@ -39,11 +39,13 @@ import io.nats.client.Nats;
 import io.nats.client.api.StreamConfiguration;
 import io.nats.client.impl.Headers;
 import java.nio.charset.StandardCharsets;
+import java.sql.PreparedStatement;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -113,6 +115,9 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private WebTestClient client;
+
+    @Autowired
+    private DataSource dataSource;
 
     private Workspace workspace;
     private Workspace other;
@@ -226,6 +231,34 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                         .getFirst()
                         .replayedAt())
                 .isNull();
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldAnswerUnavailableWhileAnotherServerReplaysTheSameConsumer() throws Exception {
+        service.capture(
+                workspace.getId(),
+                delivery("github.acme.repo.issues", "{\"action\":\"ignored\"}", "scope-lock"),
+                new PayloadParsingException("older parser"));
+        var row = service.listWorkspace(workspace.getId(), null, 100).content().getFirst();
+        // Another server's replay holds the consumer's lock in its own database session.
+        try (java.sql.Connection other = dataSource.getConnection();
+                PreparedStatement lock =
+                        other.prepareStatement("SELECT pg_advisory_lock(hashtext('consumer-replay'), hashtext(?))")) {
+            lock.setString(1, consumer.fencedConsumerName(workspace.getId(), stream));
+            lock.execute();
+            client.post()
+                    .uri("/workspaces/deadletters-a/integrations/dead-letters/{id}/replays", row.id())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isEqualTo(503)
+                    .expectBody(Void.class);
+        }
+        assertThat(service.listWorkspace(workspace.getId(), null, 100).content())
+                .filteredOn(candidate -> candidate.id().equals(row.id()))
+                .singleElement()
+                .satisfies(candidate -> assertThat(candidate.replayedAt()).isNull());
     }
 
     @Test

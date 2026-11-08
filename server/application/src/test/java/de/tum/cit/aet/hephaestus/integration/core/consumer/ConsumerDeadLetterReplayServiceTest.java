@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -18,10 +19,15 @@ import io.nats.client.Message;
 import io.nats.client.api.MessageInfo;
 import io.nats.client.impl.Headers;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.function.Supplier;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
@@ -38,7 +44,8 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
                 repository,
                 consumer,
                 new TransactionTemplate(mock(PlatformTransactionManager.class)),
-                mock(InstallationReplayAudit.class));
+                mock(InstallationReplayAudit.class),
+                lockingDataSource());
         var row = new ConsumerDeadLetter();
         row.setId(17L);
         row.setStreamName("github");
@@ -53,9 +60,10 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
         when(stored.getData()).thenReturn(payload);
         when(stored.getHeaders()).thenReturn(new Headers().put("X-Heph-Route", "original"));
         when(consumer.readRetainedMessage("github", 17)).thenReturn(stored);
+        when(consumer.fencedConsumerName(42L, "github")).thenReturn("scope");
         doAnswer(call -> call.<Supplier<ConsumerDeadLetterDTO>>getArgument(2).get())
                 .when(consumer)
-                .exclusive(eq("github"), eq("scope"), any());
+                .exclusive(eq(42L), eq("github"), any());
         row.setErrorClass("PayloadParsingException");
         row.setFailedAt(Instant.now());
         when(repository.findWorkspace(42L, 17L)).thenReturn(Optional.of(row));
@@ -90,7 +98,8 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
                 repository,
                 consumer,
                 new TransactionTemplate(mock(PlatformTransactionManager.class)),
-                mock(InstallationReplayAudit.class));
+                mock(InstallationReplayAudit.class),
+                lockingDataSource());
         var row = new ConsumerDeadLetter();
         row.setId(18L);
         row.setStreamName("github");
@@ -104,8 +113,9 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
         when(stored.getTime()).thenReturn(row.getReceivedAt().atZone(ZoneOffset.UTC));
         when(stored.getSubject()).thenReturn(row.getSubject());
         when(consumer.readRetainedMessage("github", 18)).thenReturn(stored);
-        when(consumer.exclusive(eq("github"), eq("scope"), any()))
-                .thenThrow(new ConsumerFenceException("Another replica still handles a message of the consumer", null));
+        when(consumer.fencedConsumerName(42L, "github")).thenReturn("scope");
+        when(consumer.exclusive(eq(42L), eq("github"), any()))
+                .thenThrow(new ConsumerFenceException("The consumer still holds a message", null));
         when(repository.findWorkspace(42L, 18L)).thenReturn(Optional.of(row));
 
         assertThatThrownBy(() -> service.replayWorkspace(42L, 18L, 8L))
@@ -114,5 +124,19 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
                         failure -> assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
         verify(consumer, never()).dispatch(any(), any());
         assertThat(row.getReplayedAt()).isNull();
+    }
+
+    /** A database that grants every replay lock, so these tests reach the fence. */
+    private static DataSource lockingDataSource() throws SQLException {
+        var result = mock(ResultSet.class);
+        when(result.next()).thenReturn(true);
+        when(result.getBoolean(1)).thenReturn(true);
+        var statement = mock(PreparedStatement.class);
+        when(statement.executeQuery()).thenReturn(result);
+        var connection = mock(Connection.class);
+        when(connection.prepareStatement(anyString())).thenReturn(statement);
+        var dataSource = mock(DataSource.class);
+        when(dataSource.getConnection()).thenReturn(connection);
+        return dataSource;
     }
 }

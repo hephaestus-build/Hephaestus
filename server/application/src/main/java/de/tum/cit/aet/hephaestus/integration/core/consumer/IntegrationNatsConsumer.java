@@ -278,7 +278,6 @@ public class IntegrationNatsConsumer {
             stats.setInstallationConsumerActive(false);
         }
 
-        keepAlive.shutdownNow();
         virtualThreadExecutor.shutdown();
         try {
             if (!virtualThreadExecutor.awaitTermination(SHUTDOWN_WAIT.toMillis(), TimeUnit.MILLISECONDS)) {
@@ -289,6 +288,8 @@ public class IntegrationNatsConsumer {
             Thread.currentThread().interrupt();
         }
 
+        // A handler that outlived its consumer's stop still holds its message until the connection closes.
+        keepAlive.shutdownNow();
         if (natsConnection != null) {
             try {
                 natsConnection.close();
@@ -962,80 +963,128 @@ public class IntegrationNatsConsumer {
     private @Nullable ScheduledFuture<?> holdWhileHandling(Message msg) {
         if (!msg.isJetStream()) return null;
         long period = Math.max(100L, consumerProperties.ackWait().toMillis() / 3);
-        return keepAlive.scheduleAtFixedRate(
-                () -> {
-                    try {
-                        msg.inProgress();
-                    } catch (RuntimeException failure) {
-                        log.debug(
-                                "In-progress acknowledgement failed: error.type={}",
-                                failure.getClass().getName());
-                    }
-                },
-                period,
-                period,
-                TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * Runs work while no replica handles a message of one consumer, so a replayed event and the consumer's live events
-     * are never handled at the same time. A replayed event bypasses the consumer, so {@code MaxAckPending=1} alone
-     * cannot order it. The fence pauses the consumer, waits until it holds no unacknowledged message, and resumes it
-     * after the work. A consumer that does not exist delivers nothing, so the work runs at once. After the resume, the
-     * consumer's next live message waits for the next pull request of a replica, at most one pull expiry.
-     *
-     * @throws ConsumerFenceException when the broker refuses the pause, or another replica still handles a message
-     *     after {@link #FENCE_WAIT}
-     */
-    <T extends @Nullable Object> T exclusive(String stream, String consumerName, Supplier<T> work) {
-        Connection connection = natsConnection;
-        if (connection == null) throw new ConsumerFenceException("NATS consumer connection is unavailable", null);
-        JetStreamManagement management;
         try {
-            management = connection.jetStreamManagement();
-            if (!pause(management, stream, consumerName)) return work.get();
-        } catch (IOException | JetStreamApiException failure) {
-            throw new ConsumerFenceException("The broker did not pause the consumer", failure);
-        }
-        ScheduledFuture<?> renewal = null;
-        try {
-            awaitNoPendingMessage(management, stream, consumerName);
-            long period = FENCE_PAUSE.toMillis() / 3;
-            renewal = keepAlive.scheduleAtFixedRate(
+            return keepAlive.scheduleAtFixedRate(
                     () -> {
                         try {
-                            pause(management, stream, consumerName);
-                        } catch (IOException | JetStreamApiException | RuntimeException failure) {
-                            log.warn(
-                                    "Consumer fence renewal failed: consumerName={}, error.type={}",
-                                    consumerName,
+                            msg.inProgress();
+                        } catch (RuntimeException failure) {
+                            log.debug(
+                                    "In-progress acknowledgement failed: error.type={}",
                                     failure.getClass().getName());
                         }
                     },
                     period,
                     period,
                     TimeUnit.MILLISECONDS);
-            return work.get();
-        } finally {
-            if (renewal != null) renewal.cancel(false);
+        } catch (RejectedExecutionException stopping) {
+            // The fleet stops: the message returns to the broker after its ack wait.
+            return null;
+        }
+    }
+
+    /**
+     * Runs work while no replica handles a live message of the scope's consumer on one stream, so a replayed event and
+     * the consumer's live events are never handled at the same time. A replayed event bypasses the consumer, so
+     * {@code MaxAckPending=1} alone cannot order it. The fence pauses the consumer, waits until it holds no
+     * unacknowledged message, renews the pause while the work runs, and resumes the consumer after. A consumer that
+     * does not exist delivers nothing, so the work runs at once. After the resume, the consumer's next live message
+     * waits for the next pull request of a replica, at most one pull expiry. Callers run one fence of a consumer at a
+     * time: the resume of one fence would end the pause of another.
+     *
+     * @param scopeId the workspace, or null for the installation consumer
+     * @throws ConsumerFenceException when the broker refuses the pause, or the consumer still holds a message after
+     *     {@link #FENCE_WAIT}: one that a replica handles, or one that waits for its retry
+     */
+    <T extends @Nullable Object> T exclusive(@Nullable Long scopeId, String stream, Supplier<T> work) {
+        String consumerName = fencedConsumerName(scopeId, stream);
+        Connection connection = natsConnection;
+        if (connection == null) throw new ConsumerFenceException("NATS consumer connection is unavailable", null);
+        JetStreamManagement management;
+        try {
+            management = connection.jetStreamManagement();
+        } catch (IOException failure) {
+            throw new ConsumerFenceException("The broker did not answer", failure);
+        }
+        Object pauses = new Object();
+        // Also true when a pause request failed: the broker may have applied it.
+        boolean[] fenced = {true};
+        try {
+            if (!pause(management, stream, consumerName)) {
+                fenced[0] = false;
+                return work.get();
+            }
+            awaitNoPendingMessage(management, stream, consumerName);
+            long period = FENCE_PAUSE.toMillis() / 3;
+            ScheduledFuture<?> renewal;
             try {
-                management.resumeConsumer(stream, consumerName);
-            } catch (IOException | JetStreamApiException failure) {
-                // The pause ends on its own within FENCE_PAUSE.
-                log.warn(
-                        "Consumer resume failed: consumerName={}, error.type={}",
-                        consumerName,
-                        failure.getClass().getName());
+                renewal = keepAlive.scheduleAtFixedRate(
+                        () -> {
+                            synchronized (pauses) {
+                                if (!fenced[0]) return;
+                                try {
+                                    pause(management, stream, consumerName);
+                                } catch (IOException | JetStreamApiException | RuntimeException failure) {
+                                    log.warn(
+                                            "Consumer fence renewal failed: consumerName={}, error.type={}",
+                                            consumerName,
+                                            failure.getClass().getName());
+                                }
+                            }
+                        },
+                        period,
+                        period,
+                        TimeUnit.MILLISECONDS);
+            } catch (RejectedExecutionException stopping) {
+                throw new ConsumerFenceException("The consumer fleet is stopping", stopping);
+            }
+            try {
+                return work.get();
+            } finally {
+                renewal.cancel(false);
+            }
+        } catch (IOException | JetStreamApiException failure) {
+            throw new ConsumerFenceException("The broker did not pause the consumer", failure);
+        } finally {
+            // A renewal that already runs finishes before the resume, and none pauses after it.
+            synchronized (pauses) {
+                boolean paused = fenced[0];
+                fenced[0] = false;
+                try {
+                    if (paused) management.resumeConsumer(stream, consumerName);
+                } catch (IOException | JetStreamApiException failure) {
+                    // The pause ends on its own within FENCE_PAUSE.
+                    log.warn(
+                            "Consumer resume failed: consumerName={}, error.type={}",
+                            consumerName,
+                            failure.getClass().getName());
+                }
             }
         }
     }
 
-    /** False when the consumer does not exist. */
+    /** The durable that delivers the scope's live events of the stream now, whatever name an older record holds. */
+    String fencedConsumerName(@Nullable Long scopeId, String stream) {
+        return scopeId == null
+                ? ConsumerSubjectMath.installationConsumerName(durableBaseName())
+                : ConsumerSubjectMath.scopeConsumerName(durableBaseName(), scopeId, stream);
+    }
+
+    /**
+     * False when the consumer does not exist. The pause ends at a time on this replica's clock, so a broker that
+     * reports the consumer as not paused is refused rather than trusted.
+     */
     private static boolean pause(JetStreamManagement management, String stream, String consumerName)
             throws IOException, JetStreamApiException {
         try {
-            management.pauseConsumer(
-                    stream, consumerName, ZonedDateTime.now(ZoneOffset.UTC).plus(FENCE_PAUSE));
+            if (!management
+                    .pauseConsumer(
+                            stream,
+                            consumerName,
+                            ZonedDateTime.now(ZoneOffset.UTC).plus(FENCE_PAUSE))
+                    .isPaused()) {
+                throw new ConsumerFenceException("The broker did not pause the consumer", null);
+            }
             return true;
         } catch (JetStreamApiException failure) {
             // 10014 = consumer not found.
@@ -1049,7 +1098,7 @@ public class IntegrationNatsConsumer {
         try {
             while (management.getConsumerInfo(stream, consumerName).getNumAckPending() > 0) {
                 if (System.nanoTime() > deadline) {
-                    throw new ConsumerFenceException("Another replica still handles a message of the consumer", null);
+                    throw new ConsumerFenceException("The consumer still holds a message", null);
                 }
                 TimeUnit.MILLISECONDS.sleep(FENCE_POLL.toMillis());
             }

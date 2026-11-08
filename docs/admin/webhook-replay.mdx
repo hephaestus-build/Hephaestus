@@ -71,7 +71,11 @@ Confirm that `replayedAt` contains a time.
 
 A handler failure returns HTTP 409 and leaves the record pending.
 A broker outage returns HTTP 503.
-An event of the same workspace and stream that is still in progress after 30 seconds also returns HTTP 503. Try again later.
+HTTP 503 also has two other causes. Try again later for both:
+
+- After 30 seconds, another event of the same workspace and stream is still in progress or waits for its retry.
+- Another replay of the same workspace and stream runs.
+
 An event that has expired or been removed from the stream returns HTTP 410.
 Reconcile that gap from the provider.
 The database record cannot restore an expired payload.

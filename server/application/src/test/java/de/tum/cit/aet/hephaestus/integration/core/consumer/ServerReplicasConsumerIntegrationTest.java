@@ -118,8 +118,7 @@ class ServerReplicasConsumerIntegrationTest {
 
         CountDownLatch replayRunning = new CountDownLatch(1);
         CountDownLatch finishReplay = new CountDownLatch(1);
-        String consumerName = ConsumerSubjectMath.scopeConsumerName(DURABLE, SCOPE_ID, STREAM);
-        FutureTask<String> replay = new FutureTask<>(() -> second.exclusive(STREAM, consumerName, () -> {
+        FutureTask<String> replay = new FutureTask<>(() -> second.exclusive(SCOPE_ID, STREAM, () -> {
             replayRunning.countDown();
             awaitUninterruptibly(finishReplay);
             return "replayed";
@@ -145,8 +144,7 @@ class ServerReplicasConsumerIntegrationTest {
 
     @Test
     void shouldReplayAtOnceWhenTheConsumerDoesNotExist() {
-        assertThat(first.exclusive(STREAM, "no-such-consumer", () -> "replayed"))
-                .isEqualTo("replayed");
+        assertThat(first.exclusive(SCOPE_ID + 1, STREAM, () -> "replayed")).isEqualTo("replayed");
     }
 
     private IntegrationNatsConsumer replica() {
