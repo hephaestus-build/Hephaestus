@@ -89,6 +89,34 @@ class IssueContentSourceTest extends BaseUnitTest {
         var captured = provider.capture(request(sampleMetadata(), issue), Set.of(COMMENTS));
 
         assertThat(captured.completeness()).containsEntry(COMMENTS, SourceCompleteness.PARTIAL);
+        assertThat(captured.captureLimitations()).containsEntry(COMMENTS, List.of("COMMENTS_NOT_READ_WHOLE"));
+    }
+
+    @Test
+    void shouldKeepAnUnknownProviderCountPartialEvenWhenCommentsAreStored() {
+        Issue issue = richIssue();
+        issue.setCommentsCount(null);
+        stubComments(List.of(comment("bob", "first", Instant.parse("2025-06-01T10:00:00Z"))));
+        when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
+
+        var captured = provider.capture(request(sampleMetadata(), issue), Set.of(COMMENTS));
+
+        assertThat(captured.completeness()).containsEntry(COMMENTS, SourceCompleteness.PARTIAL);
+        assertThat(captured.contentStates()).containsEntry(COMMENTS, SourceContentState.NON_EMPTY);
+        assertThat(captured.captureLimitations()).containsEntry(COMMENTS, List.of("COMMENT_COUNT_UNKNOWN"));
+    }
+
+    @Test
+    void shouldCaptureAnEmptyCompleteDiscussionWhenTheProviderExplicitlyCountsZero() {
+        Issue issue = richIssue();
+        issue.setCommentsCount(0);
+        when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
+
+        var captured = provider.capture(request(sampleMetadata(), issue), Set.of(COMMENTS));
+
+        assertThat(captured.completeness()).containsEntry(COMMENTS, SourceCompleteness.COMPLETE);
+        assertThat(captured.contentStates()).containsEntry(COMMENTS, SourceContentState.EMPTY);
+        assertThat(captured.captureLimitations()).isEmpty();
     }
 
     @Test

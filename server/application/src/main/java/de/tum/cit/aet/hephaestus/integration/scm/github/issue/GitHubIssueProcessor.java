@@ -212,7 +212,7 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
                 dto.htmlUrl(),
                 dto.locked(),
                 dto.closedAt(),
-                dto.commentsCount(), // int primitive, no null check needed
+                dto.commentsCount(),
                 now,
                 dto.createdAt(),
                 dto.updatedAt(),
@@ -311,7 +311,7 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         if (!Objects.equals(oldIssue.getStateReason(), newIssue.getStateReason())) {
             changedFields.add("stateReason");
         }
-        if (oldIssue.getCommentsCount() != newIssue.getCommentsCount()) {
+        if (!Objects.equals(oldIssue.getCommentsCount(), newIssue.getCommentsCount())) {
             changedFields.add("commentsCount");
         }
         if (oldIssue.isLocked() != newIssue.isLocked()) {

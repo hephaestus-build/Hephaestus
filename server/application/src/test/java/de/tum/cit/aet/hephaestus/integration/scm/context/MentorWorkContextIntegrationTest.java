@@ -223,6 +223,8 @@ class MentorWorkContextIntegrationTest extends AbstractWorkspaceIntegrationTest 
         assertThat(issue.path("developerRelation").valueStream().map(JsonNode::asString))
                 .containsExactly("ASSIGNEE");
         assertThat(issue.path("body").asString()).isEqualTo("Write the setup guide.");
+        assertThat(issue.path("commentsTotal").isNull()).isTrue();
+        assertThat(issue.path("commentsStatus").asString()).isEqualTo("PARTIAL");
         assertThat(issue.path("comments").get(0).path("body").asString()).isEqualTo("Start with the install steps.");
         assertThat(issue.path("comments").get(0).path("url").asString()).startsWith(assigned.getHtmlUrl() + "#note_");
         for (Issue unreadable : List.of(others, inHiddenRepository)) {
@@ -233,6 +235,26 @@ class MentorWorkContextIntegrationTest extends AbstractWorkspaceIntegrationTest 
                     .as("issue #%d", unreadable.getNumber())
                     .isEqualTo("NOT_FOUND");
         }
+    }
+
+    @Test
+    void shouldDistinguishKnownEmptyIssueCommentsFromAStoredCountGap() {
+        var work = issue(course, 14, student, "Work");
+        work.setCommentsCount(0);
+        issueRepository.saveAndFlush(work);
+        var empty = issueDetail
+                .inspect(workspace.getId(), accountId(student), work.getId())
+                .path("issue");
+        assertThat(empty.path("commentsStatus").asString()).isEqualTo("COMPLETE");
+        assertThat(empty.path("commentsTotal").asInt()).isZero();
+
+        work.setCommentsCount(1);
+        issueRepository.saveAndFlush(work);
+        var gap = issueDetail
+                .inspect(workspace.getId(), accountId(student), work.getId())
+                .path("issue");
+        assertThat(gap.path("commentsStatus").asString()).isEqualTo("PARTIAL");
+        assertThat(gap.path("commentsTotal").asInt()).isEqualTo(1);
     }
 
     @Test

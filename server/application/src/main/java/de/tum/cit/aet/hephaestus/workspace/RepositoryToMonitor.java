@@ -155,7 +155,7 @@ public class RepositoryToMonitor {
     @ToString.Exclude
     private @Nullable Workspace workspace;
 
-    /** Provider count at the last repair restart; the same coverage gap is not scanned again. */
+    /** Provider count at the last restart; another row-count repair waits for that gap to be filled. */
     @Nullable
     private Integer backfillRepairProviderCount;
 

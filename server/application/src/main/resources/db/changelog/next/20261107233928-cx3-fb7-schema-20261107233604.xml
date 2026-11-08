@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794094768023-1" author="hephaestus">
+        <dropNotNullConstraint columnDataType="int" columnName="comments_count" tableName="issue"/>
+    </changeSet>
+    <changeSet id="1794094768023-2" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="issue" columnName="comments_count"/>
+            <columnExists tableName="issue" columnName="issue_type"/>
+        </preConditions>
+        <comment>Issue zeros can come from an absent provider count. Keep them unknown until a backfill supplies the count. Positive counts and pull requests keep their values.</comment>
+        <sql>UPDATE issue SET comments_count = NULL WHERE issue_type = 'ISSUE' AND comments_count = 0</sql>
+        <rollback><stop>Restore the verified database backup taken before the issue comment count correction.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

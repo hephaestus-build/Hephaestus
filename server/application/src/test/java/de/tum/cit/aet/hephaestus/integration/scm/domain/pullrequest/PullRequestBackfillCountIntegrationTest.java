@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillRestartProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
@@ -71,6 +72,7 @@ class PullRequestBackfillCountIntegrationTest extends BaseIntegrationTest {
         var repair = new GitHubBackfillRepair(
                 repositories,
                 pullRequests,
+                mock(IssueRepository.class),
                 mock(GitHubGraphQlClientProvider.class),
                 mock(GitHubSyncProperties.class),
                 mock(BackfillRestartProvider.class),

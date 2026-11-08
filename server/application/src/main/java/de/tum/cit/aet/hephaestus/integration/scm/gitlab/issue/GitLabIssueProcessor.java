@@ -274,7 +274,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
             @Nullable String authorAvatarUrl,
             @Nullable String authorWebUrl,
             @Nullable Boolean authorBot,
-            int commentsCount,
+            @Nullable Integer commentsCount,
             @Nullable List<SyncLabelData> syncLabels,
             @Nullable List<SyncAssigneeData> syncAssignees,
             @Nullable Integer milestoneIid,

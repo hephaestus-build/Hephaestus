@@ -175,7 +175,12 @@ public class IssueDetailSource implements ContentSource {
             commentsCut |= MergeReadinessContentSource.putComment(
                     comments, author, comment.getAuthor(), words, comment.getCreatedAt(), comment.getHtmlUrl());
         }
-        node.put("commentsStatus", commentsCut ? "TRUNCATED" : "COMPLETE");
+        Integer expectedComments = issue.getCommentsCount();
+        node.put(
+                "commentsStatus",
+                commentsCut
+                        ? "TRUNCATED"
+                        : expectedComments == null || expectedComments > latest.size() ? "PARTIAL" : "COMPLETE");
         node.put("commentsTotal", issue.getCommentsCount());
 
         PageRequest related = PageRequest.of(0, MAX_RELATED + 1);

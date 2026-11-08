@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.sync.backfill;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -15,6 +16,7 @@ import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillRestartProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -42,6 +44,9 @@ class GitHubBackfillRepairTest extends BaseUnitTest {
 
     @Mock
     private PullRequestRepository pullRequests;
+
+    @Mock
+    private IssueRepository issues;
 
     @Mock
     private GitHubGraphQlClientProvider clients;
@@ -79,7 +84,7 @@ class GitHubBackfillRepairTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         repair = new GitHubBackfillRepair(
-                repositories, pullRequests, clients, properties, state, ledger, actors, comments);
+                repositories, pullRequests, issues, clients, properties, state, ledger, actors, comments);
         target = SyncTargetTestBuilder.syncTarget()
                 .id(7L)
                 .scopeId(3L)
@@ -112,10 +117,10 @@ class GitHubBackfillRepairTest extends BaseUnitTest {
                 .scopeId(3L)
                 .repositoryNameWithOwner("org/repo")
                 .build();
-        when(state.restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong()))
+        when(state.restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong(), eq(false)))
                 .thenReturn(Optional.of(fresh));
         assertThat(repair.inspect(target, false)).isEqualTo(fresh);
-        verify(state).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong());
+        verify(state).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong(), eq(false));
     }
 
     @ParameterizedTest
@@ -136,18 +141,44 @@ class GitHubBackfillRepairTest extends BaseUnitTest {
                 .repositoryNameWithOwner("org/repo")
                 .build();
         if (expectedRestart)
-            when(state.restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong()))
+            when(state.restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong(), eq(false)))
                     .thenReturn(Optional.of(restarted));
 
         assertThat(repair.inspect(target, manual)).isEqualTo(expectedRestart ? restarted : target);
-        if (!expectedRestart) verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong());
+        if (!expectedRestart)
+            verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong(), anyBoolean());
+    }
+
+    @Test
+    void shouldReopenHistoryForUnknownIssueCountsEvenWhenEveryPullRequestIsStored() {
+        when(field.toEntity(Integer.class)).thenReturn(100);
+        when(issues.existsUnknownCommentCount(3L, 8L)).thenReturn(true);
+        var restarted = SyncTargetTestBuilder.syncTarget()
+                .id(7L)
+                .scopeId(3L)
+                .repositoryNameWithOwner("org/repo")
+                .build();
+        when(state.restartCompletedBackfill(3L, 7L, 100, 100L, true)).thenReturn(Optional.of(restarted));
+
+        assertThat(repair.inspect(target, true)).isEqualTo(restarted);
+    }
+
+    @Test
+    void shouldReportARefusedUnknownCountRepairInsteadOfAnUnchangedSuccessfulTarget() {
+        when(field.toEntity(Integer.class)).thenReturn(100);
+        when(issues.existsUnknownCommentCount(3L, 8L)).thenReturn(true);
+        when(state.restartCompletedBackfill(3L, 7L, 100, 100L, true)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> repair.inspect(target, true))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Historical repair restart was not admitted");
     }
 
     @Test
     void shouldReportARefusedDiscussionRepairRestartToTheAdminRepositoryLoop() {
         when(field.toEntity(Integer.class)).thenReturn(100);
         when(pullRequests.existsUnfinishedDiscussionRead(8L)).thenReturn(true);
-        when(state.restartCompletedBackfill(3L, 7L, 100, 100L)).thenReturn(Optional.empty());
+        when(state.restartCompletedBackfill(3L, 7L, 100, 100L, true)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> repair.inspect(target, true))
                 .isInstanceOf(IllegalStateException.class)
@@ -160,14 +191,14 @@ class GitHubBackfillRepairTest extends BaseUnitTest {
         assertThat(repair.inspect(target, false)).isEqualTo(target);
         assertThat(repair.inspect(target, false)).isEqualTo(target);
         verify(request).execute();
-        verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong());
+        verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong(), anyBoolean());
     }
 
     @Test
     void shouldLeaveCompletedStateUnchangedWhenProviderFails() {
         when(request.execute()).thenReturn(Mono.error(new IllegalStateException("Unavailable")));
         assertThat(repair.inspect(target, false)).isEqualTo(target);
-        verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong());
+        verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong(), anyBoolean());
     }
 
     @Test
@@ -184,7 +215,7 @@ class GitHubBackfillRepairTest extends BaseUnitTest {
         assertThatThrownBy(() -> repair.inspect(target, true))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Unavailable");
-        verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong());
+        verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong(), anyBoolean());
     }
 
     @Test
@@ -192,6 +223,6 @@ class GitHubBackfillRepairTest extends BaseUnitTest {
         when(field.toEntity(Integer.class)).thenReturn(100);
         repair.inspect(target, true);
         verify(ledger).reconcileRepository(3, 8);
-        verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong());
+        verify(state, never()).restartCompletedBackfill(eq(3L), eq(7L), anyInt(), anyLong(), anyBoolean());
     }
 }

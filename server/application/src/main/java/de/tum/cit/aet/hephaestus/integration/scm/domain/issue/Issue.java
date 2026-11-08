@@ -85,7 +85,7 @@ public class Issue extends BaseGitServiceEntity {
 
     private @Nullable Instant closedAt;
 
-    private int commentsCount;
+    private @Nullable Integer commentsCount;
 
     /**
      * Timestamp of the last successful sync for this issue/PR and its associated data.

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -60,6 +61,7 @@ public class GitLabHistoricalBackfillService {
 
     private final ActivityLedgerRepair activityLedgerRepair;
     private final PullRequestRepository pullRequests;
+    private final IssueRepository issues;
     private final GitLabProjectAdmission admission;
     private final SyncTargetProvider syncTargetProvider;
     private final RepositoryRepository repositoryRepository;
@@ -78,6 +80,7 @@ public class GitLabHistoricalBackfillService {
             SyncSchedulerProperties syncSchedulerProperties,
             ActivityLedgerRepair activityLedgerRepair,
             PullRequestRepository pullRequests,
+            IssueRepository issues,
             GitLabProjectAdmission admission) {
         this.syncTargetProvider = syncTargetProvider;
         this.repositoryRepository = repositoryRepository;
@@ -86,6 +89,7 @@ public class GitLabHistoricalBackfillService {
         this.syncSchedulerProperties = syncSchedulerProperties;
         this.activityLedgerRepair = activityLedgerRepair;
         this.pullRequests = pullRequests;
+        this.issues = issues;
         this.admission = admission;
     }
 
@@ -127,11 +131,12 @@ public class GitLabHistoricalBackfillService {
                 if (mergeRequests == null) continue;
                 int total = mergeRequests.countMergeRequests(workspaceId, target.repositoryNameWithOwner());
                 long stored = pullRequests.countStoredByRepositoryId(repo.getId());
-                if (BackfillRestartProvider.hasMaterialGap(stored, total)
-                        || pullRequests.existsUnfinishedDiscussionRead(repo.getId()))
+                boolean incompleteCoverage = pullRequests.existsUnfinishedDiscussionRead(repo.getId())
+                        || issues.existsUnknownCommentCount(workspaceId, repo.getId());
+                if (BackfillRestartProvider.hasMaterialGap(stored, total) || incompleteCoverage)
                     admission.runWrite(read, () -> {
                         if (syncTargetProvider
-                                .restartCompletedBackfill(workspaceId, target.id(), total, stored)
+                                .restartCompletedBackfill(workspaceId, target.id(), total, stored, incompleteCoverage)
                                 .isEmpty()) handle.reportWarnings();
                     });
             } catch (RuntimeException e) {

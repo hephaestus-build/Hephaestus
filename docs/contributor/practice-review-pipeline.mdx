@@ -167,6 +167,17 @@ It has the same partial limitation: absence stays undecided until a whole provid
 Only a true value permits these sources to report complete discussion coverage.
 A whole read does not prove that the discussion is still current.
 
+Issue comment coverage uses the provider's comment count and the number of stored comments.
+An absent count stays unknown, including on work first received through a webhook.
+The issue-comment source is `PARTIAL` with `COMMENT_COUNT_UNKNOWN` until the provider supplies a count.
+A known count greater than the mirror count records `COMMENTS_NOT_READ_WHOLE`.
+An explicit zero can establish complete empty coverage.
+
+The comparison includes stored Hephaestus feedback before capture excludes it from the evidence.
+The manual **Run backfill** action reopens completed issue history when monitored issues have unknown counts.
+After that backfill, a new review can use the recovered coverage.
+Existing results are not rewritten.
+
 A changed text file over 2 MiB on either side is left out of the server's capture and named in `change.json` as `left_out`.
 The sandbox still builds `diff.patch` from Git, so the session can read the file's change.
 The diff source is `PARTIAL`, with the limitation `CHANGED_FILE_NOT_CAPTURED`. What a practice can then claim:

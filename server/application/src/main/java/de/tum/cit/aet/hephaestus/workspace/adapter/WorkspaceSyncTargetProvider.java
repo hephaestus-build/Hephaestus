@@ -356,9 +356,13 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
     @Override
     @Transactional
     public Optional<SyncTarget> restartCompletedBackfill(
-            long workspaceId, long syncTargetId, int providerCount, long storedCount) {
+            long workspaceId,
+            long syncTargetId,
+            int providerCount,
+            long storedCount,
+            boolean repairIncompleteCoverage) {
         if (repositoryToMonitorRepository.restartCompletedBackfill(
-                        workspaceId, syncTargetId, providerCount, storedCount)
+                        workspaceId, syncTargetId, providerCount, storedCount, repairIncompleteCoverage)
                 == 0) return Optional.empty();
         return loadSyncTarget(syncTargetId);
     }

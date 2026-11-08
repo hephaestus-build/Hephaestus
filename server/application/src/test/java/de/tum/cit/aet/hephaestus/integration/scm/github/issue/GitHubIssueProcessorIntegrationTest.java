@@ -186,6 +186,10 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
     }
 
     private GitHubIssueDTO createBasicIssueDto(Long id, int number, Instant updatedAt) {
+        return createBasicIssueDto(id, number, updatedAt, 0);
+    }
+
+    private GitHubIssueDTO createBasicIssueDto(Long id, int number, Instant updatedAt, @Nullable Integer count) {
         return new GitHubIssueDTO(
                 id, // id (webhook style - no databaseId)
                 null, // databaseId (null for webhook payloads)
@@ -196,7 +200,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                 "open",
                 null, // stateReason
                 "https://github.com/" + FIXTURE_REPO_FULL_NAME + "/issues/" + number,
-                0, // commentsCount
+                count, // commentsCount
                 Instant.parse("2025-11-01T21:42:45Z"),
                 updatedAt,
                 null, // closedAt
@@ -211,6 +215,23 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                 ,
                 null // subIssuesSummary
                 );
+    }
+
+    @Test
+    void shouldPreserveAnUnknownCountUntilAnExplicitProviderCountArrives() {
+        var now = Instant.parse("2026-01-01T00:00:00Z");
+        var created = processor.process(createBasicIssueDto(9_804L, 65, now, null), createContext());
+        assertNotNull(created);
+        assertThat(issueRepository.findById(created.getId()).orElseThrow().getCommentsCount())
+                .isNull();
+
+        processor.process(createBasicIssueDto(9_804L, 65, now.plusSeconds(1), 200), createContext());
+        processor.process(createBasicIssueDto(9_804L, 65, now.plusSeconds(2), null), createContext());
+        assertThat(issueRepository.findById(created.getId()).orElseThrow().getCommentsCount())
+                .isEqualTo(200);
+        eventListener.clear();
+        processor.process(createBasicIssueDto(9_804L, 65, now.plusSeconds(3), 200), createContext());
+        assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).isEmpty();
     }
 
     @ParameterizedTest

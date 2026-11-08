@@ -39,6 +39,10 @@ repository, url, state, `createdAt`, `updatedAt`, `mergedAt`, `closedAt`, additi
 and the `resource` of the issue's detail: body, comments, sub-issues, blockers and the pull requests that close it.
 This is metadata, not the code: use it to match "my X change" to a real pull request or issue and to name and date it.
 
+An issue detail's `commentsStatus` is `COMPLETE` when the stored comments cover a known provider count,
+`PARTIAL` when that count is unknown or comments are missing, and `TRUNCATED` when context limits cut the list or text.
+`commentsTotal: null` means the provider count is unknown. An empty list with partial coverage does not prove that no comments exist.
+
 ## inputs/context/merge_readiness.json
 
 Hephaestus's stored copy, not a live read, of their open pull requests: up to five in `pullRequests`, the rest named

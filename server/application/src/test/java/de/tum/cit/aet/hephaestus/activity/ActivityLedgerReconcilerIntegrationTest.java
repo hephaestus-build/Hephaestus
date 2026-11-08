@@ -563,19 +563,24 @@ class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
                         + " pull_request_backfill_high_water_mark=950,pull_request_backfill_checkpoint=0 WHERE id=?",
                 monitorId);
         var tx = new TransactionTemplate(transactions);
-        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 100, 0)))
+        assertThat(tx.<Integer>execute(
+                        status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 100, 0, false)))
                 .isEqualTo(1);
         jdbc.update(
                 "UPDATE repository_to_monitor SET"
                         + " pull_request_backfill_high_water_mark=950,pull_request_backfill_checkpoint=0 WHERE id=?",
                 monitorId);
-        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 100, 0)))
+        assertThat(tx.<Integer>execute(
+                        status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 100, 0, false)))
                 .isZero();
-        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 101, 0)))
+        assertThat(tx.<Integer>execute(
+                        status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 101, 0, false)))
                 .isZero();
-        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 120, 0)))
+        assertThat(tx.<Integer>execute(
+                        status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 120, 0, false)))
                 .isZero();
-        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 200, 100)))
+        assertThat(tx.<Integer>execute(
+                        status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 200, 100, false)))
                 .isEqualTo(1);
     }
 
@@ -590,7 +595,7 @@ class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
             var earlier = monitors.findById(monitorId).orElseThrow();
             assertThat(reset.<Integer>execute(
-                            inner -> monitors.restartCompletedBackfill(workspaceId, monitorId, 950, 0)))
+                            inner -> monitors.restartCompletedBackfill(workspaceId, monitorId, 950, 0, false)))
                     .isEqualTo(1);
             earlier.setLabelsSyncedAt(at);
             monitors.saveAndFlush(earlier);
@@ -614,11 +619,13 @@ class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
             """, Timestamp.from(at), monitorId);
         var tx = new TransactionTemplate(transactions);
         assertThat(tx.<Integer>execute(
-                        status -> monitors.restartCompletedBackfill(workspaceId + 10000, monitorId, 950, 0)))
+                        status -> monitors.restartCompletedBackfill(workspaceId + 10000, monitorId, 950, 0, false)))
                 .isZero();
-        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 950, 0)))
+        assertThat(tx.<Integer>execute(
+                        status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 950, 0, false)))
                 .isEqualTo(1);
-        assertThat(tx.<Integer>execute(status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 950, 0)))
+        assertThat(tx.<Integer>execute(
+                        status -> monitors.restartCompletedBackfill(workspaceId, monitorId, 950, 0, false)))
                 .isZero();
         assertThat(jdbc.queryForObject(
                         "SELECT pull_request_backfill_high_water_mark FROM repository_to_monitor WHERE id=?",

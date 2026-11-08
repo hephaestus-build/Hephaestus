@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.backfill;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -29,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPas
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -95,6 +97,9 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
     private PullRequestRepository pullRequests;
 
     @Mock
+    private IssueRepository issues;
+
+    @Mock
     private GitLabMergeRequestSyncService mergeRequests;
 
     private GitLabHistoricalBackfillService service;
@@ -116,6 +121,7 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
                         new FilterProperties(Set.of(), Set.of())),
                 ledger,
                 pullRequests,
+                issues,
                 projectAdmission);
 
         lenient().when(syncServiceHolderProvider.getIfAvailable()).thenReturn(syncServiceHolder);
@@ -157,7 +163,36 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
         when(mergeRequests.countMergeRequests(SCOPE_ID, REPO)).thenReturn(total);
         service.repairCompletedRepositories(SCOPE_ID, handle);
         verify(ledger).reconcileRepository(SCOPE_ID, 42L);
-        verify(syncTargetProvider, times(restart ? 1 : 0)).restartCompletedBackfill(SCOPE_ID, 7L, total, stored);
+        if (restart) verify(syncTargetProvider).restartCompletedBackfill(SCOPE_ID, 7L, total, stored, false);
+        else
+            verify(syncTargetProvider, never())
+                    .restartCompletedBackfill(eq(SCOPE_ID), eq(7L), eq(total), eq(stored), anyBoolean());
+    }
+
+    @Test
+    void shouldReopenGitLabHistoryForUnknownIssueCountsWithoutAMergeRequestGap() {
+        prepareAdminRepair(List.of(completedTarget(7L)));
+        when(pullRequests.countStoredByRepositoryId(42L)).thenReturn(100L);
+        when(mergeRequests.countMergeRequests(SCOPE_ID, REPO)).thenReturn(100);
+        when(issues.existsUnknownCommentCount(SCOPE_ID, 42L)).thenReturn(true);
+
+        service.repairCompletedRepositories(SCOPE_ID, handle);
+
+        verify(syncTargetProvider).restartCompletedBackfill(SCOPE_ID, 7L, 100, 100L, true);
+    }
+
+    @Test
+    void shouldWarnWhenTheUnknownIssueCountRepairRestartIsRefused() {
+        prepareAdminRepair(List.of(completedTarget(7L)));
+        when(pullRequests.countStoredByRepositoryId(42L)).thenReturn(100L);
+        when(mergeRequests.countMergeRequests(SCOPE_ID, REPO)).thenReturn(100);
+        when(issues.existsUnknownCommentCount(SCOPE_ID, 42L)).thenReturn(true);
+        when(syncTargetProvider.restartCompletedBackfill(SCOPE_ID, 7L, 100, 100L, true))
+                .thenReturn(Optional.empty());
+
+        service.repairCompletedRepositories(SCOPE_ID, handle);
+
+        verify(handle).reportWarnings();
     }
 
     @Test
@@ -169,7 +204,7 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
 
         service.repairCompletedRepositories(SCOPE_ID, handle);
 
-        verify(syncTargetProvider).restartCompletedBackfill(SCOPE_ID, 7L, 100, 100L);
+        verify(syncTargetProvider).restartCompletedBackfill(SCOPE_ID, 7L, 100, 100L, true);
     }
 
     @Test
@@ -178,7 +213,7 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
         when(pullRequests.countStoredByRepositoryId(42L)).thenReturn(100L);
         when(mergeRequests.countMergeRequests(SCOPE_ID, REPO)).thenReturn(100);
         when(pullRequests.existsUnfinishedDiscussionRead(42L)).thenReturn(true);
-        when(syncTargetProvider.restartCompletedBackfill(SCOPE_ID, 7L, 100, 100L))
+        when(syncTargetProvider.restartCompletedBackfill(SCOPE_ID, 7L, 100, 100L, true))
                 .thenReturn(Optional.empty());
 
         service.repairCompletedRepositories(SCOPE_ID, handle);

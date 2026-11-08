@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillRestartProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Service;
 public class GitHubBackfillRepair {
     private final RepositoryRepository repositories;
     private final PullRequestRepository pullRequests;
+    private final IssueRepository issues;
     private final GitHubGraphQlClientProvider clients;
     private final GitHubSyncProperties properties;
     private final BackfillRestartProvider backfillState;
@@ -80,8 +82,11 @@ public class GitHubBackfillRepair {
             }
             long stored = count(repo);
             boolean unfinishedDiscussions = manual && pullRequests.existsUnfinishedDiscussionRead(repo.getId());
-            if (!BackfillRestartProvider.hasMaterialGap(stored, total) && !unfinishedDiscussions) return target;
-            var restarted = backfillState.restartCompletedBackfill(target.scopeId(), target.id(), total, stored);
+            boolean unknownIssueCounts = manual && issues.existsUnknownCommentCount(target.scopeId(), repo.getId());
+            if (!BackfillRestartProvider.hasMaterialGap(stored, total) && !unfinishedDiscussions && !unknownIssueCounts)
+                return target;
+            var restarted = backfillState.restartCompletedBackfill(
+                    target.scopeId(), target.id(), total, stored, unfinishedDiscussions || unknownIssueCounts);
             if (restarted.isPresent()) {
                 log.info(
                         "Restarted incomplete historical scan: workspaceId={}, syncTargetId={}, providerCount={}",
