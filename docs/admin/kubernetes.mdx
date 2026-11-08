@@ -1900,6 +1900,18 @@ The one-host installer currently uses automatic rollback.
 If its first install fails, Helm can remove the release resources before you inspect them.
 A missing Pod does not prove that no Pod ran.
 
+For a one-host installation, first select the kubeconfig in the installer's release directory.
+For the default directory:
+
+```bash
+export KUBECONFIG="$HOME/hephaestus/kubeconfig"
+```
+
+Use your chosen directory if it differs.
+The installer exports this path only inside its own process.
+If the file does not exist, inspect the saved installer output and k3s on the host.
+Do not run the cluster checks below with another kubeconfig.
+
 1. Preserve the installer's terminal output before retrying.
 2. Check the Helm record with `helm list --namespace hephaestus`.
 3. If the release remains, read its history with `helm history hephaestus --namespace hephaestus`.
