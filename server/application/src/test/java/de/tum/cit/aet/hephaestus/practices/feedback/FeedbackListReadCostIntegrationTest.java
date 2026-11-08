@@ -158,8 +158,8 @@ class FeedbackListReadCostIntegrationTest extends BaseIntegrationTest {
                 UUID.fromString("7fffffff-ffff-ffff-ffff-ffffffffffff"),
                 UUID.fromString("80000000-0000-0000-0000-000000000000"))) {
             jdbc.sql("""
-                INSERT INTO feedback_response(id,workspace_id,feedback_id,resolution,created_at)
-                VALUES(:id,:ws,:feedback,:resolution,:at)
+                INSERT INTO feedback_response(id,workspace_id,feedback_id,resolution,comment,created_at)
+                VALUES(:id,:ws,:feedback,:resolution,'Recorded response.',:at)
                 """)
                     .param("id", response).param("ws", scenario.workspace().getId()).param("feedback", id)
                     .param("resolution", response.toString().startsWith("7") ? "DISAGREE" : "ADDRESSED")
@@ -168,8 +168,8 @@ class FeedbackListReadCostIntegrationTest extends BaseIntegrationTest {
         var first = feedback.list(scenario.workspace().getId(), ALL, PageRequest.of(0, 32));
         assertThat(first.getContent().stream().filter(row -> row.id().equals(id)).findFirst().orElseThrow().disagreedAt()).isNull();
         jdbc.sql("""
-            INSERT INTO feedback_response(id,workspace_id,feedback_id,resolution,created_at)
-            VALUES(:id,:ws,:feedback,'DISAGREE',:at)
+            INSERT INTO feedback_response(id,workspace_id,feedback_id,resolution,comment,created_at)
+            VALUES(:id,:ws,:feedback,'DISAGREE','Recorded disagreement.',:at)
             """)
                 .param("id", UUID.randomUUID()).param("ws", scenario.workspace().getId()).param("feedback", id)
                 .param("at", Timestamp.from(at.plusSeconds(1))).update();

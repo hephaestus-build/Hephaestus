@@ -43,12 +43,15 @@ public class FeedbackListReadQuery {
     private final ObjectMapper mapper;
 
     public Page<ReviewFeedbackDTO> list(long workspaceId, FeedbackQueryFilter filter, Pageable pageable) {
-        var page = queries.page(workspaceId, mapper.writeValueAsString(filter),
+        var page = queries.page(
+                workspaceId,
+                mapper.writeValueAsString(filter),
                 PageRequest.of(pageable.getPageNumber(), pageable.getPageSize()));
         if (page.isEmpty()) return new PageImpl<>(List.of(), page.getPageable(), page.getTotalElements());
         var ids = page.getContent().stream().map(Feedback::getId).toList();
-        var locations = queries.locations(workspaceId, ids).stream().collect(Collectors.toMap(
-                FeedbackQueryRepository.LocationRow::getId, FeedbackQueryRepository.LocationRow::getLocation));
+        var locations = queries.locations(workspaceId, ids).stream()
+                .collect(Collectors.toMap(
+                        FeedbackQueryRepository.LocationRow::getId, FeedbackQueryRepository.LocationRow::getLocation));
         var facts = facts(workspaceId, page.getContent());
         return page.map(row -> summary(row, Objects.requireNonNull(locations.get(row.getId())), facts));
     }
@@ -59,32 +62,47 @@ public class FeedbackListReadQuery {
 
     private Facts facts(long workspaceId, List<Feedback> feedback) {
         var ids = feedback.stream().map(Feedback::getId).toList();
-        var copies = rows.copyCounts(workspaceId, ids).stream().collect(Collectors.groupingBy(
-                FeedbackListReadRepository.CopyCount::feedbackId));
-        var copyFacts = copies.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,
-                entry -> copyFacts(entry.getValue())));
+        var copies = rows.copyCounts(workspaceId, ids).stream()
+                .collect(Collectors.groupingBy(FeedbackListReadRepository.CopyCount::feedbackId));
+        var copyFacts = copies.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> copyFacts(entry.getValue())));
         var disagreed = rows.responseTimes(workspaceId, ids).stream()
                 .filter(row -> row.resolution() == FeedbackResolution.DISAGREE)
-                .collect(Collectors.toMap(FeedbackListReadRepository.ResponseTime::feedbackId,
+                .collect(Collectors.toMap(
+                        FeedbackListReadRepository.ResponseTime::feedbackId,
                         FeedbackListReadRepository.ResponseTime::createdAt));
         return new Facts(
-                references.items(workspaceId, feedback.stream().map(Feedback::getItemId)
-                        .filter(Objects::nonNull).distinct().toList()),
-                references.developers(workspaceId, feedback.stream().map(Feedback::getDeveloperId).distinct().toList()),
-                basis.readAll(workspaceId, ids), copyFacts,
-                visibility.withdrawnAt(workspaceId, ids).keySet(), disagreed);
+                references.items(
+                        workspaceId,
+                        feedback.stream()
+                                .map(Feedback::getItemId)
+                                .filter(Objects::nonNull)
+                                .distinct()
+                                .toList()),
+                references.developers(
+                        workspaceId,
+                        feedback.stream()
+                                .map(Feedback::getDeveloperId)
+                                .distinct()
+                                .toList()),
+                basis.readAll(workspaceId, ids),
+                copyFacts,
+                visibility.withdrawnAt(workspaceId, ids).keySet(),
+                disagreed);
     }
 
     private static CopyFacts copyFacts(List<FeedbackListReadRepository.CopyCount> rows) {
         var counts = new EnumMap<FeedbackCopyState, Integer>(FeedbackCopyState.class);
         rows.forEach(row -> counts.put(row.state(), Math.toIntExact(row.count())));
-        return new CopyFacts(new FeedbackCopyCountsDTO(
-                counts.getOrDefault(FeedbackCopyState.PLANNED, 0),
-                counts.getOrDefault(FeedbackCopyState.WRITE_STARTED, 0),
-                counts.getOrDefault(FeedbackCopyState.POSTED, 0),
-                counts.getOrDefault(FeedbackCopyState.FAILED, 0),
-                counts.getOrDefault(FeedbackCopyState.WITHHELD, 0),
-                counts.getOrDefault(FeedbackCopyState.RETRACTED, 0)), rows.stream().anyMatch(row -> row.bodyPresent() != 0));
+        return new CopyFacts(
+                new FeedbackCopyCountsDTO(
+                        counts.getOrDefault(FeedbackCopyState.PLANNED, 0),
+                        counts.getOrDefault(FeedbackCopyState.WRITE_STARTED, 0),
+                        counts.getOrDefault(FeedbackCopyState.POSTED, 0),
+                        counts.getOrDefault(FeedbackCopyState.FAILED, 0),
+                        counts.getOrDefault(FeedbackCopyState.WITHHELD, 0),
+                        counts.getOrDefault(FeedbackCopyState.RETRACTED, 0)),
+                rows.stream().anyMatch(row -> row.bodyPresent() != 0));
     }
 
     private static ReviewFeedbackDTO summary(Feedback row, FeedbackLocation location, Facts facts) {
@@ -95,21 +113,37 @@ public class FeedbackListReadQuery {
         boolean allowed = !privateDestination && selected.readable();
         String body = allowed ? row.getBody() : null;
         return new ReviewFeedbackDTO(
-                id, row.getReviewId(), row.getItemId() == null ? null : facts.items().get(row.getItemId()),
+                id,
+                row.getReviewId(),
+                row.getItemId() == null ? null : facts.items().get(row.getItemId()),
                 Objects.requireNonNull(facts.developers().get(row.getDeveloperId())),
-                row.getDestination(), row.getState(), row.getStopReason(), location, row.getReplacesId(),
-                row.getCreatedAt(), row.getDeliveredAt(),
+                row.getDestination(),
+                row.getState(),
+                row.getStopReason(),
+                location,
+                row.getReplacesId(),
+                row.getCreatedAt(),
+                row.getDeliveredAt(),
                 body == null ? null : body.substring(0, Math.min(body.length(), PREVIEW_LENGTH)),
                 body != null && body.length() > PREVIEW_LENGTH,
                 privateDestination || (!allowed && (row.getBody() != null || copies.bodyPresent())),
                 selected.results().stream().anyMatch(Result::isMigratedHistory),
-                (int) selected.edges().stream().map(FeedbackBasisRepository.ReadRow::resultId).distinct().count(),
-                copies.counts(), facts.withdrawn().contains(id), facts.disagreed().get(id));
+                (int) selected.edges().stream()
+                        .map(FeedbackBasisRepository.ReadRow::resultId)
+                        .distinct()
+                        .count(),
+                copies.counts(),
+                facts.withdrawn().contains(id),
+                facts.disagreed().get(id));
     }
 
     private record CopyFacts(FeedbackCopyCountsDTO counts, boolean bodyPresent) {}
 
-    private record Facts(Map<Long, ItemRefDTO> items, Map<Long, ReviewDeveloperDTO> developers,
-            Map<UUID, FeedbackBasisRead.Snapshot> basis, Map<UUID, CopyFacts> copies,
-            Set<UUID> withdrawn, Map<UUID, Instant> disagreed) {}
+    private record Facts(
+            Map<Long, ItemRefDTO> items,
+            Map<Long, ReviewDeveloperDTO> developers,
+            Map<UUID, FeedbackBasisRead.Snapshot> basis,
+            Map<UUID, CopyFacts> copies,
+            Set<UUID> withdrawn,
+            Map<UUID, Instant> disagreed) {}
 }
