@@ -93,8 +93,8 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
         """)
     List<WorkspaceMetadataRow> findWorkspaceMetadata(@Param("workspaceId") long workspaceId);
 
-    record WorkspaceMetadataRow(Long id, IntegrationKind kind, ConnectionConfig config,
-            Instant createdAt, boolean credentialsPresent) {}
+    record WorkspaceMetadataRow(
+            Long id, IntegrationKind kind, ConnectionConfig config, Instant createdAt, boolean credentialsPresent) {}
 
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WorkspaceProviderRow(

@@ -6,8 +6,8 @@ import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMetadataQuery;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProviderAvailability;
@@ -71,7 +71,10 @@ public class WorkspaceQueryService {
     }
 
     public WorkspaceDTO toWorkspaceDTO(Workspace workspace) {
-        return WorkspaceDTO.from(workspace, connectionMetadata.findWorkspaceMetadata(workspace.getId()), workspaceAddress(workspace.getWorkspaceSlug()));
+        return WorkspaceDTO.from(
+                workspace,
+                connectionMetadata.findWorkspaceMetadata(workspace.getId()),
+                workspaceAddress(workspace.getWorkspaceSlug()));
     }
 
     private String workspaceAddress(String slug) {
@@ -86,17 +89,24 @@ public class WorkspaceQueryService {
         boolean publicActivityAllowed = publicActivityPolicy.allowed();
         var viewed = UserViewContextHolder.get();
         var ids = viewed == null
-                ? SecurityUtils.getCurrentAccountId().map(workspaceMembershipRepository::findActiveWorkspaceIdsByAccountId).orElseGet(List::of)
+                ? SecurityUtils.getCurrentAccountId()
+                        .map(workspaceMembershipRepository::findActiveWorkspaceIdsByAccountId)
+                        .orElseGet(List::of)
                 : List.of(viewed.workspaceId());
         if (ids.isEmpty()) return List.of();
         var workspaces = workspaceRepository.findListDataByIds(ids, viewed != null);
-        var kinds = connectionMetadata.findActiveProviderKinds(workspaces.stream().map(WorkspaceListData::id).toList());
+        var kinds = connectionMetadata.findActiveProviderKinds(
+                workspaces.stream().map(WorkspaceListData::id).toList());
         return workspaces.stream()
                 .sorted(Comparator.comparing(WorkspaceListData::displayName, String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(WorkspaceListData::workspaceSlug, String.CASE_INSENSITIVE_ORDER))
-                .map(workspace -> WorkspaceListItemDTO.from(workspace,
-                        Optional.ofNullable(kinds.get(workspace.id())).map(IdentityProviderType::from).orElse(null),
-                        workspaceAddress(workspace.workspaceSlug()), publicActivityAllowed))
+                .map(workspace -> WorkspaceListItemDTO.from(
+                        workspace,
+                        Optional.ofNullable(kinds.get(workspace.id()))
+                                .map(IdentityProviderType::from)
+                                .orElse(null),
+                        workspaceAddress(workspace.workspaceSlug()),
+                        publicActivityAllowed))
                 .toList();
     }
 

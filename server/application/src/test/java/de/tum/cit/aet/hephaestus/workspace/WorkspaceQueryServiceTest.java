@@ -5,8 +5,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMetadataQuery;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -89,10 +89,18 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
 
     private boolean publishes(Workspace workspace, boolean instanceAllows) {
         return WorkspaceListItemDTO.from(
-                        new WorkspaceListData(workspace.getId(), workspace.getWorkspaceSlug(), workspace.getDisplayName(),
-                                workspace.getStatus(), workspace.getAccountLogin(), Instant.EPOCH,
-                                workspace.getFeatures().getPracticesEnabled(), workspace.getPublicActivityEnabled()),
-                        null, "/w/" + workspace.getWorkspaceSlug(), instanceAllows)
+                        new WorkspaceListData(
+                                workspace.getId(),
+                                workspace.getWorkspaceSlug(),
+                                workspace.getDisplayName(),
+                                workspace.getStatus(),
+                                workspace.getAccountLogin(),
+                                Instant.EPOCH,
+                                workspace.getFeatures().getPracticesEnabled(),
+                                workspace.getPublicActivityEnabled()),
+                        null,
+                        "/w/" + workspace.getWorkspaceSlug(),
+                        instanceAllows)
                 .publishesPublicActivity();
     }
 
@@ -106,5 +114,4 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
         return workspace;
     }
-
 }

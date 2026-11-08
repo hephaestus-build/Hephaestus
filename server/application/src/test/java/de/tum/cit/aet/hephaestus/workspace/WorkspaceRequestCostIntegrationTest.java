@@ -2,18 +2,18 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.QueryPlans;
 import de.tum.cit.aet.hephaestus.testconfig.SqlRequestTrace;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
-import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
+import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -44,11 +44,16 @@ class WorkspaceRequestCostIntegrationTest extends AbstractWorkspaceIntegrationTe
     void shouldReadWorkspaceDetailsWithinTheRequestBudget() {
         var workspace = listWorkspace(persistUser("admin"), 0);
 
-        var request = requests.measure(webTestClient, client -> client.get()
-                .uri("/workspaces/{workspaceSlug}", workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser()).exchange().expectStatus().isOk()
-                .expectBody(WorkspaceDTO.class)
-                .value(value -> assertThat(value.id()).isEqualTo(workspace.getId())));
+        var request = requests.measure(
+                webTestClient,
+                client -> client.get()
+                        .uri("/workspaces/{workspaceSlug}", workspace.getWorkspaceSlug())
+                        .headers(TestAuthUtils.withCurrentUser())
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectBody(WorkspaceDTO.class)
+                        .value(value -> assertThat(value.id()).isEqualTo(workspace.getId())));
 
         assertThat(request.statements()).isLessThanOrEqualTo(8);
         assertThat(plans.fullScans(request.sql())).isEmpty();
@@ -63,19 +68,38 @@ class WorkspaceRequestCostIntegrationTest extends AbstractWorkspaceIntegrationTe
             var workspace = listWorkspace(owner, index);
             ids.add(workspace.getId());
         }
-        var small = requests.measure(webTestClient, client -> client.get().uri("/workspaces")
-                .headers(TestAuthUtils.withCurrentUser()).exchange().expectStatus().isOk()
-                .expectBodyList(WorkspaceListItemDTO.class)
-                .value(values -> assertThat(values).extracting(WorkspaceListItemDTO::id).containsExactlyElementsOf(ids)));
-        for (int index = 2; index < 8; index++) ids.add(listWorkspace(owner, index).getId());
+        var small = requests.measure(
+                webTestClient,
+                client -> client.get()
+                        .uri("/workspaces")
+                        .headers(TestAuthUtils.withCurrentUser())
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectBodyList(WorkspaceListItemDTO.class)
+                        .value(values -> assertThat(values)
+                                .extracting(WorkspaceListItemDTO::id)
+                                .containsExactlyElementsOf(ids)));
+        for (int index = 2; index < 8; index++)
+            ids.add(listWorkspace(owner, index).getId());
 
-        var larger = requests.measure(webTestClient, client -> client.get().uri("/workspaces")
-                .headers(TestAuthUtils.withCurrentUser()).exchange().expectStatus().isOk()
-                .expectBodyList(WorkspaceListItemDTO.class)
-                .value(values -> assertThat(values).extracting(WorkspaceListItemDTO::id).containsExactlyElementsOf(ids)));
+        var larger = requests.measure(
+                webTestClient,
+                client -> client.get()
+                        .uri("/workspaces")
+                        .headers(TestAuthUtils.withCurrentUser())
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectBodyList(WorkspaceListItemDTO.class)
+                        .value(values -> assertThat(values)
+                                .extracting(WorkspaceListItemDTO::id)
+                                .containsExactlyElementsOf(ids)));
 
-        assertThat(larger.statements()).as("small=%s, larger=%s", small.statements(), larger.statements())
-                .isEqualTo(small.statements()).isLessThanOrEqualTo(7);
+        assertThat(larger.statements())
+                .as("small=%s, larger=%s", small.statements(), larger.statements())
+                .isEqualTo(small.statements())
+                .isLessThanOrEqualTo(7);
         assertThat(plans.fullScans(small.sql())).isEmpty();
         assertThat(plans.fullScans(larger.sql())).isEmpty();
     }
@@ -85,7 +109,10 @@ class WorkspaceRequestCostIntegrationTest extends AbstractWorkspaceIntegrationTe
         var workspace = createWorkspace(slug, "List cost %02d".formatted(index), slug, AccountType.ORG, owner);
         ensureAdminMembership(workspace);
         long installation = workspace.getId() + 20000;
-        var connection = new Connection(workspace, IntegrationKind.GITHUB, Long.toString(installation),
+        var connection = new Connection(
+                workspace,
+                IntegrationKind.GITHUB,
+                Long.toString(installation),
                 new ConnectionConfig.GitHubAppConfig(installation, slug, null, Set.of()));
         connection.setState(IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);

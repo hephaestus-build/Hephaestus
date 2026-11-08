@@ -301,13 +301,17 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
         workspaces.saveAllAndFlush(List.of(zeta, second, first));
 
         assertThat(reads.measure(queries::findAccessibleWorkspaceListItems).value())
-                .extracting(WorkspaceListItemDTO::id).containsExactly(first.getId(), second.getId(), zeta.getId());
+                .extracting(WorkspaceListItemDTO::id)
+                .containsExactly(first.getId(), second.getId(), zeta.getId());
     }
 
     @Test
     void shouldReportStoredSlackCredentialsWithoutDecryptingThem() {
         var workspace = workspace(owner, 0);
-        var slack = new Connection(workspace, IntegrationKind.SLACK, "TSTORED",
+        var slack = new Connection(
+                workspace,
+                IntegrationKind.SLACK,
+                "TSTORED",
                 new ConnectionConfig.SlackConfig("TSTORED", "Stored", null, Set.of()));
         slack.setState(IntegrationState.ACTIVE);
         slack = connections.saveAndFlush(slack);
@@ -321,10 +325,16 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
     }
 
     private void storeUnreadableCredential(Workspace workspace, IntegrationKind kind) {
-        assertThat(jdbc.update("""
+        assertThat(jdbc.update(
+                        """
                 UPDATE connection SET credentials_encrypted=?, credentials_alg=?, credentials_key_version=?
                 WHERE workspace_id=? AND kind=?
-                """, new byte[] {1, 2, 3}, CredentialBundleConverter.ALGORITHM_TAG, 999, workspace.getId(), kind.name()))
+                """,
+                        new byte[] {1, 2, 3},
+                        CredentialBundleConverter.ALGORITHM_TAG,
+                        999,
+                        workspace.getId(),
+                        kind.name()))
                 .isEqualTo(1);
     }
 
