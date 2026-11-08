@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxRoom;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.batch.v1.Job;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -251,13 +252,15 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
             return false;
         }
         // Lease heartbeats must use the watch state instead of waiting on an API-server request.
-        Pod current = cache.pods(Map.of()).stream()
-                .filter(candidate -> candidate.getMetadata().getName().equals(pod))
-                .findFirst()
-                .orElse(null);
-        return current != null
-                && current.getMetadata().getDeletionTimestamp() == null
-                && KubernetesPods.running(current, KubernetesPods.LOOP);
+        try {
+            Pod current = cache.pod(pod);
+            return current != null
+                    && current.getMetadata().getDeletionTimestamp() == null
+                    && KubernetesPods.running(current, KubernetesPods.LOOP);
+        } catch (KubernetesClientException unavailable) {
+            // An unknown loop state keeps worker renewal active and must not roll back its heartbeat.
+            return false;
+        }
     }
 
     @Override
