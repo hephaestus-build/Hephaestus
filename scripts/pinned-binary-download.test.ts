@@ -18,7 +18,9 @@ for (const scenario of ["http", "network", "body"] as const) {
 		let calls = 0;
 		t.mock.method(globalThis, "fetch", async (input: Parameters<typeof fetch>[0]) => {
 			const url = input instanceof Request ? input.url : input.toString();
-			if (url.startsWith("https://ghcr.io/")) return new Response(null, { status: 404 });
+			if (url.startsWith("https://ghcr.io/")) {
+				return new Response(null, { status: 404 });
+			}
 			calls += 1;
 			if (calls === 1) {
 				if (scenario === "http") {
@@ -54,7 +56,9 @@ for (const scenario of ["unavailable", "not found", "corrupt"] as const) {
 		let calls = 0;
 		t.mock.method(globalThis, "fetch", async (input: Parameters<typeof fetch>[0]) => {
 			const url = input instanceof Request ? input.url : input.toString();
-			if (url.startsWith("https://ghcr.io/")) return new Response(null, { status: 404 });
+			if (url.startsWith("https://ghcr.io/")) {
+				return new Response(null, { status: 404 });
+			}
 			calls += 1;
 			if (scenario === "unavailable") {
 				return new Response("unavailable", { status: 504 });

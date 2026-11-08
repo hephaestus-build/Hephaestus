@@ -165,12 +165,12 @@ void test("the default resolver tries GHCR, GitHub API and direct URL in order",
 	const calls: string[] = [];
 	t.mock.method(globalThis, "fetch", async (input: Parameters<typeof fetch>[0]) => {
 		const url = new URL(input instanceof Request ? input.url : input.toString());
-		const source =
-			url.hostname === "ghcr.io"
-				? "ghcr"
-				: url.hostname === "api.github.com"
-					? "github-api"
-					: "direct";
+		let source = "direct";
+		if (url.hostname === "ghcr.io") {
+			source = "ghcr";
+		} else if (url.hostname === "api.github.com") {
+			source = "github-api";
+		}
 		calls.push(source);
 		return source === "direct" ? new Response(bytes) : new Response(null, { status: 404 });
 	});

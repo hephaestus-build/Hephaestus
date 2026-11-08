@@ -20,10 +20,16 @@ function credentials(t: TestContext) {
 	process.env.GITHUB_TOKEN = "fixture-github-token";
 	process.env.GITHUB_ACTOR = "fixture-actor";
 	t.after(() => {
-		if (token === undefined) delete process.env.GITHUB_TOKEN;
-		else process.env.GITHUB_TOKEN = token;
-		if (actor === undefined) delete process.env.GITHUB_ACTOR;
-		else process.env.GITHUB_ACTOR = actor;
+		if (token === undefined) {
+			delete process.env.GITHUB_TOKEN;
+		} else {
+			process.env.GITHUB_TOKEN = token;
+		}
+		if (actor === undefined) {
+			delete process.env.GITHUB_ACTOR;
+		} else {
+			process.env.GITHUB_ACTOR = actor;
+		}
 	});
 }
 
@@ -57,11 +63,12 @@ void test("GHCR authenticates its pull and preserves signed storage credentials 
 					layers: [{ digest: `sha256:${pin.sha256}` }],
 				});
 			}
-			if (url === `${base}/blobs/sha256:${pin.sha256}`)
+			if (url === `${base}/blobs/sha256:${pin.sha256}`) {
 				return new Response(null, {
 					status: 307,
 					headers: { location: "https://pkg-storage.githubusercontent.com/fixture?sig=signed" },
 				});
+			}
 			assert.equal(url, "https://pkg-storage.githubusercontent.com/fixture?sig=signed");
 			assert.equal(headers.get("authorization"), null);
 			return new Response(bytes);
@@ -88,24 +95,27 @@ void test("the mirror publishes checksum-addressed blobs and the complete versio
 				return Response.json({ token: "scoped-token" });
 			}
 			assert.equal(new Headers(init?.headers).get("authorization"), "Bearer scoped-token");
-			if (init?.method === "HEAD") return new Response(null, { status: 404 });
-			if (init?.method === "POST")
+			if (init?.method === "HEAD") {
+				return new Response(null, { status: 404 });
+			}
+			if (init?.method === "POST") {
 				return new Response(null, {
 					status: 202,
 					headers: { location: `${base}/blobs/uploads/fixture?state=opaque` },
 				});
+			}
 			assert.equal(init?.method, "PUT");
 			if (url === `${base}/manifests/1.2.3`) {
 				assert.equal(
-					new Headers(init?.headers).get("content-type"),
+					new Headers(init.headers).get("content-type"),
 					"application/vnd.oci.image.manifest.v1+json",
 				);
-				manifest = asRecord(parseJson(await new Response(init?.body).text()), "manifest");
+				manifest = asRecord(parseJson(await new Response(init.body).text()), "manifest");
 			} else {
 				const digest = new URL(url).searchParams.get("digest");
 				assert.equal(
 					digest,
-					`sha256:${toolSha256(new Uint8Array(await new Response(init?.body).arrayBuffer()))}`,
+					`sha256:${toolSha256(new Uint8Array(await new Response(init.body).arrayBuffer()))}`,
 				);
 				uploads.push(digest);
 			}
@@ -121,7 +131,7 @@ void test("the mirror publishes checksum-addressed blobs and the complete versio
 		`sha256:${pin.sha256}`,
 	]);
 	assert.equal(manifest?.artifactType, "application/vnd.hephaestus.ci-tool.v1");
-	assert.deepEqual(manifest?.layers, [
+	assert.deepEqual(manifest.layers, [
 		{
 			mediaType: "application/octet-stream",
 			digest: `sha256:${pin.sha256}`,
@@ -149,8 +159,12 @@ void test("a foreign upload location is refused before any credentials or bytes 
 		async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
 			const url = input instanceof Request ? input.url : input.toString();
 			assert.ok(url.startsWith("https://ghcr.io/"));
-			if (url.startsWith("https://ghcr.io/token?")) return Response.json({ token: "scoped-token" });
-			if (init?.method === "HEAD") return new Response(null, { status: 404 });
+			if (url.startsWith("https://ghcr.io/token?")) {
+				return Response.json({ token: "scoped-token" });
+			}
+			if (init?.method === "HEAD") {
+				return new Response(null, { status: 404 });
+			}
 			return new Response(null, {
 				status: 202,
 				headers: { location: "https://example.invalid/upload" },
@@ -162,8 +176,8 @@ void test("a foreign upload location is refused before any credentials or bytes 
 
 void test("a rejected registry token is refreshed once and then fails closed", async (t) => {
 	credentials(t);
-	let tokens = 0,
-		requests = 0;
+	let tokens = 0;
+	let requests = 0;
 	t.mock.method(globalThis, "fetch", async (input: Parameters<typeof fetch>[0]) => {
 		if (
 			(input instanceof Request ? input.url : input.toString()).startsWith("https://ghcr.io/token?")

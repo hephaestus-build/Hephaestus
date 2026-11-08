@@ -16,7 +16,9 @@ for (const [name, pins] of groups) {
 	try {
 		const entries: MirrorEntry[] = [];
 		for (const pin of pins) {
-			if (entries.some((entry) => entry.pin.sha256 === pin.sha256)) continue;
+			if (entries.some((entry) => entry.pin.sha256 === pin.sha256)) {
+				continue;
+			}
 			const resolved = await resolveCiTool(pin, {
 				sources: [
 					{
@@ -35,4 +37,6 @@ for (const [name, pins] of groups) {
 		console.error(`CI tool mirror failed for ${name}; the existing tag was not replaced.`);
 	}
 }
-if (failed.length !== 0) throw new Error(`CI tool mirror failed: ${failed.join(", ")}`);
+if (failed.length > 0) {
+	throw new Error(`CI tool mirror failed: ${failed.join(", ")}`);
+}

@@ -52,9 +52,31 @@ function boundedPolicy(policy: ArtifactPolicy) {
 		!Number.isSafeInteger(delayMs) ||
 		delayMs < 0 ||
 		delayMs > 5000
-	)
+	) {
 		throw new Error("Invalid bounded artifact request policy");
+	}
 	return { attempts, timeoutMs, delayMs };
+}
+
+function initialHeaders(url: string, options: ArtifactRequest): Record<string, string> {
+	const initial = new URL(url);
+	// Loopback HTTP serves checksum-pinned fixtures; credentials still require an exact HTTPS origin.
+	const loopback =
+		initial.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(initial.hostname);
+	if ((initial.protocol !== "https:" && !loopback) || initial.username || initial.password) {
+		throw new Error("Unsafe artifact URL");
+	}
+	const headers: Record<string, string> = { Accept: options.accept ?? "application/octet-stream" };
+	if (options.contentType !== undefined) {
+		headers["Content-Type"] = options.contentType;
+	}
+	if (options.credentials !== undefined) {
+		if (!options.credentials.origins.includes(new URL(url).origin)) {
+			throw new Error("Artifact credentials do not belong to this origin");
+		}
+		headers.Authorization = options.credentials.header;
+	}
+	return headers;
 }
 
 async function redirectedRequest(
@@ -62,20 +84,8 @@ async function redirectedRequest(
 	options: ArtifactRequest,
 	signal: AbortSignal,
 ): Promise<Response> {
-	const initial = new URL(url);
-	// Loopback HTTP serves checksum-pinned fixtures; credentials still require an exact HTTPS origin.
-	const loopback =
-		initial.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(initial.hostname);
-	if ((initial.protocol !== "https:" && !loopback) || initial.username || initial.password)
-		throw new Error("Unsafe artifact URL");
+	const headers = initialHeaders(url, options);
 	const method = options.method ?? "GET";
-	const headers: Record<string, string> = { Accept: options.accept ?? "application/octet-stream" };
-	if (options.contentType !== undefined) headers["Content-Type"] = options.contentType;
-	if (options.credentials !== undefined) {
-		if (!options.credentials.origins.includes(new URL(url).origin))
-			throw new Error("Artifact credentials do not belong to this origin");
-		headers.Authorization = options.credentials.header;
-	}
 	let response = await fetch(url, {
 		method,
 		headers,
@@ -93,22 +103,25 @@ async function redirectedRequest(
 			redirects === 5 ||
 			location === null ||
 			(method !== "GET" && method !== "HEAD")
-		)
+		) {
 			throw new Error("Invalid artifact redirect");
+		}
 		let target: URL;
 		try {
 			target = new URL(location, current);
 		} catch {
 			throw new Error("Invalid artifact redirect URL");
 		}
-		if (target.protocol !== "https:" || target.username || target.password)
+		if (target.protocol !== "https:" || target.username || target.password) {
 			throw new Error("Unsafe artifact redirect");
+		}
 		authenticated &&= options.credentials?.origins.includes(target.origin) === true;
 		const redirectedHeaders: Record<string, string> = {
 			Accept: options.accept ?? "application/octet-stream",
 		};
-		if (authenticated && options.credentials !== undefined)
+		if (authenticated && options.credentials !== undefined) {
 			redirectedHeaders.Authorization = options.credentials.header;
+		}
 		current = target.href;
 		response = await fetch(target, {
 			method,
@@ -130,17 +143,21 @@ export async function requestArtifact(
 	for (let attempt = 1; ; attempt += 1) {
 		try {
 			const response = await redirectedRequest(url, options, AbortSignal.timeout(timeoutMs));
-			if (response.ok || options.acceptedStatuses?.includes(response.status) === true)
+			if (response.ok || options.acceptedStatuses?.includes(response.status) === true) {
 				return {
 					bytes: new Uint8Array(await response.arrayBuffer()),
 					headers: response.headers,
 					status: response.status,
 				};
+			}
 			await response.body?.cancel();
-			if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === attempts)
+			if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === attempts) {
 				throw new ArtifactHttpError(response.status, attempt);
+			}
 		} catch (error) {
-			if (!transportFailure(error) || attempt === attempts) throw error;
+			if (!transportFailure(error) || attempt === attempts) {
+				throw error;
+			}
 		}
 		console.warn(`Artifact request unavailable; retrying (${attempt + 1}/${attempts}).`);
 		await sleep(attempt * delayMs);

@@ -14,7 +14,9 @@ if (variant !== "") {
 const pin = await ciToolPin(id, selector);
 if (process.argv[2] === "file") {
 	const destination = process.argv[3];
-	if (!destination) throw new Error("CI tool destination is required");
+	if (destination === undefined || destination === "") {
+		throw new Error("CI tool destination is required");
+	}
 	const resolved = await resolveCiTool(pin);
 	await writeFile(destination, resolved.bytes);
 } else {

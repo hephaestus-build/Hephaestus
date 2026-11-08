@@ -93,11 +93,14 @@ void test("signing and publication jobs do not restore tool cache archives", asy
 	const sources = resolver.getIn(["runs", "steps"]);
 	assert.ok(isSeq(sources));
 	for (const step of sources.items) {
-		if (isMap(step) && String(step.get("uses")).startsWith("actions/cache/"))
+		if (isMap(step) && String(step.get("uses")).startsWith("actions/cache/")) {
 			assert.match(String(step.get("if")), /^inputs\.cache == 'true'/u);
+		}
 	}
 	for (const file of await readdir(".github/workflows")) {
-		if (!file.endsWith(".yml")) continue;
+		if (!file.endsWith(".yml")) {
+			continue;
+		}
 		const workflow = parseDocument(await readFile(`.github/workflows/${file}`, "utf8"));
 		const jobs = workflow.get("jobs");
 		assert.ok(isMap(jobs));
@@ -108,18 +111,22 @@ void test("signing and publication jobs do not restore tool cache archives", asy
 				!["contents", "packages", "id-token", "attestations"].some(
 					(scope) => job.getIn(["permissions", scope]) === "write",
 				)
-			)
+			) {
 				continue;
-			const steps = job.get("steps");
-			if (!isSeq(steps)) continue;
-			for (const step of steps.items) {
+			}
+			const jobSteps = job.get("steps");
+			if (!isSeq(jobSteps)) {
+				continue;
+			}
+			for (const step of jobSteps.items) {
 				if (
 					!isMap(step) ||
 					!/^\.\/\.github\/actions\/setup-(?:ci-tool|helm|release-security-tools|kubernetes-tools)$/u.test(
 						String(step.get("uses")),
 					)
-				)
+				) {
 					continue;
+				}
 				assert.equal(
 					step.getIn(["with", "cache"]),
 					"false",
