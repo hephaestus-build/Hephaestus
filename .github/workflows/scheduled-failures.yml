@@ -3,6 +3,7 @@ name: CI / Scheduled failures
 on:
   workflow_run: # zizmor: ignore[dangerous-triggers] Trusted metadata only; no upstream code or artifacts run.
     workflows:
+      - "Cache / Mirror pinned CI tools"
       - "CI / Kubernetes nightly"
       - "Security / Rescan images"
       - "CI / Extension provider slots"
