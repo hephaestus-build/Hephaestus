@@ -92,6 +92,7 @@ public class FeedbackGate {
                 edges.stream().map(FeedbackBasis::getResultId).distinct().count(),
                 basis.isIncorrect(workspaceId, feedbackId),
                 copies.hasWriteFence(workspaceId, feedbackId),
+                freshness.states(workspaceId, support),
                 new GateReads(workspaceId));
     }
 
@@ -126,6 +127,7 @@ public class FeedbackGate {
         var fenced = Set.copyOf(copies.writeFencedFeedbackIds(workspaceId, ids));
         var reads = new GateReads(workspaceId);
         reads.prefetch(owned, rowById.values());
+        var sourceStates = freshness.states(workspaceId, rowById.values());
         Map<UUID, FeedbackCheck> checks = new LinkedHashMap<>();
         for (var piece : owned) {
             var distinct = resultIds.getOrDefault(piece.getId(), List.of()).stream()
@@ -143,6 +145,7 @@ public class FeedbackGate {
                             distinct.size(),
                             incorrect.contains(piece.getId()),
                             fenced.contains(piece.getId()),
+                            sourceStates,
                             reads));
         }
         return checks;
@@ -171,6 +174,7 @@ public class FeedbackGate {
                 ids.size(),
                 !ids.isEmpty() && basis.hasIncorrectResults(review.workspaceId(), ids),
                 false,
+                freshness.states(review.workspaceId(), support),
                 new GateReads(review.workspaceId()));
     }
 
@@ -182,6 +186,7 @@ public class FeedbackGate {
             long expectedResults,
             boolean incorrect,
             boolean hasWriteFence,
+            Map<UUID, Currentness> sourceStates,
             GateReads reads) {
         long workspaceId = feedback.getWorkspaceId();
         UUID feedbackId = feedback.getId();
@@ -197,7 +202,6 @@ public class FeedbackGate {
                 && support.stream().map(Result::getId).distinct().count() == expectedResults
                 && reads.deliverable(support);
         var itemSnapshot = reads.snapshot(feedback);
-        var sourceStates = freshness.states(workspaceId, support);
         boolean current = support.stream()
                 .allMatch(result -> reads.current(result) && sourceStates.get(result.getId()) == Currentness.CURRENT);
         boolean modelAllowed = policy.isPresent() && policy.get().getAiChoice() != AiChoice.NO_AI;

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
@@ -144,6 +145,41 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
             jdbc.update("UPDATE practice SET current_version_id=? WHERE id=?", next, supportedPracticeId);
         });
         assertThat(check().reason()).isEqualTo(FeedbackStopReason.REVIEWED_VERSION_CHANGED);
+    }
+
+    @Test
+    void shouldKeepReadableFeedbackCurrentWhenAnotherPieceNeedsUnavailableSources() {
+        var readable = resultWithStateFilter("state", "open");
+        supportOnWorkFeedback(readable);
+        var first = Objects.requireNonNull(supportedFeedback);
+        var unavailable = resultWithStateFilter("state", "open");
+        var second = onWork(unavailable);
+        var comments = new SourceKind("scm.pull-request.comments");
+        jdbc.update(
+                "UPDATE review_practice SET capture_decision=?::jsonb WHERE workspace_id=? AND review_id=? AND practice_id=?",
+                mapper.writeValueAsString(Map.of(
+                        "sourceFingerprints", Map.of(CORE.value(), "a".repeat(64), comments.value(), "b".repeat(64)))),
+                workspace.getId(),
+                reviewId,
+                unavailable.getPracticeId());
+        doReturn(Map.of()).when(productItems).fingerprints(eq(supportedItem), eq(Set.of(CORE, comments)));
+        when(authorization.permitsForNewDelivery(
+                        eq(workspace.getId()), any(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
+                .thenAnswer(invocation -> invocation.<Collection<Result>>getArgument(1).stream()
+                        .map(Result::getId)
+                        .collect(Collectors.toSet()));
+
+        var together = gate.evaluateAll(workspace.getId(), List.of(first, second), FeedbackCheckStage.EGRESS, false);
+
+        for (var each : List.of(first, second))
+            assertThat(together.get(each.getId()))
+                    .usingRecursiveComparison()
+                    .ignoringFields("checkedAt")
+                    .isEqualTo(gate.evaluate(each, FeedbackCheckStage.EGRESS, false));
+        assertThat(checkOf(together, first).allowed()).isTrue();
+        assertThat(checkOf(together, second).reason()).isEqualTo(FeedbackStopReason.UNCORROBORATED);
+        assertThat(results.findById(unavailable.getId()).orElseThrow().getEndedAt())
+                .isNull();
     }
 
     @Test

@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -84,13 +85,13 @@ public class ResultFreshness {
         var refs = items.findAll(
                 workspaceId, rows.stream().map(Claim::itemId).distinct().toList());
         var states = new HashMap<UUID, Currentness>();
-        for (var group :
-                rows.stream().collect(Collectors.groupingBy(Claim::itemId)).entrySet()) {
-            var item = refs.get(group.getKey());
-            var kinds = new HashSet<SourceKind>();
-            group.getValue()
-                    .forEach(result -> kinds.addAll(
-                            expected.getOrDefault(result.id(), Map.of()).keySet()));
+        for (var group : rows.stream()
+                .collect(Collectors.groupingBy(result -> new ReadScope(
+                        result.itemId(),
+                        Objects.requireNonNull(expected.get(result.id())).keySet())))
+                .entrySet()) {
+            var item = refs.get(group.getKey().itemId());
+            var kinds = group.getKey().kinds();
             var current =
                     item == null || kinds.isEmpty() ? Map.<SourceKind, String>of() : items.fingerprints(item, kinds);
             for (var result : group.getValue())
@@ -108,6 +109,8 @@ public class ResultFreshness {
     }
 
     private record CaptureKey(UUID reviewId, long practiceId, long itemId) {}
+
+    private record ReadScope(long itemId, Set<SourceKind> kinds) {}
 
     /** A requested review can reuse only the same readable footprint that its own capture recorded. */
     public boolean sameCapture(long workspaceId, Result result, UUID requestedReviewId) {

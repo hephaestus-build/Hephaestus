@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.item;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -22,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SourceReadAudience;
@@ -60,7 +62,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.util.AopTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Transactional
 @TestPropertySource(properties = "hephaestus.integration.slack.enabled=true")
@@ -103,6 +107,31 @@ class ThreadItemSourceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private MembershipService memberships;
+
+    @Autowired
+    private PlatformTransactionManager transactions;
+
+    @Test
+    void shouldKeepTheTransactionUsableWhenThePinnedSourceChanged() {
+        var fixture = fixture();
+        var pinned = source.pin(fixture.item(), null);
+        var thread = threads.findById(Objects.requireNonNull(fixture.item().sourceId()))
+                .orElseThrow();
+        thread.setLastTs("1730000001.000001");
+        threads.saveAndFlush(thread);
+
+        var rollbackOnly = new TransactionTemplate(transactions).execute(status -> {
+            assertThatThrownBy(() -> source.capture(pinned, request())).isInstanceOf(ItemCaptureException.class);
+            return status.isRollbackOnly();
+        });
+
+        assertThat(rollbackOnly).isFalse();
+        Objects.requireNonNull(entities).clear();
+        assertThat(threads.findById(Objects.requireNonNull(fixture.item().sourceId()))
+                        .orElseThrow()
+                        .getLastTs())
+                .isEqualTo("1730000001.000001");
+    }
 
     @Test
     void shouldCaptureOnlyThePinnedTenantAndKeepEveryHumanTurn() {

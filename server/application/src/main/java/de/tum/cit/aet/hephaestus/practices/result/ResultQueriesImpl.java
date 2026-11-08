@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.Session;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -28,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ResultQueriesImpl implements ResultQueries {
-    private final ResultFreshness freshness;
+    private final ObjectProvider<ResultFreshness> freshness;
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
@@ -213,7 +214,7 @@ public class ResultQueriesImpl implements ResultQueries {
                         ResultFreshness.Claim.class)
                 .setProperties(params)
                 .getResultList();
-        var matching = freshness.statesFor(workspaceId, candidates).entrySet().stream()
+        var matching = freshness.getObject().statesFor(workspaceId, candidates).entrySet().stream()
                 .filter(entry -> entry.getValue() == wanted)
                 .map(Map.Entry::getKey)
                 .toList();

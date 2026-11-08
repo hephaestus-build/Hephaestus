@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.outline.item;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemLabel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
@@ -51,7 +53,9 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Transactional
 @TestPropertySource(
@@ -93,6 +97,33 @@ class DocumentItemSourceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private MembershipService memberships;
+
+    @Autowired
+    private PlatformTransactionManager transactions;
+
+    @Test
+    void shouldKeepTheTransactionUsableWhenThePinnedSourceChanged() {
+        var fixture = readableDocument("https://wiki.example.com");
+        var pinned = resolver.pin(fixture.item(), null);
+        var document = documents
+                .findById(Objects.requireNonNull(fixture.item().sourceId()))
+                .orElseThrow();
+        document.setContentHash("changed-after-pin");
+        documents.saveAndFlush(document);
+
+        var rollbackOnly = new TransactionTemplate(transactions).execute(status -> {
+            assertThatThrownBy(() -> resolver.capture(pinned, request())).isInstanceOf(ItemCaptureException.class);
+            return status.isRollbackOnly();
+        });
+
+        assertThat(rollbackOnly).isFalse();
+        Objects.requireNonNull(entities).clear();
+        assertThat(documents
+                        .findById(Objects.requireNonNull(fixture.item().sourceId()))
+                        .orElseThrow()
+                        .getContentHash())
+                .isEqualTo("changed-after-pin");
+    }
 
     @Test
     void aContextualCollaboratorsAccountChoiceWithholdsTheWholePinnedDocument() {
