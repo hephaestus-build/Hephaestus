@@ -21,6 +21,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
 
 @Transactional
 public interface FeedbackRepository extends JpaRepository<Feedback, UUID>, JpaSpecificationExecutor<Feedback> {
@@ -40,6 +41,24 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID>, JpaSp
         """, nativeQuery = true)
     List<Feedback> lockAllByIdInAndWorkspaceId(
             @Param("ids") Collection<UUID> ids, @Param("workspaceId") long workspaceId);
+
+    /** Serializes an edit's receipt handoff with withdrawal and other revision writes in one UUID order. */
+    @Query(value = """
+        WITH RECURSIVE family AS (
+          SELECT f.id,f.replaces_id,f.destination,f.composition FROM feedback f WHERE f.workspace_id=:workspaceId AND f.id=:id
+          UNION ALL
+          SELECT prior.id,prior.replaces_id,prior.destination,prior.composition FROM family child
+            JOIN feedback prior ON prior.id=child.replaces_id AND prior.workspace_id=:workspaceId
+          WHERE child.destination='ON_WORK' AND child.composition->>'editOf'=child.replaces_id::text)
+        SELECT f.id FROM feedback f JOIN family member ON member.id=f.id
+        WHERE f.workspace_id=:workspaceId ORDER BY f.id FOR UPDATE OF f
+        """, nativeQuery = true)
+    List<UUID> lockCorrectionFamily(@Param("workspaceId") long workspaceId, @Param("id") UUID id);
+
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE Feedback f SET f.composition=:composition WHERE f.workspaceId=:workspaceId AND f.id=:id")
+    int updateComposition(
+            @Param("workspaceId") long workspaceId, @Param("id") UUID id, @Param("composition") JsonNode composition);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""

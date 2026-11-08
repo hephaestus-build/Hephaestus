@@ -217,7 +217,8 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                                     AT.plusSeconds(5),
                                     "late-receipt",
                                     "https://example.test/late-receipt",
-                                    FeedbackCopyKind.SUMMARY.name()))
+                                    FeedbackCopyKind.SUMMARY.name(),
+                                    null))
                             .isEqualTo(1);
                     holding.countDown();
                     await(release);
@@ -655,7 +656,8 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                                 AT.plusSeconds(5),
                                 "receipt-between-reads",
                                 "https://example.test/receipt",
-                                FeedbackCopyKind.SUMMARY.name()))
+                                FeedbackCopyKind.SUMMARY.name(),
+                                null))
                         .isEqualTo(1);
                 jdbc.update(
                         "UPDATE feedback SET delivered_at=? WHERE workspace_id=? AND id=?",

@@ -16,5 +16,10 @@ public interface LineNoteWriter {
     /** Writes each retracted note's words back into the same provider note. Never posts another note. */
     List<CopyUpdateReceipt> restore(FeedbackTarget target, List<RetractedNote> notes);
 
+    /** Changes the words of an owned note in place. The previous delivery key must still be present. */
+    List<CopyUpdateReceipt> editOwn(FeedbackTarget target, List<OwnedEdit> notes);
+
+    record OwnedEdit(CopyReceipt copy, String previousWriteKey, LineNote note) {}
+
     record RetractedNote(CopyReceipt copy, LineNote note) {}
 }

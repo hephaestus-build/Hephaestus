@@ -27,6 +27,8 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 @Entity
 @Table(
@@ -88,6 +90,13 @@ public class Feedback {
     @Column(name = "checks", nullable = false, columnDefinition = "jsonb")
     @Setter(AccessLevel.PACKAGE)
     private Map<FeedbackCheckStage, FeedbackChecks> checks = Map.of();
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Default
+    @ColumnDefault("'{}'")
+    @Column(name = "composition", nullable = false, columnDefinition = "jsonb")
+    @Setter(AccessLevel.PACKAGE)
+    private JsonNode composition = JsonNodeFactory.instance.objectNode();
 
     @Column(name = "replaces_id", nullable = true, columnDefinition = "UUID")
     private @Nullable UUID replacesId;

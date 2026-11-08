@@ -163,6 +163,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private ReviewJobExecutor executor(AsyncTaskExecutor pool) {
         lenient().when(jobs.lockParentForQueuedClaim(any())).thenReturn(Optional.of(UUID.randomUUID()));
         lenient().when(reviewStart.start(anyLong(), any())).thenReturn(true);
+        lenient().when(reviewStart.compose(anyLong(), any())).thenReturn(true);
         var transactions = mock(TransactionTemplate.class);
         lenient().when(transactions.execute(any())).thenAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);

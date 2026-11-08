@@ -71,6 +71,7 @@ public class FeedbackGate {
     private final List<ItemSource> sources;
     private final Clock clock;
     private final FeedbackContentDigest digests;
+    private final FeedbackRepairApproval repairApproval;
 
     @Transactional(readOnly = true)
     public FeedbackCheck evaluate(Feedback feedback, FeedbackCheckStage stage, boolean checkApproval) {
@@ -202,8 +203,9 @@ public class FeedbackGate {
         if (checkApproval && !approvalCurrent) {
             var approval = decisions.findLatestApproval(workspaceId, feedbackId);
             approvalCurrent = approval.filter(row -> row.getAction() == FeedbackDecisionAction.APPROVE
-                            && Objects.equals(row.getContentDigest(), digests.current(workspaceId, feedbackId)))
-                    .isPresent();
+                                    && Objects.equals(row.getContentDigest(), digests.current(workspaceId, feedbackId)))
+                            .isPresent()
+                    || repairApproval.approved(feedback);
         }
         long admitted = review.map(row -> row.getRolloutRevision()).orElse(0L);
         long evaluated = policy.map(FeedbackBasisRepository.PolicyRow::getRolloutRevision)
@@ -247,6 +249,10 @@ public class FeedbackGate {
         else if (feedback.getDestination() == FeedbackDestination.ON_WORK && silentMode.isSilentModeEngaged())
             refusal = FeedbackStopReason.INSTANCE_SILENCED;
         return new FeedbackCheck(stage, refusal == null, refusal, clock.instant(), facts);
+    }
+
+    public boolean keepsApprovedWords(Feedback feedback) {
+        return repairApproval.approved(feedback);
     }
 
     public boolean requiresApproval(Feedback feedback) {

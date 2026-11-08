@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794101662882-1" author="hephaestus">
+        <addColumn tableName="feedback">
+            <column defaultValueComputed="'{}'" name="composition" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794101662882-2" author="hephaestus">
+        <addColumn tableName="feedback_copy">
+            <column name="thread_ref" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794101662882-3" author="hephaestus"><sql splitStatements="false"><![CDATA[
+ALTER TABLE feedback_send DROP CONSTRAINT ck_feedback_send_action;
+ALTER TABLE feedback_send ADD CONSTRAINT ck_feedback_send_action CHECK(action IN ('POST','RETRACT','EDIT','READBACK'));
+CREATE OR REPLACE FUNCTION public.guard_feedback_copy_fence() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $_$
+DECLARE shown_text text;
+BEGIN
+ IF OLD.thread_ref IS NOT NULL AND NEW.thread_ref IS DISTINCT FROM OLD.thread_ref THEN
+  RAISE EXCEPTION 'physical copy thread binding is immutable' USING ERRCODE='55000';
+ END IF;
+ IF OLD.write_started_at IS NOT NULL THEN
+  IF NEW.write_started_at IS DISTINCT FROM OLD.write_started_at OR
+     ROW(NEW.id,NEW.workspace_id,NEW.feedback_id,NEW.position,NEW.write_key,NEW.write_marker,NEW.path,NEW.start_line,NEW.end_line,NEW.side)
+     IS DISTINCT FROM ROW(OLD.id,OLD.workspace_id,OLD.feedback_id,OLD.position,OLD.write_key,OLD.write_marker,OLD.path,OLD.start_line,OLD.end_line,OLD.side) THEN
+   RAISE EXCEPTION 'physical write fence is immutable' USING ERRCODE='55000';
+  END IF;
+  IF NEW.mentor_turn_id IS DISTINCT FROM OLD.mentor_turn_id AND NOT
+     (NEW.mentor_turn_id IS NULL AND NOT EXISTS(SELECT 1 FROM mentor_turn WHERE id=OLD.mentor_turn_id AND workspace_id=OLD.workspace_id)) THEN
+   RAISE EXCEPTION 'conversation turn binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.mentor_entry_id IS NOT NULL AND NEW.mentor_entry_id IS DISTINCT FROM OLD.mentor_entry_id AND NOT
+     (NEW.mentor_entry_id IS NULL AND NOT EXISTS(SELECT 1 FROM mentor_entry WHERE id=OLD.mentor_entry_id AND workspace_id=OLD.workspace_id)) THEN
+   RAISE EXCEPTION 'conversation answer binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.mentor_entry_id IS NULL AND NEW.mentor_entry_id IS NOT NULL AND OLD.posted_at IS NOT NULL THEN
+   RAISE EXCEPTION 'conversation answer binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.mentor_entry_id IS NULL AND NEW.mentor_entry_id IS NOT NULL AND NOT EXISTS(
+     SELECT 1 FROM mentor_entry e JOIN mentor_conversation c ON(c.id,c.workspace_id)=(e.conversation_id,e.workspace_id)
+     JOIN feedback f ON(f.id,f.workspace_id)=(NEW.feedback_id,NEW.workspace_id) AND f.developer_id=c.account_id
+     WHERE e.id=NEW.mentor_entry_id AND e.workspace_id=NEW.workspace_id AND e.kind='HEPH' AND e.turn_id=NEW.mentor_turn_id) THEN
+   RAISE EXCEPTION 'conversation answer must be the claiming turn answer to its developer' USING ERRCODE='23514';
+  END IF;
+  IF NEW.body IS DISTINCT FROM OLD.body THEN
+   IF NOT(OLD.kind='CHAT_TURN' AND OLD.body IS NULL AND NEW.body IS NOT NULL AND
+          OLD.posted_at IS NULL AND NEW.posted_at IS NOT NULL AND NEW.posted_at>=OLD.write_started_at AND
+          OLD.state IN('WRITE_STARTED','FAILED') AND NEW.state='POSTED' AND
+          NEW.mentor_entry_id IS NOT NULL AND NEW.mentor_turn_id IS NOT NULL) THEN
+    RAISE EXCEPTION 'physical copy words are immutable' USING ERRCODE='55000';
+   END IF;
+   shown_text := conversation_receipt_words(NEW.workspace_id,NEW.feedback_id,NEW.mentor_entry_id,NEW.mentor_turn_id);
+   IF shown_text IS NULL OR shown_text ~ '^[[:space:]]*$' OR NEW.body IS DISTINCT FROM shown_text THEN
+    RAISE EXCEPTION 'conversation receipt must contain the words the completed answer showed' USING ERRCODE='23514';
+   END IF;
+  END IF;
+  IF OLD.kind='CHAT_TURN' AND OLD.posted_at IS NULL AND NEW.posted_at IS NOT NULL AND NEW.body IS NULL THEN
+   RAISE EXCEPTION 'conversation receipt requires actual words' USING ERRCODE='23514';
+  END IF;
+ ELSIF NEW.write_started_at IS NOT NULL AND NEW.kind='CHAT_TURN' THEN
+  IF NEW.body IS NOT NULL OR NEW.state<>'WRITE_STARTED' OR NOT EXISTS(
+     SELECT 1 FROM mentor_turn t JOIN mentor_conversation c ON(c.id,c.workspace_id)=(t.conversation_id,t.workspace_id)
+     JOIN feedback f ON(f.id,f.workspace_id)=(NEW.feedback_id,NEW.workspace_id) AND f.developer_id=c.account_id
+     WHERE t.id=NEW.mentor_turn_id AND t.workspace_id=NEW.workspace_id AND t.status='RUNNING' AND f.destination='CONVERSATION') THEN
+   RAISE EXCEPTION 'conversation fence requires a running Heph turn of its developer' USING ERRCODE='23514';
+  END IF;
+ END IF;
+ IF OLD.kind<>NEW.kind AND NOT(OLD.kind='LINE_NOTE' AND NEW.kind='FILE_NOTE') THEN RAISE EXCEPTION 'copy form cannot change except acknowledged fallback' USING ERRCODE='55000'; END IF;
+ IF OLD.external_ref IS NOT NULL AND NEW.external_ref IS DISTINCT FROM OLD.external_ref OR OLD.external_url IS NOT NULL AND NEW.external_url IS DISTINCT FROM OLD.external_url OR OLD.posted_at IS NOT NULL AND NEW.posted_at IS DISTINCT FROM OLD.posted_at THEN RAISE EXCEPTION 'physical write receipt is immutable' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $_$;
+]]></sql></changeSet>
+    <changeSet id="1794101662882-4" author="hephaestus"><sql splitStatements="false"><![CDATA[
+ALTER TABLE feedback DROP CONSTRAINT ck_feedback_stop_reason;
+ALTER TABLE feedback ADD CONSTRAINT ck_feedback_stop_reason CHECK (stop_reason IS NULL OR stop_reason IN ('VOLUME_CAPPED','COMPOSER_WITHHELD','NOTHING_NEW','REPEATS_DELIVERED_NOTE','REACTED_DISAGREE','REACTED_NOT_APPLICABLE','CONVERSATION_EXPIRED','DELIVERY_UNCONFIRMED','ITEM_GONE','ITEM_CLOSED','ITEM_MERGED','ITEM_STATE_INELIGIBLE','ISSUE_SNAPSHOT_CHANGED','PUBLIC_SUBJECT_INELIGIBLE','NO_AI','DELIVERY_OFF','PERSON_SUPPRESSED','RECIPIENT_UNAVAILABLE','EMPTY_AFTER_SANITIZE','INSTANCE_SILENCED','FEEDBACK_OFF','WORKSPACE_DISABLED','WORKSPACE_DELIVERY_PAUSED','STALE_ROLLOUT_REVISION','OUTSIDE_CURRENT_SCOPE','APPROVAL_STALE','APPROVAL_NO_LONGER_ELIGIBLE','PRACTICE_REQUIRES_APPROVAL','BACKFILL_QUIET','RESULT_MARKED_INCORRECT','REVIEWED_VERSION_CHANGED','REVIEW_CANCELLED','EVIDENCE_NOT_PERMITTED','NO_EVIDENCE','UNCORROBORATED','PUBLIC_HISTORY_CHANGED','PUBLIC_DELIVERY_UNRESOLVED','STEP_LIMIT','NOT_COMPOSED'));
+ALTER TABLE feedback_copy DROP CONSTRAINT ck_feedback_copy_stop_reason;
+ALTER TABLE feedback_copy ADD CONSTRAINT ck_feedback_copy_stop_reason CHECK (stop_reason IS NULL OR stop_reason IN ('VOLUME_CAPPED','COMPOSER_WITHHELD','NOTHING_NEW','REPEATS_DELIVERED_NOTE','REACTED_DISAGREE','REACTED_NOT_APPLICABLE','CONVERSATION_EXPIRED','DELIVERY_UNCONFIRMED','ITEM_GONE','ITEM_CLOSED','ITEM_MERGED','ITEM_STATE_INELIGIBLE','ISSUE_SNAPSHOT_CHANGED','PUBLIC_SUBJECT_INELIGIBLE','NO_AI','DELIVERY_OFF','PERSON_SUPPRESSED','RECIPIENT_UNAVAILABLE','EMPTY_AFTER_SANITIZE','INSTANCE_SILENCED','FEEDBACK_OFF','WORKSPACE_DISABLED','WORKSPACE_DELIVERY_PAUSED','STALE_ROLLOUT_REVISION','OUTSIDE_CURRENT_SCOPE','APPROVAL_STALE','APPROVAL_NO_LONGER_ELIGIBLE','PRACTICE_REQUIRES_APPROVAL','BACKFILL_QUIET','RESULT_MARKED_INCORRECT','REVIEWED_VERSION_CHANGED','REVIEW_CANCELLED','EVIDENCE_NOT_PERMITTED','NO_EVIDENCE','UNCORROBORATED','PUBLIC_HISTORY_CHANGED','PUBLIC_DELIVERY_UNRESOLVED','STEP_LIMIT','NOT_COMPOSED'));
+ALTER TABLE feedback ADD CONSTRAINT ck_feedback_composition CHECK (jsonb_typeof(composition)='object' AND coalesce((composition->>'edits')::int,0) BETWEEN 0 AND 3);
+]]></sql></changeSet>
+</databaseChangeLog>

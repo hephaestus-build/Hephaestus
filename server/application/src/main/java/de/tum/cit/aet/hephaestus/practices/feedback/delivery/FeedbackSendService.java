@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackProviderReadback;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
@@ -37,6 +38,8 @@ public class FeedbackSendService {
     private final List<LineNoteWriter> notes;
     private final PostedCopyCorrector corrector;
     private final FeedbackReadbackMeters readbacks;
+    private final FeedbackProviderReadback providerReadback;
+    private final FeedbackOwnCopyEditor editor;
 
     public void send(long workspaceId, UUID feedbackId) {
         String owner = UUID.randomUUID().toString();
@@ -47,6 +50,11 @@ public class FeedbackSendService {
                             || attempt.copies().stream().anyMatch(copy -> copy.getWriteStartedAt() != null)
                     ? targets.resolveExisting(attempt.feedback())
                     : targets.resolve(attempt.feedback());
+            if (attempt.action() == FeedbackSendAction.READBACK) return;
+            if (attempt.action() == FeedbackSendAction.EDIT) {
+                editor.edit(attempt, target, owner);
+                return;
+            }
             if (attempt.action() == FeedbackSendAction.RETRACT) {
                 corrector.correct(attempt, target, owner);
                 return;
@@ -65,7 +73,12 @@ public class FeedbackSendService {
             transactions.error(workspaceId, feedbackId, owner);
             log.warn("Feedback send did not settle: workspaceId={}, feedbackId={}", workspaceId, feedbackId);
         } finally {
-            transactions.finish(workspaceId, feedbackId, owner, attempt.attempts() >= MAX_READBACK_ATTEMPTS);
+            try {
+                if (attempt.action() != FeedbackSendAction.RETRACT)
+                    providerReadback.capture(workspaceId, feedbackId, owner);
+            } finally {
+                transactions.finish(workspaceId, feedbackId, owner, attempt.attempts() >= MAX_READBACK_ATTEMPTS);
+            }
         }
     }
 

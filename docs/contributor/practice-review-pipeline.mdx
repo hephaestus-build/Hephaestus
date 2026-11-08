@@ -474,9 +474,15 @@ The receipt means accepted, not delivered: approval and send-time checks still a
 A changed attempt fence, permission, source or public history can refuse publication after a successful check.
 A private destination accepts all its pieces in one transaction.
 
+The review on the work also has `edit_own` for a checked quiet correction.
+After a send settles, its tools return the provider readback recorded under that send's lease.
+An approval wait can resume the same admitted composition from its retained inputs.
+[ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) owns the correction budgets, immutable revisions, approval and human-thread-state rules.
+[Data retention](/admin/data-retention) owns the capsule and tool trace's expiry.
+
 Each turn shows everything its session may use, so no session reads files.
 A session makes at most the model calls of one practice's turn for each practice that it decides, and at most three practices' worth.
-The complete composition run makes at most 12 model calls across all destinations and retries.
+Each attempt makes at most 12 model calls across its feedback destinations.
 Each call asks for no more than the attempt's output limit.
 
 No call starts after the composition deadline.

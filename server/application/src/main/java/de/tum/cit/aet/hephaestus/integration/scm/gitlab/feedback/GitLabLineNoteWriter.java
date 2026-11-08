@@ -577,7 +577,8 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             @Nullable CopyForm copyForm,
             boolean rangePending) {
         CopyReceipt preserved(LineNote item) {
-            return new CopyReceipt(item.copyId(), CopyDisposition.PRESERVED_EXISTING, noteId, url, null, copyForm);
+            return new CopyReceipt(
+                    item.copyId(), CopyDisposition.PRESERVED_EXISTING, noteId, url, null, copyForm, discussionId);
         }
 
         Copy confirmed(boolean range) {
@@ -608,6 +609,29 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             return revision == null
                     ? null
                     : locationBody(footer, projectUrl(target.item().workspaceId(), mr), revision, item.anchor(), item);
+        });
+    }
+
+    @Override
+    public List<CopyUpdateReceipt> editOwn(FeedbackTarget target, List<OwnedEdit> notes) {
+        var footer = formatter.footer(target.item());
+        var byCopy = notes.stream().collect(Collectors.toMap(note -> note.copy().copyId(), note -> note));
+        return rewrite(target, notes.stream().map(OwnedEdit::copy).toList(), (copy, type, original) -> {
+            var edit = Objects.requireNonNull(byCopy.get(copy.copyId()));
+            if (!edit.previousWriteKey().equals(ScmFeedbackFormatter.lastDeliveryKey(original))) return null;
+            if ("DiffNote".equals(type)) return lineBody(footer, edit.note());
+            var mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, kind()));
+            String revision = edit.note().anchor().side() == CitationSide.OLD
+                    ? target.version().baseVersion()
+                    : ScmVersion.reviewedHead(target.version());
+            return revision == null
+                    ? null
+                    : locationBody(
+                            footer,
+                            projectUrl(target.item().workspaceId(), mr),
+                            revision,
+                            edit.note().anchor(),
+                            edit.note());
         });
     }
 

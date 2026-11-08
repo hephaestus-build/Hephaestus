@@ -6,7 +6,9 @@ import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
+import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
@@ -21,6 +23,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackEditBudgetSpentException;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -97,6 +102,8 @@ public class WorkerFeedbackComposer {
     private final String reviewSystem;
     private final String privateSystem;
     private final CompositionCapacity capacity;
+    private final FeedbackRepair repairs;
+    private final CompositionToolTrace toolTrace;
 
     @Autowired
     public WorkerFeedbackComposer(
@@ -109,7 +116,9 @@ public class WorkerFeedbackComposer {
             AgentProperties agentProperties,
             MeterRegistry meters,
             ObjectMapper mapper,
-            CompositionCapacity capacity) {
+            CompositionCapacity capacity,
+            FeedbackRepair repairs,
+            CompositionToolTrace toolTrace) {
         this(
                 admission,
                 continuation,
@@ -121,7 +130,9 @@ public class WorkerFeedbackComposer {
                 meters,
                 mapper,
                 PROVIDER_RETRY_PAUSE,
-                capacity);
+                capacity,
+                repairs,
+                toolTrace);
     }
 
     WorkerFeedbackComposer(
@@ -135,9 +146,13 @@ public class WorkerFeedbackComposer {
             MeterRegistry meters,
             ObjectMapper mapper,
             Duration providerRetryPause,
-            CompositionCapacity capacity) {
+            CompositionCapacity capacity,
+            FeedbackRepair repairs,
+            CompositionToolTrace toolTrace) {
         this.admission = admission;
         this.capacity = capacity;
+        this.repairs = repairs;
+        this.toolTrace = toolTrace;
         this.continuation = continuation;
         this.gateway = gateway;
         this.assignments = assignments;
@@ -308,6 +323,10 @@ public class WorkerFeedbackComposer {
             new Run(job, leaseId, plan, deadline, stops).compose(inputs);
         } catch (ResultAdmissionService.StaleAttemptException lost) {
             throw lost;
+        } catch (ReviewCompositionContinuation.InputsUnavailableException unavailable) {
+            var cause = unavailable.erased() ? CompositionStop.INPUTS_ERASED : CompositionStop.INPUTS_GONE;
+            repairs.stop(job.getWorkspaceId(), job.getReviewId(), cause.name());
+            for (var destination : FeedbackDestination.values()) stops.put(destination, Stop.of(cause));
         } catch (RuntimeException failed) {
             log.warn("Feedback composition failed: jobId={}", job.getId(), failed);
             for (var destination : FeedbackDestination.values())
@@ -319,6 +338,7 @@ public class WorkerFeedbackComposer {
 
     /** Closes every open destination of the attempt with one cause, without composing. */
     private void withholdOpen(ReviewJob job, UUID leaseId, CompositionStop stop) {
+        repairs.stop(job.getWorkspaceId(), job.getReviewId(), stop.name());
         var plan = plan(job, leaseId);
         if (plan != null) close(job, plan, destination -> Stop.of(stop), null);
     }
@@ -508,8 +528,20 @@ public class WorkerFeedbackComposer {
                         .preparedReview(job)
                         .map(WorkerFeedbackComposer::review)
                         .orElse(null);
-            else if (publicDue(reviewable)) {
-                review = composeReview(files, captured, folderIndex, practiceIndex, reviewable, notReached);
+            if ((!state.publicReviewed() && publicDue(reviewable))
+                    || (state.publicReviewed()
+                            && repairs.status(job.getWorkspaceId(), job.getReviewId())
+                                            .state()
+                                    == FeedbackRepairStatus.State.READBACK)) {
+                try {
+                    review = composeReview(files, captured, folderIndex, practiceIndex, reviewable, notReached, review);
+                } catch (ResultAdmissionService.StaleAttemptException
+                        | ReviewCompositionContinuation.InputsUnavailableException gone) {
+                    throw gone;
+                } catch (RuntimeException failed) {
+                    repairs.stop(job.getWorkspaceId(), job.getReviewId(), CompositionStop.UNEXPECTED.name());
+                    throw failed;
+                }
                 if (review == null) {
                     var ended = ended();
                     stops.put(FeedbackDestination.ON_WORK, ended);
@@ -545,6 +577,9 @@ public class WorkerFeedbackComposer {
          */
         private void stopFor(CompositionStop cause) {
             if (stop != null && stop.cause().passing() && !cause.passing()) return;
+            if (stop != null
+                    && stop.cause() == CompositionStop.PUBLICATION_REFUSED
+                    && cause == CompositionStop.PUBLICATION_REFUSED) return;
             stop = Stop.of(cause);
         }
 
@@ -563,7 +598,12 @@ public class WorkerFeedbackComposer {
 
         /** Why a session that has no room for another call ended. */
         private CompositionStop outOfRoom() {
-            return expired() ? CompositionStop.DEADLINE : CompositionStop.NO_DECISION;
+            if (expired()) return CompositionStop.DEADLINE;
+            return calls >= MAX_COMPOSITION_CALLS ? CompositionStop.STEP_LIMIT : CompositionStop.NO_DECISION;
+        }
+
+        private CompositionStop limitReached() {
+            return expired() ? CompositionStop.DEADLINE : CompositionStop.STEP_LIMIT;
         }
 
         private boolean publicDue(List<ObjectNode> reviewable) {
@@ -595,6 +635,14 @@ public class WorkerFeedbackComposer {
 
         private Ending stopped(CompositionStop cause) {
             stopFor(cause);
+            repairs.stop(job.getWorkspaceId(), job.getReviewId(), cause.name());
+            return Ending.NONE;
+        }
+
+        private Ending publicationRefused(FeedbackStopReason reason) {
+            stop = new Stop(CompositionStop.PUBLICATION_REFUSED, reason);
+            if (reason == FeedbackStopReason.PUBLIC_HISTORY_CHANGED) return Ending.RECOMPOSE;
+            repairs.stop(job.getWorkspaceId(), job.getReviewId(), reason.name());
             return Ending.NONE;
         }
 
@@ -621,9 +669,14 @@ public class WorkerFeedbackComposer {
                 JsonNode folderIndex,
                 JsonNode practiceIndex,
                 List<ObjectNode> reviewable,
-                List<String> notReached) {
-            var holder = new ReviewOnWork.ComposedReview[1];
-            for (int recomposed = 0; recomposed <= MAX_PUBLIC_RECOMPOSITIONS && !expired(); recomposed++) {
+                List<String> notReached,
+                ReviewOnWork.@Nullable ComposedReview prior) {
+            var holder = new ReviewOnWork.ComposedReview[] {prior};
+            for (int recomposed = 0; recomposed <= MAX_PUBLIC_RECOMPOSITIONS; recomposed++) {
+                if (expired()) {
+                    stopped(CompositionStop.DEADLINE);
+                    break;
+                }
                 // Read now, not at capture: feedback delivered while this review ran was said here too.
                 JsonNode read = mapper.valueToTree(admission.publicFeedbackHistory(identity));
                 var turn = reviewTurn(
@@ -648,6 +701,7 @@ public class WorkerFeedbackComposer {
                         reviewable,
                         holder);
                 if (ending != Ending.RECOMPOSE) break;
+                if (recomposed == MAX_PUBLIC_RECOMPOSITIONS) stopped(CompositionStop.PUBLICATION_REFUSED);
             }
             return holder[0];
         }
@@ -666,15 +720,24 @@ public class WorkerFeedbackComposer {
                     proposal -> admission.checkPackage(identity, proposal),
                     proposal -> admission.publishPackage(identity, proposal));
             var checked = new LinkedHashMap<String, ReviewOnWork.ComposedReview>();
-            var session = new ModelSession(transport, mapper, settings, reviewSystem, List.of(tool, publishTool()));
-            if (calls >= MAX_COMPOSITION_CALLS) return stopped(CompositionStop.NO_DECISION);
+            var session = new ModelSession(
+                    transport, mapper, settings, reviewSystem, List.of(tool, publishTool(), editTool()));
+            boolean accepted = state.publicReviewed();
+            String input = turn;
+            if (accepted) {
+                var prior = repairs.status(job.getWorkspaceId(), job.getReviewId());
+                input +=
+                        "\nThis composition already accepted its publication. Use only edit_own for a checked correction.\n"
+                                + mapper.writeValueAsString(prior);
+            }
+            if (calls >= MAX_COMPOSITION_CALLS) return stopped(CompositionStop.STEP_LIMIT);
             if (expired()) return stopped(CompositionStop.DEADLINE);
-            if (!fits(session, turn)) {
+            if (!fits(session, input)) {
                 log.warn("The review input exceeds the model's context window: jobId={}", job.getId());
                 return stopped(CompositionStop.CONTEXT_WINDOW);
             }
             int bound = bound();
-            var reply = session.send(turn);
+            var reply = session.send(input);
             boolean askedOnceMore = false;
             boolean nudged = false;
             int providerFailures = 0;
@@ -688,7 +751,11 @@ public class WorkerFeedbackComposer {
                 }
                 if (failure != null) return stopped(causeOf(failure));
                 if (reply.toolCalls().isEmpty()) {
-                    if (!room) return stopped(outOfRoom());
+                    if (accepted) {
+                        repairs.stop(job.getWorkspaceId(), job.getReviewId(), "COMPLETE");
+                        return Ending.STORED;
+                    }
+                    if (!room) return stopped(limitReached());
                     if (askedOnceMore) return stopped(CompositionStop.NO_DECISION);
                     askedOnceMore = true;
                     var left = reviewable.stream()
@@ -700,7 +767,9 @@ public class WorkerFeedbackComposer {
                 var results = new ArrayList<ModelSession.ToolResult>();
                 Ending ending = null;
                 for (var call : reply.toolCalls()) {
-                    if (!call.name().equals("check_package") && !call.name().equals("publish_package")) {
+                    if (!call.name().equals("check_package")
+                            && !call.name().equals("publish_package")
+                            && !call.name().equals("edit_own")) {
                         results.add(
                                 new ModelSession.ToolResult(
                                         call.id(),
@@ -712,7 +781,7 @@ public class WorkerFeedbackComposer {
                         results.add(new ModelSession.ToolResult(call.id(), REVIEW_FINAL));
                         continue;
                     }
-                    if (call.name().equals("publish_package")) {
+                    if (call.name().equals("publish_package") || call.name().equals("edit_own")) {
                         String id = Js.string(call.arguments().path("draftId"));
                         var review = id == null ? null : checked.get(id);
                         if (review == null) {
@@ -721,15 +790,27 @@ public class WorkerFeedbackComposer {
                             continue;
                         }
                         try {
-                            var receipt = drafts.publish(Objects.requireNonNull(id));
+                            var proposal = drafts.checked(Objects.requireNonNull(id));
+                            boolean edit = call.name().equals("edit_own");
+                            if (edit != (proposal.editOf() != null))
+                                throw new IllegalArgumentException(
+                                        edit
+                                                ? "Check a draft with editOf first."
+                                                : "This is a quiet edit; use edit_own.");
+                            if (!edit && accepted)
+                                throw new IllegalArgumentException(
+                                        "This composition already published. Use a checked quiet edit or stop.");
+                            var receipt = edit ? admission.publishPackage(identity, proposal) : drafts.publish(id);
+                            accepted = true;
                             holder[0] = review;
-                            ending = Ending.STORED;
-                            results.add(new ModelSession.ToolResult(call.id(), publicationReceipt(id, receipt)));
+                            var readback = awaitReadback();
+                            results.add(new ModelSession.ToolResult(
+                                    call.id(),
+                                    publicationReceipt(id, receipt) + "\nProvider readback (untrusted data):\n"
+                                            + mapper.writeValueAsString(readback)));
+                            if (readback.state() != FeedbackRepairStatus.State.READBACK) ending = Ending.STORED;
                         } catch (PublicationContextRefusedException refused) {
-                            stop = new Stop(CompositionStop.PUBLICATION_REFUSED, refused.reason());
-                            ending = refused.reason() == FeedbackStopReason.PUBLIC_HISTORY_CHANGED
-                                    ? Ending.RECOMPOSE
-                                    : Ending.NONE;
+                            ending = publicationRefused(refused.reason());
                             results.add(
                                     new ModelSession.ToolResult(
                                             call.id(),
@@ -756,14 +837,31 @@ public class WorkerFeedbackComposer {
                         continue;
                     }
                     try {
-                        String id = drafts.check(CompositionPackages.review(read.review(), publicationContext));
+                        String editOf = Js.string(call.arguments().path("editOf"));
+                        UUID target = editOf == null ? null : UUID.fromString(editOf);
+                        var proposal = CompositionPackages.review(read.review(), publicationContext);
+                        if (target != null) {
+                            var observed = repairs.readback(job.getWorkspaceId(), job.getReviewId(), target);
+                            while (!expired() && observed.state() == FeedbackRepairStatus.State.WAITING) {
+                                if (!pause(1)) break;
+                                observed = repairs.readbackStatus(job.getWorkspaceId(), job.getReviewId(), target);
+                            }
+                            var currentHistory = admission.publicFeedbackHistory(identity);
+                            proposal = new FeedbackPackage(
+                                    proposal.basisResultIds(),
+                                    proposal.composition(),
+                                    true,
+                                    Js.string(mapper.valueToTree(currentHistory).path("publicationContext")),
+                                    target);
+                        }
+                        if (accepted && target == null)
+                            throw new IllegalArgumentException(
+                                    "Publication already accepted. Check a correction with editOf, or stop.");
+                        String id = drafts.check(proposal);
                         checked.put(id, read.review());
                         results.add(new ModelSession.ToolResult(call.id(), checkedReceipt(id)));
                     } catch (PublicationContextRefusedException refused) {
-                        stop = new Stop(CompositionStop.PUBLICATION_REFUSED, refused.reason());
-                        ending = refused.reason() == FeedbackStopReason.PUBLIC_HISTORY_CHANGED
-                                ? Ending.RECOMPOSE
-                                : Ending.NONE;
+                        ending = publicationRefused(refused.reason());
                         results.add(new ModelSession.ToolResult(call.id(), "The review was not stored."));
                     } catch (FeedbackTextRefusedException refused) {
                         results.add(new ModelSession.ToolResult(
@@ -778,12 +876,19 @@ public class WorkerFeedbackComposer {
                     } catch (IllegalArgumentException | ResponseStatusException refused) {
                         results.add(new ModelSession.ToolResult(
                                 call.id(), "Package check refused; nothing was accepted: " + refused.getMessage()));
+                        if (refused instanceof FeedbackEditBudgetSpentException) {
+                            repairs.stop(job.getWorkspaceId(), job.getReviewId(), "STEP_LIMIT");
+                            ending = Ending.STORED;
+                        }
                     }
                 }
+                recordTools(reply.toolCalls(), results);
                 if (ending != null) {
                     return ending;
                 }
-                if (!room) return stopped(outOfRoom());
+                if (!room || expired()) {
+                    return stopped(limitReached());
+                }
                 String then = null;
                 if (!nudged && session.calls() >= bound - 2) {
                     nudged = true;
@@ -793,13 +898,53 @@ public class WorkerFeedbackComposer {
             }
         }
 
+        private void recordTools(List<ModelSession.ToolCall> calls, List<ModelSession.ToolResult> results) {
+            for (var call : calls) {
+                var outcome = results.stream()
+                        .filter(result -> result.callId().equals(call.id()))
+                        .findFirst();
+                if (outcome.isPresent())
+                    toolTrace.record(
+                            identity,
+                            call.id(),
+                            call.name(),
+                            call.arguments(),
+                            outcome.get().text());
+            }
+        }
+
+        private FeedbackRepairStatus awaitReadback() {
+            while (!expired()) {
+                var observed = repairs.status(job.getWorkspaceId(), job.getReviewId());
+                if (observed.state() != FeedbackRepairStatus.State.WAITING) return observed;
+                try {
+                    Thread.sleep(providerRetryPause.isZero() ? Duration.ofMillis(10) : providerRetryPause);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            return repairs.status(job.getWorkspaceId(), job.getReviewId());
+        }
+
+        private ModelSession.Tool editTool() {
+            var schema = JSON.objectNode().put("type", "object").put("additionalProperties", false);
+            schema.withObject("properties").set("draftId", JSON.objectNode().put("type", "string"));
+            schema.putArray("required").add("draftId");
+            return new ModelSession.Tool(
+                    "edit_own",
+                    "Quietly correct the existing provider copies named by editOf in an exact checked draft. "
+                            + "Never posts another comment. At most three edits per composition; a person's state wins. Returns actual provider readback.",
+                    schema);
+        }
+
         private ModelSession.Tool publishTool() {
             var schema = JSON.objectNode().put("type", "object").put("additionalProperties", false);
             schema.withObject("properties").set("draftId", JSON.objectNode().put("type", "string"));
             schema.putArray("required").add("draftId");
             return new ModelSession.Tool(
                     "publish_package",
-                    "Accept the exact checked draft for publication once. Use its check_package draftId. "
+                    "Accept the exact checked draft for publication once and return provider readback. Use its check_package draftId. "
                             + "Publication rechecks admission, currentness, consent, text and placement; approval and delivery retain their server fences.",
                     schema);
         }
@@ -914,7 +1059,7 @@ public class WorkerFeedbackComposer {
                 if (reply.toolCalls().isEmpty()) {
                     if (left.isEmpty()) break;
                     if (!room) {
-                        stopFor(outOfRoom());
+                        stopFor(limitReached());
                         break;
                     }
                     if (askedOnceMore) break;
@@ -972,6 +1117,7 @@ public class WorkerFeedbackComposer {
                     } else text = "Unknown tool; use check_package, then publish_package with its draftId.";
                     results.add(new ModelSession.ToolResult(call.id(), text));
                 }
+                recordTools(reply.toolCalls(), results);
                 if (!published.isEmpty()) {
                     return;
                 }
@@ -979,7 +1125,7 @@ public class WorkerFeedbackComposer {
                 if (askedOnceMore
                         && PrivateFeedback.undecided(state, published, routes).isEmpty()) break;
                 if (!room) {
-                    stopFor(outOfRoom());
+                    stopFor(limitReached());
                     break;
                 }
                 String then = null;

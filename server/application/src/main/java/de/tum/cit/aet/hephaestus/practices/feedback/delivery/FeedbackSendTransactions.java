@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyReadback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackOutcomes;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPublicationContext;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendQueue;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackStoreService;
@@ -50,6 +51,7 @@ public class FeedbackSendTransactions {
     private final FeedbackSendQueue sendQueue;
     private final ItemIndexService itemLocks;
     private final FeedbackPublicationContext publication;
+    private final FeedbackRepository feedback;
 
     public record Attempt(Feedback feedback, FeedbackSendAction action, List<FeedbackCopy> copies, int attempts) {
         public Attempt {
@@ -80,19 +82,34 @@ public class FeedbackSendTransactions {
             long workspaceId, UUID feedbackId, String owner, List<UUID> attempting, List<CopyReceipt> completed) {
         if (!attempting.isEmpty())
             publication.itemOf(workspaceId, feedbackId).ifPresent(itemId -> itemLocks.lock(workspaceId, itemId));
+        feedback.lockCorrectionFamily(workspaceId, feedbackId);
         var row = store.lock(workspaceId, feedbackId);
         if (!owns(workspaceId, feedbackId, owner)) return false;
-        record(workspaceId, feedbackId, completed);
+        record(row, completed);
         if (visibility.withdrawn(workspaceId, feedbackId)) {
             settle(workspaceId, feedbackId, owner, false);
             return false;
+        }
+        if (row.getComposition().hasNonNull("editOf")) {
+            var previous = store.lock(
+                    workspaceId,
+                    UUID.fromString(row.getComposition().path("editOf").asString()));
+            if (visibility.withdrawn(workspaceId, previous.getId())
+                    || previous.getComposition().path("humanControlled").asBoolean()) {
+                store.withhold(row, FeedbackStopReason.DELIVERY_UNCONFIRMED);
+                return false;
+            }
         }
         var check = store.check(row, true);
         if (!check.allowed()) {
             store.withhold(row, Objects.requireNonNull(check.reason()));
             return false;
         }
-        if (!attempting.isEmpty()) {
+        if (!attempting.isEmpty()
+                && sends.lockByFeedbackId(workspaceId, feedbackId)
+                        .filter(send -> send.getAction() == FeedbackSendAction.POST
+                                || send.getAction() == FeedbackSendAction.EDIT)
+                        .isPresent()) {
             var refusal = publication.refusal(row);
             if (refusal.isPresent()) {
                 store.withhold(row, refusal.get());
@@ -112,16 +129,19 @@ public class FeedbackSendTransactions {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void receipt(long workspaceId, UUID feedbackId, String owner, List<CopyReceipt> receipts) {
+        feedback.lockCorrectionFamily(workspaceId, feedbackId);
         var row = store.lock(workspaceId, feedbackId);
         if (owns(workspaceId, feedbackId, owner)) {
-            record(workspaceId, feedbackId, receipts);
+            record(row, receipts);
             var projection = FeedbackSendStateMachine.project(
                     row, copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspaceId, feedbackId));
             outcomes.update(row, projection.state(), projection.stopReason(), projection.deliveredAt());
         }
     }
 
-    private void record(long workspaceId, UUID feedbackId, List<CopyReceipt> receipts) {
+    private void record(Feedback row, List<CopyReceipt> receipts) {
+        long workspaceId = row.getWorkspaceId();
+        UUID feedbackId = row.getId();
         for (CopyReceipt receipt : receipts) {
             var copy = copies.findByIdAndWorkspaceId(receipt.copyId(), workspaceId)
                     .filter(c -> c.getFeedbackId().equals(feedbackId))
@@ -153,7 +173,8 @@ public class FeedbackSendTransactions {
                         clock.instant(),
                         receipt.externalRef(),
                         receipt.externalUrl(),
-                        kind.name());
+                        kind.name(),
+                        receipt.threadRef());
             } else if (Boolean.FALSE.equals(receipt.writeMayHaveStarted())) {
                 copies.recordAbsent(workspaceId, feedbackId, copy.getId(), "Provider proved the copy was not created.");
             } else
@@ -164,6 +185,15 @@ public class FeedbackSendTransactions {
                         FeedbackStopReason.DELIVERY_UNCONFIRMED.name(),
                         FeedbackCopyReadback.UNKNOWN.name(),
                         "Provider visibility is unknown.");
+        }
+        if (!receipts.isEmpty()
+                && row.getComposition().hasNonNull("editOf")
+                && copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspaceId, feedbackId).stream()
+                        .allMatch(copy -> copy.getState() == FeedbackCopyState.POSTED)) {
+            var previous = store.lock(
+                    workspaceId,
+                    UUID.fromString(row.getComposition().path("editOf").asString()));
+            outcomes.update(previous, FeedbackState.REPLACED, null, previous.getDeliveredAt());
         }
     }
 

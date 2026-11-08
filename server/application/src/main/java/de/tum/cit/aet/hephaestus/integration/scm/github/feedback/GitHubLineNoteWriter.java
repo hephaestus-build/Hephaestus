@@ -535,7 +535,8 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                     commentId,
                     url,
                     true,
-                    item.anchor().endLine() == null ? CopyForm.FILE_NOTE : CopyForm.LINE_NOTE);
+                    item.anchor().endLine() == null ? CopyForm.FILE_NOTE : CopyForm.LINE_NOTE,
+                    threadId);
         }
     }
 
@@ -577,6 +578,18 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             var item = Objects.requireNonNull(byCopy.get(copy.copyId()));
             return item.writeKey().equals(ScmFeedbackFormatter.lastDeliveryKey(original))
                     ? postedBody(footer, item)
+                    : null;
+        });
+    }
+
+    @Override
+    public List<CopyUpdateReceipt> editOwn(FeedbackTarget target, List<OwnedEdit> notes) {
+        var footer = formatter.footer(target.item());
+        var byCopy = notes.stream().collect(Collectors.toMap(note -> note.copy().copyId(), note -> note));
+        return rewrite(target, notes.stream().map(OwnedEdit::copy).toList(), (copy, original) -> {
+            var edit = Objects.requireNonNull(byCopy.get(copy.copyId()));
+            return edit.previousWriteKey().equals(ScmFeedbackFormatter.lastDeliveryKey(original))
+                    ? postedBody(footer, edit.note())
                     : null;
         });
     }

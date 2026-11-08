@@ -81,17 +81,26 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
 
     @Transactional(readOnly = true)
     public void checkPackage(long workspaceId, UUID reviewId, List<FeedbackDraft> drafts) {
+        check(workspaceId, reviewId, drafts, false);
+    }
+
+    @Transactional(readOnly = true)
+    public void checkRepair(long workspaceId, UUID reviewId, FeedbackDraft draft) {
+        check(workspaceId, reviewId, List.of(draft), true);
+    }
+
+    private void check(long workspaceId, UUID reviewId, List<FeedbackDraft> drafts, boolean repair) {
         validateBatch(workspaceId, reviewId, drafts);
         var review = reviews.findByIdAndWorkspaceId(reviewId, workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Review", reviewId.toString()));
         if (review.getKind() != ReviewKind.ITEM) throw conflict("A scan cannot publish developer feedback.");
         for (var draft : drafts) {
             var existing = feedback.findByIdAndWorkspaceId(draft.id(), workspaceId);
-            if (review.getStatus() != ReviewStatus.RUNNING && existing.isEmpty())
+            if (!repair && review.getStatus() != ReviewStatus.RUNNING && existing.isEmpty())
                 throw conflict("This review is no longer running.");
             // Builds and discards the rows that publication would write, so a check refuses what publication refuses.
             draft.copies().forEach(input -> planned(draft, input, null));
-            var checked = preparation.prepare(draft, existing);
+            var checked = preparation.prepare(draft, existing, repair);
             if (!checked.withheldCopies().isEmpty())
                 throw conflict("Some entries are no longer publishable: " + checked.withheldCopies());
             if (draft.state() != FeedbackState.WITHHELD && checked.draft().state() == FeedbackState.WITHHELD)
@@ -111,21 +120,30 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
     }
 
     public PreparedPackage prepareAll(long workspaceId, UUID reviewId, List<FeedbackDraft> drafts) {
+        return prepare(workspaceId, reviewId, drafts, false);
+    }
+
+    public PreparedPackage prepareRepair(long workspaceId, UUID reviewId, FeedbackDraft draft) {
+        return prepare(workspaceId, reviewId, List.of(draft), true);
+    }
+
+    private PreparedPackage prepare(long workspaceId, UUID reviewId, List<FeedbackDraft> drafts, boolean repair) {
         validateBatch(workspaceId, reviewId, drafts);
         var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Review", reviewId.toString()));
         if (review.getKind() != ReviewKind.ITEM) throw conflict("A scan cannot prepare developer feedback.");
-        if (review.getStatus() != ReviewStatus.RUNNING
+        if (!repair
+                && review.getStatus() != ReviewStatus.RUNNING
                 && drafts.stream()
                         .anyMatch(draft -> feedback.findByIdAndWorkspaceId(draft.id(), workspaceId)
                                 .isEmpty())) throw conflict("This review is no longer running.");
         Instant acceptedAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
         var pieces = drafts.stream()
-                .map(draft -> preparePiece(review, draft, acceptedAt))
+                .map(draft -> preparePiece(review, draft, acceptedAt, repair))
                 .toList();
         String packageDigest = digests.orderedPackageDigest(
                 pieces.stream().map(PreparedFeedback::packageDigest).toList());
-        Instant preparedAt = preparationReceipt(review, packageDigest, acceptedAt);
+        Instant preparedAt = preparationReceipt(review, packageDigest, acceptedAt, repair);
         return new PreparedPackage(
                 packageDigest,
                 preparedAt,
@@ -140,8 +158,15 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
         var review = reviews.findByIdAndWorkspaceId(reviewId, workspaceId).orElse(null);
         if (review == null) return Optional.empty();
         JsonNode compositions = review.getChecks().path("feedbackComposition");
-        return feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(workspaceId, reviewId).stream()
-                .filter(row -> row.getDestination() == FeedbackDestination.ON_WORK
+        var rows = feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(workspaceId, reviewId);
+        var root = rows.stream()
+                .filter(row -> row.getDestination() == FeedbackDestination.ON_WORK)
+                .findFirst();
+        String latest = root.map(row ->
+                        row.getComposition().path("latest").asString(row.getId().toString()))
+                .orElse("");
+        return rows.stream()
+                .filter(row -> row.getId().toString().equals(latest)
                         && compositions.path(row.getId().toString()).isObject())
                 .findFirst()
                 .map(row -> new PreparedReviewOnWork(
@@ -187,7 +212,7 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
                 byDestination);
     }
 
-    private Instant preparationReceipt(Review review, String packageDigest, Instant acceptedAt) {
+    private Instant preparationReceipt(Review review, String packageDigest, Instant acceptedAt, boolean repair) {
         var checks = (ObjectNode) review.getChecks().deepCopy();
         var recorded = checks.path(PREPARATION_RECEIPTS);
         if (!recorded.isMissingNode() && !recorded.isObject())
@@ -199,7 +224,7 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
             if (!existing.isString()) throw conflict("The preparation receipt has no recorded timestamp.");
             return Instant.parse(existing.asString());
         }
-        if (review.getStatus() != ReviewStatus.RUNNING)
+        if (!repair && review.getStatus() != ReviewStatus.RUNNING)
             throw conflict("This preparation was not accepted before closure.");
         receipts.put(packageDigest, acceptedAt.toString());
         checks.set(PREPARATION_RECEIPTS, receipts);
@@ -210,7 +235,7 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
         return acceptedAt;
     }
 
-    private PreparedFeedback preparePiece(Review review, FeedbackDraft proposal, Instant preparedAt) {
+    private PreparedFeedback preparePiece(Review review, FeedbackDraft proposal, Instant preparedAt, boolean repair) {
         var existing = feedback.findByIdAndWorkspaceId(proposal.id(), proposal.workspaceId());
         if (proposal.composition() != null) {
             var checks = (ObjectNode) review.getChecks().deepCopy();
@@ -237,7 +262,7 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
         if (proposal.state() == FeedbackState.WITHHELD && proposal.stopReason() == null)
             throw new IllegalArgumentException("Withheld feedback needs a reason.");
         if (proposal.basis().isEmpty()) throw new IllegalArgumentException("Feedback needs an admitted result basis.");
-        var prepared = preparation.prepare(proposal, existing);
+        var prepared = preparation.prepare(proposal, existing, repair);
         var draft = prepared.draft();
         if (draft.state() != FeedbackState.WITHHELD
                 && (draft.body() == null && draft.copies().isEmpty()))

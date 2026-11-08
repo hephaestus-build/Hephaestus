@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionContext;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDraft;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageDecision;
@@ -37,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -55,6 +57,7 @@ public class FeedbackCompositionService {
     private final ResultHistoryQuery history;
     private final HistoryCopies copies;
     private final FeedbackHistoryQuery feedbackHistory;
+    private final FeedbackRepair repairs;
 
     public PreparedPackage prepare(
             ReviewJob job,
@@ -95,6 +98,42 @@ public class FeedbackCompositionService {
             Map<ComposedFeedback.Anchor, FeedbackAnchor> anchors,
             boolean publicAlreadyAccepted) {
         checkedDrafts(job, request, rows, context, anchors, publicAlreadyAccepted);
+    }
+
+    public boolean ownCopy(ReviewJob job, UUID target) {
+        return target.equals(
+                repairs.status(job.getWorkspaceId(), job.getReviewId()).feedbackId());
+    }
+
+    public @Nullable PreparedPackage repair(
+            ReviewJob job,
+            FeedbackPackage request,
+            List<AdmittedResultSnapshot> rows,
+            Read context,
+            Map<ComposedFeedback.Anchor, FeedbackAnchor> anchors,
+            boolean publish) {
+        if (!request.publicComposition() || request.editOf() == null) throw new AdmissionConflictException();
+        var drafts = FeedbackDraftBuilder.build(job, request, rows, context.support(), anchors);
+        if (drafts.size() != 1) throw new AdmissionConflictException();
+        var draft = drafts.getFirst();
+        Long itemId = draft.itemId();
+        if (draft.destination() != FeedbackDestination.ON_WORK || itemId == null)
+            throw new AdmissionConflictException();
+        var refusal = feedbackHistory.publicationRefusal(
+                job.getWorkspaceId(), itemId, job.getReviewId(), draft.developerId(), request.publicationContext());
+        if (refusal.isPresent()) throw new PublicationContextRefusedException(refusal.get());
+        String draftId = request.draftId(job.getReviewId());
+        if (!publish) {
+            repairs.check(draft, request.editOf(), draftId);
+            return null;
+        }
+        var receipt = repairs.prepare(draft, request.editOf(), draftId);
+        if (job.getPublicReviewDigest() == null) {
+            members.publicReviewed(
+                    job.getWorkspaceId(), job.getReviewId(), job.getId(), job.getAttempt(), receipt.preparedAt());
+            job.setPublicReviewDigest(receipt.packageDigest());
+        }
+        return receipt;
     }
 
     private List<FeedbackDraft> checkedDrafts(

@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedFeedback;
@@ -86,7 +87,8 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
             members,
             mock(ResultHistoryQuery.class),
             mock(HistoryCopies.class),
-            mock(FeedbackHistoryQuery.class));
+            mock(FeedbackHistoryQuery.class),
+            mock(FeedbackRepair.class));
     private final PlatformTransactionManager manager = mock(PlatformTransactionManager.class);
     private final ReviewJob job = RuntimeReviewTestData.job();
     private ResultAdmissionService service;

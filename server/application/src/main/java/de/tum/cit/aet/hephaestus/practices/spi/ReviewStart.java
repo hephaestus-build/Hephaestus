@@ -9,6 +9,8 @@ public interface ReviewStart {
      * review. Otherwise starts a queued review, or retains a running review. The caller's transaction must include
      * the job claim; it must roll back if no job is claimed.
      */
+    boolean compose(long workspaceId, UUID reviewId);
+
     boolean start(long workspaceId, UUID reviewId);
 
     /**

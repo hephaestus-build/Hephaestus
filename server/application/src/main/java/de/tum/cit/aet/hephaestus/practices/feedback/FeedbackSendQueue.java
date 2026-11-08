@@ -36,7 +36,12 @@ public class FeedbackSendQueue {
 
     @Transactional
     public void queue(Feedback row, FeedbackSendAction action, FeedbackSendState state) {
-        enqueue(row, action, state);
+        enqueue(
+                row,
+                action == FeedbackSendAction.POST && row.getComposition().hasNonNull("editOf")
+                        ? FeedbackSendAction.EDIT
+                        : action,
+                state);
     }
 
     private void enqueue(Feedback row, FeedbackSendAction action, FeedbackSendState state) {

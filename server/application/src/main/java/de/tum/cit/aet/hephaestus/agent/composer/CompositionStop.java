@@ -30,6 +30,8 @@ public enum CompositionStop {
     PUBLICATION_REFUSED(FeedbackStopReason.NOT_COMPOSED, false),
     /** The model decided nothing for the destination, within its calls and after it was asked once more. */
     NO_DECISION(FeedbackStopReason.NOT_COMPOSED, false),
+    /** The model-call or quiet-edit budget is spent. Posted copies stay in place. */
+    STEP_LIMIT(FeedbackStopReason.STEP_LIMIT, false),
     /** The inputs the review was measured from are no longer retained. */
     INPUTS_GONE(FeedbackStopReason.NOT_COMPOSED, false),
     /** The inputs the review was measured from were erased. */

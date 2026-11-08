@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.ApprovedFeedbackDeliveryListener;
+import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackOwnCopyEditor;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackReadbackMeters;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendRecovery;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendService;
@@ -153,7 +154,9 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
                 List.of(provider),
                 List.of(provider),
                 corrector,
-                new FeedbackReadbackMeters(new SimpleMeterRegistry()));
+                new FeedbackReadbackMeters(new SimpleMeterRegistry()),
+                mock(FeedbackProviderReadback.class),
+                mock(FeedbackOwnCopyEditor.class));
     }
 
     protected void prepare(boolean note) {
@@ -244,7 +247,7 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
         int summaryCreates, noteCreates, updates;
         final List<UUID> retracted = new ArrayList<>();
         final List<UUID> restored = new ArrayList<>();
-        Failure summaryFailure = Failure.NONE, noteFailure = Failure.NONE;
+        Failure summaryFailure = Failure.NONE, noteFailure = Failure.NONE, updateFailure = Failure.NONE;
         LookupPresence readback = LookupPresence.FOUND;
         CopyUpdateKind retraction = CopyUpdateKind.GONE;
         boolean fallback;
@@ -256,6 +259,7 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
         String lastSummaryLookupMarker;
 
         final Map<UUID, String> physical = new HashMap<>();
+        final Map<UUID, String> markers = new HashMap<>();
 
         @Override
         public IntegrationKind kind() {
@@ -274,6 +278,7 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
             if (summaryFailure == Failure.BEFORE_CREATE)
                 throw new IllegalStateException("Provider request was not received.");
             physical.put(content.copyId(), content.body());
+            if (content.writeMarker() != null) markers.put(content.copyId(), content.writeMarker());
             if (summaryFailure == Failure.AFTER_CREATE) throw new IllegalStateException("Provider response was lost.");
             return new SummaryHandle(content.copyId().toString(), "https://example.test/comments/" + content.copyId());
         }
@@ -292,11 +297,18 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
         @Override
         public CopyUpdateReceipt updateSummary(FeedbackTarget target, SummaryHandle existing, SummaryContent content) {
             updates++;
+            if (updateFailure == Failure.BEFORE_CREATE)
+                throw new IllegalStateException("The quiet edit response was lost.");
             UUID id = UUID.fromString(existing.externalRef());
             if (!physical.containsKey(id))
-                return new CopyUpdateReceipt(id, CopyUpdateKind.GONE, existing.externalRef(), existing.url(), null);
+                return new CopyUpdateReceipt(
+                        content.copyId(), CopyUpdateKind.GONE, existing.externalRef(), existing.url(), null);
             physical.put(id, content.body());
-            return new CopyUpdateReceipt(id, CopyUpdateKind.EDITED, existing.externalRef(), existing.url(), null);
+            if (content.writeMarker() != null) markers.put(id, content.writeMarker());
+            if (updateFailure == Failure.AFTER_CREATE)
+                throw new IllegalStateException("The quiet edit response was lost.");
+            return new CopyUpdateReceipt(
+                    content.copyId(), CopyUpdateKind.EDITED, existing.externalRef(), existing.url(), null);
         }
 
         /**
@@ -372,6 +384,24 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
                     .map(note -> receipt(note.copyId()))
                     .forEach(found::add);
             return found;
+        }
+
+        @Override
+        public List<CopyUpdateReceipt> editOwn(FeedbackTarget target, List<OwnedEdit> notes) {
+            return notes.stream()
+                    .map(note -> {
+                        UUID id = UUID.fromString(note.copy().externalRef());
+                        if (!physical.containsKey(id))
+                            return CopyUpdateReceipt.gone(note.copy().copyId(), "Deleted");
+                        physical.put(id, note.note().body());
+                        return new CopyUpdateReceipt(
+                                note.copy().copyId(),
+                                CopyUpdateKind.EDITED,
+                                note.copy().externalRef(),
+                                note.copy().externalUrl(),
+                                null);
+                    })
+                    .toList();
         }
 
         @Override

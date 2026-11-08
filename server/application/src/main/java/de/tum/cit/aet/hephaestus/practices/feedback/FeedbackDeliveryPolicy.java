@@ -72,12 +72,16 @@ public class FeedbackDeliveryPolicy {
             var check = check(row, FeedbackCheckStage.COMPOSITION, false);
             if (!check.allowed()) {
                 withhold(row, Objects.requireNonNull(check.reason()));
-            } else if (row.getState() == FeedbackState.AWAITING_APPROVAL || gate.requiresApproval(row)) {
+            } else if ((row.getState() == FeedbackState.AWAITING_APPROVAL || gate.requiresApproval(row))
+                    && !gate.keepsApprovedWords(row)) {
                 outcomes.update(row, FeedbackState.AWAITING_APPROVAL, null, null);
             } else if (row.getDestination() == FeedbackDestination.ON_WORK) {
                 var automatic = check(row, FeedbackCheckStage.AUTOMATIC, true);
-                if (automatic.allowed()) sendQueue.queue(row, FeedbackSendAction.POST, FeedbackSendState.PENDING);
-                else withhold(row, Objects.requireNonNull(automatic.reason()));
+                if (automatic.allowed()) {
+                    if (row.getState() == FeedbackState.AWAITING_APPROVAL)
+                        outcomes.update(row, FeedbackState.READY, null, null);
+                    sendQueue.queue(row, FeedbackSendAction.POST, FeedbackSendState.PENDING);
+                } else withhold(row, Objects.requireNonNull(automatic.reason()));
             }
         }
     }

@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
@@ -63,6 +64,7 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
             ItemDescriptorRegistry.class,
             ResultCommunicationRepository.class,
             FeedbackVisibilityService.class,
+            FeedbackRepair.class,
             ReviewRepository.class,
             ReviewItemRepository.class,
             ReviewPracticeRepository.class,

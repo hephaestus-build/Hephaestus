@@ -40,6 +40,8 @@ export const FEEDBACK_SEND_STATE_DEFS: StatusDefs<FeedbackSendState> = {
 export const FEEDBACK_SEND_ACTION_LABELS: Record<FeedbackSendAction, string> = {
 	POST: "Post the copies",
 	RETRACT: "Retract the posted copies",
+	EDIT: "Correct the posted copies",
+	READBACK: "Read the posted copies",
 };
 
 /**
@@ -103,7 +105,7 @@ export function deliveryCheck(
 	if (send.state === "DONE") {
 		return "available";
 	}
-	return send.action === "POST" ? "checking" : undefined;
+	return send.action === "POST" || send.action === "EDIT" ? "checking" : undefined;
 }
 
 /** Copies that are, or may be, on the work: posted, or written without a receipt proving them absent. */

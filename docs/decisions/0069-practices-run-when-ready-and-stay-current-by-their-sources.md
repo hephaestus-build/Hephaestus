@@ -346,7 +346,7 @@ No rule table decides placement in advance. The composer moves a note, merges it
   The edit count is on the feedback row, so a retry does not reset it. A further call returns "budget spent: stop and report".
 - **Approve first.** The composer checks and corrects the package before it asks for approval, so the draft that waits is final. The wait does not count against the deadline.
   After approval the server publishes it. After publish, the composer may only correct what keeps the approved words.
-  Those are placement, rendering, a broken link or a moved line.
+  Those are placement, rendering or a moved line. A changed link destination needs approval again.
   A change of words goes back to Approve first. The admin who approves drafts for the workspace approves it.
 - **Text policy.** The policy of [#3341](https://github.com/hephaestus-build/Hephaestus/pull/3341) applies in the check. Mentions stay escaped, so an edit never notifies a new person.
 
@@ -562,7 +562,7 @@ Tool results are actionable reasons from the provider, and the guardrails sit in
 **Consequence:** feedback reads like a reviewer who remembers the last round. A placement that the provider refuses is corrected, not lost.
 Quality depends on the composition prompt, the tool messages and the eval cases.
 
-With Approve first, the composer checks and corrects before it asks for approval. After approval it may only correct placement, rendering, a broken link or a moved line.
+With Approve first, the composer checks and corrects before it asks for approval. After approval it may only correct placement, rendering or a moved line without approval again. A changed link destination needs approval again.
 A change of words goes back to Approve first, and the admin who approves drafts approves it.
 
 ### D4. At most one notifying write for each review
@@ -884,3 +884,48 @@ The row "A push while a review is queued" ships with four details.
   The next readiness edge selects it, by the rule that it uses for a practice that waits for checks. This stores nothing new.
   A retry that seals at a moved version writes the same reason. What it did not measure is thus owed too.
 - **With no newer occasion, the review captures what its occasion retained.** The re-pin of that row is not shipped.
+
+## Update — 2026-11-08: read back a posted copy before correcting it
+
+The server reads back the provider's words, rendered text, positions and thread state under the send lease.
+It records those facts with the feedback in PostgreSQL.
+A late send owner cannot replace a newer readback.
+The worker reads this record and gives it to the composer as untrusted data.
+It has no provider token.
+
+A quiet correction prepares an immutable feedback revision.
+Its copies acquire the same provider references after the edit is confirmed.
+The earlier words and receipts stay recorded.
+The composition's first feedback row owns the three-edit count across revisions and attempts.
+
+A lost edit response permits readback only, with no second edit or new comment.
+A provider that cannot move a comment refuses the placement change.
+The composer can correct its words or stop.
+
+A correction that changes visible words uses the new revision's approval decision.
+A formatting correction can retain a real approval only while the approved content and its original approval digest still match.
+Approved content includes visible words, link destinations, image sources and titles, exact code literals, and code block instructions.
+A changed link destination needs approval again, even when its label stays the same.
+
+Withdrawal follows the provider object through quiet revisions.
+The nearest explicit visibility decision wins.
+A confirmed revision replaces the earlier piece without erasing its history.
+
+An approval wait retains the original composition capsule within its existing one-day expiry.
+Delivery can resume that admitted job to inspect readback without measuring again or reopening the sealed review.
+An expired or erased capsule is not restored.
+
+Tool arguments and outcomes share that capsule's copy custody and one-day expiry, including after the composition ends.
+The model-call or edit limit records `STEP_LIMIT`.
+A posted copy stays in place.
+Every terminal correction exit records its stop, and delivery resumes use the existing retry allowance.
+Each approved-edit resume spends one attempt from that allowance.
+
+Provider failures produce recorded `UNAVAILABLE` readback.
+GitHub reports outdated hunks.
+GitLab rejects a note whose head differs from the reviewed head.
+The provider APIs have no conditional comment update.
+A human change between the final read and the edit cannot be excluded.
+
+Automatic thread resolution still requires an authoritative item-problem lineage record of No longer present.
+A missing problem or a failed capture is not that proof.

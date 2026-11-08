@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import java.io.Serial;
 import java.time.Instant;
@@ -32,18 +33,24 @@ public class ReviewCompositionContinuation {
     private final ReviewJobRepository jobs;
     private final ObjectMapper mapper;
     private final ReviewAssignmentStore membership;
+    private final FeedbackRepair repairs;
+    private final AgentProperties properties;
 
     public ReviewCompositionContinuation(
             ReviewCompositionBasisRepository bases,
             JobEvidenceFiles files,
             ReviewJobRepository jobs,
             ObjectMapper mapper,
-            ReviewAssignmentStore membership) {
+            ReviewAssignmentStore membership,
+            FeedbackRepair repairs,
+            AgentProperties properties) {
         this.bases = bases;
         this.files = files;
         this.jobs = jobs;
         this.mapper = mapper;
         this.membership = membership;
+        this.repairs = repairs;
+        this.properties = properties;
     }
 
     public boolean hasStaged(ReviewJob job) {
@@ -97,24 +104,7 @@ public class ReviewCompositionContinuation {
     public Map<String, byte[]> retainedInputs(ReviewJob job) {
         var basis = bases.findByWorkspaceIdAndJobId(job.getWorkspaceId(), job.getId())
                 .orElseThrow(() -> gone("The original inputs were removed"));
-        if (!files.vouchesForOriginalCopy(
-                basis.getCopyId(), job.getId(), job.getWorkspaceId(), basis.getAdmissionAttempt()))
-            throw new InputsUnavailableException("The original capture was erased", true);
-        if (!ResultAdmissionService.isAdmitted(job)
-                || basis.getAdmissionDigest() == null
-                || basis.getBasisVersion() != ReviewCompositionBasis.VERSION
-                || !basis.getExpiresAt().isAfter(Instant.now())
-                || !basis.getAdmissionDigest().equals(job.getAdmissionDigest())
-                || basis.getAdmissionAttempt() > ResultAdmissionService.citationAttempt(job)) {
-            throw gone("The original capture no longer permits composition");
-        }
-        for (var copy : basis.getPayload().path("copies"))
-            if (!files.vouchesForOriginalCopy(
-                    UUID.fromString(copy.path("copyId").asString()),
-                    job.getId(),
-                    job.getWorkspaceId(),
-                    copy.path("attempt").asInt()))
-                throw new InputsUnavailableException("A staged capture was erased", true);
+        requireCustody(job, basis);
         var staged = new TreeMap<String, byte[]>();
         basis.getPayload()
                 .path("files")
@@ -134,6 +124,28 @@ public class ReviewCompositionContinuation {
             }
         }
         return Collections.unmodifiableMap(staged);
+    }
+
+    /** One custody check for restoration and for the exact trace of the same retained inputs. */
+    void requireCustody(ReviewJob job, ReviewCompositionBasis basis) {
+        if (!files.vouchesForOriginalCopy(
+                basis.getCopyId(), job.getId(), job.getWorkspaceId(), basis.getAdmissionAttempt()))
+            throw new InputsUnavailableException("The original capture was erased", true);
+        if (!ResultAdmissionService.isAdmitted(job)
+                || basis.getAdmissionDigest() == null
+                || basis.getBasisVersion() != ReviewCompositionBasis.VERSION
+                || !basis.getExpiresAt().isAfter(Instant.now())
+                || !basis.getAdmissionDigest().equals(job.getAdmissionDigest())
+                || basis.getAdmissionAttempt() > ResultAdmissionService.citationAttempt(job)) {
+            throw gone("The original capture no longer permits composition");
+        }
+        for (var copy : basis.getPayload().path("copies"))
+            if (!files.vouchesForOriginalCopy(
+                    UUID.fromString(copy.path("copyId").asString()),
+                    job.getId(),
+                    job.getWorkspaceId(),
+                    copy.path("attempt").asInt()))
+                throw new InputsUnavailableException("A staged capture was erased", true);
     }
 
     /**
@@ -160,6 +172,16 @@ public class ReviewCompositionContinuation {
 
     @Transactional
     public void forget(ReviewJob job) {
+        if (job.spentAttempts() > properties.maxRetries())
+            repairs.stop(job.getWorkspaceId(), job.getReviewId(), "RETRIES_EXHAUSTED");
+        if (repairs.pending(job.getWorkspaceId(), job.getReviewId())) {
+            jobs.resumeFeedbackRepair(job.getWorkspaceId(), job.getReviewId(), properties.maxRetries());
+            return;
+        }
+        var retained = bases.findByWorkspaceIdAndJobId(job.getWorkspaceId(), job.getId());
+        if (retained.filter(basis -> basis.getPayload().path("tools").isArray()
+                        && !basis.getPayload().path("tools").isEmpty())
+                .isPresent()) return;
         bases.deleteForJob(job.getWorkspaceId(), job.getId());
     }
 

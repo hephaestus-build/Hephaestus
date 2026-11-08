@@ -67,6 +67,10 @@ public class FeedbackPreparationService {
     }
 
     public Preparation prepare(FeedbackDraft draft, Optional<Feedback> existing) {
+        return prepare(draft, existing, false);
+    }
+
+    public Preparation prepare(FeedbackDraft draft, Optional<Feedback> existing, boolean repair) {
         var page = draft.page();
         String rendered = page == null
                 ? draft.body()
@@ -185,7 +189,8 @@ public class FeedbackPreparationService {
                                                     .path("about")
                                                     .asString()))
                                     .isEmpty())) reason = FeedbackStopReason.PUBLIC_SUBJECT_INELIGIBLE;
-            if (body != null
+            if (!repair
+                    && body != null
                     && repeated.repeats(draft.workspaceId(), snapshot.item().itemId(), draft.developerId(), body))
                 reason = FeedbackStopReason.REPEATS_DELIVERED_NOTE;
             if (!descriptor.copyCapabilities().contains(CopyCapability.SUMMARY)

@@ -104,6 +104,17 @@ public class PostedCopyCorrector {
 
     private void correctNote(
             Feedback feedback, FeedbackCopy copy, FeedbackTarget target, boolean remove, String owner) {
+        if (copies.hasNewerSummaryReceipt(
+                copy.getWorkspaceId(), copy.getFeedbackId(), Objects.requireNonNull(copy.getExternalRef()))) {
+            transactions.correctionError(
+                    copy.getWorkspaceId(),
+                    copy.getFeedbackId(),
+                    owner,
+                    copy.getId(),
+                    null,
+                    "A newer piece of feedback owns this provider reference.");
+            return;
+        }
         var matching = notes.stream()
                 .filter(w -> w.kind() == target.integration().kind())
                 .toList();

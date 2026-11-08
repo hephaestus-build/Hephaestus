@@ -1,10 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
-import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionAction;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -20,10 +20,8 @@ public class FeedbackVisibilityService {
     private final FeedbackDecisionRepository decisions;
 
     public boolean withdrawn(long workspaceId, UUID feedbackId) {
-        return decisions
-                .findLatestVisibility(workspaceId, feedbackId)
-                .map(decision -> decision.getAction() == FeedbackDecisionAction.WITHDRAW)
-                .orElse(false);
+        return decisions.findCurrentVisibilityForFeedbackIds(workspaceId, List.of(feedbackId)).stream()
+                .anyMatch(decision -> decision.getAction() == FeedbackDecisionAction.WITHDRAW);
     }
 
     public Map<UUID, Instant> withdrawnAt(long workspaceId, Collection<UUID> feedbackIds) {
@@ -32,6 +30,6 @@ public class FeedbackVisibilityService {
         }
         return decisions.findCurrentVisibilityForFeedbackIds(workspaceId, feedbackIds).stream()
                 .filter(row -> row.getAction() == FeedbackDecisionAction.WITHDRAW)
-                .collect(Collectors.toMap(FeedbackDecision::getFeedbackId, FeedbackDecision::getDecidedAt));
+                .collect(Collectors.toMap(row -> row.getFeedbackId(), row -> row.getDecidedAt()));
     }
 }

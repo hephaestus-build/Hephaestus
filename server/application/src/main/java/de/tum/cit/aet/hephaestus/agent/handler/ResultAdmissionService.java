@@ -275,6 +275,19 @@ public class ResultAdmissionService {
 
     private @Nullable PreparedPackage applyPackage(
             AdmissionIdentity identity, FeedbackPackage request, boolean publish) {
+        UUID editTarget = request.editOf();
+        if (editTarget != null) {
+            var listed = publicFeedbackHistory(identity);
+            var own = transactions.execute(status -> {
+                var owned = ownedJob(identity);
+                return composition.ownCopy(owned, editTarget);
+            });
+            if (!Boolean.TRUE.equals(own)
+                    && listed.history().feedback().stream()
+                            .noneMatch(entry -> entry.id().equals(request.editOf())
+                                    && !entry.withdrawn()
+                                    && !entry.bodyUnavailable())) throw new AdmissionConflictException();
+        }
         var context = files.indexLateRead(
                 identity,
                 () -> Objects.requireNonNull(transactions.execute(status -> {
@@ -300,6 +313,11 @@ public class ResultAdmissionService {
             context.support().stream().map(row -> row.resultId()).forEach(allowed::add);
             if (!allowed.containsAll(request.basisResultIds())) throw new AdmissionConflictException();
             var anchors = projection.anchors(job, rows);
+            if (request.editOf() != null) {
+                var repaired = composition.repair(job, request, rows, context, anchors, publish);
+                jobs.saveAndFlush(job);
+                return repaired;
+            }
             if (!publish) {
                 composition.check(
                         job,

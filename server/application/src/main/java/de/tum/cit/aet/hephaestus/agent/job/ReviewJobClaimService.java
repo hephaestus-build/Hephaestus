@@ -244,7 +244,9 @@ public class ReviewJobClaimService {
             if (callPermits.hasBackgroundWaiters(poolId)) return new PoolWait(poolId);
         }
 
-        if (!reviewStart.start(job.getWorkspaceId(), job.getReviewId())) return cancelWithParent(job);
+        if (!(ResultAdmissionService.isContinuation(job)
+                ? reviewStart.compose(job.getWorkspaceId(), job.getReviewId())
+                : reviewStart.start(job.getWorkspaceId(), job.getReviewId()))) return cancelWithParent(job);
         Instant claimedAt = Instant.now();
         // The first claim only: a requeued review would sample its submission again, later each time.
         if (job.getAttempt() == 0 && !job.getAvailableAt().isAfter(claimedAt)) {
@@ -280,7 +282,9 @@ public class ReviewJobClaimService {
     /** Claims an attempt that makes no model call: it withholds what its review still has open, with this cause. */
     private ClaimAttempt claimToWithhold(ReviewJob job, CompositionStop cause) {
         String itemKind = assignments.load(job).getFirst().item().kind().value();
-        if (!reviewStart.start(job.getWorkspaceId(), job.getReviewId())) return cancelWithParent(job);
+        if (!(ResultAdmissionService.isContinuation(job)
+                ? reviewStart.compose(job.getWorkspaceId(), job.getReviewId())
+                : reviewStart.start(job.getWorkspaceId(), job.getReviewId()))) return cancelWithParent(job);
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(null);

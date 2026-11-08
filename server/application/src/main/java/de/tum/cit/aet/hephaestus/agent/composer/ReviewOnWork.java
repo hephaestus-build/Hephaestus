@@ -411,6 +411,13 @@ final class ReviewOnWork {
         parameters.putArray("required").add("decisions").add("summary");
         var properties = parameters.putObject("properties");
 
+        properties
+                .putObject("editOf")
+                .put("type", "string")
+                .put("format", "uuid")
+                .put(
+                        "description",
+                        "Optional: feedbackId of an owned, listed on-work package to correct quietly. Keep each existing copy and its position.");
         var decisions = properties.putObject("decisions");
         decisions.put("type", "array");
         decisions.put("minItems", notMet.size());
@@ -733,7 +740,7 @@ final class ReviewOnWork {
         if (!isRecord(value))
             return new Read(null, List.of("review: expected an object with decisions, summary and inline"));
         for (String key : value.propertyNames())
-            if (!Set.of("decisions", "summary", "inline").contains(key))
+            if (!Set.of("decisions", "summary", "inline", "editOf").contains(key))
                 errors.add("review: unrecognized key \"" + key + "\"");
         var decisionInputs = new ArrayList<DecisionInput>();
         JsonNode decisionsNode = value.path("decisions");

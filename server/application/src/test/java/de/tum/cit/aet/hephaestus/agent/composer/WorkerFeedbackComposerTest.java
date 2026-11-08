@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -25,6 +26,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
+import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
@@ -39,10 +41,13 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateProgressDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyCapability;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReadback;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepairStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageSupport;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedFeedback;
@@ -69,12 +74,16 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Answers;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -96,6 +105,11 @@ class WorkerFeedbackComposerTest {
     private final ReviewModelGateway gateway = mock(ReviewModelGateway.class);
     private final ReviewJobAssignments assignments = mock(ReviewJobAssignments.class);
     private final ItemDescriptorRegistry items = mock(ItemDescriptorRegistry.class);
+    private final FeedbackRepair repairs = mock(FeedbackRepair.class, call -> {
+        if (call.getMethod().getReturnType() == FeedbackRepairStatus.class)
+            return new FeedbackRepairStatus(null, FeedbackRepairStatus.State.STOPPED, 0, List.of());
+        return Answers.RETURNS_DEFAULTS.answer(call);
+    });
     private final List<FeedbackPackage> prepared = new ArrayList<>();
     /** The packages the server accepted: they decide destinations as prepared rows would. */
     private final List<FeedbackPackage> accepted = new ArrayList<>();
@@ -201,7 +215,9 @@ class WorkerFeedbackComposerTest {
                 meters,
                 mapper,
                 Duration.ZERO,
-                capacity);
+                capacity,
+                repairs,
+                mock(CompositionToolTrace.class));
     }
 
     @Test
@@ -212,9 +228,8 @@ class WorkerFeedbackComposerTest {
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
-        // Each session offers the same two tools: everything it may use is in its turn.
-        assertThat(requests)
-                .allSatisfy(request -> assertThat(tools(request)).containsExactly("check_package", "publish_package"));
+        assertThat(tools(requests.getFirst())).containsExactly("check_package", "publish_package", "edit_own");
+        assertThat(tools(requests.getLast())).containsExactly("check_package", "publish_package");
         assertThat(requests.getFirst().path("max_completion_tokens").asInt()).isEqualTo(4_000);
         var review = prepared.getFirst();
         assertThat(review.publicComposition()).isTrue();
@@ -476,7 +491,8 @@ class WorkerFeedbackComposerTest {
                         handedOn -> assertThat(handedOn.stop()).isEqualTo(CompositionStop.PROVIDER));
         // The private feedback waits for the review it follows, and nothing open is withheld.
         assertThat(requests)
-                .allSatisfy(request -> assertThat(tools(request)).containsExactly("check_package", "publish_package"));
+                .allSatisfy(request ->
+                        assertThat(tools(request)).containsExactly("check_package", "publish_package", "edit_own"));
         assertThat(prepared).isEmpty();
         assertThat(stops("provider", "handed_on")).isEqualTo(1);
     }
@@ -676,6 +692,176 @@ class WorkerFeedbackComposerTest {
                 })
                 .when(gateway)
                 .call(any(), any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CONTEXT_WINDOW", "PROVIDER", "DEADLINE", "UNEXPECTED", "STEP_LIMIT"})
+    void shouldKeepATerminalRepairFromStartingAnotherModelSession(String cause) {
+        reviewedEarlier = true;
+        earlierDecisions.put(
+                FeedbackDestination.PRACTICE_PAGE, Set.of(UUID.fromString(ERRORS), UUID.fromString(DESCRIBE)));
+        earlierDecisions.put(
+                FeedbackDestination.CONVERSATION, Set.of(UUID.fromString(ERRORS), UUID.fromString(DESCRIBE)));
+        var recorded = new AtomicReference<String>();
+        doAnswer(call -> {
+                    recorded.set(call.getArgument(2));
+                    return null;
+                })
+                .when(repairs)
+                .stop(anyLong(), any(), any());
+        when(repairs.status(anyLong(), any()))
+                .thenAnswer(call -> new FeedbackRepairStatus(
+                        UUID.fromString("70000000-0000-4000-8000-000000000001"),
+                        recorded.get() == null
+                                ? FeedbackRepairStatus.State.READBACK
+                                : FeedbackRepairStatus.State.STOPPED,
+                        0,
+                        List.of()));
+        if (cause.equals("CONTEXT_WINDOW")) ((ObjectNode) job.getConfigSnapshot()).put("contextWindow", 1);
+        if (cause.equals("PROVIDER")) answerEveryCall(new ReviewModelGateway.Answer(503, new byte[0], true, null));
+        if (cause.equals("UNEXPECTED"))
+            when(admission.publicFeedbackHistory(any())).thenThrow(new IllegalStateException("History unavailable"));
+        if (cause.equals("STEP_LIMIT")) answerEveryCall(call("check_package", validReview()));
+        composer()
+                .composeAfterMeasurement(
+                        job,
+                        LEASE,
+                        cause.equals("DEADLINE") ? Instant.now() : Instant.now().plus(Duration.ofHours(1)));
+        assertThat(recorded.get()).isEqualTo(cause);
+        int spent = requests.size();
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
+        assertThat(requests).hasSize(spent);
+        assertThat(prepared).isEmpty();
+    }
+
+    @Test
+    void shouldKeepTheServerReasonWhenPublicHistoryKeepsChanging() {
+        doAnswer(call -> {
+                    FeedbackPackage proposal = call.getArgument(1);
+                    if (proposal.publicComposition())
+                        throw new PublicationContextRefusedException(FeedbackStopReason.PUBLIC_HISTORY_CHANGED);
+                    return null;
+                })
+                .when(admission)
+                .checkPackage(any(), any());
+        for (int attempt = 0; attempt < 3; attempt++) replies.add(call("check_package", validReview()));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
+        assertThat(prepared.stream().filter(FeedbackPackage::publicComposition))
+                .singleElement()
+                .satisfies(piece -> assertThat(piece.composition().getFirst().withheldReason())
+                        .isEqualTo(FeedbackStopReason.PUBLIC_HISTORY_CHANGED));
+    }
+
+    @Test
+    void shouldKeepAnApprovalWaitWhenPrivateCompositionFails() {
+        reviewedEarlier = true;
+        job.setAttempt(MAX_RETRIES);
+        when(repairs.status(anyLong(), any()))
+                .thenReturn(new FeedbackRepairStatus(
+                        UUID.fromString("70000000-0000-4000-8000-000000000001"),
+                        FeedbackRepairStatus.State.AWAITING_APPROVAL,
+                        0,
+                        List.of()));
+        replies.add(call("check_package", pagePieces()));
+        doThrow(new IllegalStateException("Private composition unavailable"))
+                .when(admission)
+                .checkPackage(any(), any());
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
+        verify(repairs, never()).stop(anyLong(), any(), any());
+        assertThat(prepared).noneMatch(FeedbackPackage::publicComposition);
+    }
+
+    @Test
+    void shouldLetTheModelCorrectAnExternalReadbackWithOnePublicationAndOneQuietEdit() {
+        UUID root = UUID.fromString("70000000-0000-4000-8000-000000000001");
+        UUID revision = UUID.fromString("70000000-0000-4000-8000-000000000002");
+        earlierDecisions.put(
+                FeedbackDestination.PRACTICE_PAGE, Set.of(UUID.fromString(ERRORS), UUID.fromString(DESCRIBE)));
+        earlierDecisions.put(
+                FeedbackDestination.CONVERSATION, Set.of(UUID.fromString(ERRORS), UUID.fromString(DESCRIBE)));
+        doAnswer(call -> {
+                    FeedbackPackage proposal = call.getArgument(1);
+                    prepared.add(proposal);
+                    accepted.add(proposal);
+                    UUID id = proposal.editOf() == null ? root : revision;
+                    return new PreparedPackage(
+                            "digest", Instant.now(), List.of(new PreparedFeedback(id, "digest", Instant.now())));
+                })
+                .when(admission)
+                .publishPackage(any(), any());
+        when(repairs.status(anyLong(), any())).thenAnswer(call -> {
+            boolean edited = accepted.stream().anyMatch(proposal -> proposal.editOf() != null);
+            return new FeedbackRepairStatus(
+                    edited ? revision : root,
+                    FeedbackRepairStatus.State.READBACK,
+                    edited ? 1 : 0,
+                    List.of(new CopyReadback(
+                            root,
+                            CopyReadback.Status.FOUND,
+                            edited ? "Corrected provider text" : "Provider text before repair",
+                            edited ? "<p>Corrected rendering</p>" : "<pre>Suggestion is unsupported here</pre>",
+                            null,
+                            false,
+                            false)));
+        });
+        when(repairs.readback(anyLong(), any(), any()))
+                .thenReturn(new FeedbackRepairStatus(root, FeedbackRepairStatus.State.READBACK, 0, List.of()));
+        var phase = new AtomicInteger();
+        doAnswer(call -> {
+                    JsonNode request = mapper.readTree((byte[]) call.getArgument(1));
+                    requests.add(request);
+                    var messages = request.path("messages");
+                    String last =
+                            messages.path(messages.size() - 1).path("content").asString("");
+                    return switch (phase.getAndIncrement()) {
+                        case 0 -> call("check_package", validReview());
+                        case 1 ->
+                            call(
+                                    "publish_package",
+                                    mapper.createObjectNode()
+                                            .put(
+                                                    "draftId",
+                                                    mapper.readTree(last)
+                                                            .path("draftId")
+                                                            .asString()));
+                        case 2 -> {
+                            assertThat(last).contains("<pre>Suggestion is unsupported here</pre>");
+                            var correction = validReview().put("editOf", root.toString());
+                            ((ObjectNode) correction.path("summary"))
+                                    .put("body", "The description should explain why fetches retry.");
+                            yield call("check_package", correction);
+                        }
+                        case 3 ->
+                            call(
+                                    "edit_own",
+                                    mapper.createObjectNode()
+                                            .put(
+                                                    "draftId",
+                                                    mapper.readTree(last)
+                                                            .path("draftId")
+                                                            .asString()));
+                        case 4 -> {
+                            assertThat(last).contains("<p>Corrected rendering</p>");
+                            yield text("The provider now shows the corrected text.");
+                        }
+                        default -> throw new AssertionError("The completed repair started another model call.");
+                    };
+                })
+                .when(gateway)
+                .call(any(), any());
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
+        assertThat(requests).hasSize(5);
+        assertThat(accepted.stream()
+                        .filter(FeedbackPackage::publicComposition)
+                        .filter(proposal -> proposal.editOf() == null))
+                .hasSize(1);
+        assertThat(accepted.stream().filter(proposal -> root.equals(proposal.editOf())))
+                .singleElement()
+                .satisfies(proposal ->
+                        assertThat(proposal.composition().getFirst().summary()).contains("why fetches retry"));
+        assertThat(requests)
+                .allSatisfy(request ->
+                        assertThat(tools(request)).containsExactly("check_package", "publish_package", "edit_own"));
     }
 
     private double stops(String cause, String outcome) {

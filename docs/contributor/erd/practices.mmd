@@ -35,6 +35,7 @@ erDiagram
         UUID replaces_id FK
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ delivered_at
+        JSONB composition "NOT NULL"
     }
 
     FeedbackBasi {
@@ -71,6 +72,7 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ posted_at
         UUID mentor_turn_id FK
+        TEXT thread_ref
     }
 
     FeedbackDecision {

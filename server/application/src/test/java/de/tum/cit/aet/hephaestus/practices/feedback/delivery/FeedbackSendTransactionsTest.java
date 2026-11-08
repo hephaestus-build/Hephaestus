@@ -76,7 +76,8 @@ class FeedbackSendTransactionsTest {
             privacy,
             mock(FeedbackSendQueue.class),
             mock(ItemIndexService.class),
-            mock(FeedbackPublicationContext.class));
+            mock(FeedbackPublicationContext.class),
+            parents);
 
     @BeforeEach
     void setup() {
@@ -183,7 +184,7 @@ class FeedbackSendTransactionsTest {
                         List.of(new CopyReceipt(
                                 copyId, CopyDisposition.FELL_BACK, "ref", null, true, CopyForm.FILE_NOTE))))
                 .isInstanceOf(IllegalArgumentException.class);
-        verify(copies, never()).confirmPosted(anyLong(), any(), any(), any(), any(), any(), anyString());
+        verify(copies, never()).confirmPosted(anyLong(), any(), any(), any(), any(), any(), anyString(), any());
     }
 
     @Test

@@ -6,6 +6,11 @@
     "summary"
   ],
   "properties": {
+    "editOf": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Optional: feedbackId of an owned, listed on-work package to correct quietly. Keep each existing copy and its position."
+    },
     "decisions": {
       "type": "array",
       "minItems": 2,
