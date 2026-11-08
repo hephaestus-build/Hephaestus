@@ -10,13 +10,12 @@ import type { ItemEvent } from "@/api/types.gen";
 
 import type { StatusDefs } from "@/components/common/status-def";
 
+import { BOT_REVIEW_REFUSAL_SENTENCE } from "./bot-review-refusal";
 import { REVIEW_ORIGIN_DEFS } from "./review-origin-defs";
 
 export type ItemEventState = ItemEvent["state"];
 export type ItemEventReason = NonNullable<ItemEvent["reason"]>;
 export type ItemEventFoundBy = ItemEvent["foundBy"];
-
-export const BOT_REVIEW_REFUSAL_SENTENCE = "Hephaestus does not review work by bots.";
 
 // Withheld events record a decision and reason, never a practice verdict.
 export const ITEM_EVENT_STATE_DEFS: StatusDefs<ItemEventState> = {

@@ -22,7 +22,7 @@ import type {
 
 import type { StatusDef, StatusDefs } from "@/components/common/status-def";
 
-import { BOT_REVIEW_REFUSAL_SENTENCE } from "./item-event-defs";
+import { BOT_REVIEW_REFUSAL_SENTENCE } from "./bot-review-refusal";
 
 export type ReviewStatus = ReviewRef["status"];
 export type ReviewStopReason = NonNullable<ReviewSummary["stopReason"]>;
