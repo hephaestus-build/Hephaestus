@@ -51,7 +51,9 @@ public record LlmCallPoolDTO(
 
         @Nullable Integer requestsPerMinute,
         @Nullable Long tokensPerMinute,
-        @Nullable Long tokensPerCall) {
+        @Nullable Long tokensPerCall,
+        @Nullable Long inputTokensPerMinute,
+        @Nullable Long outputTokensPerMinute) {
 
     public static LlmCallPoolDTO from(LlmCallPool pool) {
         int effective = LlmCallLimit.effective(pool.getLearnedLimit(), pool.getMaxConcurrentCalls());
@@ -69,6 +71,8 @@ public record LlmCallPoolDTO(
                 pool.getNoCallBefore(),
                 pool.getRequestsPerMinute(),
                 pool.getTokensPerMinute(),
-                pool.getTokensPerCall());
+                pool.getTokensPerCall(),
+                pool.getInputTokensPerMinute(),
+                pool.getOutputTokensPerMinute());
     }
 }

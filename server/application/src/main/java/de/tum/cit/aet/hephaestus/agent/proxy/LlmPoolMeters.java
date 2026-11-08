@@ -167,6 +167,7 @@ final class LlmPoolMeters {
         for (String cause : DECREASE_CAUSES) limitDecreasesCounter(slug, cause);
         absorbedCounter(slug);
         expiredCounter(slug);
+        for (String bucket : RateLimitHeaders.TAGS) bucketReachedCounter(slug, bucket);
         for (LlmCallClass callClass : LlmCallClass.values()) {
             firstTokenTimer(slug, callClass);
             operationTimer(slug, callClass);
@@ -255,6 +256,14 @@ final class LlmPoolMeters {
         return Counter.builder(AgentMetrics.LLM_POOL_FIRST_TOKEN_BASELINE_RESETS)
                 .description("How often a pool at its floor took a new first-token baseline")
                 .tag("pool", slug)
+                .register(registry);
+    }
+
+    private Counter bucketReachedCounter(String slug, String bucket) {
+        return Counter.builder(AgentMetrics.LLM_POOL_UPSTREAM_BUCKET_REACHED)
+                .description("Served answers whose rate limit headers showed an empty bucket")
+                .tag("pool", slug)
+                .tag("bucket", bucket)
                 .register(registry);
     }
 
@@ -388,6 +397,10 @@ final class LlmPoolMeters {
 
         void expired(long permits) {
             expiredCounter(slug).increment((double) permits);
+        }
+
+        void bucketReached(String bucket) {
+            bucketReachedCounter(slug, bucket).increment();
         }
 
         /** Records that the pool is in a cooldown for {@code millis} from now, as this worker knows it. */

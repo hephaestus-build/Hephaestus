@@ -74,4 +74,14 @@ public class LlmCallPermit {
     @ColumnDefault("0")
     @Column(name = "tokens", nullable = false)
     private long tokens;
+
+    /** The call's debit on an input bucket: the pool's bound until its provider reports usage. */
+    @ColumnDefault("0")
+    @Column(name = "input_tokens", nullable = false)
+    private long inputTokens;
+
+    /** The call's debit on an output bucket: none until its provider reports usage, as a bucket counts what is written. */
+    @ColumnDefault("0")
+    @Column(name = "output_tokens", nullable = false)
+    private long outputTokens;
 }

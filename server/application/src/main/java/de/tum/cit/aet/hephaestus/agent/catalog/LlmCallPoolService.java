@@ -185,6 +185,8 @@ public class LlmCallPoolService {
         pool.setRequestsPerMinute(request.requestsPerMinute());
         pool.setTokensPerMinute(request.tokensPerMinute());
         pool.setTokensPerCall(request.tokensPerCall());
+        pool.setInputTokensPerMinute(request.inputTokensPerMinute());
+        pool.setOutputTokensPerMinute(request.outputTokensPerMinute());
     }
 
     private void audit(LlmCallPool pool, String change) {

@@ -1212,16 +1212,24 @@ class LlmProxyServiceTest extends BaseUnitTest {
             verify(permit, never()).absorbed();
         }
 
-        @Test
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "{\"error\":{\"code\":\"insufficient_quota\"}}",
+                    "{\"error\":{\"details\":{\"error_code\":\"enforced_spend_limit_reached\"}}}"
+                })
         @DisplayName("a spent account reaches the caller, as no wait mends it")
-        void aSpentAccountReachesTheCaller() throws Exception {
-            LlmCallPermits.Permit permit = throttledPermit(Duration.ofSeconds(1));
-            upstream.enqueue(refused(429, "{\"error\":{\"code\":\"insufficient_quota\"}}", "1"));
+        void aSpentAccountReachesTheCaller(String body) throws Exception {
+            LlmCallPermits.Permit permit = mock(LlmCallPermits.Permit.class);
+            when(permit.revoked()).thenReturn(Mono.never());
+            upstream.enqueue(refused(429, body, "1"));
 
             Answer answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
 
             assertThat(answer.status()).isEqualTo(429);
             assertThat(upstream.getRequestCount()).isEqualTo(1);
+            // It says nothing about capacity: no other caller slows down, and the limit stays.
+            verify(streamingPermits, never()).throttled(any(), anyInt(), any(), anyBoolean());
         }
 
         @Test

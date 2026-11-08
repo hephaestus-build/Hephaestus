@@ -6,6 +6,7 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
@@ -624,6 +625,84 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldHoldAnInputBucketApartFromTheOutputBucket() {
+        long pool = pool(4);
+        jdbc.update(
+                "UPDATE llm_call_pool SET input_tokens_per_minute=150,output_tokens_per_minute=50,tokens_per_call=100 WHERE id=?",
+                pool);
+        var first = admit(workerA, pool, LlmCallClass.TURN, 1);
+        assertThat(rows.rates(pool).getInputTokens()).isEqualTo(100);
+        // A running call has no debit on the output bucket, so a bound above its rate does not stop calls.
+        assertThat(rows.rates(pool).getOutputTokens()).isZero();
+
+        assertThat(probe(workerB, pool, LlmCallClass.TURN, 2)).isNull();
+        first.close();
+    }
+
+    @Test
+    void shouldStopCallsWhenReportedOutputFillsTheOutputBucket() {
+        long pool = pool(4);
+        jdbc.update("UPDATE llm_call_pool SET output_tokens_per_minute=50 WHERE id=?", pool);
+        var call = admit(workerA, pool, LlmCallClass.TURN, 1);
+        call.settled(new ProxyTokenUsage(1, 51, 0, 0, 0), LlmApiProtocol.ANTHROPIC_MESSAGES);
+        call.close();
+
+        assertThat(probe(workerB, pool, LlmCallClass.TURN, 2)).isNull();
+    }
+
+    @Test
+    void shouldReplaceTheBoundByTheProvidersUsageWhenACallCloses() {
+        long pool = pool(4);
+        jdbc.update("UPDATE llm_call_pool SET tokens_per_minute=150,tokens_per_call=100 WHERE id=?", pool);
+        var reported = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        reported.settled(new ProxyTokenUsage(7, 20, 0, 1_000, 3), LlmApiProtocol.ANTHROPIC_MESSAGES);
+        reported.close();
+
+        // Anthropic counts no cache reads in its input bucket.
+        assertThat(rows.rates(pool).getInputTokens()).isEqualTo(10);
+        assertThat(rows.rates(pool).getOutputTokens()).isEqualTo(20);
+        assertThat(rows.rates(pool).getTokens()).isEqualTo(30);
+
+        var unreported = admit(workerB, pool, LlmCallClass.TURN, 2);
+        assertThat(rows.rates(pool).getTokens()).isEqualTo(130);
+        unreported.close();
+
+        // A call without a report keeps its bound, so the bucket stays full for a third call.
+        assertThat(rows.rates(pool).getTokens()).isEqualTo(130);
+        assertThat(probe(workerA, pool, LlmCallClass.TURN, 3)).isNull();
+    }
+
+    @Test
+    void shouldCountAWholePromptForAProviderThatCountsCacheReads() {
+        long pool = pool(4);
+        var call = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        call.settled(new ProxyTokenUsage(7, 20, 0, 1_000, 3), LlmApiProtocol.OPENAI_RESPONSES);
+        call.close();
+
+        assertThat(rows.rates(pool).getInputTokens()).isEqualTo(1_010);
+    }
+
+    @Test
+    void shouldPauseEveryCallerWithoutLoweringTheLimitWhenHeadersLeaveNoRoom() {
+        long pool = pool(4);
+        int limit = learnedLimit(pool);
+        try (var call = admit(workerA, pool, LlmCallClass.EVENT, 1)) {
+            workerA.served(call, noRequestsLeftForAnHour(), true);
+
+            await().atMost(Duration.ofSeconds(3))
+                    .untilAsserted(() -> assertThat(pausedMillis(pool)).isPositive());
+            assertThat(probe(workerB, pool, LlmCallClass.TURN, 2)).isNull();
+            assertThat(learnedLimit(pool)).isEqualTo(limit);
+            assertThat(workerAMeters
+                            .get(AgentMetrics.LLM_POOL_UPSTREAM_BUCKET_REACHED)
+                            .tags("pool", pools.findById(pool).orElseThrow().getSlug(), "bucket", "requests")
+                            .counter()
+                            .count())
+                    .isEqualTo(1);
+        }
+    }
+
+    @Test
     void shouldNotSendAReleaseHintWhenAWaitingRequestAbandons() throws Exception {
         long pool = pool(1);
         var notifications = new LlmPoolNotifications(dataSource);
@@ -695,6 +774,38 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
             first.destroy();
             second.destroy();
         }
+    }
+
+    @Test
+    void shouldNotPauseASharedPoolForTheHeadersOfAWorkspacesOwnCredential() {
+        long pool = pool(4);
+        try (var call = admit(workerA, pool, LlmCallClass.EVENT, 1)) {
+            workerA.served(call, noRequestsLeftForAnHour(), false);
+
+            await().during(Duration.ofMillis(500))
+                    .atMost(Duration.ofSeconds(2))
+                    .untilAsserted(() -> assertThat(pausedMillis(pool)).isZero());
+        }
+    }
+
+    private static HttpHeaders noRequestsLeftForAnHour() {
+        var headers = new HttpHeaders();
+        headers.add("x-ratelimit-remaining-requests", "0");
+        headers.add("x-ratelimit-reset-requests", "1h");
+        return headers;
+    }
+
+    private int learnedLimit(long pool) {
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT learned_limit FROM llm_call_pool WHERE id=?", Integer.class, pool));
+    }
+
+    private long pausedMillis(long pool) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT COALESCE(GREATEST(0,EXTRACT(EPOCH FROM no_call_before-clock_timestamp())*1000),0)::bigint"
+                        + " FROM llm_call_pool WHERE id=?",
+                Long.class,
+                pool));
     }
 
     /** A pool that has already learned its maximum, so that the maximum decides in these tests. */

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793965613174-1" author="hephaestus">
+        <addColumn tableName="llm_call_permit">
+            <column defaultValueNumeric="0" name="input_tokens" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1793965613174-2" author="hephaestus">
+        <addColumn tableName="llm_call_pool">
+            <column name="input_tokens_per_minute" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1793965613174-3" author="hephaestus">
+        <addColumn tableName="llm_call_permit">
+            <column defaultValueNumeric="0" name="output_tokens" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1793965613174-4" author="hephaestus">
+        <addColumn tableName="llm_call_pool">
+            <column name="output_tokens_per_minute" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>
