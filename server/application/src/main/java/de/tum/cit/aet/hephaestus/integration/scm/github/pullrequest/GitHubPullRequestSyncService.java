@@ -104,6 +104,7 @@ public class GitHubPullRequestSyncService {
     private final PullRequestRepository pullRequestRepository;
     private final GitHubGraphQlClientProvider graphQlClientProvider;
     private final GitHubPullRequestProcessor pullRequestProcessor;
+    private final GitHubClosingIssueClient closingIssueClient;
     private final GitHubPullRequestReviewSyncService reviewSyncService;
     private final GitHubPullRequestReviewCommentSyncService reviewCommentSyncService;
     private final GitHubIssueCommentProcessor issueCommentProcessor;
@@ -140,6 +141,7 @@ public class GitHubPullRequestSyncService {
             PullRequestRepository pullRequestRepository,
             GitHubGraphQlClientProvider graphQlClientProvider,
             GitHubPullRequestProcessor pullRequestProcessor,
+            GitHubClosingIssueClient closingIssueClient,
             GitHubPullRequestReviewSyncService reviewSyncService,
             GitHubPullRequestReviewCommentSyncService reviewCommentSyncService,
             GitHubIssueCommentProcessor issueCommentProcessor,
@@ -154,6 +156,7 @@ public class GitHubPullRequestSyncService {
         this.pullRequestRepository = pullRequestRepository;
         this.graphQlClientProvider = graphQlClientProvider;
         this.pullRequestProcessor = pullRequestProcessor;
+        this.closingIssueClient = closingIssueClient;
         this.reviewSyncService = reviewSyncService;
         this.reviewCommentSyncService = reviewCommentSyncService;
         this.issueCommentProcessor = issueCommentProcessor;
@@ -291,8 +294,6 @@ public class GitHubPullRequestSyncService {
         boolean stoppedByIncrementalSync = false;
         final boolean incrementalSync = isIncrementalSync;
         SyncResult.Status abortReason = null; // null means completed successfully
-        // A list longer than a run reads is a warning: holding the timestamp would read the same pages again.
-        boolean capped = false;
 
         if (initialCursor != null) {
             log.info(
@@ -303,12 +304,12 @@ public class GitHubPullRequestSyncService {
 
         while (hasMore) {
             pageCount++;
-            if (pageCount >= MAX_PAGINATION_PAGES) {
+            if (pageCount > MAX_PAGINATION_PAGES) {
                 log.warn(
                         "Reached maximum pagination limit for pull requests: repoName={}, limit={}",
                         safeNameWithOwner,
                         MAX_PAGINATION_PAGES);
-                capped = true;
+                abortReason = SyncResult.Status.ABORTED_ERROR;
                 break;
             }
 
@@ -397,6 +398,7 @@ public class GitHubPullRequestSyncService {
                 List<PullRequestWithReviewThreads> pullRequests = new ArrayList<>();
                 Map<String, SyncResult.Status> threadReads = new HashMap<>();
                 for (var graphQlPullRequest : connection.getNodes()) {
+                    closingIssueClient.completeReferences(scopeId, graphQlPullRequest);
                     PullRequestWithReviewThreads prWithReviews =
                             PullRequestWithReviewThreads.fromPullRequest(graphQlPullRequest);
                     if (prWithReviews == null || prWithReviews.pullRequest() == null) {
@@ -594,7 +596,7 @@ public class GitHubPullRequestSyncService {
         // recently-updated items, so fetchedCount < totalCount is expected there by design. The
         // force-pagination above handles most truncation; if GitHub still returns empty pages
         // (truly can't serve more data), fall back to state splitting.
-        if (reportedTotalCount >= 0 && !incrementalSync) {
+        if (reportedTotalCount >= 0 && !incrementalSync && abortReason == null) {
             // totalPRsSynced is the comparand the fallback below uses. checkPaginated returns
             // true only on a real early-stop gap (empty page after force-pagination), not on the
             // benign case where GitHub's totalCount over-reports.
@@ -722,12 +724,7 @@ public class GitHubPullRequestSyncService {
         }
 
         discussionReads.settle(pullRequestRepository);
-        SyncResult.Status finalStatus = abortReason != null
-                ? abortReason
-                : SyncResult.merge(
-                                new SyncResult(discussionReads.status(), 0),
-                                capped ? SyncResult.completedWithWarnings(0) : SyncResult.completed(0))
-                        .status();
+        SyncResult.Status finalStatus = abortReason != null ? abortReason : discussionReads.status();
 
         log.info(
                 "Completed pull request sync: repoName={}, prCount={}, reviewCount={}, reviewCommentCount={}, commentCount={}, prsWithReviewPagination={}, prsWithThreadPagination={}, prsWithCommentPagination={}, resumed={}, incremental={}, stoppedByIncremental={}, status={}",
@@ -786,6 +783,7 @@ public class GitHubPullRequestSyncService {
             graphQlClientProvider.trackRateLimit(scopeId, response);
             GHPullRequest graphQlPullRequest =
                     response.field("repository.pullRequest").toEntity(GHPullRequest.class);
+            closingIssueClient.completeReferences(scopeId, graphQlPullRequest);
             GitHubPullRequestDTO dto = GitHubPullRequestDTO.fromPullRequest(graphQlPullRequest);
             if (dto == null) {
                 log.debug(

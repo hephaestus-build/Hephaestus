@@ -57,6 +57,10 @@ query GetPullRequestByNumber($owner: String!, $name: String!, $number: Int!) {
                 nameWithOwner
             }
             closingIssuesReferences(first: 50) {
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
                 nodes {
                     number
                     repository {

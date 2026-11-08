@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHCommit;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssue;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueConnection;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestCommit;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestCommitConnection;
@@ -60,9 +61,26 @@ class GitHubPullRequestDTOHeadChecksTest extends BaseUnitTest {
         pr.setRepository(repository("acme/web"));
         GHIssueConnection references = new GHIssueConnection();
         references.setNodes(List.of(issue(12, "acme/web"), issue(7, "acme/other"), issue(30, "acme/web")));
+        GHPageInfo pageInfo = new GHPageInfo();
+        pageInfo.setHasNextPage(false);
+        references.setPageInfo(pageInfo);
         pr.setClosingIssuesReferences(references);
 
         assertThat(GitHubPullRequestDTO.extractClosingIssueNumbers(pr)).containsExactly(12, 30);
+    }
+
+    @Test
+    void shouldLeaveStoredClosingReferencesAloneWhenTheListIsIncomplete() {
+        GHPullRequest pr = new GHPullRequest();
+        GHIssueConnection references = new GHIssueConnection();
+        references.setNodes(List.of(issue(12, "acme/web")));
+        pr.setClosingIssuesReferences(references);
+        assertThat(GitHubPullRequestDTO.extractClosingIssueNumbers(pr)).isNull();
+
+        GHPageInfo pageInfo = new GHPageInfo();
+        pageInfo.setHasNextPage(true);
+        references.setPageInfo(pageInfo);
+        assertThat(GitHubPullRequestDTO.extractClosingIssueNumbers(pr)).isNull();
     }
 
     private static GHPullRequestCommitConnection commits(String oid, @Nullable GHStatusState state) {

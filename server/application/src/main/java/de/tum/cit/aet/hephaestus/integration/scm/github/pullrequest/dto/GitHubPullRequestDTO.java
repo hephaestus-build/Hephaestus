@@ -246,7 +246,10 @@ public record GitHubPullRequestDTO(
     @Nullable
     static List<Integer> extractClosingIssueNumbers(GHPullRequest pr) {
         if (pr.getClosingIssuesReferences() == null
-                || pr.getClosingIssuesReferences().getNodes() == null) {
+                || pr.getClosingIssuesReferences().getNodes() == null
+                || pr.getClosingIssuesReferences().getPageInfo() == null
+                || !Boolean.FALSE.equals(
+                        pr.getClosingIssuesReferences().getPageInfo().getHasNextPage())) {
             return null;
         }
         String ownRepository =
