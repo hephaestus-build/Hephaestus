@@ -3550,7 +3550,8 @@ export const zReviewBatch = z.object({
         'RUNNING',
         'PAUSED',
         'COMPLETED',
-        'CANCELLED'
+        'CANCELLED',
+        'BUDGET_EXHAUSTED'
     ]),
     submittedCount: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     targetItemIds: z.string().regex(/^[1-9][0-9]*$/),
@@ -5657,7 +5658,8 @@ export const zUpdateReviewBatchStatusRequest = z.object({
         'RUNNING',
         'PAUSED',
         'COMPLETED',
-        'CANCELLED'
+        'CANCELLED',
+        'BUDGET_EXHAUSTED'
     ])
 });
 

@@ -4788,7 +4788,7 @@ export type ReviewBatch = {
     scheduleId: string | null;
     skippedCount: number;
     startedAt: string | null;
-    status: 'AWAITING_CONFIRMATION' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+    status: 'AWAITING_CONFIRMATION' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'CANCELLED' | 'BUDGET_EXHAUSTED';
     submittedCount: number;
     targetItemIds: string;
     to: string | null;
@@ -6305,7 +6305,7 @@ export type UpdateProductFeedbackSharing = {
 };
 
 export type UpdateReviewBatchStatusRequest = {
-    status: 'AWAITING_CONFIRMATION' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
+    status: 'AWAITING_CONFIRMATION' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'CANCELLED' | 'BUDGET_EXHAUSTED';
 };
 
 export type UpdateSilentModeRequest = {

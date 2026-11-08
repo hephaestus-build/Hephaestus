@@ -129,8 +129,7 @@ public class ReviewBatchService {
                 && next != ReviewBatchStatus.PAUSED
                 && next != ReviewBatchStatus.CANCELLED)
             throw new IllegalArgumentException("Choose running, paused or cancelled.");
-        if (batch.getStatus() == ReviewBatchStatus.COMPLETED || batch.getStatus() == ReviewBatchStatus.CANCELLED)
-            throw new ReviewBatchConflictException("This batch has ended.");
+        if (batch.getStatus().isTerminal()) throw new ReviewBatchConflictException("This batch has ended.");
         if (next == ReviewBatchStatus.PAUSED || next == ReviewBatchStatus.CANCELLED) {
             for (var review : reviews.findByWorkspaceIdAndBatchIdOrderByCreatedAtAsc(context.id(), id)) {
                 if (review.getKind() == ReviewKind.SCAN && !review.getStatus().isTerminal()) {

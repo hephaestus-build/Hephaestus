@@ -49,3 +49,24 @@ Do not report a child as finished when nothing measured it.
 A CHECK validates each existing row.
 Rows from before the 1.0 cutover can break a rule that today's code keeps.
 Count them on staging and in production first. Then repair them in the same migration.
+
+## Scheduled review batches
+
+`ReviewBatchStatus` owns the terminal states.
+A terminal batch cannot resume.
+Its transition table is beside the enum in
+[`ReviewBatchStatus`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/spi/ReviewBatchStatus.java).
+A scheduled batch with no selected targets left completes before the driver checks its budget.
+
+`BUDGET_EXHAUSTED` records a normal end at the run limit.
+It has a completion time and no pause reason.
+It does not block the next scheduled batch.
+An existing scheduled batch paused at its fixed cap takes this transition on the next driver tick.
+The driver first waits for any scan already in flight to end.
+Unknown cost information keeps a pause; it does not prove that the fixed cap is spent.
+Some costs need operator correction before the run can continue.
+
+A manual dated-work batch has no fixed run cap.
+It keeps its budget pause until workspace funding permits another review.
+Its API rejects a fixed scan budget.
+The `review_batch` status CHECK includes `BUDGET_EXHAUSTED`.

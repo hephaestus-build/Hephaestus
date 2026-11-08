@@ -304,6 +304,15 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 	const settingsReviewModel = reviewModelOf(bindingsQuery);
 	const workspaceQuery = useQuery(getWorkspaceOptions({ path: { workspaceSlug } }));
 	const schedulesQuery = useQuery(listReviewSchedulesOptions({ path: { workspaceSlug } }));
+	const scheduledBatchesQuery = useQuery({
+		...listReviewBatchesOptions({ path: { workspaceSlug }, query: { origin: "SCHEDULE" } }),
+		refetchInterval: (query) =>
+			query.state.data?.content.some(
+				(batch) => batch.status === "RUNNING" || batch.status === "PAUSED",
+			) === true
+				? ACTIVE_BATCH_POLL_MS
+				: false,
+	});
 	const repositoriesOptions = listReviewItemsInfiniteOptions({
 		path: { workspaceSlug },
 		query: { itemKind: ITEM_KIND.repository, size: PICKER_PAGE_SIZE },
@@ -501,10 +510,13 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 			<PracticeReviewSchedule
 				workspaceSlug={workspaceSlug}
 				schedules={schedulesQuery.data ?? []}
+				recentBatches={scheduledBatchesQuery.data?.content ?? []}
 				isLoading={schedulesQuery.isLoading}
 				isError={schedulesQuery.isError}
+				isRunStatusError={scheduledBatchesQuery.isError}
 				onRetry={() => {
 					void schedulesQuery.refetch();
+					void scheduledBatchesQuery.refetch();
 				}}
 				isSaving={
 					createSchedule.isPending ||

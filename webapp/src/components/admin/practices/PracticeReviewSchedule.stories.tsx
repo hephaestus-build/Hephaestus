@@ -6,7 +6,7 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 import { expectClosedSelectShows } from "@/test/controls";
 
 import { PracticeReviewSchedule } from "./PracticeReviewSchedule";
-import { reviewSchedule as schedule } from "./review/fixtures";
+import { reviewSchedule as schedule, reviewBatch as batch } from "./review/fixtures";
 
 const meta = {
 	component: PracticeReviewSchedule,
@@ -18,8 +18,10 @@ const meta = {
 	args: {
 		workspaceSlug: "aet",
 		schedules: [],
+		recentBatches: [],
 		isLoading: false,
 		isError: false,
+		isRunStatusError: false,
 		onRetry: fn(),
 		isSaving: false,
 		onCreate: fn(),
@@ -158,7 +160,7 @@ export const DeleteAfterConfirming: Story = {
 export const NotRunYet: Story = {
 	args: { schedules: [schedule({ lastRunAt: null })] },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/has not checked anything yet/iu)).toBeVisible();
+		await expect(canvas.getByText(/has not tried a scheduled check yet/iu)).toBeVisible();
 	},
 };
 
@@ -178,7 +180,7 @@ export const PausedBeforeItEverRan: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByText(
-				"Every day, covering the last 2 days. Paused, so nothing is being checked. It has not checked anything yet.",
+				"Every day, covering the last 2 days. Paused, so nothing is being checked. It has not tried a scheduled check yet.",
 			),
 		).toBeVisible();
 	},
@@ -270,5 +272,39 @@ export const Error: Story = {
 		await expect(
 			canvas.getByRole("button", { name: "Start checking pull or merge requests" }),
 		).toBeDisabled();
+	},
+};
+
+export const RunLimitReached: Story = {
+	args: {
+		schedules: [schedule({ itemKind: "scm.repository", lookbackDays: null, budgetUsd: "1" })],
+		recentBatches: [
+			batch({
+				origin: "SCHEDULE",
+				scheduleId: schedule().id,
+				itemKind: "scm.repository",
+				status: "BUDGET_EXHAUSTED",
+				from: null,
+				to: null,
+				budgetUsd: "1",
+				finishedAt: new Date("2026-08-09T02:18:00Z"),
+			}),
+		],
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Run limit reached")).toBeVisible();
+		await expect(canvas.getByText(/Later scheduled checks can start new runs/u)).toBeVisible();
+		await expect(canvas.getByText("Schedule on")).toBeVisible();
+		await expect(canvas.queryByRole("button", { name: /^Resume/u })).not.toBeInTheDocument();
+		await expectNoPageOverflow();
+	},
+};
+
+export const RunStatusUnavailable: Story = {
+	args: { schedules: [schedule()], isRunStatusError: true },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("We could not load recent run statuses")).toBeVisible();
+		await expect(canvas.getByRole("button", { name: /Pause checking/u })).toBeEnabled();
+		await expect(canvas.getByRole("button", { name: /^Edit /u })).toBeEnabled();
 	},
 };

@@ -3,8 +3,10 @@ import { AlertCircle, History } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import type { CreateReviewBatchRequest, ReviewBatch } from "@/api/types.gen";
+import { definitionFor } from "@/components/common/status-def";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { REVIEW_BATCH_STATUS_DEFS } from "@/components/practice-vocabulary/review-batch-status-defs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -359,7 +361,7 @@ function ActiveBatchSection({
 					<h2 id="batch-active-heading" className="text-lg font-semibold">
 						Reviewing past work
 					</h2>
-					<Badge variant={paused ? "outline" : "secondary"}>{paused ? "Paused" : "Running"}</Badge>
+					<StatusBadge def={definitionFor(REVIEW_BATCH_STATUS_DEFS, batch.status)} />
 				</div>
 				<p className="text-sm text-muted-foreground">{formatWindow(batch)}</p>
 			</div>
@@ -456,9 +458,7 @@ function HistorySection({
 							</ItemDescription>
 						</ItemContent>
 						<ItemActions>
-							<Badge variant={batch.status === "CANCELLED" ? "outline" : "secondary"}>
-								{batch.status === "CANCELLED" ? "Stopped" : "Finished"}
-							</Badge>
+							<StatusBadge def={definitionFor(REVIEW_BATCH_STATUS_DEFS, batch.status)} />
 						</ItemActions>
 					</Item>
 				))}

@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeReviewReadiness;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchPauseReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
@@ -73,7 +74,25 @@ public class ReviewBatchDriver {
             batches.save(batch);
             return;
         }
+        var ids = scope.next(
+                batch.getWorkspaceId(), batch.getId(), batch.getCursorItemId(), scan ? 1 : properties.batchSize());
+        if (ids.isEmpty()) {
+            batch.setStatus(ReviewBatchStatus.COMPLETED);
+            batch.setPauseReason(null);
+            batch.setFinishedAt(clock.instant());
+            batch.setUpdatedAt(clock.instant());
+            batches.save(batch);
+            return;
+        }
         var remaining = spend.remaining(batch);
+        if (batch.getOrigin() == ReviewBatchOrigin.SCHEDULE && remaining.verified() && remaining.exhausted()) {
+            batch.setStatus(ReviewBatchStatus.BUDGET_EXHAUSTED);
+            batch.setPauseReason(null);
+            batch.setFinishedAt(clock.instant());
+            batch.setUpdatedAt(clock.instant());
+            batches.save(batch);
+            return;
+        }
         ReviewBatchPauseReason reason = workspace == null || workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE
                 ? ReviewBatchPauseReason.WORKSPACE_UNAVAILABLE
                 : !readiness.hasRunnableAgent(batch.getWorkspaceId())
@@ -94,14 +113,6 @@ public class ReviewBatchDriver {
         }
         batch.setStatus(ReviewBatchStatus.RUNNING);
         batch.setPauseReason(null);
-        var ids = scope.next(
-                batch.getWorkspaceId(), batch.getId(), batch.getCursorItemId(), scan ? 1 : properties.batchSize());
-        if (ids.isEmpty()) {
-            batch.setStatus(ReviewBatchStatus.COMPLETED);
-            batch.setFinishedAt(clock.instant());
-            batches.save(batch);
-            return;
-        }
         for (long itemId : ids) {
             try {
                 switch (submitter.offer(batch, itemId, remaining.remainingUsd())) {

@@ -3,11 +3,12 @@ import { format } from "date-fns";
 import { AlertCircle, CalendarClock } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 
-import type { ReviewSchedule, ReviewScheduleInput } from "@/api/types.gen";
+import type { ReviewBatch, ReviewSchedule, ReviewScheduleInput } from "@/api/types.gen";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { InlineLink } from "@/components/common/InlineLink";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { REVIEW_BATCH_STATUS_DEFS } from "@/components/practice-vocabulary/review-batch-status-defs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -45,8 +46,10 @@ export interface PracticeReviewScheduleProps {
 	/** Where its repository scans are listed. */
 	workspaceSlug: string;
 	schedules: ReviewSchedule[];
+	recentBatches: ReviewBatch[];
 	isLoading: boolean;
 	isError: boolean;
+	isRunStatusError: boolean;
 	onRetry: () => void;
 	isSaving: boolean;
 	onCreate: (input: ReviewScheduleInput) => void;
@@ -109,8 +112,10 @@ const formatMoment = (value: Date | null) => {
 export function PracticeReviewSchedule({
 	workspaceSlug,
 	schedules,
+	recentBatches,
 	isLoading,
 	isError,
+	isRunStatusError,
 	onRetry,
 	isSaving,
 	onCreate,
@@ -156,6 +161,7 @@ export function PracticeReviewSchedule({
 					<ScheduleRow
 						key={schedule.id}
 						schedule={schedule}
+						recentBatch={recentBatches.find((batch) => batch.scheduleId === schedule.id)}
 						isSaving={isSaving}
 						onReplace={onReplace}
 						onSetEnabled={onSetEnabled}
@@ -188,12 +194,20 @@ export function PracticeReviewSchedule({
 					</InlineLink>
 				</p>
 			</div>
-			{isError ? (
+			{isError || isRunStatusError ? (
 				<Alert variant="destructive">
 					<AlertCircle />
-					<AlertTitle>We could not load recurring checks</AlertTitle>
+					<AlertTitle>
+						{isError
+							? "We could not load recurring checks"
+							: "We could not load recent run statuses"}
+					</AlertTitle>
 					<AlertDescription>
-						<p>Scheduled checks keep running. Check your connection, then try again.</p>
+						<p>
+							{isError
+								? "Scheduled checks keep running. Check your connection, then try again."
+								: "You can still change recurring checks. Retry to update their run statuses."}
+						</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
 							Retry
 						</Button>
@@ -223,12 +237,14 @@ export function PracticeReviewSchedule({
 
 function ScheduleRow({
 	schedule,
+	recentBatch,
 	isSaving,
 	onReplace,
 	onSetEnabled,
 	onDelete,
 }: {
 	schedule: ReviewSchedule;
+	recentBatch: ReviewBatch | undefined;
 	isSaving: boolean;
 	onReplace: PracticeReviewScheduleProps["onReplace"];
 	onSetEnabled: PracticeReviewScheduleProps["onSetEnabled"];
@@ -250,19 +266,31 @@ function ScheduleRow({
 	const description = [
 		`${describeSchedule(schedule)}.`,
 		nextCheck,
-		hasText(lastRun) ? `Last checked ${lastRun}.` : "It has not checked anything yet.",
+		hasText(lastRun)
+			? `Last scheduled attempt ${lastRun}.`
+			: "It has not tried a scheduled check yet.",
 	].join(" ");
 
 	return (
 		<Item variant="outline" className="flex-wrap">
 			<ItemContent>
-				<ItemTitle>{kind}</ItemTitle>
-				<ItemDescription>{description}</ItemDescription>
+				<ItemTitle>
+					{kind}
+					{recentBatch?.status === "BUDGET_EXHAUSTED" ? (
+						<StatusBadge def={REVIEW_BATCH_STATUS_DEFS.BUDGET_EXHAUSTED} />
+					) : null}
+				</ItemTitle>
+				<ItemDescription className="line-clamp-none">{description}</ItemDescription>
+				{recentBatch?.status === "BUDGET_EXHAUSTED" ? (
+					<ItemDescription className="line-clamp-none">
+						{REVIEW_BATCH_STATUS_DEFS.BUDGET_EXHAUSTED.description}
+					</ItemDescription>
+				) : null}
 			</ItemContent>
 			<ItemActions className="flex-wrap">
-				<Badge variant={schedule.enabled ? "secondary" : "outline"}>
-					{schedule.enabled ? "On" : "Paused"}
-				</Badge>
+				<span className="text-sm text-muted-foreground">
+					{schedule.enabled ? "Schedule on" : "Schedule paused"}
+				</span>
 				{/* One row per kind, so every row would otherwise answer to the same word. The visible word
 				    still opens the name a voice-control user says (WCAG 2.2 SC 2.5.3). */}
 				<Button
@@ -432,8 +460,8 @@ function ScheduleForm({
 						<FieldContent>
 							<FieldLabel htmlFor={`${id}-budget`}>Budget for all repositories (USD)</FieldLabel>
 							<FieldDescription id={`${id}-budget-description`}>
-								Each scheduled check scans the repositories in the review scope one at a time. The
-								scans share this amount and stop when it is spent.
+								Each scheduled check scans one repository at a time, up to this amount in total.
+								Spending it ends only that run.
 							</FieldDescription>
 							{showBudgetError ? (
 								<FieldError id={`${id}-budget-error`}>{budgetProblem}</FieldError>

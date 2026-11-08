@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchPauseReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -22,6 +23,8 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
@@ -77,21 +80,30 @@ class ReviewBatchControllerIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(0);
     }
 
-    @Test
-    void shouldReturnConflictWhenAnEndedBatchIsResumed() {
+    @ParameterizedTest
+    @EnumSource(
+            value = ReviewBatchStatus.class,
+            names = {"COMPLETED", "CANCELLED", "BUDGET_EXHAUSTED"})
+    void shouldReturnConflictWhenAnEndedBatchIsResumed(ReviewBatchStatus status) {
         var now = Instant.now();
         var batch = batches.saveAndFlush(ReviewBatch.builder()
                 .id(UUID.randomUUID())
                 .workspaceId(scenario.workspace().getId())
-                .kind("scm.pull_request")
-                .fromAt(now.minusSeconds(60))
-                .toAt(now)
-                .status(ReviewBatchStatus.CANCELLED)
+                .kind("scm.repository")
+                .budgetUsd(BigDecimal.ONE)
+                .status(status)
+                .origin(ReviewBatchOrigin.SCHEDULE)
                 .requestedByAccountId(scenario.account().getId())
                 .createdAt(now)
                 .updatedAt(now)
                 .finishedAt(now)
                 .build());
+        get("/practices/review-batches?origin=SCHEDULE")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[?(@.id == '" + batch.getId() + "')].status")
+                .isEqualTo(List.of(status.name()));
         http.patch()
                 .uri(root() + "/practices/review-batches/" + batch.getId() + "/status")
                 .headers(h -> h.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
