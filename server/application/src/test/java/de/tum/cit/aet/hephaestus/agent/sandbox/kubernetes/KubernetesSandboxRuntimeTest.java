@@ -855,7 +855,7 @@ class KubernetesSandboxRuntimeTest {
                 child,
                 "Running",
                 List.of(exited(KubernetesPods.ISOLATION, 0), exited(KubernetesPods.INITIALIZER, 0)),
-                List.of(running(KubernetesPods.RUNTIME)));
+                List.of(running(KubernetesPods.LOOP)));
         await().atMost(Duration.ofSeconds(10)).until(() -> reviews.running(handle));
 
         setStatus(
@@ -863,7 +863,7 @@ class KubernetesSandboxRuntimeTest {
                 child,
                 "Succeeded",
                 List.of(exited(KubernetesPods.ISOLATION, 0), exited(KubernetesPods.INITIALIZER, 0)),
-                List.of(exited(KubernetesPods.RUNTIME, 0)));
+                List.of(exited(KubernetesPods.LOOP, 0)));
         await().atMost(Duration.ofSeconds(10)).until(() -> !reviews.running(handle));
     }
 
