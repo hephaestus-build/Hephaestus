@@ -6375,6 +6375,10 @@ export const LlmCallPoolSchema = {
             format: 'int64',
             description: 'Pool id'
         },
+        inputTokensPerMinute: {
+            type: 'integer',
+            format: 'int64'
+        },
         learnedLimit: {
             type: 'integer',
             format: 'int32',
@@ -6389,6 +6393,10 @@ export const LlmCallPoolSchema = {
             type: 'string',
             format: 'date-time',
             description: 'The provider asked for no call before this time'
+        },
+        outputTokensPerMinute: {
+            type: 'integer',
+            format: 'int64'
         },
         requestsPerMinute: {
             type: 'integer',
@@ -17080,10 +17088,22 @@ export const SaveLlmCallPoolRequestSchema = {
             maxLength: 128,
             minLength: 0
         },
+        inputTokensPerMinute: {
+            type: 'integer',
+            format: 'int64',
+            description: 'A bucket of input tokens alone, for a provider that has one',
+            minimum: 1
+        },
         maxConcurrentCalls: {
             type: 'integer',
             format: 'int32',
             description: 'Ceiling on the limit the pool learns; null leaves it uncapped',
+            minimum: 1
+        },
+        outputTokensPerMinute: {
+            type: 'integer',
+            format: 'int64',
+            description: 'A bucket of output tokens alone, for a provider that has one',
             minimum: 1
         },
         requestsPerMinute: {
@@ -17106,6 +17126,7 @@ export const SaveLlmCallPoolRequestSchema = {
         tokensPerMinute: {
             type: 'integer',
             format: 'int64',
+            description: 'A bucket of input and output tokens together',
             minimum: 1
         }
     },
