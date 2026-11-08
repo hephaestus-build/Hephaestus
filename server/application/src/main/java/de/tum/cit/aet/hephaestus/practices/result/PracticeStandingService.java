@@ -99,7 +99,64 @@ public class PracticeStandingService {
      * between the two moments. That is the property the practice profile's "what changed" reads off them.
      */
     public List<StandingSnapshot> getStandingSnapshots(Long workspaceId, Long developerId, List<Instant> edges) {
-        return standingSnapshots(workspaceId, developerId, edges, SourceReadAudience.HUMAN_RECORDED_STANDING);
+        return visibilityPolicy.asOneRead(
+                workspaceId,
+                () -> getStandingSnapshots(
+                        workspaceId, edges, history(workspaceId, developerId, practiceTrendService.horizon())));
+    }
+
+    /**
+     * {@link #getStandingSnapshots(Long, Long, List)} read off a history the caller already holds, which reaches
+     * back at least to the look-back's start. The history comes from {@link #history(Long, Long, Instant)}.
+     */
+    public List<StandingSnapshot> getStandingSnapshots(Long workspaceId, List<Instant> edges, History history) {
+        return visibilityPolicy.asOneRead(
+                workspaceId,
+                () -> readStandingSnapshots(workspaceId, edges, history, SourceReadAudience.HUMAN_RECORDED_STANDING));
+    }
+
+    /**
+     * One developer's projected history and its permission decisions, shared within one request. Callers outside
+     * the standing reader can access only the permitted views.
+     */
+    public static final class History {
+        private final Instant since;
+        private final List<ResultView> views;
+        private final Set<UUID> permitted;
+
+        private History(Instant since, List<ResultView> views, Set<UUID> permitted) {
+            this.since = since;
+            this.views = views;
+            this.permitted = permitted;
+        }
+
+        /** The views the read's purpose permits, in the history's order. */
+        public List<ResultView> permittedViews() {
+            return views.stream()
+                    .filter(view -> permitted.contains(view.result().getId()))
+                    .toList();
+        }
+
+        /** Refuses a history that starts after {@code start}: rows it never loaded would read as absent. */
+        public History from(Instant start) {
+            if (since.isAfter(start)) {
+                throw new IllegalStateException("The history starts after " + start);
+            }
+            return this;
+        }
+    }
+
+    /** The developer's Practice page history, for every read of one profile request. */
+    public History history(Long workspaceId, Long developerId, Instant since) {
+        return history(workspaceId, developerId, since, PURPOSE);
+    }
+
+    private History history(Long workspaceId, Long developerId, Instant since, SourceUsePurpose purpose) {
+        List<Result> rows = results.forDevelopersSince(workspaceId, List.of(developerId), since, false);
+        return new History(
+                since,
+                resultViewQuery.views(workspaceId, rows),
+                visibilityPolicy.permitsHistory(workspaceId, rows, purpose));
     }
 
     /**
@@ -109,23 +166,30 @@ public class PracticeStandingService {
      */
     public List<StandingSnapshot> getProcessingStandingSnapshots(
             Long workspaceId, Long developerId, List<Instant> edges) {
-        return standingSnapshots(workspaceId, developerId, edges, SourceReadAudience.PROCESSING);
-    }
-
-    private List<StandingSnapshot> standingSnapshots(
-            Long workspaceId, Long developerId, List<Instant> edges, SourceReadAudience audience) {
         // Every edge reads the same work, so its sources are checked once for all of them.
         return visibilityPolicy.asOneRead(
-                workspaceId, () -> readStandingSnapshots(workspaceId, developerId, edges, audience));
+                workspaceId,
+                () -> readStandingSnapshots(
+                        workspaceId,
+                        edges,
+                        history(
+                                workspaceId,
+                                developerId,
+                                practiceTrendService.horizon(),
+                                SourceUsePurpose.CONVERSATIONAL_MENTORING),
+                        SourceReadAudience.PROCESSING));
     }
 
     private List<StandingSnapshot> readStandingSnapshots(
-            Long workspaceId, Long developerId, List<Instant> edges, SourceReadAudience audience) {
-        SourceUsePurpose purpose = purpose(audience);
+            Long workspaceId, List<Instant> edges, History history, SourceReadAudience audience) {
         // One instant for the evidence and the trend, so no result lies inside the read but before the trend.
         Instant since = practiceTrendService.horizon();
-        List<ResultView> window = load(workspaceId, List.of(developerId), since, Collections.max(edges));
-        Set<UUID> visible = visibilityPolicy.permitsHistory(workspaceId, rowsOf(window), purpose);
+        Instant until = Collections.max(edges);
+        List<ResultView> window = history.from(since).views.stream()
+                .filter(view -> !view.result().getRecordedAt().isBefore(since)
+                        && !view.result().getRecordedAt().isAfter(until))
+                .toList();
+        Set<UUID> visible = history.permitted;
         Map<UUID, String> deliveredGuidance = deliveredGuidanceByResult(
                 workspaceId,
                 window.stream()
