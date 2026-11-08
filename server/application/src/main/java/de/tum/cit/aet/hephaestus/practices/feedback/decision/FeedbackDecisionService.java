@@ -75,6 +75,8 @@ public class FeedbackDecisionService {
         Feedback feedback = feedbackRepository
                 .lockByIdAndWorkspaceId(feedbackId, workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Feedback", feedbackId.toString()));
+        if (feedback.getDestination() == FeedbackDestination.ON_WORK && feedback.getState() == FeedbackState.REPLACED)
+            throw conflict("A newer revision owns this copy. Open that revision to change its delivery.");
         var send = sendQueue.lock(workspaceId, feedbackId);
         var lockedCopies = copies.lockByFeedbackId(workspaceId, feedbackId);
         Instant now = clock.instant();

@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackProviderReadback;
 import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
@@ -86,7 +87,9 @@ class FeedbackSendServiceTest {
                 List.of(writer),
                 List.of(),
                 mock(PostedCopyCorrector.class),
-                new FeedbackReadbackMeters(meters));
+                new FeedbackReadbackMeters(meters),
+                mock(FeedbackProviderReadback.class),
+                mock(FeedbackOwnCopyEditor.class));
     }
 
     FeedbackCopy copy(FeedbackCopyState state) {
@@ -220,7 +223,9 @@ class FeedbackSendServiceTest {
                 List.of(writer),
                 writers,
                 mock(PostedCopyCorrector.class),
-                new FeedbackReadbackMeters(meters));
+                new FeedbackReadbackMeters(meters),
+                mock(FeedbackProviderReadback.class),
+                mock(FeedbackOwnCopyEditor.class));
     }
 
     @Test

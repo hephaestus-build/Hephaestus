@@ -90,7 +90,7 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
         UPDATE feedback_copy SET state = 'POSTED', posted_at = :postedAt,
-            external_ref = :externalRef, external_url = :externalUrl, kind = :kind,
+            external_ref = :externalRef, external_url = :externalUrl, kind = :kind, thread_ref = :threadRef,
             stop_reason = NULL, last_error = NULL, readback=NULL
          WHERE workspace_id = :workspaceId AND feedback_id = :feedbackId AND id = :copyId
            AND state = 'WRITE_STARTED' AND write_started_at IS NOT NULL
@@ -103,7 +103,8 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
             @Param("postedAt") Instant postedAt,
             @Param("externalRef") @Nullable String externalRef,
             @Param("externalUrl") @Nullable String externalUrl,
-            @Param("kind") String kind);
+            @Param("kind") String kind,
+            @Param("threadRef") @Nullable String threadRef);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
@@ -300,7 +301,7 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
     @Query(value = """
         SELECT EXISTS(SELECT 1 FROM feedback_copy newer JOIN feedback latest ON latest.id=newer.feedback_id AND latest.workspace_id=newer.workspace_id
           JOIN feedback original ON original.id=:feedbackId AND original.workspace_id=:workspaceId
-          WHERE newer.workspace_id=:workspaceId AND newer.feedback_id<>original.id AND newer.kind='SUMMARY'
+          WHERE newer.workspace_id=:workspaceId AND newer.feedback_id<>original.id
             AND newer.external_ref=:externalRef AND newer.posted_at IS NOT NULL AND latest.item_id=original.item_id
             AND (latest.created_at>original.created_at OR (latest.created_at=original.created_at AND latest.id::text>original.id::text)))
         """, nativeQuery = true)

@@ -18,6 +18,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.practices.feedback.AbstractFeedbackDeliveryIntegrationTest;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackProviderReadback;
+import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackOwnCopyEditor;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackReadbackMeters;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResolver;
@@ -94,7 +96,9 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
                 List.of(gitlab.channel()),
                 List.of(writer),
                 corrector,
-                new FeedbackReadbackMeters(new SimpleMeterRegistry()));
+                new FeedbackReadbackMeters(new SimpleMeterRegistry()),
+                mock(FeedbackProviderReadback.class),
+                mock(FeedbackOwnCopyEditor.class));
         prepare(true);
         sender.send(workspace.getId(), feedbackId);
         if (rejected) {

@@ -8937,6 +8937,7 @@ paths:
             - UNCORROBORATED
             - PUBLIC_HISTORY_CHANGED
             - PUBLIC_DELIVERY_UNRESOLVED
+            - STEP_LIMIT
             - NOT_COMPOSED
       - in: query
         name: withdrawn
@@ -9132,6 +9133,7 @@ paths:
             - UNCORROBORATED
             - PUBLIC_HISTORY_CHANGED
             - PUBLIC_DELIVERY_UNRESOLVED
+            - STEP_LIMIT
             - NOT_COMPOSED
       - in: query
         name: withdrawn
@@ -9312,6 +9314,7 @@ paths:
             - UNCORROBORATED
             - PUBLIC_HISTORY_CHANGED
             - PUBLIC_DELIVERY_UNRESOLVED
+            - STEP_LIMIT
             - NOT_COMPOSED
       - in: query
         name: withdrawn
@@ -15030,6 +15033,7 @@ components:
           - UNCORROBORATED
           - PUBLIC_HISTORY_CHANGED
           - PUBLIC_DELIVERY_UNRESOLVED
+          - STEP_LIMIT
           - NOT_COMPOSED
           - null
         stage:
@@ -15204,6 +15208,7 @@ components:
           - UNCORROBORATED
           - PUBLIC_HISTORY_CHANGED
           - PUBLIC_DELIVERY_UNRESOLVED
+          - STEP_LIMIT
           - NOT_COMPOSED
           - null
         writeStartedAt:
@@ -15565,6 +15570,8 @@ components:
           type: string
           enum:
           - POST
+          - EDIT
+          - READBACK
           - RETRACT
         attemptCount:
           type: integer
@@ -22507,6 +22514,7 @@ components:
           - UNCORROBORATED
           - PUBLIC_HISTORY_CHANGED
           - PUBLIC_DELIVERY_UNRESOLVED
+          - STEP_LIMIT
           - NOT_COMPOSED
           - null
         textHidden:
@@ -22716,6 +22724,7 @@ components:
           - UNCORROBORATED
           - PUBLIC_HISTORY_CHANGED
           - PUBLIC_DELIVERY_UNRESOLVED
+          - STEP_LIMIT
           - NOT_COMPOSED
           - null
         textHidden:

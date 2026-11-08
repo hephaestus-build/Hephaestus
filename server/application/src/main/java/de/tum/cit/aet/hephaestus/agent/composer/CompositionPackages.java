@@ -173,6 +173,12 @@ final class CompositionPackages {
             return id;
         }
 
+        FeedbackPackage checked(String id) {
+            var proposal = checked.get(id);
+            if (proposal == null) throw new IllegalArgumentException("Unknown draftId; check the package first.");
+            return proposal;
+        }
+
         PreparedPackage publish(String id) {
             if (publishedId != null) {
                 if (!publishedId.equals(id))

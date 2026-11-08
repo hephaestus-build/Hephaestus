@@ -1,0 +1,26 @@
+query GetOwnedFeedbackCopies($ids: [ID!]!) {
+    viewer { login }
+    nodes(ids: $ids) {
+        __typename
+        id
+        ... on IssueComment {
+            body bodyHTML viewerDidAuthor editor { login }
+            issue { id }
+            commentPullRequest: pullRequest { id }
+        }
+        ... on PullRequestReview {
+            body bodyHTML viewerDidAuthor editor { login }
+            state
+            pullRequest { id }
+        }
+        ... on PullRequestReviewThread {
+            pullRequest { id }
+            isResolved isOutdated subjectType
+            path line startLine originalLine originalStartLine diffSide startDiffSide
+            comments(first: 2) { totalCount nodes {
+                id body bodyHTML viewerDidAuthor editor { login }
+            } }
+        }
+    }
+    rateLimit { cost limit remaining resetAt }
+}

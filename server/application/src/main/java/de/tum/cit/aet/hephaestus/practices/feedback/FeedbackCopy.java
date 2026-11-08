@@ -101,6 +101,9 @@ public class FeedbackCopy {
     @Column(name = "external_ref", nullable = true, columnDefinition = "TEXT")
     private @Nullable String externalRef;
 
+    @Column(name = "thread_ref", nullable = true, columnDefinition = "TEXT")
+    private @Nullable String threadRef;
+
     @Column(name = "external_url", nullable = true, columnDefinition = "TEXT")
     private @Nullable String externalUrl;
 

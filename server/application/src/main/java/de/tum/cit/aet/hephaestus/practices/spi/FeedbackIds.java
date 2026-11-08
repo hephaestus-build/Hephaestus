@@ -44,6 +44,10 @@ public final class FeedbackIds {
         return named("copy/" + feedbackId + "/" + kind + "/" + position);
     }
 
+    public static UUID correction(UUID rootId, String draftId) {
+        return named("correction/" + rootId + "/" + draftId);
+    }
+
     public static UUID basis(UUID feedbackId, UUID resultId, @Nullable UUID problemId) {
         return named("basis/" + feedbackId + "/" + resultId + "/" + (problemId == null ? "-" : problemId));
     }

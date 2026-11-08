@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
+import de.tum.cit.aet.hephaestus.practices.review.model.Review;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
@@ -30,11 +32,16 @@ public class ReviewStartService implements ReviewStart {
     private final PracticeItemOptions itemOptions;
     private final ItemEventService events;
     private final Clock clock;
+    private final FeedbackRepair repairs;
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean start(long workspaceId, UUID reviewId) {
         var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
+        return startLocked(review);
+    }
+
+    private boolean startLocked(Review review) {
         if (review.getStatus().isTerminal()
                 || review.getChecks().path("cancellationRequested").asBoolean()) return false;
         if (review.getStatus() == ReviewStatus.QUEUED) {
@@ -44,6 +51,16 @@ public class ReviewStartService implements ReviewStart {
             review.setChecks(checks);
         }
         return true;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean compose(long workspaceId, UUID reviewId) {
+        var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
+        if (!review.getStatus().isTerminal()) return startLocked(review);
+        return (review.getStatus() == ReviewStatus.COMPLETE || review.getStatus() == ReviewStatus.PARTIAL)
+                && !review.getChecks().path("cancellationRequested").asBoolean()
+                && repairs.pending(workspaceId, reviewId);
     }
 
     // A person's request stays: they asked for this review. An immediate occasion keeps waiting for it, as does one at

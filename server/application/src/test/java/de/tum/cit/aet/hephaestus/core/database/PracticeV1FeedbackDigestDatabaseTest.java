@@ -15,6 +15,34 @@ class PracticeV1FeedbackDigestDatabaseTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"prod", "dev"})
+    void shouldKeepRepairStateBoundedAndTheConfirmedThreadImmutable(String context) throws Exception {
+        var database = NativePracticeFixture.feedbackParent(context);
+        PracticeMigrationFixture.execute(database, """
+            UPDATE feedback SET composition='{"edits":3}',stop_reason='STEP_LIMIT'
+            WHERE id='00000000-0000-0000-0000-000000978041';
+            UPDATE feedback_copy SET thread_ref='provider-thread',stop_reason='STEP_LIMIT'
+            WHERE id='00000000-0000-0000-0000-000000978042';
+            """);
+        assertThat(PracticeMigrationFixture.column(
+                        database, "SELECT composition->>'edits' FROM feedback WHERE id='" + WORK + "'"))
+                .containsExactly("3");
+        assertThatThrownBy(() -> PracticeMigrationFixture.execute(
+                        database, "UPDATE feedback SET composition='{\"edits\":4}' WHERE id='" + WORK + "'"))
+                .hasRootCauseInstanceOf(SQLException.class)
+                .hasMessageContaining("ck_feedback_composition");
+        assertThatThrownBy(() -> PracticeMigrationFixture.execute(database, """
+            UPDATE feedback_copy SET thread_ref='other-thread'
+            WHERE id='00000000-0000-0000-0000-000000978042'
+            """))
+                .hasRootCauseInstanceOf(SQLException.class)
+                .hasMessageContaining("thread binding is immutable");
+        assertThat(PracticeMigrationFixture.column(database, """
+            SELECT thread_ref FROM feedback_copy WHERE id='00000000-0000-0000-0000-000000978042'
+            """)).containsExactly("provider-thread");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"prod", "dev"})
     void shouldKeepApprovalThroughFallbackAndBindThePreparedWordsAndSide(String context) throws Exception {
         var database = NativePracticeFixture.feedbackParent(context);
         PracticeMigrationFixture.execute(database, """

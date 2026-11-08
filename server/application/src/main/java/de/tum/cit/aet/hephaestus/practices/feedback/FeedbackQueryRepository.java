@@ -47,9 +47,8 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
               WHEN 'CONVERSATION' THEN CASE WHEN conversation.surface='SLACK' THEN 'SLACK'
                 WHEN conversation.surface IS NOT NULL THEN 'HEPH' ELSE 'NEXT_CONVERSATION' END
             END AS location,
-            (SELECT d.action='WITHDRAW' FROM feedback_decision d
-              WHERE d.workspace_id=f.workspace_id AND d.feedback_id=f.id AND d.action IN ('WITHDRAW','RESTORE')
-              ORDER BY d.decided_at DESC,d.id::text DESC LIMIT 1) AS withdrawn,
+            (SELECT d.action='WITHDRAW' FROM (""" + FeedbackVisibilitySql.LATEST + """
+            ) d) AS withdrawn,
             (SELECT r.resolution='DISAGREE' FROM feedback_response r
               WHERE r.workspace_id=f.workspace_id AND r.feedback_id=f.id
               ORDER BY r.created_at DESC,r.id::text DESC LIMIT 1) AS disagreed,

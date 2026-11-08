@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
+import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
@@ -48,6 +49,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.core.runtime.WorkerGraphWithoutCluster;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
+import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -63,15 +65,20 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Bear
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
@@ -82,6 +89,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendRecovery;
+import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendService;
 import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
@@ -98,6 +106,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionInput;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
@@ -109,6 +118,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -128,6 +138,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -153,6 +164,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.BootstrapUtils;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -196,6 +208,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewCompositionContinuation continuation;
+
+    @Autowired
+    private FeedbackRepair repairs;
 
     @Autowired
     private ReviewJobAssignments assignments;
@@ -279,6 +294,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private FeedbackSendRecovery recovery;
 
     @Autowired
+    private FeedbackSendService sender;
+
+    @Autowired
     private FeedbackDecisionService decisions;
 
     @Autowired
@@ -288,6 +306,15 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private CredentialBundleConverter credentials;
 
     private boolean silencedBefore;
+
+    @Autowired
+    private ReviewStart reviewStart;
+
+    @Autowired
+    private CompositionToolTrace toolTrace;
+
+    @Autowired
+    private ApplicationEventPublisher events;
 
     @Autowired
     private PracticeStagingStore stagingStore;
@@ -1614,7 +1641,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     agentProperties,
                     meters,
                     mapper,
-                    new CompositionCapacity(4));
+                    new CompositionCapacity(4),
+                    mock(FeedbackRepair.class),
+                    mock(CompositionToolTrace.class));
             composer.composeResumed(job, WORKER_LEASE, Instant.now());
 
             assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
@@ -1772,6 +1801,312 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     /** A running attempt of one ITEM review of a GitHub pull request, claimed by {@link #WORKER_LEASE}, with its capture. */
+    @Test
+    void shouldResumeTheApprovedCompositionFromItsOriginalInputsWithoutMeasuringAgain() {
+        try (var review = claimedReview(FeedbackMode.APPROVE_FIRST)) {
+            var response = admitStaged(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            UUID feedbackId = admission
+                    .publishPackage(review.identity(), composition(response, SUMMARY, context))
+                    .pieces()
+                    .getFirst()
+                    .feedbackId();
+            var sealedIds = resultIds(review);
+            var originalReport = mapper.createObjectNode().put("sealedReport", "retained");
+            jdbc.update(
+                    "UPDATE review_job SET status='COMPLETED',completed_at=now(),output=?::jsonb WHERE workspace_id=? AND id=?",
+                    originalReport.toString(),
+                    review.workspaceId(),
+                    review.identity().jobId());
+            jdbc.update(
+                    "UPDATE review SET status='COMPLETE',completed_at=now() WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    review.reviewId());
+            var ended = jobs.findById(review.identity().jobId()).orElseThrow();
+            continuation.forget(ended);
+            assertThat(compositionBases.findByWorkspaceIdAndJobId(review.workspaceId(), ended.getId()))
+                    .isPresent();
+            assertThat(jobs.findById(ended.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
+            decisions.decide(
+                    review.workspaceId(),
+                    feedbackId,
+                    review.developerId(),
+                    new FeedbackDecisionInput(
+                            FeedbackDecisionAction.APPROVE,
+                            null,
+                            null,
+                            digests.current(review.workspaceId(), feedbackId)));
+            var resumed = jobs.findById(ended.getId()).orElseThrow();
+            assertThat(resumed.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+            assertThat(resumed.getAttempt()).isEqualTo(ended.getAttempt() + 1);
+            assertThat(resumed.getOutput()).isEqualTo(originalReport);
+            assertThat(resultIds(review)).containsExactlyElementsOf(sealedIds);
+            var canCompose =
+                    transactions.execute(status -> reviewStart.compose(review.workspaceId(), review.reviewId()));
+            assertThat(canCompose).isTrue();
+            assertThat(continuation.retainedInputs(resumed)).containsKey(RECORD);
+            assertThat(jdbc.queryForObject(
+                            "SELECT status FROM review WHERE workspace_id=? AND id=?",
+                            String.class,
+                            review.workspaceId(),
+                            review.reviewId()))
+                    .isEqualTo("COMPLETE");
+            jdbc.update(
+                    "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    ended.getId());
+            var expired = Timestamp.from(Instant.now().minusSeconds(1));
+            jdbc.update(
+                    "UPDATE review_composition_basis SET expires_at=? WHERE workspace_id=? AND job_id=?",
+                    expired,
+                    review.workspaceId(),
+                    ended.getId());
+            var expiredResume = transactions.execute(status ->
+                    jobs.resumeFeedbackRepair(review.workspaceId(), review.reviewId(), agentProperties.maxRetries()));
+            assertThat(expiredResume).isZero();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CONTEXT_WINDOW", "PROVIDER", "DEADLINE", "STEP_LIMIT"})
+    void shouldKeepAStoppedRepairTerminalAfterDelivery(String reason) {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            UUID id = admission
+                    .publishPackage(review.identity(), composition(response, SUMMARY, context))
+                    .pieces()
+                    .getFirst()
+                    .feedbackId();
+            sender.send(review.workspaceId(), id);
+            assertThat(feedback.findByIdAndWorkspaceId(id, review.workspaceId())
+                            .orElseThrow()
+                            .getState())
+                    .isEqualTo(FeedbackState.DELIVERED);
+            repairs.stop(review.workspaceId(), review.reviewId(), reason);
+            jdbc.update(
+                    "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    review.identity().jobId());
+            assertThat(feedback.findByIdAndWorkspaceId(id, review.workspaceId())
+                            .orElseThrow()
+                            .getComposition()
+                            .path("stop")
+                            .asString())
+                    .isEqualTo(reason);
+            assertThat(jobs.findById(review.identity().jobId()).orElseThrow().getStatus())
+                    .isEqualTo(ReviewJobStatus.COMPLETED);
+            var resumed = transactions.execute(status ->
+                    jobs.resumeFeedbackRepair(review.workspaceId(), review.reviewId(), agentProperties.maxRetries()));
+            assertThat(compositionBases.findByWorkspaceIdAndJobId(
+                            review.workspaceId(), review.identity().jobId()))
+                    .isPresent();
+            assertThat(feedback.findByIdAndWorkspaceId(id, review.workspaceId())
+                            .orElseThrow()
+                            .getComposition()
+                            .path("readback")
+                            .isArray())
+                    .isTrue();
+            assertThat(resumed).isZero();
+            continuation.forget(jobs.findById(review.identity().jobId()).orElseThrow());
+        }
+    }
+
+    @Test
+    void shouldNotResumePostedFeedbackPastTheExistingRetryAllowance() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            UUID id = admission
+                    .publishPackage(review.identity(), composition(response, SUMMARY, context))
+                    .pieces()
+                    .getFirst()
+                    .feedbackId();
+            sender.send(review.workspaceId(), id);
+            assertThat(feedback.findByIdAndWorkspaceId(id, review.workspaceId())
+                            .orElseThrow()
+                            .getState())
+                    .isEqualTo(FeedbackState.DELIVERED);
+            jdbc.update(
+                    "UPDATE review_job SET status='COMPLETED',completed_at=now(),attempt=? WHERE workspace_id=? AND id=?",
+                    agentProperties.maxRetries() + 1,
+                    review.workspaceId(),
+                    review.identity().jobId());
+            var ended = jobs.findById(review.identity().jobId()).orElseThrow();
+            assertThat(compositionBases.findByWorkspaceIdAndJobId(review.workspaceId(), ended.getId()))
+                    .isPresent();
+            assertThat(feedback.findByIdAndWorkspaceId(id, review.workspaceId())
+                            .orElseThrow()
+                            .getComposition()
+                            .path("readback")
+                            .isArray())
+                    .isTrue();
+            var resumed = transactions.execute(status ->
+                    jobs.resumeFeedbackRepair(review.workspaceId(), review.reviewId(), agentProperties.maxRetries()));
+            assertThat(resumed).isZero();
+            continuation.forget(ended);
+            assertThat(feedback.findByIdAndWorkspaceId(id, review.workspaceId())
+                            .orElseThrow()
+                            .getComposition()
+                            .path("stop")
+                            .asString())
+                    .isEqualTo("RETRIES_EXHAUSTED");
+            assertThat(jobs.findById(ended.getId()).orElseThrow()).satisfies(row -> {
+                assertThat(row.getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
+                assertThat(row.getAttempt()).isEqualTo(ended.getAttempt());
+            });
+        }
+    }
+
+    @Test
+    void shouldKeepExactToolArgumentsAndOutcomesUntilTheOriginalCapsuleExpiry() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admitStaged(review.identity(), request(review));
+            var original = compositionBases
+                    .findByWorkspaceIdAndJobId(
+                            review.workspaceId(), review.identity().jobId())
+                    .orElseThrow();
+            var arguments = mapper.createObjectNode().put("summary", "Keep the failure cause.");
+            toolTrace.record(review.identity(), "checked-1", "check_package", arguments, "Placement accepted.");
+            jdbc.update(
+                    "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    review.identity().jobId());
+            continuation.forget(jobs.findById(review.identity().jobId()).orElseThrow());
+            var retained = compositionBases
+                    .findByWorkspaceIdAndJobId(
+                            review.workspaceId(), review.identity().jobId())
+                    .orElseThrow();
+            assertThat(retained.getExpiresAt()).isEqualTo(original.getExpiresAt());
+            assertThat(retained.getBasisDigest()).isEqualTo(original.getBasisDigest());
+            assertThat(retained.getPayload().path("tools")).hasSize(1);
+            assertThat(retained.getPayload().path("tools").path(0).path("arguments"))
+                    .isEqualTo(arguments);
+            assertThat(retained.getPayload()
+                            .path("tools")
+                            .path(0)
+                            .path("outcome")
+                            .asString())
+                    .isEqualTo("Placement accepted.");
+        }
+    }
+
+    @Test
+    void shouldRefuseAnotherToolTraceAfterItsCopiedEvidenceWasRevoked() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admitStaged(review.identity(), request(review));
+            toolTrace.record(
+                    review.identity(), "checked-1", "check_package", mapper.createObjectNode(), "Placement accepted.");
+            var original = compositionBases
+                    .findByWorkspaceIdAndJobId(
+                            review.workspaceId(), review.identity().jobId())
+                    .orElseThrow();
+            jdbc.update(
+                    "UPDATE person_evidence_copy SET state='ERASED',payload='{}'::jsonb WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    original.getCopyId());
+            assertThatThrownBy(() -> toolTrace.record(
+                            review.identity(), "checked-2", "check_package", mapper.createObjectNode(), "New text."))
+                    .isInstanceOfSatisfying(
+                            ReviewCompositionContinuation.InputsUnavailableException.class,
+                            refused -> assertThat(refused.erased()).isTrue());
+            var retained = compositionBases
+                    .findByWorkspaceIdAndJobId(
+                            review.workspaceId(), review.identity().jobId())
+                    .orElseThrow();
+            assertThat(retained.getPayload().path("tools")).hasSize(1);
+        }
+    }
+
+    @Test
+    void shouldPreserveHumanThreadControlInAnotherWorkspaceThatIndexesTheSameProviderWork() {
+        try (var observing = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var owner = data.scenario(DefinitionTestFixtures.definition());
+            var now = Instant.now();
+            var indexed = new Item();
+            indexed.setWorkspaceId(owner.workspace().getId());
+            indexed.setKind(ScmItemEvents.PULL_REQUEST);
+            indexed.setSourceId(observing.pullRequestId());
+            indexed.setCreatedAt(now);
+            indexed = items.saveAndFlush(indexed);
+            UUID ownerReview = UUID.randomUUID();
+            jdbc.update(
+                    "INSERT INTO review(id,workspace_id,item_id,kind,item_version,origin,status,ordered_at,created_at) "
+                            + "VALUES(?,?,?,'ITEM',?,'REQUEST','RUNNING',now(),now())",
+                    ownerReview,
+                    owner.workspace().getId(),
+                    indexed.getId(),
+                    observing.itemVersion());
+            var row = feedback.saveAndFlush(Feedback.builder()
+                    .id(UUID.randomUUID())
+                    .workspaceId(owner.workspace().getId())
+                    .reviewId(ownerReview)
+                    .itemId(indexed.getId())
+                    .developerId(Objects.requireNonNull(owner.account().getId()))
+                    .destination(FeedbackDestination.ON_WORK)
+                    .state(FeedbackState.DELIVERED)
+                    .createdAt(now)
+                    .deliveredAt(now)
+                    .build());
+            String threadRef = "PRRT_" + UUID.randomUUID();
+            UUID copyId = FeedbackIds.copy(row.getId(), FeedbackCopyKind.LINE_NOTE, 0);
+            var receipt = copies.saveAndFlush(FeedbackCopy.builder()
+                    .id(copyId)
+                    .workspaceId(owner.workspace().getId())
+                    .feedbackId(row.getId())
+                    .kind(FeedbackCopyKind.LINE_NOTE)
+                    .position(0)
+                    .body("Keep the failure cause.")
+                    .path("src/A.java")
+                    .startLine(1)
+                    .endLine(1)
+                    .side(CitationSide.NEW)
+                    .state(FeedbackCopyState.POSTED)
+                    .writeKey(copyId.toString())
+                    .writeMarker(FeedbackIds.writeMarker(copyId))
+                    .writeStartedAt(now)
+                    .postedAt(now)
+                    .externalRef("PRRC_" + UUID.randomUUID())
+                    .threadRef(threadRef)
+                    .createdAt(now)
+                    .build());
+            Long threadId = jdbc.queryForObject(
+                    "INSERT INTO pull_request_review_thread(native_id,provider_id,pull_request_id,node_id,state) "
+                            + "SELECT ?,provider_id,id,?,'UNRESOLVED' FROM issue WHERE id=? RETURNING id",
+                    Long.class,
+                    ThreadLocalRandom.current().nextLong(1_000_000, Long.MAX_VALUE),
+                    threadRef,
+                    observing.pullRequestId());
+            var event = new ScmDomainEvent.ReviewThreadUnresolved(
+                    new ScmEventPayload.ReviewThreadData(
+                            Objects.requireNonNull(threadId),
+                            PullRequestReviewThread.State.UNRESOLVED,
+                            "src/A.java",
+                            1,
+                            null,
+                            observing.pullRequestId()),
+                    new EventContext(
+                            UUID.randomUUID(),
+                            now,
+                            observing.workspaceId(),
+                            null,
+                            DataSource.WEBHOOK,
+                            "unresolved",
+                            "synthetic-thread-event",
+                            IdentityProviderType.GITHUB));
+            transactions.executeWithoutResult(status -> events.publishEvent(event));
+            assertThat(feedback.findByIdAndWorkspaceId(
+                                    row.getId(), owner.workspace().getId())
+                            .orElseThrow()
+                            .getComposition()
+                            .path("humanControlled")
+                            .asBoolean())
+                    .isTrue();
+            assertThat(copies.findById(receipt.getId()).orElseThrow().getThreadRef())
+                    .isEqualTo(threadRef);
+        }
+    }
+
     private ClaimedReview claimedReview(FeedbackMode mode) {
         return claimedReview(mode, DefinitionTestFixtures.definition());
     }

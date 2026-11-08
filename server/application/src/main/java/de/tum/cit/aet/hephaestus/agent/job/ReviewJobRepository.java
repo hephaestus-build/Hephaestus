@@ -529,6 +529,25 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     int requeueAdmittedForComposition(
             @Param("id") UUID id, @Param("leaseId") UUID leaseId, @Param("request") CompositionRequeue request);
 
+    /** Only delivery proof can resume an ended composition, while its original, unerased capsule is retained. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        UPDATE review_job j SET status='QUEUED',attempt=attempt+1,lease_id=NULL,leased_until=NULL,
+          started_at=NULL,completed_at=NULL,execution_started_at=NULL,available_at=clock_timestamp(),
+          llm_calls=0,llm_input_tokens=0,llm_output_tokens=0,llm_reasoning_tokens=0,llm_cache_read_tokens=0,llm_cache_write_tokens=0
+        WHERE j.workspace_id=:workspaceId AND j.review_id=:reviewId AND j.status='COMPLETED' AND j.admission_digest IS NOT NULL
+          AND j.attempt-j.drain_count-j.room_refusals-j.progressed_attempts<=:maxRetries
+          AND EXISTS(SELECT 1 FROM review_composition_basis b WHERE b.workspace_id=j.workspace_id AND b.job_id=j.id
+            AND b.expires_at>clock_timestamp())
+          AND EXISTS(SELECT 1 FROM feedback f WHERE f.workspace_id=j.workspace_id AND f.review_id=j.review_id
+            AND f.destination='ON_WORK' AND jsonb_exists(f.composition,'readback') AND NOT jsonb_exists(f.composition,'stop')
+            AND NOT EXISTS(SELECT 1 FROM feedback newer WHERE newer.workspace_id=f.workspace_id AND newer.replaces_id=f.id))
+        """, nativeQuery = true)
+    int resumeFeedbackRepair(
+            @Param("workspaceId") long workspaceId,
+            @Param("reviewId") UUID reviewId,
+            @Param("maxRetries") int maxRetries);
+
     record CompositionRequeue(int attempt, int maxRetries, Instant availableAt) {}
 
     /**

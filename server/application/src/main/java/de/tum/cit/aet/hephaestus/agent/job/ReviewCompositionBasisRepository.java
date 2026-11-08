@@ -21,8 +21,8 @@ public interface ReviewCompositionBasisRepository extends Repository<ReviewCompo
     int deleteForJob(@Param("workspaceId") long workspaceId, @Param("jobId") UUID jobId);
 
     /**
-     * A bounded batch of rows no writer can use any more: past their expiry, or of a job that has ended. A job that
-     * ended has its output, its refusal or its failure on record; none of them reads the original inputs again.
+     * Removes expired capsules and ended recovery inputs. Pending delivery and a tool trace retain the capsule
+     * within its ordinary expiry; neither extends that expiry.
      */
     @WorkspaceAgnostic("Cross-workspace retention sweep over job-scoped rows")
     @Modifying
@@ -30,7 +30,10 @@ public interface ReviewCompositionBasisRepository extends Repository<ReviewCompo
         DELETE FROM review_composition_basis WHERE job_id IN (
           SELECT b.job_id FROM review_composition_basis b
           JOIN review_job j ON j.workspace_id = b.workspace_id AND j.id = b.job_id
-          WHERE b.expires_at < :now OR j.status NOT IN ('QUEUED', 'RUNNING')
+          WHERE b.expires_at < :now OR (j.status NOT IN ('QUEUED', 'RUNNING') AND NOT jsonb_exists(b.payload,'tools')
+            AND NOT EXISTS(SELECT 1 FROM feedback f WHERE f.workspace_id=j.workspace_id AND f.review_id=j.review_id
+              AND f.destination='ON_WORK' AND f.state IN ('READY','AWAITING_APPROVAL','DELIVERED','UNCONFIRMED')
+              AND NOT jsonb_exists(f.composition,'stop')))
           LIMIT :limit)
         """, nativeQuery = true)
     int deleteUnusable(@Param("now") Instant now, @Param("limit") int limit);

@@ -1,0 +1,27 @@
+query GetOwnedFeedbackCopies($fullPath: ID!, $iid: String!, $last: Int!, $before: String, $issue: Boolean!) {
+    currentUser { id }
+    project(fullPath: $fullPath) {
+        issue(iid: $iid) @include(if: $issue) {
+            notes(last: $last, before: $before) { ...OwnedFeedbackNotes }
+        }
+        mergeRequest(iid: $iid) @skip(if: $issue) {
+            notes(last: $last, before: $before) { ...OwnedFeedbackNotes }
+        }
+    }
+}
+
+fragment OwnedFeedbackNotes on NoteConnection {
+    pageInfo { hasPreviousPage startCursor }
+    nodes {
+        id body bodyHtml updatedAt
+        system internal
+        author { id }
+        lastEditedBy { id }
+        resolved
+        discussion { id resolved notes(first: 2) { pageInfo { hasNextPage } nodes { id } } }
+        position {
+            filePath newPath oldPath newLine oldLine positionType
+            diffRefs { baseSha headSha startSha }
+        }
+    }
+}

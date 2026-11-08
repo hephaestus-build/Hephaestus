@@ -14,8 +14,17 @@ public record FeedbackPackage(
         List<UUID> basisResultIds,
         List<ComposedFeedback> composition,
         boolean publicComposition,
-        @Nullable String publicationContext) {
+        @Nullable String publicationContext,
+        @Nullable UUID editOf) {
     private static final JsonMapper MAPPER = new JsonMapper();
+
+    public FeedbackPackage(
+            List<UUID> basisResultIds,
+            List<ComposedFeedback> composition,
+            boolean publicComposition,
+            @Nullable String publicationContext) {
+        this(basisResultIds, composition, publicComposition, publicationContext, null);
+    }
 
     public FeedbackPackage {
         basisResultIds = List.copyOf(basisResultIds);

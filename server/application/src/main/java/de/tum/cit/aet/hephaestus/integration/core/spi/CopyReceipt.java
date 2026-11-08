@@ -9,7 +9,18 @@ public record CopyReceipt(
         @Nullable String externalRef,
         @Nullable String externalUrl,
         @Nullable Boolean writeMayHaveStarted,
-        @Nullable CopyForm actualKind) {
+        @Nullable CopyForm actualKind,
+        @Nullable String threadRef) {
+    public CopyReceipt(
+            UUID copyId,
+            CopyDisposition disposition,
+            @Nullable String externalRef,
+            @Nullable String externalUrl,
+            @Nullable Boolean writeMayHaveStarted,
+            @Nullable CopyForm actualKind) {
+        this(copyId, disposition, externalRef, externalUrl, writeMayHaveStarted, actualKind, null);
+    }
+
     public boolean acknowledged() {
         return disposition != CopyDisposition.FAILED && externalRef != null && !externalRef.isBlank();
     }

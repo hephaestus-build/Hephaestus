@@ -319,7 +319,7 @@ public class GitLabSummaryWriter implements SummaryWriter {
         return SummaryLookup.unknown();
     }
 
-    private static boolean isIssueSubject(String subjectExternalId) {
+    static boolean isIssueSubject(String subjectExternalId) {
         return subjectExternalId != null && subjectExternalId.lastIndexOf('#') > subjectExternalId.lastIndexOf('!');
     }
 

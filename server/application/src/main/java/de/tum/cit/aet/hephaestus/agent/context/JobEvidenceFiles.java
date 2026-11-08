@@ -109,7 +109,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
      */
     private static final String TRACE_MANIFEST = "manifest.json";
 
-    private static final long TRACE_BYTE_BUDGET = 8L * 1024 * 1024;
+    public static final long TRACE_BYTE_BUDGET = 8L * 1024 * 1024;
     private static final int TRACE_FILE_BUDGET = 2 * 1024 * 1024;
 
     private final FabricLayout layout;

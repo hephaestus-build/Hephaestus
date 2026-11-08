@@ -1184,6 +1184,7 @@ export const zFeedbackCheck = z.object({
         'UNCORROBORATED',
         'PUBLIC_HISTORY_CHANGED',
         'PUBLIC_DELIVERY_UNRESOLVED',
+        'STEP_LIMIT',
         'NOT_COMPOSED'
     ]).nullable(),
     stage: z.enum([
@@ -1264,6 +1265,7 @@ export const zFeedbackCopy = z.object({
         'UNCORROBORATED',
         'PUBLIC_HISTORY_CHANGED',
         'PUBLIC_DELIVERY_UNRESOLVED',
+        'STEP_LIMIT',
         'NOT_COMPOSED'
     ]).nullable(),
     writeStartedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable()
@@ -1380,7 +1382,12 @@ export const zFeedbackResponseRequest = z.object({
 });
 
 export const zFeedbackSend = z.object({
-    action: z.enum(['POST', 'RETRACT']),
+    action: z.enum([
+        'POST',
+        'EDIT',
+        'READBACK',
+        'RETRACT'
+    ]),
     attemptCount: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
     feedbackId: z.uuid(),
@@ -3724,6 +3731,7 @@ export const zReviewFeedback = z.object({
         'UNCORROBORATED',
         'PUBLIC_HISTORY_CHANGED',
         'PUBLIC_DELIVERY_UNRESOLVED',
+        'STEP_LIMIT',
         'NOT_COMPOSED'
     ]).nullable(),
     textHidden: z.boolean(),
@@ -3836,6 +3844,7 @@ export const zReviewFeedbackDetail = z.object({
         'UNCORROBORATED',
         'PUBLIC_HISTORY_CHANGED',
         'PUBLIC_DELIVERY_UNRESOLVED',
+        'STEP_LIMIT',
         'NOT_COMPOSED'
     ]).nullable(),
     textHidden: z.boolean(),

@@ -96,6 +96,7 @@ const REASON_FAMILY: Record<WithholdingReason, WithholdingFamily> = {
 	CONVERSATION_EXPIRED: "HOUSEKEEPING",
 	DELIVERY_UNCONFIRMED: "HOUSEKEEPING",
 	NOT_COMPOSED: "HOUSEKEEPING",
+	STEP_LIMIT: "HOUSEKEEPING",
 };
 
 /**
@@ -148,6 +149,7 @@ export const WITHHOLDING_REASON_DEFS: Record<WithholdingReason, string> = {
 	DELIVERY_UNCONFIRMED: "It may have appeared, but that was never confirmed.",
 	NOT_COMPOSED:
 		"The feedback could not be written, for example because time or budget ran out, so nothing was sent.",
+	STEP_LIMIT: "The review reached its correction limit. Copies already posted stay on the work.",
 };
 
 export function withholdingFamily(reason: WithholdingReason): WithholdingFamily {
