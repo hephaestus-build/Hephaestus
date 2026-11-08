@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
@@ -34,6 +35,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -69,6 +71,9 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
     private WorkspaceRepository workspaceRepository;
 
     @Autowired
+    private WorkspaceLifecycleService workspaceLifecycle;
+
+    @Autowired
     private UserRepository userRepository;
 
     @Autowired
@@ -88,6 +93,9 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PullRequestRepository pullRequests;
+
+    @Autowired
+    private IssueRepository issues;
 
     @Autowired
     private ActivityFactDelivery activityFacts;
@@ -193,7 +201,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
-        void shouldEndAPendingPublicationWhenItsWorkspaceIsDeleted() {
+        void shouldEndAPendingPublicationWhenItsWorkspaceIsPurged() {
             var event = event();
             long targetId = event.pullRequest().id();
             jdbc.execute("ALTER TABLE activity_event ADD CONSTRAINT " + FAILURE_CONSTRAINT + " CHECK (target_id <> "
@@ -202,7 +210,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                 publish(event);
                 assertThat(pending(event)).isEqualTo(1L);
                 jdbc.execute("ALTER TABLE activity_event DROP CONSTRAINT " + FAILURE_CONSTRAINT);
-                workspaceRepository.deleteById(testWorkspace.getId());
+                workspaceLifecycle.purgeWorkspace(testWorkspace.getWorkspaceSlug());
 
                 resubmit(event);
 
@@ -293,7 +301,19 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                     Objects.requireNonNull(RepositoryRef.from(testRepository)),
                     IdentityProviderType.GITHUB,
                     at);
-            var event = new ScmDomainEvent.IssueDeleted(95002L, context);
+            var issue = new Issue();
+            issue.setNativeId(95002L);
+            issue.setNumber(32);
+            issue.setTitle("Deleted issue");
+            issue.setState(Issue.State.OPEN);
+            issue.setAuthor(testUser);
+            issue.setRepository(testRepository);
+            issue.setProvider(gitProvider);
+            issue.setCreatedAt(at);
+            issue.setUpdatedAt(at);
+            issue.setHtmlUrl("https://github.com/test-org/test-repo/issues/32");
+            issue = issues.saveAndFlush(issue);
+            var event = new ScmDomainEvent.IssueDeleted(issue.getId(), context);
             for (int replay = 0; replay < 2; replay++) {
                 new TransactionTemplate(transactionManager)
                         .executeWithoutResult(ignored -> publisher.publishEvent(event));
@@ -316,6 +336,9 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
             pull.setAuthor(testUser);
             pull.setRepository(testRepository);
             pull.setProvider(gitProvider);
+            pull.setBaseRefName("main");
+            pull.setHeadRefName("work");
+            pull.setHtmlUrl("https://github.com/test-org/test-repo/pull/31");
             pull.setHeadRefOid("a".repeat(40));
             pull.setBaseRefOid("b".repeat(40));
             pull.setCreatedAt(Instant.now());
