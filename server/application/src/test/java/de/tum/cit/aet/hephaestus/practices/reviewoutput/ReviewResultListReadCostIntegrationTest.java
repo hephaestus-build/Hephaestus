@@ -10,9 +10,9 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultSort;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.MockSecurityContextUtils;
+import de.tum.cit.aet.hephaestus.testconfig.QueryPlans;
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.SqlRequestTrace;
-import de.tum.cit.aet.hephaestus.testconfig.QueryPlans;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Objects;
@@ -38,7 +38,8 @@ class ReviewResultListReadCostIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private SqlRequestTrace requests;
 
-    @Autowired private QueryPlans plans;
+    @Autowired
+    private QueryPlans plans;
 
     @Autowired
     private WebTestClient http;
@@ -82,7 +83,7 @@ class ReviewResultListReadCostIntegrationTest extends BaseIntegrationTest {
                         .acceptedAt())
                 .isEqualTo(accepted.getCreatedAt());
         for (int index = 2; index < 8; index++) {
-            ids.add(data.result(data.onOtherWork(scenario), ResultOutcome.NOT_MET, at.plusSeconds(index))
+            ids.add(data.result(otherDeveloperWork(scenario), ResultOutcome.NOT_MET, at.plusSeconds(index))
                     .getId());
         }
 
@@ -123,7 +124,7 @@ class ReviewResultListReadCostIntegrationTest extends BaseIntegrationTest {
                         .jsonPath("$.content.length()")
                         .isEqualTo(2));
         for (int index = 2; index < 8; index++) {
-            data.result(data.onOtherWork(scenario), ResultOutcome.NOT_MET, at.plusSeconds(index));
+            data.result(otherDeveloperWork(scenario), ResultOutcome.NOT_MET, at.plusSeconds(index));
         }
 
         var larger = requests.measure(
@@ -146,5 +147,10 @@ class ReviewResultListReadCostIntegrationTest extends BaseIntegrationTest {
         assertThat(larger.statements()).isLessThanOrEqualTo(22);
         assertThat(plans.fullScans(small.sql())).isEmpty();
         assertThat(plans.fullScans(larger.sql())).isEmpty();
+    }
+
+    private ReviewIntegrationData.Scenario otherDeveloperWork(ReviewIntegrationData.Scenario scenario) {
+        var work = data.onOtherWork(scenario);
+        return new ReviewIntegrationData.Scenario(work.workspace(), data.member(work.workspace().getId()), work.practice(), work.item());
     }
 }

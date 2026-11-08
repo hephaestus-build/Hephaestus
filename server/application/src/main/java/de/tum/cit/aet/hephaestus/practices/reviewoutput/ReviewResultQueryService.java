@@ -62,30 +62,52 @@ public class ReviewResultQueryService {
         var permitted = authorization.permitsAll(ws, rows.getContent(), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
         var ids = rows.getContent().stream().map(Result::getId).toList();
         var marked = listRows.markTimes(ws, ids).stream()
-                .collect(Collectors.groupingBy(ReviewResultListRepository.MarkTime::resultId,
-                        Collectors.toMap(ReviewResultListRepository.MarkTime::kind, ReviewResultListRepository.MarkTime::createdAt)));
+                .collect(Collectors.groupingBy(
+                        ReviewResultListRepository.MarkTime::resultId,
+                        Collectors.toMap(
+                                ReviewResultListRepository.MarkTime::kind,
+                                ReviewResultListRepository.MarkTime::createdAt)));
         var counts = listRows.problemCounts(ws, ids).stream()
-                .collect(Collectors.toMap(ReviewResultListRepository.ProblemCount::resultId,
+                .collect(Collectors.toMap(
+                        ReviewResultListRepository.ProblemCount::resultId,
                         ReviewResultListRepository.ProblemCount::count));
         var permittedIds = ids.stream().filter(permitted::contains).toList();
-        var summaries = permittedIds.isEmpty() ? Map.<UUID, List<ProblemSummaryDTO>>of()
+        var summaries = permittedIds.isEmpty()
+                ? Map.<UUID, List<ProblemSummaryDTO>>of()
                 : listRows.problemSummaries(ws, permittedIds).stream()
-                        .collect(Collectors.groupingBy(ReviewResultListRepository.ProblemSummary::resultId,
-                                Collectors.mapping(row -> new ProblemSummaryDTO(row.id(), row.severity(), row.summary()), Collectors.toList())));
+                        .collect(Collectors.groupingBy(
+                                ReviewResultListRepository.ProblemSummary::resultId,
+                                Collectors.mapping(
+                                        row -> new ProblemSummaryDTO(row.id(), row.severity(), row.summary()),
+                                        Collectors.toList())));
         var feedback = listRows.feedbackCounts(ws, ids).stream()
                 .collect(Collectors.groupingBy(ReviewResultListRepository.FeedbackCount::resultId));
-        var developers = references.developers(ws, rows.getContent().stream().map(Result::getDeveloperId)
-                .filter(Objects::nonNull).distinct().toList());
+        var developers = references.developers(
+                ws,
+                rows.getContent().stream()
+                        .map(Result::getDeveloperId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList());
         return new PageImpl<>(
                 views.views(ws, rows.getContent()).stream()
                         .map(v -> {
                             var r = v.result();
                             var activeMarks = marked.getOrDefault(r.getId(), Map.of());
                             return new ReviewResultDTO(
-                                    r.getId(), r.getReviewId(), v.item(), v.practice().getSlug(), presentation.name(v),
-                                    r.getOutcome(), r.getSeverity(), permitted.contains(r.getId()) ? r.getSummary() : null,
-                                    v.review().getOrigin(), r.getRecordedAt(), presentation.currentness(v),
-                                    activeMarks.get(ResultMarkKind.INCORRECT), activeMarks.get(ResultMarkKind.ACCEPTED),
+                                    r.getId(),
+                                    r.getReviewId(),
+                                    v.item(),
+                                    v.practice().getSlug(),
+                                    presentation.name(v),
+                                    r.getOutcome(),
+                                    r.getSeverity(),
+                                    permitted.contains(r.getId()) ? r.getSummary() : null,
+                                    v.review().getOrigin(),
+                                    r.getRecordedAt(),
+                                    presentation.currentness(v),
+                                    activeMarks.get(ResultMarkKind.INCORRECT),
+                                    activeMarks.get(ResultMarkKind.ACCEPTED),
                                     summaries.getOrDefault(r.getId(), List.of()),
                                     r.getDeveloperId() == null ? null : developers.get(r.getDeveloperId()),
                                     Math.toIntExact(counts.getOrDefault(r.getId(), 0L)),
