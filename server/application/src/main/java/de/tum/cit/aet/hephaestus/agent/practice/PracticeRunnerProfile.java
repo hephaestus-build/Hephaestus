@@ -33,6 +33,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-diagnostics.json",
             "pi-practice-scripts-report.ts",
             "pi-error-text.ts",
+            "pi-gateway-wait.ts",
             "pi-model-failure.ts",
             "pi-text.ts",
             "pi-result-normalize.ts",
