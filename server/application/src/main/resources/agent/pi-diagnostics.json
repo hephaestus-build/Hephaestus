@@ -93,6 +93,7 @@
 		"error": [
 			"AbortError",
 			"AdmissionUnreachableError",
+			"GatewayUnavailableError",
 			"Error",
 			"RangeError",
 			"ReferenceError",

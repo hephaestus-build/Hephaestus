@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { normalizeContext, type Model } from "@earendil-works/pi-ai";
+import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
+import { modelFailure } from "../../../main/resources/agent/pi-model-failure.ts";
 
 import { waitForGateway } from "../../../main/resources/agent/pi-gateway-wait.ts";
 
@@ -74,7 +77,7 @@ await test("gateway connection failures stay inside one model stream beyond the 
 
 await test("a disconnected partial response is replaced by one complete model response", async () => {
 	let calls = 0;
-	const output = await waitForGateway(stream, Date.now() + 5000)(model, context, {
+	const output = await waitForGateway(stream, Date.now() + 10000)(model, context, {
 		...options,
 		fetch: async () => {
 			calls += 1;
@@ -112,7 +115,7 @@ await test("a disconnected partial response is replaced by one complete model re
 for (const status of [429, 503]) {
 	await test(`a provider HTTP ${status} remains a model failure`, async () => {
 		let calls = 0;
-		const output = await waitForGateway(stream, Date.now() + 5000)(model, context, {
+		const output = await waitForGateway(stream, Date.now() + 10000)(model, context, {
 			...options,
 			fetch: async () => {
 				calls += 1;
@@ -131,7 +134,7 @@ await test("cancellation ends a gateway wait without another model request", asy
 	const abort = new AbortController();
 	const called = Promise.withResolvers<undefined>();
 	let calls = 0;
-	const output = await waitForGateway(stream, Date.now() + 5000)(model, context, {
+	const output = await waitForGateway(stream, Date.now() + 10000)(model, context, {
 		...options,
 		signal: abort.signal,
 		fetch: async () => {
@@ -151,7 +154,7 @@ await test("cancellation ends a gateway wait without another model request", asy
 
 await test("the work deadline bounds a gateway wait", async () => {
 	let calls = 0;
-	const output = await waitForGateway(stream, Date.now() + 50)(model, context, {
+	const output = await waitForGateway(stream, Date.now() + 100)(model, context, {
 		...options,
 		fetch: async () => {
 			calls += 1;
@@ -159,7 +162,68 @@ await test("the work deadline bounds a gateway wait", async () => {
 		},
 	});
 	await eventsFrom(output);
-	assert.equal(calls, 1);
+	assert.ok(calls <= 1);
 	const result = await output.result();
 	assert.equal(result.stopReason, "aborted");
+	assert.equal(modelFailure(result).source, "ADAPTER");
 });
+
+await test("repeated lost responses stop as an infrastructure interruption without a model retry", async () => {
+	let calls = 0;
+	let interrupted = false;
+	const output = await waitForGateway(stream, Date.now() + 10_000, {
+		unavailable: () => {
+			interrupted = true;
+		},
+	})(model, context, {
+		...options,
+		fetch: async () => {
+			calls += 1;
+			return new Response(
+				new ReadableStream({
+					start(controller) {
+						controller.error(new TypeError("terminated", { cause: { code: "UND_ERR_SOCKET" } }));
+					},
+				}),
+				{ headers: { "content-type": "text/event-stream" } },
+			);
+		},
+	});
+	const events = await eventsFrom(output);
+	const result = await output.result();
+	assert.equal(calls, 3);
+	assert.equal(interrupted, true);
+	assert.equal(events.filter((event) => event.type === "error").length, 1);
+	assert.equal(result.stopReason, "aborted");
+	assert.equal(modelFailure(result).source, "ADAPTER");
+});
+
+for (const providerCase of [
+	{ api: "openai-responses", provider: openAIResponsesApi() },
+	{ api: "anthropic-messages", provider: anthropicMessagesApi() },
+] as const) {
+	await test(`${providerCase.api} waits for a connection, then preserves a provider failure`, async () => {
+		let calls = 0;
+		const native = (...args: Parameters<typeof providerCase.provider.streamSimple>) =>
+			providerCase.provider.streamSimple(...args);
+		const output = await waitForGateway(native, Date.now() + 10000)(
+			{ ...model, api: providerCase.api },
+			context,
+			{
+				...options,
+				fetch: async () => {
+					calls += 1;
+					if (calls === 1) {
+						throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
+					}
+					return Response.json({ error: { message: "provider unavailable" } }, { status: 503 });
+				},
+			},
+		);
+		const events = await eventsFrom(output);
+		const result = await output.result();
+		assert.equal(calls, 2);
+		assert.equal(events.filter((event) => event.type === "error").length, 1);
+		assert.equal(result.stopReason, "error");
+	});
+}

@@ -5,27 +5,39 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 
 import { diagnose } from "./pi-diagnostics.ts";
 import { errorText } from "./pi-error-text.ts";
-import { gatewayConnectionFailed } from "./work/practice-scripts/lib/core/gateway-connection.ts";
+import {
+	gatewayConnectionFailure,
+	GatewayUnavailableError,
+	MAX_GATEWAY_RESPONSE_REPLAYS,
+} from "./work/practice-scripts/lib/core/gateway-connection.ts";
 
 type Stream = AgentSession["agent"]["streamFunction"];
 
 /** The lease wrapper stops the process at lease expiry; this wait also obeys the model call's cancellation and work bound. */
-export function waitForGateway(stream: Stream, workDeadline: number): Stream {
+export function waitForGateway(
+	stream: Stream,
+	workDeadline: number,
+	observer: { waiting?: () => void; unavailable?: () => void } = {},
+): Stream {
 	return async (model, context, options) => {
 		const deadline = AbortSignal.timeout(Math.max(0, workDeadline - Date.now()));
-		const signal =
-			options?.signal === undefined ? deadline : AbortSignal.any([options.signal, deadline]);
+		const unavailable = new AbortController();
+		const signal = AbortSignal.any([
+			deadline,
+			unavailable.signal,
+			...(options?.signal === undefined ? [] : [options.signal]),
+		]);
 		const isAborted = () => signal.aborted;
 		const transport = options?.fetch ?? globalThis.fetch;
-		let disconnected = false;
-		const wasDisconnected = () => disconnected;
+		let failure: "connection" | "response" | undefined;
+		const failureKind = () => failure;
 		const fetchGateway: typeof fetch = async (input, init) => {
-			disconnected = false;
+			failure = undefined;
 			let response: Response;
 			try {
 				response = await transport(input, init);
 			} catch (error) {
-				disconnected = !isAborted() && gatewayConnectionFailed(error);
+				failure = isAborted() ? undefined : gatewayConnectionFailure(error);
 				throw error;
 			}
 			if (response.body === null) {
@@ -43,7 +55,10 @@ export function waitForGateway(stream: Stream, workDeadline: number): Stream {
 							controller.enqueue(next.value);
 						}
 					} catch (error) {
-						disconnected = !isAborted() && gatewayConnectionFailed(error);
+						failure =
+							!isAborted() && gatewayConnectionFailure(error) !== undefined
+								? "response"
+								: undefined;
 						reader.releaseLock();
 						controller.error(error);
 					}
@@ -62,19 +77,39 @@ export function waitForGateway(stream: Stream, workDeadline: number): Stream {
 				headers: response.headers,
 			});
 		};
-		const call = async () => stream(model, context, { ...options, signal, fetch: fetchGateway });
+		const call = async () => {
+			failure = undefined;
+			return stream(model, context, { ...options, signal, fetch: fetchGateway });
+		};
 		let current = await call();
 		const output = createAssistantMessageEventStream();
 		void (async () => {
 			let started = false;
 			let lastFailure: AssistantMessage | undefined;
 			let waits = 0;
+			let lostResponses = 0;
+			function countResponseLoss(): void {
+				if (failureKind() !== "response") {
+					return;
+				}
+				lostResponses += 1;
+				if (lostResponses <= MAX_GATEWAY_RESPONSE_REPLAYS) {
+					return;
+				}
+				const error = new GatewayUnavailableError(
+					"The gateway repeatedly disconnected a model response",
+				);
+				unavailable.abort(error);
+				observer.unavailable?.();
+				throw error;
+			}
 			try {
 				for (;;) {
 					let again = false;
 					for await (const event of current) {
-						if (event.type === "error" && wasDisconnected() && !isAborted()) {
+						if (event.type === "error" && failureKind() !== undefined && !isAborted()) {
 							lastFailure = event.error;
+							countResponseLoss();
 							again = true;
 							break;
 						}
@@ -90,7 +125,10 @@ export function waitForGateway(stream: Stream, workDeadline: number): Stream {
 						return;
 					}
 					waits += 1;
-					diagnose("gateway.waiting", { waits });
+					observer.waiting?.();
+					if (Number.isInteger(Math.log2(waits))) {
+						diagnose("gateway.waiting", { waits });
+					}
 					await sleep(1000, undefined, { signal });
 					current = await call();
 				}
@@ -100,7 +138,6 @@ export function waitForGateway(stream: Stream, workDeadline: number): Stream {
 				const failed: AssistantMessage = {
 					...previous,
 					content: [],
-					diagnostics: [],
 					stopReason,
 					errorMessage: errorText(error),
 				};

@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { once } from "node:events";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { capturedLines, field, runRunner, stagePractices } from "./program-host-runner.ts";
+import {
+	capturedLines,
+	directProgram,
+	field,
+	runRunner,
+	stagePractices,
+} from "./program-host-runner.ts";
 
 void test("an unavailable practice stays open while completed work is staged for its retry", async () => {
 	const first = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-stage-outage-")));
@@ -71,5 +79,62 @@ void test("a provider outage stages no withholding and a later attempt measures 
 	} finally {
 		rmSync(first, { recursive: true, force: true });
 		rmSync(retry, { recursive: true, force: true });
+	}
+});
+
+void test("repeated gateway response loss requeues the run and stages no program result", async () => {
+	const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-gateway-requeue-")));
+	let calls = 0;
+	const server = createServer((request, response) => {
+		request.on("end", () => {
+			calls += 1;
+			response.writeHead(200, { "content-type": "application/json" });
+			response.write("{");
+			setImmediate(() => {
+				response.destroy();
+			});
+		});
+		request.resume();
+	});
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	try {
+		const address = server.address();
+		assert.ok(address !== null && typeof address !== "string");
+		stagePractices(cwd, [
+			{
+				slug: "direct",
+				program: directProgram(`
+			await step("one call", () => generateText({
+				model: ctx.models.chat, prompt: "Say yes.", maxOutputTokens: 1000,
+			}));`),
+			},
+		]);
+		writeFileSync(
+			path.join(cwd, "practice-script-models.json"),
+			JSON.stringify({
+				chat: { protocol: "openai-completions", modelId: "chat-model" },
+			}),
+		);
+
+		const interrupted = await runRunner(
+			cwd,
+			{},
+			{
+				LLM_PROXY_URL: `http://127.0.0.1:${address.port}`,
+			},
+		);
+
+		assert.equal(interrupted.status, 75, interrupted.stderr);
+		assert.equal(calls, 3);
+		assert.deepEqual(capturedLines(cwd, "staging"), []);
+		assert.deepEqual(capturedLines(cwd, "admission"), []);
+		assert.doesNotMatch(interrupted.stderr, /provider\.retrying/u);
+	} finally {
+		const closed = once(server, "close");
+		server.closeAllConnections();
+		server.close();
+		await closed;
+		rmSync(cwd, { recursive: true, force: true });
 	}
 });

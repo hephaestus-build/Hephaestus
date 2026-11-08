@@ -658,3 +658,36 @@ void describe("a direct model call during a gateway outage", () => {
 		assert.equal(calls, 1);
 	});
 });
+
+void test("repeated disconnected direct responses interrupt the attempt and retain its reservation", async (t) => {
+	let calls = 0;
+	const abort = new AbortController();
+	t.mock.method(globalThis, "fetch", async () => {
+		calls += 1;
+		return new Response(
+			new ReadableStream({
+				start(controller) {
+					controller.error(new TypeError("terminated", { cause: { code: "UND_ERR_SOCKET" } }));
+				},
+			}),
+			{ headers: { "content-type": "application/json" } },
+		);
+	});
+	const { chat } = hostModels(
+		{ chat: { protocol: "openai-completions", modelId: "chat" } },
+		"https://proxy.example/internal/llm",
+		"test-token",
+		"practice",
+	);
+	assert.ok(chat);
+	const call = modelCall("chat", chat, { prompt: [], maxOutputTokens: 1000 }, abort.signal, () =>
+		abort.abort(),
+	);
+	assert.ok("run" in call);
+	const budget = new ModelBudget(5000, 1);
+	const result = await budget.run(call.reserve, abort.signal, call.run);
+	assert.equal(calls, 3);
+	assert.equal(abort.signal.aborted, true);
+	assert.deepEqual(result, { reason: "deadline" });
+	assert.equal(budget.left, 5000 - call.reserve);
+});

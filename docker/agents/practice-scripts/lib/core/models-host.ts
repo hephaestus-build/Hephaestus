@@ -21,7 +21,11 @@ import {
 	type SlotModels,
 } from "./contract.ts";
 import { decisionOutputTokens, logprobDecisionModel } from "./decision-logprobs.ts";
-import { gatewayConnectionFailed } from "./gateway-connection.ts";
+import {
+	gatewayConnectionFailure,
+	GatewayUnavailableError,
+	MAX_GATEWAY_RESPONSE_REPLAYS,
+} from "./gateway-connection.ts";
 import { registerForcedToolChoice } from "./model-capabilities.ts";
 import { MAX_OUTPUT_TOKENS } from "./model-options.ts";
 import { reasonOf } from "./practice-script.ts";
@@ -214,6 +218,7 @@ export function modelCall<S extends ModelSlot>(
 	model: SlotModels[S],
 	options: unknown,
 	signal: AbortSignal,
+	onGatewayUnavailable?: () => void,
 ):
 	| { reason: "too-large" }
 	| { reserve: number; run: () => Promise<{ value: SlotAnswer; tokens: number | undefined }> } {
@@ -226,12 +231,23 @@ export function modelCall<S extends ModelSlot>(
 	return {
 		reserve: reservationOf(slot, kept),
 		run: async () => {
+			let lostResponses = 0;
 			for (;;) {
 				try {
 					return await entry.call(model, { ...kept, abortSignal: signal });
 				} catch (error) {
-					if (signal.aborted || !gatewayConnectionFailed(error)) {
+					const failure = gatewayConnectionFailure(error);
+					if (signal.aborted || failure === undefined) {
 						throw error;
+					}
+					if (failure === "response") {
+						lostResponses += 1;
+					}
+					if (lostResponses > MAX_GATEWAY_RESPONSE_REPLAYS) {
+						onGatewayUnavailable?.();
+						throw new GatewayUnavailableError(
+							"The gateway repeatedly disconnected a model response",
+						);
 					}
 					await sleep(1000, undefined, { signal });
 				}
