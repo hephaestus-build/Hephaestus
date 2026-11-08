@@ -13,7 +13,7 @@
 - [ADR 0025](0025-agent-job-queue-on-postgresql.md): the form of the queue and the claim order.
 - [ADR 0026](0026-per-purpose-agent-bindings-and-llm-governance.md): the worker that holds keys and admits turns.
 - [ADR 0044](0044-email-is-a-notification-transport.md): where an email's delivery state lives.
-- [ADR 0057](0057-one-heph-conversation-per-developer.md): the lease, the usage and the Slack post of a turn, and the sandbox for each conversation.
+- [ADR 0057](0057-one-heph-conversation-per-developer.md): the lease, usage and Slack post of a turn, one sandbox per conversation, and the Java digest.
 - [ADR 0061](0061-review-seals-then-feedback-composes.md): where composition runs.
 - [ADR 0063](0063-each-practice-is-staged-when-it-ends.md): the fence of a stage write.
 - [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md): the placement (W′), the attempt contract, coverage authority, capacity and decisions B, G and J.
@@ -501,9 +501,11 @@ Capture stays a server step. The gateway serves only captured bytes and archives
 ### Interactive and proactive work
 
 - **Turns.** Each turn is a `turn` run in band `interactive`, keyed to its conversation. Turns of one conversation run in order.
-- **Proactive work.** A `digest` run is the kind for scheduled, proactive work of a conversation, in its sandbox. A proactive trigger starts that sandbox as a message does.
-  The kind waits for a decision on what a model may write proactively. ADR 0057 rejected a model-written digest as a claim about a person outside admission, approval and withdrawal.
-  Until that decision, the weekly digest of ADR 0057 stays a Java step of the server, and no `digest` run exists.
+- **Proactive work.** Hephaestus writes proactive text with the model. The maintainer decided this on 2026-11-09.
+  - Digests and nudges are `digest` runs in the conversation's sandbox. A schedule or a proactive trigger starts that sandbox as a message does.
+  - A `digest` run passes the same admission as other agent output. The server checks each claim against its sources. A claim that admission refuses is not sent.
+  - The text reaches the developer through the outbox, as a reply does. The note goes as a `slack_post` or an `email` action.
+  - The Java digest goes. ADR 0057's rejection of a model-written digest is superseded: admission now covers the claim that the rejection named.
 - **Cold start.** The cold start is a measured product number. The target is the first text at most 6 s from a cold sandbox. A follow-up turn in a warm sandbox starts at once.
 - **Reviews.** The `review_measure` run measures and stages each practice (ADR 0063). The server admits and seals. The `review_compose` run then composes in the same sandbox, and the outbox delivers.
 
@@ -516,6 +518,7 @@ Capture stays a server step. The gateway serves only captured bytes and archives
 - The conversation host and its WebSocket, the `conversation-loop` Deployment, the tools Pods and `TurnSandboxes`.
 - `SandboxReconciler`, the Job path of `KubernetesSandboxBackend`, the sidecars, the Unix-socket tool protocol and the `setpriv` filter.
 - The JVM composer (`agent/composer`), `ReviewModelGateway` and `CompositionCapacity`.
+- The Java weekly digest: `agent/mentor/weeklydigest/WeeklyDigestComposer` and the Java composition that it does. A `digest` run replaces it.
 - The direct provider call of `ProductFeedbackModelAdapter`, the `DraftingService` loop, and the direct call of `LlmModelCapabilityProbe`. Every model call goes through the proxy.
 - The lease and outbox of `FeedbackSend*`, the delivery state of `MentorSlackDelivery`, `SlackMentorPoster` and `SlackMentorReconciler`, the filing lease, and email without an idempotency key.
 - The chart capacity helpers, `turn-admission.json`, the duplicated Pod size tables and the Java `auto` capacity constants.

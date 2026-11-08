@@ -565,9 +565,11 @@ The ledger, the conversation model, the context model and delivery of this decis
 - **§ The ledger, the usage of a turn.** Each model call writes one `llm_usage_event` row, keyed by run, epoch and call. The turn row no longer carries usage.
 - **§ The ledger, the Slack post.** A Slack reply is a `slack_post` action in the `agent_action` outbox. The action carries the state from intent to outcome, and its adapter reads back by marker. The reconciler of the question's reply state goes. The rule "one history read, and never a second post" stays.
 - **§ Weekly digest, the delivery.** The Slack note and the email of a digest are `slack_post` and `email` actions.
+- **Weekly digest option 1, "A model writes a weekly summary", is the chosen path from 2026-11-09.** The maintainer decided it.
+  The rejection named a new claim about a person, outside admission, approval and withdrawal.
+  Now a `digest` run in the conversation's sandbox writes the digest and other proactive text, such as nudges.
+  Each claim passes the same admission as other agent output: the server checks it against its sources. The text goes through the outbox, as a reply does.
+- **§ Weekly digest, "Java composes the digest from facts. No model writes it."** The Java digest goes.
 
-§ Weekly digest otherwise stays as it is. Java writes the digest from facts, and no model writes it.
-The digest stays a Java step of the server. ADR 0079 reserves a `digest` run for proactive work in the conversation's sandbox, which waits for its own decision.
-
-Weekly digest option 1, "A model writes a weekly summary", stays rejected. A model-written digest needs its own decision, because the reason still holds.
-Such a summary is a new claim about a person, outside admission, approval and withdrawal.
+The opt-in, the time window, the rule that a quiet week writes nothing, and the rule of no score, rank or streak stay.
+The destination rules of § Weekly digest decide which facts the server gives the run.
