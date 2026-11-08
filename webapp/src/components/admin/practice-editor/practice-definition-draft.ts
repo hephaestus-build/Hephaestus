@@ -1,4 +1,4 @@
-import { zCreatePracticeGroupRequest, zCreatePracticeRequest } from "@/api/zod.gen";
+import { CreatePracticeGroupRequestSchema, CreatePracticeRequestSchema } from "@/api/schemas.gen";
 
 import type {
 	PracticeDefinitionInput,
@@ -42,6 +42,9 @@ import {
 	type ReviewedByProblem,
 	reviewedByProblem,
 } from "./reviewed-by";
+
+const PRACTICE_SLUG = new RegExp(CreatePracticeRequestSchema.properties.slug.pattern, "u");
+const DEFINITION_SLUG = new RegExp(CreatePracticeGroupRequestSchema.properties.slug.pattern, "u");
 
 // Base UI Select requires a string value for an unassigned group.
 export const NO_GROUP = "__none__";
@@ -323,11 +326,16 @@ export function draftErrors(
 				reveal: reveals.revealScript,
 			},
 		mode === "create" &&
-			!zCreatePracticeRequest.shape.slug.safeParse(draft.slug).success && {
+			!(
+				draft.slug.length <= CreatePracticeRequestSchema.properties.slug.maxLength &&
+				PRACTICE_SLUG.test(draft.slug)
+			) && {
 				fieldId: FIELD_IDS.slug,
-				message: zCreatePracticeGroupRequest.shape.slug.safeParse(draft.slug).success
-					? "This identifier is not available. Choose a different one."
-					: "Enter an identifier of 1–64 lowercase letters, numbers and single hyphens.",
+				message:
+					draft.slug.length <= CreatePracticeRequestSchema.properties.slug.maxLength &&
+					DEFINITION_SLUG.test(draft.slug)
+						? "This identifier is not available. Choose a different one."
+						: "Enter an identifier of 1–64 lowercase letters, numbers and single hyphens.",
 				reveal: reveals.revealTechnical,
 			},
 	];
