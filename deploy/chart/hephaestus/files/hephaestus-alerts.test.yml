@@ -1814,14 +1814,14 @@ tests:
     interval: 1m
     input_series:
       - series: 'tenancy_violation_total{job="hephaestus",instance="server:9090",runtime_role="server",module="tenancy",table="repository",mode="throw"}'
-        values: "1x10 2x30"
+        values: "1x20 2x30"
       - series: 'tenancy_violation_total{job="hephaestus",instance="server:9090",runtime_role="server",module="tenancy",table="issue",mode="throw"}'
-        values: "1x40"
+        values: "1x50"
     alert_rule_test:
-      - eval_time: 5m
+      - eval_time: 18m
         alertname: HephaestusTenancyViolations
         exp_alerts: []
-      - eval_time: 15m
+      - eval_time: 25m
         alertname: HephaestusTenancyViolations
         exp_alerts:
           - exp_labels:
@@ -1831,7 +1831,30 @@ tests:
             exp_annotations:
               summary: A database statement on repository did not stay in one workspace (throw mode)
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - eval_time: 40m
+      - eval_time: 45m
+        alertname: HephaestusTenancyViolations
+        exp_alerts: []
+
+  - name: the first violation of a table fires although its counter has no earlier sample
+    interval: 1m
+    input_series:
+      - series: 'tenancy_violation_total{job="hephaestus",instance="server:9090",runtime_role="server",module="tenancy",table="repository",mode="log"}'
+        values: "_x20 1x30"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusTenancyViolations
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: HephaestusTenancyViolations
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              table: repository
+              mode: log
+            exp_annotations:
+              summary: A database statement on repository did not stay in one workspace (log mode)
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 45m
         alertname: HephaestusTenancyViolations
         exp_alerts: []
 
