@@ -18,7 +18,7 @@ Semantic versioning applies to the surfaces an operator or API consumer depends 
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Database migration chain** | Liquibase applies changesets in changelog order. A newer release builds on the previous schema. Follow the [database migration instructions](#database-migrations) before an upgrade.                                                                                                                                                                                |
 | **Runtime prerequisites** | The minimum PostgreSQL major version and its required extensions. The minimum Kubernetes version and the required kernel features. The required outbound network destinations and external services. Adding or raising one is a breaking change. |
-| **REST API**                 | The endpoints described by the published [OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml). CI checks each change against the previous release: see [API compatibility](../contributor/ci-cd#api-compatibility). The base path is `/api`. Error responses use the problem types in [API error handling](../contributor/api-error-handling). [Open enums](#open-enums) states what a client must accept. |
+| **REST API** | The methods and paths in [Public REST operations](https://github.com/hephaestus-build/Hephaestus/blob/main/server/public-api-operations.json): the extension calls and the API operations documented in the admin and user guides. The [OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml) defines their request and response shapes. The base path is `/api`. Error responses use the problem types in [API error handling](../contributor/api-error-handling). [Open enums](#open-enums) states what a client must accept. |
 | **Helm chart values** | The values of the Helm chart, and the key names that [Secret custody](./secret-custody) lists for `secret.name`. Removing or renaming a value, accepting less than before, or changing its meaning is a breaking change. A new optional value or a wider limit is a minor change. |
 | **Signed release** | The assets that [Release image lock](./release-image-lock.md) lists and the schema of the joint lock. The location of the chart, and the image names in [Docker image tags](#docker-image-tags). |
 | **Backups** | The pgBackRest stanza name of the bundled PostgreSQL, because an existing repository uses it. |
@@ -26,9 +26,14 @@ Semantic versioning applies to the surfaces an operator or API consumer depends 
 | **Practice definitions and catalog** | The fields of a practice definition, its Applies when conditions, and the practice and group slugs of the catalog. A new field or condition is a minor change. A changed catalog practice reaches a workspace as an offer that an admin accepts. |
 | **Alert rules** | The alert names of the shipped rules, and the metrics that those rules read. |
 | **Provider connections** | The webhook routes that you registered at a provider, and the permissions of the GitHub App, the GitLab token and the Slack app. A new required permission is a breaking change. A minor release can ask for a permission only if its feature stays off, with a recorded reason, until you grant it. |
-| **Posted text** | Hephaestus wrote links into comments, notes, Slack messages and email. These targets stay: `/w/<short name>/feedback/<item>`, `/w/<short name>/conversation`, `/settings` and `/unsubscribe`. The hidden `<!-- hephaestus…` markers in comments also keep their format. |
+| **Posted text** | The destinations in [Posted links](#posted-links), including their query parameters. The hidden `<!-- hephaestus…` markers in comments also keep their format. |
 
 CI enforces these rules from 1.0.0: see [Public contract gate](../contributor/ci-cd#public-contract-gate) and [API compatibility](../contributor/ci-cd#api-compatibility).
+
+The previous-release API check covers every OpenAPI operation, including internal web app calls.
+This protects browser tabs that still run the previous release.
+It does not add these operations to the 1.x public promise.
+From 1.0, the promised operations must stay compatible with the stable release.
 
 A limit that a release states can go in a minor release.
 [One GitLab instance for each install](./integrations#more-than-one-gitlab) is an example.
@@ -38,13 +43,82 @@ Other surfaces can change in any release without notice:
 - Java and TypeScript internals.
 - The database schema itself, as distinct from the migration chain.
 - Environment variables and `hephaestus.*` properties. The chart sets them, so set chart values instead.
-- Undocumented endpoints, and the operation IDs and tags of the OpenAPI specification.
+- Operations outside [Public REST operations](https://github.com/hephaestus-build/Hephaestus/blob/main/server/public-api-operations.json), and the operation IDs and tags of OpenAPI.
 - UI layout, and web app routes that posted text does not link to. A moved route gets no redirect.
 - The wording of comment footers, email and notifications.
 - The workspace layout of a sandbox, the tool protocol, and the contents of the `agent-pi` image. A custom sandbox image is not supported.
 - The NATS stream and subject names.
 - The interfaces between the server and its GitHub, GitLab, Slack and Outline adapters.
 - Metrics that no shipped alert rule reads, and log fields.
+
+### Discovery and browser routes
+
+`GET /.well-known/hephaestus.json` is part of the public contract.
+The web app host serves this document.
+All four fields are present:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `apexOrigin` | String | Configured instance origin. It can be empty when unset. |
+| `baseDomain` | String | Domain for workspace hosts. It can be empty when workspace subdomains are off. |
+| `workspaceSubdomainsEnabled` | Boolean | Whether workspace hosts are enabled. |
+| `version` | String | Application version. |
+
+The extension uses it to resolve a workspace host to the instance origin.
+This requires an HTTPS `apexOrigin` without a port, a matching `baseDomain`, and `workspaceSubdomainsEnabled: true`.
+Otherwise, the extension keeps the origin that the person entered.
+
+These browser routes are also part of the contract, although OpenAPI does not list all of them:
+
+- `GET /api/auth/login`: start browser sign-in or link an identity.
+- `GET /api/login/oauth2/code/{registrationId}`: a login provider's registered callback.
+- `GET /api/oauth/callback/{kind}`: a workspace provider connection's registered callback.
+- `POST /api/auth/bootstrap-admin`: recover instance administration, with a signed-in session, CSRF protection, and the configured bootstrap token.
+
+For installed-client sign-in, `/api/auth/login` accepts `mode=client`, `provider`, `client_id`, `redirect_uri`, `code_challenge`, `code_challenge_method=S256`, and `state`.
+When development sign-in is enabled, the extension uses `GET /api/auth/dev-login/client` instead.
+That route accepts `username` and `admin` in place of `provider` and `mode`, with the same client and PKCE parameters.
+Production refuses development sign-in.
+
+A successful installed-client handoff returns `code` and `state` to the registered extension redirect URI.
+A failed handoff returns `error` and, when available, `state`.
+The extension treats `error=access_denied` as a declined sign-in.
+For browser sign-in, `provider` selects the login provider and optional `returnTo` selects the page after sign-in.
+`mode=link` links that provider identity to the signed-in account, with the same `provider` and `returnTo` parameters.
+
+The bootstrap request body has a `token` field, as [Instance administration](./instance-admin#bootstrap-and-recovery) describes.
+
+The login callback and the connection callback are separate routes.
+Keep the callback URL registered at each provider when you upgrade.
+
+### Conversation stream
+
+The documented live-answer endpoint `GET /api/workspaces/{workspaceSlug}/mentor/events` is part of the public contract.
+It uses server-sent events, which OpenAPI does not describe.
+[Runtime roles § Live answers](./runtime-roles#live-answers) gives its connection behavior.
+
+### Posted links
+
+The public contract covers these destinations for provider comments, Slack messages, and email:
+
+| Destination | Path on the instance |
+| --- | --- |
+| Home | `/` |
+| Feedback on work | `/w/<short name>/feedback/<item>` |
+| Conversation entry | `/w/<short name>/conversation?entry=<entry>` |
+| Workspace settings | `/w/<short name>/admin/settings` |
+| Review details from the extension | `/w/<short name>/admin/practices/reviews/?itemId=<item>&detail=item:<item>` |
+| Instance product feedback | `/admin/feedback` |
+| Your product feedback | `/product-feedback` |
+| Account settings | `/settings` |
+| Email unsubscribe confirmation | `/unsubscribe?token=<token>` |
+| One-click email unsubscribe | `POST /api/notifications/unsubscribe/<token>` |
+
+With workspace subdomains, the four workspace paths start at the workspace host and omit `/w/<short name>`.
+The other destinations use the instance host.
+The conversation path also works without `entry`.
+The `entry`, `token`, `itemId`, and `detail` query parameters retain their meaning.
+One-click unsubscribe requests send `List-Unsubscribe=One-Click` as form data.
 
 ## Version numbers
 
