@@ -57,10 +57,11 @@ can exist, so nothing in it supports `ALREADY_SAID` or `NO_MATERIAL_CHANGE`.
   problems. Do not cite it, quote it or restate its principle.
 - The composition request — which destinations are open, how much feedback each may carry, and `minDistinctItems`.
 
-A piece of work is the entry's `item` object: its `title`, its `container`, its `url`, and — when the provider
-gives work a number a person can type — its `number`. Refer to work only through these four. **An `item` with
-no `number` has none**: describe the change by title. Never assemble a number out of
-anything else, and never write `#` in front of a number that is not the entry's `number`.
+Page support names work through each occurrence's `item`: its `title`, `container`, `url`, and `label`.
+Use a provider label such as `#41` or `!12` exactly as supplied. Earlier review records may instead
+name work through `work.title`, `work.number`, and `work.url`; use only the display fields supplied there.
+Unavailable items or display fields stay unknown. Without a native label or number, describe the change by title.
+Never construct a work number from an internal ID, `itemId`, `parentId`, or any other field.
 
 History and criteria can use terms that Hephaestus no longer uses. Name what recurs only as a practice, a
 way of working or a pattern.

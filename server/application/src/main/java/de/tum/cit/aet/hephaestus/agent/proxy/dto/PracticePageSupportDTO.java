@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageSupport;
@@ -68,6 +69,7 @@ public sealed interface PracticePageSupportDTO {
             UUID resultId,
             String itemKind,
             String itemId,
+            @Nullable ItemRefDTO item,
             ResultOutcome outcome,
             ReviewOrigin origin,
             String summary,

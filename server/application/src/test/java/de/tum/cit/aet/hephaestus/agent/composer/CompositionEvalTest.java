@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -26,6 +27,25 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @Tag("unit")
 class CompositionEvalTest {
+
+    @Test
+    void shouldNameEveryWorkItemInThePrivatePageControls() throws Exception {
+        var scenarios = CompositionEvalCases.privateScenarios(CompositionEvalCases.load());
+        for (var scenario : scenarios) {
+            if (!scenario.destination().equals("PRACTICE_PAGE")) continue;
+            var support = Objects.requireNonNull(scenario.admission().practicePageSupport());
+            for (var practice : support.path("practices")) {
+                var occurrences = practice.path("occurrences");
+                for (var occurrence : occurrences) {
+                    var item = occurrence.path("item");
+                    assertThat(scenario.turn())
+                            .contains(
+                                    item.path("title").asString(),
+                                    item.path("url").asString());
+                }
+            }
+        }
+    }
 
     @Test
     void shouldRejectPrivatePiecesOnADestinationTheTurnDoesNotRoute() throws Exception {

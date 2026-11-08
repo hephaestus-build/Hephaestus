@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
+import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
@@ -88,7 +89,8 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
             mock(ResultHistoryQuery.class),
             mock(HistoryCopies.class),
             mock(FeedbackHistoryQuery.class),
-            mock(FeedbackRepair.class));
+            mock(FeedbackRepair.class),
+            mock(ProductReferenceQuery.class));
     private final PlatformTransactionManager manager = mock(PlatformTransactionManager.class);
     private final ReviewJob job = RuntimeReviewTestData.job();
     private ResultAdmissionService service;

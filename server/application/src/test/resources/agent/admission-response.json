@@ -56,9 +56,34 @@
 		"practices": [
 			{
 				"practiceSlug": "handles-errors",
-				"decision": "GATE_REFUSED",
-				"stopReason": "NO_AI",
-				"occurrences": []
+				"decision": "ADMIT",
+				"stopReason": null,
+				"occurrences": [
+					{
+						"resultId": "30000000-0000-4000-8000-000000000001",
+						"itemKind": "scm.pull_request",
+						"itemId": "42",
+						"item": {
+							"id": "42",
+							"kind": "scm.pull_request",
+							"parentId": null,
+							"provider": "GITHUB",
+							"label": "#7",
+							"title": "Handle fetch failures",
+							"url": "https://github.com/acme/app/pull/7",
+							"container": "acme/app",
+							"path": null,
+							"removedAt": null
+						},
+						"outcome": "NOT_MET",
+						"origin": "EVENT",
+						"summary": "The failure is dropped",
+						"explanation": "The catch returns without recording the error.",
+						"evidence": null,
+						"practiceVersionId": "7",
+						"recordedAt": "2026-10-14T00:00:00Z"
+					}
+				]
 			}
 		]
 	},

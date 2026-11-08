@@ -218,7 +218,13 @@
 				"truncatedReads": 0,
 				"failedReads": 0,
 				"receipts": [],
-				"omitted": [{ "what": "sources", "count": 1, "reason": "selection" }]
+				"omitted": [
+					{
+						"what": "sources",
+						"count": 1,
+						"reason": "selection"
+					}
+				]
 			},
 			"problems": [],
 			"summaryOnly": false,
@@ -253,7 +259,19 @@
 							"citations": []
 						},
 						"practiceVersionId": "11",
-						"recordedAt": "2026-09-01T10:00:00Z"
+						"recordedAt": "2026-09-01T10:00:00Z",
+						"item": {
+							"id": "5",
+							"kind": "scm.pull_request",
+							"parentId": null,
+							"provider": "GITHUB",
+							"label": "#5",
+							"title": "Handle record fetch failures",
+							"url": "https://github.com/acme/app/pull/5",
+							"container": "acme/app",
+							"path": null,
+							"removedAt": null
+						}
 					},
 					{
 						"resultId": "30000000-0000-4000-8000-000000000001",
@@ -265,7 +283,19 @@
 						"explanation": null,
 						"evidence": null,
 						"practiceVersionId": null,
-						"recordedAt": "2026-10-20T10:01:00Z"
+						"recordedAt": "2026-10-20T10:01:00Z",
+						"item": {
+							"id": "7",
+							"kind": "scm.pull_request",
+							"parentId": null,
+							"provider": "GITHUB",
+							"label": "#7",
+							"title": "Retry record fetches",
+							"url": "https://github.com/acme/app/pull/7",
+							"container": "acme/app",
+							"path": null,
+							"removedAt": null
+						}
 					}
 				]
 			},

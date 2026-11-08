@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.proxy.dto;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackCompositionService;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationEligibility;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
@@ -16,9 +18,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.PracticePageDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageSupport;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackHistory;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -40,9 +44,19 @@ class AdmissionResponseDTOTest {
                                 readAt,
                                 List.of(new PracticePageSupport.PracticeSupport(
                                         "handles-errors",
-                                        PracticePageDecision.GATE_REFUSED,
-                                        FeedbackStopReason.NO_AI,
-                                        List.of())),
+                                        PracticePageDecision.ADMIT,
+                                        null,
+                                        List.of(new PracticePageSupport.Occurrence(
+                                                resultId,
+                                                "scm.pull_request",
+                                                "42",
+                                                ResultOutcome.NOT_MET,
+                                                ReviewOrigin.EVENT,
+                                                "The failure is dropped",
+                                                "The catch returns without recording the error.",
+                                                null,
+                                                "7",
+                                                readAt)))),
                                 null),
                         new ConversationEligibility(
                                 ConversationEligibility.State.COMPLETE,
@@ -80,7 +94,20 @@ class AdmissionResponseDTOTest {
                                         "Notes queued for Hephaestus about dropped errors.",
                                         null,
                                         Currentness.CURRENT,
-                                        "handles-errors"))));
+                                        "handles-errors"))),
+                Map.of(
+                        42L,
+                        new ItemRefDTO(
+                                "42",
+                                "scm.pull_request",
+                                null,
+                                IntegrationKind.GITHUB,
+                                "#7",
+                                "Handle fetch failures",
+                                "https://github.com/acme/app/pull/7",
+                                "acme/app",
+                                null,
+                                null)));
         var problem = new AdmittedProblemDTO(
                 UUID.fromString("40000000-0000-4000-8000-000000000001"),
                 Severity.MAJOR,
