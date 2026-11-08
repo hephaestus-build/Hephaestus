@@ -252,10 +252,11 @@ no provider credential.
 
 ## Update — 2026-11-09: superseded in part by ADR 0079
 
-[ADR 0079](0079-one-agent-system.md) supersedes where the proxy runs, as the 2026-09-03 update set it: on the worker's Sandbox Gateway.
-1.0 has no worker.
-The proxy runs in the server, on the gateway port that sandboxes reach (8081).
-Considered option 2, "hardcode on coordinator", is thus the chosen path from 2026-11-09.
+[ADR 0079](0079-one-agent-system.md) supersedes these parts:
+
+- **The 2026-09-03 update, where the proxy runs.** It put the proxy on the worker's Sandbox Gateway. 1.0 has no worker. The proxy runs in the server, on the gateway port that sandboxes reach (8081). Considered option 2, "hardcode on coordinator", is thus the chosen path from 2026-11-09.
+- **The 2026-10-09 update, the turn credential and admission.** A sandbox token names one subject, not one turn attempt. Each call names its run and epoch, and the proxy checks them against `agent_run`. The claim admits a turn, not a worker. Each model call writes its own usage row, so no reaper bills a lost attempt.
+
 The credential-isolation driver of the Context stays binding.
 Only the server holds provider keys.
 A sandbox holds only a token for one subject, and it can reach only the gateway.

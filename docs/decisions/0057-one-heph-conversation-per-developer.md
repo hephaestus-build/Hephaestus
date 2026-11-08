@@ -556,10 +556,17 @@ The ledger, the conversation model, the context model and delivery of this decis
 
 [ADR 0079](0079-one-agent-system.md) supersedes these parts. The conversation model, the ledger as the memory, the context model, Stop, the citation tools and the receipts stay.
 
+- **Runtime option 1 is the chosen path from 2026-11-09, in a changed form.** That option keeps "a sandbox per developer". Now a conversation has one sandbox while it is in use.
+  The rejection named state, affinity and warm capacity. The sandbox holds no state that PostgreSQL does not hold. Any server replica serves it. No warm pool exists.
+- **§ The Heph host, "no affinity, warm sandbox".** ADR 0068 already superseded the host. The sandbox is a cache. Each turn still rebuilds its request from the ledger. The server deletes the sandbox when it is idle.
 - **§ The ledger, the lease of a turn.** A turn is an `agent_run` of kind `turn`, keyed to its conversation, in band `interactive`.
   The lease, its epoch and the retry budget are on the run, not on `mentor_turn`.
-  The reaper's attempt budget in the capacity home replaces "a turn that loses its lease runs once more".
+  The attempt budget in the capacity home replaces "a turn that loses its lease runs once more".
 - **§ The ledger, the usage of a turn.** Each model call writes one `llm_usage_event` row, keyed by run, epoch and call. The turn row no longer carries usage.
 - **§ The ledger, the Slack post.** A Slack reply is a `slack_post` action in the `agent_action` outbox. The action carries the state from intent to outcome, and its adapter reads back by marker. The reconciler of the question's reply state goes. The rule "one history read, and never a second post" stays.
-- **§ The Heph host, "no affinity, warm sandbox".** ADR 0068 already superseded the host. A conversation now has one sandbox while it is in use. The sandbox is a cache. Each turn still rebuilds its request from the ledger. The server deletes the sandbox when it is idle.
-- **§ Weekly digest, "Java composes the digest from facts. No model writes it."** A `digest` run writes the digest on a schedule, in the conversation's sandbox. The server still selects the facts by the destination rules of that section. The opt-in, the time window, the pointer rule and the rule of no score, rank or streak stay.
+- **§ Weekly digest, the delivery.** The Slack note and the email of a digest are `slack_post` and `email` actions.
+
+§ Weekly digest otherwise stays as it is. Java writes the digest from facts, and no model writes it.
+A `digest` run is the scheduled run of a conversation, in its sandbox.
+Weekly digest option 1, "A model writes a weekly summary", stays rejected. A model-written digest needs its own decision, because the reason still holds.
+Such a summary is a new claim about a person, outside admission, approval and withdrawal.

@@ -138,7 +138,7 @@ would introduce an additional export or rendering step here without an existing 
 
 ## Update — 2026-11-09: superseded in part by ADR 0079
 
-[ADR 0079](0079-one-agent-system.md) supersedes where an email's delivery state lives.
+[ADR 0079](0079-one-agent-system.md) supersedes where an email's delivery state lives, in § Decision, "Where does reliability live" and the item on `@ApplicationModuleListener`.
 Each email is an `email` action in the `agent_action` outbox, with an idempotency key.
 Email is at most once: an `UNCERTAIN` action is never sent again.
 The event publication registry is no longer the record of an email delivery.

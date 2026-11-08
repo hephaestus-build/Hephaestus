@@ -160,10 +160,11 @@ A worker's review slots and the reviews quota still bound how many reviews run.
 
 ## Update — 2026-11-09: superseded in part by ADR 0079
 
-[ADR 0079](0079-one-agent-system.md) supersedes the form of the queue. PostgreSQL stays the queue and the only record of work.
+[ADR 0079](0079-one-agent-system.md) supersedes the form of the queue in § Decision and the claim order of the 2026-11-03 update. PostgreSQL stays the queue and the only record of work.
 
 - One `agent_run` table holds the lease of every kind of agent work. `review_job` and `mentor_turn` point to their runs and keep their domain lifecycles.
-- A claim uses `SKIP LOCKED` and wakes on `NOTIFY`. A fixed poll interval and a claim batch do not decide the start time.
+- A claim uses `SKIP LOCKED` and wakes on `NOTIFY`. `AGENT_POLL_INTERVAL` and `AGENT_CLAIM_BATCH_SIZE` do not decide the start time.
 - A claim orders by band, then by the workspace with the fewest running runs, then by age. This is the fairness that the revisit trigger named.
+- The band replaces the order by origin with aging. "Started work first" goes: a run of a subject that is already started holds its lease, so it needs no rank.
 - A write is fenced on `(run_id, lease_epoch)`, not on a worker id. `worker_registry` and the sweeps by worker go.
-- One reaper on the database clock runs on every server replica.
+- One reaper on the database clock runs on every server replica. The attempt budget of each kind replaces `AGENT_MAX_RETRIES`.

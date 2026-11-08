@@ -209,7 +209,7 @@ The role selection of this decision stays.
 
 ## Update — 2026-11-09: superseded in part by ADR 0079
 
-[ADR 0079](0079-one-agent-system.md) supersedes the worker role of this decision and of its later updates.
+[ADR 0079](0079-one-agent-system.md) supersedes the worker role in § Decision and in the updates of 2026-07-22, 2026-10-01, 2026-10-09 and 2026-10-28.
 1.0 has two runtime roles: server and webhook.
 The server takes every concern of the worker: the Kubernetes client, capture, the sandbox gateway and the LLM proxy.
 The server runs as several replicas with rolling updates.

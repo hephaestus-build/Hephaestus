@@ -1,6 +1,6 @@
 # ADR 0026: Per-purpose agent bindings and governed OpenAI-compatible LLM catalog
 
-**Status:** Accepted, amended 2026-07-26 (named-agent-config model deleted), 2026-09-22 (member AI choice is per account, and the tiers collapse to in-house and cloud from one declared fact), 2026-10-09 (purposes for practice scripts and model protocols), 2026-10-09 (Heph turn accounting, [ADR 0057](0057-one-heph-conversation-per-developer.md)) and 2026-10-14 (job names)
+**Status:** Accepted, amended 2026-07-26 (named-agent-config model deleted), 2026-09-22 (member AI choice is per account, and the tiers collapse to in-house and cloud from one declared fact), 2026-10-09 (purposes for practice scripts and model protocols), 2026-10-09 (Heph turn accounting, [ADR 0057](0057-one-heph-conversation-per-developer.md)) and 2026-10-14 (job names). Superseded in part on 2026-11-09 by [ADR 0079](0079-one-agent-system.md).
 **Date:** 2026-07-24
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0006](0006-llm-proxy-on-coordinator-trust-model.md) (in-app LLM proxy as the sole credential path), [ADR 0025](0025-agent-job-queue-on-postgresql.md) (PostgreSQL agent job queue)
@@ -289,3 +289,11 @@ Heph submission and the ledger. The worker admits the turn when it claims it.
 `maxConcurrentJobs` is removed from the binding. In § What the bound does not cover, N for jobs is now the number of reviews of the workspace that run at once.
 The worker's review slots bound N, and the call pool's calls in flight bound how fast their spend can pass the budget.
 So the overshoot stays bounded, by capacity rather than by an operator's number.
+
+## Update — 2026-11-09: superseded in part by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) supersedes the worker in the updates of this decision.
+The server resolves provider keys, because the proxy runs in the server.
+The claim of a `turn` run admits the turn.
+Each model call writes one `llm_usage_event` row with its run and epoch. The spend of a turn whose lease expired is thus already recorded, and no reaper bills it.
+The budgets and the governed catalog stay.

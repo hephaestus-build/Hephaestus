@@ -4,21 +4,26 @@
 **Date:** 2026-11-09
 **Authors:** Felix T.J. Dietrich
 
+**Supersedes:** [ADR 0007](0007-sandbox-spi-shape.md): the sandbox SPI, the Job backend and its reconciler.
+
 **Supersedes in part:**
 
 - [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md): the worker role.
-- [ADR 0006](0006-llm-proxy-on-coordinator-trust-model.md): where the proxy runs.
-- [ADR 0007](0007-sandbox-spi-shape.md): the Job backend and its reconciler.
-- [ADR 0025](0025-agent-job-queue-on-postgresql.md): the form of the queue.
+- [ADR 0006](0006-llm-proxy-on-coordinator-trust-model.md): where the proxy runs, and the turn credential.
+- [ADR 0025](0025-agent-job-queue-on-postgresql.md): the form of the queue and the claim order.
+- [ADR 0026](0026-per-purpose-agent-bindings-and-llm-governance.md): the worker that holds keys and admits turns.
 - [ADR 0044](0044-email-is-a-notification-transport.md): where an email's delivery state lives.
-- [ADR 0057](0057-one-heph-conversation-per-developer.md): the lease, the usage and the Slack post of a turn, and who writes the weekly digest.
+- [ADR 0057](0057-one-heph-conversation-per-developer.md): the lease, the usage and the Slack post of a turn, and the sandbox for each conversation.
 - [ADR 0061](0061-review-seals-then-feedback-composes.md): where composition runs.
 - [ADR 0063](0063-each-practice-is-staged-when-it-ends.md): the fence of a stage write.
-- [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md): the placement (W′), the attempt contract, capacity and decisions B, G and J.
+- [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md): the placement (W′), the attempt contract, coverage authority, capacity and decisions B, G and J.
 - [ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md): where the feedback composer runs.
+- [ADR 0073](0073-product-feedback-is-worked-on-in-github.md): the filing lease.
 - [ADR 0074](0074-a-reviews-width-and-count-follow-the-provider.md): the worker and the chart in § Capacity.
 
-Each ADR above has an update block, dated 2026-11-09, that names the exact sections.
+**Amends:** [ADR 0070](0070-1-0-is-a-cutover-release.md): the cutover steps that name the worker.
+
+Each ADR above has an update block, dated 2026-11-09, that names the sections that change and the sections that stay.
 
 **Builds on:** [ADR 0070](0070-1-0-is-a-cutover-release.md) (1.0 is a cutover) and [ADR 0078](0078-lifecycles-are-explicit-and-rigor-follows-the-damage.md) (explicit lifecycles).
 
@@ -274,10 +279,15 @@ flowchart LR
 | Sandboxes | One for each subject that needs one. |
 
 There is no worker role.
-The server holds a Role in the sandbox namespace that allows `SandboxClaim` objects only: create, get, watch and delete.
-It needs no `pods/exec`, no Jobs and no Secrets.
-The gateway port has its own security chain, and it accepts only sandbox tokens.
-The user API never listens on that port.
+
+- **Kubernetes authority.** The server holds a Role in the [sandbox namespace](../contributor/practice-review-glossary.mdx#runtime-terms).
+  The operator creates that namespace for the sandboxes of one release.
+  The Role allows `SandboxClaim` objects only: create, get, list, watch and delete. It allows no `pods/exec`, no Jobs and no Secrets.
+- **The gateway port.** Port 8081 has its own security chain, and it accepts only sandbox tokens. Every other path on it answers `404`.
+  The public port 8080 answers `404` on every gateway path. The public ingress has no rule for port 8081.
+  The server's ingress policy admits the sandbox namespace on port 8081 only.
+- **A stateless gateway.** The gateway keeps no state outside PostgreSQL and the token. Any replica serves any call of any sandbox, and a sandbox dials the gateway Service, not a Pod.
+- **Repository evidence.** [ADR 0039](0039-git-and-postgresql-own-evidence.md) keeps repository evidence in the clones of one worker storage node. That node goes with the worker. Before the server runs as several replicas, its layer must give the clones one home that every replica can read. See [Open items](#open-items).
 
 ### Subject and sandbox
 
@@ -286,7 +296,7 @@ A **subject** is the thing that a sandbox serves. Its key is the concurrency key
 | Kind | Subject key | Lifetime |
 |---|---|---|
 | `review` | `review:<id>` | `shutdownTime` is the review's deadline. The sandbox measures, then composes. |
-| `conversation` | `conversation:<id>` | While the conversation is in use. The reaper deletes it after the idle limit. |
+| `conversation` | `conversation:<id>` | While the conversation is in use. The reaper deletes it after the idle limit. `shutdownTime` is a ceiling from the capacity home, so its token also expires. |
 | `action` | `action:<id>` | Short. One action task, such as a product feedback draft. |
 
 The server creates a sandbox with a `SandboxClaim` from the `SandboxTemplate` of its kind.
@@ -317,16 +327,25 @@ It allows no ingress.
 - It carries `workspace_id`, `subject_key`, `sandbox_id`, and an `exp` equal to the sandbox's `shutdownTime`.
 - The claim delivers it as `env`.
 - It works only at the gateway, and only for its own subject's runs.
+- The gateway also checks that `sandbox_id` names a live `agent_sandbox` row (`REQUESTED` or `READY`) of the same subject. A deleted sandbox's token thus stops at once, before its `exp`.
+- The token is plain text in the `SandboxClaim` object. Only the server's Role and cluster administrators can read claims in the sandbox namespace. The liveness check and the short life bound a copy of it.
 
 There is no warm pool. The sandbox **pulls** its work from the gateway. The server pushes nothing into it.
 
-The sandbox's files are not evidence.
-Admission checks each citation against the bytes that the server captured.
-The sandbox has no persistent volume. The server rebuilds its context from PostgreSQL at each start.
+**Evidence authority.** The sandbox's files are not evidence, because a command can change them.
+
+- Admission checks each citation against the bytes that the server captured.
+- A read counts for coverage only when its bytes match the digest that the server captured for that file. The loop checks the digest when it reads.
+- A proved search searches only files that match their digests. A search over changed files proves nothing.
+
+**No persistent volume.** The server rebuilds the sandbox's context from PostgreSQL at each start.
+
+**The boundary first.** The server creates no claim while the egress and isolation gate fails. `Unmanaged` fails open on a network plugin that does not enforce NetworkPolicy, so the gate proves the policy on the running cluster. ADR 0068's isolation probe becomes this gate.
 
 ### Data model
 
 Every new table carries `workspace_id` from its first migration, with composite foreign keys.
+The one exception is an instance-level action, such as an account email, which has no workspace. Its `workspace_id` is null, as on `product_feedback`.
 
 ```mermaid
 erDiagram
@@ -374,11 +393,15 @@ erDiagram
 
 **`agent_run`** leases one unit of agent work.
 
-- **Columns:** `id`, `workspace_id`, `kind`, `band`, `concurrency_key` (the subject key), `state`, `attempt`, `lease_epoch`, `leased_until`, `deadline`, `stop_reason`, and the created, started and ended times.
+- **Columns:** `id`, `workspace_id`, `kind`, `band`, `concurrency_key` (the subject key), `state`, `attempt`, `lease_epoch`, `leased_until`, `available_at`, `deadline`, `stop_reason`, and the created, started and ended times.
 - **Kinds:** `review_measure`, `review_compose`, `turn`, `report_draft` and `digest`. A new kind of work is a new value, not a new table.
-- **Bands:** `interactive`, `batch` and `background`.
-- **States:** `QUEUED`, `LEASED` and `ENDED`. A reap of a run that can try again goes from `LEASED` back to `QUEUED`. The database enforces the transitions (ADR 0078). `stop_reason` says why a run ended.
-- A partial unique index on `(concurrency_key) WHERE state = 'LEASED'` lets one run of each subject run at a time.
+- **Bands:** `interactive`, `batch` and `background`. The kind and the origin set the band:
+  - `turn` and `report_draft`: `interactive`. A person waits.
+  - `review_measure` and `review_compose` of an event or a request: `batch`.
+  - A scheduled or backfill review, and `digest`: `background`.
+- **States:** `QUEUED`, `LEASED` and `ENDED`. A claim goes from `QUEUED` to `LEASED`, and raises `attempt` and `lease_epoch`. A reap of a run that can try again goes from `LEASED` back to `QUEUED`. The database enforces the transitions (ADR 0078), and the epoch never goes down.
+- **Stop reasons:** `stop_reason` is a closed list that says why a run ended, such as completed, cancelled, attempts spent or deadline. The domain row keeps its own detailed reason.
+- A partial unique index on `(workspace_id, concurrency_key) WHERE state = 'LEASED'` lets one run of each subject run at a time.
 - **Domain rows:** a foreign key points from each domain row to its run. The domain rows are the review job, the conversation turn, the product feedback filing and the digest.
   Their lifecycles stay on the domain rows.
 
@@ -386,31 +409,38 @@ erDiagram
 
 - **Columns:** `id`, `workspace_id`, `subject_key` (unique among the live rows), `claim_name`, `state`, `template`, `created_at`, `last_used_at`, `shutdown_at`.
 - **States:** `REQUESTED`, then `READY`, then `DELETING`, then `GONE`.
-- **Reaper rule:** the reaper deletes the claim when the subject has no live need. It also deletes it when the sandbox is idle past the limit.
+- **Reaper rule:** the reaper deletes the claim when the subject has no live need. A queued or leased run of the subject is a live need, for example the `review_compose` run after a seal. The reaper also deletes the claim when the sandbox is idle past the limit.
+- **Erasure and access.** An erasure of a person, or a change of access to a conversation, deletes the subject's sandbox at once.
 
 **`agent_action`** is the one outbox.
 
 - **Columns:** `id`, `workspace_id`, `run_id` (null for an action that a person started), `kind`, `lane_key`, `idempotency_key` (unique), `state`, `attempts`, `next_attempt_at`, the lease, and a readback reference.
 - **Kinds:** `deliver_feedback`, `edit_feedback`, `retract_feedback`, `slack_post`, `email`, `file_issue` and `show_feedback`. A new kind is a new value.
 - **States:** `PROPOSED`, `ADMITTED`, `EXECUTING`, and then `DONE`, `UNCERTAIN`, `FAILED` or `CANCELLED`.
-- One executor in the server runs the actions of a lane in order. Each adapter reads back by the marker of the action.
+- One executor runs on every server replica, with no leader. It claims only the head of each lane, so the actions of a lane run in order.
+- The executor records the start of a write before the provider call. No provider call runs inside a transaction (ADR 0075). Each adapter reads back by the marker of the action.
 - Email is at most once. An `UNCERTAIN` email is never sent again.
-- An erasure cancels each pending action that holds the person's data.
+- An erasure cancels each pending action that holds the person's data, and removes its payload.
 
 **Permits.** The call pool (`llm_call_permit`) gets a band and a fair share for each workspace.
+The grant order is the band, then the workspace with the fewest granted permits in the pool, then age.
 An interactive call gets a grant first. A batch call yields at grant time. Nothing stops a call that holds its grant.
 
-**Usage.** Each model call writes one `llm_usage_event` row, keyed by `(run_id, lease_epoch, call)`.
-The usage tables of each kind merge into it.
+The band replaces the call class. The conversation reserve becomes the reserve of the `interactive` band.
+
+**Usage.** Each model call writes one `llm_usage_event` row when it ends, keyed by `(run_id, lease_epoch, call)`.
+The usage tables of each kind merge into it. A lost lease needs no billing step, because its calls are already rows.
 
 **Capacity.** One `@ConfigurationProperties` home, `hephaestus.agent.capacity.*`, holds every capacity value:
 
 - The sandbox count for each kind.
-- The idle limit of a conversation sandbox.
+- The Pod requests and limits of each sandbox kind.
+- The idle limit and the `shutdownTime` ceiling of a conversation sandbox.
 - The attempt budget for each run kind.
-- The start lease and the renewal interval.
+- The lease duration and the renewal interval.
+- The call pool limits.
 
-The chart sets these values directly. No template helper derives a value, and no JSON table repeats one in Java.
+The chart sets these values directly, and it renders the three `SandboxTemplate` objects from them. No template helper derives a value, and no JSON table repeats one in Java.
 
 ### Claim, priority and reap
 
@@ -420,17 +450,18 @@ There is no leader election and no registry of processes.
 ```mermaid
 sequenceDiagram
     accTitle: One run from claim to end
-    accDescr: A server replica claims the next run and ensures a sandbox for its subject. The sandbox starts, asks the gateway for its next run, renews the lease, makes model calls and proposes results and actions. The server admits them. The run ends, and the reaper later deletes the idle sandbox.
+    accDescr: A server replica picks queued runs in claim order and ensures a sandbox for each subject. The sandbox starts and asks the gateway for its next run, and the gateway claims it. The sandbox renews the lease, makes model calls and proposes results and actions. The server admits them. The run ends, and the reaper later deletes the idle sandbox.
     participant C as Server control
     participant DB as PostgreSQL
     participant K as agent-sandbox controller
     participant S as Sandbox
     participant G as Server gateway
-    C->>DB: Claim the next run (SKIP LOCKED), set LEASED and raise lease_epoch
-    C->>DB: Ensure agent_sandbox for the subject
+    C->>DB: Pick queued runs in claim order, within capacity
+    C->>DB: Ensure agent_sandbox for each subject
     C->>K: Create SandboxClaim with the token as env
     K-->>S: Start the container
     S->>G: POST /internal/agent/next
+    G->>DB: Claim the subject's next run (SKIP LOCKED), set LEASED, raise lease_epoch
     G-->>S: Run, epoch, deadline and context descriptor
     loop While the run works
         S->>G: Renew the lease, call the model, propose results and actions
@@ -440,12 +471,10 @@ sequenceDiagram
     C->>K: Delete the claim when no need remains or the idle limit passes
 ```
 
-- **Claim.** A claim uses `SKIP LOCKED` and wakes on `NOTIFY`.
-  - It orders by band, then by the workspace with the fewest running runs, then by age.
-  - It sets `LEASED`, raises `lease_epoch`, and sets a start lease long enough for a cold start.
-  - It then makes sure that a sandbox exists for the subject. If none exists, it creates the claim.
-  - The run goes to the sandbox when the sandbox pulls it.
-- **One writer.** From the pull on, the sandbox is the only writer of the run's lease. Every write names `(run_id, lease_epoch)`, and the database refuses a stale epoch.
+- **Order.** The claim order is the band, then the workspace with the fewest running runs, then age. A `NOTIFY` on each new run wakes the replicas.
+- **Sandboxes.** The control concern takes the queued runs in that order, within the counts of the capacity home. It makes sure that a sandbox exists for each of their subjects. If none exists, it creates the claim.
+- **Claim.** The sandbox's `next` call claims its subject's next run, with `SKIP LOCKED`. The claim sets `LEASED`, raises `attempt` and `lease_epoch`, and sets `leased_until` on the database clock. A warm sandbox's `next` waits for the next run of its subject.
+- **One writer.** The sandbox that claimed the run is the only writer of its lease. Every write names `(run_id, lease_epoch)`, and the database refuses a stale epoch.
 - **Reaper.** The reaper is a conditional update on the database clock.
   - An expired lease requeues the run, or ends it with a reason when its attempt budget is spent.
   - The reaper also deletes the claims of subjects that have no need.
@@ -453,6 +482,8 @@ sequenceDiagram
 ### Gateway API
 
 Every route is on the server's port 8081 and needs the sandbox token.
+Each call after `next` names its run and epoch in the headers `X-Agent-Run` and `X-Agent-Epoch`.
+The gateway checks that the run's `concurrency_key` equals the token's `subject_key`, and then checks the fence in PostgreSQL.
 
 | Route | Purpose |
 |---|---|
@@ -468,7 +499,9 @@ Capture stays a server step. The gateway serves only captured bytes and archives
 ### Interactive and proactive work
 
 - **Turns.** Each turn is a `turn` run in band `interactive`, keyed to its conversation. Turns of one conversation run in order.
-- **Proactive work.** A `digest` run writes the weekly digest on a schedule, in the conversation's sandbox. A proactive trigger starts that sandbox as a message does. The server selects the facts by the rules of ADR 0057 § Weekly digest.
+- **Proactive work.** A `digest` run is the scheduled run of a conversation, in its sandbox. A proactive trigger starts that sandbox as a message does.
+  ADR 0057 § Weekly digest stays: Java writes the digest from facts, and no model writes it.
+  A model-written digest needs its own decision. ADR 0057 rejected it as a claim about a person outside admission, approval and withdrawal.
 - **Cold start.** The cold start is a measured product number. The target is the first text at most 6 s from a cold sandbox. A follow-up turn in a warm sandbox starts at once.
 - **Reviews.** The `review_measure` run measures and stages each practice (ADR 0063). The server admits and seals. The `review_compose` run then composes in the same sandbox, and the outbox delivers.
 
@@ -507,10 +540,28 @@ Capture stays a server step. The gateway serves only captured bytes and archives
 - **The server runs as several replicas.** That needs provider events in order for each item across replicas. Until then the server cannot leave `Recreate`.
 - **A server restart cuts streams.** The loop retries a model call whose connection broke, under the replay bound of ADR 0068's update of 2026-11-08.
 - **Cold start is a product number.** It must be measured for each stage, on runc and on gVisor, and optimized. A regression shows directly in a conversation.
-- **The server holds Kubernetes authority beside user sessions.** The Role is narrow: `SandboxClaim` objects in one namespace. ADR 0068 kept that authority in the worker. Code execution in the server already reaches every row, so the Role adds little.
+- **The server holds Kubernetes authority beside user sessions.** ADR 0068 kept that authority in the worker. The Role is narrow: it can only create and delete claims from the fixed templates in one namespace.
+  Code execution in the server already reaches every row and every key. The Role adds little to what such an attacker holds.
 - **A platform prerequisite.** An install needs cluster-admin once, to apply the platform manifest with the controller. The admin guide states it.
+- **The loop's reports share the container's trust.** A command runs as the loop's user, so it can tamper with the loop's coverage report.
+  Admission still checks each citation against the captured bytes. Coverage and a proved search stay claims of the loop, bounded by the digest check.
+  The injection canary tests this, and a forged coverage report is a revisit trigger.
+- **Commands can reach the gateway.** A command in a sandbox can call the gateway with the sandbox's own token. The gateway's limits for each sandbox and the fence bound it.
 - **Conversation turns share a workspace.** ADR 0068 decision J gave each turn attempt a fresh workspace. Now the sandbox holds files across turns.
   The files go when the sandbox is idle, or when an erasure or a change of access deletes it.
+
+### Open items
+
+These items have an owner in the implementation program. Each must close before 1.0.
+
+- **Ordered provider events across server replicas.** Until it ships, the server keeps one replica and `Recreate`.
+- **A home for repository evidence that every replica can read** (ADR 0039, ADR 0041 § State and storage).
+  There are two candidates. One is a volume that every replica mounts. The other is a clone on each replica that fetches the pinned commit before it serves it.
+  If no clone can supply a pinned commit, the step ends with a named capture failure. It is never a claim about the work.
+  The layer that runs the server as several replicas decides it and updates ADR 0039.
+- **The stream of turn deltas** from the sandbox through the gateway to the live hub, with no loop Deployment.
+- **The cold start, measured** for each stage, on runc and on gVisor.
+- **Run id and epoch on logs, metrics and traces** ([ADR 0071](0071-every-user-visible-failure-is-observable.md)).
 
 ## Revisit trigger
 
@@ -518,6 +569,7 @@ Capture stays a server step. The gateway serves only captured bytes and archives
 - **More conversations.** More than 3 conversations at once becomes normal.
   Then measure the memory of a warm sandbox, and reconsider the idle limit or a shared loop.
 - **The token is misused.** The egress and isolation gate or an injection canary shows a command that used the token outside its bounds.
+  A forged coverage report has the same effect.
   Then split the loop and the tools again (option 2).
 - **Upstream breaks.** If two agent-sandbox upgrades in a row fail the CI gate, or the project stops releasing, replace the backend behind `agent_sandbox`.
 - **Namespace mode ships.** When #484 or #1440 ships, move the controller install from the platform manifest into the chart.

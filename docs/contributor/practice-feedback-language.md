@@ -59,7 +59,7 @@ This table records only their retired names.
 
 | Term | Owning definition | Avoid for this concept |
 | --- | --- | --- |
-| **Item** | [Review glossary](./practice-review-glossary.mdx#review-terms) | artifact, unit, part, target, subject |
+| **Item** | [Review glossary](./practice-review-glossary.mdx#review-terms) | artifact, unit, part, target, subject. A [subject](./practice-review-glossary.mdx#runtime-terms) is what a sandbox serves, never an item. |
 | **Event** | [Review glossary](./practice-review-glossary.mdx#review-terms) | signal, occasion, trigger, moment |
 | **Scan** | [Review glossary](./practice-review-glossary.mdx#review-terms) | population review |
 | **Origin** | [Review glossary](./practice-review-glossary.mdx#review-terms) | door, trigger mode |
