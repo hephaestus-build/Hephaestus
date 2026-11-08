@@ -98,12 +98,11 @@ You do not register a new OAuth application or add a callback URL at a provider.
 
 ## Rate limits
 
-Sign-in starts have the same per-address limit as other sign-ins.
-`HEPHAESTUS_AUTH_RATE_LIMIT_OAUTH_CAPACITY` per `HEPHAESTUS_AUTH_RATE_LIMIT_OAUTH_PERIOD` defaults to 20 a minute.
-Sign-in code redemption, session renewal, and sign-out share a separate per-address limit.
-`HEPHAESTUS_AUTH_RATE_LIMIT_CLIENT_SESSION_CAPACITY` per `HEPHAESTUS_AUTH_RATE_LIMIT_CLIENT_SESSION_PERIOD` defaults to 30 a minute.
+Sign-in starts share a per-address limit of 20 requests a minute with other sign-ins.
+Sign-in code redemption, session renewal, and sign-out share a separate limit of 30 requests a minute per address.
 Everyone behind one network address shares that limit.
-For a campus or company network where everyone signs in together, increase it.
+The Helm chart exposes no value to change these limits.
+If sign-ins return HTTP 429 behind a shared address, stagger sign-ins across separate minutes.
 
 Users confirm review requests in the extension's own window.
 The extension sends them to the web app's endpoints, with the same permissions, cooldowns, and rate limits.

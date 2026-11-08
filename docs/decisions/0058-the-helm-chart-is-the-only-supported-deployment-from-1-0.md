@@ -1,6 +1,6 @@
 # ADR 0058: The Helm chart is the only supported deployment from 1.0
 
-**Status:** Accepted (amended 2026-10-25 — previews, [ADR 0059](0059-previews-run-on-the-staging-cluster.md)) (amended 2026-10-28 — the Docker driver, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
+**Status:** Accepted (amended 2026-10-25 — previews, [ADR 0059](0059-previews-run-on-the-staging-cluster.md)) (amended 2026-10-28 — the Docker driver, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md)). Amended on 2026-11-08 for 1.0 backup qualification, as specified below.
 **Date:** 2026-10-25
 **Authors:** Felix T.J. Dietrich
 
@@ -169,7 +169,12 @@ When the staging host runs k3s, previews can return as one namespace for each pu
 
 ### Gates before v1.0.0
 
-The tag waits for all of these:
+Amended on 2026-11-08: The [backup policy for 1.0](../admin/backup-restore.mdx#backup-policy-for-10) amends gates 12 and 13.
+Qualification of recovery objectives and recovery from total host loss is deferred for 1.0.
+The restore checks in gates 10, 11 and 14, webhook loss check in gate 12, and key custody in gate 15 remain required.
+Upgrade restore points remain required.
+
+The tag waits for these gates, subject to that backup deferral:
 
 1. Chart CI passes on k3d at the minimum and the latest supported Kubernetes minor, on amd64 and arm64.
    Amended on 2026-10-26: arm64 runs on the minimum supported minor only, the minor of the arm64 host.

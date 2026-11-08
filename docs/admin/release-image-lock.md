@@ -31,7 +31,7 @@ The signing identity is `release.yml` on `main` in `hephaestus-build/Hephaestus`
 | Asset | Contents | Reader |
 | --- | --- | --- |
 | `release-vX.Y.Z.chart.json` and its `.sigstore.json` bundle | The joint lock of schema version 2. | [Chart verification](./kubernetes#verify-the-release-chart), the installer and the reconciler. |
-| The chart at `ghcr.io/hephaestus-build/charts/hephaestus@sha256:…`, signed in the registry | Release metadata and the five chart images by digest. | Helm, after chart verification. |
+| The chart at `ghcr.io/hephaestus-build/charts/hephaestus@sha256:…`, signed in the registry | Release metadata and references to all images from the signed joint lock, by digest. | Helm, after chart verification. |
 | `hephaestus-k3s-X.Y.Z.tar.gz` and its `.sigstore.json` bundle | The installer and the platform and host configuration, in one archive. | [Install on one host](./kubernetes#install-on-one-host-k3s). |
 | `release-vX.Y.Z.intoto.jsonl` | The release attestation bundle. Subjects include the first-party image digests, chart manifest and package, joint lock and k3s bundle. | [Independent verification](#independent-verification). |
 | `manifest.json`, SBOMs, vulnerability and license reports, and signed `SHA256SUMS` | Per-platform release evidence. | [Operator verification](/contributor/release-management#operator-verification). |

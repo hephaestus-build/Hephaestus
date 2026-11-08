@@ -559,8 +559,10 @@ These behaviors matter independently of configured capacity:
   A prompt change is a code change.
 
 1. Provision storage for the mirror, captured content, and per-job staging.
-2. For larger monorepos, raise `GIT_MAX_SNAPSHOT_BYTES`.
-3. Size the fabric root for the repositories you monitor.
+2. Check that each captured repository snapshot fits the fixed 8 GiB limit.
+3. Size the storage for the repositories you monitor.
+
+The Helm chart exposes no value to increase the snapshot limit.
 
 ## Rollback
 

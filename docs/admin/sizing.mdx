@@ -129,7 +129,7 @@ Keep the larger limit and lower concurrency if the trial fails.
 ## Review sandbox limits
 
 The [Pod-kind table](./kubernetes#sandbox-sizes) owns each sandbox's memory, CPU request and disk sizes.
-`SANDBOX_CPUS` sets the review's CPU ceiling.
+The review CPU ceiling is 1 CPU. The Helm chart exposes no value to change it.
 The retired `SANDBOX_MEMORY_BYTES` and `SANDBOX_PIDS_LIMIT` settings do not configure Kubernetes.
 The kubelet enforces the per-Pod process limit, which the worker's isolation probe verifies.
 
@@ -189,10 +189,10 @@ The heap must also leave room for the worker's file cache and for other memory t
 
 The default headroom is 0 %.
 Thus, if you increase the container memory limit, the heap can also increase at the next start.
-Select the headroom for the actual workload of your worker.
+Measure the worker's total memory use before changing its memory limit.
 
-Set the worker's headroom through the chart worker settings.
-If you do not set it, the buildpack's default behavior applies.
+The Helm chart exposes no value for JVM headroom.
+The release uses the buildpack's default behavior.
 The value applies only when the JVM starts.
 To apply a change, drain and restart the worker, as [Graceful drain](./runtime-roles#graceful-drain) describes.
 For the calculation, see the [Paketo memory calculator](https://paketo.io/docs/reference/java-reference/#memory-calculator).

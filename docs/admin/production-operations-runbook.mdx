@@ -127,8 +127,9 @@ The silent deployment checklist above owns startup.
 
 [Backup & restore](./backup-restore) owns the data inventory and the backup and restore procedures. A dump restores
 one snapshot, not an arbitrary point in time. Use **pgBackRest** for scheduled backups and WAL archiving
-([backup tooling decision](https://github.com/hephaestus-build/Hephaestus/issues/1370)). Require off-host
-backup freshness alerts and a verified restore before unattended delivery.
+([backup tooling decision](https://github.com/hephaestus-build/Hephaestus/issues/1370)).
+[Backup policy for 1.0](./backup-restore#backup-policy-for-10) states the deferred release scope.
+For an installation that uses backups, require freshness alerts and a verified restore before relying on recovery.
 
 The chart backup implementation and its schedule are in [Backup and restore on Kubernetes](./kubernetes#backup-and-restore).
 The shared redacted backup status required by [Readiness](https://github.com/hephaestus-build/Hephaestus/issues/1547),

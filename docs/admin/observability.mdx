@@ -558,8 +558,7 @@ The image never sets `log_statement` or `log_min_duration_statement`.
 To find slow statements, read [the statement statistics](#database-statement-statistics), which hold no parameter values.
 An error line can still quote a value in its `DETAIL`, for example the key of a unique constraint violation.
 
-To change a setting, set it in `postgresql.parameters` of the chart, or as a `-c` flag in the Compose `command`.
-Each overrides the image's value.
+The chart does not expose values for these logging settings.
 The log collector of the chart does not read the PostgreSQL container.
 
 ## Reading log records
@@ -1447,8 +1446,10 @@ Outside the cluster, only the server and the worker reach a collector, and only 
 The webhook has no path to an external collector, so its traces are lost.
 
 Each span carries the running version as `service.version` and the deployment environment as `deployment.environment.name`.
-For authenticated collectors, configure Spring Boot's
-`management.opentelemetry.tracing.export.otlp.headers` through protected deployment configuration.
+The Helm chart exposes no value for authenticated OTLP headers.
+Use an in-cluster collector that accepts the roles without those headers.
+Configure authentication for the collector's upstream destination in the collector itself.
+
 Do not put collector credentials in a URL. OTLP log and metric export stay disabled: enabling traces does not
 start exporting application logs, private transcripts or a second metrics stream. Prometheus metrics
 are available through the private listener described in [Scrape metrics](#scrape-metrics).

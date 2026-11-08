@@ -1235,10 +1235,15 @@ For one host, use [Install on one host (k3s)](#install-on-one-host-k3s).
    ```bash
    helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
      -f "chart-$VERSION/hephaestus/profiles/small.yaml" -f site.yaml \
-     --rollback-on-failure --wait=watcher --wait-for-jobs --timeout 20m
+     --wait=watcher --wait-for-jobs --timeout 20m
    ```
 
-7. Follow the migration Job's log until the migrations are complete: `kubectl --namespace hephaestus logs job/hephaestus-migration-1`.
+   The first install omits automatic rollback so a failure leaves its Jobs and Pods available for diagnosis.
+   If it fails, use [A first install fails](#a-first-install-fails) before removing anything.
+
+7. Find the successful install's revision with `helm history hephaestus --namespace hephaestus`.
+   Follow its migration Job's log: `kubectl --namespace hephaestus logs job/hephaestus-migration-<revision>`.
+   Replace `<revision>` with the successful install's revision number.
    The Job logs `Database migration completed` when it finishes.
    The JVM then prints a long native memory summary. It is not an error.
 8. Wait until the worker is ready. A worker is ready only after its [isolation probe](#sandbox-prerequisites) passed and it watches the sandbox namespace.
@@ -1921,7 +1926,61 @@ A change of NATS itself stops reception: while NATS is down, the receiver answer
 4. To remove the data too, delete the release namespace: `kubectl delete namespace hephaestus`.
    A PersistentVolume with the `Retain` reclaim policy stays until you delete it.
 
+### Remove a dedicated k3s host
+
+:::caution[CAUTION: Host data loss]
+The k3s uninstall script deletes the local cluster datastore and local persistent volume data.
+This includes PostgreSQL and NATS data on a default one-host installation.
+Verify a recovery set first if you must keep the data.
+:::
+
+1. Complete [Decommission](./production-operations-runbook#decommission), including provider disconnects and any required final backup.
+2. Disable the reconciler timer, if installed, as [Operating it](./pull-based-deployment#operating-it) describes.
+3. Complete [Uninstall](#uninstall) above.
+4. On the dedicated k3s server, run `sudo /usr/local/bin/k3s-uninstall.sh`.
+5. Remove the reconciler's systemd units and `/var/lib/hephaestus` state if the host will be reused.
+6. Remove any separately configured storage only when its retention requirements permit deletion.
+
+Use this procedure only for a host dedicated to this installation.
+For a shared cluster, remove only the application release and its resources.
+The [k3s uninstall reference](https://docs.k3s.io/installation/uninstall) owns the platform deletion behavior.
+
 ## Troubleshooting
+
+### A first install fails
+
+A failed manual install keeps its Helm revision and resources when you omit `--rollback-on-failure`.
+The one-host installer currently uses automatic rollback.
+If its first install fails, Helm can remove the release resources before you inspect them.
+A missing Pod does not prove that no Pod ran.
+
+For a one-host installation, first select the kubeconfig in the installer's release directory.
+For the default directory:
+
+```bash
+export KUBECONFIG="$HOME/hephaestus/kubeconfig"
+```
+
+Use your chosen directory if it differs.
+The installer exports this path only inside its own process.
+If the file does not exist, inspect the saved installer output and k3s on the host.
+Do not run the cluster checks below with another kubeconfig.
+
+1. Preserve the installer's terminal output before retrying.
+2. Check the Helm record with `helm list --namespace hephaestus`.
+3. If the release remains, read its history with `helm history hephaestus --namespace hephaestus`.
+4. List remaining Jobs and Pods with `kubectl --namespace hephaestus get jobs,pods -o wide`.
+5. Read recent events with `kubectl --namespace hephaestus get events --sort-by=.metadata.creationTimestamp`.
+6. If the migration Job remains, preserve its log with `kubectl --namespace hephaestus logs job/<migration-job>`.
+   Replace `<migration-job>` with the Job name for the failed Helm revision from steps 3 and 4.
+7. If a worker Pod remains, read its log before the next install replaces it.
+
+Events expire, and a removed Pod's log might no longer exist.
+A failed install can still have changed the database.
+Use [Failed-migration recovery](./upgrade#if-migration-fails) before starting an older release against it.
+For durable logs, configure a [log collector](./observability#ship-logs-to-a-log-store) before the install.
+
+### Other symptoms
 
 | Symptom | Cause and check |
 | --- | --- |
