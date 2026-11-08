@@ -5,12 +5,13 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMetadataQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import de.tum.cit.aet.hephaestus.testconfig.MockSecurityContextUtils;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -33,6 +34,9 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
     private ConnectionService connectionService;
 
     @Mock
+    private ConnectionMetadataQuery connectionMetadata;
+
+    @Mock
     private PublicActivityPolicy publicActivityPolicy;
 
     private WorkspaceQueryService newService() {
@@ -41,55 +45,12 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
                 workspaceMembershipRepository,
                 repositoryToMonitorRepository,
                 connectionService,
+                connectionMetadata,
                 publicActivityPolicy,
                 new WorkspaceProperties(false, null, false, null, WorkspaceProperties.CreationPolicy.ADMIN_ONLY),
                 new WorkspaceSubdomainProperties(false, ""),
                 "http://localhost:4200",
                 List.of());
-    }
-
-    @Test
-    void findAccessibleWorkspacesSortsByDisplayNameAndDeduplicatesMemberships() {
-        Workspace alphaWorkspace = workspace(1L, "alpha-space", "Alpha Workspace", true);
-        Workspace bravoWorkspace = workspace(2L, "bravo-space", "Bravo Workspace", false);
-
-        authenticate();
-
-        Membership bravoMembership = membership(bravoWorkspace);
-        Membership alphaMembership = membership(alphaWorkspace);
-
-        WorkspaceQueryService service = newService();
-
-        when(workspaceMembershipRepository.findById_AccountId(42L))
-                .thenReturn(List.of(bravoMembership, alphaMembership));
-        when(workspaceRepository.findAllById(List.of(2L, 1L))).thenReturn(List.of(bravoWorkspace, alphaWorkspace));
-
-        List<Workspace> workspaces = service.findAccessibleWorkspaces();
-
-        assertThat(workspaces).extracting(Workspace::getWorkspaceSlug).containsExactly("alpha-space", "bravo-space");
-    }
-
-    @Test
-    void shouldReturnNoWorkspacesForAnonymousUsers() {
-        WorkspaceQueryService service = newService();
-
-        List<Workspace> workspaces = service.findAccessibleWorkspaces();
-
-        assertThat(workspaces).isEmpty();
-    }
-
-    @Test
-    void shouldKeepAccountMembershipWhenProviderMirrorsAreAbsent() {
-        authenticate();
-        var workspace = workspace(1L, "gh-space", "Workspace", false);
-        when(workspaceMembershipRepository.findById_AccountId(42L)).thenReturn(List.of(membership(workspace)));
-        when(workspaceRepository.findAllById(List.of(1L))).thenReturn(List.of(workspace));
-        assertThat(newService().findAccessibleWorkspaces()).containsExactly(workspace);
-    }
-
-    private static void authenticate() {
-        SecurityContextHolder.setContext(
-                MockSecurityContextUtils.createSecurityContext("developer", "42", new String[0], "token"));
     }
 
     @AfterEach
@@ -128,7 +89,18 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
 
     private boolean publishes(Workspace workspace, boolean instanceAllows) {
         return WorkspaceListItemDTO.from(
-                        workspace, connectionService, "/w/" + workspace.getWorkspaceSlug(), instanceAllows)
+                        new WorkspaceListData(
+                                workspace.getId(),
+                                workspace.getWorkspaceSlug(),
+                                workspace.getDisplayName(),
+                                workspace.getStatus(),
+                                workspace.getAccountLogin(),
+                                Instant.EPOCH,
+                                workspace.getFeatures().getPracticesEnabled(),
+                                workspace.getPublicActivityEnabled()),
+                        null,
+                        "/w/" + workspace.getWorkspaceSlug(),
+                        instanceAllows)
                 .publishesPublicActivity();
     }
 
@@ -137,15 +109,9 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
         workspace.setId(id);
         workspace.setWorkspaceSlug(slug);
         workspace.setDisplayName(displayName);
+        workspace.setAccountLogin(slug);
         workspace.setPublicActivityEnabled(publiclyViewable);
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
         return workspace;
-    }
-
-    private Membership membership(Workspace workspace) {
-        Membership membership = new Membership();
-        membership.setWorkspace(workspace);
-        membership.setId(new Membership.Id(workspace.getId(), 42L));
-        return membership;
     }
 }

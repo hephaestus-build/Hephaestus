@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMetadataQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -29,14 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 @WorkspaceAgnostic("Manages workspaces themselves - operates at admin/registry level")
 public class WorkspaceQueryService {
 
-    private static final Comparator<Workspace> ACCESSIBLE_WORKSPACE_COMPARATOR = Comparator.comparing(
-                    Workspace::getDisplayName, String.CASE_INSENSITIVE_ORDER)
-            .thenComparing(Workspace::getWorkspaceSlug, String.CASE_INSENSITIVE_ORDER);
-
     private final WorkspaceRepository workspaceRepository;
     private final MembershipRepository workspaceMembershipRepository;
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final ConnectionService connectionService;
+    private final ConnectionMetadataQuery connectionMetadata;
     private final PublicActivityPolicy publicActivityPolicy;
 
     private final Map<IntegrationKind, WorkspaceProviderAvailability> providerAvailability;
@@ -50,6 +48,7 @@ public class WorkspaceQueryService {
             MembershipRepository workspaceMembershipRepository,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             ConnectionService connectionService,
+            ConnectionMetadataQuery connectionMetadata,
             PublicActivityPolicy publicActivityPolicy,
             WorkspaceProperties workspaceProperties,
             WorkspaceSubdomainProperties subdomains,
@@ -59,6 +58,7 @@ public class WorkspaceQueryService {
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.connectionService = connectionService;
+        this.connectionMetadata = connectionMetadata;
         this.publicActivityPolicy = publicActivityPolicy;
         this.workspaceProperties = workspaceProperties;
         this.subdomains = subdomains;
@@ -71,11 +71,14 @@ public class WorkspaceQueryService {
     }
 
     public WorkspaceDTO toWorkspaceDTO(Workspace workspace) {
-        return WorkspaceDTO.from(workspace, connectionService, workspaceAddress(workspace));
+        return WorkspaceDTO.from(
+                workspace,
+                connectionMetadata.findWorkspaceMetadata(workspace.getId()),
+                workspaceAddress(workspace.getWorkspaceSlug()));
     }
 
-    private String workspaceAddress(Workspace workspace) {
-        return subdomains.address(workspace.getWorkspaceSlug(), webappUrl);
+    private String workspaceAddress(String slug) {
+        return subdomains.address(slug, webappUrl);
     }
 
     /**
@@ -85,14 +88,25 @@ public class WorkspaceQueryService {
     public List<WorkspaceListItemDTO> findAccessibleWorkspaceListItems() {
         boolean publicActivityAllowed = publicActivityPolicy.allowed();
         var viewed = UserViewContextHolder.get();
-        if (viewed != null) {
-            return workspaceRepository.findById(viewed.workspaceId()).stream()
-                    .map(workspace -> WorkspaceListItemDTO.from(
-                            workspace, connectionService, workspaceAddress(workspace), publicActivityAllowed))
-                    .toList();
-        }
-        return findAccessibleWorkspaces().stream()
-                .map(w -> WorkspaceListItemDTO.from(w, connectionService, workspaceAddress(w), publicActivityAllowed))
+        var ids = viewed == null
+                ? SecurityUtils.getCurrentAccountId()
+                        .map(workspaceMembershipRepository::findActiveWorkspaceIdsByAccountId)
+                        .orElseGet(List::of)
+                : List.of(viewed.workspaceId());
+        if (ids.isEmpty()) return List.of();
+        var workspaces = workspaceRepository.findListDataByIds(ids, viewed != null);
+        var kinds = connectionMetadata.findActiveProviderKinds(
+                workspaces.stream().map(WorkspaceListData::id).toList());
+        return workspaces.stream()
+                .sorted(Comparator.comparing(WorkspaceListData::displayName, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(WorkspaceListData::workspaceSlug, String.CASE_INSENSITIVE_ORDER))
+                .map(workspace -> WorkspaceListItemDTO.from(
+                        workspace,
+                        Optional.ofNullable(kinds.get(workspace.id()))
+                                .map(IdentityProviderType::from)
+                                .orElse(null),
+                        workspaceAddress(workspace.workspaceSlug()),
+                        publicActivityAllowed))
                 .toList();
     }
 
@@ -151,35 +165,6 @@ public class WorkspaceQueryService {
 
     public List<Long> findActiveIds() {
         return workspaceRepository.findIdsByStatus(Workspace.WorkspaceStatus.ACTIVE);
-    }
-
-    /**
-     * Returns workspaces in which the current account has a membership. An unauthenticated caller
-     * receives an empty list.
-     *
-     * @return list of accessible workspaces for the current user
-     */
-    public List<Workspace> findAccessibleWorkspaces() {
-        var viewed = UserViewContextHolder.get();
-        Long accountId =
-                viewed == null ? SecurityUtils.getCurrentAccountId().orElse(null) : Long.valueOf(viewed.accountId());
-        if (accountId == null) return List.of();
-        var memberships = workspaceMembershipRepository.findById_AccountId(accountId).stream()
-                .filter(member -> member.getLeftAt() == null)
-                .toList();
-        var workspaceIds = memberships.stream()
-                .map(Membership::getWorkspace)
-                .map(Workspace::getId)
-                .distinct()
-                .toList();
-
-        List<Workspace> memberWorkspaces = workspaceIds.isEmpty()
-                ? List.of()
-                : workspaceRepository.findAllById(workspaceIds).stream()
-                        .filter(w -> w.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
-                        .toList();
-
-        return memberWorkspaces.stream().sorted(ACCESSIBLE_WORKSPACE_COMPARATOR).toList();
     }
 
     /**
