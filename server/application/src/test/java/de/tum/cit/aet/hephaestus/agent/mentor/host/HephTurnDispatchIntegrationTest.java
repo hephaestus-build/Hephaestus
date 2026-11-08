@@ -10,7 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeExecSandboxes;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeToolsPods;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
@@ -146,7 +146,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private HephTurnDispatcher dispatcher;
     private HephTurnController controller;
     private final ProxyCallsInFlight callsInFlight = new ProxyCallsInFlight(12);
-    private final FakeExecSandboxes runtime = new FakeExecSandboxes();
+    private final FakeToolsPods runtime = new FakeToolsPods();
     private final TurnSandboxes sandboxes = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry());
     private Workspace workspace;
     private MentorConversation conversation;
@@ -378,7 +378,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         Instant claimedUntil = Objects.requireNonNull(row(asked).getLeasedUntil());
         CountDownLatch listing = new CountDownLatch(1);
         CountDownLatch answers = new CountDownLatch(1);
-        FakeExecSandboxes stalled = new FakeExecSandboxes();
+        FakeToolsPods stalled = new FakeToolsPods();
         stalled.onList = () -> {
             listing.countDown();
             try {

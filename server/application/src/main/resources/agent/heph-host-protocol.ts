@@ -5,7 +5,7 @@
 // `${LLM_PROXY_URL}/turn/<turnId>/...` with the turn's own credential. The Java counterparts:
 //   commands                → HephTurnDispatcher, HephHostChannelConfiguration
 //   turn endpoints          → HephTurnController
-//   turn sandbox endpoints  → HephTurnSandboxController
+//   tools Pod endpoints  → HephTurnSandboxController
 
 /** The tools that work in the turn's context folder. Heph has them only in a turn whose context sets `contextFolder`. */
 export const CONTEXT_FOLDER_TOOL_NAMES = ["read", "bash", "load_context"] as const;
@@ -34,20 +34,20 @@ export function isLinkTool(name: string): name is LinkToolName {
 	return Object.hasOwn(LINK_TOOLS, name);
 }
 
-/** `POST turn/<id>/sandbox/read`: one page of one file in the turn sandbox, paged by the worker. */
+/** Pi's `read`: one page of a document from the worker (`POST turn/<id>/sandbox/document`) or of a file in the tools Pod. */
 export interface SandboxReadRequest {
 	path: string;
 	offset?: number;
 	limit?: number;
 }
 
-/** `POST turn/<id>/sandbox/exec`: one command in the turn sandbox, as `bash -c`, with cwd `/workspace`. */
+/** Pi's `bash`: one command in the tools Pod, as `bash -c`, with the context folder as its cwd. */
 export interface SandboxExecRequest {
 	command: string;
 	timeoutMs?: number;
 }
 
-/** `POST turn/<id>/sandbox/load`: one item staged into the context folder, such as `repos/github.com/acme/api@pull/42`. */
+/** `POST turn/<id>/sandbox/load`: one item the worker prepares for the context folder, such as `repos/github.com/acme/api@pull/42`. */
 export interface SandboxLoadRequest {
 	path: string;
 }
@@ -62,11 +62,11 @@ export interface SandboxRefusal {
 /** The page as Pi's `read` returns a text file, with Pi's continuation notices. */
 export type SandboxReadAnswer = { ok: true; text: string } | SandboxRefusal;
 
-/** The output's tail as Pi's `bash` returns it; the worker appends Pi's notice when it cut the output. */
+/** The output's tail as Pi's `bash` returns it, with Pi's notice when the host cut the output. */
 export type SandboxExecAnswer =
 	| {
 			ok: true;
-			/** `null` only when the worker killed the command after its timeout. */
+			/** `null` only when the command was killed after its timeout. */
 			exitCode: number | null;
 			output: string;
 			truncated: boolean;
@@ -100,34 +100,6 @@ export function asReadAnswer(value: unknown): SandboxReadAnswer | null {
 	return value.ok === true && typeof value.text === "string"
 		? { ok: true, text: value.text }
 		: asRefusal(value);
-}
-
-/** The worker's answer to a command, or `null` when it is malformed. */
-export function asExecAnswer(value: unknown): SandboxExecAnswer | null {
-	if (!isRecord(value)) {
-		return null;
-	}
-	if (value.ok !== true) {
-		return asRefusal(value);
-	}
-	const { exitCode, output, truncated, timedOut, fullOutputPath } = value;
-	if (
-		(exitCode !== null && !Number.isInteger(exitCode)) ||
-		typeof output !== "string" ||
-		typeof truncated !== "boolean" ||
-		typeof timedOut !== "boolean" ||
-		(fullOutputPath !== null && typeof fullOutputPath !== "string")
-	) {
-		return null;
-	}
-	return {
-		ok: true,
-		exitCode: typeof exitCode === "number" ? exitCode : null,
-		output,
-		truncated,
-		timedOut,
-		fullOutputPath,
-	};
 }
 
 /** The worker's answer to a load, or `null` when it is malformed. */
@@ -286,4 +258,61 @@ export interface TurnEnd {
 	reason: "ERROR" | "DEADLINE" | "STALLED" | null;
 	/** For the operator: the kind of failure of a failed attempt. */
 	detail: FailureDetail | null;
+}
+
+/** `POST turn/<id>/sandbox/bind`: the attempt's tools Pod, which the host dials on TCP, or a refusal. */
+export type SandboxBindAnswer =
+	| { ok: true; id: string; host: string; port: number; nonce: string }
+	| SandboxRefusal;
+
+/** The worker's answer to a bind, or `null` when it is malformed. */
+export function asBindAnswer(value: unknown): SandboxBindAnswer | null {
+	if (!isRecord(value)) {
+		return null;
+	}
+	if (value.ok !== true) {
+		return asRefusal(value);
+	}
+	const { id, host, port, nonce } = value;
+	return typeof id === "string" &&
+		typeof host === "string" &&
+		typeof port === "number" &&
+		Number.isInteger(port) &&
+		typeof nonce === "string"
+		? { ok: true, id, host, port, nonce }
+		: null;
+}
+
+/** What the worker says of a load's archive, in its `Hephaestus-Load` header: the answer and the summary command. */
+export interface SandboxLoadAbout {
+	path: string;
+	resolved: { ref: string; sha: string; cite: string };
+	note: string;
+	summary: string[];
+}
+
+/** The `Hephaestus-Load` header's answer, or `null` when it is malformed. */
+export function asLoadAbout(value: unknown): SandboxLoadAbout | null {
+	if (!isRecord(value) || value.ok !== true) {
+		return null;
+	}
+	const { path, resolved, note, summary } = value;
+	if (
+		typeof path !== "string" ||
+		typeof note !== "string" ||
+		!isRecord(resolved) ||
+		typeof resolved.ref !== "string" ||
+		typeof resolved.sha !== "string" ||
+		typeof resolved.cite !== "string" ||
+		!Array.isArray(summary) ||
+		!summary.every((part): part is string => typeof part === "string")
+	) {
+		return null;
+	}
+	return {
+		path,
+		resolved: { ref: resolved.ref, sha: resolved.sha, cite: resolved.cite },
+		note,
+		summary,
+	};
 }

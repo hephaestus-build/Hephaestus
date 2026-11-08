@@ -39,7 +39,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * What a turn reads from this worker: its context, and the tools it calls with the turn's credential. A turn's
- * context documents are built once, when its host asks for the context, and the turn sandbox stages that build, so one
+ * context documents are built once, when its host asks for the context, and the tools Pod stages that build, so one
  * turn sees one consistent picture. A link tool shows only the developer's own results and problems, and
  * {@code show_feedback} claims the feedback's conversation copy for the attempt. The build is dropped when the turn
  * ends, and in any case once no call of the attempt read it for {@link #UNREAD}: a turn whose host is lost or stopped
@@ -51,7 +51,7 @@ import tools.jackson.databind.node.ObjectNode;
 public class HephTurnContexts {
 
     /**
-     * The situation of a turn that this worker cannot give a context folder, for example when no turn sandbox can start.
+     * The situation of a turn that this worker cannot give a context folder, for example when no tools Pod can start.
      * The turn has no read, bash or load tool, and without this line its instructions still send it to read files.
      */
     static final String NO_CONTEXT_FOLDER =
@@ -177,7 +177,7 @@ public class HephTurnContexts {
                 contextFolder);
     }
 
-    /** The turn attempt's context documents, built once per attempt; the turn sandbox stages them. */
+    /** The turn attempt's context documents, built once per attempt; the tools Pod stages them. */
     public Map<String, byte[]> documents(TurnAttempt turn) {
         Build cached = inputs.getIfPresent(Attempt.of(turn));
         if (cached != null && cached.generation() == generations.current(turn.workspaceId())) {

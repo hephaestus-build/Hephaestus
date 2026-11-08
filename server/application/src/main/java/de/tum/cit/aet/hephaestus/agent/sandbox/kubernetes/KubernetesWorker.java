@@ -26,9 +26,9 @@ public class KubernetesWorker {
 
     public static final String KIND_REVIEW = "review";
     public static final String KIND_HOST = "host";
-    public static final String KIND_TURN = "turn";
+    public static final String KIND_TOOLS = "tools";
 
-    /** A Pod of the isolation probe: the chart's policies treat it as a review Pod or a turn Pod, by its kind. */
+    /** A Pod of the isolation probe: the chart's policies treat it as a review Pod or a tools Pod, by its kind. */
     public static final String PROBE = "hephaestus.build/isolation-probe";
 
     public static final String JOB_ID = "hephaestus.build/job-id";

@@ -173,7 +173,7 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
 COPY --from=gateway /opt/pi-sdk/dist/ /opt/pi-sdk/
 COPY pi/tools-launch.sh /opt/pi-sdk/tools-launch.sh
 # The tools program starts with no privilege on each transport, and its client gets the Pod's nonce from `hello`.
-# A review's sides start through their filter, and a command there can open no network socket.
+# Both start through the launcher: a conversation's tools Pod on TCP, a review's sides under their socket filter.
 RUN install -d -m 1777 /tmp/tools-check && node --input-type=module <<'CHECK' && rm -rf /tmp/tools /tmp/tools-check
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -182,7 +182,7 @@ import { ToolClient } from "/opt/pi-sdk/tool-client.js";
 
 const nonce = "image-check";
 const privilege = ["--reuid=1001", "--regid=1001", "--clear-groups", "--no-new-privs", "--bounding-set=-all", "--inh-caps=-all"];
-async function hello(address, env, program) {
+async function hello(address, env, program, use = async () => {}) {
   const tools = spawn(
     "setpriv",
     [...privilege, ...program],
@@ -190,7 +190,9 @@ async function hello(address, env, program) {
   );
   for (let attempt = 1; ; attempt += 1) {
     try {
-      (await ToolClient.open(address, nonce)).close();
+      const client = await ToolClient.open(address, nonce);
+      await use(client);
+      client.close();
       break;
     } catch (error) {
       if (attempt === 100 || tools.exitCode !== null) {
@@ -202,14 +204,19 @@ async function hello(address, env, program) {
   tools.kill();
   await once(tools, "exit");
 }
-await hello({ host: "127.0.0.1", port: 7100 }, { TOOLS_PORT: "7100" }, ["node", "/opt/pi-sdk/tools-server.js"]);
+await hello({ host: "127.0.0.1", port: 7100 }, { TOOLS_PORT: "7100", TOOLS_ROLE: "conversation" }, ["sh", "/opt/pi-sdk/tools-launch.sh"], async (client) => {
+  // The tools program listens on TCP, and a command it runs still opens no socket but a Unix one.
+  let out = "";
+  await client.exec({ command: "(exec 3<>/dev/tcp/127.0.0.1/7100) 2>/dev/null && echo OPEN || echo REFUSED", cwd: "/tmp/tools/workspace", timeoutMs: 10000 }, (chunk) => { out += chunk; });
+  if (out.trim() !== "REFUSED") throw new Error(`a conversation command opened a TCP socket: ${out}`);
+});
 await hello({ path: "/tmp/tools-check/tools.sock" }, { TOOLS_SOCKET: "/tmp/tools-check/tools.sock" }, ["sh", "/opt/pi-sdk/tools-launch.sh"]);
 CHECK
 RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     ln -s /opt/pi-sdk/node_modules /workspace/node_modules
 
-LABEL hephaestus.agent.runtime-contract=12
+LABEL hephaestus.agent.runtime-contract=13
 LABEL hephaestus.agent.node-version=${NODE_VERSION}
 LABEL hephaestus.agent.pi-version=${PI_VERSION}
 

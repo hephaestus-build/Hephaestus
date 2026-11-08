@@ -14,7 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeExecSandboxes;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeToolsPods;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
@@ -131,8 +131,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         var sandboxController = new HephTurnSandboxController(
                 contexts,
                 dispatcher,
-                HephTurnFixtures.folder(
-                        beans, new TurnSandboxes(new FakeExecSandboxes(), 0, new SimpleMeterRegistry())));
+                HephTurnFixtures.folder(beans, new TurnSandboxes(new FakeToolsPods(), 0, new SimpleMeterRegistry())));
         var application = new SpringApplication(
                 GatewayApplication.class,
                 Class.forName("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig"));
@@ -177,8 +176,10 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 Arguments.of("POST", "link-problem", "link-problem.request.json", 422),
                 Arguments.of("POST", "show-feedback", "show-feedback.request.json", 422),
                 // A refusal of the context folder is an answer the model reads, not an HTTP error.
-                Arguments.of("POST", "sandbox/read", "sandbox-read.request.json", 200),
-                Arguments.of("POST", "sandbox/exec", "sandbox-exec.request.json", 200),
+                Arguments.of("POST", "sandbox/document", "sandbox-document.request.json", 200),
+                Arguments.of("GET", "sandbox/documents", null, 200),
+                Arguments.of("POST", "sandbox/bind", "{}", 200),
+                Arguments.of("POST", "sandbox/discard", "sandbox-discard.request.json", 204),
                 Arguments.of("POST", "sandbox/load", "sandbox-load.request.json", 200),
                 Arguments.of("POST", "end", "end.request.json", 204));
     }

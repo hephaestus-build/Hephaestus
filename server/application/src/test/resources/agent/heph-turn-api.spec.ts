@@ -9,6 +9,7 @@ import test from "node:test";
 
 import { isRecord, type PartialMessage } from "../../../main/resources/agent/heph-host-protocol.ts";
 import {
+	declaredSize,
 	httpTurnApi,
 	isLeaseLost,
 	isTooLarge,
@@ -93,20 +94,6 @@ function isPartialMessages(value: unknown): value is PartialMessage[] {
 }
 
 const READ_ANSWER = { ok: true, text: '{\n  "pullRequests": []\n}' };
-const EXEC_ANSWER = {
-	ok: true,
-	exitCode: 0,
-	output: "c0ffee1 Pin the image\n",
-	truncated: false,
-	timedOut: false,
-	fullOutputPath: null,
-};
-const LOAD_ANSWER = {
-	ok: true,
-	path: "repos/github.com/acme/api",
-	resolved: { ref: "pull/42", sha: "7044a8a0c0ffee0c0ffee0c0ffee0c0ffee0c0ff", cite: "@7044a8a" },
-	note: "Staged pull request #42 of acme/api.",
-};
 
 void test("a tools quota wait ends when its turn is stopped", async () => {
 	const received = Promise.withResolvers<undefined>();
@@ -144,28 +131,22 @@ void test("tools wait for their turn budget instead of the shorter worker-reques
 	}
 });
 
-void test("the host sends its partial answer, searches, sandbox calls and end in the shape the worker binds", async () => {
+void test("the host sends its partial answer, searches, document reads and end in the shape the worker binds", async () => {
 	const worker = await fakeWorker([
 		{ status: 204 },
 		{ status: 200, body: { hits: [] } },
 		{ status: 200, body: READ_ANSWER },
-		{ status: 200, body: EXEC_ANSWER },
-		{ status: 200, body: LOAD_ANSWER },
 	]);
 	try {
 		const partial = recordOf(contract("partial.request.json"));
 		const search = recordOf(contract("search.request.json"));
-		const read = recordOf(contract("sandbox-read.request.json"));
-		const exec = recordOf(contract("sandbox-exec.request.json"));
-		const load = recordOf(contract("sandbox-load.request.json"));
+		const read = recordOf(contract("sandbox-document.request.json"));
 		const end = recordOf(contract("end.request.json"));
 		const deadline = recordOf(contract("end-deadline.request.json"));
 		assert.ok(isPartialMessages(partial.messages));
 		assert.ok(isList(end.entries));
 		assert.ok(typeof read.path === "string" && typeof read.offset === "number");
 		assert.ok(typeof read.limit === "number");
-		assert.ok(typeof exec.command === "string" && typeof exec.timeoutMs === "number");
-		assert.ok(typeof load.path === "string");
 		const { signal } = new AbortController();
 
 		await worker.api.partial({
@@ -179,11 +160,6 @@ void test("the host sends its partial answer, searches, sandbox calls and end in
 			await worker.api.read({ path: read.path, offset: read.offset, limit: read.limit }, signal),
 			READ_ANSWER,
 		);
-		assert.deepEqual(
-			await worker.api.exec({ command: exec.command, timeoutMs: exec.timeoutMs }, signal),
-			EXEC_ANSWER,
-		);
-		assert.deepEqual(await worker.api.load({ path: load.path }, signal), LOAD_ANSWER);
 		await worker.api.end({ outcome: "DONE", entries: end.entries, reason: null, detail: null });
 		assert.equal(deadline.detail, "deadline");
 		await worker.api.end({
@@ -198,16 +174,14 @@ void test("the host sends its partial answer, searches, sandbox calls and end in
 			[
 				["PUT", "/turn/turn-1/partial", "Bearer turn-token"],
 				["POST", "/turn/turn-1/search", "Bearer turn-token"],
-				["POST", "/turn/turn-1/sandbox/read", "Bearer turn-token"],
-				["POST", "/turn/turn-1/sandbox/exec", "Bearer turn-token"],
-				["POST", "/turn/turn-1/sandbox/load", "Bearer turn-token"],
+				["POST", "/turn/turn-1/sandbox/document", "Bearer turn-token"],
 				["POST", "/turn/turn-1/end", "Bearer turn-token"],
 				["POST", "/turn/turn-1/end", "Bearer turn-token"],
 			],
 		);
 		assert.deepEqual(
 			worker.received.map(({ body }) => body),
-			[partial, search, read, exec, load, end, deadline],
+			[partial, search, read, end, deadline],
 		);
 	} finally {
 		worker.close();
@@ -306,11 +280,10 @@ void test("a sandbox refusal is an answer, and an answer of another shape fails 
 		{ status: 200, body: refusal },
 		{
 			status: 200,
-			body: { ok: false, error: "UNAVAILABLE", detail: "No turn sandbox can start now." },
+			body: { ok: false, error: "UNAVAILABLE", detail: "No tools can start now." },
 		},
 		{ status: 200, body: { ok: true, content: "a shape no endpoint answers" } },
-		{ status: 200, body: { ...EXEC_ANSWER, exitCode: "0" } },
-		{ status: 200, body: { ...LOAD_ANSWER, resolved: { ref: "main" } } },
+		{ status: 200, body: { ok: true, id: "hephaestus-tools-1", host: "10.0.0.1", port: "7100" } },
 	]);
 	try {
 		const { signal } = new AbortController();
@@ -321,16 +294,13 @@ void test("a sandbox refusal is an answer, and an answer of another shape fails 
 		assert.deepEqual(await worker.api.exec({ command: "true" }, signal), {
 			ok: false,
 			error: "UNAVAILABLE",
-			detail: "No turn sandbox can start now.",
+			detail: "No tools can start now.",
 		});
 		await assert.rejects(worker.api.read({ path: "INDEX.md" }, signal), {
-			message: "the worker sent a malformed sandbox/read answer",
+			message: "the worker sent a malformed sandbox/document answer",
 		});
 		await assert.rejects(worker.api.exec({ command: "true" }, signal), {
-			message: "the worker sent a malformed sandbox/exec answer",
-		});
-		await assert.rejects(worker.api.load({ path: "repos/github.com/acme/api" }, signal), {
-			message: "the worker sent a malformed sandbox/load answer",
+			message: "the worker sent a malformed sandbox/bind answer",
 		});
 		assert.deepEqual(worker.received[0]?.body, { path: "inputs/context/nothing.json" });
 	} finally {
@@ -416,6 +386,90 @@ void test("a partial answer the worker did not answer is not sent again", async 
 		);
 
 		assert.equal(worker.received.length, 1);
+	} finally {
+		worker.close();
+	}
+});
+
+/** The size that headers with this content-length declare; none when `length` is `undefined`. */
+function sizeOf(length?: string) {
+	return declaredSize(new Headers(length === undefined ? {} : { "content-length": length }));
+}
+
+void test("a size the worker did not declare is no size: missing, empty and malformed lengths are refused", () => {
+	assert.equal(sizeOf(), null);
+	assert.equal(sizeOf(""), null);
+	assert.equal(sizeOf("-1"), null);
+	assert.equal(sizeOf("1e3"), null);
+	assert.equal(sizeOf("0"), 0);
+	assert.equal(sizeOf("4096"), 4096);
+});
+
+/** A worker that answers a load with an archive, `sized` or chunked, and every other call with a refusal. */
+async function archiveWorker(sized: boolean) {
+	const about = Buffer.from(
+		JSON.stringify({
+			ok: true,
+			path: "repos/github.com/acme/api",
+			resolved: { ref: "main", sha: "abc", cite: "@abc" },
+			note: "Loaded.",
+			summary: [],
+		}),
+	).toString("base64url");
+	const archive = Buffer.alloc(1024);
+	const server = createServer((request, response) => {
+		request.resume();
+		request.on("end", () => {
+			if (request.url?.endsWith("/sandbox/load") !== true) {
+				response
+					.writeHead(200, { "content-type": "application/json" })
+					.end(JSON.stringify({ ok: false, error: "UNAVAILABLE", detail: "No tools now." }));
+				return;
+			}
+			response.writeHead(200, {
+				"content-type": "application/x-tar",
+				"hephaestus-load": about,
+				"hephaestus-load-sha256": "0".repeat(64),
+				...(sized ? { "content-length": String(archive.length) } : {}),
+			});
+			// Without a content-length, Node sends the body chunked.
+			response.write(archive.subarray(0, 512));
+			response.end(archive.subarray(512));
+		});
+	});
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	const address = server.address();
+	assert.ok(address !== null && typeof address !== "string");
+	return {
+		api: httpTurnApi(`http://127.0.0.1:${address.port}`, "turn-1", "turn-token", [0, 0, 0]),
+		close: () => server.close(),
+	};
+}
+
+void test("a load archive with its size goes on to bind its tools Pod, and waits on no unread copy of itself", async () => {
+	const worker = await archiveWorker(true);
+	try {
+		assert.deepEqual(
+			await worker.api.load({ path: "repos/github.com/acme/api" }, AbortSignal.timeout(10_000)),
+			{
+				ok: false,
+				error: "UNAVAILABLE",
+				detail: "No tools now.",
+			},
+		);
+	} finally {
+		worker.close();
+	}
+});
+
+void test("a load archive that comes chunked, with no declared size, fails the load", async () => {
+	const worker = await archiveWorker(false);
+	try {
+		await assert.rejects(
+			worker.api.load({ path: "repos/github.com/acme/api" }, AbortSignal.timeout(10_000)),
+			/malformed sandbox\/load answer/u,
+		);
 	} finally {
 		worker.close();
 	}

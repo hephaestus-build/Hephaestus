@@ -2,7 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.mentor.sandbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -11,15 +14,13 @@ class ContextFolderPathsTest extends BaseUnitTest {
 
     @ParameterizedTest(name = "{0} -> {1}")
     @CsvSource({
-        "inputs/context/user.json, /workspace/inputs/context/user.json",
-        "/workspace/INDEX.md, /workspace/INDEX.md",
-        "./repos//github.com/acme/api/./README.md, /workspace/repos/github.com/acme/api/README.md",
-        "repos/github.com/acme/../acme/api, /workspace/repos/github.com/acme/api",
-        "/workspace, /workspace",
-        "/tmp/heph-out/12.log, /tmp/heph-out/12.log"
+        "inputs/context/user.json, inputs/context/user.json",
+        "/tmp/tools/workspace/INDEX.md, INDEX.md",
+        "./repos//github.com/acme/api/./README.md, repos/github.com/acme/api/README.md",
+        "repos/github.com/acme/../acme/api, repos/github.com/acme/api",
     })
-    void shouldReadThePathInTheFolderWhenItStaysInside(String path, String readable) {
-        assertThat(ContextFolderPaths.readable(path)).contains(readable);
+    void shouldNameThePathInTheFolderWhenItStaysInside(String path, String relative) {
+        assertThat(ContextFolderPaths.relative(path)).contains(relative);
     }
 
     @ParameterizedTest
@@ -28,15 +29,33 @@ class ContextFolderPathsTest extends BaseUnitTest {
                 "../etc/passwd",
                 "inputs/../../etc/passwd",
                 "/etc/passwd",
-                "/workspace/../etc/passwd",
-                "/workspacex/INDEX.md",
+                "/tmp/tools/workspace/../etc/passwd",
+                "/tmp/tools/workspacex/INDEX.md",
+                "/workspace/INDEX.md",
                 "~/.ssh/id_rsa",
-                "/tmp/heph-out/../../etc/passwd",
-                "/tmp/other.txt",
                 "/proc/1/environ",
                 "inputs/\0x"
             })
-    void shouldNameNoFileWhenThePathLeavesTheFolder(String path) {
-        assertThat(ContextFolderPaths.readable(path)).isEmpty();
+    void shouldNameNoPathWhenItLeavesTheFolder(String path) {
+        assertThat(ContextFolderPaths.relative(path)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"INDEX.md", "FIELDS.md", "inputs/context/user.json", "inputs/context/issue/7.json"})
+    void shouldServeTheIndexTheFieldGuideAndTheContextDocumentsFromMemory(String relative) {
+        assertThat(ContextFolderPaths.document(relative)).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"repos/github.com/acme/api/README.md", "inputs/other.json", "notes.txt", ""})
+    void shouldLeaveEveryOtherPathToTheToolsPod(String relative) {
+        assertThat(ContextFolderPaths.document(relative)).isFalse();
+    }
+
+    @Test
+    void shouldNameTheFolderInTheSystemPromptWhereTheToolsFindIt() {
+        String prompt = new String(PiRuntimeFactory.loadClasspathResource("mentor/system.md"), StandardCharsets.UTF_8);
+
+        assertThat(prompt).contains("context folder at `" + ContextFolderPaths.ROOT + "`");
     }
 }

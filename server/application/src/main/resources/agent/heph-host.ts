@@ -30,7 +30,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import {
-	asExecAnswer,
+	asBindAnswer,
+	asLoadAbout,
 	asLoadAnswer,
 	asReadAnswer,
 	CONTEXT_FOLDER_TOOL_NAMES,
@@ -54,6 +55,7 @@ import {
 	type TurnEnd,
 	type TurnModel,
 } from "./heph-host-protocol.ts";
+import { FOLDER, type LoadedArchive, TurnTools } from "./heph-tools.ts";
 import {
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
@@ -196,9 +198,9 @@ export type LinkAnswer = { admitted: true } | { admitted: false; reason: string 
 /** What a turn reads from and writes to its worker, with the turn's credential. */
 export interface TurnApi {
 	context: () => Promise<TurnContext>;
-	/** Reads one page of a file in the turn sandbox; a refusal is an answer, not a failure. */
+	/** Reads one page of a file in the tools Pod; a refusal is an answer, not a failure. */
 	read: (request: SandboxReadRequest, signal: AbortSignal) => Promise<SandboxReadAnswer>;
-	/** Runs one command in the turn sandbox. */
+	/** Runs one command in the tools Pod. */
 	exec: (request: SandboxExecRequest, signal: AbortSignal) => Promise<SandboxExecAnswer>;
 	/** Stages one item, such as a repository, into the turn's context folder. */
 	load: (request: SandboxLoadRequest, signal: AbortSignal) => Promise<SandboxLoadAnswer>;
@@ -278,6 +280,57 @@ export function failureSummary(failure: unknown): string {
 			: "";
 	return `${failureKind(failure)}${status}`;
 }
+
+/** The answer in a load's `Hephaestus-Load` header, or `null` when it is missing or malformed. */
+function loadAbout(header: string | null) {
+	try {
+		return asLoadAbout(JSON.parse(Buffer.from(header ?? "", "base64url").toString("utf8")));
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * The size that a response declares, or `null` when it declares none: `Number` reads a missing header as `0`, and a
+ * chunked response has none, so a bound on it would bound nothing.
+ */
+export function declaredSize(headers: Headers): number | null {
+	const length = headers.get("content-length");
+	if (length === null || !/^\d+$/u.test(length)) {
+		return null;
+	}
+	const size = Number(length);
+	return Number.isSafeInteger(size) ? size : null;
+}
+
+/** A load's archive as the worker sends it: what the model reads about it in a header, then the archive's bytes. */
+async function loadedArchive(response: Response, what: string): Promise<LoadedArchive> {
+	const { headers, body } = response;
+	const about = loadAbout(headers.get("hephaestus-load"));
+	const size = declaredSize(headers);
+	const sha256 = headers.get("hephaestus-load-sha256") ?? "";
+	if (about === null || size === null || !/^[0-9a-f]{64}$/u.test(sha256) || body === null) {
+		await body?.cancel();
+		throw new Error(`the worker sent a malformed ${what} answer`);
+	}
+	const stream = body;
+	async function* bytes() {
+		for await (const chunk of stream) {
+			yield Buffer.from(chunk);
+		}
+	}
+	return {
+		ok: true,
+		...about,
+		archive: { bytes: bytes(), size, sha256 },
+		cancel: async () => {
+			await stream.cancel().catch(() => undefined);
+		},
+	};
+}
+
+/** The most bytes of a turn's documents that the host holds: they are JSON documents of one turn, never a checkout. */
+const MAX_DOCUMENTS_BYTES = 32 * 1024 * 1024;
 
 export function httpTurnApi(
 	proxyUrl: string,
@@ -360,6 +413,50 @@ export function httpTurnApi(
 			}
 		}
 	}
+	const tools = new TurnTools({
+		bind: async (signal) => {
+			const what = "sandbox/bind";
+			const answer = asBindAnswer(await json(await call("POST", what, {}, signal, null), what));
+			if (answer === null) {
+				throw new Error(`the worker sent a malformed ${what} answer`);
+			}
+			return answer;
+		},
+		discard: async (id) => ok(await call("POST", "sandbox/discard", { id }), "sandbox/discard"),
+		documents: async (signal) => {
+			const what = "sandbox/documents";
+			const response = await call("GET", what, undefined, signal, null);
+			// A failure carries its text. A success keeps its body for the archive: a cancelled clone of it would wait for the
+			// archive's bytes to be read, and they never would be.
+			if (!response.ok) {
+				await ok(response, what);
+			}
+			const size = declaredSize(response.headers);
+			if (size === null || size > MAX_DOCUMENTS_BYTES) {
+				await response.body?.cancel();
+				throw new Error(`the worker sent a ${what} archive without a size within its bound`);
+			}
+			return Buffer.from(await response.arrayBuffer());
+		},
+		document: async (request, signal) => sandbox("document", request, signal, asReadAnswer),
+		load: async (path, signal) => {
+			const what = "sandbox/load";
+			const response = await call("POST", what, { path }, signal, null);
+			if (response.headers.get("content-type")?.startsWith("application/json") === true) {
+				const answer = asLoadAnswer(await json(response, what));
+				if (answer === null || answer.ok) {
+					throw new Error(`the worker sent a malformed ${what} answer`);
+				}
+				return answer;
+			}
+			// A failure carries its text. A success keeps its body for the archive: a cancelled clone of it would wait for the
+			// archive's bytes to be read, and they never would be.
+			if (!response.ok) {
+				await ok(response, what);
+			}
+			return loadedArchive(response, what);
+		},
+	});
 	return {
 		async context() {
 			const what = "reading the turn context";
@@ -368,13 +465,13 @@ export function httpTurnApi(
 			);
 		},
 		async read(request, signal) {
-			return sandbox("read", request, signal, asReadAnswer);
+			return tools.read(request, signal);
 		},
 		async exec(request, signal) {
-			return sandbox("exec", request, signal, asExecAnswer);
+			return tools.exec(request, signal);
 		},
 		async load(request, signal) {
-			return sandbox("load", request, signal, asLoadAnswer);
+			return tools.load(request, signal);
 		},
 		async link(tool, id, signal) {
 			const { path, idKey } = LINK_TOOLS[tool];
@@ -398,7 +495,11 @@ export function httpTurnApi(
 		},
 		async end(end) {
 			const what = "ending the turn";
-			await repeated(what, async () => ok(await call("POST", "end", end), what));
+			try {
+				await repeated(what, async () => ok(await call("POST", "end", end), what));
+			} finally {
+				await tools.close();
+			}
 		},
 	};
 }
@@ -692,14 +793,15 @@ const LIMITS = `${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whi
 const READ_DESCRIPTION =
 	`Read the contents of a file. Supports text files only. Output is truncated to ${LIMITS}. Use offset/limit for ` +
 	"large files. When you need the full file, continue with offset until complete. Paths are relative to the " +
-	"context folder, /workspace: start with INDEX.md. read also opens the full output file that bash names.";
+	`context folder, ${FOLDER}: start with INDEX.md. read also opens the full output file that bash names.`;
 
 const BASH_DESCRIPTION =
-	"Execute a bash command in the current working directory, /workspace, the context folder. Returns stdout and " +
+	`Execute a bash command in the current working directory, ${FOLDER}, the context folder. Returns stdout and ` +
 	`stderr. Output is truncated to last ${LIMITS}. If truncated, full output is saved to a file that read opens. ` +
 	`Optionally provide a timeout in seconds; ${EXEC_TIMEOUT_SECONDS} is the default and the most. The sandbox has ` +
-	"git, rg, grep, find, jq, sed, awk and node, and no network. The context folder is read-only; write scratch " +
-	"files under /tmp. Nothing is kept after this answer. Prefer small, targeted commands: rg with a path, " +
+	"git, rg, grep, find, jq, sed, awk and node, and no network. It sees the documents under inputs/ and the loaded " +
+	"repositories under repos/, which are read-only; INDEX.md and FIELDS.md open with read only. Write scratch " +
+	"files elsewhere under /tmp. Nothing is kept after this answer. Prefer small, targeted commands: rg with a path, " +
 	"git log -n 20, git diff --stat before a full diff.";
 
 const LOAD_DESCRIPTION =
@@ -716,7 +818,7 @@ function withStatus(output: string, status: string): string {
 	return output === "" ? status : `${output}\n\n${status}`;
 }
 
-/** `read`, `bash` and `load_context`: Pi's contracts, run by the worker in the turn sandbox. */
+/** `read`, `bash` and `load_context`: Pi's contracts, run by the worker in the tools Pod. */
 function contextFolderTools(
 	api: TurnApi,
 	signalOf: (signal: AbortSignal | undefined) => AbortSignal,

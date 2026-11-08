@@ -204,6 +204,11 @@ const kindOf = (resource: Resource) => get(resource, "kind");
 const nameOf = (resource: Resource) => String(get(resource, "metadata", "name"));
 const componentOf = (resource: Resource) =>
 	get(resource, "metadata", "labels", "app.kubernetes.io/component");
+/** A Pod selector of one sandbox kind. */
+const sandboxKind = (value: string) => ({
+	matchLabels: { "hephaestus.build/sandbox-kind": value },
+});
+
 const workloads = (resources: Resource[]) =>
 	resources.filter((resource) => ["Deployment", "StatefulSet"].includes(String(kindOf(resource))));
 const workload = (resources: Resource[], component: string) => {
@@ -1440,9 +1445,8 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 		[
 			sandboxes,
 			[
+				// No pods/exec: the worker runs no command in any sandbox Pod.
 				...["create", "delete", "get", "list", "patch", "watch"].map((verb) => `/pods:${verb}`),
-				"/pods/exec:create",
-				"/pods/exec:get",
 				"/pods/log:get",
 				...["create", "delete", "get", "list", "watch"].map((verb) => `batch/jobs:${verb}`),
 				// A quota refusal of a review Pod: the Job controller's event.
@@ -1487,7 +1491,26 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 			)
 			.map(nameOf)
 			.toSorted(byCodePoint);
-	assert.deepEqual(policiesIn(sandboxes), ["heph-sandbox-deny", "heph-sandbox-gateway"]);
+	assert.deepEqual(policiesIn(sandboxes), [
+		"heph-sandbox-deny",
+		"heph-sandbox-gateway",
+		"heph-sandbox-host-tools",
+		"heph-sandbox-tools",
+	]);
+	const policy = (name: string) =>
+		resources.find((resource) => kindOf(resource) === "NetworkPolicy" && nameOf(resource) === name);
+	// A tools Pod accepts its host on the tools port, and nothing else; its host may dial it there.
+	const toolsPort = [{ port: 7100, protocol: "TCP" }];
+	assert.deepEqual(get(policy("heph-sandbox-tools"), "spec"), {
+		podSelector: sandboxKind("tools"),
+		policyTypes: ["Ingress"],
+		ingress: [{ from: [{ podSelector: sandboxKind("host") }], ports: toolsPort }],
+	});
+	assert.deepEqual(get(policy("heph-sandbox-host-tools"), "spec"), {
+		podSelector: sandboxKind("host"),
+		policyTypes: ["Egress"],
+		egress: [{ to: [{ podSelector: sandboxKind("tools") }], ports: toolsPort }],
+	});
 	const gateway = resources.find(
 		(resource) =>
 			kindOf(resource) === "NetworkPolicy" && nameOf(resource) === "heph-sandbox-gateway",
@@ -2387,10 +2410,10 @@ const sandboxPods = (() => {
 	return {
 		review: entry("review"),
 		hephHost: entry("hephHost"),
-		turn: entry("turnSandbox"),
+		turn: entry("toolsPod"),
 		probe: entry("isolationProbe"),
-		pooledTurns: count("pooledTurnSandboxes"),
-		activeTurnSandboxes: count("activeTurnSandboxes"),
+		pooledTurns: count("pooledToolsPods"),
+		activeToolsPods: count("activeToolsPods"),
 	};
 })();
 const sandboxGib = {
@@ -2506,8 +2529,7 @@ for (const name of profiles) {
 			const workerReviews = Math.min(held, replicas * perWorker);
 			const turns = Number(envValue(worker, "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"));
 			assert.ok(Number.isInteger(turns), "the profile bounds the Heph turns");
-			const turnSandboxes =
-				sandboxPods.pooledTurns + Math.min(turns, sandboxPods.activeTurnSandboxes);
+			const turnSandboxes = sandboxPods.pooledTurns + Math.min(turns, sandboxPods.activeToolsPods);
 			const sum = (parts: [typeof sandboxPods.review, number][]) => ({
 				gib: parts.reduce((total, [pod, count]) => total + pod.gib * count, 0),
 				cpu: parts.reduce((total, [pod, count]) => total + pod.cpu * count, 0),
@@ -2721,13 +2743,12 @@ await test("the 16 GiB profile runs its reviews and Heph turns, and an upgrade, 
 		cpu:
 			reviewSlots * sandboxPods.review.cpu +
 			sandboxPods.hephHost.cpu +
-			(sandboxPods.pooledTurns + Math.min(turns, sandboxPods.activeTurnSandboxes)) *
+			(sandboxPods.pooledTurns + Math.min(turns, sandboxPods.activeToolsPods)) *
 				sandboxPods.turn.cpu,
 		memory:
 			(reviewSlots * sandboxGib.review +
 				sandboxGib.hephHost +
-				(sandboxGib.pooledTurns + Math.min(turns, sandboxPods.activeTurnSandboxes)) *
-					sandboxGib.turn) *
+				(sandboxGib.pooledTurns + Math.min(turns, sandboxPods.activeToolsPods)) * sandboxGib.turn) *
 			2 ** 30,
 	});
 	assert.equal(turns, 32);

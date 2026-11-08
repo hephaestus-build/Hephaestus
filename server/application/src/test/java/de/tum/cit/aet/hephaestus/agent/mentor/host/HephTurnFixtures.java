@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.host;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeExecSandboxes;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeToolsPods;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextGenerations;
@@ -43,7 +43,7 @@ final class HephTurnFixtures {
                 beans,
                 results,
                 feedback,
-                folder(beans, new TurnSandboxes(new FakeExecSandboxes(), 0, new SimpleMeterRegistry())));
+                folder(beans, new TurnSandboxes(new FakeToolsPods(), 0, new SimpleMeterRegistry())));
     }
 
     /** The worker's turn contexts with the context folder a test chooses. */
@@ -71,7 +71,7 @@ final class HephTurnFixtures {
                 beans,
                 beans.getBean(ResultHistoryQuery.class),
                 beans.getBean(ConversationClaims.class),
-                folder(beans, new TurnSandboxes(new FakeExecSandboxes(), 0, new SimpleMeterRegistry())),
+                folder(beans, new TurnSandboxes(new FakeToolsPods(), 0, new SimpleMeterRegistry())),
                 generations);
     }
 

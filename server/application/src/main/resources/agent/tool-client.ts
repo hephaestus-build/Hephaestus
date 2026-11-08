@@ -370,13 +370,23 @@ export class ToolClient {
 		const first = integer(reply.header, "offset");
 		const totalLines = integer(reply.header, "totalLines");
 		const nextOffset = integer(reply.header, "nextOffset");
-		if (first === undefined || totalLines === undefined || nextOffset === undefined) {
+		const newlines = integer(reply.header, "newlines");
+		const firstLineBytes = integer(reply.header, "firstLineBytes");
+		if (
+			first === undefined ||
+			totalLines === undefined ||
+			nextOffset === undefined ||
+			newlines === undefined ||
+			firstLineBytes === undefined
+		) {
 			throw broken("malformed read reply");
 		}
 		return {
 			text: reply.body.toString("utf8"),
 			offset: first,
 			totalLines,
+			newlines,
+			firstLineBytes,
 			truncated: reply.header.truncated === true,
 			nextOffset,
 		};
@@ -385,9 +395,10 @@ export class ToolClient {
 	/**
 	 * Streams a tar archive into a new directory `dir` on the tools side, which extracts it read-only once its size and
 	 * SHA-256 match. It waits while the socket is full, so the loop holds at most one frame of the archive at a time, and
-	 * it stops as soon as the tools side refuses the put.
+	 * it stops as soon as the tools side refuses the put. With `replace`, the new tree takes the place of a directory that
+	 * an earlier put made, on a tools side that allows it.
 	 */
-	async put(dir: string, archive: PutArchive): Promise<void> {
+	async put(dir: string, archive: PutArchive, options: { replace?: boolean } = {}): Promise<void> {
 		if (archive.size > LIMITS.putBytes) {
 			throw new ToolProtocolError("request", "The archive is larger than a checkout may be.");
 		}
@@ -397,7 +408,14 @@ export class ToolClient {
 		const reply = Promise.allSettled([
 			this.#request(
 				id,
-				{ type: "put", id, dir, size: archive.size, sha256: archive.sha256 },
+				{
+					type: "put",
+					id,
+					dir,
+					size: archive.size,
+					sha256: archive.sha256,
+					...(options.replace === true ? { replace: true } : {}),
+				},
 				FINAL.put,
 			).reply,
 		]);

@@ -1,5 +1,5 @@
 /**
- * Heph's context folder and turn sandboxes: the read-only file tree that one turn attempt reads with {@code read},
+ * Heph's context folder and tools Pods: the read-only file tree that one turn attempt reads with {@code read},
  * {@code bash} and {@code load_context}, in a sandbox of its own on this worker.
  * {@code docs/contributor/unified-pi-runtime.mdx} has the model.
  */

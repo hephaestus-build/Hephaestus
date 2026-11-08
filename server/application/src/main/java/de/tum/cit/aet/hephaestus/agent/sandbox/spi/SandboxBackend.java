@@ -13,7 +13,7 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>A sandbox runs two processes of one image, in order. The initializer fills {@code /workspace} from the worker's
  * gateway and may write it. The runtime then runs with {@code /workspace} read-only. Each backend guarantees, for both:
- * the user {@link ExecSandboxes#SANDBOX_USER}, a read-only root file system, no capability, no privilege escalation,
+ * the user 1000, a read-only root file system, no capability, no privilege escalation,
  * the memory, CPU and process limits of the launch, no credential and no environment but the launch's, and no network
  * destination but the worker's gateway. Only a Heph host whose worker runs outside any container may get a route out,
  * where a backend has no other way to its gateway.

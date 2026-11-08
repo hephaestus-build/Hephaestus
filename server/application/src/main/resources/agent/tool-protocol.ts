@@ -240,6 +240,10 @@ export interface ReadPage {
 	/** The first line of the page, counted from 1. */
 	offset: number;
 	totalLines: number;
+	/** The newline bytes of the whole file: Pi counts its lines as these plus one. */
+	newlines: number;
+	/** The length in bytes of the page's first line, without its newline, also when the body bound cut it. */
+	firstLineBytes: number;
 	/**
 	 * Whether the body bound ended the page before the lines that were asked for: the page then holds the whole lines
 	 * that fit, or only the start of its first line when that line alone is past the bound.

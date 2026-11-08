@@ -40,7 +40,8 @@ The worker stages the conversation host's scripts, its system prompt, and a `pac
 It also reads the practice-script library at `/opt/practice-scripts`, through the same workspace link that the practice runner uses.
 It reads the stored path and the situation of a turn from the worker (`GET context`).
 
-The conversation host reads context documents and repositories from a [context folder](../practice-review-glossary.mdx#runtime-terms) in a turn sandbox, through the worker ([Conversation runtime](../unified-pi-runtime.mdx#context-folder)).
+The conversation host reads context documents and repositories from a [context folder](../practice-review-glossary.mdx#runtime-terms) ([Conversation runtime](../unified-pi-runtime.mdx#context-folder)).
+The worker serves the documents, and the host reaches the rest in the turn's tools Pod.
 That folder uses a layout similar to the job folder: documents under `inputs/context/` and repositories under `repos/`.
 The practice runner and the conversation host execute on Node.
 See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md).

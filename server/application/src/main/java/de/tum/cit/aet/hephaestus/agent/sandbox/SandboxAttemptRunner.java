@@ -51,27 +51,8 @@ public class SandboxAttemptRunner implements SandboxManager {
     private static final String MDC_JOB_ID = "sandbox.jobId";
     private static final String MDC_SANDBOX = "sandbox.id";
 
-    /**
-     * Overrides repository, global and system Git config; explicit {@code git -c} options take precedence.
-     *
-     * <p>Each entry pairs a git config key that can execute code with a value that neutralises it: an
-     * empty string disables the feature, {@code /nonexistent} points it at a path that cannot exist, and
-     * {@code cat} is the canonical no-op pager.
-     *
-     * @see <a href="https://git-scm.com/docs/git-config#_environment">git-config environment</a>
-     */
-    static final List<Map.Entry<String, String>> GIT_SECURITY_CONFIGS = List.of(
-            Map.entry("core.hooksPath", "/nonexistent"),
-            Map.entry("core.fsmonitor", "false"),
-            Map.entry("core.sshCommand", ""),
-            Map.entry("core.askPass", ""),
-            Map.entry("core.editor", ""),
-            Map.entry("core.pager", "cat"),
-            Map.entry("core.gitProxy", ""),
-            Map.entry("sequence.editor", ""),
-            Map.entry("credential.helper", ""),
-            Map.entry("diff.external", ""),
-            Map.entry("protocol.ext.allow", "never"));
+    /** Overrides repository, global and system Git config; explicit {@code git -c} options take precedence. */
+    static final List<Map.Entry<String, String>> GIT_SECURITY_CONFIGS = SandboxGitHardening.CONFIGS;
 
     private final SandboxBackend backend;
     private final SandboxWorkspaceManager workspaceManager;
@@ -385,18 +366,7 @@ public class SandboxAttemptRunner implements SandboxManager {
         addTraceEnvironment(env);
 
         // The agent can clone a repository at runtime and carry a hostile .git/config in with it.
-        int idx = 0;
-        for (var gitConfig : GIT_SECURITY_CONFIGS) {
-            env.put("GIT_CONFIG_KEY_" + idx, gitConfig.getKey());
-            env.put("GIT_CONFIG_VALUE_" + idx, gitConfig.getValue());
-            idx++;
-        }
-        env.put("GIT_CONFIG_COUNT", String.valueOf(idx));
-
-        // Prevent git from prompting interactively (would hang the agent)
-        env.put("GIT_TERMINAL_PROMPT", "0");
-        // Prevent system-wide gitattributes from being loaded
-        env.put("GIT_ATTR_NOSYSTEM", "1");
+        env.putAll(SandboxGitHardening.environment());
 
         // One route for every provider: the proxy identifies the connection from the authenticated job token, not the
         // URL.

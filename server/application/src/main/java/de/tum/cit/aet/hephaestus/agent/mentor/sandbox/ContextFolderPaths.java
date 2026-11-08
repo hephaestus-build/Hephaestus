@@ -3,12 +3,11 @@ package de.tum.cit.aet.hephaestus.agent.mentor.sandbox;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Optional;
-import java.util.regex.Pattern;
 
-/** Paths in the context folder, which is {@code /workspace} in the turn sandbox. */
+/** Paths in the context folder: the tools workspace of the turn's tools Pod, where its host puts what it loads. */
 final class ContextFolderPaths {
 
-    static final String ROOT = "/workspace";
+    static final String ROOT = "/tmp/tools/workspace";
 
     /** Where the context documents are, as {@code ContentSource#OUTPUT_PREFIX} names them. */
     static final String DOCUMENTS = "inputs/context/";
@@ -49,25 +48,10 @@ final class ContextFolderPaths {
         return Optional.of(String.join("/", segments));
     }
 
-    /** Where {@code bash} writes the full output of a command that it cut. */
-    static final String OUTPUTS = "/tmp/heph-out/";
-
-    private static final Pattern OUTPUT = Pattern.compile("[0-9]{1,9}\\.log");
-
-    /**
-     * The absolute path that {@code read} may read: a path in the folder, or a full output of {@code bash}. Empty for
-     * anything else.
-     */
-    static Optional<String> readable(String path) {
-        String trimmed = path.strip();
-        if (trimmed.startsWith(OUTPUTS)) {
-            String name = trimmed.substring(OUTPUTS.length());
-            return OUTPUT.matcher(name).matches() ? Optional.of(OUTPUTS + name) : Optional.empty();
-        }
-        return relative(trimmed).map(ContextFolderPaths::absolute);
-    }
-
-    static String absolute(String relative) {
-        return relative.isEmpty() ? ROOT : ROOT + "/" + relative;
+    /** Whether the worker serves the path from the turn's memory: {@code INDEX.md}, {@code FIELDS.md} and the documents. */
+    static boolean document(String relative) {
+        return relative.equals(ContextFolderIndex.PATH)
+                || relative.equals(ContextFolderIndex.FIELDS_PATH)
+                || relative.startsWith(DOCUMENTS);
     }
 }

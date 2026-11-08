@@ -2,7 +2,7 @@
 
 | Variable | Setting | Application default | Containers | Description |
 | --- | --- | --- | --- | --- |
-| `HEPHAESTUS_SANDBOX_KUBERNETES_CONVERSATION_PRIORITY_CLASS` | `hephaestus.sandbox.kubernetes.conversation-priority-class` |  | `worker` | The PriorityClass of the conversation host and turn sandbox Pods. Blank gives none. |
+| `HEPHAESTUS_SANDBOX_KUBERNETES_CONVERSATION_PRIORITY_CLASS` | `hephaestus.sandbox.kubernetes.conversation-priority-class` |  | `worker` | The PriorityClass of the conversation hosts and tools Pods. Blank gives none. |
 | `HEPHAESTUS_SANDBOX_KUBERNETES_GATEWAY_PROBE_SERVICE` | `hephaestus.sandbox.kubernetes.gateway-probe-service` | `default: (empty)` | `worker` | DNS name of the Service that the isolation probe proves a sandbox's route through. Empty where no such Service exists, as with a worker outside the cluster. |
 | `HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE` | `hephaestus.sandbox.kubernetes.namespace` | `default: (empty)` | `worker` | The namespace of every sandbox Pod and Job. The installation owns it alone, so everything in it of the sandbox kinds is this installation's. |
 | `HEPHAESTUS_SANDBOX_KUBERNETES_NODE_SELECTOR` | `hephaestus.sandbox.kubernetes.node-selector` | `default: (empty)` | `worker` | The node labels of sandbox Pods, as a JSON object. Empty allows any node. |

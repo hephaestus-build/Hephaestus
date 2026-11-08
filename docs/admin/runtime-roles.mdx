@@ -748,42 +748,54 @@ The worker gives each attempt a credential that is valid only for that turn.
 The worker resolves provider keys and never sends them to the host.
 PostgreSQL remains the billing record.
 
-### Turn sandboxes
+### Conversation tools Pods
 
-Hephaestus reads its context documents, code, and Git history in a [turn sandbox](/contributor/practice-review-glossary#runtime-terms) on the worker, not in the conversation host.
-The first read of a turn attempt takes one turn sandbox.
-The worker removes it when the attempt ends.
-Each worker also keeps a pool of 2 empty turn sandboxes, so that a turn does not wait for a container start.
+Hephaestus reads its context documents, code, and Git history with the tools `read`, `bash` and `load_context`.
+The worker serves `INDEX.md`, `FIELDS.md` and the context documents from the memory of the turn attempt.
+A command, a load, and a read of another file run in a [tools Pod](/contributor/practice-review-glossary#runtime-terms) on the worker, not in the conversation host.
+An attempt takes one tools Pod at its first `bash` or `load_context`, or at its first `read` of another file.
+The conversation host then puts the context documents under `inputs/` in the tools Pod.
+The host connects to the tools Pod itself.
 
-[Kubernetes § Sandbox sizes](./kubernetes#sandbox-sizes) owns each turn sandbox's requests and limits.
+The worker removes the tools Pod when the attempt ends.
+Each worker also keeps a pool of 2 empty tools Pods, so that a turn does not wait for a Pod start.
+
+[Kubernetes § Sandbox sizes](./kubernetes#sandbox-sizes) owns each tools Pod's requests and limits.
 The [conversation admission budget](./sizing#conversation-turn-admission) counts tools Pods separately from resident turns.
-Turn sandboxes have no network and use the release's agent image.
-Their Pods have the label `hephaestus.kind=heph-sandbox`.
 
-- One turn sandbox for each running conversation turn that reads, at most `hephaestus.worker.capacity.mentor-max`.
-- 2 empty turn sandboxes in the pool.
+A tools Pod is a Kubernetes Job with one container, `tools`, from the release's agent image.
+The container runs only the tools program, with no service account token and no credential.
+Its Pod has the label `hephaestus.build/sandbox-kind=tools`.
+Only conversation hosts can connect to it, on TCP port 7100 ([Kubernetes § Worker](./kubernetes#worker)).
+A tools Pod has no egress.
 
-Each turn sandbox has these fixed limits:
+- One tools Pod for each running turn attempt that needs one, within the conversations quota.
+- 2 empty tools Pods in the pool.
+
+Each tools Pod has these fixed limits:
 
 - 1 CPU.
 - Memory and storage from the [Pod-kind table](./kubernetes#sandbox-sizes).
 - The process limit enforced by the kubelet.
-- No network.
+- No egress.
 
-The limits are bounds, not reservations. An idle sandbox runs only `sleep`.
-`SANDBOX_MAX_CONCURRENT` and the review capacity of the worker do not count turn sandboxes.
-Their Pods have `hephaestus.build/sandbox-kind=turn`.
+The limits are bounds, not reservations. An idle tools Pod runs only its tools program.
+`SANDBOX_MAX_CONCURRENT` and the review capacity of the worker do not count tools Pods.
 
-Turn sandboxes need the qualified Kubernetes worker and the pinned agent image of the release.
-If the worker cannot start a turn sandbox, Hephaestus cannot read the developer's work and says so.
-The worker logs `Could not fill the turn sandbox pool` at `WARN` and tries again every 60 seconds.
+Tools Pods need the qualified Kubernetes worker and the pinned agent image of the release.
+If the worker cannot start a tools Pod, Hephaestus cannot read the developer's work and says so.
+The worker logs `Could not fill the tools Pod pool` at `WARN` and tries again every 60 seconds.
+If the conversations quota cannot hold one tools Pod, the worker logs `The tools quota cannot hold one tools Pod` at `WARN`.
+
 Hephaestus reads repositories only where the worker has Git mirrors (`GIT_CHECKOUT_ENABLED`).
 Without Git mirrors, Hephaestus tells the developer that it cannot read the code.
-No setting turns turn sandboxes on or off.
+No setting turns tools Pods on or off.
 
-The worker removes leftover turn sandboxes at startup and every 60 seconds.
-It never removes a turn sandbox of another worker that still runs.
+The worker also removes a tools Pod when the data of its workspace changes, or when the conversation host reports it broken.
+The worker removes leftover tools Pods at startup and every 60 seconds.
+It never removes a tools Pod of another worker that still runs.
 The worker uses its sandbox namespace and worker ownership labels for cleanup.
+To remove a tools Pod, the worker deletes its Job.
 Host development does not run the worker role.
 
 The [Conversation runtime](/contributor/unified-pi-runtime#context-folder) gives the other limits and the measured times.
@@ -876,7 +888,7 @@ Missing metadata prevents worker startup.
 The [host development launcher](/contributor/local-development#kubernetes) supplies these values for the shared dev cluster.
 
 Every worker beats in `worker_registry`, also with `AGENT_ENABLED=false`.
-The other workers keep a worker's conversation host and turn sandboxes while it beats.
+The other workers keep a worker's conversation host and tools Pods while it beats.
 
 ## Graceful drain
 

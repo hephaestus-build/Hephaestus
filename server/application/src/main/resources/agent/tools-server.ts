@@ -17,6 +17,7 @@ import {
 	realpathSync,
 	statSync,
 	type WriteStream,
+	existsSync,
 } from "node:fs";
 import {
 	chmod,
@@ -67,6 +68,18 @@ export interface ToolsServerOptions {
 	scriptEntry?: string;
 	/** Whether this side only runs practice programs: it then refuses `exec`, `read`, `put` and `reset`. */
 	programsOnly?: boolean;
+	/** The operations this side offers, when fewer than all: a conversation's tools Pod has no `script.run` and no `reset`. */
+	operations?: readonly string[];
+	/**
+	 * Whether a put may create its missing parents inside its put root, and replace a directory that an earlier put made.
+	 * A conversation loads a repository under `repos/<host>/<path>`, and loads it again at another ref in the same place.
+	 */
+	nestedPuts?: boolean;
+	/**
+	 * The system call filter that every program of an `exec` starts under, when the tools program itself runs without one:
+	 * a conversation's tools Pod listens on TCP, and its commands still open no socket but a Unix one.
+	 */
+	commandFilter?: string;
 	/**
 	 * Whether this user runs nothing but the tools: then `reset` also ends processes that left their call's group.
 	 * Only the sidecar's own user does; a test shares its user with the test runner.
@@ -111,6 +124,8 @@ interface Call {
 
 interface Put {
 	dir: string;
+	/** For a replacing put, the directory that an earlier put created: the new tree takes its place once extracted. */
+	replaces?: string;
 	file: string;
 	sink: WriteStream;
 	hash: ReturnType<typeof createHash>;
@@ -366,6 +381,8 @@ async function readPage(file: string, offset: number, limit: number) {
 	let line = 1;
 	/** Whether bytes follow the last newline: they are a last line without one. */
 	let lastLineOpen = false;
+	/** The page's first line in bytes, without its newline, also when the body bound cut it. */
+	let firstLineBytes = 0;
 	/** Where the body bound ended the page, if it did, and whether it cut the page's only line. */
 	const stop: { nextOffset?: number; cutLine: boolean } = { cutLine: false };
 	/** Adds a piece of the current line to the page, or ends the page where the body bound falls. */
@@ -398,6 +415,9 @@ async function readPage(file: string, offset: number, limit: number) {
 			while (start < chunk.length) {
 				const newline = chunk.indexOf(0x0a, start);
 				const end = newline === -1 ? chunk.length : newline + 1;
+				if (line === offset) {
+					firstLineBytes += (newline === -1 ? end : newline) - start;
+				}
 				if (line >= offset && line <= last && stop.nextOffset === undefined) {
 					take(chunk.subarray(start, end));
 				}
@@ -442,9 +462,38 @@ async function readPage(file: string, offset: number, limit: number) {
 	return {
 		body,
 		totalLines,
+		newlines: line - 1,
+		firstLineBytes,
 		truncated: stop.nextOffset !== undefined,
 		nextOffset: stop.nextOffset ?? Math.max(offset, Math.min(last, totalLines) + 1),
 	};
+}
+
+/**
+ * What each role of the tools program may do. A conversation's tools Pod gets the turn's documents under `inputs/` and its
+ * checkouts under `repos/`, both by put, and runs no practice program.
+ */
+export function roleOptions(
+	role: string | undefined,
+	workspace: string,
+	repos: string,
+): Pick<
+	ToolsServerOptions,
+	"putRoots" | "scriptEntry" | "programsOnly" | "operations" | "nestedPuts"
+> {
+	if (role === "programs") {
+		return { putRoots: [repos], scriptEntry: "/opt/practice-scripts/child.ts", programsOnly: true };
+	}
+	if (role === "conversation") {
+		const filter = process.env.TOOLS_COMMAND_FILTER;
+		return {
+			putRoots: [workspace],
+			operations: ["exec", "read", "put"],
+			nestedPuts: true,
+			...(filter === undefined || filter === "" ? {} : { commandFilter: filter }),
+		};
+	}
+	return { putRoots: [repos] };
 }
 
 export function startToolsServer(options: ToolsServerOptions): Server {
@@ -478,6 +527,41 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 	let resets = 0;
 	const trash = new Set<string>();
 	const retiring = new Set<string>();
+	/** The directories that puts made, which a later put may replace; a reset forgets them with the workspace. */
+	const putMade = new Set<string>();
+	/** The put-made directories that a put is replacing now: two puts never replace one directory at once. */
+	const replacing = new Set<string>();
+
+	/** Creates `dir`'s missing parents inside a put root, one real directory at a time: it never follows a symlink. */
+	async function makeParents(dir: string): Promise<void> {
+		// Compare real paths: the deepest parent that exists, resolved, with the missing names after it.
+		let existing = path.dirname(path.resolve(dir));
+		const missing: string[] = [];
+		while (!existsSync(existing) && path.dirname(existing) !== existing) {
+			missing.unshift(path.basename(existing));
+			existing = path.dirname(existing);
+		}
+		const parent = path.join(realpathSync(existing), ...missing);
+		for (const root of options.putRoots.map((entry) => realpathSync(entry))) {
+			if (!within(root, parent)) {
+				continue;
+			}
+			let current = root;
+			for (const name of path
+				.relative(root, parent)
+				.split(path.sep)
+				.filter((part) => part !== "")) {
+				current = path.join(current, name);
+				const found = await lstat(current).catch(() => undefined);
+				if (found === undefined) {
+					await mkdir(current, { mode: 0o700 }).catch(() => undefined);
+				} else if (!found.isDirectory()) {
+					return;
+				}
+			}
+			return;
+		}
+	}
 	let reclaiming = false;
 	let sweepRequested = false;
 
@@ -626,7 +710,10 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			} else if (argv === undefined) {
 				program = ["bash", "-c", command];
 			}
-			const [file, ...args] = program ?? [];
+			const [file, ...args] =
+				program === undefined || options.commandFilter === undefined
+					? (program ?? [])
+					: ["setpriv", "--seccomp-filter", options.commandFilter, ...program];
 			if (file === undefined) {
 				refuse(id, "request", "An exec names exactly one of a command or an argv.");
 				return;
@@ -957,6 +1044,8 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 						type: "read",
 						offset,
 						totalLines: page.totalLines,
+						newlines: page.newlines,
+						firstLineBytes: page.firstLineBytes,
 						truncated: page.truncated,
 						nextOffset: page.nextOffset,
 					},
@@ -1019,6 +1108,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 					throw new ToolProtocolError("reset", "The active tool operations could not stop.");
 				}
 				await retire(workspace);
+				putMade.clear();
 				await mkdir(workspace, { mode: 0o700 });
 				for (const directory of [options.scratch, ...options.putRoots]) {
 					await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -1032,17 +1122,34 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 
 		async function startPut(id: string, header: Header, arrivedAfter: number): Promise<void> {
 			const requested = text(header, "dir") ?? "";
-			const parent = await contained(path.dirname(requested), options.putRoots);
+			const replace = header.replace === true;
+			let parent: string | undefined;
+			let exists = false;
+			try {
+				if (options.nestedPuts === true && !replace && path.isAbsolute(requested)) {
+					await makeParents(requested);
+				}
+				parent = await contained(path.dirname(requested), options.putRoots);
+				exists = await lstat(requested).then(
+					() => true,
+					() => false,
+				);
+			} catch {
+				// A command of the same user can swap a parent while it is checked; the put is refused, not the connection.
+				parent = undefined;
+			}
 			const size = integer(header, "size");
 			const sha256 = text(header, "sha256");
-			const fresh = await lstat(requested).then(
-				() => false,
-				() => true,
-			);
+			const target = parent === undefined ? undefined : path.join(parent, path.basename(requested));
+			const replaceable =
+				options.nestedPuts === true &&
+				target !== undefined &&
+				putMade.has(target) &&
+				!replacing.has(target);
 			if (
 				parent === undefined ||
 				!path.isAbsolute(requested) ||
-				!fresh ||
+				(replace ? !exists || !replaceable : exists) ||
 				size === undefined ||
 				size < 0 ||
 				size > LIMITS.putBytes ||
@@ -1051,7 +1158,9 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				await dropPut(
 					id,
 					"request",
-					"A put names a new directory inside the put roots, a bounded size and a sha256.",
+					replace
+						? "A replacing put names a directory that an earlier put made, a bounded size and a sha256."
+						: "A put names a new directory inside the put roots, a bounded size and a sha256.",
 				);
 				return;
 			}
@@ -1069,7 +1178,11 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 					return;
 				}
 				const entry: Put = {
-					dir: path.join(parent, path.basename(requested)),
+					// A replacing put extracts beside its target, on the same mount, and swaps the trees once whole.
+					dir: replace
+						? path.join(parent, `.put-${randomUUID()}`)
+						: path.join(parent, path.basename(requested)),
+					...(replace && target !== undefined ? { replaces: target } : {}),
 					file,
 					sink,
 					hash: createHash("sha256"),
@@ -1087,6 +1200,9 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				});
 				puts.set(id, entry);
 				uploads.add(entry);
+				if (entry.replaces !== undefined) {
+					replacing.add(entry.replaces);
+				}
 			} catch {
 				await dropPut(id, "put", "The tools side cannot store the archive.");
 			}
@@ -1174,6 +1290,29 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				}
 				await makeReadOnly(entry.dir);
 				entry.abort.signal.throwIfAborted();
+				if (entry.replaces === undefined) {
+					putMade.add(entry.dir);
+				} else {
+					// The old tree goes to the trash first, so the swap never mixes two trees. Moving a directory to another
+					// parent needs write permission on the directory itself, and a put left it read-only.
+					const replaced = await lstat(entry.replaces);
+					if (!replaced.isDirectory()) {
+						throw new ToolProtocolError(
+							"put",
+							"The directory to replace is no longer a directory.",
+						);
+					}
+					await chmod(entry.replaces, 0o700);
+					await retire(entry.replaces);
+					putMade.delete(entry.replaces);
+					try {
+						await rename(entry.dir, entry.replaces);
+					} catch {
+						throw new ToolProtocolError("put", "The tools side could not replace the directory.");
+					}
+					created = false;
+					putMade.add(entry.replaces);
+				}
 				extracted = true;
 			} catch (error) {
 				entry.refusal ??= {
@@ -1214,6 +1353,9 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				}
 				puts.delete(id);
 				uploads.delete(entry);
+				if (entry.replaces !== undefined) {
+					replacing.delete(entry.replaces);
+				}
 				if (entry.refusal) {
 					refuse(id, entry.refusal.error, entry.refusal.detail);
 				} else {
@@ -1285,7 +1427,8 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			if (inFlight.has(id)) {
 				throw new ToolProtocolError("protocol", "a request id that is already in flight");
 			}
-			const offered = options.programsOnly === true ? ["script.run"] : ALL_OPERATIONS;
+			const offered =
+				options.programsOnly === true ? ["script.run"] : (options.operations ?? ALL_OPERATIONS);
 			if (!offered.includes(header.type)) {
 				if (header.type === "put") {
 					rememberRefusedPut(id);
@@ -1400,10 +1543,13 @@ if (import.meta.main) {
 		workspace,
 		roots: ["/workspace", workspace],
 		scratch,
-		putRoots: [repos],
-		...(process.env.TOOLS_ROLE === "programs"
-			? { scriptEntry: "/opt/practice-scripts/child.ts", programsOnly: true }
-			: {}),
+		...roleOptions(process.env.TOOLS_ROLE, workspace, repos),
 		soleUser: true,
 	});
+	// The kernel delivers PID 1 only the signals it handles. A tools Pod's stop sends SIGTERM: the tools program ends at
+	// once, and every command ends with it, so a removed Pod serves nothing until its grace period runs out. A review
+	// sidecar shares its process namespace with the agent, whose commands must not end it.
+	if (process.env.TOOLS_ROLE === "conversation") {
+		process.once("SIGTERM", () => process.exit(0));
+	}
 }

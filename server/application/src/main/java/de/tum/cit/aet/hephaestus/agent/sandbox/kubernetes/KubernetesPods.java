@@ -3,13 +3,14 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.BoundedTranscript;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.ContainerBuilder;
+import io.fabric8.kubernetes.api.model.ContainerPortBuilder;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
 import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.api.model.EnvVarBuilder;
@@ -91,16 +92,8 @@ public class KubernetesPods {
     /** A review's native sidecar for custom practice programs: out of reach of the commands in {@link #TOOLS}. */
     public static final String PROGRAMS = "programs";
 
-    /** A turn sandbox's container, which runs every untrusted command. */
-    public static final String SANDBOX = "sandbox";
-
-    /** A turn sandbox's trusted container, which only stages archives into the workspace. */
-    public static final String STAGER = "stager";
-
-    static final long SANDBOX_UID = Long.parseLong(ExecSandboxes.SANDBOX_USER);
-
-    /** Not the sandbox user: no untrusted process can signal or trace the stager's processes. */
-    static final long STAGER_UID = 1001;
+    /** The loop's user, and the initializer's. */
+    static final long SANDBOX_UID = 1000;
 
     /** Not the loop's user: a tools command cannot signal, trace or read the loop. */
     static final long TOOLS_UID = 1001;
@@ -250,28 +243,11 @@ public class KubernetesPods {
             50);
 
     /**
-     * A turn sandbox's command container: 3 MiB measured. Its workspace, where a repository that a turn loads lands,
-     * and its scratch places each have a fixed size limit. It requests 20m: a pooled sandbox is idle, and a
-     * turn's commands are short bursts that its limit serves.
+     * A conversation's tools Pod: the tools program and the commands of one turn attempt. Its one volume, {@code /tmp},
+     * holds the tools workspace, where the turn's documents and the repositories it loads land, and the spill files. It
+     * requests 25m: a pooled Pod is idle, and a turn's commands are short bursts that its limit serves.
      */
-    static final Size TURN =
-            new Size(128 * MIB, 512 * MIB, 256 * MIB, SandboxLayout.TURN_WORKSPACE_BYTES, 1 + SCRATCH_PATHS.size(), 20);
-
-    /** The stager of a turn sandbox: a shell that sleeps, 1 MiB measured. It writes the workspace to disk. */
-    private static final Quantity STAGER_MEMORY = new Quantity(Long.toString(32 * MIB));
-
-    private static final long STAGER_CPU_MILLICORES = 250;
-
-    /** The stager sleeps until a turn loads a repository, so it requests almost nothing. */
-    private static final long STAGER_CPU_REQUEST_MILLICORES = 5;
-
-    /**
-     * The turn sandbox's first process, the init process of its container's PID namespace. The kernel delivers it no
-     * signal from inside the namespace that it does not handle, and {@code kill -1} spares it, so the sandbox user
-     * cannot end it; it ignores the rest. Its {@code wait} reaps a process that a command left and cancellation killed.
-     */
-    static final List<String> SANDBOX_INIT =
-            List.of("bash", "-c", "trap '' HUP INT QUIT TERM USR1 USR2 ALRM PIPE; while :; do sleep 3600; done");
+    static final Size TOOLS_POD = new Size(160 * MIB, 512 * MIB, 256 * MIB, SandboxLayout.TURN_WORKSPACE_BYTES, 1, 25);
 
     /**
      * The fixed start of every container command and every exec: the {@code nofile} and {@code core} limits,
@@ -443,47 +419,33 @@ public class KubernetesPods {
     }
 
     /**
-     * A turn sandbox Pod. The sandbox container runs the untrusted commands and reads its workspace through a read-only
-     * mount; the stager container alone writes it. The two do not share a PID namespace.
+     * A conversation's tools Pod: the review sidecar's tools program as its only container, serving its host on TCP. It
+     * gets the nonce and Git's settings and no credential; the isolation init container holds it until the network
+     * policy that leaves it no egress is in force. It ends itself at the latest at its limits' runtime, so no worker needs
+     * to be alive to bound it.
      */
-    public Pod turnPod(Workload workload, ResourceLimits limits) {
-        List<Volume> volumes = new ArrayList<>();
-        volumes.add(diskVolume("workspace", TURN.volumeBytes()));
-        volumes.addAll(scratchVolumes(TURN));
-        List<VolumeMount> sandboxMounts = new ArrayList<>();
-        sandboxMounts.add(mount("workspace", WORKSPACE, true));
-        sandboxMounts.addAll(scratchMounts());
-        Container sandbox = base(SANDBOX, workload.image(), SANDBOX_UID)
-                .withCommand(limited(SANDBOX_INIT))
-                .withVolumeMounts(sandboxMounts)
-                .withResources(resources(limits, TURN))
-                .build();
-        Container stager = base(STAGER, workload.image(), STAGER_UID)
-                .withCommand(limited(List.of("sleep", "infinity")))
-                .withVolumeMounts(mount("workspace", WORKSPACE, false))
-                .withResources(new ResourceRequirementsBuilder()
-                        .withLimits(Map.of(
-                                "cpu",
-                                new Quantity(STAGER_CPU_MILLICORES + "m"),
-                                "memory",
-                                STAGER_MEMORY,
-                                "ephemeral-storage",
-                                bytes(SIDE_LOG_BYTES)))
-                        .withRequests(Map.of(
-                                "cpu",
-                                new Quantity(STAGER_CPU_REQUEST_MILLICORES + "m"),
-                                "memory",
-                                STAGER_MEMORY,
-                                "ephemeral-storage",
-                                bytes(SIDE_LOG_BYTES)))
+    public Pod toolsPod(Workload workload, ResourceLimits limits, String nonce, Map<String, String> gitSettings) {
+        List<EnvVar> env = new ArrayList<>();
+        gitSettings.forEach((name, value) -> env.add(variable(name, value)));
+        env.add(variable("TOOLS_NONCE", nonce));
+        env.add(variable("TOOLS_PORT", Integer.toString(ToolsPods.PORT)));
+        env.add(variable("TOOLS_ROLE", "conversation"));
+        Container tools = base(TOOLS, workload.image(), TOOLS_UID)
+                .withCommand(limited(TOOLS_COMMAND))
+                .withEnv(env)
+                .withPorts(new ContainerPortBuilder()
+                        .withName(TOOLS)
+                        .withContainerPort(ToolsPods.PORT)
+                        .withProtocol("TCP")
                         .build())
+                .withVolumeMounts(mount("tools-tmp", "/tmp", false))
+                .withResources(resources(limits, TOOLS_POD))
                 .build();
-        // The sandbox ends itself at the latest at its limits' runtime: no worker needs to be alive to bound it.
-        return pod(workload, STAGER_UID, limits.maxRuntime().toSeconds())
+        return pod(workload, TOOLS_UID, limits.maxRuntime().toSeconds())
                 .editSpec()
                 .withInitContainers(isolation(workload.image()))
-                .withContainers(sandbox, stager)
-                .withVolumes(volumes)
+                .withContainers(tools)
+                .withVolumes(diskVolume("tools-tmp", TOOLS_POD.volumeBytes()))
                 .endSpec()
                 .build();
     }
@@ -549,11 +511,11 @@ public class KubernetesPods {
         return exit != null && exit != 0;
     }
 
-    /** A Heph host or turn sandbox is a conversation; a review and every probe Pod rank below it. */
+    /** A Heph host or tools Pod is a conversation; a review and every probe Pod rank below it. */
     private static @Nullable String priorityClass(Workload workload, KubernetesSandboxProperties properties) {
         String kind = workload.labels().get(KubernetesWorker.SANDBOX_KIND);
         boolean conversation = !workload.labels().containsKey(KubernetesWorker.PROBE)
-                && (KubernetesWorker.KIND_HOST.equals(kind) || KubernetesWorker.KIND_TURN.equals(kind));
+                && (KubernetesWorker.KIND_HOST.equals(kind) || KubernetesWorker.KIND_TOOLS.equals(kind));
         String name = conversation ? properties.conversationPriorityClass() : properties.reviewPriorityClass();
         return name.isEmpty() ? null : name;
     }
@@ -685,8 +647,8 @@ public class KubernetesPods {
     }
 
     /**
-     * A tenth of a CPU limit. A request equal to the limit made each idle turn sandbox hold a core, and an upgrade's
-     * probe Pods then found no room beside the old workers' turn sandboxes, so the new workers never became ready.
+     * A tenth of a CPU limit. A request equal to the limit made each idle tools Pod hold a core, and an upgrade's
+     * probe Pods then found no room beside the old workers' tools Pods, so the new workers never became ready.
      */
     static Quantity cpuRequest(long limitMillicores) {
         return new Quantity(Math.max(1, limitMillicores / 10) + "m");
