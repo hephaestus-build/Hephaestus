@@ -159,7 +159,7 @@ public class AuthSecurityConfig {
         };
     }
 
-    /** A GitLab server comes from configuration, so its user info call checks the address that it connects to. */
+    /** Provider user-info calls check the address that they connect to. */
     private RestTemplate guardedUserInfoClient() {
         return restTemplates
                 .requestFactory(this::guardedRequestFactory)

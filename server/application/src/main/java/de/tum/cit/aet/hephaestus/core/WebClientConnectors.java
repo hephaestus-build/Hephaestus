@@ -13,16 +13,16 @@ import reactor.netty.http.client.HttpClient;
 public final class WebClientConnectors {
 
     public static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
-    public static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
+    public static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
 
     private WebClientConnectors() {}
 
-    /** A finite connect and read wait, with the caller's address-resolution policy. */
+    /** Limits connection time and the wait between reads. The caller bounds its total wait. */
     public static HttpClient httpClient(AddressResolverGroup<InetSocketAddress> resolver) {
         return HttpClient.create()
                 .resolver(resolver)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, Math.toIntExact(CONNECT_TIMEOUT.toMillis()))
-                .responseTimeout(REQUEST_TIMEOUT);
+                .responseTimeout(READ_TIMEOUT);
     }
 
     public static ClientHttpConnector systemDns() {

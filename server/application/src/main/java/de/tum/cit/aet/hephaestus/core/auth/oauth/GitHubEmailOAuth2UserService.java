@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
+import org.springframework.boot.http.client.HttpRedirects;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -50,8 +51,8 @@ public class GitHubEmailOAuth2UserService implements OAuth2UserService<OAuth2Use
                 .clone()
                 .requestFactory(ClientHttpRequestFactoryBuilder.jdk()
                         .build(HttpClientSettings.defaults()
-                                .withTimeouts(
-                                        WebClientConnectors.CONNECT_TIMEOUT, WebClientConnectors.REQUEST_TIMEOUT)))
+                                .withTimeouts(WebClientConnectors.CONNECT_TIMEOUT, WebClientConnectors.READ_TIMEOUT)
+                                .withRedirects(HttpRedirects.DONT_FOLLOW)))
                 .build();
     }
 

@@ -89,7 +89,7 @@ public class GitHubInstallationRepositoryEnumerationService {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationToken)
                         .retrieve()
                         .toEntity(InstallationRepositoriesResponse.class)
-                        .block();
+                        .block(WebClientConnectors.READ_TIMEOUT);
 
                 if (responseEntity == null || responseEntity.getBody() == null) {
                     log.warn("Received empty response: installationId={}, pageNumber={}", installationId, pageCount);
