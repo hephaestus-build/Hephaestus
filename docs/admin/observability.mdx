@@ -555,8 +555,7 @@ The image never sets `log_statement` or `log_min_duration_statement`.
 To find slow statements, read [the statement statistics](#database-statement-statistics), which hold no parameter values.
 An error line can still quote a value in its `DETAIL`, for example the key of a unique constraint violation.
 
-To change a setting, set it in `postgresql.parameters` of the chart.
-Each overrides the image's value.
+The chart does not expose values for these logging settings.
 The log collector of the chart does not read the PostgreSQL container.
 
 ## Reading log records
