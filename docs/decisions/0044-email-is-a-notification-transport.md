@@ -1,6 +1,6 @@
 # ADR 0044: Email is a notification transport, delivered through the event publication registry
 
-**Status:** Accepted. The 1.0 cutover removes the survey invitation records and survey email requests described below. The email transport decision remains in effect.
+**Status:** Accepted. The 1.0 cutover removes the survey invitation records and survey email requests described below. The email transport decision remains in effect. Superseded in part 2026-11-09 by [ADR 0079](0079-one-agent-system.md).
 **Date:** 2026-09-12
 
 ## Context
@@ -135,3 +135,11 @@ would introduce an additional export or rendering step here without an existing 
 
 - [One-click unsubscribe (RFC 8058)](https://www.rfc-editor.org/rfc/rfc8058).
 - [Google email sender guidelines](https://support.google.com/a/answer/81126?hl=en).
+
+## Update — 2026-11-09: superseded in part by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) supersedes where an email's delivery state lives.
+Each email is an `email` action in the `agent_action` outbox, with an idempotency key.
+Email is at most once: an `UNCERTAIN` action is never sent again.
+The event publication registry is no longer the record of an email delivery.
+The `notification` module, the one SMTP gateway, Silent Mode and the templates stay.

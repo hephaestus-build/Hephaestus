@@ -1,6 +1,6 @@
 # ADR 0063: Each practice is staged when it ends, and the review seals once
 
-**Status:** Accepted
+**Status:** Accepted (superseded in part 2026-11-09 by [ADR 0079](0079-one-agent-system.md))
 **Date:** 2026-10-26
 **Authors:** Felix T.J. Dietrich
 
@@ -150,3 +150,12 @@ A captured inapplicability can then remain an execution withholding.
 [ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) owns source fingerprints and later publication changes.
 Until its loop-only prerequisite ships, currentness keeps the existing conservative item version.
 This layer adds no provider writer, composition template or separate scheduling queue.
+
+## Update — 2026-11-09: superseded in part by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) supersedes the fence and the owner of the recovery. Staging, the seal, the retry rule and the failure table stay.
+
+- The fence of every stage write is `(run_id, lease_epoch)` on the `review_measure` run. It replaces "job, attempt and worker" and the 2026-10-30 check on `review_job.leased_until`.
+- The server admits each staged candidate when the sandbox proposes it at the gateway. No worker takes part.
+- In the table of § Decision, the row "Attempt, lease and fence" is now kept in `agent_run`, and the server's reaper requeues the run.
+- Composition after the seal is a `review_compose` run in the same sandbox ([ADR 0061](0061-review-seals-then-feedback-composes.md)).

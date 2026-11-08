@@ -1,6 +1,6 @@
 # ADR 0057: One Heph conversation per developer, on a stateless shared Heph host
 
-**Status:** Accepted (amended 2026-10-28 — Heph's host and turn sandbox superseded, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
+**Status:** Accepted (amended 2026-10-28 — Heph's host and turn sandbox superseded, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md)). Superseded in part on 2026-11-09 by [ADR 0079](0079-one-agent-system.md).
 **Date:** 2026-10-09
 **Authors:** Felix T.J. Dietrich
 
@@ -551,3 +551,15 @@ Heph's loop runs as one Deployment, and each turn attempt's tools run in a tools
 The Heph host, its WebSocket channel, its gateway session token, the turn sandbox and its stager go.
 Each turn attempt carries an attempt token that names only the turn, its workspace and the attempt.
 The ledger, the conversation model, the context model and delivery of this decision stay.
+
+## Update — 2026-11-09: superseded in part by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) supersedes these parts. The conversation model, the ledger as the memory, the context model, Stop, the citation tools and the receipts stay.
+
+- **§ The ledger, the lease of a turn.** A turn is an `agent_run` of kind `turn`, keyed to its conversation, in band `interactive`.
+  The lease, its epoch and the retry budget are on the run, not on `mentor_turn`.
+  The reaper's attempt budget in the capacity home replaces "a turn that loses its lease runs once more".
+- **§ The ledger, the usage of a turn.** Each model call writes one `llm_usage_event` row, keyed by run, epoch and call. The turn row no longer carries usage.
+- **§ The ledger, the Slack post.** A Slack reply is a `slack_post` action in the `agent_action` outbox. The action carries the state from intent to outcome, and its adapter reads back by marker. The reconciler of the question's reply state goes. The rule "one history read, and never a second post" stays.
+- **§ The Heph host, "no affinity, warm sandbox".** ADR 0068 already superseded the host. A conversation now has one sandbox while it is in use. The sandbox is a cache. Each turn still rebuilds its request from the ledger. The server deletes the sandbox when it is idle.
+- **§ Weekly digest, "Java composes the digest from facts. No model writes it."** A `digest` run writes the digest on a schedule, in the conversation's sandbox. The server still selects the facts by the destination rules of that section. The opt-in, the time window, the pointer rule and the rule of no score, rank or streak stay.

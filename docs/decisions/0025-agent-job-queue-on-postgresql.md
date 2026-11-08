@@ -1,6 +1,6 @@
 # ADR 0025: Agent job queue moves off NATS onto PostgreSQL
 
-**Status:** Accepted
+**Status:** Accepted (superseded in part 2026-11-09 by [ADR 0079](0079-one-agent-system.md))
 **Date:** 2026-07-21
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md) (two-role runtime, original agent NATS consumer), [ADR 0006](0006-llm-proxy-on-coordinator-trust-model.md) (in-app LLM proxy as the sole credential path), [ADR 0013](0013-no-jetstream-dlq-stream.md) (no JetStream DLQ stream)
@@ -157,3 +157,13 @@ The candidate query no longer excludes a slot at a cap.
 § Consequences called that cap "the only lever" against a noisy tenant. The claim order has since taken that role: started work first, then the workspace with fewer running reviews, then origin with aging, then age.
 The fair grants of the call pool share the provider between workspaces ([ADR 0074](0074-a-reviews-width-and-count-follow-the-provider.md)).
 A worker's review slots and the reviews quota still bound how many reviews run.
+
+## Update — 2026-11-09: superseded in part by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) supersedes the form of the queue. PostgreSQL stays the queue and the only record of work.
+
+- One `agent_run` table holds the lease of every kind of agent work. `review_job` and `mentor_turn` point to their runs and keep their domain lifecycles.
+- A claim uses `SKIP LOCKED` and wakes on `NOTIFY`. A fixed poll interval and a claim batch do not decide the start time.
+- A claim orders by band, then by the workspace with the fewest running runs, then by age. This is the fairness that the revisit trigger named.
+- A write is fenced on `(run_id, lease_epoch)`, not on a worker id. `worker_registry` and the sweeps by worker go.
+- One reaper on the database clock runs on every server replica.

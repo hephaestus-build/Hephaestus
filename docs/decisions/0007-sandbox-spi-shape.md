@@ -1,6 +1,6 @@
 # ADR 0007: Sandbox SPI shape — sealed VolumeMount + typed NetworkPolicy
 
-**Status:** Accepted (amended 2026-09-03 #1719 — mount portability superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-09 — interactive SPI replaced by `HostSandbox`, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — [one attempt runner over a narrow backend](#update--2026-10-24-one-attempt-runner-over-a-narrow-backend); 2026-10-28 — Jobs only, `HostSandbox` goes, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
+**Status:** Accepted (amended 2026-09-03 #1719 — mount portability superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-09 — interactive SPI replaced by `HostSandbox`, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — [one attempt runner over a narrow backend](#update--2026-10-24-one-attempt-runner-over-a-narrow-backend); 2026-10-28 — Jobs only, `HostSandbox` goes, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md); 2026-11-09 — superseded in part by [ADR 0079](0079-one-agent-system.md))
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -113,3 +113,12 @@ The backend contract states what every backend guarantees for both sandbox proce
 
 The sandbox backend starts Jobs only. `HostSandbox` and the exec sandboxes go: Heph's tools run in tools Pods, which are Jobs too.
 Every sandbox Pod sets `hostUsers: false`. The attempt runner over a narrow backend of the 2026-10-24 update stays.
+
+## Update — 2026-11-09: superseded in part by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) supersedes the 2026-10-24 update and the 2026-10-28 update.
+A sandbox is an agent-sandbox `Sandbox` that the server requests with a `SandboxClaim` from a `SandboxTemplate` for each kind.
+There is one sandbox for each subject, and it has one container.
+`SandboxAttemptRunner`, the Job backend (`launch`, `observe`, `running`, `transcript`, `kill`, `remove`, `list`) and `SandboxReconciler` go.
+The `agent_sandbox` table is the single owner of each claim, and the server's reaper deletes a claim that no subject needs.
+The rule that the gateway is a sandbox's only destination stays.

@@ -1,6 +1,6 @@
 # ADR 0074: A review's width and count follow the provider
 
-**Status:** Accepted
+**Status:** Accepted (superseded in part 2026-11-09 by [ADR 0079](0079-one-agent-system.md))
 **Date:** 2026-11-02
 **Authors:** Felix T.J. Dietrich
 
@@ -211,3 +211,13 @@ This points at the larger gain: fewer calls in each session, not fewer sessions.
 - An eval with verified citations on real pull requests shows that batching keeps outcomes: reconsider several practices in one session.
 - A rule loses Not met results beyond the noise floor: withdraw it.
 - A model's measured precision on the selection replay loses no Not met result and saves more calls than it costs: reconsider option 5.
+
+## Update — 2026-11-09: superseded in part by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) supersedes the placement in this decision. Width, pace, selection, no repeat work and the provider rules stay. They apply to the review's sandbox as they applied to the review Pod.
+
+- § Decision: "30 MiB of worker memory for each running review" and "32 reviews on one worker" have no worker to refer to. The bench target of 64 reviews stays.
+- § Capacity: the chart derives no count. `worker.reviews`, `worker.sandbox.reviewMemory` and the derived composition and turn budgets go. The values are in one capacity home, `hephaestus.agent.capacity.*`.
+- § Provider, "Claims follow Pod memory and `worker.reviews`": claims follow the order and the counts of ADR 0079.
+
+§ Shared loop host stays rejected. Each subject has its own sandbox and loop.

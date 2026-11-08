@@ -1,6 +1,6 @@
 # ADR 0069: Practices run when they are ready and stay current by their sources
 
-**Status:** Accepted
+**Status:** Accepted (superseded in part 2026-11-09 by [ADR 0079](0079-one-agent-system.md))
 **Date:** 2026-10-28
 **Authors:** Felix T.J. Dietrich
 
@@ -929,3 +929,15 @@ A human change between the final read and the edit cannot be excluded.
 
 Automatic thread resolution still requires an authoritative item-problem lineage record of No longer present.
 A missing problem or a failed capture is not that proof.
+
+## Update — 2026-11-09: superseded in part by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) supersedes where the feedback composer runs.
+
+- § The feedback composer works with tools says "Composition stays a worker step". [D16](#d16-the-composer-holds-no-provider-token) says "The composer runs on the worker".
+  Now the composer runs as a `review_compose` run in the review's sandbox, after the seal.
+- D16 stays in substance. The composer holds no provider token. Its tools call the gateway, and the server writes through the one `agent_action` outbox, fenced on the run.
+- [D10](#d10-practice-concurrency): the reference to review Pod admission now means the claim of ADR 0079.
+
+The decision driver "No plan table, no workflow engine" stays true.
+`agent_run` holds the lease of one unit of agent work. It holds no plan and no step journal, and selection, readiness and freshness stay derived from the rows that exist.

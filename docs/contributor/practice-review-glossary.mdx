@@ -219,9 +219,21 @@ The same name is the source capture code that causes it.
 | **Conversation loop**                  | The one long-lived trusted process that runs the conversation turns of an install and calls tools Pods for their tools. | planned            |
 | **Tool protocol v1**           | The messages from a loop to its tools, each with a request id. It has hello, put, read, streamed exec, cancel and reset, and script runs for reviews. | tool-protocol.ts |
 | **Proved search**              | A search that the loop confirmed by searching the same files itself. Only a proved search can show that the work lacks something. | pi-verified-search.ts |
+| **Subject**                    | The thing that one sandbox serves: a review, a conversation or an action task. Its key, such as `review:<id>`, is the concurrency key of its runs. It is not the item that a review covers. | planned: agent_run.concurrency_key, agent_sandbox.subject_key |
+| **Run**                        | One leased unit of agent work for a subject, such as the measurement of a review or one turn. One run of a subject runs at a time, and its sandbox is its only writer. | planned: agent_run |
+| **Lease epoch**                | The fencing number of a run. Each claim raises it, and the database refuses a write that names an older one. | planned: agent_run.lease_epoch |
+| **Band**                       | The priority of a run and of its model calls: interactive, batch or background. An interactive call gets a grant first, and a batch call yields at grant time. | planned: agent_run.band |
+| **Sandbox**                    | The one agent-sandbox `Sandbox` of a subject: one container with the loop, the tools and the workspace. It is a cache. The server deletes it when no run needs it, and rebuilds its context from PostgreSQL. | planned: agent_sandbox |
+| **Sandbox token**              | The credential of one sandbox. It names the workspace, the subject and the sandbox, and it expires at the sandbox's shutdown time. Only the gateway accepts it. | planned |
+| **Gateway**                    | The server port that sandboxes can reach, and their only egress. It holds the LLM proxy, the call permits, the context and checkout, lease renewal and proposals. | planned: server port 8081 |
+| **Action**                     | One side effect that the server executes for a run or for a person, such as a feedback post, a Slack reply or an email. It has an idempotency key, and its adapter reads it back. | planned: agent_action |
 
 Stage and Seal are decided for 1.0 and not shipped yet ([ADR 0063](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0063-each-practice-is-staged-when-it-ends.md)).
-The conversation loop is decided for 1.0 and not shipped yet ([ADR 0068](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md)).
+The conversation loop of [ADR 0068](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md) is not shipped.
+[ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) decides the subject, run, lease epoch, band, sandbox, sandbox token, gateway and action for 1.0.
+They are not shipped yet.
+When they ship, they replace the job, attempt, lease, attempt token and send.
+They also replace the review agent Pod, tools Pod, conversation loop, conversation host, tool protocol v1 and the worker.
 
 The job folder of a review is the context folder of that review.
 The [Conversation runtime](./unified-pi-runtime.mdx) owns turns, the conversation host, context documents, context loaders and tools Pods.
