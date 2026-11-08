@@ -30,6 +30,54 @@ function changedFile(file: string): DiffFile {
 	return { path: file, addedLines: new Map(), removedLines: new Map(), hunks: [] };
 }
 
+void describe("engaging-with-inline-review-comments", () => {
+	void it("retains marked notes as uncertain leads without counting them as reviewer advice or author replies", async () => {
+		const note = { path: "src/a.ts", thread: 1, createdAt: "2026-01-01T01:00:00Z" };
+		const result = await runBundled("engaging-with-inline-review-comments", {
+			item: { author: "author" },
+			context: {
+				"comments.json": [
+					{ ...note, author: "reviewer", body: "Explain this branch." },
+					{
+						...note,
+						author: "service-account",
+						body: "Earlier feedback.",
+						quotesHephaestusMarker: true,
+					},
+					{
+						...note,
+						author: "author",
+						body: "A copied reply.",
+						createdAt: "2026-01-01T02:00:00Z",
+						quotesHephaestusMarker: true,
+					},
+				],
+				"general_comments.json": {
+					comments: [
+						{
+							author: "service-account",
+							body: "Review could not run.",
+							quotesHephaestusMarker: true,
+						},
+					],
+				},
+				"review_threads.json": { threads: [], reviewDecisions: [] },
+			},
+		});
+		assert.ok(result.facts);
+		assert.equal(result.facts.reviewerComments, 1);
+		assert.equal(result.facts.conversationComments, 0);
+		assert.equal(result.facts.botComments, 0);
+		assert.equal(result.facts.uncertainOriginComments, 2);
+		assert.equal(result.facts.withAuthorReply, 0);
+		assert.equal(
+			result.leads?.filter((lead) => lead.facts?.quotesHephaestusMarker === true).length,
+			2,
+		);
+		assert.match((result.directions ?? []).join(" "), /2 more with uncertain authorship/u);
+	});
+});
+
 void describe("ships-tests-with-the-change", () => {
 	const slug = "ships-tests-with-the-change";
 

@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
@@ -101,7 +100,7 @@ class PullRequestContentSourceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldDropHephaestusOwnNotesAndNameTheThreadAndParentAfterTheSessionCloses() {
+    void shouldKeepQuotedMarkersAndNameTheThreadAndParentAfterTheSessionCloses() {
         PullRequest pr = persistPullRequest(21);
         User reviewer = persistUser("reviewer-a");
         PullRequestReviewThread thread = persistThread(pr);
@@ -109,11 +108,13 @@ class PullRequestContentSourceIntegrationTest extends BaseIntegrationTest {
         persistComment(pr, thread, reviewer, ask, "done in 3f2a1", at("11:00"));
         persistComment(pr, thread, reviewer, null, "Add a test.\n<!-- hephaestus-diff-note -->", at("12:00"));
 
-        List<PullRequestReviewComment> rows = reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(
-                pr.getId(), WorkspaceScmProjection.HEPHAESTUS_MARKER, PageRequest.of(0, 50));
+        List<PullRequestReviewComment> rows =
+                reviewCommentRepository.findRecentWithContextByPullRequestId(pr.getId(), PageRequest.of(0, 50));
 
-        assertThat(rows).extracting(PullRequestReviewComment::getBody).containsExactly("done in 3f2a1", "guard this");
-        PullRequestReviewComment reply = rows.get(0);
+        assertThat(rows)
+                .extracting(PullRequestReviewComment::getBody)
+                .containsExactly("Add a test.\n<!-- hephaestus-diff-note -->", "done in 3f2a1", "guard this");
+        PullRequestReviewComment reply = rows.get(1);
         PullRequestReviewComment parent = reply.getInReplyTo();
         assertThat(parent).isNotNull();
         assertThat(parent.getId()).isEqualTo(ask.getId());

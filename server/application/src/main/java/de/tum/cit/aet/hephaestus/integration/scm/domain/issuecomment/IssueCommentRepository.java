@@ -130,13 +130,6 @@ public interface IssueCommentRepository extends JpaRepository<IssueComment, Long
             + "WHERE ic.issue.id = :issueId ORDER BY ic.createdAt DESC, ic.id DESC")
     List<IssueComment> findRecentByIssueIdWithAuthor(@Param("issueId") Long issueId, Pageable pageable);
 
-    @Query("SELECT ic FROM IssueComment ic LEFT JOIN FETCH ic.author "
-            + "WHERE ic.issue.id = :issueId AND ic.body IS NOT NULL AND TRIM(ic.body) <> '' "
-            + "AND ic.body NOT LIKE CONCAT('%', :excludedMarker, '%') "
-            + "ORDER BY ic.createdAt DESC, ic.id DESC")
-    List<IssueComment> findRecentHumanByIssueIdWithAuthor(
-            @Param("issueId") Long issueId, @Param("excludedMarker") String excludedMarker, Pageable pageable);
-
     /**
      * The non-empty comments, oldest first, as stored. Delivery provenance is applied by the caller. A projection rather than
      * entities: in the transaction that wrote a comment, an entity is the managed instance with the values Java

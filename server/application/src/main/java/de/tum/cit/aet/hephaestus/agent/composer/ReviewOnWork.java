@@ -55,11 +55,15 @@ final class ReviewOnWork {
 
     // ---------------------------------------------------------------- what the review rests on
 
+    static boolean publicNotMet(JsonNode result) {
+        return isTrue(result.path("publicEligible")) && "NOT_MET".equals(string(result.path("outcome")));
+    }
+
     /** The admitted results the review on the work may speak about: public NOT_MET results without their digests. */
     static List<ObjectNode> publicResults(List<ObjectNode> results) {
         var reviewable = new ArrayList<ObjectNode>();
         for (ObjectNode result : results) {
-            if (!isTrue(result.path("publicEligible")) || !"NOT_MET".equals(string(result.path("outcome")))) continue;
+            if (!publicNotMet(result)) continue;
             var shown = JSON.objectNode();
             result.properties().forEach(property -> {
                 if (!Set.of("citations", "example", "problems").contains(property.getKey()))
@@ -304,7 +308,7 @@ final class ReviewOnWork {
     static final String TOOL_DESCRIPTION =
             "Check a complete draft without publishing it. Correct any refusal before publishing its returned draftId. First decide each NOT_MET result: RAISE it, or withhold it "
                     + "with your reason and, for advice this work already received, the statement that gave it. Write useful local notes first, "
-                    + "then use the summary for a warranted point without a useful line note, or useful orientation. Do not repeat a note's diagnosis or action. "
+                    + "then use the summary for warranted guidance that the notes do not carry. Do not recap a note or repeat its diagnosis or action. "
                     + "Use summary:null when it adds nothing; without useful line notes, put the complete guidance in the summary. "
                     + "Together the texts speak about every raised result, itself or through "
                     + "its problems, and no withheld one. Each body is published whole as written, with provider safety formatting and a fixed disclosure; nothing is "
@@ -346,13 +350,12 @@ final class ReviewOnWork {
             + "carries every ask that is not "
             + "about one place in the code, such as the description, a reply to a reviewer or a work-wide change, unless it "
             + "forms one point with the code at a line. When a point has no useful line note, the summary carries that point "
-            + "completely. It may name or locate a line note's topic, and then names that note's "
-            + "results or problems in basedOn, but it does not restate the note's diagnosis or action. "
-            + "Use summary:null when the notes carry every ask and an overview adds no useful orientation.\n"
+            + "completely. A recap of the notes is repetition, even without their remedies. "
+            + "Use summary:null when the notes carry every useful action.\n"
             + "- The review speaks only about NOT_MET results and their problems. It never acknowledges or praises a MET "
             + "result, and it does not use praise to cushion a concern. When no NOT_MET result is raised, the review says "
             + "nothing: the summary is null and there are no line notes.\n\n"
-            + "One result or problem may support notes at several places, and also the summary's overview of them.";
+            + "One result or problem may support notes at several places and different guidance in the summary, without repeating a point.";
 
     static final String STANDARD_REFERENCE =
             "Reference, whole as staged: each standard explains what its practice's recorded results were assessed "

@@ -9,6 +9,6 @@ import java.util.Set;
 public interface DeliveredPullRequestCommentLookup {
     CommentIds findForPullRequest(long workspaceId, long pullRequestId, ItemKind kind);
 
-    /** Native ids of the mirrored ordinary comments ({@code general}) and line comments ({@code inline}). */
-    record CommentIds(Set<Long> general, Set<Long> inline) {}
+    /** Native ids of the mirrored ordinary comments ({@code general}), line comments ({@code inline}) and submitted reviews ({@code reviews}). */
+    record CommentIds(Set<Long> general, Set<Long> inline, Set<Long> reviews) {}
 }

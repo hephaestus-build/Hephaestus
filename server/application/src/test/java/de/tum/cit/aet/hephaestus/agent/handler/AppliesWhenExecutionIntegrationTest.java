@@ -407,7 +407,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
         var pullRequest = pullRequests.findByIdForReviewContext(sourceId).orElseThrow();
         var repository = Objects.requireNonNull(pullRequest.getRepository());
         when(delivered.findForPullRequest(anyLong(), eq(sourceId), any()))
-                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of()));
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(), Set.of()));
         var comment = new PullRequestReviewComment();
         var author = new User();
         author.setLogin("reviewer");
@@ -415,7 +415,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
         comment.setBody("Please explain this branch.");
         comment.setPath("src/Main.java");
         comment.setCreatedAt(Instant.now());
-        when(inlineComments.findRecentHumanByPullRequestIdWithAuthor(eq(sourceId), any(), any()))
+        when(inlineComments.findRecentWithContextByPullRequestId(eq(sourceId), any()))
                 .thenReturn(inlineCommentPresent ? List.of(comment) : List.of());
         var pullCapture = new PullRequestContentSource(
                 mapper,
@@ -428,7 +428,8 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                 mapper,
                 pullRequests,
                 mock(PullRequestReviewThreadRepository.class),
-                mock(PullRequestReviewRepository.class));
+                mock(PullRequestReviewRepository.class),
+                delivered);
         var general = new GeneralReviewCommentContentSource(
                 mapper, mock(IssueCommentRepository.class), pullRequests, delivered);
         var metadata = mapper.createObjectNode()

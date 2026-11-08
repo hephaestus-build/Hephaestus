@@ -1055,7 +1055,9 @@ public class WorkerFeedbackComposer {
                 ComposerFiles.CONTEXT_ROOT,
                 ComposerFiles.REPOSITORY_ROOT,
                 folderIndex,
-                new ArrayList<>(state.results()),
+                new ArrayList<>(state.results().stream()
+                        .filter(ReviewOnWork::publicNotMet)
+                        .toList()),
                 reader);
         String sameWork = String.join(
                 "\n\n",
@@ -1083,7 +1085,7 @@ public class WorkerFeedbackComposer {
                 Js.string(read.path("publicationContext")));
     }
 
-    /** The private turn: the captured-work brief, then what the private feedback is composed from. */
+    /** The private turn includes proven primary source for its routed concerns, as the public turn does. */
     static String privateTurn(
             ComposerFiles files,
             CapturedWork captured,
@@ -1093,8 +1095,30 @@ public class WorkerFeedbackComposer {
             Map<String, List<String>> routes,
             List<String> notReached) {
         String brief = captured.brief();
-        return (brief.isEmpty() ? "" : brief + "\n\n")
-                + PrivateFeedback.turn(files, MAPPER, request, state, review, routes, notReached);
+        JsonNode folderIndex = files.json(SandboxLayout.MANIFEST_PATH, MAPPER).orElse(JSON.missingNode());
+        var composable = PrivateFeedback.composable(state, routes);
+        var eligible = state.results().stream()
+                .filter(result -> {
+                    String slug = result.path("practiceSlug").asString();
+                    return composable.contains(slug)
+                            && request.openPrivate().stream()
+                                    .anyMatch(destination ->
+                                            routes.getOrDefault(slug, List.of()).contains(destination));
+                })
+                .toList();
+        String primary = PrimarySource.reference(
+                files,
+                ComposerFiles.CONTEXT_ROOT,
+                ComposerFiles.REPOSITORY_ROOT,
+                folderIndex,
+                new ArrayList<>(eligible),
+                PrimarySource.captured(files, folderIndex, ComposerFiles.CONTEXT_ROOT, ComposerFiles.REPOSITORY_ROOT));
+        return String.join(
+                "\n\n",
+                List.of(brief, primary, PrivateFeedback.turn(files, MAPPER, request, state, review, routes, notReached))
+                        .stream()
+                        .filter(part -> !part.isEmpty())
+                        .toList());
     }
 
     private static byte[] utf8(String text) {

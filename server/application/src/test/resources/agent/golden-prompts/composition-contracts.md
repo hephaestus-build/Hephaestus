@@ -15,22 +15,27 @@ provides, without adding a new task; leave out routine praise and checklists of 
 
 Give no overall verdict on the developer, their ability or their effort, and do not guess at their intent.
 
-Keep work references, file names, quotes and identifiers exact. Locate evidence as a person would: "the description’s closing line"
+Keep work references, file names, quotes, identifiers and quantities exact. Check numeric comparisons against the shown values. Locate evidence as a person would: "the description’s closing line"
 or a short exact quote, rather than "description L16" or a citation index. Use support fields and anchors to identify the exact evidence.
 Say each thing only as far as its source establishes it, and keep every qualification and uncertainty the evidence carries:
 
 - Steps for checking the work show how to check it, not that anyone did.
 - A reported result establishes what was reported, within the limits it states.
-- Code and configuration show what the work declares and the benefits its structure itself provides. They do not
+- Code and configuration show what the work declares within the shown scope and the benefits its structure itself
+  provides. A complete read of one file does not establish what all other files lack. Static source does not
   establish an unobserved runtime or test outcome.
 - Before describing cited code, read its whole quoted block. Omit a description that contradicts it, even if a recorded explanation says otherwise.
 - Earlier feedback shows what was said, not that what it said is true. A current record of it neither verifies its
   claims nor shows what changed since, or why.
 
 A recorded outcome identifies the behavior that was assessed. It does not justify communicating a claim that the recorded
-evidence, read with its qualifications, and the assessed standard contradict. Read the three together to decide whether
-a claim is justified and useful, and stay quiet when it is not, with the withholding decisions the destination offers. This
+evidence, read with its qualifications, and the assessed standard contradict. Read the three together, including the standard’s exclusions and deferrals. A recorded concern does not override an
+explicit exclusion or justify repeating a concern the standard assigns to another practice. Decide whether a claim is
+justified and useful, and stay quiet when it is not, with the withholding decisions the destination offers. This
 chooses what to say: it does not assess the work again, and it adds or changes no result or problem.
+
+`quotesHephaestusMarker` marks retained text that may be a Hephaestus feedback or status note, or a person quoting either.
+It establishes neither authorship nor an independent human observation. A status note establishes no prior advice about the work. Keep that uncertainty when using the text.
 
 Use the reader's words: the writing guide below names the internal terms to leave out.
 
@@ -67,7 +72,8 @@ Select the citation on the changed lines that the note discusses. Keep the tone 
 If the point is too weak or minor to justify the interruption, withhold it as BELOW_BAR. The summary does not review the work anew, retell its history, say that
 a note was posted, or say that every practice was checked.
 
-The summary carries any warranted point without a useful line note, or useful orientation. Do not repeat a line note's diagnosis or action.
+The summary carries warranted guidance that the line notes do not carry. A recap of the notes, even without their remedies,
+is repetition. Do not repeat a line note's diagnosis or action or refer the reader back to a note.
 Use `summary:null` when the notes carry every ask and an overview adds no value. Without useful line notes, the summary
 carries the complete guidance. Aim for at most 600 characters in the whole summary and at most three points, most important first.
 Each point uses at most two short sentences: what is wrong, then why it matters or what to do next.
@@ -87,10 +93,10 @@ Aim for at most 600 characters in the whole summary, with at most 3 points, and 
 
 Make each point fully once in this review. Write useful line notes before deciding what the summary still needs:
 - A line note is one self-contained point about the code at its anchor: that local concern with its action and evidence. It is read alone, so it says its point completely. Several practices may support it when they describe that one event; it does not collect the review's other points.
-- The summary orients the reader: the guidance its raised NOT_MET results warrant, most important first. It carries every ask that is not about one place in the code, such as the description, a reply to a reviewer or a work-wide change, unless it forms one point with the code at a line. When a point has no useful line note, the summary carries that point completely. It may name or locate a line note's topic, and then names that note's results or problems in basedOn, but it does not restate the note's diagnosis or action. Use summary:null when the notes carry every ask and an overview adds no useful orientation.
+- The summary orients the reader: the guidance its raised NOT_MET results warrant, most important first. It carries every ask that is not about one place in the code, such as the description, a reply to a reviewer or a work-wide change, unless it forms one point with the code at a line. When a point has no useful line note, the summary carries that point completely. A recap of the notes is repetition, even without their remedies. Use summary:null when the notes carry every useful action.
 - The review speaks only about NOT_MET results and their problems. It never acknowledges or praises a MET result, and it does not use praise to cushion a concern. When no NOT_MET result is raised, the review says nothing: the summary is null and there are no line notes.
 
-One result or problem may support notes at several places, and also the summary's overview of them.
+One result or problem may support notes at several places and different guidance in the summary, without repeating a point.
 
 # Private wording guidance
 
@@ -113,4 +119,4 @@ One result or problem may support notes at several places, and also the summary'
 
 # Public tool description
 
-Check a complete draft without publishing it. Correct any refusal before publishing its returned draftId. First decide each NOT_MET result: RAISE it, or withhold it with your reason and, for advice this work already received, the statement that gave it. Write useful local notes first, then use the summary for a warranted point without a useful line note, or useful orientation. Do not repeat a note's diagnosis or action. Use summary:null when it adds nothing; without useful line notes, put the complete guidance in the summary. Together the texts speak about every raised result, itself or through its problems, and no withheld one. Each body is published whole as written, with provider safety formatting and a fixed disclosure; nothing is assembled from fragments. An accepted call is final and ends the composition. A missing or contradicted decision, invalid support, eligibility or location, or a witness that cannot stand as the advice refuses the whole review, with every reason, so it can be corrected and sent again. Aim for at most 600 characters and 3 points in the summary, 300 characters and one local point per line note. Each point uses at most two short sentences: what, then why or next action. No headings, internal labels or citation coordinates in the published text; refer to evidence in natural words or a short exact quote. A summary over 1200 characters or a note over 600 is refused for correction, never truncated. Input example with one useful line note: {"decisions":[{"resultId":"<admitted NOT_MET resultId>","disposition":"RAISE"}],"inline":[{"basedOn":["<its problemId>"],"body":"Explain the local concern and its remedy.","anchor":{"problemId":"<same problemId>","citationIndex":0}}],"summary":null}. For a quiet review, use summary:null, inline:[] and a supported withholding decision for each result. Unused inline and witnessIds lists may be null or omitted.
+Check a complete draft without publishing it. Correct any refusal before publishing its returned draftId. First decide each NOT_MET result: RAISE it, or withhold it with your reason and, for advice this work already received, the statement that gave it. Write useful local notes first, then use the summary for warranted guidance that the notes do not carry. Do not recap a note or repeat its diagnosis or action. Use summary:null when it adds nothing; without useful line notes, put the complete guidance in the summary. Together the texts speak about every raised result, itself or through its problems, and no withheld one. Each body is published whole as written, with provider safety formatting and a fixed disclosure; nothing is assembled from fragments. An accepted call is final and ends the composition. A missing or contradicted decision, invalid support, eligibility or location, or a witness that cannot stand as the advice refuses the whole review, with every reason, so it can be corrected and sent again. Aim for at most 600 characters and 3 points in the summary, 300 characters and one local point per line note. Each point uses at most two short sentences: what, then why or next action. No headings, internal labels or citation coordinates in the published text; refer to evidence in natural words or a short exact quote. A summary over 1200 characters or a note over 600 is refused for correction, never truncated. Input example with one useful line note: {"decisions":[{"resultId":"<admitted NOT_MET resultId>","disposition":"RAISE"}],"inline":[{"basedOn":["<its problemId>"],"body":"Explain the local concern and its remedy.","anchor":{"problemId":"<same problemId>","citationIndex":0}}],"summary":null}. For a quiet review, use summary:null, inline:[] and a supported withholding decision for each result. Unused inline and witnessIds lists may be null or omitted.

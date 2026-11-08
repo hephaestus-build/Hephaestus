@@ -23,7 +23,8 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.MissingNode;
 
 /**
- * The code that the public NOT_MET results cite, shown whole with its line numbers, for the review on the work. A
+ * The code that the destination-eligible NOT_MET results cite, shown whole with its line numbers. The caller selects
+ * those results before requesting a reference. A
  * file is shown only when its bytes match the digest admission
  * verified; the {@link Reader} decides where those bytes come from.
  */
@@ -213,9 +214,7 @@ final class PrimarySource {
         var unproven = new ArrayList<String>();
         String changeRecord = contextRoot + "/change.json#/diff";
         for (JsonNode result : results) {
-            if (!result.path("publicEligible").asBoolean(false)
-                    || !result.path("publicEligible").isBoolean()
-                    || !"NOT_MET".equals(string(result.path("outcome")))) continue;
+            if (!"NOT_MET".equals(string(result.path("outcome")))) continue;
             for (JsonNode citation : resultCitations(result)) {
                 JsonNode verification = citation.path("verification");
                 if (!isRecord(citation) || !isRecord(verification)) continue;
@@ -488,8 +487,7 @@ final class PrimarySource {
     }
 
     /**
-     * The primary source reference of the review on the work, or the empty string when no public NOT_MET result cites
-     * code.
+     * The primary source reference for the caller-selected eligible results, or the empty string when none cites code.
      */
     static String reference(
             ComposerFiles composerFiles,

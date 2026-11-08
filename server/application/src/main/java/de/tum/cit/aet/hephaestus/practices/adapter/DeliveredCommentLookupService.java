@@ -49,9 +49,16 @@ public class DeliveredCommentLookupService implements DeliveredIssueCommentLooku
     public CommentIds findForPullRequest(long workspaceId, long pullRequestId, ItemKind kind) {
         var regular = new HashSet<Long>();
         var inline = new HashSet<Long>();
-        for (var receipt : queries.pullRequestReceipts(workspaceId, pullRequestId, kind.value(), CONFIRMED_STATES))
-            (receipt.getInline() ? inline : regular).add(receipt.getNativeId());
-        return new CommentIds(Set.copyOf(regular), Set.copyOf(inline));
+        var reviews = new HashSet<Long>();
+        for (var receipt : queries.pullRequestReceipts(workspaceId, pullRequestId, kind.value(), CONFIRMED_STATES)) {
+            switch (receipt.getKind()) {
+                case "general" -> regular.add(receipt.getNativeId());
+                case "inline" -> inline.add(receipt.getNativeId());
+                case "review" -> reviews.add(receipt.getNativeId());
+                default -> throw new IllegalStateException("Unknown delivered comment kind");
+            }
+        }
+        return new CommentIds(Set.copyOf(regular), Set.copyOf(inline), Set.copyOf(reviews));
     }
 
     private static DeliveredComment comment(FeedbackQueryRepository.IssueReceipt row) {

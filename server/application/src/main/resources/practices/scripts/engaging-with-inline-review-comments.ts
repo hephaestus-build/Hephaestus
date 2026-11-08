@@ -35,6 +35,7 @@ function approvalAfter(
 		.filter(
 			(d) =>
 				d.state === "APPROVED" &&
+				d.quotesHephaestusMarker !== true &&
 				d.dismissed !== true &&
 				d.author === reviewer &&
 				(millisBetween(at, d.submittedAt) ?? -1) >= 0,
@@ -56,6 +57,7 @@ function approvalAfter(
 interface Note {
 	lead: ReviewLead;
 	bot: boolean;
+	quotesHephaestusMarker: boolean;
 	replied: boolean;
 	committedOnFile: boolean;
 	afterHandOff: boolean;
@@ -77,11 +79,13 @@ export default definePracticeScript({
 		const byOthers = (note: { author?: string }) =>
 			note.author !== undefined && note.author !== author;
 		const authorNotes = [
-			...(inline ?? []).filter((c) => c.author === author),
-			...(general ?? []).filter((c) => c.author === author),
+			...(inline ?? []).filter((c) => c.author === author && c.quotesHephaestusMarker !== true),
+			...(general ?? []).filter((c) => c.author === author && c.quotesHephaestusMarker !== true),
 		];
 		const reviewerNextNote = (reviewer: string | undefined, at: string | undefined) =>
-			(general ?? []).find((c) => c.author === reviewer && later(c.createdAt, at))?.body ?? "";
+			(general ?? []).find(
+				(c) => c.author === reviewer && c.quotesHephaestusMarker !== true && later(c.createdAt, at),
+			)?.body ?? "";
 
 		const inlineNotes: Note[] = reviewerCommentRows(
 			inline ?? [],
@@ -96,6 +100,7 @@ export default definePracticeScript({
 			const facts: Facts = {
 				by: comment.author ?? "",
 				bot: comment.bot,
+				...(comment.quotesHephaestusMarker === true ? { quotesHephaestusMarker: true } : {}),
 				at: comment.createdAt ?? "",
 				path: comment.path,
 				side: comment.side ?? "",
@@ -133,6 +138,7 @@ export default definePracticeScript({
 					facts,
 				},
 				bot: comment.bot,
+				quotesHephaestusMarker: comment.quotesHephaestusMarker === true,
 				replied: replies.length > 0,
 				committedOnFile: Number(commitsAfterTouchingFile) > 0,
 				afterHandOff,
@@ -142,7 +148,10 @@ export default definePracticeScript({
 			.filter(byOthers)
 			.map((note: GeneralComment) => {
 				const authorAfter = (general ?? []).filter(
-					(c) => c.author === author && later(c.createdAt, note.createdAt),
+					(c) =>
+						c.author === author &&
+						c.quotesHephaestusMarker !== true &&
+						later(c.createdAt, note.createdAt),
 				);
 				const afterHandOff = later(note.createdAt, handOff);
 				return {
@@ -152,6 +161,7 @@ export default definePracticeScript({
 						facts: {
 							by: note.author ?? "",
 							bot: note.bot,
+							...(note.quotesHephaestusMarker === true ? { quotesHephaestusMarker: true } : {}),
 							at: note.createdAt ?? "",
 							authorNotesAfter: authorAfter.length,
 							authorNoteExcerpt: excerpt(authorAfter[0]?.body ?? "", 80),
@@ -169,15 +179,19 @@ export default definePracticeScript({
 						},
 					},
 					bot: note.bot,
+					quotesHephaestusMarker: note.quotesHephaestusMarker === true,
 					replied: authorAfter.length > 0,
 					committedOnFile: false,
 					afterHandOff,
 				};
 			});
 		const notes = [...inlineNotes, ...conversationNotes];
-		const byPeople = notes.filter((note) => !note.bot);
-		const inlineByPeople = inlineNotes.filter((note) => !note.bot).length;
-		const conversationByPeople = conversationNotes.filter((note) => !note.bot).length;
+		const byPerson = (note: Note) => !note.bot && !note.quotesHephaestusMarker;
+		const byPeople = notes.filter(byPerson);
+		const inlineByPeople = inlineNotes.filter(byPerson).length;
+		const conversationByPeople = conversationNotes.filter(byPerson).length;
+		const uncertainOrigin = notes.filter((note) => note.quotesHephaestusMarker).length;
+		const bots = notes.filter((note) => note.bot && !note.quotesHephaestusMarker).length;
 		const replied = byPeople.filter((note) => note.replied).length;
 		// Without captured commits, reply counts and their sum are unknown, not zero.
 		const committedAfter =
@@ -193,9 +207,8 @@ export default definePracticeScript({
 				`No note by anyone other than the author in the captured record (${inline === null ? "comments.json not captured" : `${String(inline.length)} inline comment(s)`}, ${general === null ? "general_comments.json not captured" : `${String(general.length)} conversation comment(s)`}).`,
 			);
 		} else {
-			const bots = notes.length - byPeople.length;
 			directions.push(
-				`${String(byPeople.length)} reviewer note(s) (${String(inlineByPeople)} inline, ${String(conversationByPeople)} conversation)${bots > 0 ? `, ${String(bots)} more by bots` : ""}; ${String(replied)} have a later author note.`,
+				`${String(byPeople.length)} reviewer note(s) (${String(inlineByPeople)} inline, ${String(conversationByPeople)} conversation)${bots > 0 ? `, ${String(bots)} more by bots` : ""}${uncertainOrigin > 0 ? `, ${String(uncertainOrigin)} more with uncertain authorship (retained Hephaestus markers)` : ""}; ${String(replied)} have a later author note.`,
 				`${committedAfter === null ? "How many have a later authored commit touching the commented file is unknown" : `${String(committedAfter)} have a later authored commit touching the commented file`}; ${String(afterHandOff)} were posted after the work merged or closed.`,
 				`Commit capture: ${capturedCommits === null ? "unavailable" : `${String(commits.length)} captured commit(s)`} in commits.json.`,
 			);
@@ -210,7 +223,8 @@ export default definePracticeScript({
 				...(inline === null && general === null
 					? {}
 					: {
-							botComments: notes.length - byPeople.length,
+							botComments: bots,
+							...(uncertainOrigin > 0 ? { uncertainOriginComments: uncertainOrigin } : {}),
 							withAuthorReply: replied,
 							...(committedAfter === null ? {} : { withLaterCommitOnFile: committedAfter }),
 							afterHandOff,
@@ -261,8 +275,12 @@ function reviewerCommentRows(
 				opensThread: !inline.some(
 					(earlier, j) => j < index && byOthers(earlier) && sameThread(earlier, comment),
 				),
-				replies: inline.filter((c) => c.author === author && after(c)),
-				followUps: inline.filter((c) => byOthers(c) && after(c)),
+				replies: inline.filter(
+					(c) => c.author === author && c.quotesHephaestusMarker !== true && after(c),
+				),
+				followUps: inline.filter(
+					(c) => byOthers(c) && c.quotesHephaestusMarker !== true && after(c),
+				),
 				thread: threadOf(comment),
 			},
 		];

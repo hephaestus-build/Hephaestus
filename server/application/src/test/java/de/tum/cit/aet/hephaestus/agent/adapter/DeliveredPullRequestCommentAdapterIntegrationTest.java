@@ -16,6 +16,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommen
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
@@ -71,6 +73,9 @@ class DeliveredPullRequestCommentAdapterIntegrationTest extends AbstractWorkspac
     private FeedbackRepository feedback;
 
     @Autowired
+    private PullRequestReviewRepository reviews;
+
+    @Autowired
     private FeedbackCopyRepository copies;
 
     private Workspace workspace;
@@ -120,11 +125,11 @@ class DeliveredPullRequestCommentAdapterIntegrationTest extends AbstractWorkspac
         copy(save(elsewhere, work, FeedbackState.DELIVERED), FeedbackCopyKind.LINE_NOTE, "gid://gitlab/Note/209", null);
 
         assertThat(lookup.findForPullRequest(workspace.getId(), work.getId(), ScmItemEvents.PULL_REQUEST))
-                .isEqualTo(new CommentIds(Set.of(101L, 102L, 103L, 104L), Set.of(201L, 202L)));
+                .isEqualTo(new CommentIds(Set.of(101L, 102L, 103L, 104L), Set.of(201L, 202L), Set.of()));
         assertThat(lookup.findForPullRequest(elsewhere.getId(), work.getId(), ScmItemEvents.PULL_REQUEST))
-                .isEqualTo(new CommentIds(Set.of(), Set.of(209L)));
+                .isEqualTo(new CommentIds(Set.of(), Set.of(209L), Set.of()));
         assertThat(lookup.findForPullRequest(workspace.getId(), otherWork.getId(), ScmItemEvents.PULL_REQUEST))
-                .isEqualTo(new CommentIds(Set.of(), Set.of()));
+                .isEqualTo(new CommentIds(Set.of(), Set.of(), Set.of()));
     }
 
     @Test
@@ -152,7 +157,29 @@ class DeliveredPullRequestCommentAdapterIntegrationTest extends AbstractWorkspac
         copy(save(workspace, work, FeedbackState.DELIVERED), FeedbackCopyKind.SUMMARY, "IC_kwDOunmapped", null);
 
         assertThat(lookup.findForPullRequest(workspace.getId(), work.getId(), ScmItemEvents.PULL_REQUEST))
-                .isEqualTo(new CommentIds(Set.of(5_001L), Set.of(6_001L)));
+                .isEqualTo(new CommentIds(Set.of(5_001L), Set.of(6_001L), Set.of()));
+    }
+
+    @Test
+    void shouldIdentifyARecordedGitHubReviewWithoutUsingItsBodyOrAnotherWorkspacesReceipt() {
+        var work = pullRequest(ensureGitHubProvider(), 93_001L, 7);
+        var review = new PullRequestReview();
+        review.setProvider(work.getProvider());
+        review.setPullRequest(work);
+        review.setNativeId(8_001L);
+        review.setState(PullRequestReview.State.COMMENTED);
+        review.setBody("Edited review without a marker");
+        review.setHtmlUrl(work.getHtmlUrl() + "#pullrequestreview-8001");
+        reviews.saveAndFlush(review);
+        copy(
+                save(workspace, work, FeedbackState.REPLACED),
+                FeedbackCopyKind.SUMMARY,
+                "PRR_recorded",
+                review.getHtmlUrl());
+        assertThat(lookup.findForPullRequest(workspace.getId(), work.getId(), ScmItemEvents.PULL_REQUEST))
+                .isEqualTo(new CommentIds(Set.of(), Set.of(), Set.of(8_001L)));
+        assertThat(lookup.findForPullRequest(elsewhere.getId(), work.getId(), ScmItemEvents.PULL_REQUEST))
+                .isEqualTo(new CommentIds(Set.of(), Set.of(), Set.of()));
     }
 
     private PullRequest pullRequest(IdentityProvider provider, long nativeId, int number) {

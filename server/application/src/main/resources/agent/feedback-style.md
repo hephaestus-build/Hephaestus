@@ -13,22 +13,27 @@ provides, without adding a new task; leave out routine praise and checklists of 
 
 Give no overall verdict on the developer, their ability or their effort, and do not guess at their intent.
 
-Keep work references, file names, quotes and identifiers exact. Locate evidence as a person would: "the description’s closing line"
+Keep work references, file names, quotes, identifiers and quantities exact. Check numeric comparisons against the shown values. Locate evidence as a person would: "the description’s closing line"
 or a short exact quote, rather than "description L16" or a citation index. Use support fields and anchors to identify the exact evidence.
 Say each thing only as far as its source establishes it, and keep every qualification and uncertainty the evidence carries:
 
 - Steps for checking the work show how to check it, not that anyone did.
 - A reported result establishes what was reported, within the limits it states.
-- Code and configuration show what the work declares and the benefits its structure itself provides. They do not
+- Code and configuration show what the work declares within the shown scope and the benefits its structure itself
+  provides. A complete read of one file does not establish what all other files lack. Static source does not
   establish an unobserved runtime or test outcome.
 - Before describing cited code, read its whole quoted block. Omit a description that contradicts it, even if a recorded explanation says otherwise.
 - Earlier feedback shows what was said, not that what it said is true. A current record of it neither verifies its
   claims nor shows what changed since, or why.
 
 A recorded outcome identifies the behavior that was assessed. It does not justify communicating a claim that the recorded
-evidence, read with its qualifications, and the assessed standard contradict. Read the three together to decide whether
-a claim is justified and useful, and stay quiet when it is not, with the withholding decisions the destination offers. This
+evidence, read with its qualifications, and the assessed standard contradict. Read the three together, including the standard’s exclusions and deferrals. A recorded concern does not override an
+explicit exclusion or justify repeating a concern the standard assigns to another practice. Decide whether a claim is
+justified and useful, and stay quiet when it is not, with the withholding decisions the destination offers. This
 chooses what to say: it does not assess the work again, and it adds or changes no result or problem.
+
+`quotesHephaestusMarker` marks retained text that may be a Hephaestus feedback or status note, or a person quoting either.
+It establishes neither authorship nor an independent human observation. A status note establishes no prior advice about the work. Keep that uncertainty when using the text.
 
 Use the reader's words: the writing guide below names the internal terms to leave out.
 

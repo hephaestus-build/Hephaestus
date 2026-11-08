@@ -8,9 +8,11 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
@@ -60,6 +62,7 @@ public class ReviewThreadContentSource {
     static final String FILE_NAME = "review_threads.json";
 
     private final ObjectMapper objectMapper;
+    private final DeliveredPullRequestCommentLookup deliveredComments;
     private final PullRequestRepository pullRequestRepository;
     private final PullRequestReviewThreadRepository threadRepository;
     private final PullRequestReviewRepository reviewRepository;
@@ -68,8 +71,10 @@ public class ReviewThreadContentSource {
             ObjectMapper objectMapper,
             PullRequestRepository pullRequestRepository,
             PullRequestReviewThreadRepository threadRepository,
-            PullRequestReviewRepository reviewRepository) {
+            PullRequestReviewRepository reviewRepository,
+            DeliveredPullRequestCommentLookup deliveredComments) {
         this.objectMapper = objectMapper;
+        this.deliveredComments = deliveredComments;
         this.pullRequestRepository = pullRequestRepository;
         this.threadRepository = threadRepository;
         this.reviewRepository = reviewRepository;
@@ -79,8 +84,10 @@ public class ReviewThreadContentSource {
      * @param occasionDecision the submitted review's decision as its occasion retained it; it takes the place of that
      *     review as stored now, which may have been edited since
      */
-    private ObjectNode collect(long pullRequestId, ScmCapturedWork metadata, @Nullable ObjectNode occasionDecision) {
+    private ObjectNode collect(
+            long workspaceId, long pullRequestId, ScmCapturedWork metadata, @Nullable ObjectNode occasionDecision) {
         try {
+            var posted = deliveredComments.findForPullRequest(workspaceId, pullRequestId, ScmItemEvents.PULL_REQUEST);
             List<Long> threadIds =
                     new ArrayList<>(threadRepository.findRecentIdsByPullRequestId(pullRequestId, Pageable.unpaged()));
             List<PullRequestReviewThread> threads =
@@ -120,7 +127,7 @@ public class ReviewThreadContentSource {
 
             ArrayNode threadArray = objectMapper.createArrayNode();
             for (PullRequestReviewThread t : threads) {
-                if (t == null || isHephaestusThread(t)) {
+                if (t == null || isHephaestusThread(t, posted.inline())) {
                     continue;
                 }
                 threadArray.add(toThread(t));
@@ -129,20 +136,25 @@ public class ReviewThreadContentSource {
 
             ArrayNode decisionArray = objectMapper.createArrayNode();
             boolean occasionStaged = occasionDecision == null;
+            if (occasionDecision != null) flagMarker(occasionDecision);
             for (PullRequestReview review : reviews) {
                 if (review == null || review.getState() == null) {
                     continue;
                 }
                 if (occasionDecision != null && Objects.equals(review.getId(), metadata.reviewSourceId())) {
-                    if (decides(occasionDecision)) decisionArray.add(occasionDecision);
+                    if (decides(occasionDecision) && !delivered(posted.reviews(), review.getNativeId()))
+                        decisionArray.add(occasionDecision);
                     occasionStaged = true;
                     continue;
                 }
-                if (decides(review.getState(), review.getBody()) && !isHephaestusReview(review))
+                if (decides(review.getState(), review.getBody()) && !delivered(posted.reviews(), review.getNativeId()))
                     decisionArray.add(decision(review));
             }
-            if (!occasionStaged && occasionDecision != null && decides(occasionDecision))
-                decisionArray.add(occasionDecision);
+            if (!occasionStaged
+                    && occasionDecision != null
+                    && decides(occasionDecision)
+                    && !posted.reviews()
+                            .contains(occasionDecision.path("nativeId").asLong())) decisionArray.add(occasionDecision);
             root.set("reviewDecisions", decisionArray);
             // A withdrawn or replaced decision may be gone, so this list is no event history.
             root.put("decisionHistoryComplete", false);
@@ -170,7 +182,8 @@ public class ReviewThreadContentSource {
             return CaptureContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
         }
         var occasion = request.occasion();
-        ObjectNode root = collect(pullRequestId, metadata, occasion == null ? null : occasion.decision());
+        ObjectNode root =
+                collect(request.workspaceId(), pullRequestId, metadata, occasion == null ? null : occasion.decision());
         if (occasion != null) {
             JsonNode decision = occasion.record().get("review_decision");
             if (decision != null) root.set("review_decision", decision);
@@ -201,27 +214,12 @@ public class ReviewThreadContentSource {
                 ScmCitableTexts.files(files, this::sourceKindFor, objectMapper));
     }
 
-    private static boolean isHephaestusReview(PullRequestReview review) {
-        String body = review.getBody();
-        return body != null && body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER);
+    private static boolean delivered(Set<Long> posted, @Nullable Long nativeId) {
+        return nativeId != null && posted.contains(nativeId);
     }
 
-    // Filter posted feedback by its marker; bot logins cannot reliably distinguish it from human review.
-    private static boolean isHephaestusThread(PullRequestReviewThread t) {
-        var comments = t.getComments();
-        if (comments == null || comments.isEmpty()) {
-            return false;
-        }
-        for (var c : comments) {
-            if (c == null) {
-                continue;
-            }
-            String body = c.getBody();
-            if (body != null && body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER)) {
-                return true;
-            }
-        }
-        return false;
+    private static boolean isHephaestusThread(PullRequestReviewThread thread, Set<Long> posted) {
+        return thread.getComments().stream().anyMatch(comment -> delivered(posted, comment.getNativeId()));
     }
 
     private ObjectNode toThread(PullRequestReviewThread t) {
@@ -310,8 +308,14 @@ public class ReviewThreadContentSource {
         }
         if (!isBlank(review.getBody())) {
             node.put("body", review.getBody());
+            flagMarker(node);
         }
         return node;
+    }
+
+    private static void flagMarker(ObjectNode node) {
+        if (node.path("body").asString("").contains(WorkspaceScmProjection.HEPHAESTUS_MARKER))
+            node.put("quotesHephaestusMarker", true);
     }
 
     private static boolean isBlank(@Nullable String text) {

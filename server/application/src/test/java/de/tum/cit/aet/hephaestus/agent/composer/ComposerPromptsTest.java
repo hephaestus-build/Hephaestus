@@ -6,11 +6,13 @@ import de.tum.cit.aet.hephaestus.agent.runtime.FeedbackWritingGuide;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Objects;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-/** The worker's composers use the voice, placement and contracts the golden file holds. */
+/** The worker's composers use the golden contracts. UPDATE_COMPOSITION_GOLDENS=1 regenerates the source snapshot. */
 @Tag("unit")
 class ComposerPromptsTest {
 
@@ -32,6 +34,13 @@ class ComposerPromptsTest {
                         "# Public tool description",
                         ReviewOnWork.TOOL_DESCRIPTION)
                 + "\n";
+        if ("1".equals(System.getenv("UPDATE_COMPOSITION_GOLDENS"))) {
+            Files.writeString(
+                    Path.of("src/test/resources/agent/golden-prompts/composition-contracts.md"),
+                    actual,
+                    StandardCharsets.UTF_8);
+            return;
+        }
         try (InputStream golden = Objects.requireNonNull(
                 getClass().getResourceAsStream("/agent/golden-prompts/composition-contracts.md"))) {
             assertThat(actual).isEqualTo(new String(golden.readAllBytes(), StandardCharsets.UTF_8));

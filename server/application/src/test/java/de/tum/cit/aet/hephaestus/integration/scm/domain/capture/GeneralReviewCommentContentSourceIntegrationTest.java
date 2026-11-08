@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
@@ -92,7 +91,7 @@ class GeneralReviewCommentContentSourceIntegrationTest extends BaseIntegrationTe
     }
 
     @Test
-    void theQueryDropsHephaestusOwnCommentsAndEmptyBodies() {
+    void shouldKeepQuotedFeedbackMarkersForReceiptBasedCapture() {
         PullRequest pr = persistPullRequest(11);
         User human = persistUser("reviewer-a");
         persistComment(pr, human, "<!-- hephaestus:practice-review:abc --> 2 gaps to fix", at("09:00"));
@@ -100,12 +99,16 @@ class GeneralReviewCommentContentSourceIntegrationTest extends BaseIntegrationTe
         persistComment(pr, human, "   ", at("09:30"));
         persistComment(pr, human, "split persistence out so each unit is testable", at("10:00"));
 
-        List<IssueComment> rows = issueCommentRepository.findRecentHumanByIssueIdWithAuthor(
-                pr.getId(), WorkspaceScmProjection.HEPHAESTUS_MARKER, PageRequest.of(0, 50));
+        List<IssueComment> rows =
+                issueCommentRepository.findRecentByIssueIdWithAuthor(pr.getId(), PageRequest.of(0, 50));
 
         assertThat(rows)
                 .extracting(IssueComment::getBody)
-                .containsExactly("split persistence out so each unit is testable");
+                .containsExactly(
+                        "split persistence out so each unit is testable",
+                        "   ",
+                        "**`App/View.swift:13`** Add a label\n<!-- hephaestus-diff-note -->",
+                        "<!-- hephaestus:practice-review:abc --> 2 gaps to fix");
     }
 
     @Test

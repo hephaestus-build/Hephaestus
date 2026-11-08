@@ -98,6 +98,26 @@ void test("review decisions preserve the retained read time separately from prov
 	);
 });
 
+void test("discussion readers preserve uncertain authorship on comments and decisions", async () => {
+	const marked = {
+		body: "A retained note",
+		author: "service-account",
+		quotesHephaestusMarker: true,
+	};
+	const inline = await readReviewComments(
+		evidence([{ ...marked, path: "src/a.ts" }], "comments.json"),
+	);
+	const general = await readGeneralComments(
+		evidence({ comments: [marked] }, "general_comments.json"),
+	);
+	const reviews = await readReviewThreads(
+		evidence({ threads: [], reviewDecisions: [{ ...marked, state: "COMMENTED" }] }),
+	);
+	assert.equal(inline?.[0]?.quotesHephaestusMarker, true);
+	assert.equal(general?.[0]?.quotesHephaestusMarker, true);
+	assert.equal(reviews?.decisions[0]?.quotesHephaestusMarker, true);
+});
+
 for (const { name, read, empty, result, invalid } of readers) {
 	void test(`${name} distinguishes absent capture from measured empty data`, async () => {
 		assert.equal(await read({ record: async () => ({ status: "ABSENT" }) }), null);

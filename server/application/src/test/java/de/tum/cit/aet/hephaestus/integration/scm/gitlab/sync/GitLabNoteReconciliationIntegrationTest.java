@@ -135,7 +135,7 @@ class GitLabNoteReconciliationIntegrationTest extends AbstractWorkspaceIntegrati
         assertThat(comments.findById(deleted.getId())).isEmpty();
         assertThat(comments.findById(other.getId())).isPresent();
         // The live-content query used by Heph and evidence reads has no deleted body left to capture.
-        assertThat(comments.findRecentHumanByIssueIdWithAuthor(issue.getId(), "hephaestus", PageRequest.of(0, 10)))
+        assertThat(comments.findRecentByIssueIdWithAuthor(issue.getId(), PageRequest.of(0, 10)))
                 .isEmpty();
     }
 
@@ -162,8 +162,7 @@ class GitLabNoteReconciliationIntegrationTest extends AbstractWorkspaceIntegrati
                 .isNull();
         assertThat(threads.findById(thread.getId()).orElseThrow().getRootComment())
                 .isNull();
-        assertThat(diffComments.findRecentHumanByPullRequestIdWithAuthor(
-                        mr.getId(), "hephaestus", PageRequest.of(0, 10)))
+        assertThat(diffComments.findRecentWithContextByPullRequestId(mr.getId(), PageRequest.of(0, 10)))
                 .extracting(PullRequestReviewComment::getId)
                 .containsExactly(reply.getId());
         assertThat(service(request -> Mono.just(page("[]", 0, 1, "")))
