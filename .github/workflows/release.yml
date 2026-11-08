@@ -183,7 +183,7 @@ jobs:
 
       - name: Install cosign for candidate verification
         if: needs.release.outputs.candidate != ''
-        uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
+        uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@972e766b362779c7d2115251e8fc589b443a2c97
         with:
           cosign-release: v3.1.4
 
@@ -530,7 +530,7 @@ jobs:
           install: "none"
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
+        uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@972e766b362779c7d2115251e8fc589b443a2c97
         with:
           cosign-release: v3.1.4
 

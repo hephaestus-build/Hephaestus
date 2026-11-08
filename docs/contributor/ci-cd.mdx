@@ -1394,15 +1394,17 @@ when changing these boundaries, and preserve dependency stats from the single St
 
 The security-tool installer and pinned repository tools use GitHub's release asset API first when
 `GITHUB_TOKEN` or `GH_TOKEN` is available. The API lookup selects the exact asset of the pinned release.
-The token goes only to `api.github.com`; redirects and direct release URLs receive no token.
+The token goes only to `api.github.com`. Redirects and direct release URLs receive no token.
 If the API path is unavailable, the downloader tries the pinned direct release URL.
+
 Each request retries temporary HTTP and transport failures up to three times, with waits of one and
 two seconds. The timeout is ten seconds for release metadata and 120 seconds for each asset attempt.
-A download failure fails the gate; it never becomes a valid workflow or a clean security scan.
+A download failure fails the gate. It never becomes a valid workflow or a clean security scan.
 
-Cosign keeps the upstream installer's trust chain: the SHA-256-pinned 3.1.3 bootstrap verifies the
-selected binary with both its keyless bundle and its KMS bundle. The release public key retains its
-pinned SHA-256. Syft and Trivy archives must match their release checksum files before extraction.
+Cosign keeps the upstream installer's trust chain. The 3.1.3 bootstrap has a pinned SHA-256.
+It verifies the selected binary with both its keyless bundle and its KMS bundle.
+The release public key retains its pinned SHA-256.
+Syft and Trivy archives must match their release checksum files before extraction.
 
 Signing jobs use the Cosign installer action at an immutable commit, with no checkout of the build
 branch. Publish and review a new installer commit before updating those action references.

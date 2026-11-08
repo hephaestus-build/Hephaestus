@@ -86,7 +86,7 @@ jobs:
           CHANNEL: ${{ inputs.environment }}
         run: node scripts/automatic-promotion.ts
 
-      - uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
+      - uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@972e766b362779c7d2115251e8fc589b443a2c97
         if: ${{ steps.policy.outputs.apply != 'false' }}
         with:
           cosign-release: v3.1.4
