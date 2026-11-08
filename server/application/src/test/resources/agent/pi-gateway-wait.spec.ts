@@ -93,7 +93,8 @@ for (const code of ["ETIMEDOUT", "EHOSTUNREACH", "ENETUNREACH"]) {
 		await eventsFrom(output);
 		assert.equal(calls, 3);
 		assert.equal(interrupted, true);
-		assert.equal((await output.result()).stopReason, "aborted");
+		const result = await output.result();
+		assert.equal(result.stopReason, "aborted");
 	});
 }
 
@@ -103,15 +104,17 @@ await test("a proven connect timeout waits within the same model stream", async 
 		...options,
 		fetch: async () => {
 			calls += 1;
-			if (calls <= 3)
+			if (calls <= 3) {
 				throw new TypeError("fetch failed", { cause: { code: "ETIMEDOUT", syscall: "connect" } });
+			}
 			return completed();
 		},
 	});
 	const events = await eventsFrom(output);
 	assert.equal(calls, 4);
 	assert.equal(events.filter((event) => event.type === "error").length, 0);
-	assert.equal((await output.result()).stopReason, "stop");
+	const result = await output.result();
+	assert.equal(result.stopReason, "stop");
 });
 
 await test("a disconnected partial response is replaced by one complete model response", async () => {
