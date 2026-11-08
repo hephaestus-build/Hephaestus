@@ -1444,7 +1444,10 @@ Cache restore and save are best effort. A verified download is saved for later r
 
 Mirror and upstream requests make at most three attempts, with waits of one and two seconds.
 The timeout is ten seconds for API metadata and 30 seconds for each asset attempt, including its body.
-The API uses the job token first, then tries the public endpoint without credentials.
+
+The asset API uses the job token first, then tries the public endpoint without credentials.
+For another repository, release metadata uses the public API first, with the job token as a fallback.
+This metadata choice does not remove authentication from the asset download.
 The token stays on `api.github.com` and `github.com`, including redirects between those origins.
 Storage redirects retain their signed URL credentials. Other hosts receive no repository token.
 
@@ -1459,6 +1462,11 @@ Pulls use the job token with `packages: read`. The resolver verifies the selecte
 The `Cache / Mirror pinned CI tools` workflow runs on main when pins change, each week, or by manual dispatch.
 It reads the same pin files, verifies every platform asset, then publishes the version with `packages: write`.
 A failed group leaves the existing version tag unchanged. Other tool groups can still publish.
+
+Mirror errors name the registry operation and HTTP status, without response bodies or credentials.
+If authentication or publication is denied, check the job's `packages: write` grant and the package's Actions access.
+An organization owner controls private package creation under **Organization settings → Packages → Package Creation**.
+See [package creation permissions](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility#package-creation-visibility-for-organization-members).
 
 Its upstream requests allow four attempts of 60 seconds, with waits of five, ten and 15 seconds.
 This longer retry runs outside the pull request gates.

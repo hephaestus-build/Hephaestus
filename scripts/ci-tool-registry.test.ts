@@ -78,68 +78,75 @@ void test("GHCR authenticates its pull and preserves signed storage credentials 
 	assert.equal(calls.length, 4);
 });
 
-void test("the mirror publishes checksum-addressed blobs and the complete version manifest", async (t) => {
-	credentials(t);
-	let manifest: Record<string, unknown> | undefined;
-	const uploads: string[] = [];
-	t.mock.method(
-		globalThis,
-		"fetch",
-		async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-			const url = input instanceof Request ? input.url : input.toString();
-			if (url.startsWith("https://ghcr.io/token?")) {
-				assert.equal(
-					new URL(url).searchParams.get("scope"),
-					"repository:hephaestus-build/ci-tools/fixture:pull,push",
-				);
-				return Response.json({ token: "scoped-token" });
-			}
-			assert.equal(new Headers(init?.headers).get("authorization"), "Bearer scoped-token");
-			if (init?.method === "HEAD") {
-				return new Response(null, { status: 404 });
-			}
-			if (init?.method === "POST") {
-				return new Response(null, {
-					status: 202,
-					headers: { location: `${base}/blobs/uploads/fixture?state=opaque` },
-				});
-			}
-			assert.equal(init?.method, "PUT");
-			if (url === `${base}/manifests/1.2.3`) {
-				assert.equal(
-					new Headers(init.headers).get("content-type"),
-					"application/vnd.oci.image.manifest.v1+json",
-				);
-				manifest = asRecord(parseJson(await new Response(init.body).text()), "manifest");
-			} else {
-				const digest = new URL(url).searchParams.get("digest");
-				assert.equal(
-					digest,
-					`sha256:${toolSha256(new Uint8Array(await new Response(init.body).arrayBuffer()))}`,
-				);
-				uploads.push(digest);
-			}
-			return new Response(null, { status: 201 });
-		},
-	);
-	await publishCiToolGroup([
-		{ pin, bytes },
-		{ pin, bytes },
-	]);
-	assert.deepEqual(uploads, [
-		`sha256:${toolSha256(new TextEncoder().encode("{}"))}`,
-		`sha256:${pin.sha256}`,
-	]);
-	assert.equal(manifest?.artifactType, "application/vnd.hephaestus.ci-tool.v1");
-	assert.deepEqual(manifest.layers, [
-		{
-			mediaType: "application/octet-stream",
-			digest: `sha256:${pin.sha256}`,
-			size: bytes.length,
-			annotations: { "org.opencontainers.image.title": "fixture.bin" },
-		},
-	]);
-});
+for (const segment of ["upload", "uploads"]) {
+	void test(`the mirror follows the registry ${segment} location and publishes verified blobs`, async (t) => {
+		credentials(t);
+		let manifest: Record<string, unknown> | undefined;
+		const uploads: string[] = [];
+		t.mock.method(
+			globalThis,
+			"fetch",
+			async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+				const url = input instanceof Request ? input.url : input.toString();
+				if (url.startsWith("https://ghcr.io/token?")) {
+					assert.equal(
+						new URL(url).searchParams.get("scope"),
+						"repository:hephaestus-build/ci-tools/fixture:pull,push",
+					);
+					return Response.json({ token: "scoped-token" });
+				}
+				assert.equal(new Headers(init?.headers).get("authorization"), "Bearer scoped-token");
+				if (init?.method === "HEAD") {
+					return new Response(null, { status: 404 });
+				}
+				if (init?.method === "POST") {
+					return new Response(null, {
+						status: 202,
+						headers: { location: `${base}/blobs/${segment}/fixture?state=opaque` },
+					});
+				}
+				assert.equal(init?.method, "PUT");
+				if (url === `${base}/manifests/1.2.3`) {
+					assert.equal(
+						new Headers(init.headers).get("content-type"),
+						"application/vnd.oci.image.manifest.v1+json",
+					);
+					manifest = asRecord(parseJson(await new Response(init.body).text()), "manifest");
+				} else {
+					assert.equal(
+						new URL(url).pathname,
+						`/v2/hephaestus-build/ci-tools/fixture/blobs/${segment}/fixture`,
+					);
+					assert.equal(new URL(url).searchParams.get("state"), "opaque");
+					const digest = new URL(url).searchParams.get("digest");
+					assert.equal(
+						digest,
+						`sha256:${toolSha256(new Uint8Array(await new Response(init.body).arrayBuffer()))}`,
+					);
+					uploads.push(digest);
+				}
+				return new Response(null, { status: 201 });
+			},
+		);
+		await publishCiToolGroup([
+			{ pin, bytes },
+			{ pin, bytes },
+		]);
+		assert.deepEqual(uploads, [
+			`sha256:${toolSha256(new TextEncoder().encode("{}"))}`,
+			`sha256:${pin.sha256}`,
+		]);
+		assert.equal(manifest?.artifactType, "application/vnd.hephaestus.ci-tool.v1");
+		assert.deepEqual(manifest.layers, [
+			{
+				mediaType: "application/octet-stream",
+				digest: `sha256:${pin.sha256}`,
+				size: bytes.length,
+				annotations: { "org.opencontainers.image.title": "fixture.bin" },
+			},
+		]);
+	});
+}
 
 void test("the mirror refuses mismatched bytes before making any request", async (t) => {
 	t.mock.method(globalThis, "fetch", () => {
@@ -171,7 +178,10 @@ void test("a foreign upload location is refused before any credentials or bytes 
 			});
 		},
 	);
-	await assert.rejects(publishCiToolGroup([{ pin, bytes }]), /Unsafe GHCR upload location/u);
+	await assert.rejects(
+		publishCiToolGroup([{ pin, bytes }]),
+		/GHCR upload location validation failed/u,
+	);
 });
 
 void test("a rejected registry token is refreshed once and then fails closed", async (t) => {
@@ -191,4 +201,65 @@ void test("a rejected registry token is refreshed once and then fails closed", a
 	await assert.rejects(fetchMirroredCiTool(pin), /HTTP 401/u);
 	assert.equal(tokens, 2);
 	assert.equal(requests, 2);
+});
+
+void test("a repeat publication reuses existing blobs without starting an upload", async (t) => {
+	credentials(t);
+	const methods: string[] = [];
+	t.mock.method(
+		globalThis,
+		"fetch",
+		async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+			const url = input instanceof Request ? input.url : input.toString();
+			if (url.startsWith("https://ghcr.io/token?")) {
+				return Response.json({ token: "scoped-token" });
+			}
+			methods.push(init?.method ?? "GET");
+			if (init?.method === "HEAD") {
+				return new Response(null, { status: 200 });
+			}
+			assert.equal(url, `${base}/manifests/1.2.3`);
+			assert.equal(init?.method, "PUT");
+			return new Response(null, { status: 201 });
+		},
+	);
+	await publishCiToolGroup([{ pin, bytes }]);
+	assert.deepEqual(methods, ["HEAD", "HEAD", "PUT"]);
+});
+
+void test("a denied mirror operation reports a safe stage and HTTP status", async (t) => {
+	credentials(t);
+	t.mock.method(
+		globalThis,
+		"fetch",
+		async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+			const url = input instanceof Request ? input.url : input.toString();
+			if (url.startsWith("https://ghcr.io/token?")) {
+				return Response.json({ token: "scoped-token" });
+			}
+			if (init?.method === "HEAD") {
+				return new Response(null, { status: 404 });
+			}
+			assert.equal(init?.method, "POST");
+			return new Response("untrusted response fixture-github-token", { status: 403 });
+		},
+	);
+	await assert.rejects(publishCiToolGroup([{ pin, bytes }]), (error: unknown) => {
+		assert.ok(error instanceof Error);
+		assert.equal(error.message, "GHCR upload initiation failed (HTTP 403)");
+		assert.ok(!error.message.includes("fixture-github-token"));
+		return true;
+	});
+});
+
+void test("registry authentication failures are distinct from upload permission failures", async (t) => {
+	credentials(t);
+	t.mock.method(globalThis, "fetch", async (input: Parameters<typeof fetch>[0]) => {
+		const url = input instanceof Request ? input.url : input.toString();
+		assert.ok(url.startsWith("https://ghcr.io/token?"));
+		return new Response("untrusted fixture-github-token response", { status: 403 });
+	});
+	await assert.rejects(publishCiToolGroup([{ pin, bytes }]), {
+		message: "GHCR authentication failed (HTTP 403)",
+	});
 });
