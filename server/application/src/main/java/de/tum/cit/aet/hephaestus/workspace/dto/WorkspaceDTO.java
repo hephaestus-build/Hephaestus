@@ -1,10 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace.dto;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -77,74 +74,30 @@ public record WorkspaceDTO(
 
         @NonNull @Schema(description = "Whether manual practice reviews triggered through a bot command are enabled")
         Boolean practiceReviewManualTriggerEnabled) {
-    /** Builds a DTO pulling integration metadata from the Connection registry. */
-    public static WorkspaceDTO from(Workspace workspace, ConnectionService connectionService, String workspaceAddress) {
-        long workspaceId = workspace.getId();
-
-        var providerKind = connectionService.findActiveProviderKind(workspaceId);
-        var gitHubApp = connectionService.findActiveGitHubAppConfig(workspaceId);
-        var gitHubPat = connectionService.findActiveGitHubPatConfig(workspaceId);
-        var gitLab = connectionService.findActiveGitLabConfig(workspaceId);
-
-        String serverUrl = gitLab.map(ConnectionConfig.GitLabConfig::serverUrl)
-                .or(() -> gitHubApp.map(ConnectionConfig.GitHubAppConfig::serverUrl))
-                .or(() -> gitHubPat.map(ConnectionConfig.GitHubPatConfig::serverUrl))
-                .orElse(null);
-
-        Long installationId =
-                gitHubApp.map(ConnectionConfig.GitHubAppConfig::installationId).orElse(null);
-
-        Instant installationLinkedAt = connectionService
-                .findActive(workspaceId, IntegrationKind.GITHUB)
-                .filter(c -> c.getConfig() instanceof ConnectionConfig.GitHubAppConfig)
-                .map(c -> c.getCreatedAt())
-                .orElse(null);
-
-        // Presence only: this view must not decrypt anything, or a credential the running key cannot
-        // read takes the whole workspace page down with it.
-        boolean hasPat = (gitHubPat.isPresent()
-                        && storesCredentials(connectionService, workspaceId, IntegrationKind.GITHUB))
-                || (gitLab.isPresent() && storesCredentials(connectionService, workspaceId, IntegrationKind.GITLAB));
-
-        boolean hasSlackToken = storesCredentials(connectionService, workspaceId, IntegrationKind.SLACK);
-
-        Long slackConnectionId = connectionService
-                .findActive(workspaceId, IntegrationKind.SLACK)
-                .map(c -> c.getId())
-                .orElse(null);
-
-        boolean gitlabWebhookRegistered =
-                gitLab.map(c -> c.gitlabWebhookId() != null).orElse(false);
-
+    public static WorkspaceDTO from(
+            Workspace workspace, ConnectionService.WorkspaceMetadata metadata, String workspaceAddress) {
+        var kind = metadata.kind();
         return new WorkspaceDTO(
-                workspaceId,
+                workspace.getId(),
                 workspace.getWorkspaceSlug(),
                 workspaceAddress,
                 workspace.getDisplayName(),
                 workspace.getPublicActivityEnabled(),
                 workspace.getStatus().name(),
                 workspace.getAccountLogin(),
-                installationId,
-                providerKind.map(Enum::name).orElse(null),
-                providerKind.map(IdentityProviderType::from).orElse(null),
-                serverUrl,
+                metadata.installationId(),
+                kind == null ? null : kind.name(),
+                kind == null ? null : IdentityProviderType.from(kind),
+                metadata.serverUrl(),
                 workspace.getCreatedAt(),
                 workspace.getUpdatedAt(),
-                installationLinkedAt,
-                hasPat,
-                hasSlackToken,
-                slackConnectionId,
-                gitlabWebhookRegistered,
+                metadata.installationLinkedAt(),
+                metadata.hasPersonalAccessToken(),
+                metadata.hasSlackToken(),
+                metadata.slackConnectionId(),
+                metadata.gitlabWebhookRegistered(),
                 workspace.getFeatures().getPracticesEnabled(),
                 workspace.getFeatures().getPracticeReviewAutoTriggerEnabled(),
                 workspace.getFeatures().getPracticeReviewManualTriggerEnabled());
-    }
-
-    private static boolean storesCredentials(
-            ConnectionService connectionService, long workspaceId, IntegrationKind kind) {
-        return connectionService
-                .findActive(workspaceId, kind)
-                .map(Connection::hasCredentials)
-                .orElse(false);
     }
 }

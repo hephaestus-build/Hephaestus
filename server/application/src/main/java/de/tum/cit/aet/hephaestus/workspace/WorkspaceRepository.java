@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -16,6 +17,16 @@ import org.springframework.stereotype.Repository;
 @Repository
 @WorkspaceAgnostic("Workspace is the tenant root - queries manage workspaces themselves")
 public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
+
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.workspace.WorkspaceListData(
+            w.id, w.workspaceSlug, w.displayName, w.status, w.accountLogin, w.createdAt,
+            w.features.practicesEnabled, w.publicActivityEnabled)
+        FROM Workspace w
+        WHERE w.id IN :ids
+          AND (:includeInactive = true OR w.status = de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.ACTIVE)
+        """)
+    List<WorkspaceListData> findListDataByIds(@Param("ids") Collection<Long> ids, @Param("includeInactive") boolean includeInactive);
 
     Optional<Workspace> findFirstByOrderByIdAsc();
 

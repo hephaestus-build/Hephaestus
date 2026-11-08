@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.workspace.dto;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceListData;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import org.jspecify.annotations.NonNull;
@@ -44,26 +44,22 @@ public record WorkspaceListItemDTO(
                         + " turned it on")
         Boolean publishesPublicActivity) {
     public static WorkspaceListItemDTO from(
-            Workspace workspace,
-            ConnectionService connectionService,
+            WorkspaceListData workspace,
+            @Nullable IdentityProviderType providerType,
             String workspaceAddress,
             boolean instanceAllowsPublicActivity) {
-        IdentityProviderType providerType = connectionService
-                .findActiveProviderKind(workspace.getId())
-                .map(IdentityProviderType::from)
-                .orElse(null);
         return new WorkspaceListItemDTO(
-                workspace.getId(),
-                workspace.getWorkspaceSlug(),
+                workspace.id(),
+                workspace.workspaceSlug(),
                 workspaceAddress,
-                workspace.getDisplayName(),
-                workspace.getStatus().name(),
-                workspace.getAccountLogin(),
+                workspace.displayName(),
+                workspace.status().name(),
+                workspace.accountLogin(),
                 providerType,
-                workspace.getCreatedAt(),
-                workspace.getFeatures().getPracticesEnabled(),
+                workspace.createdAt(),
+                workspace.practicesEnabled(),
                 instanceAllowsPublicActivity
-                        && workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE
-                        && Boolean.TRUE.equals(workspace.getPublicActivityEnabled()));
+                        && workspace.status() == Workspace.WorkspaceStatus.ACTIVE
+                        && Boolean.TRUE.equals(workspace.publicActivityEnabled()));
     }
 }

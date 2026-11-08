@@ -112,6 +112,9 @@ public interface MembershipRepository extends JpaRepository<Membership, Membersh
     @WorkspaceAgnostic("An account reads its memberships across workspaces")
     List<Membership> findById_AccountId(Long accountId);
 
+    @Query("SELECT DISTINCT m.workspace.id FROM Membership m WHERE m.id.accountId = :accountId AND m.leftAt IS NULL")
+    List<Long> findActiveWorkspaceIdsByAccountId(@Param("accountId") Long accountId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @WorkspaceAgnostic("Account absorption locks memberships across workspaces")
     @Query("""

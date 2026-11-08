@@ -15,7 +15,12 @@ import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -115,12 +120,15 @@ public class ConnectionService {
      */
     @Transactional(readOnly = true)
     public Optional<IntegrationKind> findActiveProviderKind(long workspaceId) {
-        boolean github = connectionRepository
-                .findActive(workspaceId, IntegrationKind.GITHUB)
-                .isPresent();
-        boolean gitlab = connectionRepository
-                .findActive(workspaceId, IntegrationKind.GITLAB)
-                .isPresent();
+        var kinds = EnumSet.noneOf(IntegrationKind.class);
+        if (connectionRepository.findActive(workspaceId, IntegrationKind.GITHUB).isPresent()) kinds.add(IntegrationKind.GITHUB);
+        if (connectionRepository.findActive(workspaceId, IntegrationKind.GITLAB).isPresent()) kinds.add(IntegrationKind.GITLAB);
+        return scmProviderKind(kinds);
+    }
+
+    private static Optional<IntegrationKind> scmProviderKind(Set<IntegrationKind> kinds) {
+        boolean github = kinds.contains(IntegrationKind.GITHUB);
+        boolean gitlab = kinds.contains(IntegrationKind.GITLAB);
         if (github && gitlab) {
             throw new IllegalStateException(
                     "This workspace has active GitHub and GitLab connections, which Hephaestus does not support. Ask your instance operator to fix it.");
@@ -129,6 +137,52 @@ public class ConnectionService {
         if (gitlab) return Optional.of(IntegrationKind.GITLAB);
         return Optional.empty();
     }
+
+    @Transactional(readOnly = true)
+    public Map<Long, IntegrationKind> findActiveProviderKinds(Collection<Long> workspaceIds) {
+        if (workspaceIds.isEmpty()) return Map.of();
+        Map<Long, IntegrationKind> kinds = new HashMap<>();
+        for (var row : connectionRepository.findActiveWorkspaceProviders(workspaceIds)) {
+            kinds.merge(row.getWorkspaceId(), row.getKind(),
+                    (first, second) -> scmProviderKind(EnumSet.of(first, second)).orElseThrow());
+        }
+        return kinds;
+    }
+
+    @Transactional(readOnly = true)
+    public WorkspaceMetadata findWorkspaceMetadata(long workspaceId) {
+        var active = new EnumMap<IntegrationKind, ConnectionRepository.WorkspaceMetadataRow>(IntegrationKind.class);
+        for (var row : connectionRepository.findWorkspaceMetadata(workspaceId)) active.put(row.getKind(), row);
+        var github = Optional.ofNullable(active.get(IntegrationKind.GITHUB));
+        var gitlab = Optional.ofNullable(active.get(IntegrationKind.GITLAB));
+        var slack = Optional.ofNullable(active.get(IntegrationKind.SLACK));
+        var app = github.map(ConnectionRepository.WorkspaceMetadataRow::getConfig)
+                .filter(config -> config instanceof ConnectionConfig.GitHubAppConfig)
+                .map(config -> (ConnectionConfig.GitHubAppConfig) config);
+        var pat = github.map(ConnectionRepository.WorkspaceMetadataRow::getConfig)
+                .filter(config -> config instanceof ConnectionConfig.GitHubPatConfig)
+                .map(config -> (ConnectionConfig.GitHubPatConfig) config);
+        var group = gitlab.map(ConnectionRepository.WorkspaceMetadataRow::getConfig)
+                .filter(config -> config instanceof ConnectionConfig.GitLabConfig)
+                .map(config -> (ConnectionConfig.GitLabConfig) config);
+        String serverUrl = group.map(ConnectionConfig.GitLabConfig::serverUrl)
+                .or(() -> app.map(ConnectionConfig.GitHubAppConfig::serverUrl))
+                .or(() -> pat.map(ConnectionConfig.GitHubPatConfig::serverUrl)).orElse(null);
+        boolean hasPat = (pat.isPresent() && github.map(ConnectionRepository.WorkspaceMetadataRow::getCredentialsPresent).orElse(false))
+                || (group.isPresent() && gitlab.map(ConnectionRepository.WorkspaceMetadataRow::getCredentialsPresent).orElse(false));
+        return new WorkspaceMetadata(
+                scmProviderKind(active.keySet()).orElse(null), serverUrl,
+                app.map(ConnectionConfig.GitHubAppConfig::installationId).orElse(null),
+                app.isPresent() ? github.map(ConnectionRepository.WorkspaceMetadataRow::getCreatedAt).orElseThrow() : null,
+                hasPat, slack.map(ConnectionRepository.WorkspaceMetadataRow::getCredentialsPresent).orElse(false),
+                slack.map(ConnectionRepository.WorkspaceMetadataRow::getId).orElse(null),
+                group.map(config -> config.gitlabWebhookId() != null).orElse(false));
+    }
+
+    public record WorkspaceMetadata(
+            @Nullable IntegrationKind kind, @Nullable String serverUrl, @Nullable Long installationId,
+            @Nullable Instant installationLinkedAt, boolean hasPersonalAccessToken, boolean hasSlackToken,
+            @Nullable Long slackConnectionId, boolean gitlabWebhookRegistered) {}
 
     @Transactional(readOnly = true)
     public Optional<ConnectionConfig.GitHubAppConfig> findActiveGitHubAppConfig(long workspaceId) {

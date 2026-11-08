@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.MockSecurityContextUtils;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -49,19 +50,16 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void findAccessibleWorkspacesSortsByDisplayNameAndDeduplicatesMemberships() {
+    void shouldSortAccessibleWorkspacesByDisplayName() {
         Workspace alphaWorkspace = workspace(1L, "alpha-space", "Alpha Workspace", true);
         Workspace bravoWorkspace = workspace(2L, "bravo-space", "Bravo Workspace", false);
 
         authenticate();
 
-        Membership bravoMembership = membership(bravoWorkspace);
-        Membership alphaMembership = membership(alphaWorkspace);
-
         WorkspaceQueryService service = newService();
 
-        when(workspaceMembershipRepository.findById_AccountId(42L))
-                .thenReturn(List.of(bravoMembership, alphaMembership));
+        when(workspaceMembershipRepository.findActiveWorkspaceIdsByAccountId(42L))
+                .thenReturn(List.of(2L, 1L));
         when(workspaceRepository.findAllById(List.of(2L, 1L))).thenReturn(List.of(bravoWorkspace, alphaWorkspace));
 
         List<Workspace> workspaces = service.findAccessibleWorkspaces();
@@ -82,7 +80,7 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
     void shouldKeepAccountMembershipWhenProviderMirrorsAreAbsent() {
         authenticate();
         var workspace = workspace(1L, "gh-space", "Workspace", false);
-        when(workspaceMembershipRepository.findById_AccountId(42L)).thenReturn(List.of(membership(workspace)));
+        when(workspaceMembershipRepository.findActiveWorkspaceIdsByAccountId(42L)).thenReturn(List.of(1L));
         when(workspaceRepository.findAllById(List.of(1L))).thenReturn(List.of(workspace));
         assertThat(newService().findAccessibleWorkspaces()).containsExactly(workspace);
     }
@@ -128,7 +126,10 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
 
     private boolean publishes(Workspace workspace, boolean instanceAllows) {
         return WorkspaceListItemDTO.from(
-                        workspace, connectionService, "/w/" + workspace.getWorkspaceSlug(), instanceAllows)
+                        new WorkspaceListData(workspace.getId(), workspace.getWorkspaceSlug(), workspace.getDisplayName(),
+                                workspace.getStatus(), workspace.getAccountLogin(), Instant.EPOCH,
+                                workspace.getFeatures().getPracticesEnabled(), workspace.getPublicActivityEnabled()),
+                        null, "/w/" + workspace.getWorkspaceSlug(), instanceAllows)
                 .publishesPublicActivity();
     }
 
@@ -137,15 +138,10 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
         workspace.setId(id);
         workspace.setWorkspaceSlug(slug);
         workspace.setDisplayName(displayName);
+        workspace.setAccountLogin(slug);
         workspace.setPublicActivityEnabled(publiclyViewable);
         workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
         return workspace;
     }
 
-    private Membership membership(Workspace workspace) {
-        Membership membership = new Membership();
-        membership.setWorkspace(workspace);
-        membership.setId(new Membership.Id(workspace.getId(), 42L));
-        return membership;
-    }
 }

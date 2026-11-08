@@ -80,6 +80,41 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
 
     List<Connection> findByWorkspaceIdAndState(long workspaceId, IntegrationState state);
 
+    @Query("""
+        SELECT c.id AS id, c.kind AS kind, c.config AS config, c.createdAt AS createdAt,
+               CASE WHEN c.credentialsEncrypted IS NOT NULL THEN true ELSE false END AS credentialsPresent
+        FROM Connection c
+        WHERE c.workspace.id = :workspaceId
+          AND c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE
+          AND c.kind IN (de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITHUB,
+                         de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITLAB,
+                         de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.SLACK)
+        """)
+    List<WorkspaceMetadataRow> findWorkspaceMetadata(@Param("workspaceId") long workspaceId);
+
+    interface WorkspaceMetadataRow {
+        Long getId();
+        IntegrationKind getKind();
+        ConnectionConfig getConfig();
+        Instant getCreatedAt();
+        boolean getCredentialsPresent();
+    }
+
+    @Query("""
+        SELECT DISTINCT c.workspace.id AS workspaceId, c.kind AS kind
+        FROM Connection c
+        WHERE c.workspace.id IN :workspaceIds
+          AND c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE
+          AND c.kind IN (de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITHUB,
+                         de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITLAB)
+        """)
+    List<WorkspaceProviderRow> findActiveWorkspaceProviders(@Param("workspaceIds") Collection<Long> workspaceIds);
+
+    interface WorkspaceProviderRow {
+        Long getWorkspaceId();
+        IntegrationKind getKind();
+    }
+
     /** Whether another workspace still removes what its disconnected connection to this instance left at the provider. */
     @WorkspaceAgnostic("A connect refuses an instance whose removal another workspace has not finished")
     boolean existsByKindAndInstanceKeyAndProviderTeardownRequestedAtNotNullAndWorkspace_IdNot(

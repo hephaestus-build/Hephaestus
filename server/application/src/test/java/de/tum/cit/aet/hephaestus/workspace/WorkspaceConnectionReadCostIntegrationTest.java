@@ -179,7 +179,9 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
         var own = workspace(owner, 0);
         workspace(persistAccount("Other workspace owner"), 99);
         SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
-                "workspace-reader", Objects.requireNonNull(owner.getId()).toString(), new String[] {"app_admin"},
+                "workspace-reader",
+                Objects.requireNonNull(owner.getId()).toString(),
+                new String[] {"app_admin"},
                 "read-cost-token"));
 
         var read = reads.measure(queries::findAccessibleWorkspaceListItems);
@@ -192,7 +194,8 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
         workspace(owner, 0);
         SecurityContextHolder.clearContext();
 
-        assertThat(reads.measure(queries::findAccessibleWorkspaceListItems).value()).isEmpty();
+        assertThat(reads.measure(queries::findAccessibleWorkspaceListItems).value())
+                .isEmpty();
     }
 
     @Test
@@ -242,8 +245,10 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
                 Timestamp.from(Instant.parse("2020-01-01T00:00:00Z")),
                 workspace.getId());
         var linkedAt = Instant.parse("2020-01-01T00:00:00Z");
-        jdbc.update("UPDATE connection SET created_at = ? WHERE id = ?",
-                Timestamp.from(Instant.parse("2021-01-01T00:00:00Z")), recent.getId());
+        jdbc.update(
+                "UPDATE connection SET created_at = ? WHERE id = ?",
+                Timestamp.from(Instant.parse("2021-01-01T00:00:00Z")),
+                recent.getId());
 
         var read = reads.measure(() -> queries.toWorkspaceDTO(workspace));
 
