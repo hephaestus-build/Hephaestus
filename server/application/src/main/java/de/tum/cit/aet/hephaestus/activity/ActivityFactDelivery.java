@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-public class ActivityFactDelivery {
+class ActivityFactDelivery {
     private final ApplicationEventPublisher publisher;
     private final ActivityEventService activity;
     private final ActivityPersonWriteAdmission admission;
@@ -32,19 +32,7 @@ public class ActivityFactDelivery {
     private final MeterRegistry meters;
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void record(
-            Long workspaceId,
-            ActivityEventType type,
-            Instant occurredAt,
-            @Nullable User actor,
-            @Nullable Repository repository,
-            ActivityTargetType targetType,
-            Long targetId) {
-        record(workspaceId, type, occurredAt, actor, repository, targetType, targetId, null);
-    }
-
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void record(
+    void record(
             Long workspaceId,
             ActivityEventType type,
             Instant occurredAt,
@@ -66,7 +54,7 @@ public class ActivityFactDelivery {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void recordDeleted(
+    void recordDeleted(
             Long workspaceId,
             ActivityEventType type,
             Instant occurredAt,

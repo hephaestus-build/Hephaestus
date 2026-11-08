@@ -100,7 +100,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testUser),
                             eq(testRepository),
                             eq(ActivityTargetType.PULL_REQUEST),
-                            eq(1L));
+                            eq(1L),
+                            isNull());
             verify(userRepository).getReferenceById(100L);
             verify(repositoryRepository).getReferenceById(200L);
         }
@@ -108,7 +109,9 @@ class ActivityEventListenerTest extends BaseUnitTest {
         @Test
         void shouldRollBackSourceWhenFactPublicationFails() {
             var failure = new TransientDataAccessResourceException("database unavailable");
-            doThrow(failure).when(activityFacts).record(anyLong(), any(), any(), any(), any(), any(), anyLong());
+            doThrow(failure)
+                    .when(activityFacts)
+                    .record(anyLong(), any(), any(), any(), any(), any(), anyLong(), isNull());
             var event = new ScmDomainEvent.PullRequestCreated(
                     createPullRequestData(createPullRequest(1L)), createContext());
 
@@ -295,7 +298,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testUser),
                             eq(testRepository),
                             eq(ActivityTargetType.REVIEW),
-                            eq(5L));
+                            eq(5L),
+                            isNull());
         }
 
         @Test
@@ -331,7 +335,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testUser),
                             eq(testRepository),
                             eq(ActivityTargetType.ISSUE),
-                            eq(10L));
+                            eq(10L),
+                            isNull());
         }
 
         @Test
@@ -364,7 +369,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             isNull(), // null actor - user deleted or bot
                             eq(testRepository),
                             eq(ActivityTargetType.ISSUE),
-                            eq(14L));
+                            eq(14L),
+                            isNull());
         }
     }
 
@@ -448,7 +454,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testUser),
                             eq(testRepository),
                             eq(ActivityTargetType.COMMIT),
-                            eq(20L));
+                            eq(20L),
+                            isNull());
         }
 
         @Test
@@ -469,7 +476,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             isNull(), // null actor - user deleted or bot
                             eq(testRepository),
                             eq(ActivityTargetType.COMMIT),
-                            eq(21L));
+                            eq(21L),
+                            isNull());
         }
 
         @Test
@@ -525,7 +533,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testUser),
                             eq(testRepository),
                             eq(ActivityTargetType.REVIEW_COMMENT),
-                            eq(77L));
+                            eq(77L),
+                            isNull());
         }
 
         @Test
@@ -555,7 +564,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testUser),
                             eq(testRepository),
                             eq(ActivityTargetType.REVIEW_COMMENT),
-                            eq(78L));
+                            eq(78L),
+                            isNull());
         }
 
         @Test

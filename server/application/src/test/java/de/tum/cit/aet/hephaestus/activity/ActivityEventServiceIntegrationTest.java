@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.activity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -53,6 +54,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.FailedEventPublications;
 import org.springframework.modulith.events.ResubmissionOptions;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -175,6 +177,18 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
     @Nested
     class DurableDelivery {
         private static final String FAILURE_CONSTRAINT = "test_activity_record_failure";
+
+        @Test
+        void shouldRefuseFactPublicationOutsideTheSourceTransaction() {
+            assertThatThrownBy(() -> activityFacts.recordDeleted(
+                            testWorkspace.getId(),
+                            ActivityEventType.ISSUE_DELETED,
+                            Instant.now(),
+                            ActivityTargetType.ISSUE,
+                            95002L,
+                            testRepository.getId()))
+                    .isInstanceOf(IllegalTransactionStateException.class);
+        }
 
         @Test
         void shouldRetainAFailedPublicationAndRecordItOnceAfterRecovery() {

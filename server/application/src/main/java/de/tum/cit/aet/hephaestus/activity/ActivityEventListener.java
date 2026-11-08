@@ -92,7 +92,8 @@ public class ActivityEventListener {
                 userRepository.getReferenceById(authorId),
                 repositoryRepository.getReferenceById(pr.repository().id()),
                 ActivityTargetType.PULL_REQUEST,
-                pr.id());
+                pr.id(),
+                null);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
@@ -284,7 +285,8 @@ public class ActivityEventListener {
                 userRepository.getReferenceById(authorId),
                 repositoryRepository.getReferenceById(pr.repository().id()),
                 ActivityTargetType.PULL_REQUEST,
-                pr.id());
+                pr.id(),
+                null);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
@@ -308,7 +310,8 @@ public class ActivityEventListener {
                 userRepository.getReferenceById(authorId),
                 repositoryRepository.getReferenceById(pr.repository().id()),
                 ActivityTargetType.PULL_REQUEST,
-                pr.id());
+                pr.id(),
+                null);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
@@ -348,7 +351,8 @@ public class ActivityEventListener {
                 userRepository.getReferenceById(authorId),
                 repositoryRepository.getReferenceById(repositoryId),
                 ActivityTargetType.REVIEW,
-                reviewData.id());
+                reviewData.id(),
+                null);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
@@ -422,7 +426,8 @@ public class ActivityEventListener {
                 userRepository.getReferenceById(authorId),
                 repositoryRepository.getReferenceById(repositoryId),
                 ActivityTargetType.REVIEW,
-                reviewData.id());
+                reviewData.id(),
+                null);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
@@ -453,7 +458,8 @@ public class ActivityEventListener {
                 userRepository.getReferenceById(authorId),
                 repositoryRepository.getReferenceById(repositoryId),
                 ActivityTargetType.ISSUE_COMMENT,
-                commentData.id());
+                commentData.id(),
+                null);
     }
 
     /**
@@ -555,7 +561,8 @@ public class ActivityEventListener {
                 userRepository.getReferenceById(authorId),
                 repositoryRepository.getReferenceById(repositoryId),
                 ActivityTargetType.REVIEW_COMMENT,
-                commentData.id());
+                commentData.id(),
+                null);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
@@ -708,7 +715,8 @@ public class ActivityEventListener {
                 userRepository.getReferenceById(userId),
                 repositoryRepository.getReferenceById(repositoryId),
                 ActivityTargetType.REVIEW_THREAD,
-                threadData.id());
+                threadData.id(),
+                null);
     }
 
     /**
@@ -747,7 +755,8 @@ public class ActivityEventListener {
                 actor,
                 repositoryRepository.getReferenceById(issueData.repository().id()),
                 ActivityTargetType.ISSUE,
-                issueData.id());
+                issueData.id(),
+                null);
     }
 
     /**
@@ -868,7 +877,8 @@ public class ActivityEventListener {
                 getActorOrNull(issueData.authorId()),
                 repositoryRepository.getReferenceById(issueData.repository().id()),
                 ActivityTargetType.ISSUE,
-                issueData.id());
+                issueData.id(),
+                null);
     }
 
     /**
@@ -898,7 +908,8 @@ public class ActivityEventListener {
                 getActorOrNull(issueData.authorId()),
                 repositoryRepository.getReferenceById(issueData.repository().id()),
                 ActivityTargetType.ISSUE,
-                issueData.id());
+                issueData.id(),
+                null);
     }
 
     /**
@@ -931,7 +942,8 @@ public class ActivityEventListener {
                 getActorOrNull(issueData.authorId()),
                 repositoryRepository.getReferenceById(issueData.repository().id()),
                 ActivityTargetType.ISSUE,
-                issueData.id());
+                issueData.id(),
+                null);
     }
 
     /**
@@ -964,7 +976,8 @@ public class ActivityEventListener {
                 getActorOrNull(issueData.authorId()),
                 repositoryRepository.getReferenceById(issueData.repository().id()),
                 ActivityTargetType.ISSUE,
-                issueData.id());
+                issueData.id(),
+                null);
     }
 
     private ActivityEventType mapReviewState(PullRequestReview.State state) {
@@ -1003,7 +1016,8 @@ public class ActivityEventListener {
                 actor,
                 repositoryRepository.getReferenceById(commitData.repositoryId()),
                 ActivityTargetType.COMMIT,
-                commitData.id());
+                commitData.id(),
+                null);
     }
 
     /**
