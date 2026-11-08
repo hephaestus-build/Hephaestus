@@ -166,7 +166,7 @@ public class ReviewSummaryQueryService {
                             review.getStopReason(),
                             practices(review, rows, reads),
                             reads.resultCounts(review.getId(), null),
-                            feedbackCounts(reads.feedback.getOrDefault(review.getId(), Map.of())),
+                            ReviewFeedbackCountsDTO.from(reads.feedback.getOrDefault(review.getId(), Map.of())),
                             Math.toIntExact(jobs.values().stream()
                                     .mapToLong(Long::longValue)
                                     .sum()),
@@ -439,15 +439,5 @@ public class ReviewSummaryQueryService {
                 c.getOrDefault(ResultOutcome.COULD_NOT_DETERMINE, 0));
     }
 
-    private static ReviewFeedbackCountsDTO feedbackCounts(Map<FeedbackState, Integer> c) {
-        return new ReviewFeedbackCountsDTO(
-                c.getOrDefault(FeedbackState.AWAITING_APPROVAL, 0),
-                c.getOrDefault(FeedbackState.READY, 0),
-                c.getOrDefault(FeedbackState.DELIVERED, 0),
-                c.getOrDefault(FeedbackState.UNCONFIRMED, 0),
-                c.getOrDefault(FeedbackState.WITHHELD, 0),
-                c.getOrDefault(FeedbackState.REJECTED, 0),
-                c.getOrDefault(FeedbackState.REPLACED, 0),
-                c.getOrDefault(FeedbackState.FAILED, 0));
-    }
+
 }

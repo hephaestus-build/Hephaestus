@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackCopyRefDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackRefDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewBoundFeedbackDTO;
-import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Problem;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.model.ResultMark;
@@ -28,7 +27,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -93,14 +91,6 @@ public class ResultPresentation {
                         : List.of(),
                 permitted && child.getBasis() != null ? json.convertValue(child.getBasis(), ClaimBasis.class) : null,
                 permitted ? child.getNextStep() : null);
-    }
-
-    public List<ProblemSummaryDTO> summaries(Result result, boolean permitted) {
-        return permitted
-                ? problems(result).stream()
-                        .map(p -> new ProblemSummaryDTO(p.getId(), p.getSeverity(), p.getSummary()))
-                        .toList()
-                : List.of();
     }
 
     public List<ResultListDTO> lists(long workspaceId, Collection<ResultView> views, Set<UUID> permitted) {
@@ -226,20 +216,6 @@ public class ResultPresentation {
                 .map(row -> new FeedbackDisagreementDTO(
                         row.getId(), row.getDestination(), row.getComment(), row.getRespondedAt()))
                 .toList();
-    }
-
-    public ReviewFeedbackCountsDTO feedbackCounts(Result r) {
-        var c = new EnumMap<FeedbackState, Integer>(FeedbackState.class);
-        boundFeedback(r).forEach(f -> c.merge(f.state(), 1, Integer::sum));
-        return new ReviewFeedbackCountsDTO(
-                c.getOrDefault(FeedbackState.AWAITING_APPROVAL, 0),
-                c.getOrDefault(FeedbackState.READY, 0),
-                c.getOrDefault(FeedbackState.DELIVERED, 0),
-                c.getOrDefault(FeedbackState.UNCONFIRMED, 0),
-                c.getOrDefault(FeedbackState.WITHHELD, 0),
-                c.getOrDefault(FeedbackState.REJECTED, 0),
-                c.getOrDefault(FeedbackState.REPLACED, 0),
-                c.getOrDefault(FeedbackState.FAILED, 0));
     }
 
     /**

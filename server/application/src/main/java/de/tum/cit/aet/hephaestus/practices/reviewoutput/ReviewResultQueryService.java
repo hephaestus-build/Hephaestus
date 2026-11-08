@@ -121,15 +121,7 @@ public class ReviewResultQueryService {
     private static ReviewFeedbackCountsDTO feedbackCounts(List<ReviewResultListRepository.FeedbackCount> rows) {
         var counts = new EnumMap<FeedbackState, Integer>(FeedbackState.class);
         rows.forEach(row -> counts.put(row.state(), Math.toIntExact(row.count())));
-        return new ReviewFeedbackCountsDTO(
-                counts.getOrDefault(FeedbackState.AWAITING_APPROVAL, 0),
-                counts.getOrDefault(FeedbackState.READY, 0),
-                counts.getOrDefault(FeedbackState.DELIVERED, 0),
-                counts.getOrDefault(FeedbackState.UNCONFIRMED, 0),
-                counts.getOrDefault(FeedbackState.WITHHELD, 0),
-                counts.getOrDefault(FeedbackState.REJECTED, 0),
-                counts.getOrDefault(FeedbackState.REPLACED, 0),
-                counts.getOrDefault(FeedbackState.FAILED, 0));
+        return ReviewFeedbackCountsDTO.from(counts);
     }
 
     public ReviewResultDetailDTO get(long ws, UUID id) {

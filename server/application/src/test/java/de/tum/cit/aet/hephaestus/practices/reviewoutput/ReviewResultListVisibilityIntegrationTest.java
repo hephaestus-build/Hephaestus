@@ -138,7 +138,7 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
         long ws = scenario.workspace().getId();
         var at = Instant.parse("2026-01-01T00:00:00Z");
         for (int index = 0; index < 2; index++) {
-            data.result(data.onOtherWork(scenario), ResultOutcome.NOT_MET, at.plusSeconds(index));
+            feedback(data.result(data.onOtherWork(scenario), ResultOutcome.NOT_MET, at.plusSeconds(index)), false);
         }
         when(evidenceAuthorization.permitsAll(eq(ws), anyCollection(), eq(SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW)))
                 .thenAnswer(invocation -> {
@@ -150,10 +150,11 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
         for (int index = 2; index < 8; index++) {
             var work = data.onOtherWork(scenario);
             var developer = data.member(ws);
-            data.result(
+            var result = data.result(
                     new ReviewIntegrationData.Scenario(work.workspace(), developer, work.practice(), work.item()),
                     ResultOutcome.NOT_MET,
                     at.plusSeconds(index));
+            feedback(result, false);
         }
 
         var larger =
@@ -166,6 +167,7 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
                     .singleElement()
                     .satisfies(problem -> assertThat(problem.summary()).isEqualTo("A recorded problem"));
             assertThat(row.developer()).isNotNull();
+            assertThat(row.feedback().delivered()).isEqualTo(1);
         });
         assertThat(larger.cost().statements())
                 .as("small=%s, larger=%s", small.cost(), larger.cost())
