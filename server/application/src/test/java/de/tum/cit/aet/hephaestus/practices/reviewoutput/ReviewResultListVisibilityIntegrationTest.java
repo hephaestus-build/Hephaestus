@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultQueryFilter;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultSort;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -32,6 +34,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.reactive.server.WebTestClient;
 
 class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
     @Autowired
@@ -51,6 +54,8 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcClient jdbc;
+
+    @Autowired private WebTestClient http;
 
     @Autowired
     private QueryPlans plans;
@@ -177,11 +182,41 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
         assertThat(plans.fullScans(larger.sql())).isEmpty();
     }
 
+    @Test
+    void shouldReturnEachFeedbackStateCountInItsWireField() {
+        var scenario = data.scenario();
+        var result = data.result(scenario, ResultOutcome.NOT_MET, Instant.parse("2026-01-01T00:00:00Z"));
+        long ws = scenario.workspace().getId();
+        when(evidenceAuthorization.permitsAll(eq(ws), anyCollection(), eq(SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW)))
+                .thenReturn(Set.of());
+        Map.of(FeedbackState.AWAITING_APPROVAL, 1, FeedbackState.READY, 2, FeedbackState.DELIVERED, 3,
+                FeedbackState.UNCONFIRMED, 4, FeedbackState.WITHHELD, 5, FeedbackState.REJECTED, 6,
+                FeedbackState.REPLACED, 7, FeedbackState.FAILED, 8).forEach((state, count) -> {
+                    for (int index = 0; index < count; index++) feedback(result, state, false);
+                });
+
+        http.get().uri("/workspaces/" + scenario.workspace().getWorkspaceSlug() + "/practices/reviews/results")
+                .headers(headers -> headers.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
+                .exchange().expectStatus().isOk().expectBody()
+                .jsonPath("$.content[0].feedback.awaitingApproval").isEqualTo(1)
+                .jsonPath("$.content[0].feedback.ready").isEqualTo(2)
+                .jsonPath("$.content[0].feedback.delivered").isEqualTo(3)
+                .jsonPath("$.content[0].feedback.unconfirmed").isEqualTo(4)
+                .jsonPath("$.content[0].feedback.withheld").isEqualTo(5)
+                .jsonPath("$.content[0].feedback.rejected").isEqualTo(6)
+                .jsonPath("$.content[0].feedback.replaced").isEqualTo(7)
+                .jsonPath("$.content[0].feedback.failed").isEqualTo(8);
+    }
+
     private UUID feedback(Result result, boolean duplicateBasis) {
+        return feedback(result, FeedbackState.DELIVERED, duplicateBasis);
+    }
+
+    private UUID feedback(Result result, FeedbackState state, boolean duplicateBasis) {
         var id = UUID.randomUUID();
         jdbc.sql("""
-            INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at)
-            VALUES(:id,:ws,:review,:item,:developer,'ON_WORK','DELIVERED','Review this change.',:at,:at)
+            INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at,stop_reason)
+            VALUES(:id,:ws,:review,:item,:developer,'ON_WORK',:state,'Review this change.',:at,:delivered,:stop)
             """)
                 .param("id", id)
                 .param("ws", result.getWorkspaceId())
@@ -189,6 +224,9 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
                 .param("item", result.getItemId())
                 .param("developer", result.getDeveloperId())
                 .param("at", Timestamp.from(result.getRecordedAt()))
+                .param("state", state.name())
+                .param("delivered", state == FeedbackState.DELIVERED ? Timestamp.from(result.getRecordedAt()) : null)
+                .param("stop", state == FeedbackState.WITHHELD ? "COMPOSER_WITHHELD" : null)
                 .update();
         basis(result, id, null, 0);
         if (duplicateBasis) {
