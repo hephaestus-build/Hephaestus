@@ -10,6 +10,7 @@
 		"diagnostic.invalid",
 		"extension.failed",
 		"gateway.refused",
+		"gateway.waiting",
 		"measurement.ended",
 		"measurement.finished",
 		"measurement.stopped",
@@ -92,6 +93,7 @@
 		"error": [
 			"AbortError",
 			"AdmissionUnreachableError",
+			"GatewayUnavailableError",
 			"Error",
 			"RangeError",
 			"ReferenceError",
@@ -209,6 +211,7 @@
 		"turns": "count",
 		"unanswered_calls": "count",
 		"waited_ms": "count",
+		"waits": "count",
 		"withheld": "count",
 		"without_result": "count"
 	}

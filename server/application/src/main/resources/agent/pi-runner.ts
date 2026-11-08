@@ -37,6 +37,7 @@ import { assessmentCacheExtension } from "./pi-assessment-cache.ts";
 import { CHANGE_ROOT, pinnedCheckout, readChange, safeRepositoryPath } from "./pi-change.ts";
 import { type DiagnosticValue, diagnose, errorKind, ms } from "./pi-diagnostics.ts";
 import { errorText } from "./pi-error-text.ts";
+import { waitForGateway } from "./pi-gateway-wait.ts";
 import {
 	type ModelWait,
 	newModelWait,
@@ -44,6 +45,7 @@ import {
 	roomForSession,
 	SessionPace,
 } from "./pi-session-pace.ts";
+import { GatewayUnavailableError } from "./work/practice-scripts/lib/core/gateway-connection.ts";
 
 import {
 	CONTEXT_IS_LOOP_ONLY,
@@ -906,6 +908,7 @@ export async function runReviewJob(): Promise<void> {
 
 	const stagedPractices = new Set<string>();
 	let stagingFailure: { error: unknown } | undefined;
+	let gatewayFailure: GatewayUnavailableError | undefined;
 	const runtimeReasons: Partial<Record<NonNullable<ProgramOutcome["stopReason"]>, string>> = {
 		budget: "BUDGET",
 		deadline: "DEADLINE",
@@ -2726,6 +2729,16 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				thinkingLevel,
 			});
 			const scope = sessionState();
+			fresh.agent.streamFunction = waitForGateway(
+				fresh.agent.streamFunction,
+				PROCESS_START_MS + AGENT_BUDGET_MS,
+				{
+					waiting: () => {
+						scope.servedTurn ??= scope.modelWait.call();
+					},
+					unavailable: gatewayUnavailable,
+				},
+			);
 			if (scope.currentTurn?.practiceSlug !== undefined) {
 				const stream = fresh.agent.streamFunction;
 				fresh.agent.streamFunction = (
@@ -2830,6 +2843,12 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		void whenLost("tools", toolSide);
 		if (programs !== null) {
 			void whenLost("programs", programs);
+		}
+		function gatewayUnavailable(): void {
+			gatewayFailure ??= new GatewayUnavailableError(
+				"The gateway repeatedly disconnected a model response",
+			);
+			measuringEnded.abort(gatewayFailure);
 		}
 
 		async function runScope(
@@ -3200,6 +3219,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 							}
 							return toolsProgram(programs, start);
 						},
+						gatewayUnavailable,
 						review: async (options, signal) =>
 							reviewPractice(slug, practiceHeading, options, signal, sessionReads),
 						signal: AbortSignal.any([stopped.signal, measuringEnded.signal]),
@@ -3425,6 +3445,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			});
 		}
 
+		if (gatewayFailure !== undefined) {
+			throw gatewayFailure;
+		}
 		if (stagingFailure !== undefined) {
 			throw stagingFailure.error;
 		}
@@ -3505,7 +3528,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 
 	// Admission transport failures keep their retryable code; a server error keeps its own.
 	function exitCodeOf(error: unknown): number {
-		if (error instanceof AdmissionUnreachableError) {
+		if (error instanceof AdmissionUnreachableError || error instanceof GatewayUnavailableError) {
 			return SERVER_UNREACHABLE_EXIT;
 		}
 		return isAdmissionServerError(error) ? SERVER_ERROR_EXIT : 2;

@@ -999,12 +999,8 @@ public class ReviewJobExecutor {
                             : result.timedOut() ? ReviewStopReason.DEADLINE : ReviewStopReason.EXECUTION_INCOMPLETE);
         }
 
-        // Three exits say the run could not reach something it needed, rather than anything about the
-        // reviewed work: the review finished and could not admit it, because the sandbox holds an
-        // address the server has since moved away from; no practice was reached at all because
-        // every model call went unanswered; or a side of the Pod stopped before anything was staged.
-        // None leaves anything to deliver, and none is a fact a second attempt would repeat. Past
-        // the retry cap they fall through and terminalize.
+        // An infrastructure or provider failure can leave the run without deliverable work. A bounded retry keeps
+        // staged practices and makes no claim about the reviewed work. Past the cap, the attempt ends here.
         RequeueCause unreachable = unreachableReason(result.exitCode());
         if (unreachable != null && requeueForAnotherAttempt(job, true, unreachable)) {
             log.warn(

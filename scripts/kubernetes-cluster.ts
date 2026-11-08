@@ -826,7 +826,7 @@ async function runSandboxQualification(packaged: boolean, namespaceName: string)
 	let scaled = false;
 	let created = false;
 	try {
-		await run("k3d", ["image", "import", "--cluster", DEV_CLUSTER, image]);
+		await run("k3d", ["image", "import", "--mode", "direct", "--cluster", DEV_CLUSTER, image]);
 		await kubectl(["-n", namespaceName, "scale", `deployment/${worker}`, "--replicas=0"]);
 		scaled = true;
 		await kubectl([

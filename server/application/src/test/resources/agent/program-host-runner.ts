@@ -13,6 +13,8 @@ import nodePath from "node:path";
 import { mock } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { createAssistantMessageEventStream, type AssistantMessage } from "@earendil-works/pi-ai";
+
 import {
 	createBashToolDefinition,
 	createFindToolDefinition,
@@ -50,6 +52,30 @@ export default definePracticeScript({
     async run() { return { outcome: "MET" }; },
 });
 `;
+
+function emptyModelStream() {
+	const message = {
+		role: "assistant",
+		content: [],
+		api: "openai-completions",
+		provider: "test",
+		model: "test-model",
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason: "stop",
+		timestamp: Date.now(),
+	} satisfies AssistantMessage;
+	const stream = createAssistantMessageEventStream();
+	stream.push({ type: "start", partial: message });
+	stream.push({ type: "done", reason: "stop", message });
+	return stream;
+}
 
 export function codingAgentExports(
 	cwd: string,
@@ -655,16 +681,18 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 			let sessionSlug: string | undefined;
 			let aborted = false;
 			const isAborted = () => aborted;
+			let requestedOutput = 100;
 			const agent = {
 				state: { tools: [] },
 				finishTurn: async () => ({ action: "continue" }),
-				streamFunction: (
+				streamFunction: async (
 					_model: unknown,
 					_context: unknown,
 					requestOptions?: { maxTokens?: number },
 				) => {
 					capture("requests", { slug: sessionSlug, maxTokens: requestOptions?.maxTokens });
-					return requestOptions?.maxTokens ?? 100;
+					requestedOutput = requestOptions?.maxTokens ?? 100;
+					return emptyModelStream();
 				},
 			};
 			return {
@@ -720,7 +748,9 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 						}
 						if (behaviour === "budget") {
 							while (!isAborted()) {
-								const output = Math.min(100, agent.streamFunction({ maxTokens: 16_384 }, {}, {}));
+								const response = await agent.streamFunction({ maxTokens: 16_384 }, {}, {});
+								await response.result();
+								const output = Math.min(100, requestedOutput);
 								emit({
 									type: "message_end",
 									message: {
@@ -807,7 +837,8 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 								await read.execute("scan-read", { path: process.env.PI_HOST_SCAN_PATH }),
 							);
 						}
-						agent.streamFunction({ maxTokens: 16_384 }, {}, {});
+						const response = await agent.streamFunction({ maxTokens: 16_384 }, {}, {});
+						await response.result();
 						const submits = behaviour === "submit" || behaviour === "read-change";
 						emit({
 							type: "message_end",

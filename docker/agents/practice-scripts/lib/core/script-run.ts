@@ -120,6 +120,8 @@ export interface ProgramServices {
 	budget: ModelBudget;
 	/** A direct model call waits for its answer. The returned function records the answer. */
 	awaitModel: () => () => void;
+	/** Repeated lost responses end the attempt as an infrastructure failure, not a program result. */
+	gatewayUnavailable?: () => void;
 	/** Run one review of this practice. It rejects with `UnratedError` when the session gives no result. */
 	review: (options: ReviewOptions, signal: AbortSignal) => Promise<Candidate>;
 	signal: AbortSignal;
@@ -403,7 +405,7 @@ export async function runCustomProgram(
 			});
 			return;
 		}
-		const asked = modelCall(slot, model, message.options, call);
+		const asked = modelCall(slot, model, message.options, call, services.gatewayUnavailable);
 		// A call counts as use only once the budget lets it reach the proxy.
 		const outcome =
 			"reason" in asked

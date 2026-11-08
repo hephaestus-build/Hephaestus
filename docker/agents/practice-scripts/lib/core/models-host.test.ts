@@ -560,3 +560,134 @@ void test("native Anthropic chat carries gateway authorization and exclusive cac
 	assert.equal(reply.usage.inputTokens.cacheWrite, 300);
 	assert.equal(reply.usage.inputTokens.total, 1513);
 });
+
+void describe("a direct model call during a gateway outage", () => {
+	for (const failure of ["connection", "response body"]) {
+		void test(`waits out a lost ${failure} within one budget reservation`, async (t) => {
+			let calls = 0;
+			t.mock.method(globalThis, "fetch", async () => {
+				calls += 1;
+				if (calls <= 2) {
+					const error = new TypeError("gateway disconnected", {
+						cause: { code: "UND_ERR_SOCKET" },
+					});
+					if (failure === "connection") {
+						throw error;
+					}
+					return new Response(
+						new ReadableStream({
+							start(controller) {
+								controller.error(error);
+							},
+						}),
+						{ headers: { "content-type": "application/json" } },
+					);
+				}
+				return Response.json({
+					choices: [{ message: { role: "assistant", content: "yes" }, finish_reason: "stop" }],
+					usage: { prompt_tokens: 10, completion_tokens: 20 },
+				});
+			});
+			const { chat } = hostModels(
+				{ chat: { protocol: "openai-completions", modelId: "chat" } },
+				"https://proxy.example/internal/llm",
+				"test-token",
+				"practice",
+			);
+			assert.ok(chat);
+			const signal = AbortSignal.timeout(5000);
+			const call = modelCall("chat", chat, { prompt: [], maxOutputTokens: 1000 }, signal);
+			assert.ok("run" in call);
+			const budget = new ModelBudget(5000, 1);
+
+			const answer = await budget.run(call.reserve, signal, call.run);
+
+			assert.ok("value" in answer);
+			assert.equal(answer.tokens, 30);
+			assert.equal(budget.left, 4970);
+			assert.equal(calls, 3);
+		});
+	}
+
+	void test("leaves a provider HTTP failure to the model caller", async (t) => {
+		let calls = 0;
+		t.mock.method(globalThis, "fetch", async () => {
+			calls += 1;
+			return Response.json({ error: { message: "provider unavailable" } }, { status: 503 });
+		});
+		const { chat } = hostModels(
+			{ chat: { protocol: "openai-completions", modelId: "chat" } },
+			"https://proxy.example/internal/llm",
+			"test-token",
+			"practice",
+		);
+		assert.ok(chat);
+		const call = modelCall("chat", chat, { prompt: [], maxOutputTokens: 1000 }, never);
+		assert.ok("run" in call);
+		const budget = new ModelBudget(5000, 1);
+
+		const answer = await budget.run(call.reserve, never, call.run);
+
+		assert.ok("reason" in answer);
+		assert.equal(budget.left, 5000 - call.reserve);
+		assert.equal(calls, 1);
+	});
+
+	void test("stops at cancellation without another request", async (t) => {
+		const abort = new AbortController();
+		let calls = 0;
+		t.mock.method(globalThis, "fetch", async () => {
+			calls += 1;
+			abort.abort();
+			throw new TypeError("gateway disconnected", { cause: { code: "ECONNREFUSED" } });
+		});
+		const { chat } = hostModels(
+			{ chat: { protocol: "openai-completions", modelId: "chat" } },
+			"https://proxy.example/internal/llm",
+			"test-token",
+			"practice",
+		);
+		assert.ok(chat);
+		const call = modelCall("chat", chat, { prompt: [], maxOutputTokens: 1000 }, abort.signal);
+		assert.ok("run" in call);
+		const budget = new ModelBudget(5000, 1);
+
+		const answer = await budget.run(call.reserve, abort.signal, call.run);
+
+		assert.deepEqual(answer, { reason: "deadline" });
+		assert.equal(calls, 1);
+	});
+});
+
+void test("repeated disconnected direct responses interrupt the attempt and retain its reservation", async (t) => {
+	let calls = 0;
+	const abort = new AbortController();
+	t.mock.method(globalThis, "fetch", async () => {
+		calls += 1;
+		return new Response(
+			new ReadableStream({
+				start(controller) {
+					controller.error(new TypeError("terminated", { cause: { code: "UND_ERR_SOCKET" } }));
+				},
+			}),
+			{ headers: { "content-type": "application/json" } },
+		);
+	});
+	const { chat } = hostModels(
+		{ chat: { protocol: "openai-completions", modelId: "chat" } },
+		"https://proxy.example/internal/llm",
+		"test-token",
+		"practice",
+	);
+	assert.ok(chat);
+	const call = modelCall("chat", chat, { prompt: [], maxOutputTokens: 1000 }, abort.signal, () =>
+		abort.abort(),
+	);
+	assert.ok("run" in call);
+	const budget = new ModelBudget(5000, 1);
+	const result = await budget.run(call.reserve, abort.signal, call.run);
+	assert.equal(calls, 3);
+	assert.equal(abort.signal.aborted, true);
+	assert.deepEqual(result, { reason: "deadline" });
+	assert.equal(budget.left, 5000 - call.reserve);
+});
