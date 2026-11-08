@@ -47,6 +47,7 @@ import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import reactor.core.scheduler.Schedulers;
 
 class ProxyStreamingUtilsTest extends BaseUnitTest {
 
@@ -743,8 +744,10 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             var first = pooled("data: one\n\n");
             var second = pooled("data: two\n\n");
             var emitters = new ConcurrentLinkedQueue<Thread>();
+            // Keep the observer on the parallel worker instead of a fused queue's polling consumer.
             Flux<DataBuffer> body = Flux.<DataBuffer>just(first, second)
-                    .delayElements(Duration.ofMillis(10))
+                    .publishOn(Schedulers.parallel())
+                    .hide()
                     .doOnNext(buffer -> emitters.add(Thread.currentThread()));
             var recorded = recording(new CountDownLatch(0));
 
