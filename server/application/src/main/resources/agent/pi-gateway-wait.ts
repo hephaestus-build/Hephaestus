@@ -41,6 +41,7 @@ export function waitForGateway(stream: Stream, workDeadline: number): Stream {
 		const isAborted = () => signal.aborted;
 		const transport = options?.fetch ?? globalThis.fetch;
 		let disconnected = false;
+		const wasDisconnected = () => disconnected;
 		const fetchGateway: typeof fetch = async (input, init) => {
 			disconnected = false;
 			let response: Response;
@@ -95,7 +96,7 @@ export function waitForGateway(stream: Stream, workDeadline: number): Stream {
 				for (;;) {
 					let again = false;
 					for await (const event of current) {
-						if (event.type === "error" && disconnected && !isAborted()) {
+						if (event.type === "error" && wasDisconnected() && !isAborted()) {
 							lastFailure = event.error;
 							again = true;
 							break;
