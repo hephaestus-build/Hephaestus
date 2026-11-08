@@ -11,6 +11,7 @@ import { unzipSync } from "fflate";
 import { environmentWithoutGitRepository } from "./git-environment.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
 import { PUSH_CHECK_ENV } from "./push-gates.ts";
+import { downloadReleaseAsset } from "./release-asset.ts";
 
 /**
  * The cache directory for one pinned tool, shared by every worktree of the clone. Each use verifies
@@ -107,15 +108,7 @@ export async function installPinnedBinary(options: {
 			`${executable} is not cached. Run \`vp run check\` to install the pinned tools before push checks.`,
 		);
 	}
-	const response = await fetch(`${url}${asset.name}`, {
-		signal: AbortSignal.timeout(120_000),
-	});
-	if (!response.ok) {
-		throw new Error(
-			`${asset.name} download returned ${response.status}. Retry the pinned release URL.`,
-		);
-	}
-	const bytes = new Uint8Array(await response.arrayBuffer());
+	const bytes = await downloadReleaseAsset(`${url}${asset.name}`);
 	verifyArchive(bytes, asset);
 	const contents = executableFromArchive(bytes, asset.name, member);
 	await mkdir(cache, { recursive: true });

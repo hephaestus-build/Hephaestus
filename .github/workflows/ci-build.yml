@@ -88,6 +88,8 @@ jobs:
       # origin. docs/contributor/ci-cd.mdx § API compatibility.
       - name: API compatibility with the previous release
         id: api-compatibility
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         continue-on-error: true
         if: always()
         run: vp run gate:api-compatibility

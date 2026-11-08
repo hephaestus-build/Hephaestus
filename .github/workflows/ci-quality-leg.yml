@@ -75,6 +75,7 @@ jobs:
 
       - name: Quality gates
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           LEG: ${{ inputs.leg }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           # The bundle budget compares with the entry ahead in the queue; a pull request uses its merge base.

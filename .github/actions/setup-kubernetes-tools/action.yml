@@ -6,6 +6,7 @@ runs:
     - name: Install k3d, kind and kubeconform
       shell: bash
       env:
+        GITHUB_TOKEN: ${{ github.token }}
         # The one version of each tool for the chart's cluster jobs. Each SHA-256 below is the value
         # that the tool's release publishes beside that file for this version.
         K3D_VERSION: v5.9.0
@@ -30,8 +31,7 @@ runs:
         install_dir="$RUNNER_TEMP/kubernetes-tools/bin"
         mkdir -p "$install_dir"
         fetch() {
-          curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 2 --retry-max-time 300 \
-            --connect-timeout 15 --max-time 120 -o "$work/$1" "$2"
+          node scripts/download-release-asset.ts "$2" "$work/$1"
           actual=$(sha256sum "$work/$1" | cut -d' ' -f1)
           if [ "$actual" != "$3" ]; then
             echo "::error::$1 has SHA-256 $actual, not the pinned $3"

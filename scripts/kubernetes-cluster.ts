@@ -51,6 +51,7 @@ import type { ChartImage } from "./kubernetes-chart.ts";
 import { claimDevNamespace, DEV_OWNER, ownsDevNamespace } from "./lib/dev-namespace.ts";
 import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
+import { downloadReleaseAsset } from "./lib/release-asset.ts";
 import { parseResolvedImages } from "./resolve-release-images.ts";
 
 const ROOT = path.join(import.meta.dirname, "..");
@@ -438,11 +439,7 @@ async function gatewayApi(work: string): Promise<void> {
 	) {
 		return;
 	}
-	const response = await fetch(GATEWAY_API.url);
-	if (!response.ok) {
-		throw new Error(`could not download the Gateway API definitions: HTTP ${response.status}`);
-	}
-	const body = Buffer.from(await response.arrayBuffer());
+	const body = Buffer.from(await downloadReleaseAsset(GATEWAY_API.url));
 	const digest = createHash("sha256").update(body).digest("hex");
 	if (digest !== GATEWAY_API.sha256) {
 		throw new Error(

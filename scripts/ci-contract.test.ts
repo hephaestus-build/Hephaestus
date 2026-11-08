@@ -2915,8 +2915,10 @@ void describe("CI contract", () => {
 		assert.doesNotMatch(merge, /node (?:\.\/)?scripts\//u);
 		// The tools are installed for the runner's own CPU, since arm64 scans on an arm64 runner.
 		const tools = await readFile(".github/actions/setup-release-security-tools/action.yml", "utf8");
-		assert.match(tools, /ARM64\) syft_arch=arm64 trivy_arch=ARM64/u);
-		assert.doesNotMatch(tools, /linux_amd64|Linux-64bit\.tar/u);
+		assert.match(tools, /node scripts\/setup-release-security-tools\.ts/u);
+		const installer = await readFile("scripts/setup-release-security-tools.ts", "utf8");
+		assert.match(installer, /arch === "X64" \? "amd64" : "arm64"/u);
+		assert.match(installer, /arch === "X64" \? "64bit" : "ARM64"/u);
 
 		let callSites = 0;
 		for (const [file, source] of await workflowSources()) {
@@ -4238,7 +4240,11 @@ void describe("CI contract", () => {
 		)) {
 			visit(parseDocument(source), {
 				Map(_key, declaration) {
-					if (!String(declaration.get("uses")).startsWith("sigstore/cosign-installer@")) {
+					const reference = String(declaration.get("uses"));
+					if (
+						!reference.startsWith("sigstore/cosign-installer@") &&
+						!reference.startsWith("hephaestus-build/Hephaestus/.github/actions/setup-cosign@")
+					) {
 						return;
 					}
 					installers.add(file);

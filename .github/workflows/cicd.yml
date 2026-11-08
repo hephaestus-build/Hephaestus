@@ -678,6 +678,8 @@ jobs:
       # cannot read. docs/contributor/ci-cd.mdx § Workflow validation says which check owns what.
       - name: Validate workflows with GitHub's parser
         id: native
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-workflows.ts
 
       # Without file arguments Actionlint reads every workflow, so an empty list must skip it.

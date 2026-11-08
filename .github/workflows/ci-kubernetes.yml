@@ -135,6 +135,7 @@ jobs:
             --k3s-arg "--kubelet-arg=pod-max-pids=4096@all" --port "127.0.0.1:443:443@loadbalancer"
       - name: Install, upgrade and verify
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           COMMIT: ${{ inputs.commit }}
         run: |
           set -euo pipefail
