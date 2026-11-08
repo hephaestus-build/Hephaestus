@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.dto.GroupRefDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Problem;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemQueryFilter;
@@ -14,6 +15,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultQueryFilter;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
+import de.tum.cit.aet.hephaestus.practices.result.dto.ProblemSummaryDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDeveloperDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewBoundResultDTO;
@@ -22,11 +24,16 @@ import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewProblemDetailD
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewResultDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewResultDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultSort;
 import java.time.Instant;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
@@ -47,38 +54,60 @@ public class ReviewResultQueryService {
     private final ProductReferenceQuery references;
     private final EvidenceAuthorization authorization;
     private final ResultMarkService marks;
+    private final ReviewResultListRepository listRows;
 
     public Page<ReviewResultDTO> list(long ws, ResultQueryFilter filter, ResultSort sort, Pageable page) {
         var rows = results.list(ws, filter, sort, false, page);
+        if (rows.isEmpty()) return new PageImpl<>(List.of(), page, rows.getTotalElements());
         var permitted = authorization.permitsAll(ws, rows.getContent(), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
+        var ids = rows.getContent().stream().map(Result::getId).toList();
+        var marked = listRows.markTimes(ws, ids).stream()
+                .collect(Collectors.groupingBy(ReviewResultListRepository.MarkTime::resultId,
+                        Collectors.toMap(ReviewResultListRepository.MarkTime::kind, ReviewResultListRepository.MarkTime::createdAt)));
+        var counts = listRows.problemCounts(ws, ids).stream()
+                .collect(Collectors.toMap(ReviewResultListRepository.ProblemCount::resultId,
+                        ReviewResultListRepository.ProblemCount::count));
+        var permittedIds = ids.stream().filter(permitted::contains).toList();
+        var summaries = permittedIds.isEmpty() ? Map.<UUID, List<ProblemSummaryDTO>>of()
+                : listRows.problemSummaries(ws, permittedIds).stream()
+                        .collect(Collectors.groupingBy(ReviewResultListRepository.ProblemSummary::resultId,
+                                Collectors.mapping(row -> new ProblemSummaryDTO(row.id(), row.severity(), row.summary()), Collectors.toList())));
+        var feedback = listRows.feedbackCounts(ws, ids).stream()
+                .collect(Collectors.groupingBy(ReviewResultListRepository.FeedbackCount::resultId));
+        var developers = references.developers(ws, rows.getContent().stream().map(Result::getDeveloperId)
+                .filter(Objects::nonNull).distinct().toList());
         return new PageImpl<>(
                 views.views(ws, rows.getContent()).stream()
-                        .map(v -> list(v, permitted.contains(v.result().getId())))
+                        .map(v -> {
+                            var r = v.result();
+                            var activeMarks = marked.getOrDefault(r.getId(), Map.of());
+                            return new ReviewResultDTO(
+                                    r.getId(), r.getReviewId(), v.item(), v.practice().getSlug(), presentation.name(v),
+                                    r.getOutcome(), r.getSeverity(), permitted.contains(r.getId()) ? r.getSummary() : null,
+                                    v.review().getOrigin(), r.getRecordedAt(), presentation.currentness(v),
+                                    activeMarks.get(ResultMarkKind.INCORRECT), activeMarks.get(ResultMarkKind.ACCEPTED),
+                                    summaries.getOrDefault(r.getId(), List.of()),
+                                    r.getDeveloperId() == null ? null : developers.get(r.getDeveloperId()),
+                                    Math.toIntExact(counts.getOrDefault(r.getId(), 0L)),
+                                    feedbackCounts(feedback.getOrDefault(r.getId(), List.of())));
+                        })
                         .toList(),
                 page,
                 rows.getTotalElements());
     }
 
-    private ReviewResultDTO list(ResultView v, boolean permitted) {
-        var r = v.result();
-        return new ReviewResultDTO(
-                r.getId(),
-                r.getReviewId(),
-                v.item(),
-                v.practice().getSlug(),
-                presentation.name(v),
-                r.getOutcome(),
-                r.getSeverity(),
-                permitted ? r.getSummary() : null,
-                v.review().getOrigin(),
-                r.getRecordedAt(),
-                presentation.currentness(v),
-                presentation.markedAt(r, ResultMarkKind.INCORRECT),
-                presentation.markedAt(r, ResultMarkKind.ACCEPTED),
-                presentation.summaries(r, permitted),
-                developer(v),
-                presentation.problems(r).size(),
-                presentation.feedbackCounts(r));
+    private static ReviewFeedbackCountsDTO feedbackCounts(List<ReviewResultListRepository.FeedbackCount> rows) {
+        var counts = new EnumMap<FeedbackState, Integer>(FeedbackState.class);
+        rows.forEach(row -> counts.put(row.state(), Math.toIntExact(row.count())));
+        return new ReviewFeedbackCountsDTO(
+                counts.getOrDefault(FeedbackState.AWAITING_APPROVAL, 0),
+                counts.getOrDefault(FeedbackState.READY, 0),
+                counts.getOrDefault(FeedbackState.DELIVERED, 0),
+                counts.getOrDefault(FeedbackState.UNCONFIRMED, 0),
+                counts.getOrDefault(FeedbackState.WITHHELD, 0),
+                counts.getOrDefault(FeedbackState.REJECTED, 0),
+                counts.getOrDefault(FeedbackState.REPLACED, 0),
+                counts.getOrDefault(FeedbackState.FAILED, 0));
     }
 
     public ReviewResultDetailDTO get(long ws, UUID id) {
