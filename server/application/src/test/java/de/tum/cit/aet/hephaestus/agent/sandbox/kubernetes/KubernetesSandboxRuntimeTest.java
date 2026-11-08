@@ -891,7 +891,8 @@ class KubernetesSandboxRuntimeTest {
                     "Pending",
                     List.of(exited(KubernetesPods.ISOLATION, 0), exited(KubernetesPods.INITIALIZER, 0)),
                     List.of());
-            reviews.observe(handle, SandboxBackend.Stage.INITIALIZED, Instant.now().plusSeconds(10));
+            reviews.observe(
+                    handle, SandboxBackend.Stage.INITIALIZED, Instant.now().plusSeconds(10));
         }
 
         assertThat(reviews.running(handle)).isFalse();
