@@ -294,6 +294,10 @@ await test("a chart host installs the release tree's chart with its profiles, th
 		await mkdir(profiles, { recursive: true });
 		await writeFile(path.join(profiles, "small.yaml"), "{}\n");
 		await assert.rejects(profileFiles(settings, tree), /no chart profile site-overlay/u);
+		const unreadable = path.join(tree, "unreadable");
+		await mkdir(path.join(unreadable, "deploy/chart/hephaestus"), { recursive: true });
+		await writeFile(path.join(unreadable, "deploy/chart/hephaestus/profiles"), "not a directory\n");
+		await assert.rejects(profileFiles(settings, unreadable), { code: "ENOTDIR" });
 		await writeFile(path.join(profiles, "site-overlay.yaml"), "{}\n");
 		const files = await profileFiles(settings, tree);
 		assert.deepEqual(files, [

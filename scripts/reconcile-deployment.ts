@@ -441,7 +441,11 @@ export async function profileFiles(
 	for (const [index, file] of files.entries()) {
 		try {
 			await stat(file);
-		} catch {
+		} catch (error) {
+			// Only an absent file is the operator's profile choice; any other error is the host's.
+			if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+				throw error;
+			}
 			throw new OperatorActionRequiredError(
 				`the release has no chart profile ${settings.profiles[index] ?? ""}. Remove or replace it in HEPHAESTUS_CHART_PROFILE before retrying reconciliation (${file}).`,
 			);
