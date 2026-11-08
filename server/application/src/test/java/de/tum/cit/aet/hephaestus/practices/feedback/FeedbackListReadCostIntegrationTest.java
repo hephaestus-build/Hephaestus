@@ -209,13 +209,20 @@ class FeedbackListReadCostIntegrationTest extends BaseIntegrationTest {
             INSERT INTO feedback_decision(id,workspace_id,feedback_id,action,actor_account_id,note,decided_at)
             VALUES(:id,:ws,:feedback,:action,:actor,'Recorded visibility decision.',:at)
             """)
-                .param("id", UUID.randomUUID()).param("ws", scenario.workspace().getId())
-                .param("feedback", id).param("action", action).param("actor", scenario.account().getId())
-                .param("at", Timestamp.from(at)).update();
+                .param("id", UUID.randomUUID())
+                .param("ws", scenario.workspace().getId())
+                .param("feedback", id)
+                .param("action", action)
+                .param("actor", scenario.account().getId())
+                .param("at", Timestamp.from(at))
+                .update();
     }
 
     private static ReviewFeedbackDTO row(Page<ReviewFeedbackDTO> page, UUID id) {
-        return page.getContent().stream().filter(row -> row.id().equals(id)).findFirst().orElseThrow();
+        return page.getContent().stream()
+                .filter(row -> row.id().equals(id))
+                .findFirst()
+                .orElseThrow();
     }
 
     private UUID recordedFeedback(ReviewIntegrationData.Scenario owner, int index) {

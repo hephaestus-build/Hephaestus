@@ -9,8 +9,8 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRead;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryPolicy;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackGate;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackHistoryQueryService;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackMarkListener;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackListReadQuery;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackMarkListener;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPreparationStore;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPublicHistory;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackReadService;
@@ -53,7 +53,8 @@ class FeedbackDeliveryRoleContextTest {
             FeedbackResponseSuppressionFilter.class,
             RepeatedSummaryCheck.class);
 
-    private static final Set<Class<?>> SERVER_READ_HELPERS = Set.of(FeedbackReadService.class, FeedbackBasisRead.class, FeedbackListReadQuery.class);
+    private static final Set<Class<?>> SERVER_READ_HELPERS =
+            Set.of(FeedbackReadService.class, FeedbackBasisRead.class, FeedbackListReadQuery.class);
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withUserConfiguration(CAPTURE_HELPERS.toArray(Class<?>[]::new))

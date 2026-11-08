@@ -64,11 +64,13 @@ public class FeedbackListReadQuery {
     private Facts facts(long workspaceId, List<Feedback> feedback) {
         var ids = feedback.stream().map(Feedback::getId).toList();
         var copyFacts = copies.copyCounts(workspaceId, ids).stream()
-                .collect(Collectors.groupingBy(FeedbackCopyRepository.CopyCount::feedbackId,
+                .collect(Collectors.groupingBy(
+                        FeedbackCopyRepository.CopyCount::feedbackId,
                         Collectors.collectingAndThen(Collectors.toList(), FeedbackListReadQuery::copyFacts)));
         var disagreed = responses.responseTimes(workspaceId, ids).stream()
                 .filter(row -> row.disagreedAt() != null)
-                .collect(Collectors.toMap(FeedbackResponseRepository.ResponseTime::feedbackId,
+                .collect(Collectors.toMap(
+                        FeedbackResponseRepository.ResponseTime::feedbackId,
                         row -> Objects.requireNonNull(row.disagreedAt())));
         return new Facts(
                 references.items(
