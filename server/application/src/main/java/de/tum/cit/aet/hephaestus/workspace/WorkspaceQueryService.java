@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMetadataQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProviderAvailability;
@@ -18,7 +19,6 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -30,18 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 @WorkspaceAgnostic("Manages workspaces themselves - operates at admin/registry level")
 public class WorkspaceQueryService {
 
-    private static final Comparator<Workspace> ACCESSIBLE_WORKSPACE_COMPARATOR = accessibleWorkspaceOrder(
-            Workspace::getDisplayName, Workspace::getWorkspaceSlug);
-
-    private static <T> Comparator<T> accessibleWorkspaceOrder(Function<T, String> displayName, Function<T, String> slug) {
-        return Comparator.comparing(displayName, String.CASE_INSENSITIVE_ORDER)
-                .thenComparing(slug, String.CASE_INSENSITIVE_ORDER);
-    }
-
     private final WorkspaceRepository workspaceRepository;
     private final MembershipRepository workspaceMembershipRepository;
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final ConnectionService connectionService;
+    private final ConnectionMetadataQuery connectionMetadata;
     private final PublicActivityPolicy publicActivityPolicy;
 
     private final Map<IntegrationKind, WorkspaceProviderAvailability> providerAvailability;
@@ -55,6 +48,7 @@ public class WorkspaceQueryService {
             MembershipRepository workspaceMembershipRepository,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             ConnectionService connectionService,
+            ConnectionMetadataQuery connectionMetadata,
             PublicActivityPolicy publicActivityPolicy,
             WorkspaceProperties workspaceProperties,
             WorkspaceSubdomainProperties subdomains,
@@ -64,6 +58,7 @@ public class WorkspaceQueryService {
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.connectionService = connectionService;
+        this.connectionMetadata = connectionMetadata;
         this.publicActivityPolicy = publicActivityPolicy;
         this.workspaceProperties = workspaceProperties;
         this.subdomains = subdomains;
@@ -76,7 +71,7 @@ public class WorkspaceQueryService {
     }
 
     public WorkspaceDTO toWorkspaceDTO(Workspace workspace) {
-        return WorkspaceDTO.from(workspace, connectionService.findWorkspaceMetadata(workspace.getId()), workspaceAddress(workspace.getWorkspaceSlug()));
+        return WorkspaceDTO.from(workspace, connectionMetadata.findWorkspaceMetadata(workspace.getId()), workspaceAddress(workspace.getWorkspaceSlug()));
     }
 
     private String workspaceAddress(String slug) {
@@ -90,12 +85,15 @@ public class WorkspaceQueryService {
     public List<WorkspaceListItemDTO> findAccessibleWorkspaceListItems() {
         boolean publicActivityAllowed = publicActivityPolicy.allowed();
         var viewed = UserViewContextHolder.get();
-        var ids = viewed == null ? accessibleWorkspaceIds() : List.of(viewed.workspaceId());
+        var ids = viewed == null
+                ? SecurityUtils.getCurrentAccountId().map(workspaceMembershipRepository::findActiveWorkspaceIdsByAccountId).orElseGet(List::of)
+                : List.of(viewed.workspaceId());
         if (ids.isEmpty()) return List.of();
         var workspaces = workspaceRepository.findListDataByIds(ids, viewed != null);
-        var kinds = connectionService.findActiveProviderKinds(workspaces.stream().map(WorkspaceListData::id).toList());
+        var kinds = connectionMetadata.findActiveProviderKinds(workspaces.stream().map(WorkspaceListData::id).toList());
         return workspaces.stream()
-                .sorted(accessibleWorkspaceOrder(WorkspaceListData::displayName, WorkspaceListData::workspaceSlug))
+                .sorted(Comparator.comparing(WorkspaceListData::displayName, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(WorkspaceListData::workspaceSlug, String.CASE_INSENSITIVE_ORDER))
                 .map(workspace -> WorkspaceListItemDTO.from(workspace,
                         Optional.ofNullable(kinds.get(workspace.id())).map(IdentityProviderType::from).orElse(null),
                         workspaceAddress(workspace.workspaceSlug()), publicActivityAllowed))
@@ -157,30 +155,6 @@ public class WorkspaceQueryService {
 
     public List<Long> findActiveIds() {
         return workspaceRepository.findIdsByStatus(Workspace.WorkspaceStatus.ACTIVE);
-    }
-
-    /**
-     * Returns workspaces in which the current account has a membership. An unauthenticated caller
-     * receives an empty list.
-     *
-     * @return list of accessible workspaces for the current user
-     */
-    public List<Workspace> findAccessibleWorkspaces() {
-        var workspaceIds = accessibleWorkspaceIds();
-        List<Workspace> memberWorkspaces = workspaceIds.isEmpty()
-                ? List.of()
-                : workspaceRepository.findAllById(workspaceIds).stream()
-                        .filter(w -> w.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
-                        .toList();
-        return memberWorkspaces.stream().sorted(ACCESSIBLE_WORKSPACE_COMPARATOR).toList();
-    }
-
-    private List<Long> accessibleWorkspaceIds() {
-        var viewed = UserViewContextHolder.get();
-        Long accountId =
-                viewed == null ? SecurityUtils.getCurrentAccountId().orElse(null) : Long.valueOf(viewed.accountId());
-        if (accountId == null) return List.of();
-        return workspaceMembershipRepository.findActiveWorkspaceIdsByAccountId(accountId);
     }
 
     /**

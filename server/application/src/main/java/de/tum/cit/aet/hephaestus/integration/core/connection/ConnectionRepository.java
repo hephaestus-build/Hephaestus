@@ -81,8 +81,9 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     List<Connection> findByWorkspaceIdAndState(long workspaceId, IntegrationState state);
 
     @Query("""
-        SELECT c.id AS id, c.kind AS kind, c.config AS config, c.createdAt AS createdAt,
-               CASE WHEN c.credentialsEncrypted IS NOT NULL THEN true ELSE false END AS credentialsPresent
+        SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WorkspaceMetadataRow(
+               c.id, c.kind, c.config, c.createdAt,
+               CASE WHEN c.credentialsEncrypted IS NOT NULL THEN true ELSE false END)
         FROM Connection c
         WHERE c.workspace.id = :workspaceId
           AND c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE
@@ -92,16 +93,12 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
         """)
     List<WorkspaceMetadataRow> findWorkspaceMetadata(@Param("workspaceId") long workspaceId);
 
-    interface WorkspaceMetadataRow {
-        Long getId();
-        IntegrationKind getKind();
-        ConnectionConfig getConfig();
-        Instant getCreatedAt();
-        boolean getCredentialsPresent();
-    }
+    record WorkspaceMetadataRow(Long id, IntegrationKind kind, ConnectionConfig config,
+            Instant createdAt, boolean credentialsPresent) {}
 
     @Query("""
-        SELECT DISTINCT c.workspace.id AS workspaceId, c.kind AS kind
+        SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WorkspaceProviderRow(
+               c.workspace.id, c.kind)
         FROM Connection c
         WHERE c.workspace.id IN :workspaceIds
           AND c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE
@@ -110,10 +107,7 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
         """)
     List<WorkspaceProviderRow> findActiveWorkspaceProviders(@Param("workspaceIds") Collection<Long> workspaceIds);
 
-    interface WorkspaceProviderRow {
-        Long getWorkspaceId();
-        IntegrationKind getKind();
-    }
+    record WorkspaceProviderRow(Long workspaceId, IntegrationKind kind) {}
 
     /** Whether another workspace still removes what its disconnected connection to this instance left at the provider. */
     @WorkspaceAgnostic("A connect refuses an instance whose removal another workspace has not finished")

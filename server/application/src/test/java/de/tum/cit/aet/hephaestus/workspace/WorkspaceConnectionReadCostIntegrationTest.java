@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.MockSecurityContextUtils;
+import de.tum.cit.aet.hephaestus.testconfig.QueryPlans;
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
 import java.sql.Timestamp;
@@ -20,7 +21,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,7 +28,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-@Slf4j
 class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private WorkspaceRepository workspaces;
@@ -44,6 +43,9 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private QueryPlans plans;
 
     private Account owner;
 
@@ -82,8 +84,8 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
         assertThat(read.value().hasPersonalAccessToken()).isFalse();
         assertThat(read.value().hasSlackToken()).isFalse();
         assertThat(read.value().slackConnectionId()).isEqualTo(slack.getId());
-        log.info("Workspace detail read cost: {}", read.cost());
         assertThat(read.cost()).isEqualTo(new SqlReadMeasurement.Cost(1, 0));
+        assertThat(plans.fullScans(read.sql())).isEmpty();
     }
 
     @Test
@@ -101,6 +103,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
                 new ConnectionConfig.GitLabConfig("https://gitlab.example.test", 42L, 7L, Set.of(), null));
         gitlab.setState(IntegrationState.ACTIVE);
         connections.saveAndFlush(gitlab);
+        storeUnreadableCredential(workspace, IntegrationKind.GITLAB);
 
         var read = reads.measure(() -> queries.toWorkspaceDTO(workspace));
 
@@ -110,7 +113,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
         assertThat(read.value().installationId()).isNull();
         assertThat(read.value().installationLinkedAt()).isNull();
         assertThat(read.value().gitlabWebhookRegistered()).isTrue();
-        assertThat(read.value().hasPersonalAccessToken()).isFalse();
+        assertThat(read.value().hasPersonalAccessToken()).isTrue();
     }
 
     @Test
@@ -151,11 +154,12 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
         assertThat(larger.value())
                 .extracting(WorkspaceListItemDTO::providerType)
                 .containsOnly(IdentityProviderType.GITHUB);
-        log.info("Workspace list read costs: small={}, larger={}", small.cost(), larger.cost());
         assertThat(larger.cost().statements())
                 .as("small=%s, larger=%s", small.cost(), larger.cost())
                 .isEqualTo(small.cost().statements());
         assertThat(larger.cost().statements()).isLessThanOrEqualTo(5);
+        assertThat(plans.fullScans(small.sql())).isEmpty();
+        assertThat(plans.fullScans(larger.sql())).isEmpty();
         assertThat(larger.cost().entities()).isEqualTo(small.cost().entities()).isLessThanOrEqualTo(1);
     }
 
@@ -202,12 +206,15 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
     void shouldKeepAUserViewLimitedToItsWorkspace() {
         workspace(owner, 0);
         var viewed = workspace(owner, 1);
+        viewed.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+        workspaces.saveAndFlush(viewed);
         UserViewContextHolder.set(
                 new UserViewContextHolder.View(viewed.getId(), Objects.requireNonNull(owner.getId())));
         try {
             var read = reads.measure(queries::findAccessibleWorkspaceListItems);
             assertThat(read.value()).extracting(WorkspaceListItemDTO::id).containsExactly(viewed.getId());
             assertThat(read.value().getFirst().providerType()).isEqualTo(IdentityProviderType.GITHUB);
+            assertThat(read.value().getFirst().status()).isEqualTo("SUSPENDED");
         } finally {
             UserViewContextHolder.clear();
         }
@@ -279,6 +286,46 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
                         .getFirst()
                         .providerType())
                 .isNull();
+    }
+
+    @Test
+    void shouldKeepCaseInsensitiveDisplayNameAndSlugOrder() {
+        var zeta = workspace(owner, 0);
+        zeta.setDisplayName("zeta");
+        var second = workspace(owner, 1);
+        second.setDisplayName("ALPHA");
+        second.setWorkspaceSlug("z-space");
+        var first = workspace(owner, 2);
+        first.setDisplayName("alpha");
+        first.setWorkspaceSlug("a-space");
+        workspaces.saveAllAndFlush(List.of(zeta, second, first));
+
+        assertThat(reads.measure(queries::findAccessibleWorkspaceListItems).value())
+                .extracting(WorkspaceListItemDTO::id).containsExactly(first.getId(), second.getId(), zeta.getId());
+    }
+
+    @Test
+    void shouldReportStoredSlackCredentialsWithoutDecryptingThem() {
+        var workspace = workspace(owner, 0);
+        var slack = new Connection(workspace, IntegrationKind.SLACK, "TSTORED",
+                new ConnectionConfig.SlackConfig("TSTORED", "Stored", null, Set.of()));
+        slack.setState(IntegrationState.ACTIVE);
+        slack = connections.saveAndFlush(slack);
+        storeUnreadableCredential(workspace, IntegrationKind.SLACK);
+
+        var read = reads.measure(() -> queries.toWorkspaceDTO(workspace));
+
+        assertThat(read.value().hasSlackToken()).isTrue();
+        assertThat(read.value().slackConnectionId()).isEqualTo(slack.getId());
+        assertThat(plans.fullScans(read.sql())).isEmpty();
+    }
+
+    private void storeUnreadableCredential(Workspace workspace, IntegrationKind kind) {
+        assertThat(jdbc.update("""
+                UPDATE connection SET credentials_encrypted=?, credentials_alg=?, credentials_key_version=?
+                WHERE workspace_id=? AND kind=?
+                """, new byte[] {1, 2, 3}, CredentialBundleConverter.ALGORITHM_TAG, 999, workspace.getId(), kind.name()))
+                .isEqualTo(1);
     }
 
     private Workspace workspace(Account account, int index) {

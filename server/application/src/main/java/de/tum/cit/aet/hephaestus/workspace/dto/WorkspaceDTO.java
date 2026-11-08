@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace.dto;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMetadataQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -75,7 +75,7 @@ public record WorkspaceDTO(
         @NonNull @Schema(description = "Whether manual practice reviews triggered through a bot command are enabled")
         Boolean practiceReviewManualTriggerEnabled) {
     public static WorkspaceDTO from(
-            Workspace workspace, ConnectionService.WorkspaceMetadata metadata, String workspaceAddress) {
+            Workspace workspace, ConnectionMetadataQuery.WorkspaceMetadata metadata, String workspaceAddress) {
         var kind = metadata.kind();
         return new WorkspaceDTO(
                 workspace.getId(),
