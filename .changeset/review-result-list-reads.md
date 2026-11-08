@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-The review results list uses a fixed number of database queries as a page grows. Evidence visibility, result marks, problem counts and feedback counts keep their existing behavior.
+The review results list reads marks, problem summaries and counts, feedback counts, and developer references in batches. Evidence visibility and result details keep their existing behavior.
