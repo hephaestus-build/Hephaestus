@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.testconfig.QueryPlans;
 import de.tum.cit.aet.hephaestus.testconfig.SqlRequestTrace;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
+import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +28,39 @@ class WorkspaceRequestCostIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Autowired
     private QueryPlans plans;
+
+    @Test
+    @WithAdminUser
+    void shouldKeepWorkspaceListRequestCostBoundedAsMembershipsGrow() {
+        User owner = persistUser("admin");
+        var ids = new ArrayList<Long>();
+        for (int index = 0; index < 2; index++) {
+            var workspace = listWorkspace(owner, index);
+            ids.add(workspace.getId());
+        }
+        var small = requests.measure(webTestClient, client -> client.get().uri("/workspaces")
+                .headers(TestAuthUtils.withCurrentUser()).exchange().expectStatus().isOk()
+                .expectBodyList(WorkspaceListItemDTO.class)
+                .value(values -> assertThat(values).extracting(WorkspaceListItemDTO::id).containsExactlyElementsOf(ids)));
+        for (int index = 2; index < 8; index++) ids.add(listWorkspace(owner, index).getId());
+
+        var larger = requests.measure(webTestClient, client -> client.get().uri("/workspaces")
+                .headers(TestAuthUtils.withCurrentUser()).exchange().expectStatus().isOk()
+                .expectBodyList(WorkspaceListItemDTO.class)
+                .value(values -> assertThat(values).extracting(WorkspaceListItemDTO::id).containsExactlyElementsOf(ids)));
+
+        assertThat(larger.statements()).as("small=%s, larger=%s", small.statements(), larger.statements())
+                .isEqualTo(small.statements()).isLessThanOrEqualTo(7);
+        assertThat(plans.fullScans(small.sql())).isEmpty();
+        assertThat(plans.fullScans(larger.sql())).isEmpty();
+    }
+
+    private Workspace listWorkspace(User owner, int index) {
+        String slug = "list-cost-%02d".formatted(index);
+        var workspace = createWorkspace(slug, "List cost %02d".formatted(index), slug, AccountType.ORG, owner);
+        ensureAdminMembership(workspace);
+        return workspace;
+    }
 
     @Test
     @WithAdminUser
