@@ -4266,6 +4266,7 @@ export const FeedbackCheckSchema = {
                 'UNCORROBORATED',
                 'PUBLIC_HISTORY_CHANGED',
                 'PUBLIC_DELIVERY_UNRESOLVED',
+                'STEP_LIMIT',
                 'NOT_COMPOSED',
                 null
             ]
@@ -4493,6 +4494,7 @@ export const FeedbackCopySchema = {
                 'UNCORROBORATED',
                 'PUBLIC_HISTORY_CHANGED',
                 'PUBLIC_DELIVERY_UNRESOLVED',
+                'STEP_LIMIT',
                 'NOT_COMPOSED',
                 null
             ]
@@ -4988,6 +4990,8 @@ export const FeedbackSendSchema = {
             type: 'string',
             enum: [
                 'POST',
+                'EDIT',
+                'READBACK',
                 'RETRACT'
             ]
         },
@@ -14368,6 +14372,7 @@ export const ReviewFeedbackSchema = {
                 'UNCORROBORATED',
                 'PUBLIC_HISTORY_CHANGED',
                 'PUBLIC_DELIVERY_UNRESOLVED',
+                'STEP_LIMIT',
                 'NOT_COMPOSED',
                 null
             ]
@@ -14646,6 +14651,7 @@ export const ReviewFeedbackDetailSchema = {
                 'UNCORROBORATED',
                 'PUBLIC_HISTORY_CHANGED',
                 'PUBLIC_DELIVERY_UNRESOLVED',
+                'STEP_LIMIT',
                 'NOT_COMPOSED',
                 null
             ]
@@ -19929,6 +19935,19 @@ export const VerifyPasskeyRequestSchema = {
     required: [
         'challengeId',
         'credentialJson'
+    ]
+} as const;
+
+export const VisibilityUpdateSchema = {
+    type: 'object',
+    description: 'Whether a team or repository is hidden from workspace activity.',
+    properties: {
+        hidden: {
+            type: 'boolean'
+        }
+    },
+    required: [
+        'hidden'
     ]
 } as const;
 
