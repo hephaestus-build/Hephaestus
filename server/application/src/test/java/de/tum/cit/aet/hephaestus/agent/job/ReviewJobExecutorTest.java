@@ -1191,8 +1191,9 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void shouldNotKeepARunningReviewAliveWithoutItsLoopsRenewal(boolean live) {
         var job = configuredJob();
         var executor = tracking(executor(mock(AsyncTaskExecutor.class)), job);
+        var lease = Objects.requireNonNull(job.getLeaseId());
         when(sandbox.loopRunning(job.getId())).thenReturn(true);
-        when(jobs.hasLiveLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getLeaseId()))
+        when(jobs.hasLiveLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), lease))
                 .thenReturn(live);
 
         executor.stopEndedAttempts(executor.renewLeases());
@@ -1205,12 +1206,13 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void shouldRenewWhileTheReviewLoopHasNotStartedOrHasAlreadyExited() {
         var job = configuredJob();
         var executor = tracking(executor(mock(AsyncTaskExecutor.class)), job);
+        var lease = Objects.requireNonNull(job.getLeaseId());
         when(sandbox.loopRunning(job.getId())).thenReturn(false);
         when(jobs.renewLease(
                         job.getId(),
                         job.getWorkspaceId(),
                         job.getAttempt(),
-                        job.getLeaseId(),
+                        lease,
                         AgentProperties.WORKER_LEASE_TTL.toSeconds()))
                 .thenReturn(1);
 
@@ -1221,7 +1223,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         job.getId(),
                         job.getWorkspaceId(),
                         job.getAttempt(),
-                        job.getLeaseId(),
+                        lease,
                         AgentProperties.WORKER_LEASE_TTL.toSeconds());
     }
 
