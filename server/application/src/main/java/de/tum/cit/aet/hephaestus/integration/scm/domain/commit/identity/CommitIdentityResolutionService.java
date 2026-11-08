@@ -4,9 +4,11 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityProvider.Answer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolution.State;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import java.time.Clock;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,12 +24,16 @@ public class CommitIdentityResolutionService {
     private final CommitIdentityChangeRepository changes;
     private final PersonDataWriteFence fence;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     public record Result(String outcome, int changedLinks) {}
 
     /** Applies an answer for the email of one queue row. {@link Answer.Deferred} never reaches this method. */
     @Transactional
     public Result apply(long resolutionId, long repositoryId, long providerId, String email, Answer answer) {
+        if (resolutions.lockById(resolutionId).isEmpty()) {
+            return new Result("skipped", 0);
+        }
         return switch (answer) {
             case Answer.Account account -> {
                 var person = new PersonIdentity(providerId, Long.toString(account.nativeId()), null);
@@ -49,6 +55,9 @@ public class CommitIdentityResolutionService {
     /** Ends a question that can never be answered, or counts one attempt. It changes no link. */
     @Transactional
     public Result miss(long resolutionId, int attempts, int maxAttempts) {
+        if (resolutions.lockById(resolutionId).isEmpty()) {
+            return new Result("skipped", 0);
+        }
         if (attempts + 1 >= maxAttempts) {
             return finish(resolutionId, State.UNANSWERED, "unanswered", 0);
         }
@@ -65,6 +74,9 @@ public class CommitIdentityResolutionService {
 
     private Result finish(long resolutionId, State state, String outcome, int changedLinks) {
         resolutions.finish(resolutionId, state.name(), clock.instant());
+        if (state == State.RESOLVED || state == State.NO_ACCOUNT) {
+            events.publishEvent(new ScmDomainEvent.CommitIdentityCorrected(resolutionId));
+        }
         return new Result(outcome, changedLinks);
     }
 }

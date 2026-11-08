@@ -497,15 +497,20 @@ GitLab gives no answer for an email that appears in no merge request, so that va
 
 The commit link correction job overwrites `git_commit.author_id`, `git_commit.committer_id`, and `commit_contributor.user_id` with GitHub's answer for an email on a repository.
 If GitHub says that no account owns the email, the job clears these values.
-Later enrichment does not restore them from a stored email.
-Commit capture can still link a new commit, or a commit that has no captured details yet, through an email stored on exactly one user.
+The stored-email pass of later enrichment does not restore cleared links.
+
+Commit ingestion can still link a new or existing commit through an email stored on exactly one user of its provider.
+That ingestion can refill a link that the job cleared. The queue does not reopen automatically.
+A new GitHub commit can also link through the account id in a noreply address.
 If GitHub gives no answer, the job changes nothing.
 
 The job never links an erased person.
 Person export and erasure follow the new values from then on, and earlier exports are not recalled.
-The job does not change the actor of an existing Activity event.
-An Activity event that has an actor stays with that actor in export and erasure.
-An Activity event with no actor follows the corrected commit link, and later commit enrichment can fill its actor.
+
+Each provider answer also corrects the actor of existing commit Activity events, including an explicit clear.
+The commit links, queue result, and Activity correction commit in one transaction. A failed Activity correction rolls them back together.
+Person export and erasure follow the corrected Activity actor.
+If ingestion links a cleared commit again from a stored email, its Activity follows that link. The queue does not reopen.
 
 `commit_identity_resolution` holds the job's queue. It points at a commit and holds no email.
 `commit_identity_change` holds one row for each changed link: the column, the row id, the old and new user ids, the outcome, and the time.

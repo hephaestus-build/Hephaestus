@@ -10,6 +10,44 @@ import org.springframework.data.repository.query.Param;
 
 /** Source facts and conflict-safe writes for bounded activity repair. */
 public interface ActivityLedgerRepository extends Repository<ActivityEvent, UUID> {
+    /** One queue row identifies the email without copying it into a maintenance event. */
+    String CORRECTED_COMMITS = """
+        SELECT gc.id, gc.repository_id, gc.author_id
+        FROM commit_identity_resolution q
+        JOIN git_commit representative ON representative.id = q.commit_id
+        LEFT JOIN commit_contributor contributor ON contributor.id = q.contributor_id
+        JOIN git_commit gc ON gc.repository_id = q.repository_id
+          AND gc.author_email = CASE q.source WHEN 'AUTHOR' THEN representative.author_email
+                                              WHEN 'COMMITTER' THEN representative.committer_email
+                                              ELSE contributor.email END
+        WHERE q.id = :resolutionId
+        """;
+
+    @WorkspaceAgnostic("One provider answer bounds shared commit rows before activity write admission")
+    @Query(
+            value = "SELECT DISTINCT source.author_id FROM (" + CORRECTED_COMMITS
+                    + ") source WHERE source.author_id IS NOT NULL ORDER BY source.author_id",
+            nativeQuery = true)
+    List<Long> findCorrectedCommitAuthors(@Param("resolutionId") long resolutionId);
+
+    @WorkspaceAgnostic(
+            "One provider answer corrects derived commit actors in each workspace that holds the source event")
+    @Modifying
+    @Query(
+            value = "UPDATE activity_event e SET actor_id = source.author_id FROM (" + CORRECTED_COMMITS + """
+        ) source
+        WHERE e.repository_id = source.repository_id AND e.target_id = source.id
+          AND e.target_type = 'commit' AND e.event_type = 'COMMIT_CREATED'
+          AND e.actor_id IS DISTINCT FROM source.author_id
+          AND (source.author_id IS NULL OR source.author_id IN (:admitted))
+          AND NOT EXISTS (SELECT 1 FROM identity_restriction s JOIN "user" u
+              ON u.provider_id = s.provider_id AND s.kind = 'ERASED'
+                AND u.native_id::text = s.provider_user_key AND s.team_key = ''
+              WHERE u.id = source.author_id)
+        """,
+            nativeQuery = true)
+    int correctCommitActors(@Param("resolutionId") long resolutionId, @Param("admitted") List<Long> admitted);
+
     /**
      * Issue row {@code i} is contradicted by a pull request: GitHub numbers issues and pull requests in one
      * space per repository, so a stored GitHub pull request with its provider, repository and number means

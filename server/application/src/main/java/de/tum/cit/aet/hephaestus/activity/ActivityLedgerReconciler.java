@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** Restores facts still present in provider rows, never inferred lifecycle transitions. */
@@ -20,6 +22,13 @@ public class ActivityLedgerReconciler implements ActivityLedgerRepair {
     private final ActivityPersonWriteAdmission admission;
     private final PlatformTransactionManager transactionManager;
     private final WorkspaceActorSelector actors;
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int correctCommitActors(long resolutionId) {
+        var admitted = admission.holdActors(repository.findCorrectedCommitAuthors(resolutionId));
+        return repository.correctCommitActors(resolutionId, admitted);
+    }
 
     @Override
     public int reconcileRepository(long workspaceId, long repositoryId) {

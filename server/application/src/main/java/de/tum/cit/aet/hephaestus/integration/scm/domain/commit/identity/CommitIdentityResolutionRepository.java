@@ -84,6 +84,13 @@ public interface CommitIdentityResolutionRepository extends JpaRepository<Commit
     @Query(value = "SELECT count(*) FROM commit_identity_resolution WHERE state = 'PENDING'", nativeQuery = true)
     long countPending();
 
+    /** Provider corrections lock the queue before changing commit links, as stored-email enrichment does. */
+    @WorkspaceAgnostic("Keyed lock of one row of the shared repair queue")
+    @Query(
+            value = "SELECT id FROM commit_identity_resolution WHERE id = :id AND state = 'PENDING' FOR UPDATE",
+            nativeQuery = true)
+    Optional<Long> lockById(@Param("id") long id);
+
     @WorkspaceAgnostic("Keyed update of one row of the instance-wide repair queue")
     @Modifying
     @Transactional

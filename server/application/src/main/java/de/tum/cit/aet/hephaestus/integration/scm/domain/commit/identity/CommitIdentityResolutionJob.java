@@ -106,12 +106,22 @@ public class CommitIdentityResolutionJob {
             miss(email);
             return;
         }
-        count(service.apply(
-                email.getId(),
-                repository.getRepositoryId(),
-                repository.getProviderId(),
-                Objects.requireNonNull(email.getEmail()),
-                answer));
+        CommitIdentityResolutionService.Result result;
+        try {
+            result = service.apply(
+                    email.getId(),
+                    repository.getRepositoryId(),
+                    repository.getProviderId(),
+                    Objects.requireNonNull(email.getEmail()),
+                    answer);
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Commit identity correction failed: resolutionId={}, cause={}",
+                    email.getId(),
+                    exception.getClass().getSimpleName());
+            result = service.miss(email.getId(), email.getAttempts(), MAX_ATTEMPTS);
+        }
+        count(result);
     }
 
     private void miss(PendingEmail email) {
