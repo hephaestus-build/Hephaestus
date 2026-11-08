@@ -116,8 +116,10 @@ class LlmProxySecurityConfig {
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/link-problem"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/show-feedback"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/search"),
-                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/sandbox/read"),
-                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/sandbox/exec"),
+                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/sandbox/document"),
+                paths.matcher(HttpMethod.GET, "/internal/llm/turn/{id}/sandbox/documents"),
+                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/sandbox/bind"),
+                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/sandbox/discard"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/sandbox/load"));
         RequestMatcher turnBookkeeping = new OrRequestMatcher(
                 paths.matcher(HttpMethod.GET, "/internal/llm/turn/{id}/context"),

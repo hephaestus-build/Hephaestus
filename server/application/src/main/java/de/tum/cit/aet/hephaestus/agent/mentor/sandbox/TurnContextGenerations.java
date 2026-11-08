@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * The generation of each workspace's context on this worker. A change of what the workspace's turns may read (an
  * erasure, a consent change, a hidden repository) makes a new generation; so does a reconnect that may have missed
  * changes, for every workspace. A turn's built documents carry the generation they were built under and are not used
- * in a later one. The turn sandboxes are released on the same signal.
+ * in a later one. The tools Pods are released on the same signal.
  */
 public final class TurnContextGenerations {
 

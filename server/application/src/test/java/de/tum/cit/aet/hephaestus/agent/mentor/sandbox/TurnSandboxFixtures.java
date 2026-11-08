@@ -12,7 +12,10 @@ public final class TurnSandboxFixtures {
 
     public static String held(TurnSandboxes sandboxes, TurnAttempt turn) {
         return Objects.requireNonNull(sandboxes.acquire(
-                        new TurnSandboxes.Attempt(turn.turnId(), turn.attempt()), turn.workspaceId(), () -> false)
-                .containerId);
+                                new TurnSandboxes.Attempt(turn.turnId(), turn.attempt()),
+                                turn.workspaceId(),
+                                () -> false)
+                        .started)
+                .id();
     }
 }

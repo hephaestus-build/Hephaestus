@@ -1,27 +1,27 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.sandbox;
 
-import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoadException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.Serial;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -34,73 +34,30 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.locks.Lock;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Heph's context folder: what {@code read}, {@code bash} and {@code load_context} of one turn attempt act on. The first
- * call of an attempt takes a sandbox ({@link TurnSandboxes}) and stages {@code INDEX.md} and the attempt's context
- * documents into it. Every command runs in the sandbox as its unprivileged user; this worker receives at most one page
- * of a file or one tail of an output ({@link PiText}). A refusal is an answer with {@code ok: false}, never an HTTP
- * error, so the host passes its {@code detail} to the model.
+ * The worker's half of Heph's context folder for one turn attempt. It serves {@code INDEX.md}, {@code FIELDS.md} and
+ * the context documents from the attempt's memory, binds the attempt's tools Pod ({@link TurnSandboxes}), and prepares
+ * what {@code load_context} loads. The host puts the documents and each load into the tools Pod and runs every
+ * command there itself: this worker runs none. A refusal is an answer with {@code ok: false}, never an HTTP error, so
+ * the host passes its {@code detail} to the model.
  */
 @WorkspaceAgnostic("The turn credential binds the workspace and the developer of every call")
 public class TurnContextFolder {
 
     private static final Logger log = LoggerFactory.getLogger(TurnContextFolder.class);
 
-    static final Duration MAX_COMMAND_TIME = Duration.ofSeconds(60);
     static final int MAX_LOADS_PER_ATTEMPT = 5;
     static final int LOADS_AT_ONCE = 2;
-
-    /** How long staging may take at most; the turn's deadline bounds it further. */
-    private static final Duration STAGE_TIME = Duration.ofSeconds(60);
-
-    /** The command's own timeout, then its kill after two seconds, then this margin before the worker cancels it. */
-    private static final Duration KILL_MARGIN = Duration.ofSeconds(5);
-
-    private static final Duration READ_TIME = Duration.ofSeconds(30);
-
-    /** How long a loader's summary of a staged item may take, and how much of it the note keeps. */
-    private static final Duration SUMMARY_TIME = Duration.ofSeconds(10);
-
-    private static final int SUMMARY_LIMIT = 8 * 1024;
-
-    /** A page or a tail, its header line, and room. */
-    private static final int OUTPUT_LIMIT = PiText.MAX_BYTES + 4096;
-
-    /** Arguments: the file, the first line, the line count. Prints the newlines, the first line's bytes, the page. */
-    static final String READ_SCRIPT = """
-            f=$1; s=$2; n=$3
-            if [ -d "$f" ]; then exit 4; fi
-            if [ ! -e "$f" ] || [ ! -r "$f" ]; then exit 3; fi
-            export LC_ALL=C
-            l=$(awk -v s="$s" 'NR==s{print length($0); exit}' "$f")
-            printf '%s %s\\n' "$(wc -l < "$f")" "${l:-0}"
-            tail -n "+$s" -- "$f" | head -n "$n" | head -c 51201
-            """;
-
-    /**
-     * Arguments: the output number, the timeout in seconds, the command. Prints the exit code, the output's newlines,
-     * bytes and last line's bytes, then its tail.
-     */
-    static final String EXEC_SCRIPT = """
-            mkdir -p /tmp/heph-out
-            o=/tmp/heph-out/$1.log
-            # The folder belongs to root, so Git would refuse its repositories as owned by another user.
-            export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
-            timeout --kill-after=2s "$2" bash -c "$3" > "$o" 2>&1 < /dev/null
-            c=$?
-            export LC_ALL=C
-            printf '%s %s %s %s\\n' "$c" "$(wc -l < "$o")" "$(wc -c < "$o")" "$(tail -n 1 "$o" | wc -c)"
-            tail -c 51202 "$o"
-            """;
 
     private static final JsonNodeFactory NODES = JsonNodeFactory.instance;
 
@@ -108,6 +65,10 @@ public class TurnContextFolder {
     private final ObjectProvider<ContextLoader> loaders;
     private final Clock clock;
     private final Semaphore loading = new Semaphore(LOADS_AT_ONCE);
+
+    /** The loads of each attempt; an attempt ends within its deadline. */
+    private final Cache<TurnSandboxes.Attempt, AtomicInteger> loads =
+            Caffeine.newBuilder().expireAfterWrite(Duration.ofHours(1)).build();
 
     /** Loads run here, so that an attempt's end can stop waiting for one; each takes a virtual thread. */
     private final ExecutorService preparations = Executors.newVirtualThreadPerTaskExecutor();
@@ -140,7 +101,7 @@ public class TurnContextFolder {
                                     : line);
                 }
             } catch (RuntimeException e) {
-                // The class only, as in every sandbox log here: a message can quote an item or the daemon's answer.
+                // The class only: a message can quote an item.
                 log.warn(
                         "A context loader could not name what it loads: loader={}, failure={}",
                         loader.prefix(),
@@ -151,314 +112,203 @@ public class TurnContextFolder {
     }
 
     /**
-     * Pi's {@code read} of one file page; an unstaged item document is read from its source first.
-     *
-     * @param deadline when the attempt's turn ends, as the dispatcher holds it
+     * Pi's {@code read} of one page of {@code INDEX.md}, {@code FIELDS.md} or a context document; an item document that
+     * the attempt did not build is read from its source.
      */
-    public ObjectNode read(
-            TurnAttempt turn,
-            Instant deadline,
-            TurnDocuments documents,
-            String path,
-            @Nullable Integer offset,
-            @Nullable Integer limit) {
-        Optional<String> file = ContextFolderPaths.readable(path);
-        if (file.isEmpty()) {
+    public ObjectNode document(
+            TurnAttempt turn, TurnDocuments documents, String path, @Nullable Integer offset, @Nullable Integer limit) {
+        Optional<String> relative = ContextFolderPaths.relative(path).filter(ContextFolderPaths::document);
+        if (relative.isEmpty()) {
             return refusal("NOT_FOUND", "File not found: " + path);
         }
-        Optional<String> item =
-                ContextFolderPaths.relative(path).filter(relative -> relative.startsWith(ContextFolderPaths.DOCUMENTS));
-        return inFolder(turn, deadline, documents, sandbox -> {
-            ExecSandboxes.Execution page =
-                    reading(sandbox, deadline, () -> page(sandbox, file.get(), offset, limit, deadline));
-            Integer missing = page.exitCode();
-            if (missing != null && missing == 3 && item.isPresent()) {
-                Optional<byte[]> document = documents.item(item.get());
-                if (document.isPresent()) {
-                    changing(turn, sandbox, deadline, () -> add(sandbox, Map.of(item.get(), document.get()), deadline));
-                    page = reading(sandbox, deadline, () -> page(sandbox, file.get(), offset, limit, deadline));
-                }
-            }
-            Integer exit = page.exitCode();
-            if (exit == null) {
-                return refusal("UNAVAILABLE", "Reading " + path + " took too long. Try again.");
-            }
-            return switch (exit) {
-                case 0 -> page(path, offset, limit, page.stdout());
-                case 3 -> refusal("NOT_FOUND", "File not found: " + path);
-                case 4 -> refusal("IS_DIRECTORY", path + " is a directory. Use bash: ls " + path);
-                default -> refusal("UNAVAILABLE", "Could not read " + path + ".");
-            };
-        });
+        Optional<byte[]> content = documentBytes(turn, documents, relative.get());
+        if (content.isEmpty()) {
+            return refusal("NOT_FOUND", "File not found: " + path);
+        }
+        PiText.Page page = page(path, offset, limit, content.get());
+        String error = page.offsetError();
+        if (error != null) {
+            return refusal("OFFSET_BEYOND_END", error);
+        }
+        return NODES.objectNode().put("ok", true).put("text", page.text());
     }
 
-    /** Pi's {@code bash}: one command in the sandbox, bounded by a minute and by the turn's deadline. */
-    public ObjectNode exec(
-            TurnAttempt turn, Instant deadline, TurnDocuments documents, String command, @Nullable Integer timeoutMs) {
-        return inFolder(turn, deadline, documents, sandbox -> {
-            Duration bound = timeoutMs == null ? MAX_COMMAND_TIME : Duration.ofMillis(Math.max(1, timeoutMs));
-            int number = sandbox.commands.incrementAndGet();
-            long started = System.nanoTime();
-            // The budget is computed once the folder is free: a wait for a load comes off the turn's time.
-            Ran ran = reading(sandbox, deadline, () -> {
-                Duration time = shortest(bound, MAX_COMMAND_TIME, left(deadline));
-                if (time.isZero() || time.isNegative()) {
-                    return new Ran(null);
-                }
-                String seconds = String.format(Locale.ROOT, "%.3f", time.toMillis() / 1000.0);
-                return new Ran(sandboxes
-                        .runtime()
-                        .exec(
-                                sandbox.containerId(),
-                                new ExecSandboxes.Command(
-                                        List.of(
-                                                "sh",
-                                                "-c",
-                                                EXEC_SCRIPT,
-                                                "exec",
-                                                Integer.toString(number),
-                                                seconds,
-                                                command),
-                                        time.plus(KILL_MARGIN),
-                                        OUTPUT_LIMIT)));
-            });
-            ExecSandboxes.Execution run = ran.run();
-            if (run == null) {
-                return result(null, "", false, true, null);
+    private Optional<byte[]> documentBytes(TurnAttempt turn, TurnDocuments documents, String relative) {
+        if (relative.equals(ContextFolderIndex.FIELDS_PATH)) {
+            return Optional.of(ContextFolderIndex.FIELDS);
+        }
+        if (relative.equals(ContextFolderIndex.PATH)) {
+            return Optional.of(index(turn, documents));
+        }
+        byte[] built = documents.built().get(relative);
+        return built != null ? Optional.of(built) : documents.item(relative);
+    }
+
+    /** {@code INDEX.md}: the documents the attempt built, when, and what each loader can load. */
+    private byte[] index(TurnAttempt turn, TurnDocuments documents) {
+        List<String> sections = new ArrayList<>();
+        loaders.orderedStream().forEach(loader -> sections.add(section(loader, turn)));
+        List<String> listed = new ArrayList<>(documents.built().keySet());
+        listed.add(ContextFolderIndex.FIELDS_PATH);
+        listed.add(ContextFolderIndex.PATH);
+        return ContextFolderIndex.render(listed, documents.builtAt(), sections).getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * The attempt's built documents as one archive, rooted at {@code inputs/}: the host puts it into the tools Pod, so
+     * that {@code bash} sees them too.
+     */
+    public byte[] documentsArchive(TurnDocuments documents) {
+        String root = ContextFolderPaths.DOCUMENTS.substring(0, ContextFolderPaths.DOCUMENTS.indexOf('/') + 1);
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        documents.built().forEach((path, bytes) -> {
+            if (path.startsWith(root)) files.put(path.substring(root.length()), bytes);
+        });
+        return FolderArchive.files(files);
+    }
+
+    /**
+     * The attempt's tools Pod: where its host dials it, and its nonce. The first call of an attempt binds one, waiting
+     * while the tools quota has no room.
+     */
+    public ObjectNode bind(TurnAttempt turn, Instant deadline) {
+        TurnSandboxes.Sandbox sandbox;
+        try {
+            sandbox = sandboxes.acquire(
+                    attempt(turn), turn.workspaceId(), () -> !clock.instant().isBefore(deadline));
+        } catch (TurnSandboxes.ContextChanged changed) {
+            return refusal(
+                    "CONTEXT_CHANGED", "The context folder changed. Read it again; repositories must be loaded again.");
+        } catch (SandboxException failed) {
+            if (!clock.instant().isBefore(deadline)) {
+                return refusal("TIMEOUT", "The answer ended before the tools were ready.");
             }
-            long elapsedMs = Duration.ofNanos(System.nanoTime() - started).toMillis();
-            if (run.timedOut()) {
-                cancelCommands(sandbox);
-                log.info("Turn sandbox command killed: turnId={}, elapsedMs={}", turn.turnId(), elapsedMs);
-                return result(null, "", false, true, null);
-            }
-            Header header = Header.of(run.stdout(), 4);
-            if (header == null) {
-                return refusal("UNAVAILABLE", "The command could not run in the sandbox.");
-            }
-            int exitCode = (int) header.value(0);
-            // `timeout` exits 124 at its limit, and 137 when it had to kill.
-            boolean timedOut = exitCode == SandboxLayout.EXIT_WORK_TIMEOUT || exitCode == SandboxLayout.EXIT_KILLED;
-            if (timedOut) {
-                // A child that left the command's process group, with setsid for example, outlives timeout.
-                cancelCommands(sandbox);
-            }
-            String fullOutput = "/tmp/heph-out/" + number + ".log";
-            PiText.Tail tail = PiText.bash(
-                    header.value(1),
-                    header.value(2),
-                    lastLineBytes(header.value(3), header.rest()),
-                    header.rest(),
-                    fullOutput);
-            log.debug(
-                    "Turn sandbox command ran: turnId={}, elapsedMs={}, exitCode={}",
+            log.warn(
+                    "Could not bind a tools Pod: turnId={}, failure={}",
                     turn.turnId(),
-                    elapsedMs,
-                    exitCode);
-            return result(exitCode, tail.text(), tail.truncated(), timedOut, tail.truncated() ? fullOutput : null);
-        });
+                    failed.getClass().getSimpleName());
+            return refusal("UNAVAILABLE", "This worker cannot run the context folder now. Do not retry.");
+        }
+        ToolsPods.Started pod;
+        try {
+            pod = sandbox.started();
+        } catch (SandboxException removed) {
+            return refusal("TIMEOUT", "The answer ended before the tools were ready.");
+        }
+        return NODES.objectNode()
+                .put("ok", true)
+                .put("id", pod.id())
+                .put("host", pod.host())
+                .put("port", pod.port())
+                .put("nonce", pod.nonce());
     }
 
-    /** {@code load_context}: stages one item through the loader that owns its path. */
-    public ObjectNode load(TurnAttempt turn, Instant deadline, TurnDocuments documents, String path) {
+    /**
+     * After a tools Pod failed its host, the attempt's next bind gets a new one: what the old one holds may be partial.
+     */
+    public void discard(TurnAttempt turn, String id) {
+        sandboxes.discard(attempt(turn), id);
+    }
+
+    /**
+     * {@code load_context}: prepares one item through the loader that owns its path. The answer is the item as an
+     * archive, with what the model reads about it and the command whose output follows that, or a refusal.
+     */
+    public Load load(TurnAttempt turn, Instant deadline, String path) {
         String requested = path.strip();
         Optional<ContextLoader> owner = loaders.orderedStream()
                 .filter(loader -> requested.startsWith(loader.prefix()))
                 .findFirst();
         if (owner.isEmpty()) {
-            return refusal("INVALID_PATH", "Nothing can be loaded at " + requested + ". INDEX.md lists what can.");
+            return new Refused(
+                    refusal("INVALID_PATH", "Nothing can be loaded at " + requested + ". INDEX.md lists what can."));
         }
-        return inFolder(turn, deadline, documents, sandbox -> {
-            if (sandbox.loads.incrementAndGet() > MAX_LOADS_PER_ATTEMPT) {
-                return refusal("BUDGET_EXHAUSTED", "This answer already loaded " + MAX_LOADS_PER_ATTEMPT + " items.");
+        TurnSandboxes.Attempt attempt = attempt(turn);
+        if (Objects.requireNonNull(loads.get(attempt, key -> new AtomicInteger()))
+                        .incrementAndGet()
+                > MAX_LOADS_PER_ATTEMPT) {
+            return new Refused(
+                    refusal("BUDGET_EXHAUSTED", "This answer already loaded " + MAX_LOADS_PER_ATTEMPT + " items."));
+        }
+        BooleanSupplier abandoned =
+                () -> sandboxes.ended(attempt) || left(deadline).isNegative();
+        long started = System.nanoTime();
+        Path archive = null;
+        try (ContextLoader.Loaded loaded = prepare(turn, deadline, owner.get(), requested, abandoned)) {
+            Optional<String> relative =
+                    ContextFolderPaths.relative(loaded.path()).filter(found -> !found.isEmpty());
+            if (relative.isEmpty()) {
+                throw new SandboxException("A context loader named a path outside the folder");
             }
-            TurnSandboxes.Attempt attempt = attempt(turn);
-            BooleanSupplier abandoned =
-                    () -> !sandboxes.holds(attempt, sandbox) || left(deadline).isNegative();
-            long started = System.nanoTime();
-            try (ContextLoader.Loaded loaded = prepare(turn, deadline, owner.get(), requested, abandoned)) {
-                // The summary describes what was staged: no other load may stage in between.
-                StringBuilder summary = new StringBuilder();
-                changing(turn, sandbox, deadline, () -> {
-                    stageLoaded(sandbox, loaded, deadline);
-                    summary.append(summary(sandbox, loaded, deadline));
-                });
-                ContextLoader.Version version = loaded.version();
-                log.info(
-                        "Turn sandbox load: turnId={}, elapsedMs={}",
-                        turn.turnId(),
-                        Duration.ofNanos(System.nanoTime() - started).toMillis());
-                ObjectNode answer = NODES.objectNode().put("ok", true).put("path", loaded.path());
-                answer.putObject("resolved")
-                        .put("ref", version.ref())
-                        .put("sha", version.id())
-                        .put("cite", version.cite());
-                return answer.put("note", summary.isEmpty() ? loaded.note() : loaded.note() + "\n" + summary);
-            } catch (Abandoned | CancellationException ended) {
-                return refusal("TIMEOUT", "The answer ended before " + requested + " could load.");
-            } catch (ContextLoadException refused) {
-                return refusal(
-                        refused.code().name(),
-                        Objects.toString(refused.getMessage(), refused.code().name()));
-            }
-        });
-    }
-
-    /** What one call does in the attempt's staged sandbox. */
-    @FunctionalInterface
-    private interface InFolder {
-        ObjectNode apply(TurnSandboxes.Sandbox sandbox) throws IOException;
-    }
-
-    /** A step that runs in the sandbox. */
-    @FunctionalInterface
-    private interface Step<T> {
-        T run() throws IOException;
-    }
-
-    /** A step that changes the folder. */
-    @FunctionalInterface
-    private interface Change {
-        void run() throws IOException;
-    }
-
-    private ObjectNode inFolder(TurnAttempt turn, Instant deadline, TurnDocuments documents, InFolder call) {
-        TurnSandboxes.Sandbox sandbox;
-        try {
-            sandbox = folder(turn, deadline, documents);
-        } catch (Late late) {
-            return refusal("TIMEOUT", "The answer ended before the context folder was free.");
-        } catch (TurnSandboxes.ContextChanged changed) {
-            return refusal(
-                    "CONTEXT_CHANGED", "The context folder changed. Read it again; repositories must be loaded again.");
-        } catch (SandboxException | IOException failed) {
+            archive = FolderArchive.directory(loaded.directory());
+            ContextLoader.Version version = loaded.version();
+            ObjectNode answer = NODES.objectNode().put("ok", true).put("path", relative.get());
+            answer.putObject("resolved")
+                    .put("ref", version.ref())
+                    .put("sha", version.id())
+                    .put("cite", version.cite());
+            answer.put("note", loaded.note());
+            ArrayNode summary = answer.putArray("summary");
+            loaded.summary().forEach(summary::add);
+            log.info(
+                    "Turn load prepared: turnId={}, elapsedMs={}",
+                    turn.turnId(),
+                    Duration.ofNanos(System.nanoTime() - started).toMillis());
+            Prepared prepared = new Prepared(answer, archive, Files.size(archive), sha256(archive));
+            archive = null;
+            return prepared;
+        } catch (Abandoned | CancellationException ended) {
+            return new Refused(refusal("TIMEOUT", "The answer ended before " + requested + " could load."));
+        } catch (ContextLoadException refused) {
+            return new Refused(refusal(
+                    refused.code().name(),
+                    Objects.toString(refused.getMessage(), refused.code().name())));
+        } catch (IOException | SandboxException failed) {
             log.warn(
-                    "Could not prepare a turn sandbox: turnId={}, failure={}",
+                    "A turn load failed: turnId={}, failure={}",
                     turn.turnId(),
                     failed.getClass().getSimpleName());
-            return refusal("UNAVAILABLE", "This worker cannot run the context folder now. Do not retry.");
-        }
-        try {
-            return call.apply(sandbox);
-        } catch (Late late) {
-            return refusal("TIMEOUT", "The answer ended before the context folder was free.");
-        } catch (Staging failed) {
-            Throwable cause = failed.getCause();
-            log.warn(
-                    "Staging into a turn sandbox failed: turnId={}, failure={}",
-                    turn.turnId(),
-                    cause == null
-                            ? failed.getClass().getSimpleName()
-                            : cause.getClass().getSimpleName());
-            return refusal("UNAVAILABLE", "The context folder could not be prepared. Try again once.");
-        } catch (SandboxException failed) {
-            if (sandbox.removed()) {
-                return refusal("TIMEOUT", "The answer ended while the sandbox ran.");
-            }
-            // A command whose run or cancellation failed may still start, or still run, in the sandbox: the next
-            // command gets a new one, which nothing of this one can reach.
-            sandboxes.discard(attempt(turn), sandbox);
-            log.warn(
-                    "A turn sandbox call failed: turnId={}, failure={}",
-                    turn.turnId(),
-                    failed.getClass().getSimpleName());
-            return refusal("UNAVAILABLE", "The sandbox failed. Try again once.");
-        } catch (IOException failed) {
-            if (sandbox.removed()) {
-                return refusal("TIMEOUT", "The answer ended while the sandbox ran.");
-            }
-            log.warn(
-                    "A turn sandbox call failed: turnId={}, failure={}",
-                    turn.turnId(),
-                    failed.getClass().getSimpleName());
-            return refusal("UNAVAILABLE", "The sandbox failed. Try again once.");
-        }
-    }
-
-    /** A step that reads the folder: it runs beside other readers, never during a change. */
-    private <T> T reading(TurnSandboxes.Sandbox sandbox, Instant deadline, Step<T> step) throws IOException {
-        lock(sandbox.lock.readLock(), deadline);
-        try {
-            return step.run();
+            return new Refused(refusal("UNAVAILABLE", "The item could not be prepared. Try again once."));
         } finally {
-            sandbox.lock.readLock().unlock();
+            // Set only while no answer holds the archive: a failed load leaves no file behind.
+            if (archive != null) deleteArchive(archive);
         }
     }
+
+    /** What a load answers: a refusal, or the item's archive with what the model reads about it. */
+    public sealed interface Load permits Refused, Prepared {}
+
+    public record Refused(ObjectNode answer) implements Load {}
 
     /**
-     * A step that changes the folder: it runs alone. When it fails, the folder may hold part of a change, so the
-     * sandbox is removed; the attempt's next call gets a new one and stages again.
+     * The caller sends the archive and then deletes it. Its size and SHA-256 go ahead of it: the tools side checks both
+     * before it extracts.
      */
-    private void changing(TurnAttempt turn, TurnSandboxes.Sandbox sandbox, Instant deadline, Change step)
-            throws IOException {
-        lock(sandbox.lock.writeLock(), deadline);
-        try {
-            step.run();
-        } catch (SandboxException | IOException | UncheckedIOException failed) {
-            sandboxes.discard(attempt(turn), sandbox);
-            throw new Staging(failed);
-        } finally {
-            sandbox.lock.writeLock().unlock();
+    public record Prepared(ObjectNode answer, Path archive, long size, String sha256) implements Load {
+        public void delete() {
+            deleteArchive(archive);
         }
     }
 
-    /** Takes the lock, waiting at most until the turn's deadline. */
-    private void lock(Lock lock, Instant deadline) {
+    private static void deleteArchive(Path archive) {
         try {
-            if (!lock.tryLock(Math.max(0, left(deadline).toMillis()), TimeUnit.MILLISECONDS)) {
-                throw new Late();
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            Late late = new Late();
-            late.initCause(interrupted);
-            throw late;
+            Files.deleteIfExists(archive);
+        } catch (IOException e) {
+            log.warn("Could not delete a load archive: {}", e.getClass().getSimpleName());
         }
     }
 
-    /** One command's run in the sandbox; none when no time was left. */
-    private record Ran(ExecSandboxes.@Nullable Execution run) {}
-
-    /** The attempt's sandbox, staged with {@code INDEX.md}, {@code FIELDS.md} and the context documents on first use. */
-    private TurnSandboxes.Sandbox folder(TurnAttempt turn, Instant deadline, TurnDocuments documents)
-            throws IOException {
-        long started = System.nanoTime();
-        TurnSandboxes.Sandbox sandbox = sandboxes.acquire(
-                attempt(turn), turn.workspaceId(), () -> !clock.instant().isBefore(deadline));
-        if (sandbox.staged) {
-            return sandbox;
-        }
-        lock(sandbox.lock.writeLock(), deadline);
-        try {
-            if (!sandbox.staged) {
-                long acquired = System.nanoTime();
-                Map<String, byte[]> files = new LinkedHashMap<>(documents.built());
-                List<String> sections = new ArrayList<>();
-                loaders.orderedStream().forEach(loader -> sections.add(section(loader, turn)));
-                files.put(ContextFolderIndex.FIELDS_PATH, ContextFolderIndex.FIELDS);
-                files.put(
-                        ContextFolderIndex.PATH,
-                        ContextFolderIndex.render(files.keySet(), documents.builtAt(), sections)
-                                .getBytes(StandardCharsets.UTF_8));
-                try {
-                    add(sandbox, files, deadline);
-                } catch (SandboxException | IOException | UncheckedIOException failed) {
-                    // A sandbox that is half staged is never used: the attempt gets a new one on its next call.
-                    sandboxes.discard(attempt(turn), sandbox);
-                    throw failed;
-                }
-                sandbox.staged = true;
-                log.info(
-                        "Turn sandbox staged: turnId={}, acquireMs={}, stageMs={}, files={}",
-                        turn.turnId(),
-                        Duration.ofNanos(acquired - started).toMillis(),
-                        Duration.ofNanos(System.nanoTime() - acquired).toMillis(),
-                        files.size());
+    private static String sha256(Path file) throws IOException {
+        try (var in = Files.newInputStream(file)) {
+            var digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[64 * 1024];
+            for (int read; (read = in.read(buffer)) > 0; ) {
+                digest.update(buffer, 0, read);
             }
-        } finally {
-            sandbox.lock.writeLock().unlock();
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException missing) {
+            throw new IllegalStateException("Every Java platform has SHA-256", missing);
         }
-        return sandbox;
     }
 
     private static String section(ContextLoader loader, TurnAttempt turn) {
@@ -473,118 +323,29 @@ public class TurnContextFolder {
         }
     }
 
-    /** @param file an absolute path in the sandbox ({@link ContextFolderPaths#readable}) */
-    private ExecSandboxes.Execution page(
-            TurnSandboxes.Sandbox sandbox,
-            String file,
-            @Nullable Integer offset,
-            @Nullable Integer limit,
-            Instant deadline) {
+    /** One page of a document, as Pi's {@code read} pages a file, from the document's bytes. */
+    static PiText.Page page(String path, @Nullable Integer offset, @Nullable Integer limit, byte[] content) {
+        long newlines = 0;
+        for (byte b : content) {
+            if (b == '\n') newlines++;
+        }
         long first = offset == null ? 1 : Math.max(1, offset.longValue());
         long lines = Math.min(limit == null ? Long.MAX_VALUE : Math.max(1, limit.longValue()), PiText.MAX_LINES + 1L);
-        return sandboxes
-                .runtime()
-                .exec(
-                        sandbox.containerId(),
-                        new ExecSandboxes.Command(
-                                List.of(
-                                        "sh",
-                                        "-c",
-                                        READ_SCRIPT,
-                                        "read",
-                                        file,
-                                        Long.toString(first),
-                                        Long.toString(lines)),
-                                shortest(READ_TIME, left(deadline)),
-                                OUTPUT_LIMIT));
+        int start = 0;
+        for (long line = 1; line < first && start < content.length; start++) {
+            if (content[start] == '\n') line++;
+        }
+        int end = start;
+        for (long taken = 0; end < content.length && taken < lines && end - start <= PiText.MAX_BYTES; end++) {
+            if (content[end] == '\n') taken++;
+        }
+        end = Math.min(end, start + PiText.MAX_BYTES + 1);
+        int firstLineEnd = start;
+        while (firstLineEnd < content.length && content[firstLineEnd] != '\n') firstLineEnd++;
+        byte[] chunk = Arrays.copyOfRange(content, start, end);
+        return PiText.read(path, offset, limit, newlines, firstLineEnd - start, chunk);
     }
 
-    private static ObjectNode page(String path, @Nullable Integer offset, @Nullable Integer limit, byte[] stdout) {
-        Header header = Header.of(stdout, 2);
-        if (header == null) {
-            return refusal("UNAVAILABLE", "Could not read " + path + ".");
-        }
-        PiText.Page page = PiText.read(path, offset, limit, header.value(0), header.value(1), header.rest());
-        String error = page.offsetError();
-        if (error != null) {
-            return refusal("OFFSET_BEYOND_END", error);
-        }
-        return NODES.objectNode().put("ok", true).put("text", page.text());
-    }
-
-    /** Adds files to the folder, which is read-only for the model again after it. */
-    private void add(TurnSandboxes.Sandbox sandbox, Map<String, byte[]> files, Instant deadline) throws IOException {
-        byte[] archive = FolderArchive.files(files);
-        List<String> names = files.keySet().stream()
-                .map(path -> path.contains("/") ? path.substring(0, path.indexOf('/')) : path)
-                .distinct()
-                .toList();
-        try (InputStream in = new ByteArrayInputStream(archive)) {
-            sandboxes
-                    .runtime()
-                    .stage(
-                            sandbox.containerId(),
-                            new ExecSandboxes.Add(names, in, archive.length, shortest(STAGE_TIME, left(deadline))));
-        }
-    }
-
-    /** Replaces the loaded item's directory in the folder, which is read-only for the model again after it. */
-    private void stageLoaded(TurnSandboxes.Sandbox sandbox, ContextLoader.Loaded loaded, Instant deadline)
-            throws IOException {
-        String relative = ContextFolderPaths.relative(loaded.path())
-                .filter(path -> !path.isEmpty())
-                .orElseThrow(() -> new SandboxException("A context loader named a path outside the folder"));
-        Path archive = FolderArchive.directory(loaded.directory());
-        try (InputStream in = Files.newInputStream(archive)) {
-            sandboxes
-                    .runtime()
-                    .stage(
-                            sandbox.containerId(),
-                            new ExecSandboxes.Replace(
-                                    relative, in, Files.size(archive), shortest(STAGE_TIME, left(deadline))));
-        } finally {
-            Files.deleteIfExists(archive);
-        }
-    }
-
-    /** The loader's summary of the staged item, run in its directory as the sandbox user; empty when none or late. */
-    private String summary(TurnSandboxes.Sandbox sandbox, ContextLoader.Loaded loaded, Instant deadline) {
-        List<String> command = loaded.summary();
-        Duration time = shortest(SUMMARY_TIME, left(deadline));
-        if (command.isEmpty() || time.isNegative() || time.isZero()) {
-            return "";
-        }
-        String directory = ContextFolderPaths.relative(loaded.path())
-                .map(ContextFolderPaths::absolute)
-                .orElse(ContextFolderPaths.ROOT);
-        List<String> argv =
-                new ArrayList<>(List.of("sh", "-c", "cd \"$1\" && shift && exec \"$@\"", "summary", directory));
-        argv.addAll(command);
-        // A failed summary may still start in the sandbox: its failure fails the change, which removes the sandbox.
-        ExecSandboxes.Execution run =
-                sandboxes.runtime().exec(sandbox.containerId(), new ExecSandboxes.Command(argv, time, SUMMARY_LIMIT));
-        if (run.timedOut()) {
-            // The sandbox stays usable: the cancellation ends the sandbox user's processes only.
-            cancelCommands(sandbox);
-            return "";
-        }
-        return new String(run.stdout(), StandardCharsets.UTF_8).strip();
-    }
-
-    /**
-     * Ends every process of the sandbox's user, a detached one too; the sandbox stays in use. A cancellation that the
-     * runtime cannot confirm throws, and the caller's failure removes the sandbox: a late kill must reach no later
-     * command.
-     */
-    private void cancelCommands(TurnSandboxes.Sandbox sandbox) {
-        sandboxes.runtime().cancelCommands(sandbox.containerId());
-    }
-
-    /**
-     * The load, bounded by what remains of the turn and abandoned when the attempt ends. A load holds one of the
-     * worker's {@link #LOADS_AT_ONCE} permits until it ends, also when the turn stopped waiting for it: a fetch has no
-     * interruption of its own, so its permit is what keeps abandoned fetches from piling up.
-     */
     private ContextLoader.Loaded prepare(
             TurnAttempt turn, Instant deadline, ContextLoader loader, String path, BooleanSupplier abandoned) {
         try {
@@ -635,105 +396,8 @@ public class TurnContextFolder {
         return Duration.between(clock.instant(), deadline);
     }
 
-    private static Duration shortest(Duration first, Duration... others) {
-        Duration shortest = first;
-        for (Duration other : others) {
-            if (other.compareTo(shortest) < 0) shortest = other;
-        }
-        return shortest;
-    }
-
-    private static long lastLineBytes(long withNewline, byte[] tail) {
-        boolean endsWithNewline = tail.length > 0 && tail[tail.length - 1] == '\n';
-        return endsWithNewline ? Math.max(0, withNewline - 1) : withNewline;
-    }
-
-    private static ObjectNode result(
-            @Nullable Integer exitCode,
-            String output,
-            boolean truncated,
-            boolean timedOut,
-            @Nullable String fullOutput) {
-        ObjectNode answer = NODES.objectNode().put("ok", true);
-        if (exitCode == null) {
-            answer.putNull("exitCode");
-        } else {
-            answer.put("exitCode", exitCode);
-        }
-        answer.put("output", output).put("truncated", truncated).put("timedOut", timedOut);
-        if (fullOutput == null) {
-            answer.putNull("fullOutputPath");
-        } else {
-            answer.put("fullOutputPath", fullOutput);
-        }
-        return answer;
-    }
-
     static ObjectNode refusal(String code, String detail) {
         return NODES.objectNode().put("ok", false).put("error", code).put("detail", detail);
-    }
-
-    /** The first line of a script's output, as numbers, and the bytes after it. */
-    static final class Header {
-        private final long[] values;
-        private final byte[] rest;
-
-        private Header(long[] values, byte[] rest) {
-            this.values = values;
-            this.rest = rest;
-        }
-
-        long value(int index) {
-            return values[index];
-        }
-
-        byte[] rest() {
-            return rest;
-        }
-
-        static @Nullable Header of(byte[] output, int count) {
-            int newline = -1;
-            for (int index = 0; index < output.length; index++) {
-                if (output[index] == '\n') {
-                    newline = index;
-                    break;
-                }
-            }
-            if (newline < 0) return null;
-            String[] fields = new String(output, 0, newline, StandardCharsets.US_ASCII)
-                    .trim()
-                    .split("\\s+", -1);
-            if (fields.length < count) return null;
-            long[] values = new long[count];
-            try {
-                for (int index = 0; index < count; index++) {
-                    values[index] = Long.parseLong(fields[index]);
-                }
-            } catch (NumberFormatException malformed) {
-                return null;
-            }
-            return new Header(values, Arrays.copyOfRange(output, newline + 1, output.length));
-        }
-    }
-
-    /** The folder was not free before the turn's deadline. */
-    private static final class Late extends SandboxException {
-        @Serial
-        private static final long serialVersionUID = 1L;
-
-        Late() {
-            super("The context folder was not free before the deadline");
-        }
-    }
-
-    /** A change of the folder failed; its sandbox is removed. */
-    private static final class Staging extends SandboxException {
-        @Serial
-        private static final long serialVersionUID = 1L;
-
-        Staging(Exception cause) {
-            super("Staging into the turn sandbox failed", cause);
-        }
     }
 
     /** The load outlived the turn or the attempt ended. */

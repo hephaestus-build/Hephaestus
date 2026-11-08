@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -27,7 +27,7 @@ class TurnSandboxesTest extends BaseUnitTest {
 
     private static final long WORKSPACE = 7;
 
-    private final FakeExecSandboxes runtime = new FakeExecSandboxes();
+    private final FakeToolsPods runtime = new FakeToolsPods();
     private final TurnSandboxes sandboxes = new TurnSandboxes(runtime, 2, new SimpleMeterRegistry());
 
     @AfterEach
@@ -87,7 +87,7 @@ class TurnSandboxesTest extends BaseUnitTest {
             assertThat(runtime.createdCount()).isZero();
             assertThat(unpooled.available()).isTrue();
             runtime.quotaFull = false;
-            assertThat(waiting.get(5, TimeUnit.SECONDS).containerId()).isNotBlank();
+            assertThat(waiting.get(5, TimeUnit.SECONDS).started().id()).isNotBlank();
             assertThat(unpooled.waitingForQuota(attempt)).isFalse();
             assertThat(meters.get(AgentMetrics.MENTOR_TURN_TOOLS_WAIT)
                             .tag("outcome", "ready")
@@ -123,7 +123,7 @@ class TurnSandboxesTest extends BaseUnitTest {
 
         TurnSandboxes.Sandbox taken = sandboxes.acquire(attempt(), WORKSPACE, () -> false);
 
-        assertThat(taken.containerId()).isIn("container-1", "container-2");
+        assertThat(taken.started().id()).isIn("hephaestus-tools-1", "hephaestus-tools-2");
         await().atMost(Duration.ofSeconds(5)).until(() -> sandboxes.pooled() == 2);
         assertThat(runtime.createdCount()).isEqualTo(3);
     }
@@ -134,7 +134,7 @@ class TurnSandboxesTest extends BaseUnitTest {
 
         TurnSandboxes.Sandbox taken = sandboxesWithoutPool.acquire(attempt(), WORKSPACE, () -> false);
 
-        assertThat(taken.containerId()).isEqualTo("container-1");
+        assertThat(taken.started().id()).isEqualTo("hephaestus-tools-1");
         sandboxesWithoutPool.close();
     }
 
@@ -143,17 +143,36 @@ class TurnSandboxesTest extends BaseUnitTest {
         filled();
         TurnSandboxes.Attempt attempt = attempt();
         TurnSandboxes.Sandbox taken = sandboxes.acquire(attempt, WORKSPACE, () -> false);
-        String container = taken.containerId();
+        String container = taken.started().id();
         assertThat(sandboxes.acquire(attempt, WORKSPACE, () -> false)).isSameAs(taken);
 
         sandboxes.release(attempt.turnId(), attempt.number());
 
         await().atMost(Duration.ofSeconds(5)).until(() -> runtime.removed.contains(container));
         assertThat(taken.removed()).isTrue();
-        assertThatThrownBy(taken::containerId).isInstanceOf(SandboxException.class);
+        assertThatThrownBy(taken::started).isInstanceOf(SandboxException.class);
         assertThatThrownBy(() -> sandboxes.acquire(attempt, WORKSPACE, () -> false))
                 .as("a call of the ended attempt gets no sandbox")
                 .isInstanceOf(SandboxException.class);
+    }
+
+    @Test
+    void shouldRemoveOnlyTheToolsPodThatItsHostFoundBrokenAndBindANewOneNext() {
+        filled();
+        TurnSandboxes.Attempt attempt = attempt();
+        String broken =
+                sandboxes.acquire(attempt, WORKSPACE, () -> false).started().id();
+
+        sandboxes.discard(attempt, "hephaestus-tools-of-an-earlier-bind");
+        assertThat(sandboxes.acquire(attempt, WORKSPACE, () -> false).started().id())
+                .as("a late report about another Pod removes nothing")
+                .isEqualTo(broken);
+
+        sandboxes.discard(attempt, broken);
+
+        await().atMost(Duration.ofSeconds(5)).until(() -> runtime.removed.contains(broken));
+        assertThat(sandboxes.acquire(attempt, WORKSPACE, () -> false).started().id())
+                .isNotEqualTo(broken);
     }
 
     @Test
@@ -223,8 +242,9 @@ class TurnSandboxesTest extends BaseUnitTest {
         var revocations = new TurnContextRevocations(new TurnContextGenerations(), sandboxes);
         TurnSandboxes.Attempt first = attempt();
         TurnSandboxes.Attempt second = attempt();
-        String one = sandboxes.acquire(first, WORKSPACE, () -> false).containerId();
-        String other = sandboxes.acquire(second, WORKSPACE + 1, () -> false).containerId();
+        String one = sandboxes.acquire(first, WORKSPACE, () -> false).started().id();
+        String other =
+                sandboxes.acquire(second, WORKSPACE + 1, () -> false).started().id();
 
         revocations.resync();
 
@@ -251,7 +271,8 @@ class TurnSandboxesTest extends BaseUnitTest {
     @Test
     void shouldRemoveTheSandboxOfAnAttemptThatNoLongerRunsHereWhenItReconciles() {
         TurnSandboxes.Attempt attempt = attempt();
-        String container = sandboxes.acquire(attempt, WORKSPACE, () -> false).containerId();
+        String container =
+                sandboxes.acquire(attempt, WORKSPACE, () -> false).started().id();
 
         sandboxes.reconcile((turnId, number) -> !turnId.equals(attempt.turnId()));
 
@@ -261,8 +282,8 @@ class TurnSandboxesTest extends BaseUnitTest {
     @Test
     void shouldRemoveUnknownOwnAndAbandonedSandboxesButKeepThoseOfALiveWorkerWhenItReconciles() {
         runtime.running.put("left-by-an-earlier-start", "unknown-sandbox");
-        runtime.others.add(new ExecSandboxes.Listed("of-a-live-worker", "s-1", "worker-live", false, false));
-        runtime.others.add(new ExecSandboxes.Listed("of-a-gone-worker", "s-2", "worker-gone", true, false));
+        runtime.others.add(new ToolsPods.Listed("of-a-live-worker", "s-1", "worker-live", false, false));
+        runtime.others.add(new ToolsPods.Listed("of-a-gone-worker", "s-2", "worker-gone", true, false));
 
         sandboxes.reconcile((turnId, number) -> true);
 
@@ -278,7 +299,8 @@ class TurnSandboxesTest extends BaseUnitTest {
         sandboxes.reconcile((turnId, number) -> true);
         await().atMost(Duration.ofSeconds(5)).until(() -> sandboxes.pooled() == 2);
         TurnSandboxes.Attempt attempt = attempt();
-        String assigned = sandboxes.acquire(attempt, WORKSPACE, () -> false).containerId();
+        String assigned =
+                sandboxes.acquire(attempt, WORKSPACE, () -> false).started().id();
         await().atMost(Duration.ofSeconds(5)).until(() -> sandboxes.pooled() == 2);
         Set<String> pooled = new HashSet<>(runtime.running.keySet());
         pooled.remove(assigned);
@@ -289,7 +311,8 @@ class TurnSandboxesTest extends BaseUnitTest {
         await().atMost(Duration.ofSeconds(5)).until(() -> runtime.removed.containsAll(pooled));
         await().atMost(Duration.ofSeconds(5)).until(() -> sandboxes.pooled() == 2);
         assertThat(runtime.removed).doesNotContain(assigned);
-        String next = sandboxes.acquire(attempt(), WORKSPACE, () -> false).containerId();
+        String next =
+                sandboxes.acquire(attempt(), WORKSPACE, () -> false).started().id();
         assertThat(pooled).doesNotContain(next);
     }
 
@@ -297,17 +320,23 @@ class TurnSandboxesTest extends BaseUnitTest {
     void shouldSayOnceThatTheContextChangedThenStartOverWhenTheWorkspaceDataChanges() {
         TurnSandboxes.Attempt attempt = attempt();
         TurnSandboxes.Attempt otherWorkspace = attempt();
-        String container = sandboxes.acquire(attempt, WORKSPACE, () -> false).containerId();
-        String kept =
-                sandboxes.acquire(otherWorkspace, WORKSPACE + 1, () -> false).containerId();
+        String container =
+                sandboxes.acquire(attempt, WORKSPACE, () -> false).started().id();
+        String kept = sandboxes
+                .acquire(otherWorkspace, WORKSPACE + 1, () -> false)
+                .started()
+                .id();
 
         sandboxes.releaseWorkspace(WORKSPACE);
 
         assertThatThrownBy(() -> sandboxes.acquire(attempt, WORKSPACE, () -> false))
                 .isInstanceOf(TurnSandboxes.ContextChanged.class);
-        assertThat(sandboxes.acquire(attempt, WORKSPACE, () -> false).containerId())
+        assertThat(sandboxes.acquire(attempt, WORKSPACE, () -> false).started().id())
                 .isNotEqualTo(container);
-        assertThat(sandboxes.acquire(otherWorkspace, WORKSPACE + 1, () -> false).containerId())
+        assertThat(sandboxes
+                        .acquire(otherWorkspace, WORKSPACE + 1, () -> false)
+                        .started()
+                        .id())
                 .isEqualTo(kept);
         await().atMost(Duration.ofSeconds(5)).until(() -> runtime.removed.contains(container));
     }
@@ -321,9 +350,11 @@ class TurnSandboxesTest extends BaseUnitTest {
         assertThat(sandboxes.available()).isFalse();
 
         runtime.failCreate = false;
-        assertThat(Objects.requireNonNull(
-                        sandboxes.acquire(attempt(), WORKSPACE, () -> false).containerId()))
-                .startsWith("container-");
+        assertThat(Objects.requireNonNull(sandboxes
+                        .acquire(attempt(), WORKSPACE, () -> false)
+                        .started()
+                        .id()))
+                .startsWith("hephaestus-tools-");
         assertThat(sandboxes.available()).isTrue();
     }
 

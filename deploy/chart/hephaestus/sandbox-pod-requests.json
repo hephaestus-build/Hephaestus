@@ -1,8 +1,8 @@
 {
 	"review": { "pods": 1, "memoryMi": 384, "cpuMillis": 50, "ephemeralStorageMi": 1024 },
 	"hephHost": { "pods": 1, "memoryMi": 256, "cpuMillis": 50, "ephemeralStorageMi": 256 },
-	"turnSandbox": { "pods": 1, "memoryMi": 160, "cpuMillis": 25, "ephemeralStorageMi": 272 },
+	"toolsPod": { "pods": 1, "memoryMi": 160, "cpuMillis": 25, "ephemeralStorageMi": 256 },
 	"isolationProbe": { "pods": 2, "memoryMi": 640, "cpuMillis": 100, "ephemeralStorageMi": 32 },
-	"pooledTurnSandboxes": 2,
-	"activeTurnSandboxes": 8
+	"pooledToolsPods": 2,
+	"activeToolsPods": 8
 }

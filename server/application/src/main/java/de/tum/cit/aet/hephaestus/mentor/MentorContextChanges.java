@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Tells every worker, through the ledger notifications, that what a Heph turn of the workspace may read changed, so
- * that it removes the workspace's turn sandboxes. Each listener runs in the transaction of the change, so workers hear
+ * that it removes the workspace's tools Pods. Each listener runs in the transaction of the change, so workers hear
  * of it once it commits. An AI-choice change tells every workspace of the account. A person erasure tells them from its own step ({@code MentorToolResultCopyPersonDataStore}).
  */
 @Component

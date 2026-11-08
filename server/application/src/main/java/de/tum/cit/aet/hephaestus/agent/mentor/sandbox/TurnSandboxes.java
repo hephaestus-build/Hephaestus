@@ -3,11 +3,11 @@ package de.tum.cit.aet.hephaestus.agent.mentor.sandbox;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -27,7 +27,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiPredicate;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
@@ -36,8 +35,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The turn sandboxes of this worker. A pool of {@link #poolSize} empty sandboxes waits ahead. The first {@code read},
- * {@code bash} or {@code load_context} call of a turn attempt takes one, and the pool fills again in the background.
+ * The conversation tools Pods of this worker. A pool of {@link #poolSize} empty Pods waits ahead. A turn attempt's
+ * first call that needs one ({@code bash}, {@code load_context}, or a {@code read} outside the turn's documents) binds
+ * one, and the pool fills again in the background. The host then dials the Pod itself.
  * An assigned sandbox belongs to its attempt until the attempt ends, and never goes back to the pool: the end removes
  * it with every file in it. The assignment lives in this worker's memory only; the sandbox carries its own id and the
  * worker's id as labels.
@@ -66,36 +66,27 @@ public class TurnSandboxes implements AutoCloseable {
         REMOVED
     }
 
-    /** One sandbox. Its folder state belongs to the attempt it is assigned to. */
+    /** One tools Pod. It belongs to the attempt it is assigned to, and its loads count against that attempt. */
     public static final class Sandbox {
         final String sandboxId;
-        volatile @Nullable String containerId;
+        volatile ToolsPods.@Nullable Started started;
         volatile State state = State.POOLED;
         volatile @Nullable Attempt attempt;
         volatile long workspaceId;
 
-        /**
-         * Staging and loads change the folder and take the write lock; {@code read} and {@code bash} take the read
-         * lock, so a command never sees a folder half replaced.
-         */
-        final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
-
-        /** Whether the context documents are staged; set under the write lock. */
-        volatile boolean staged;
-
-        final AtomicInteger commands = new AtomicInteger();
         final AtomicInteger loads = new AtomicInteger();
 
         Sandbox(String sandboxId) {
             this.sandboxId = sandboxId;
         }
 
-        public String containerId() {
-            String id = containerId;
-            if (id == null || state == State.REMOVED) {
-                throw new SandboxException("The turn sandbox was removed");
+        /** Where the attempt's host dials this Pod, and the nonce that the Pod's {@code hello} returns. */
+        public ToolsPods.Started started() {
+            ToolsPods.Started pod = started;
+            if (pod == null || state == State.REMOVED) {
+                throw new SandboxException("The tools Pod was removed");
             }
-            return id;
+            return pod;
         }
 
         boolean removed() {
@@ -113,7 +104,7 @@ public class TurnSandboxes implements AutoCloseable {
         }
     }
 
-    private final ExecSandboxes sandboxes;
+    private final ToolsPods sandboxes;
     private final int poolSize;
     private final MeterRegistry meters;
     private final Map<Attempt, Integer> quotaWaiting = new ConcurrentHashMap<>();
@@ -139,14 +130,14 @@ public class TurnSandboxes implements AutoCloseable {
     private volatile boolean lastStartFailed;
     private boolean closed;
 
-    public TurnSandboxes(ExecSandboxes sandboxes, int poolSize, MeterRegistry meters) {
+    public TurnSandboxes(ToolsPods sandboxes, int poolSize, MeterRegistry meters) {
         this.sandboxes = sandboxes;
         this.poolSize = poolSize;
         this.meters = meters;
     }
 
     /**
-     * Whether this worker can serve turn sandboxes: it can name itself on them, so that its next start removes what a
+     * Whether this worker can serve tools Pods: it can name itself on them, so that its next start removes what a
      * crash left, its runtime is ready, and the last start of one did not fail.
      */
     public boolean available() {
@@ -156,7 +147,7 @@ public class TurnSandboxes implements AutoCloseable {
         return sandboxes.workerInstance() != null && sandboxes.ready() && !lastStartFailed;
     }
 
-    public ExecSandboxes runtime() {
+    public ToolsPods runtime() {
         return sandboxes;
     }
 
@@ -298,14 +289,28 @@ public class TurnSandboxes implements AutoCloseable {
     }
 
     /**
-     * Removes the sandbox after a staging failure: what it holds may be partial. The attempt goes on; its next call
-     * gets a new sandbox and stages again.
+     * Removes the attempt's tools Pod after its host found it broken: what it holds may be partial. The attempt goes on;
+     * its next call binds a new one and puts again. Another Pod of the attempt stays: a late report never removes it.
      */
-    public void discard(Attempt attempt, Sandbox sandbox) {
+    public void discard(Attempt attempt, String id) {
+        Sandbox broken;
         synchronized (lifecycle) {
-            assigned.remove(attempt, sandbox);
+            Sandbox held = assigned.get(attempt);
+            ToolsPods.Started pod = held == null ? null : held.started;
+            if (held == null || pod == null || !pod.id().equals(id)) {
+                return;
+            }
+            assigned.remove(attempt, held);
+            broken = held;
         }
-        removeLater(sandbox);
+        removeLater(broken);
+    }
+
+    /** Whether the attempt ended here: a load for it stops waiting. */
+    public boolean ended(Attempt attempt) {
+        synchronized (lifecycle) {
+            return closed || ended.getIfPresent(attempt) != null;
+        }
     }
 
     /**
@@ -356,7 +361,7 @@ public class TurnSandboxes implements AutoCloseable {
         }
         for (Attempt attempt : gone) {
             log.info(
-                    "Removing the turn sandbox of attempt {} of turn {}: it no longer runs here",
+                    "Removing the tools Pod of attempt {} of turn {}: it no longer runs here",
                     attempt.number(),
                     attempt.turnId());
             release(attempt.turnId(), attempt.number());
@@ -365,18 +370,18 @@ public class TurnSandboxes implements AutoCloseable {
         if (self == null) {
             return;
         }
-        List<ExecSandboxes.Listed> listed;
+        List<ToolsPods.Listed> listed;
         try {
             listed = sandboxes.list();
         } catch (SandboxException e) {
-            // The class only, as below: an exec failure can quote the API's response body.
-            log.warn("Could not list the turn sandboxes: {}", e.getClass().getSimpleName());
+            // The class only: an API failure can quote the API's response body.
+            log.warn("Could not list the tools Pods: {}", e.getClass().getSimpleName());
             return;
         }
-        for (ExecSandboxes.Listed sandbox : listed) {
+        for (ToolsPods.Listed sandbox : listed) {
             boolean own = self.equals(sandbox.workerInstance());
             if ((own && !known.containsKey(sandbox.sandboxId())) || (!own && sandbox.workerGone())) {
-                log.info("Removing a turn sandbox that no worker holds: {}", sandbox.sandboxId());
+                log.info("Removing a tools Pod that no worker holds: {}", sandbox.sandboxId());
                 sandboxes.remove(sandbox.id());
             } else if (own && sandbox.ended()) {
                 removeEndedFromPool(sandbox.sandboxId());
@@ -393,7 +398,7 @@ public class TurnSandboxes implements AutoCloseable {
                 return;
             }
         }
-        log.info("Removing a pooled turn sandbox that ended: {}", sandboxId);
+        log.info("Removing a pooled tools Pod that ended: {}", sandboxId);
         removeLater(ended);
     }
 
@@ -425,13 +430,12 @@ public class TurnSandboxes implements AutoCloseable {
                     log.warn("The tools quota cannot hold one tools Pod");
                 }
             } catch (SandboxException e) {
-                log.warn(
-                        "Could not fill the turn sandbox pool: {}", e.getClass().getSimpleName());
+                log.warn("Could not fill the tools Pod pool: {}", e.getClass().getSimpleName());
             } finally {
                 refilling.set(false);
             }
         });
-        log.trace("Filling the turn sandbox pool: {}", filling);
+        log.trace("Filling the tools Pod pool: {}", filling);
     }
 
     /**
@@ -445,14 +449,14 @@ public class TurnSandboxes implements AutoCloseable {
             known.put(sandbox.sandboxId, sandbox);
         }
         try {
-            sandbox.containerId = sandboxes.create(sandbox.sandboxId, LIMITS);
+            sandbox.started = sandboxes.create(sandbox.sandboxId, LIMITS);
             lastStartFailed = false;
         } catch (RuntimeException e) {
             lastStartFailed = !(e instanceof SandboxCapacityException);
             known.remove(sandbox.sandboxId);
             throw e instanceof SandboxException failed
                     ? failed
-                    : new SandboxException("A turn sandbox could not start", e);
+                    : new SandboxException("A tools Pod could not start", e);
         }
         boolean stopping;
         synchronized (lifecycle) {
@@ -469,7 +473,7 @@ public class TurnSandboxes implements AutoCloseable {
         sandbox.state = State.REMOVED;
         try {
             var removal = background.submit(() -> removeNow(sandbox));
-            log.trace("Removing turn sandbox {}: {}", sandbox.sandboxId, removal);
+            log.trace("Removing tools Pod {}: {}", sandbox.sandboxId, removal);
         } catch (RejectedExecutionException stopped) {
             removeNow(sandbox);
         }
@@ -477,9 +481,9 @@ public class TurnSandboxes implements AutoCloseable {
 
     private void removeNow(Sandbox sandbox) {
         sandbox.state = State.REMOVED;
-        String id = sandbox.containerId;
-        if (id != null) {
-            sandboxes.remove(id);
+        ToolsPods.Started pod = sandbox.started;
+        if (pod != null) {
+            sandboxes.remove(pod.id());
         }
         known.remove(sandbox.sandboxId);
         synchronized (lifecycle) {

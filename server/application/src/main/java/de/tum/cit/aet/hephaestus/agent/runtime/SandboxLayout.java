@@ -34,7 +34,7 @@ public final class SandboxLayout {
     /** Each scratch place, {@code /tmp} and {@code ~/.local}: a bounded disk volume in Kubernetes. */
     public static final long SCRATCH_BYTES = 1024L * 1024 * 1024;
 
-    /** A turn sandbox's workspace: a bounded disk volume in Kubernetes. */
+    /** A tools Pod's workspace: a bounded disk volume in Kubernetes. */
     public static final long TURN_WORKSPACE_BYTES = 512L * 1024 * 1024;
 
     /** The Heph host's memory limit on Kubernetes. Its Node heap stops at three quarters of it, on both backends. */
@@ -226,7 +226,7 @@ public final class SandboxLayout {
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";
 
     /** Runtime contract required by the staged runners. */
-    public static final int RUNTIME_CONTRACT_VERSION = 12;
+    public static final int RUNTIME_CONTRACT_VERSION = 13;
 
     /** Node major required by the staged runners. */
     public static final int NODE_MAJOR = 24;

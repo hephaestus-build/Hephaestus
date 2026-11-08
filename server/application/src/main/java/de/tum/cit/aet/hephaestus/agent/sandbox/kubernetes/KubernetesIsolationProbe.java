@@ -40,7 +40,7 @@ import tools.jackson.databind.json.JsonMapper;
  *       and the Restricted one does not.
  *   <li><b>Egress to the gateway only.</b> A Pod with a review sandbox's labels reaches this worker's gateway, directly
  *       and through a Service, which is the control, and none of: this worker's management port, the Kubernetes API, the
- *       cluster DNS server. A Pod of no sandbox kind, which the policies treat as a turn sandbox, reaches the gateway by
+ *       cluster DNS server. A Pod of no sandbox kind, which the policies treat as a tools Pod, reaches the gateway by
  *       neither route.
  *   <li><b>No service account token, a read-only root and a non-root user</b> inside these Pods.
  *   <li><b>User namespaces.</b> A Pod without host users gets a user namespace of its own.

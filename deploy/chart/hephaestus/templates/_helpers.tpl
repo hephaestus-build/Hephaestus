@@ -84,7 +84,7 @@ capabilities:
 {{- end -}}
 
 {{/*
-The sandbox namespace, of review sandboxes, the conversation host and turn sandboxes. The operator creates
+The sandbox namespace, of review sandboxes, the conversation host and tools Pods. The operator creates
 it with the Restricted Pod Security level and names it here; the chart writes into it and never
 creates it. The worker receives the same string, and the runtime derives no name of its own.
 */}}
@@ -477,10 +477,16 @@ readinessProbe:
       protocol: TCP
 {{- end -}}
 
+{{/* The port a conversation's tools Pod listens on. It must equal ToolsPods.PORT. */}}
+{{- define "hephaestus.toolsPort" -}}
+7100
+{{- end -}}
+
 {{/*
 The sandbox pods that may reach the workers' gateway: review sandboxes and conversation hosts, by their kind.
-A sandbox's credential, not this selector, binds it to its own worker. Turn sandboxes never match.
+A sandbox's credential, not this selector, binds it to its own worker. Tools Pods never match.
 */}}
+
 {{- define "hephaestus.policy.gatewaySources" -}}
 matchExpressions:
   - key: hephaestus.build/sandbox-kind
@@ -772,9 +778,9 @@ independent pool and quota admission. The ceiling is the qualified model-only re
 {{- end -}}
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
 {{- $running := ternary $replicas (mul $replicas 2) (eq .Values.worker.rolloutStrategy "Recreate") -}}
-{{- $tools := add (int $table.activeTurnSandboxes) (int $table.pooledTurnSandboxes) -}}
-{{- $conversationPods := add (int $table.hephHost.pods) (mul $tools (int $table.turnSandbox.pods)) -}}
-{{- $roles = add $roles (mul $running (add (int $table.hephHost.cpuMillis) (mul $tools (int $table.turnSandbox.cpuMillis)) (mul $conversationPods (int .Values.worker.runtime.podOverhead.cpuMillis)))) -}}
+{{- $tools := add (int $table.activeToolsPods) (int $table.pooledToolsPods) -}}
+{{- $conversationPods := add (int $table.hephHost.pods) (mul $tools (int $table.toolsPod.pods)) -}}
+{{- $roles = add $roles (mul $running (add (int $table.hephHost.cpuMillis) (mul $tools (int $table.toolsPod.cpuMillis)) (mul $conversationPods (int .Values.worker.runtime.podOverhead.cpuMillis)))) -}}
 {{- $reviews := int (include "hephaestus.reviewCpuMillis" .) -}}
 {{- $available := max 0 (sub (int $budget.allocatableCpuMillis) (add $roles $reviews)) -}}
 {{- $turns := min (int $budget.maximumTurns) (div $available (int $budget.cpuMillisPerTurn)) -}}

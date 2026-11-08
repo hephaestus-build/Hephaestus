@@ -124,15 +124,15 @@ public class KubernetesSandboxConfiguration {
         return new KubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits, cache);
     }
 
-    @Bean(destroyMethod = "close")
-    public KubernetesExecSandboxes kubernetesExecSandboxes(
+    @Bean
+    public KubernetesToolsPods kubernetesToolsPods(
             KubernetesPods pods,
-            KubernetesWorker worker,
+            KubernetesSandboxJobs jobs,
             AgentImageProperties agentImageProperties,
             KubernetesLiveWorkers liveWorkers,
             SandboxExits exits,
             KubernetesSandboxCache cache) {
-        return new KubernetesExecSandboxes(pods, worker, agentImageProperties.reference(), liveWorkers, exits, cache);
+        return new KubernetesToolsPods(pods, jobs, agentImageProperties.reference(), liveWorkers, exits, cache);
     }
 
     @Bean

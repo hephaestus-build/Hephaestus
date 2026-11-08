@@ -5,7 +5,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 
 /**
  * Hears, from any process, that what a workspace's turns may read changed: it makes a new context generation, so no
- * cached build of the old one is staged again, and removes the workspace's turn sandboxes. A reconnect may have
+ * cached build of the old one is staged again, and removes the workspace's tools Pods. A reconnect may have
  * missed changes, so it does both for every workspace.
  */
 public final class TurnContextRevocations implements MentorLedgerNotifications.Listener {

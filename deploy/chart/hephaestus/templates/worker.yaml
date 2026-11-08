@@ -37,9 +37,9 @@ at most eight assigned tools Pods. Resident turn admission does not enlarge that
 {{- $review := $table.review }}
 {{- $probe := $table.isolationProbe }}
 {{- $host := $table.hephHost }}
-{{- $turn := $table.turnSandbox }}
-{{- $tools := min $turns (int $table.activeTurnSandboxes) }}
-{{- $turnSandboxes := add (int $table.pooledTurnSandboxes) $tools }}
+{{- $turn := $table.toolsPod }}
+{{- $tools := min $turns (int $table.activeToolsPods) }}
+{{- $turnSandboxes := add (int $table.pooledToolsPods) $tools }}
 {{- $reviews := int (include "hephaestus.reviews" .) }}
 {{- /* Requests, not limits: sandbox Pods are Burstable, and a quota on limits would admit about half the reviews
 that the node holds. The scheduler places Pods by their requests; a limit bounds one Pod's own peak. */}}
@@ -106,8 +106,8 @@ spec:
     secrets: "0"
 ---
 {{- end }}
-# No ingress and no egress for any pod of the namespace. Turn sandboxes get no other policy, so
-# they have no network at all.
+# No ingress and no egress for any pod of the namespace. A conversation's tools Pod gets only the
+# ingress from its host below, so it reaches nothing.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -135,12 +135,7 @@ rules:
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
-  # The client opens an exec as a WebSocket GET; Kubernetes 1.35 and later also authorize that
-  # upgrade as create on pods/exec, so the worker needs both verbs.
-  - apiGroups: [""]
-    resources: ["pods/exec"]
-    verbs: ["get", "create"]
-  # One Job per practice-review attempt.
+  # One Job per practice-review attempt, and one per conversation's tools Pod.
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["get", "list", "watch", "create", "delete"]
@@ -194,6 +189,51 @@ spec:
               {{- include "hephaestus.selectorLabels" (dict "root" . "component" "worker") | nindent 14 }}
       ports:
         - port: {{ $port }}
+          protocol: TCP
+---
+# A conversation's tools Pod serves its host on the tools port, and no other Pod reaches it. Its host
+# dials it there, and the tools side answers with the nonce that the worker wrote into its spec.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "sandbox-tools") }}
+  namespace: {{ $sandboxes }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "sandbox") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      hephaestus.build/sandbox-kind: tools
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              hephaestus.build/sandbox-kind: host
+      ports:
+        - port: {{ include "hephaestus.toolsPort" . }}
+          protocol: TCP
+---
+# A conversation host may dial the tools Pods on the tools port, besides its gateway.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "sandbox-host-tools") }}
+  namespace: {{ $sandboxes }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "sandbox") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      hephaestus.build/sandbox-kind: host
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              hephaestus.build/sandbox-kind: tools
+      ports:
+        - port: {{ include "hephaestus.toolsPort" . }}
           protocol: TCP
 ---
 # Callers reach a worker that holds its isolation proof, because readiness carries that proof.

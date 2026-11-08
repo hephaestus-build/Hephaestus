@@ -66,6 +66,11 @@ public class KubernetesSandboxJobs {
         this.worker = worker;
     }
 
+    /** The worker whose sandbox Jobs these are. */
+    KubernetesWorker worker() {
+        return worker;
+    }
+
     /**
      * The Job of a sandbox Pod: the Pod's name and labels, and the Pod as its template.
      *
@@ -230,16 +235,39 @@ public class KubernetesSandboxJobs {
 
     /** The review Jobs. */
     public List<Job> list() {
+        return list(KubernetesWorker.KIND_REVIEW);
+    }
+
+    /** The sandbox Jobs of one kind. */
+    public List<Job> list(String kind) {
         try {
             return client.batch()
                     .v1()
                     .jobs()
                     .inNamespace(worker.namespace())
-                    .withLabels(worker.selector(KubernetesWorker.KIND_REVIEW))
+                    .withLabels(worker.selector(kind))
                     .list()
                     .getItems();
         } catch (KubernetesClientException e) {
-            throw KubernetesPods.failure("Could not list review Jobs", e);
+            throw KubernetesPods.failure("Could not list sandbox Jobs", e);
+        }
+    }
+
+    /**
+     * Deletes the Job, and its Pod before the Job goes ({@code Foreground}, ADR 0068 § The tools Pod), so that no
+     * replacement Pod starts; a Job that is already gone is no error.
+     */
+    public void deleteWithPod(String job) {
+        try {
+            client.batch()
+                    .v1()
+                    .jobs()
+                    .inNamespace(worker.namespace())
+                    .withName(job)
+                    .withPropagationPolicy(DeletionPropagation.FOREGROUND)
+                    .delete();
+        } catch (KubernetesClientException e) {
+            throw KubernetesPods.failure("Could not delete a sandbox Job", e);
         }
     }
 

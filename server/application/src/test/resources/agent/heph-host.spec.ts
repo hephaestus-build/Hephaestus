@@ -647,10 +647,10 @@ function resultsIn(request: FauxRequest | undefined): { text: string; isError: u
 		.map((message) => ({ text: textOf(message), isError: isRecord(message) && message.isError }));
 }
 
-void test("read, bash and load_context ask the worker in the shape the worker binds and show its answers", async () => {
-	// HephTurnGatewayIntegrationTest sends the same files to the real endpoints.
-	const read = contract("sandbox-read.request.json");
-	const exec = contract("sandbox-exec.request.json");
+void test("read, bash and load_context ask in the shape the turn's tools bind and show their answers", async () => {
+	// HephTurnGatewayIntegrationTest sends the same files to the real endpoints; a command goes to the tools Pod.
+	const read = contract("sandbox-document.request.json");
+	const exec = { command: "git -C repos/github.com/acme/api log --oneline -5", timeoutMs: 30_000 };
 	const load = contract("sandbox-load.request.json");
 	const { timeoutMs } = exec;
 	assert.ok(typeof timeoutMs === "number");
@@ -682,7 +682,7 @@ void test("read, bash and load_context ask the worker in the shape the worker bi
 	assert.deepEqual(worker.loads, [load]);
 	assert.deepEqual(resultsIn(requests[0]), [
 		{ text: `contents of ${String(read.path)}`, isError: false },
-		{ text: `ran ${String(exec.command)}`, isError: false },
+		{ text: `ran ${exec.command}`, isError: false },
 		{
 			text:
 				"Loaded repos/github.com/acme/api at pull/42 (7044a8a0c0ffee0c0ffee0c0ffee0c0ffee0c0ff). Cite its code " +
@@ -757,7 +757,7 @@ void test("a failed, timed out or silent command reads as Pi's bash words it, an
 		{
 			ok: false,
 			error: "UNAVAILABLE",
-			detail: "This worker cannot run turn sandboxes now. Do not retry.",
+			detail: "This worker cannot run the context folder now. Do not retry.",
 		},
 	];
 	const api = worker.api();
@@ -814,7 +814,7 @@ void test("a failed, timed out or silent command reads as Pi's bash words it, an
 		{ text: "fatal: bad revision 'nope'\n\nCommand exited with code 128", isError: true },
 		{ text: "partial\n\nCommand timed out after 5 seconds", isError: true },
 		{ text: "(no output)", isError: false },
-		{ text: "This worker cannot run turn sandboxes now. Do not retry.", isError: true },
+		{ text: "This worker cannot run the context folder now. Do not retry.", isError: true },
 		{ text: "Invalid timeout: must be a finite number of seconds", isError: true },
 		{ text: "File not found: inputs/context/nothing.json", isError: true },
 		{ text: "NOT_VISIBLE: Hephaestus cannot read repos/github.com/other/x.", isError: true },

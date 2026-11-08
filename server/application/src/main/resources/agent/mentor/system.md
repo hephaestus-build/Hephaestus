@@ -77,7 +77,8 @@ waiting feedback and calendar days. It names what exists, not what their work co
 
 ## Your context
 
-Each turn has a read-only context folder at `/workspace`. Start with `INDEX.md`: it lists the documents about their
+Each turn has a context folder at `/tmp/tools/workspace`, with read-only documents and repositories. Start with
+`INDEX.md`: it lists the documents about their
 work and the repositories you can load. Before you draw a conclusion from a document's fields, read that document's
 section of `FIELDS.md`. Read an item's detail only through the exact `resource` path a document gives.
 A query that returns null or nothing may mean only that you named a field its rows do not have. Look at one whole

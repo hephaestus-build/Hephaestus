@@ -108,20 +108,32 @@ await test("host sandboxes retain the chart's quotas and restricted authority wi
 		assert.deepEqual(binding?.subjects, [
 			{ kind: "ServiceAccount", name: "host-worker", namespace },
 		]);
-		const policies = resources.filter((resource) => resource.kind === "NetworkPolicy");
-		assert.equal(policies.length, 2);
-		const deny = policies.find(
-			(resource) => asRecord(resource.spec, "policy").egress === undefined,
+		const policies = new Map(
+			resources
+				.filter((resource) => resource.kind === "NetworkPolicy")
+				.map((resource) => [String(asRecord(resource.metadata, "metadata").name), resource]),
 		);
-		assert.ok(deny);
-		assert.deepEqual(deny.spec, { podSelector: {}, policyTypes: ["Ingress", "Egress"] });
-		const gateway = policies.find(
-			(resource) => asRecord(resource.spec, "policy").egress !== undefined,
-		);
-		assert.ok(gateway);
-		assert.deepEqual(asRecord(gateway.spec, "policy").egress, [
+		assert.deepEqual([...policies.keys()].toSorted(), [
+			"heph-sandbox-deny",
+			"heph-sandbox-gateway",
+			"heph-sandbox-host-tools",
+			"heph-sandbox-tools",
+		]);
+		assert.deepEqual(policies.get("heph-sandbox-deny")?.spec, {
+			podSelector: {},
+			policyTypes: ["Ingress", "Egress"],
+		});
+		// The gateway is the host's address; the host still reaches the tools Pods inside the cluster.
+		assert.deepEqual(asRecord(policies.get("heph-sandbox-gateway")?.spec, "policy").egress, [
 			{ to: [{ ipBlock: { cidr: "192.0.2.1/32" } }], ports: [{ protocol: "TCP", port: 8081 }] },
 		]);
+		assert.deepEqual(
+			asArray(
+				asRecord(policies.get("heph-sandbox-host-tools")?.spec, "policy").egress,
+				"egress",
+			).map((rule) => asRecord(rule, "rule").ports),
+			[[{ protocol: "TCP", port: 7100 }]],
+		);
 		const role = resources.find((resource) => resource.kind === "Role");
 		assert.ok(role);
 		assert.ok(

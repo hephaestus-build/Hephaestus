@@ -184,7 +184,7 @@ A turn that keeps calling loops on a tool or on a failing call.
 The worker logs one line for each model call and each tool call of a turn.
 The line names the tool, the outcome and the duration, never the words.
 
-A turn gets a context folder only while the worker can start turn sandboxes.
+A turn gets a context folder only while the worker can start tools Pods.
 Without one, the turn has no `read`, `bash` or `load_context` tool, and its situation says so (`HephTurnContexts.NO_CONTEXT_FOLDER`).
 
 ### How a turn fails
@@ -542,15 +542,15 @@ If the host is lost after a claim, the worker tries one fresh host before the cl
 
 | Property | Value |
 | --- | --- |
-| Image | The agent image of the release, runtime contract 10 (`SandboxLayout.RUNTIME_CONTRACT_VERSION`). It provides Node and the Pi SDK. |
+| Image | The agent image of the release, runtime contract 13 (`SandboxLayout.RUNTIME_CONTRACT_VERSION`). It provides Node and the Pi SDK. |
 | Host script | `heph-host.ts`, its modules, and the system prompt come from the worker JAR. The worker stages them into the workspace (`HephHostSpec`). The image does not hold them. |
 | Process | `node --max-old-space-size=1024 --permission`, with no child-process grant. |
 | Readable paths | The workspace, `/opt/pi-sdk`, the empty home, and the practice-script library (`/opt/practice-scripts`). The provider helper imports that library through the workspace link that the practice runners also use (`PiRunnerProfile.PRACTICE_SCRIPT_LIBRARY_SETUP`). |
 | Writable paths | Pi's agent directory and the temporary directory only. |
 | Limits | `HephHostSpec.LIMITS`. [Runtime roles](/admin/runtime-roles#the-conversation-host) gives the values. |
-| Network | NetworkPolicy permits only the worker's Sandbox Gateway. |
+| Network | NetworkPolicy permits only the worker's Sandbox Gateway and TCP port 7100 of tools Pods. |
 | Pod label | `hephaestus.build/sandbox-kind=host`. `SESSION_ID` is the host id. |
-| Tools | `link_result`, `link_problem`, `show_feedback`, `search_conversation`, and `read`, `bash` and `load_context` when the worker can serve them ([Context folder](#context-folder)). The three run in a turn sandbox, not in the host. |
+| Tools | `link_result`, `link_problem`, `show_feedback`, `search_conversation`, and `read`, `bash` and `load_context` when the worker can serve them ([Context folder](#context-folder)). The host runs the three against the attempt's tools Pod. |
 
 The sandbox SPI `agent.sandbox.spi.HostSandbox` launches the host.
 `SandboxHosts` implements it on the sandbox backend that runs practice reviews (`KubernetesSandboxBackend`).
@@ -598,7 +598,7 @@ All paths start with `/internal/llm/turn/{turnId}/`.
 | `POST link-problem` | Admits one problem for the answer (`{problemId}`). A refused problem gets `422`. |
 | `POST show-feedback` | Claims the copy of one piece of prepared conversation feedback for the attempt (`{feedbackId}`). A refused claim gets `422` ([Delivery of shown feedback](#delivery-of-shown-feedback)). |
 | `POST search` | Full-text search in the conversation tree. |
-| `POST sandbox/read`, `sandbox/exec`, `sandbox/load` | The `read`, `bash` and `load_context` calls in the attempt's turn sandbox ([Context folder](#context-folder)). |
+| `POST sandbox/document`, `sandbox/bind`, `sandbox/discard`, `sandbox/load`, and `GET sandbox/documents` | The worker's half of `read`, `bash` and `load_context` ([Context folder](#context-folder)). |
 | `PUT partial` | The partial answer and the stage. The partial answer has the text and the `link_result`, `link_problem`, and `show_feedback` calls of each assistant message of the turn so far. The last message can be unfinished. The gateway rate limit does not apply. A lost snapshot is not sent again. |
 | `POST end` | Ends the turn with `DONE`, `STOPPED`, or `FAILED`, with the Pi entries that the turn appended ([Limits](#limits)). A failed end carries a `detail`, a kind of failure for the worker log ([How a turn fails](#how-a-turn-fails)). The end first waits up to 10 seconds for the proxy to record the attempt's model calls (`ProxyCallsInFlight`). An end without an answer cancels them first. |
 
@@ -607,8 +607,8 @@ The host then sends the end again, with each `read`, `bash` and `load_context` r
 The next turn reads the notes instead of this turn's results, and reads again what it needs.
 
 The worker builds the fixed context documents of an attempt once, when the host reads the context.
-The turn sandbox stages that build, so one turn sees one set of documents.
-It stages an item document, for example the detail of one issue, when Hephaestus reads it ([Staging](#staging)).
+The worker serves that build, and the host puts it into the tools Pod, so one attempt sees one set of documents.
+The worker builds an item document, for example the detail of one issue, when Hephaestus reads it ([Documents and loads](#documents-and-loads)).
 The end drops the build.
 A build that no call reads for 15 minutes expires, and a later read builds it again for the same question.
 
@@ -660,18 +660,22 @@ Thus, the end waits for the attempt's calls, or the fence on the turn row would 
 ### Context folder
 
 Hephaestus reads its [context folder](/contributor/practice-review-glossary#runtime-terms) with the tools `read`, `bash` and `load_context`.
-The folder is in a [turn sandbox](/contributor/practice-review-glossary#runtime-terms) on the worker, not in the host.
+The folder is the tools workspace of a [tools Pod](/contributor/practice-review-glossary#runtime-terms) on the worker, not in the host.
+The worker serves INDEX.md, FIELDS.md and the context documents from the memory of the attempt.
 [ADR 0057 § Context folder and turn sandbox](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0057-one-heph-conversation-per-developer.md#context-folder-and-turn-sandbox) gives the decision.
 
 The folder has this layout:
 
 ```text
-/workspace/
-├── INDEX.md                    # What each area holds, what Hephaestus can load, and the rules.
-├── FIELDS.md                   # What each document's fields mean and do not show.
+/tmp/tools/workspace/
+├── INDEX.md                    # What each area holds, what Hephaestus can load, and the rules. read only.
+├── FIELDS.md                   # What each document's fields mean and do not show. read only.
 ├── inputs/context/<doc>.json   # The context documents of the attempt.
 └── repos/<host>/<path>/        # A repository with its Git history, after load_context.
 ```
+
+INDEX.md and FIELDS.md are not files in the tools Pod: only `read` opens them.
+`bash` sees `inputs/` and `repos/`.
 
 `ContextFolderIndex` writes the core part of INDEX.md.
 Each context loader adds its own section.
@@ -682,74 +686,87 @@ Hephaestus reads a section only when it needs it, so the system prompt that each
 The host holds no list of document keys.
 
 The host offers the three tools only when `GET context` returns `contextFolder: true` (`TurnContextFolder.available`).
-The value is `false` after the worker failed to start a turn sandbox.
+The value is `false` after the worker failed to start a tools Pod.
 For example, the cluster could not schedule the Pod or pull the agent image.
 No setting turns the tools on or off.
 
 #### Endpoints
 
-`HephTurnSandboxController` serves three endpoints under `/internal/llm/turn/{turnId}/sandbox/`, with the turn's attempt token.
+`HephTurnSandboxController` serves five endpoints under `/internal/llm/turn/{turnId}/sandbox/`, with the turn's attempt token.
 Each endpoint checks that the attempt holds the lease, as the other turn endpoints do.
 A refusal that the model must read is `200` with `{"ok": false, "error", "detail"}`.
 The host returns `detail` as the error text of the tool.
 
-| Endpoint | Tool | Does |
-| --- | --- | --- |
-| `POST read` | `read {path, offset?, limit?}` | Returns one page of a file, with the notices of Pi 1.0 `read`. The worker pages in the sandbox, so the host never holds more than one page. |
-| `POST exec` | `bash {command, timeout?}` | Runs `bash -c <command>` in `/workspace` as the unprivileged user of the image. Returns the end of the output. |
-| `POST load` | `load_context {path}` | Stages one item through the loader that owns the path prefix. Returns the staged path, the resolved ref, the SHA, and how to cite it. |
+| Endpoint | Does |
+| --- | --- |
+| `POST document` | Returns one page of INDEX.md, FIELDS.md or a context document from the memory of the attempt, with the notices of Pi 1.0 `read`. |
+| `GET documents` | Returns the attempt's built documents as one tar, rooted at `inputs/`. |
+| `POST bind` | Binds the attempt's tools Pod and returns its id, address, port and nonce. It waits while the conversations quota has no room. |
+| `POST discard` | Removes a tools Pod that failed its host. The next `bind` gets a new one. |
+| `POST load` | Prepares one item through the loader that owns the path prefix. It returns the item as a tar. The `Hephaestus-Load` header holds the path, the resolved ref, the SHA, and how to cite it. |
 
-These rules apply to the endpoints:
+The host runs the three tools against the tools Pod over [tool protocol v1](/contributor/practice-review-glossary#runtime-terms) (`heph-tools.ts`):
 
-- A path that leaves `/workspace` gets the same `NOT_FOUND` text as an absent file. `read` also reads `/tmp/heph-out/<n>.log`.
-- A page is at most 2,000 lines or 50 KB (`PiText`). A longer line gets Pi's notice with a `sed` command.
-- A command runs as `timeout --kill-after=2s <t> bash -c …`. The bound `t` is the smallest of the asked timeout, 60 seconds, and the time left in the turn.
-- The worker cancels sandbox commands that exceed their bound by 5 seconds or are killed by their timeout (`ExecSandboxes.cancelCommands`).
-  The cancellation ends every process of the sandbox user, also a child that left the command's process group.
-  The sandbox stays in use for the next calls.
-  Kubernetes runs cancellation through a separate exec session as the sandbox user.
-- `exec` writes the full output to `/tmp/heph-out/<n>.log` and returns the last 2,000 lines or 50 KB, with Pi's notice.
-- The command gets no environment from the host or the worker. `GIT_CONFIG_*` sets `safe.directory=*`, because the trusted stager owns the folder.
+| Tool | Does |
+| --- | --- |
+| `read {path, offset?, limit?}` | Asks `document` for INDEX.md, FIELDS.md and `inputs/context/**`. Pages any other file in the tools Pod. |
+| `bash {command, timeout?}` | Runs the command in the folder, in the tools Pod. Returns the end of the output. |
+| `load_context {path}` | Asks `load` for the item and puts its tar into the tools Pod at the path. Then it runs the loader's summary command there. |
+
+The first `bash`, the first `load_context`, or the first `read` of another file binds the tools Pod.
+The host checks that the Pod's `hello` returns the nonce, and then puts the documents under `inputs/`.
+A Pod that fails a call can hold a partial put, so the host discards it.
+
+These rules apply to the tools:
+
+- A path that leaves the folder gets the same `NOT_FOUND` text as an absent file.
+- A page is at most 2,000 lines or 50 KB. A longer line gets Pi's notice with a `sed` command.
+- A command runs for at most the asked timeout or 60 seconds, whichever is smaller (`MAX_COMMAND_MS`). The end of the turn cancels it.
+- The tools program runs each command in its own process group. At a timeout or a cancel, it ends that group and every process that carries the call's marker.
+- The tools program writes the full output to a spill file in the scratch directory of its workspace. `bash` returns the last 2,000 lines or 50 KB, with Pi's notice and the spill file's path.
+- The command gets only `PATH`, `LANG`, `HOME`, `GIT_TERMINAL_PROMPT=0` and Git's hardening settings (`SandboxGitHardening`). No credential reaches it.
 - A load path is `repos/<host>/<full path>[@ref]`. A ref is a branch, a SHA, `pull/N` on GitHub, or `merge-request/N` on GitLab.
 - A load without a ref takes the default branch. A second load of the same repository replaces the first.
 
-| Error | Endpoint | Cause |
+| Error | Tool | Cause |
 | --- | --- | --- |
 | `NOT_FOUND`, `IS_DIRECTORY`, `OFFSET_BEYOND_END` | `read` | The file is absent or not visible, the path is a directory, or the page starts after the end. |
-| `NOT_VISIBLE` | `load` | The repository is unknown, unmonitored, hidden, or in another workspace. All cases get one text. |
-| `REF_NOT_FOUND` | `load` | No commit matches the ref. |
-| `TIMEOUT` | `load` | The turn ended or its deadline passed before the load finished. |
-| `BUDGET_EXHAUSTED` | `load` | The attempt already loaded 5 items. |
-| `INVALID_PATH` | `load` | No loader owns the path. |
-| `UNAVAILABLE` | all | The worker cannot start a turn sandbox now, or the mirror cannot load the repository. |
-| `CONTEXT_CHANGED` | all | The workspace's data changed and the worker removed the sandbox. The next call gets a new one. |
+| `NOT_VISIBLE` | `load_context` | The repository is unknown, unmonitored, hidden, or in another workspace. All cases get one text. |
+| `REF_NOT_FOUND` | `load_context` | No commit matches the ref. |
+| `BUDGET_EXHAUSTED` | `load_context` | The attempt already loaded 5 items. |
+| `INVALID_PATH` | `load_context` | No loader owns the path. |
+| `TIMEOUT` | all | The turn ended or its deadline passed before the tools Pod or the load was ready. |
+| `UNAVAILABLE` | all | The worker cannot start a tools Pod now, the tools Pod failed, or the mirror cannot load the repository. |
+| `CONTEXT_CHANGED` | `read` of a file in the tools Pod, `bash`, `load_context` | The workspace's data changed and the worker removed the tools Pod. The next call gets a new one. |
 
-The request fixtures `sandbox-read`, `sandbox-exec` and `sandbox-load` in `agent/heph-turn-contract/` bind the host and the controller.
+The request fixtures `sandbox-document`, `sandbox-discard` and `sandbox-load` in `agent/heph-turn-contract/` bind the host and the controller.
 `heph-turn-api.spec.ts` and `HephTurnGatewayIntegrationTest` both read them.
 
-#### Turn sandboxes
+#### Tools Pods
 
-`TurnSandboxes` owns the turn sandboxes of one worker.
-`KubernetesExecSandboxes` starts each one as a Pod in the sandbox namespace.
+`TurnSandboxes` owns the tools Pods of one worker.
+`KubernetesToolsPods` starts each one as a Job (`backoffLimit: 0`) in the sandbox namespace, named `hephaestus-tools-<id>`.
 
 | Property | Value |
 | --- | --- |
-| Image and policy | The release's agent image, under the Restricted Pod Security Standard |
-| Process | Commands run as user 1000. The trusted stager runs in its own container as user 1001. Both are non-root. |
-| Folder | `/workspace`, read-only for the command user, on the node's disk |
-| Scratch | `/tmp`, a bounded volume on the node's disk |
-| Network | `none` |
-| Limits | The turn-sandbox row of the [Pod-kind resource table](/admin/kubernetes#sandbox-sizes). The kubelet sets the process limit |
-| Labels | `hephaestus.build/sandbox-kind=turn`, the sandbox id, and the creating worker's id |
+| Image and policy | The release's agent image, under the Restricted Pod Security Standard, with user namespaces. The isolation init container runs first. |
+| Process | One container, `tools`, runs only the tools program of tool protocol v1, as user 1001. The launcher starts it without the review side's socket filter, because it listens on TCP. Each command starts under that filter, so it cannot open a network socket. Commands run as the same user. |
+| Folder | `/tmp/tools/workspace`, on the one `/tmp` volume on the node's disk |
+| Network | Ingress on TCP port 7100 from conversation hosts only. No egress and no DNS. |
+| Credentials | No service account token and no credential. The worker writes a fresh nonce into the Pod spec. |
+| Limits | The tools Pod row of the [Pod-kind resource table](/admin/kubernetes#sandbox-sizes). The kubelet sets the process limit |
+| Labels | `hephaestus.build/sandbox-kind=tools`, the sandbox id, and the creating worker's id |
 
-A sandbox has three states: `POOLED`, `ASSIGNED` and `REMOVED`.
-The worker keeps 2 sandboxes in the pool (`HephHostConfiguration.SANDBOX_POOL`).
-The first `read`, `bash` or `load_context` call of an attempt takes one from the pool, or starts one if the pool is empty.
+A tools Pod has three states: `POOLED`, `ASSIGNED` and `REMOVED`.
+The worker keeps 2 tools Pods in the pool (`HephHostConfiguration.SANDBOX_POOL`).
+The first `bind` of an attempt takes one from the pool, or starts one if the pool is empty.
 The pool then fills again in the background.
-An assigned sandbox never goes back to the pool.
-The assignment exists only in the memory of the worker.
 
-The worker removes the sandbox of an attempt by deleting its Pod on each path that seals the attempt's model calls:
+An assigned tools Pod never goes back to the pool.
+The assignment exists only in the memory of the worker.
+The worker runs no command in a tools Pod: the host dials it.
+
+The worker removes the tools Pod of an attempt by deleting its Job on each path that seals the attempt's model calls:
 
 - The end of the turn from the host (`finish`).
 - A lost lease.
@@ -758,18 +775,19 @@ The worker removes the sandbox of an attempt by deleting its Pod on each path th
 
 A command that runs at that time ends with the container.
 A load that runs at that time is abandoned.
+The worker also deletes the Job when the host discards the Pod.
 
 The reconciler (`TurnSandboxes.reconcile`) runs at startup and every 60 seconds on the worker.
-It removes the sandboxes of this worker that it does not know, and the assigned sandboxes of attempts that no longer run here.
-It also removes a sandbox whose creating worker no longer has a live heartbeat.
-It never removes a sandbox of a live other worker.
-`SandboxReconciler` ignores turn sandboxes.
+It removes the tools Pods of this worker that it does not know, and the assigned tools Pods of attempts that no longer run here.
+It also removes a tools Pod whose creating worker no longer has a live heartbeat.
+It never removes a tools Pod of a live other worker.
+`SandboxReconciler` ignores tools Pods.
 
 The same worker identity and lease rules apply to host development.
 The worktree's restricted namespace keeps its Pods separate from the other edit loops.
 
 A change to what a workspace's turns may read sends `MentorLedgerEvents.ContextChanged` over the ledger `NOTIFY` channel.
-The listener of each worker then removes every turn sandbox of that workspace (`releaseWorkspace`).
+The listener of each worker then removes every tools Pod of that workspace (`releaseWorkspace`).
 These changes send it:
 
 - The erasure of a person (`MentorToolResultCopyPersonDataStore`).
@@ -778,35 +796,28 @@ These changes send it:
 - A changed AI choice of an account, for each workspace of the account (`AiChoiceChangedEvent`).
 
 The next call of the running attempt gets `CONTEXT_CHANGED` once.
-The call after it gets a new sandbox.
+The call after it gets a new tools Pod.
 
-#### Staging
+#### Documents and loads
 
-`TurnContextFolder` stages the folder on the first call of an attempt (`ExecSandboxes.stage`).
-An `Add` sends INDEX.md, FIELDS.md and the attempt's documents as one tar into `/workspace`.
-A load sends a `Replace`: the tar replaces one directory, for example `repos/<host>/<path>`, with all its contents.
-The worker owns the tar stream, and the sandbox reads exactly its size.
-A staged path is a plain path in `/workspace`.
-After a staging, the sandbox user cannot write the folder or what the tar wrote.
-
-`exec` runs commands only as the sandbox user, so no command can stage.
-A failed staging can leave part of the tar, so the worker removes that sandbox.
-
-Kubernetes staging uses a bounded exec stream.
-The staging script extracts the tar and makes the result read-only for the command user.
+`GET documents` gives the attempt's built documents as one tar, and the host puts it under `inputs/` in the tools Pod.
+A load gives one tar, and the host puts it at its path, for example `repos/<host>/<path>`.
+A second load of the same path replaces that directory with all its contents.
+The host announces the size and the SHA-256 of each tar. The tools program checks both before it extracts.
+The tools program extracts each put read-only.
 
 `HephTurnContexts` builds the fixed documents once for each attempt, as JSON with times in the developer's time zone.
-The folder stages them with indentation, so that `read` can page them by line.
+The worker serves them with indentation, so that `read` can page them by line.
 
 An item document is lazy.
 Examples are `issue/<id>.json`, `merge_readiness/<id>.json`, `results_history/<id>.json`, `delivered_feedback/<id>.json` and `review_attempts/<kind>/<id>.json` under `inputs/context/`.
-A `read` of an item path that is not staged asks the owning `ContentSource.read`.
-The worker stages the document and returns its first page.
+A `read` of an item path that the attempt did not build asks the owning `ContentSource.read`.
+The worker returns the document's first page. The item document stays out of the tools Pod.
 A path that no source owns, or that the turn may not see, gets `NOT_FOUND`.
 
 #### Context loaders
 
-A [context loader](/contributor/practice-review-glossary#runtime-terms) (`integration.core.spi.ContextLoader`) stages a heavy item on request:
+A [context loader](/contributor/practice-review-glossary#runtime-terms) (`integration.core.spi.ContextLoader`) prepares a heavy item on request:
 
 - `prefix()` is the folder path that the loader owns, for example `repos/`.
 - `index(workspaceId, accountId)` returns the loader's section of INDEX.md.
@@ -832,7 +843,9 @@ Without Git mirrors (`GIT_CHECKOUT_ENABLED`), INDEX.md has no `repos/` section.
 
 #### Live qualification
 
-`KubernetesSandboxLiveTest.TurnContext` covers staging, document reads, Git loads, timeout and cancellation on the real Kubernetes adapters.
+`KubernetesSandboxLiveTest` runs a tools Pod on the real Kubernetes adapters.
+The Pod serves its host on TCP only, and goes with its Job and at the end of its attempt.
+`heph-tools.spec.ts` covers the host's tools against a real tools side on TCP.
 Run it through the [Kubernetes live suite](./testing#live-external-service-tests).
 Timings from the retired Docker backend do not describe this runtime.
 
@@ -939,7 +952,7 @@ The situation message gives these facts:
 A context document is one file under `inputs/context/` in the [context folder](#context-folder).
 An `evidence.capture.ContentSource` builds each document from a `MentorContextRequest`: the workspace, the account, the conversation, and the question.
 `MentorContextKeys` lists the fixed keys.
-INDEX.md gives Hephaestus one line about each staged document (`ContextFolderIndex`).
+INDEX.md gives Hephaestus one line about each built document (`ContextFolderIndex`).
 That index is the only description of the documents.
 An item path, for example the detail of one issue, comes only from a `resource` field in a document.
 
@@ -1079,10 +1092,10 @@ This table gives the fixed limits that only contributors change.
 | Limit | Value | Where |
 | --- | --- | --- |
 | Attempts per turn | 2 | `MentorTurnService.MAX_ATTEMPTS` |
-| One `read` page, or the output that `bash` returns | 2,000 lines or 50 KB | `PiText` |
-| Time of one `bash` command | 60 seconds | `TurnContextFolder.MAX_COMMAND_TIME` |
+| One `read` page, or the output that `bash` returns | 2,000 lines or 50 KB | `PiText` and `heph-tools.ts` |
+| Time of one `bash` command | 60 seconds | `heph-tools.ts` (`MAX_COMMAND_MS`) |
 | Loads in one attempt | 5 | `TurnContextFolder.MAX_LOADS_PER_ATTEMPT` |
-| Empty turn sandboxes on one worker | 2 | `HephHostConfiguration.SANDBOX_POOL` |
+| Empty tools Pods on one worker | 2 | `HephHostConfiguration.SANDBOX_POOL` |
 | Partial answer interval | 250 ms | `heph-host.ts` |
 | Wait of an end for the attempt's model calls | 10 seconds | `ProxyCallsInFlight.SETTLE_WAIT` |
 | Smallest conversation model | 32,768 tokens of context, 4,096 tokens of output | `AgentBindingLimits` |

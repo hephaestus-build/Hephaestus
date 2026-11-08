@@ -37,7 +37,11 @@ import {
 	type ToolAddress,
 	ToolProtocolError,
 } from "../../../main/resources/agent/tool-protocol.ts";
-import { checkAuthority, startToolsServer } from "../../../main/resources/agent/tools-server.ts";
+import {
+	checkAuthority,
+	roleOptions,
+	startToolsServer,
+} from "../../../main/resources/agent/tools-server.ts";
 import { dialAddress, listenAddress, transport } from "./tool-transport.ts";
 
 const base = mkdtempSync(path.join(tmpdir(), "tools-"));
@@ -870,6 +874,8 @@ void test("a read pages the lines of a file", async () => {
 		text: "two\nthree",
 		offset: 2,
 		totalLines: 4,
+		newlines: 4,
+		firstLineBytes: 3,
 		truncated: false,
 		nextOffset: 4,
 	});
@@ -887,6 +893,11 @@ void test("a page past the body bound says so and names where the next page star
 	assert.equal(long.nextOffset, 3);
 	assert.ok(Buffer.byteLength(long.text) <= LIMITS.bodyBytes);
 	assert.match(long.text, /^é+$/u, "the cut falls at a character boundary");
+	assert.equal(
+		long.firstLineBytes,
+		Buffer.byteLength("é".repeat(LIMITS.bodyBytes)),
+		"a cut line keeps its length",
+	);
 	const last = await client.read(file, 3, 10);
 	assert.deepEqual(
 		{ text: last.text, truncated: last.truncated, totalLines: last.totalLines },
@@ -1359,6 +1370,83 @@ void test("a put extracts a whole archive read-only, into a new directory only",
 		client.put(path.join(workspace, "notes"), archiveOf(archive)),
 		refusal("request"),
 	);
+});
+
+void test("a conversation's tools side nests puts under its workspace and replaces only what a put made", async () => {
+	const home = mkdtempSync(path.join(tmpdir(), "tools-conversation-"));
+	const mutable = path.join(home, "workspace");
+	const repos = path.join(mutable, "repos");
+	mkdirSync(path.join(mutable, ".scratch"), { recursive: true });
+	mkdirSync(repos);
+	mkdirSync(path.join(mutable, "made-by-hand"));
+	symlinkSync(outside, path.join(repos, "planted"));
+	const conversation = startToolsServer({
+		address: { path: path.join(home, "tools.sock") },
+		nonce,
+		workspace: mutable,
+		roots: [mutable],
+		scratch: path.join(mutable, ".scratch"),
+		...roleOptions("conversation", mutable, repos),
+		soleUser: false,
+	});
+	await once(conversation, "listening");
+	const tools = await ToolClient.open({ path: path.join(home, "tools.sock") }, nonce);
+	const source = mkdtempSync(path.join(tmpdir(), "archive-"));
+	const tarOfText = (text: string) => {
+		writeFileSync(path.join(source, "README.md"), text);
+		return execFileSync("tar", ["-c", "-C", source, "README.md"]);
+	};
+	try {
+		// The turn's documents and a checkout go next to each other, and a checkout's parents appear on the way.
+		await tools.put(path.join(mutable, "inputs"), archiveOf(tarOfText("documents\n")));
+		const checkout = path.join(repos, "github.com", "acme", "api");
+		await tools.put(checkout, archiveOf(tarOfText("first\n")));
+		assert.equal(readFileSync(path.join(checkout, "README.md"), "utf8"), "first\n");
+
+		// A load at another ref keeps its path, and only with replace.
+		await assert.rejects(tools.put(checkout, archiveOf(tarOfText("second\n"))), refusal("request"));
+		await tools.put(checkout, archiveOf(tarOfText("second\n")), { replace: true });
+		assert.equal(readFileSync(path.join(checkout, "README.md"), "utf8"), "second\n");
+		assert.equal(statSync(path.join(checkout, "README.md")).mode.toString(8).slice(-3), "444");
+
+		// Replace never reaches a directory that no put made, and a new put never passes a planted symlink.
+		await assert.rejects(
+			tools.put(path.join(mutable, "made-by-hand"), archiveOf(tarOfText("x\n")), { replace: true }),
+			refusal("request"),
+		);
+		await assert.rejects(
+			tools.put(path.join(repos, "planted", "inside", "api"), archiveOf(tarOfText("x\n"))),
+			refusal("request"),
+		);
+		assert.equal(existsSync(path.join(outside, "inside")), false);
+
+		// This side runs no practice program and keeps its workspace for the turn.
+		await assert.rejects(tools.reset(), refusal("unknown"));
+	} finally {
+		tools.close();
+		const closed = once(conversation, "close");
+		conversation.close();
+		await closed;
+		// Puts extract read-only, and the trash may still be draining.
+		execFileSync("chmod", ["-R", "u+w", home]);
+		rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 });
+		rmSync(source, { recursive: true, force: true });
+	}
+});
+
+void test("a review's tools side neither nests a put nor replaces one", async () => {
+	const source = mkdtempSync(path.join(tmpdir(), "archive-"));
+	writeFileSync(path.join(source, "README.md"), "pinned\n");
+	const archive = execFileSync("tar", ["-c", "-C", source, "README.md"]);
+	const dir = path.join(workspace, "repos", "reviewed");
+	await client.put(dir, archiveOf(archive));
+	await assert.rejects(client.put(dir, archiveOf(archive), { replace: true }), refusal("request"));
+	await assert.rejects(
+		client.put(path.join(workspace, "repos", "missing", "api"), archiveOf(archive)),
+		refusal("request"),
+	);
+	assert.equal(existsSync(path.join(workspace, "repos", "missing")), false);
+	rmSync(source, { recursive: true, force: true });
 });
 
 void test("a hostile archive writes nothing outside its directory", async () => {

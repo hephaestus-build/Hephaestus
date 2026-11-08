@@ -149,19 +149,19 @@ export function hostResources(
 		if (resource.kind === "RoleBinding") {
 			resource.subjects = [{ kind: "ServiceAccount", name: "host-worker", namespace }];
 		}
-		if (resource.kind === "NetworkPolicy") {
-			const spec = asRecord(resource.spec, "network policy");
-			// Only the gateway policy has egress. Turn/tools Pods retain the chart's complete network denial.
-			if (spec.egress !== undefined) {
-				spec.egress = [
-					{ to: [{ ipBlock: { cidr: `${address}/32` } }], ports: [{ protocol: "TCP", port }] },
-				];
-			}
+		// The gateway runs on the host here. The other policies keep the chart's rules, which name only sandbox Pods.
+		if (
+			resource.kind === "NetworkPolicy" &&
+			asRecord(resource.metadata, "metadata").name === `${RELEASE}-sandbox-gateway`
+		) {
+			asRecord(resource.spec, "network policy").egress = [
+				{ to: [{ ipBlock: { cidr: `${address}/32` } }], ports: [{ protocol: "TCP", port }] },
+			];
 		}
 	}
 	if (
 		selected.filter((resource) => resource.kind === "ResourceQuota").length !== 3 ||
-		selected.filter((resource) => resource.kind === "NetworkPolicy").length !== 2 ||
+		selected.filter((resource) => resource.kind === "NetworkPolicy").length !== 4 ||
 		selected.filter((resource) => resource.kind === "RoleBinding").length !== 1
 	) {
 		throw new Error(

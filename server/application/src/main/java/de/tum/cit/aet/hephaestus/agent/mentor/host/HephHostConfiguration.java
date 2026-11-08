@@ -9,8 +9,8 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
@@ -47,7 +47,7 @@ public class HephHostConfiguration {
     }
 
     /**
-     * Turn sandboxes that wait empty, ahead of the turns that take them. The chart's {@code sandbox-pod-requests.json} sizes the
+     * Tools Pods that wait empty, ahead of the turns that take them. The chart's {@code sandbox-pod-requests.json} sizes the
      * conversations quota by it.
      */
     public static final int SANDBOX_POOL = 2;
@@ -61,12 +61,12 @@ public class HephHostConfiguration {
     }
 
     /**
-     * The worker's turn sandboxes. A change of what a workspace's turns may read, on any process, makes a new context
-     * generation and removes that workspace's sandboxes here ({@link TurnContextRevocations}).
+     * The worker's tools Pods. A change of what a workspace's turns may read, on any process, makes a new context
+     * generation and removes that workspace's tools Pods here ({@link TurnContextRevocations}).
      */
     @Bean(destroyMethod = "close")
     TurnSandboxes turnSandboxes(
-            ExecSandboxes sandboxes,
+            ToolsPods sandboxes,
             MentorLedgerNotifications notifications,
             TurnContextGenerations generations,
             MeterRegistry meters) {

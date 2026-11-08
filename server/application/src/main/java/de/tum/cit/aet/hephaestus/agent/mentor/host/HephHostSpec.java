@@ -23,6 +23,9 @@ public final class HephHostSpec {
     /** Imported by the host with a relative specifier, so each is staged beside it. */
     static final List<String> SIDECARS = List.of(
             "heph-host-protocol.ts",
+            "heph-tools.ts",
+            "tool-client.ts",
+            "tool-protocol.ts",
             "pi-agent-sandbox.ts",
             "pi-diagnostics.ts",
             "pi-diagnostics.json",

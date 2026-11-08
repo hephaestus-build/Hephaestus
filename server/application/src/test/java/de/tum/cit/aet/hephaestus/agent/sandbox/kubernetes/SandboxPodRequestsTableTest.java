@@ -65,11 +65,11 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("a turn sandbox, with its stager, counts what the table says")
-    void shouldMatchTheTableWhenTheWorkerBuildsATurnSandbox() throws IOException {
-        Pod turn = pods.turnPod(workload(KubernetesWorker.KIND_TURN), TurnSandboxes.LIMITS);
+    @DisplayName("a conversation's tools Pod counts what the table says")
+    void shouldMatchTheTableWhenTheWorkerBuildsAToolsPod() throws IOException {
+        Pod tools = pods.toolsPod(workload(KubernetesWorker.KIND_TOOLS), TurnSandboxes.LIMITS, "nonce", Map.of());
 
-        assertCounts("turnSandbox", List.of(turn));
+        assertCounts("toolsPod", List.of(tools));
     }
 
     @Test
@@ -92,11 +92,11 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("the turn sandbox pool matches the worker")
+    @DisplayName("the tools Pod pool matches the worker")
     void shouldMatchTheWorkerWhenTheTableCountsPooledSandboxes() throws IOException {
         JsonNode table = table();
 
-        assertThat(table.path("pooledTurnSandboxes").asInt()).isEqualTo(HephHostConfiguration.SANDBOX_POOL);
+        assertThat(table.path("pooledToolsPods").asInt()).isEqualTo(HephHostConfiguration.SANDBOX_POOL);
     }
 
     private void assertCounts(String entry, List<Pod> counted) throws IOException {
