@@ -295,6 +295,29 @@ groups:
         annotations:
           summary: At least three agent jobs failed or timed out in one hour
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusFeedbackSendRetrying
+        expr: >-
+          max(practice_feedback_send_attempts{job="hephaestus"})
+          >= max(practice_feedback_send_readback_limit{job="hephaestus"}) / 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: A feedback send kept using at least half its readback attempt threshold for one minute
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusFeedbackSendMetricsUnavailable
+        expr: >-
+          practice_feedback_send_attempts{job="hephaestus",runtime_role="server"}
+          != practice_feedback_send_attempts{job="hephaestus",runtime_role="server"}
+          or
+          (up{job="hephaestus",runtime_role="server"} == 1
+          unless on (job, instance) practice_feedback_send_attempts{job="hephaestus",runtime_role="server"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A server cannot read the attempts of feedback sends that are not DONE
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusFeedbackDeliveriesFailing
         expr: sum by (destination) (increase(practice_feedback_settled_total{job="hephaestus",state="failed"}[1h])) >= 3
         labels:

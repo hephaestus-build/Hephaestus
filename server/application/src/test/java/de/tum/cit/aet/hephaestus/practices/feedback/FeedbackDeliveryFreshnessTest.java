@@ -15,7 +15,8 @@ class FeedbackDeliveryFreshnessTest {
 
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private final FeedbackRepository feedback = mock(FeedbackRepository.class);
-    private final FeedbackDeliveryFreshness freshness = new FeedbackDeliveryFreshness(feedback, registry);
+    private final FeedbackSendRepository sends = mock(FeedbackSendRepository.class);
+    private final FeedbackDeliveryFreshness freshness = new FeedbackDeliveryFreshness(feedback, sends, registry);
 
     @Test
     void shouldReportTheAgeOfTheOldestWaitingFeedbackAndZeroWhenNoneWaits() {
@@ -38,6 +39,34 @@ class FeedbackDeliveryFreshnessTest {
         freshness.sample();
 
         assertThat(oldest()).isNaN();
+    }
+
+    @Test
+    void shouldReportSendAttemptsAndZeroWhenNoSendWaits() {
+        assertThat(attempts()).isNaN();
+        when(sends.maxAttemptsBeforeDone()).thenReturn(4, 0);
+        freshness.sample();
+        assertThat(attempts()).isEqualTo(4);
+        freshness.sample();
+        assertThat(attempts()).isZero();
+    }
+
+    @Test
+    void shouldClearSendAttemptsAfterAFailedReadAndRecoverIndependentlyOfTheAge() {
+        when(sends.maxAttemptsBeforeDone())
+                .thenReturn(4)
+                .thenThrow(new QueryTimeoutException("fixture"))
+                .thenReturn(2);
+        freshness.sample();
+        freshness.sample();
+        assertThat(attempts()).isNaN();
+        assertThat(oldest()).isZero();
+        freshness.sample();
+        assertThat(attempts()).isEqualTo(2);
+    }
+
+    private double attempts() {
+        return registry.get(PracticeMetrics.FEEDBACK_SEND_ATTEMPTS).gauge().value();
     }
 
     private double oldest() {

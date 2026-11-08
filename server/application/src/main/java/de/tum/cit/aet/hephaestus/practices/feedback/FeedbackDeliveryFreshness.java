@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendService;
 import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -29,14 +30,26 @@ class FeedbackDeliveryFreshness {
     private static final Logger log = LoggerFactory.getLogger(FeedbackDeliveryFreshness.class);
 
     private final FeedbackRepository feedback;
+    private final FeedbackSendRepository sends;
+    private final AtomicReference<@Nullable Integer> sendAttempts = new AtomicReference<>();
     private final AtomicReference<@Nullable Double> oldest = new AtomicReference<>();
 
-    FeedbackDeliveryFreshness(FeedbackRepository feedback, MeterRegistry registry) {
+    FeedbackDeliveryFreshness(FeedbackRepository feedback, FeedbackSendRepository sends, MeterRegistry registry) {
         this.feedback = feedback;
+        this.sends = sends;
         Gauge.builder(PracticeMetrics.FEEDBACK_OLDEST_WAITING, oldest, FeedbackDeliveryFreshness::seconds)
                 .description("Seconds since the oldest feedback on the work that may be sent and has no posted copy;"
                         + " 0 when none waits, NaN before the first read and after a failed read")
                 .baseUnit("seconds")
+                .register(registry);
+        Gauge.builder(PracticeMetrics.FEEDBACK_SEND_ATTEMPTS, sendAttempts, value -> {
+                    Integer current = value.get();
+                    return current == null ? Double.NaN : current.doubleValue();
+                })
+                .description("Most lifetime attempts of feedback sends not DONE; NaN without a successful read")
+                .register(registry);
+        Gauge.builder(PracticeMetrics.FEEDBACK_SEND_READBACK_LIMIT, () -> FeedbackSendService.MAX_READBACK_ATTEMPTS)
+                .description("Claim count at which unresolved feedback readback stops retrying")
                 .register(registry);
     }
 
@@ -49,6 +62,14 @@ class FeedbackDeliveryFreshness {
             oldest.set(null);
             log.warn(
                     "Feedback delivery freshness read failed, reporting no value: errorType={}",
+                    e.getClass().getName());
+        }
+        try {
+            sendAttempts.set(sends.maxAttemptsBeforeDone());
+        } catch (RuntimeException e) {
+            sendAttempts.set(null);
+            log.warn(
+                    "Feedback send attempts read failed: errorType={}",
                     e.getClass().getName());
         }
     }

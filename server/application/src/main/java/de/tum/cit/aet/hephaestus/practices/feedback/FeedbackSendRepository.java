@@ -31,6 +31,16 @@ public interface FeedbackSendRepository extends JpaRepository<FeedbackSend, UUID
         """, nativeQuery = true)
     List<FeedbackSend> findDue(@Param("now") Instant now, @Param("limit") int limit);
 
+    @WorkspaceAgnostic("Send retry pressure is one instance-wide maximum; it reads no content or identifiers")
+    @Query(value = """
+        SELECT COALESCE(MAX(attempts), 0) FROM (
+          SELECT attempts FROM feedback_send WHERE state IN ('PENDING','UNCERTAIN')
+          UNION ALL
+          SELECT attempts FROM feedback_send WHERE state = 'SENDING'
+        ) active_sends
+        """, nativeQuery = true)
+    int maxAttemptsBeforeDone();
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
         UPDATE feedback_send SET state = 'SENDING', lease_owner = :owner,
