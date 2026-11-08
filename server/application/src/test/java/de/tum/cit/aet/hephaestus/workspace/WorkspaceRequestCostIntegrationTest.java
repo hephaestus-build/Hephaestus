@@ -3,13 +3,20 @@ package de.tum.cit.aet.hephaestus.workspace;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.QueryPlans;
 import de.tum.cit.aet.hephaestus.testconfig.SqlRequestTrace;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
+import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -28,6 +35,24 @@ class WorkspaceRequestCostIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Autowired
     private QueryPlans plans;
+
+    @Autowired
+    private ConnectionRepository connections;
+
+    @Test
+    @WithAdminUser
+    void shouldReadWorkspaceDetailsWithinTheRequestBudget() {
+        var workspace = listWorkspace(persistUser("admin"), 0);
+
+        var request = requests.measure(webTestClient, client -> client.get()
+                .uri("/workspaces/{workspaceSlug}", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser()).exchange().expectStatus().isOk()
+                .expectBody(WorkspaceDTO.class)
+                .value(value -> assertThat(value.id()).isEqualTo(workspace.getId())));
+
+        assertThat(request.statements()).isLessThanOrEqualTo(8);
+        assertThat(plans.fullScans(request.sql())).isEmpty();
+    }
 
     @Test
     @WithAdminUser
@@ -59,6 +84,11 @@ class WorkspaceRequestCostIntegrationTest extends AbstractWorkspaceIntegrationTe
         String slug = "list-cost-%02d".formatted(index);
         var workspace = createWorkspace(slug, "List cost %02d".formatted(index), slug, AccountType.ORG, owner);
         ensureAdminMembership(workspace);
+        long installation = workspace.getId() + 20000;
+        var connection = new Connection(workspace, IntegrationKind.GITHUB, Long.toString(installation),
+                new ConnectionConfig.GitHubAppConfig(installation, slug, null, Set.of()));
+        connection.setState(IntegrationState.ACTIVE);
+        connections.saveAndFlush(connection);
         return workspace;
     }
 
