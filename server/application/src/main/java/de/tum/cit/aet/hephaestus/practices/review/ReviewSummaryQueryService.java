@@ -438,6 +438,4 @@ public class ReviewSummaryQueryService {
                 c.getOrDefault(ResultOutcome.DOES_NOT_APPLY, 0),
                 c.getOrDefault(ResultOutcome.COULD_NOT_DETERMINE, 0));
     }
-
-
 }

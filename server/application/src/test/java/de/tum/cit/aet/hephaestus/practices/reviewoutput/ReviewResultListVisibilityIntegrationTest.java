@@ -55,7 +55,8 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcClient jdbc;
 
-    @Autowired private WebTestClient http;
+    @Autowired
+    private WebTestClient http;
 
     @Autowired
     private QueryPlans plans;
@@ -189,23 +190,50 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
         long ws = scenario.workspace().getId();
         when(evidenceAuthorization.permitsAll(eq(ws), anyCollection(), eq(SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW)))
                 .thenReturn(Set.of());
-        Map.of(FeedbackState.AWAITING_APPROVAL, 1, FeedbackState.READY, 2, FeedbackState.DELIVERED, 3,
-                FeedbackState.UNCONFIRMED, 4, FeedbackState.WITHHELD, 5, FeedbackState.REJECTED, 6,
-                FeedbackState.REPLACED, 7, FeedbackState.FAILED, 8).forEach((state, count) -> {
+        Map.of(
+                        FeedbackState.AWAITING_APPROVAL,
+                        1,
+                        FeedbackState.READY,
+                        2,
+                        FeedbackState.DELIVERED,
+                        3,
+                        FeedbackState.UNCONFIRMED,
+                        4,
+                        FeedbackState.WITHHELD,
+                        5,
+                        FeedbackState.REJECTED,
+                        6,
+                        FeedbackState.REPLACED,
+                        7,
+                        FeedbackState.FAILED,
+                        8)
+                .forEach((state, count) -> {
                     for (int index = 0; index < count; index++) feedback(result, state, false);
                 });
 
-        http.get().uri("/workspaces/" + scenario.workspace().getWorkspaceSlug() + "/practices/reviews/results")
+        http.get()
+                .uri("/workspaces/" + scenario.workspace().getWorkspaceSlug() + "/practices/reviews/results")
                 .headers(headers -> headers.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
-                .exchange().expectStatus().isOk().expectBody()
-                .jsonPath("$.content[0].feedback.awaitingApproval").isEqualTo(1)
-                .jsonPath("$.content[0].feedback.ready").isEqualTo(2)
-                .jsonPath("$.content[0].feedback.delivered").isEqualTo(3)
-                .jsonPath("$.content[0].feedback.unconfirmed").isEqualTo(4)
-                .jsonPath("$.content[0].feedback.withheld").isEqualTo(5)
-                .jsonPath("$.content[0].feedback.rejected").isEqualTo(6)
-                .jsonPath("$.content[0].feedback.replaced").isEqualTo(7)
-                .jsonPath("$.content[0].feedback.failed").isEqualTo(8);
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[0].feedback.awaitingApproval")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].feedback.ready")
+                .isEqualTo(2)
+                .jsonPath("$.content[0].feedback.delivered")
+                .isEqualTo(3)
+                .jsonPath("$.content[0].feedback.unconfirmed")
+                .isEqualTo(4)
+                .jsonPath("$.content[0].feedback.withheld")
+                .isEqualTo(5)
+                .jsonPath("$.content[0].feedback.rejected")
+                .isEqualTo(6)
+                .jsonPath("$.content[0].feedback.replaced")
+                .isEqualTo(7)
+                .jsonPath("$.content[0].feedback.failed")
+                .isEqualTo(8);
     }
 
     private UUID feedback(Result result, boolean duplicateBasis) {
