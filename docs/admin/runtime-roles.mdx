@@ -791,6 +791,10 @@ A load test that asks more questions as one account must raise the capacity.
 
 ### Tunables
 
+These defaults apply to the application properties without chart overrides.
+The chart passes a resolved integer for turn capacity, from `worker.conversationTurns` ([Kubernetes § Worker](./kubernetes#worker)).
+Its `auto` setting uses the chart's CPU budget, instead of the application's fallback of eight.
+
 | Property                                    | Default       | Effect                                                                  |
 | ------------------------------------------- | ------------- | ----------------------------------------------------------------------- |
 | `hephaestus.worker.capacity.mentor-max`     | `auto` (8)    | The number of conversation turns that one worker's conversation host runs at once ([Conversation turn capacity](#conversation-turn-capacity)) |
@@ -803,7 +807,6 @@ A load test that asks more questions as one account must raise the capacity.
 | `hephaestus.mentor.agent.max-prompt-chars`  | `100000`      | The maximum length of a question sent in the webapp, in characters      |
 
 Give all roles the same values.
-Set `worker.conversationTurns` for turn capacity.
 Use the [configuration reference](./configuration-reference) for the chart-owned configuration of the other properties.
 
 [Observability](./observability.mdx#conversation-turn-metrics) lists the conversation turn metrics.
