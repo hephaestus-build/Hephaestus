@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatNumber } from "@/lib/numbers";
 
 import type { LlmModel } from "@/api/types.gen";
 import type { PricingMode } from "@/lib/llm-pricing";
@@ -79,7 +80,7 @@ const tokenCountSchema = z
 	)
 	.refine(
 		(value) => value === "" || !/^\d+$/u.test(value) || Number(value) <= MAX_TOKEN_COUNT,
-		`Enter ${MAX_TOKEN_COUNT.toLocaleString("en-US")} tokens or fewer.`,
+		`Enter ${formatNumber(MAX_TOKEN_COUNT)} tokens or fewer.`,
 	);
 
 const rateSchema = z

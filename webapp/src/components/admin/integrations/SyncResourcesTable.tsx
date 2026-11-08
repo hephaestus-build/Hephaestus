@@ -33,6 +33,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { asDate } from "@/lib/dates";
+import { formatNumber } from "@/lib/numbers";
 import { andList, hasText } from "@/lib/text";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
@@ -366,16 +367,14 @@ function ResourceNameCell({
 						{resource.itemCount != null && (
 							<>
 								<dt>Records</dt>
-								<dd className="text-foreground tabular-nums">
-									{resource.itemCount.toLocaleString()}
-								</dd>
+								<dd className="text-foreground tabular-nums">{formatNumber(resource.itemCount)}</dd>
 							</>
 						)}
 						{resource.upstreamCount != null && (
 							<>
 								<dt>Upstream</dt>
 								<dd className="text-foreground tabular-nums">
-									{resource.upstreamCount.toLocaleString()} records
+									{formatNumber(resource.upstreamCount)} records
 								</dd>
 							</>
 						)}
@@ -540,12 +539,12 @@ function ClassCountCell({
 			<TableCell className="text-right">
 				<Tooltip>
 					<TooltipTrigger className="cursor-help tabular-nums">
-						{total.toLocaleString()}
+						{formatNumber(total)}
 					</TooltipTrigger>
 					<TooltipContent>
 						<span className="tabular-nums">
 							{members
-								.map((member) => `${member.count.toLocaleString()} ${member.label.toLowerCase()}`)
+								.map((member) => `${formatNumber(member.count)} ${member.label.toLowerCase()}`)
 								.join(" · ")}
 						</span>
 					</TooltipContent>
@@ -556,7 +555,7 @@ function ClassCountCell({
 
 	return (
 		<TableCell numeric className="text-right">
-			{total.toLocaleString()}
+			{formatNumber(total)}
 		</TableCell>
 	);
 }
@@ -640,7 +639,7 @@ function TotalsFooter({
 					}
 					return (
 						<TableCell key={column.key} numeric className="text-right">
-							{sum.toLocaleString()}
+							{formatNumber(sum)}
 						</TableCell>
 					);
 				})}
@@ -848,7 +847,7 @@ export function SyncResourcesTable({
 					) : (
 						<>
 							{resources.length} {resources.length === 1 ? resourceNoun : resourceNounPlural} ·{" "}
-							{totalItems.toLocaleString()} {totalItems === 1 ? "record" : "records"}
+							{formatNumber(totalItems)} {totalItems === 1 ? "record" : "records"}
 						</>
 					)}
 				</p>

@@ -34,6 +34,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCaption, TableCell, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatCapUsd, formatCostUsd } from "@/lib/money";
+import { formatNumber } from "@/lib/numbers";
 
 import { BudgetPaceAlert } from "./BudgetPaceAlert";
 import { CapIsNotMonthScoped } from "./CapIsNotMonthScoped";
@@ -235,7 +236,7 @@ export function AdminInstanceLlmUsageTable({
 				columnHelper.accessor("events", {
 					id: "runs",
 					header: "Uses",
-					cell: ({ getValue }) => getValue().toLocaleString(),
+					cell: ({ getValue }) => formatNumber(getValue()),
 					enableGlobalFilter: false,
 					sortDescFirst: true,
 					meta: { numeric: true },

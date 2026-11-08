@@ -1,6 +1,7 @@
 import type { LlmUsageByJobType, WorkspaceLlmUsageReport } from "@/api/types.gen";
 import { PURSES, type Purse } from "@/components/practice-vocabulary/purse-defs";
-import { asDate, type DateLike } from "@/lib/dates";
+import { DATE_LOCALE, asDate, type DateLike } from "@/lib/dates";
+import { formatNumber } from "@/lib/numbers";
 
 export type LlmJobType = LlmUsageByJobType["jobType"];
 
@@ -117,18 +118,18 @@ export function addMonths(month: string, delta: number): string {
 export function formatMonthLabel(month: string): string {
 	const [yearStr, monthStr] = month.split("-");
 	return new Date(Date.UTC(Number(yearStr), Number(monthStr) - 1, 1)).toLocaleDateString(
-		undefined,
+		DATE_LOCALE,
 		{ month: "long", year: "numeric", timeZone: "UTC" },
 	);
 }
 
-/** A day bucket as `Jul 22`. An unparseable day renders a dash rather than `Invalid Date`. */
+/** A day bucket as `22 Jul`. An unparseable day renders a dash rather than `Invalid Date`. */
 export function formatUsageDay(value: DateLike): string {
 	const date = asDate(value);
 	if (!date) {
 		return "–";
 	}
-	return date.toLocaleDateString(undefined, {
+	return date.toLocaleDateString(DATE_LOCALE, {
 		month: "short",
 		day: "numeric",
 		timeZone: "UTC",
@@ -136,7 +137,7 @@ export function formatUsageDay(value: DateLike): string {
 }
 
 export function formatDayLabel(date: Date): string {
-	return date.toLocaleDateString(undefined, {
+	return date.toLocaleDateString(DATE_LOCALE, {
 		month: "long",
 		day: "numeric",
 		timeZone: "UTC",
@@ -221,7 +222,7 @@ export function formatTokens(value: number | undefined): string {
 	if (value == null) {
 		return "—";
 	}
-	return value.toLocaleString();
+	return formatNumber(value);
 }
 
 export const FIRST_COLUMN =

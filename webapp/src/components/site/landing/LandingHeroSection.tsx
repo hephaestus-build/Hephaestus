@@ -6,6 +6,7 @@ import { LandingSignInCta } from "@/components/auth/LandingSignInCta";
 import { GitHubIcon, GitLabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { formatNumber } from "@/lib/numbers";
 import {
 	LandingCluster,
 	LandingFeedbackCard,
@@ -43,8 +44,8 @@ function Diffstat({ added, removed }: { added: number; removed: number }) {
 		<span className="inline-flex items-center gap-1.5 font-mono">
 			{/* Fixed locale: the scene is captured as a committed image, and a grouping separator
 			    that follows the capturing machine's locale would rewrite that image in CI. */}
-			<span className="text-success">+{added.toLocaleString("en")}</span>
-			<span className="text-destructive">−{removed.toLocaleString("en")}</span>
+			<span className="text-success">+{formatNumber(added)}</span>
+			<span className="text-destructive">−{formatNumber(removed)}</span>
 			<span className="flex gap-px" aria-hidden="true">
 				{[0, 1, 2, 3, 4].map((index) => (
 					<span

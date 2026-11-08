@@ -4,6 +4,7 @@ import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
 import { hasText } from "@/lib/text";
 
+import { formatNumber } from "@/lib/numbers";
 import { JOB_TYPE_LABEL, jobProgress, phaseLabel } from "./sync-format";
 
 export interface ActiveJobProgressProps {
@@ -39,13 +40,13 @@ export function ActiveJobProgress({ job }: ActiveJobProgressProps) {
 							className="w-32 shrink-0"
 							aria-label="Sync progress"
 							getAriaValueText={() =>
-								`${processed.toLocaleString()} of ${total.toLocaleString()} records${
+								`${formatNumber(processed)} of ${formatNumber(total)} records${
 									hasText(currentStep) ? `, ${currentStep}` : ""
 								}`
 							}
 						/>
 						<span className="shrink-0 tabular-nums">
-							{processed.toLocaleString()}/{total.toLocaleString()}
+							{formatNumber(processed)}/{formatNumber(total)}
 						</span>
 					</>
 				) : (

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { formatCalendarDate } from "@/lib/dates";
 import { ITEM_KIND, itemKindNoun } from "@/lib/item-kinds";
+import { formatNumber } from "@/lib/numbers";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 import { capitalise } from "@/lib/text";
 import {
@@ -99,10 +100,10 @@ export function PublicPersonSummary({
 							variant={counts.contributions > 0 || counts.activeWeeks > 0 ? undefined : "muted"}
 							icon={null}
 							title="Contributions"
-							value={counts.contributions.toLocaleString("en-GB")}
+							value={formatNumber(counts.contributions)}
 							detail={
 								<p className="text-xs text-muted-foreground">
-									{counts.activeWeeks.toLocaleString("en-GB")} active{" "}
+									{formatNumber(counts.activeWeeks)} active{" "}
 									{counts.activeWeeks === 1 ? "week" : "weeks"}
 								</p>
 							}
@@ -153,7 +154,7 @@ export function PublicPersonSummary({
 									<TableRow key={week.start.getTime()} variant="static">
 										<TableCell>{formatCalendarDate(week.start)}</TableCell>
 										<TableCell numeric className="text-right">
-											{week.contributions.toLocaleString("en-GB")}
+											{formatNumber(week.contributions)}
 										</TableCell>
 									</TableRow>
 								))}
@@ -191,12 +192,12 @@ function TotalTile({ total, providerType }: { total: Total; providerType: Provid
 				)
 			}
 			title={title}
-			value={value.toLocaleString("en-GB")}
+			value={formatNumber(value)}
 			qualifier={qualifier}
 			detail={
 				secondary === undefined ? undefined : (
 					<p className="text-xs text-muted-foreground">
-						{secondary.count.toLocaleString("en-GB")} {secondary.label}
+						{formatNumber(secondary.count)} {secondary.label}
 					</p>
 				)
 			}

@@ -173,20 +173,20 @@ function disclosureText(fx: Fx, isCurrentMonth: boolean): string | null {
 describe("page disclosure", () => {
 	it("quotes the live rate for the current month, and names who published it", () => {
 		expect(disclosureText(eur, true)).toBe(
-			"EUR amounts are estimates at the European Central Bank reference rate published on Jul 24, 2026 (1 USD ≈ €0.879). Spend is metered and enforced in USD.",
+			"EUR amounts are estimates at the European Central Bank reference rate published on 24 Jul 2026 (1 USD ≈ €0.879). Spend is metered and enforced in USD.",
 		);
 	});
 
 	it("explains why a closed month never moves", () => {
 		expect(disclosureText(eurClosed, false)).toBe(
-			"EUR amounts are estimates at the European Central Bank reference rate published on Jun 30, 2026 (1 USD ≈ €0.879). That is the last rate published in the month shown, so these figures no longer change.",
+			"EUR amounts are estimates at the European Central Bank reference rate published on 30 Jun 2026 (1 USD ≈ €0.879). That is the last rate published in the month shown, so these figures no longer change.",
 		);
 	});
 
 	it("declines to name a publisher it does not recognise", () => {
 		const unknownSource: Fx = { ...eur, source: "SNB" };
 		expect(disclosureText(unknownSource, true)).toBe(
-			"EUR amounts are estimates at the reference rate published on Jul 24, 2026 (1 USD ≈ €0.879). Spend is metered and enforced in USD.",
+			"EUR amounts are estimates at the reference rate published on 24 Jul 2026 (1 USD ≈ €0.879). Spend is metered and enforced in USD.",
 		);
 	});
 

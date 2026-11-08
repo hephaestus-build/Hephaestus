@@ -29,6 +29,7 @@ import {
 	formatAverageUsd,
 	formatCostUsd,
 } from "@/lib/money";
+import { formatNumber } from "@/lib/numbers";
 
 import { MoneyCell } from "./MoneyCell";
 import { PurseHeading, PurseLeaf } from "./PurseHeading";
@@ -124,8 +125,8 @@ export function LlmUsageByPracticeTable({
 				}),
 				columnHelper.accessor("reviews", {
 					header: "Reviews",
-					cell: ({ getValue }) => getValue().toLocaleString(),
-					footer: () => total?.reviews.toLocaleString(),
+					cell: ({ getValue }) => formatNumber(getValue()),
+					footer: () => (total == null ? undefined : formatNumber(total.reviews)),
 					sortDescFirst: true,
 					meta: NUMERIC,
 				}),
@@ -133,8 +134,8 @@ export function LlmUsageByPracticeTable({
 					? [
 							columnHelper.accessor("unpricedEventCount", {
 								header: UNPRICED_RUNS.label,
-								cell: ({ getValue }) => getValue().toLocaleString(),
-								footer: () => total?.unpricedEventCount.toLocaleString(),
+								cell: ({ getValue }) => formatNumber(getValue()),
+								footer: () => (total == null ? undefined : formatNumber(total.unpricedEventCount)),
 								sortDescFirst: true,
 								meta: { numeric: true, className: UNPRICED_RUNS.className },
 							}),
@@ -156,8 +157,8 @@ export function LlmUsageByPracticeTable({
 				}),
 				columnHelper.accessor("calls", {
 					header: "Calls",
-					cell: ({ getValue }) => getValue().toLocaleString(),
-					footer: () => total?.calls.toLocaleString(),
+					cell: ({ getValue }) => formatNumber(getValue()),
+					footer: () => (total == null ? undefined : formatNumber(total.calls)),
 					sortDescFirst: true,
 					meta: NUMERIC_WIDE_ONLY,
 				}),

@@ -1,5 +1,5 @@
 import type { FxRateInfo } from "@/api/types.gen";
-import { asDate, type DateLike } from "@/lib/dates";
+import { DATE_LOCALE, asDate, type DateLike } from "@/lib/dates";
 
 /**
  * Display-only conversion for the AI-usage surfaces. USD stays authoritative — spend is metered,
@@ -20,23 +20,14 @@ export type Fx = (Omit<FxRateInfo, "source"> & { source: string }) | null | unde
 
 type CurrencyDisplay = "symbol" | "code" | "name";
 
-/** A cached `null` is a currency code the platform rejected, so `undefined` means "not tried yet". */
-const formatters = new Map<string, Intl.NumberFormat | null>();
-
-/** `en-US`, not the viewer's locale: `de-DE`'s `3,96 €` beside `$4.50` is two number grammars. */
+/** `en-US` keeps converted figures in the same number grammar as authoritative USD. */
 function formatter(
 	currencyCode: string,
 	digits: number,
 	currencyDisplay: CurrencyDisplay,
 ): Intl.NumberFormat | null {
-	const key = `${currencyCode}|${digits}|${currencyDisplay}`;
-	const cached = formatters.get(key);
-	if (cached !== undefined) {
-		return cached;
-	}
-	let built: Intl.NumberFormat | null;
 	try {
-		built = new Intl.NumberFormat("en-US", {
+		return new Intl.NumberFormat("en-US", {
 			style: "currency",
 			currency: currencyCode,
 			currencyDisplay,
@@ -44,27 +35,18 @@ function formatter(
 			maximumFractionDigits: digits,
 		});
 	} catch {
-		// An unknown ISO code throws. Presentation, not accounting — fall back to USD alone.
-		built = null;
+		// Unknown currency codes leave the authoritative USD amount on its own.
+		return null;
 	}
-	formatters.set(key, built);
-	return built;
 }
 
-const usesIsoCode = new Map<string, boolean>();
-
-/** A `$`-bearing symbol beside the USD figure would read as dollars: `$50 (≈ CAD 44)` instead. */
+/** A dollar-bearing symbol beside USD would read as dollars, so use its ISO code. */
 function displayFor(currencyCode: string): CurrencyDisplay {
-	let ambiguous = usesIsoCode.get(currencyCode);
-	if (ambiguous === undefined) {
-		const symbol =
-			formatter(currencyCode, 2, "symbol")
-				?.formatToParts(1)
-				.find((part) => part.type === "currency")?.value ?? "";
-		ambiguous = currencyCode !== "USD" && symbol.includes("$");
-		usesIsoCode.set(currencyCode, ambiguous);
-	}
-	return ambiguous ? "code" : "symbol";
+	const symbol =
+		formatter(currencyCode, 2, "symbol")
+			?.formatToParts(1)
+			.find((part) => part.type === "currency")?.value ?? "";
+	return currencyCode !== "USD" && symbol.includes("$") ? "code" : "symbol";
 }
 
 /**
@@ -132,7 +114,7 @@ function formatRateDate(value: DateLike): string {
 	if (!date) {
 		return "–";
 	}
-	return date.toLocaleDateString(undefined, {
+	return date.toLocaleDateString(DATE_LOCALE, {
 		month: "short",
 		day: "numeric",
 		year: "numeric",

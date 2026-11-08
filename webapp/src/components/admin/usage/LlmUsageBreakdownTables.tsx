@@ -19,6 +19,7 @@ import {
 	formatAverageUsd,
 	formatCostUsd,
 } from "@/lib/money";
+import { formatNumber } from "@/lib/numbers";
 
 import { type TableSkeletonColumn, TableRowsSkeleton } from "@/components/common/TableRowsSkeleton";
 import { MoneyCell } from "./MoneyCell";
@@ -223,11 +224,11 @@ export function LlmUsageByJobTypeTable({ report, purses }: LlmUsageByJobTypeTabl
 							</TableCell>
 							<PurseCells purses={purses} figures={row} digits={digits} />
 							<TableCell numeric className="text-right">
-								{row.events.toLocaleString()}
+								{formatNumber(row.events)}
 							</TableCell>
 							{hasUnpriced && (
 								<TableCell numeric className="text-right">
-									{row.unpricedEventCount.toLocaleString()}
+									{formatNumber(row.unpricedEventCount)}
 								</TableCell>
 							)}
 							<TableCell numeric className={cn("text-right", WIDE_ONLY)}>
@@ -243,7 +244,7 @@ export function LlmUsageByJobTypeTable({ report, purses }: LlmUsageByJobTypeTabl
 								{formatTokens(row.outputTokens)}
 							</TableCell>
 							<TableCell numeric className={cn("text-right", WIDE_ONLY)}>
-								{row.totalCalls.toLocaleString()}
+								{formatNumber(row.totalCalls)}
 							</TableCell>
 						</TableRow>
 					))}
@@ -255,11 +256,11 @@ export function LlmUsageByJobTypeTable({ report, purses }: LlmUsageByJobTypeTabl
 						<TotalHead />
 						<PurseCells purses={purses} figures={total} digits={digits} className={TOTAL_CELL} />
 						<TableCell numeric className={cn("text-right", TOTAL_CELL)}>
-							{total.runs.toLocaleString()}
+							{formatNumber(total.runs)}
 						</TableCell>
 						{hasUnpriced && (
 							<TableCell numeric className={cn("text-right", TOTAL_CELL)}>
-								{total.unpriced.toLocaleString()}
+								{formatNumber(total.unpriced)}
 							</TableCell>
 						)}
 						<TableCell numeric className={cn("text-right", WIDE_ONLY, TOTAL_CELL)}>
@@ -275,7 +276,7 @@ export function LlmUsageByJobTypeTable({ report, purses }: LlmUsageByJobTypeTabl
 							{formatTokens(total.outputTokens)}
 						</TableCell>
 						<TableCell numeric className={cn("text-right", WIDE_ONLY, TOTAL_CELL)}>
-							{total.calls.toLocaleString()}
+							{formatNumber(total.calls)}
 						</TableCell>
 					</TableRow>
 				</TableFooter>
@@ -346,11 +347,11 @@ export function LlmUsageByDayTable({ report, purses }: LlmUsageByDayTableProps) 
 							</TableCell>
 							<DaySpendCells purses={purses} figures={row} />
 							<TableCell numeric className="text-right">
-								{row.events.toLocaleString()}
+								{formatNumber(row.events)}
 							</TableCell>
 							{hasUnpriced && (
 								<TableCell numeric className="text-right">
-									{row.unpricedEventCount.toLocaleString()}
+									{formatNumber(row.unpricedEventCount)}
 								</TableCell>
 							)}
 						</TableRow>
@@ -363,11 +364,11 @@ export function LlmUsageByDayTable({ report, purses }: LlmUsageByDayTableProps) 
 						<TotalHead />
 						<DaySpendCells purses={purses} figures={total} className={TOTAL_CELL} />
 						<TableCell numeric className={cn("text-right", TOTAL_CELL)}>
-							{total.runs.toLocaleString()}
+							{formatNumber(total.runs)}
 						</TableCell>
 						{hasUnpriced && (
 							<TableCell numeric className={cn("text-right", TOTAL_CELL)}>
-								{total.unpriced.toLocaleString()}
+								{formatNumber(total.unpriced)}
 							</TableCell>
 						)}
 					</TableRow>

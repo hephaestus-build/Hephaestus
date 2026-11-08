@@ -79,8 +79,9 @@ describe("month and day labels", () => {
 	});
 
 	it("labels a day by its UTC date, not the viewer's", () => {
-		expect(formatUsageDay(new Date("2026-07-05T00:00:00.000Z"))).toBe("Jul 5");
-		expect(formatDayLabel(new Date("2026-07-05T00:00:00.000Z"))).toBe("July 5");
+		expect(formatUsageDay(new Date("2026-07-05T00:00:00.000Z"))).toBe("5 Jul");
+		expect(formatDayLabel(new Date("2026-07-05T00:00:00.000Z"))).toBe("5 July");
+		expect(formatUsageDay(new Date("2026-09-05T00:00:00.000Z"))).toBe("5 Sept");
 	});
 
 	it.each([
@@ -107,8 +108,8 @@ describe("budgetUsedPercent", () => {
 
 describe("budgetResetDayLabel", () => {
 	it.each([
-		["2026-07", "August 1"],
-		["2026-12", "January 1"],
+		["2026-07", "1 August"],
+		["2026-12", "1 January"],
 	])("names the first day after %s", (month, label) => {
 		expect(budgetResetDayLabel(month)).toBe(label);
 	});

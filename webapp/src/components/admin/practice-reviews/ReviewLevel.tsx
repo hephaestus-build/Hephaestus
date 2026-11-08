@@ -758,7 +758,7 @@ function ReviewJobEntry({ job, position }: { job: ReviewJob; position: string })
 	);
 }
 
-const cachePercent = new Intl.NumberFormat("en-GB", {
+const cachePercent = new Intl.NumberFormat("en-US", {
 	style: "percent",
 	maximumFractionDigits: 1,
 });

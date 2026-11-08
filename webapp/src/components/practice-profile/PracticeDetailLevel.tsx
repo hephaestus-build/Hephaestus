@@ -68,6 +68,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { formatNumber } from "@/lib/numbers";
 import { problemStatusOf } from "@/lib/problem-detail";
 import { nonEmpty } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
@@ -620,7 +621,7 @@ function observationCount(reviews: readonly ReviewEntry[]): number {
 const NO_FILTER: ObservationFilter = {};
 
 function observationsShownText(count: number): string {
-	return `${count.toLocaleString()} ${count === 1 ? "observation" : "observations"} shown.`;
+	return `${formatNumber(count)} ${count === 1 ? "observation" : "observations"} shown.`;
 }
 
 function emptyDescriptionOf(filtered: boolean, ownFiltered: boolean): string {

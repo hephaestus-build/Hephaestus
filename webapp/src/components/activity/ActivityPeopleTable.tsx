@@ -23,6 +23,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatNumber } from "@/lib/numbers";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 import { nameOrder } from "@/lib/text";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
@@ -441,7 +442,7 @@ function Figure({ count, strong = false }: { count: number; strong?: boolean }) 
 	if (count === 0) {
 		return <NoneMark />;
 	}
-	return <span className={cn(strong && "font-semibold")}>{count.toLocaleString("en-GB")}</span>;
+	return <span className={cn(strong && "font-semibold")}>{formatNumber(count)}</span>;
 }
 
 /** "12 people", or what a search leaves of them: "3 of 12 people". */

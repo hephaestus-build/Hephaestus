@@ -5,6 +5,7 @@ import { type ReactNode, useState } from "react";
 import { PracticeTabsLink, PracticeTabsRail } from "@/components/common/practice-tabs";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
+import { formatNumber } from "@/lib/numbers";
 
 import { GlobalScopeSlot } from "./GlobalScopeRow";
 import { carriedScope, type ScopeSource } from "./review-scope";
@@ -29,8 +30,6 @@ const SECTIONS = [
 export type ReviewTabCounts = Partial<
 	Record<"reviews" | "results" | "problems" | "feedback", number>
 >;
-
-const COUNT_FORMAT = new Intl.NumberFormat("en-US");
 
 const NO_COUNTS: ReviewTabCounts = {};
 
@@ -73,7 +72,7 @@ export function PracticeReviewsLayout({
 						>
 							{SECTIONS.map(({ to, label, tab }) => {
 								const count = tab === "overview" ? undefined : counts[tab];
-								const shown = count === undefined ? undefined : COUNT_FORMAT.format(count);
+								const shown = count === undefined ? undefined : formatNumber(count);
 								return (
 									<PracticeTabsLink
 										key={to}
