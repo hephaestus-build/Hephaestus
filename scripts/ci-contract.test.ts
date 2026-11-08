@@ -4831,6 +4831,7 @@ void test("a pull-request workflow cancels its superseded runs and nothing else"
 		head_ref: "patch-1",
 		sha,
 		event: {
+			action: "synchronize",
 			number,
 			pull_request: { number, head: { sha, ref: "patch-1", repo: { full_name: head } } },
 			repository: { default_branch: "main" },
