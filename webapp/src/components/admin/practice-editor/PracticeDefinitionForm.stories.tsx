@@ -272,7 +272,10 @@ export const ReservedIdentifier: Story = {
 		});
 		await userEvent.click(link);
 		await expect(canvas.getByRole("textbox", { name: "Identifier" })).toHaveValue("scans");
-		await expect(canvas.getByRole("textbox", { name: "Identifier" })).toHaveFocus();
+		// The summary moves focus a frame after the click.
+		await waitFor(async () =>
+			expect(canvas.getByRole("textbox", { name: "Identifier" })).toHaveFocus(),
+		);
 		await expect(submit).not.toHaveBeenCalled();
 	},
 };
