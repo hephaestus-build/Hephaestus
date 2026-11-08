@@ -655,7 +655,10 @@ Optional emails contain a visible unsubscribe confirmation link and an RFC 8058 
 A GET never changes subscriptions.
 The local HTTP Mailpit loop deliberately omits the HTTPS-only one-click header.
 
-1. Set public application host and webapp URLs to externally reachable **HTTPS** addresses.
+1. Set the auth issuer (`HEPHAESTUS_AUTH_ISSUER`) and webapp URL to externally reachable **HTTPS** addresses.
+   One-click links use the issuer origin and `hephaestus.auth.api-base-path`.
+   The Helm chart sets the production prefix to `/api`.
+   Confirmation links use the webapp URL.
 2. Configure relay DKIM signatures to include **both `List-Unsubscribe` and `List-Unsubscribe-Post`** headers.
 3. Keep SPF, DKIM, and DMARC aligned with the sender.
 4. Follow [Google's sender requirements](https://support.google.com/a/answer/81126?hl=en) and [RFC 8058](https://www.rfc-editor.org/rfc/rfc8058).

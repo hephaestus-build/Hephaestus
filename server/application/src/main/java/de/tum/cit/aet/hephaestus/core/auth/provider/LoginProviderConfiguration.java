@@ -24,6 +24,6 @@ public class LoginProviderConfiguration {
             OutlineOriginPolicy outlineOriginPolicy,
             ScmServerEndpointPolicy scmEndpoints) {
         return new LoginProviderClientRegistrationRepository(
-                loginProviderRepository, authProperties.oauthCallbackBase(), outlineOriginPolicy, scmEndpoints);
+                loginProviderRepository, authProperties.apiBaseUrl(), outlineOriginPolicy, scmEndpoints);
     }
 }
