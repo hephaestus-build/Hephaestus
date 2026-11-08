@@ -24,6 +24,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public interface FeedbackBasisRepository extends JpaRepository<FeedbackBasis, UUID> {
 
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository$ReadRow(
+            b.feedbackId, b.resultId, b.problemId, b.ordinal)
+        FROM FeedbackBasis b WHERE b.workspaceId = :workspaceId AND b.feedbackId IN :feedbackIds
+        ORDER BY b.feedbackId, b.ordinal, b.id
+        """)
+    List<ReadRow> findReadRows(long workspaceId, Collection<UUID> feedbackIds);
+
+    record ReadRow(UUID feedbackId, UUID resultId, @Nullable UUID problemId, int ordinal) {}
+
     List<FeedbackBasis> findByWorkspaceIdAndFeedbackIdOrderByOrdinalAscIdAsc(long workspaceId, UUID feedbackId);
 
     List<FeedbackBasis> findByWorkspaceIdAndResultId(long workspaceId, UUID resultId);

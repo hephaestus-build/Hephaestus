@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.MockSecurityContextUtils;
+import de.tum.cit.aet.hephaestus.testconfig.QueryPlans;
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.SqlRequestTrace;
 import java.sql.Timestamp;
@@ -29,12 +30,25 @@ class FeedbackListReadCostIntegrationTest extends BaseIntegrationTest {
     private static final FeedbackQueryFilter ALL = new FeedbackQueryFilter(
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
-    @Autowired private ReviewIntegrationData data;
-    @Autowired private FeedbackReadService feedback;
-    @Autowired private SqlReadMeasurement reads;
-    @Autowired private SqlRequestTrace requests;
-    @Autowired private WebTestClient http;
-    @Autowired private JdbcClient jdbc;
+    @Autowired
+    private ReviewIntegrationData data;
+
+    @Autowired
+    private FeedbackReadService feedback;
+
+    @Autowired
+    private SqlReadMeasurement reads;
+
+    @Autowired
+    private SqlRequestTrace requests;
+
+    @Autowired
+    private WebTestClient http;
+
+    @Autowired
+    private JdbcClient jdbc;
+
+    @Autowired private QueryPlans plans;
 
     private ReviewIntegrationData.Scenario scenario;
     private final List<UUID> ids = new ArrayList<>();
@@ -60,42 +74,113 @@ class FeedbackListReadCostIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldKeepOperatorFeedbackListReadsBoundedAsThePageGrows() {
         var small = reads.measure(() -> feedback.list(scenario.workspace().getId(), ALL, PageRequest.of(0, 32)));
-        assertThat(small.value().getContent()).extracting(ReviewFeedbackDTO::id).containsExactlyInAnyOrderElementsOf(ids);
+        assertThat(small.value().getContent())
+                .extracting(ReviewFeedbackDTO::id)
+                .containsExactlyInAnyOrderElementsOf(ids);
         growPage();
 
         var larger = reads.measure(() -> feedback.list(scenario.workspace().getId(), ALL, PageRequest.of(0, 32)));
 
-        assertThat(larger.value().getContent()).extracting(ReviewFeedbackDTO::id)
-                .containsExactlyInAnyOrderElementsOf(ids).doesNotContain(foreignId);
-        assertThat(larger.value().getContent()).containsAll(small.value().getContent()).allSatisfy(row -> {
-            assertThat(row.resultCount()).isEqualTo(1);
-            assertThat(row.bodyPreview()).isNull();
-            assertThat(row.textHidden()).isTrue();
-            assertThat(row.withdrawn()).isFalse();
-        });
-        assertThat(larger.cost().statements()).as("small=%s, larger=%s", small.cost(), larger.cost())
+        assertThat(larger.value().getContent())
+                .extracting(ReviewFeedbackDTO::id)
+                .containsExactlyInAnyOrderElementsOf(ids)
+                .doesNotContain(foreignId);
+        assertThat(larger.value().getContent())
+                .containsAll(small.value().getContent())
+                .allSatisfy(row -> {
+                    assertThat(row.resultCount()).isEqualTo(1);
+                    assertThat(row.bodyPreview()).isNull();
+                    assertThat(row.textHidden()).isTrue();
+                    assertThat(row.withdrawn()).isFalse();
+                });
+        assertThat(larger.cost().statements())
+                .as("small=%s, larger=%s", small.cost(), larger.cost())
                 .isEqualTo(small.cost().statements());
+        assertThat(plans.fullScans(small.sql())).isEmpty();
+        assertThat(plans.fullScans(larger.sql())).isEmpty();
     }
 
     @Test
     void shouldKeepOperatorFeedbackRequestCostBoundedAsThePageGrows() {
         var path = "/workspaces/" + scenario.workspace().getWorkspaceSlug() + "/practices/reviews/feedback?size=32";
-        var small = requests.measure(http, client -> client.get().uri(path)
-                .headers(headers -> headers.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
-                .exchange().expectStatus().isOk().expectBody().jsonPath("$.content.length()").isEqualTo(2));
+        var small = requests.measure(
+                http,
+                client -> client.get()
+                        .uri(path)
+                        .headers(headers -> headers.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectBody()
+                        .jsonPath("$.content.length()")
+                        .isEqualTo(2));
         growPage();
 
-        var larger = requests.measure(http, client -> client.get().uri(path)
-                .headers(headers -> headers.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
-                .exchange().expectStatus().isOk().expectBody().jsonPath("$.content.length()").isEqualTo(8)
-                .jsonPath("$.content[?(@.id=='" + foreignId + "')]").isEmpty());
+        var larger = requests.measure(
+                http,
+                client -> client.get()
+                        .uri(path)
+                        .headers(headers -> headers.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectBody()
+                        .jsonPath("$.content.length()")
+                        .isEqualTo(8)
+                        .jsonPath("$.content[?(@.id=='" + foreignId + "')]")
+                        .isEmpty());
 
-        assertThat(larger.statements()).as("small=%s, larger=%s", small.statements(), larger.statements())
+        assertThat(larger.statements())
+                .as("small=%s, larger=%s", small.statements(), larger.statements())
                 .isEqualTo(small.statements());
+        assertThat(plans.fullScans(small.sql())).isEmpty();
+        assertThat(plans.fullScans(larger.sql())).isEmpty();
     }
 
     private void growPage() {
         for (int index = 2; index < 8; index++) ids.add(recordedFeedback(scenario, index));
+    }
+
+    @Test
+    void shouldKeepTotalsOnAnEmptyPage() {
+        var page = feedback.list(scenario.workspace().getId(), ALL, PageRequest.of(99, 2));
+
+        assertThat(page.getContent()).isEmpty();
+        assertThat(page.getTotalElements()).isEqualTo(2);
+        assertThat(page.getNumber()).isEqualTo(99);
+    }
+
+    @Test
+    void shouldUseTheLatestResponseIncludingUuidTiesAndNullResolution() {
+        var id = ids.getFirst();
+        var at = AT.plusSeconds(10);
+        for (var response : List.of(
+                UUID.fromString("7fffffff-ffff-ffff-ffff-ffffffffffff"),
+                UUID.fromString("80000000-0000-0000-0000-000000000000"))) {
+            jdbc.sql("""
+                INSERT INTO feedback_response(id,workspace_id,feedback_id,resolution,created_at)
+                VALUES(:id,:ws,:feedback,:resolution,:at)
+                """)
+                    .param("id", response).param("ws", scenario.workspace().getId()).param("feedback", id)
+                    .param("resolution", response.toString().startsWith("7") ? "DISAGREE" : "ADDRESSED")
+                    .param("at", Timestamp.from(at)).update();
+        }
+        var first = feedback.list(scenario.workspace().getId(), ALL, PageRequest.of(0, 32));
+        assertThat(first.getContent().stream().filter(row -> row.id().equals(id)).findFirst().orElseThrow().disagreedAt()).isNull();
+        jdbc.sql("""
+            INSERT INTO feedback_response(id,workspace_id,feedback_id,resolution,created_at)
+            VALUES(:id,:ws,:feedback,'DISAGREE',:at)
+            """)
+                .param("id", UUID.randomUUID()).param("ws", scenario.workspace().getId()).param("feedback", id)
+                .param("at", Timestamp.from(at.plusSeconds(1))).update();
+        var disagreed = feedback.list(scenario.workspace().getId(), ALL, PageRequest.of(0, 32));
+        assertThat(disagreed.getContent().stream().filter(row -> row.id().equals(id)).findFirst().orElseThrow().disagreedAt())
+                .isEqualTo(at.plusSeconds(1));
+        jdbc.sql("INSERT INTO feedback_response(id,workspace_id,feedback_id,created_at) VALUES(:id,:ws,:feedback,:at)")
+                .param("id", UUID.randomUUID()).param("ws", scenario.workspace().getId()).param("feedback", id)
+                .param("at", Timestamp.from(at.plusSeconds(2))).update();
+        var cleared = feedback.list(scenario.workspace().getId(), ALL, PageRequest.of(0, 32));
+        assertThat(cleared.getContent().stream().filter(row -> row.id().equals(id)).findFirst().orElseThrow().disagreedAt()).isNull();
     }
 
     private UUID recordedFeedback(ReviewIntegrationData.Scenario owner, int index) {
@@ -105,15 +190,23 @@ class FeedbackListReadCostIntegrationTest extends BaseIntegrationTest {
             INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at)
             VALUES(:id,:ws,:review,:item,:developer,'ON_WORK','DELIVERED','Recorded feedback.',:at,:at)
             """)
-                .param("id", id).param("ws", result.getWorkspaceId()).param("review", result.getReviewId())
-                .param("item", result.getItemId()).param("developer", result.getDeveloperId())
-                .param("at", Timestamp.from(result.getRecordedAt())).update();
+                .param("id", id)
+                .param("ws", result.getWorkspaceId())
+                .param("review", result.getReviewId())
+                .param("item", result.getItemId())
+                .param("developer", result.getDeveloperId())
+                .param("at", Timestamp.from(result.getRecordedAt()))
+                .update();
         jdbc.sql("""
             INSERT INTO feedback_basis(id,workspace_id,feedback_id,result_id,developer_id,ordinal)
             VALUES(:id,:ws,:feedback,:result,:developer,0)
             """)
-                .param("id", UUID.randomUUID()).param("ws", result.getWorkspaceId()).param("feedback", id)
-                .param("result", result.getId()).param("developer", result.getDeveloperId()).update();
+                .param("id", UUID.randomUUID())
+                .param("ws", result.getWorkspaceId())
+                .param("feedback", id)
+                .param("result", result.getId())
+                .param("developer", result.getDeveloperId())
+                .update();
         return id;
     }
 }

@@ -9,6 +9,10 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.ReviewResultQueryService;
 import java.util.List;
+import java.util.Collection;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.function.Function;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -28,7 +32,7 @@ public class FeedbackBasisRead {
     private final ResultVisibilityPolicy evidence;
     private final ReviewResultQueryService presentation;
 
-    public record Snapshot(List<FeedbackBasis> edges, List<Result> results, Set<UUID> permitted, boolean readable) {
+    public record Snapshot(List<FeedbackBasisRepository.ReadRow> edges, List<Result> results, Set<UUID> permitted, boolean readable) {
         public Snapshot {
             edges = List.copyOf(edges);
             results = List.copyOf(results);
@@ -37,15 +41,27 @@ public class FeedbackBasisRead {
     }
 
     public Snapshot read(long workspaceId, UUID feedbackId) {
-        var edges = basis.findByWorkspaceIdAndFeedbackIdOrderByOrdinalAscIdAsc(workspaceId, feedbackId);
-        var ids = edges.stream().map(FeedbackBasis::getResultId).distinct().toList();
-        var support = results.findByWorkspaceIdAndIdIn(workspaceId, ids);
+        return Objects.requireNonNull(readAll(workspaceId, List.of(feedbackId)).get(feedbackId));
+    }
+
+    public Map<UUID, Snapshot> readAll(long workspaceId, Collection<UUID> feedbackIds) {
+        if (feedbackIds.isEmpty()) return Map.of();
+        var edges = basis.findReadRows(workspaceId, feedbackIds);
+        var ids = edges.stream().map(FeedbackBasisRepository.ReadRow::resultId).distinct().toList();
+        var support = ids.isEmpty() ? List.<Result>of() : results.findByWorkspaceIdAndIdIn(workspaceId, ids);
         var permitted = evidence.permitsHistory(workspaceId, support, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
-        return new Snapshot(
-                edges,
-                support,
-                permitted,
-                !edges.isEmpty() && support.size() == ids.size() && permitted.containsAll(ids));
+        var byResult = support.stream().collect(Collectors.toMap(Result::getId, Function.identity()));
+        var byFeedback = edges.stream().collect(Collectors.groupingBy(FeedbackBasisRepository.ReadRow::feedbackId));
+        Map<UUID, Snapshot> snapshots = new LinkedHashMap<>();
+        for (var id : feedbackIds) {
+            var selected = byFeedback.getOrDefault(id, List.of());
+            var resultIds = selected.stream().map(FeedbackBasisRepository.ReadRow::resultId).distinct().toList();
+            var selectedResults = resultIds.stream().map(byResult::get).filter(Objects::nonNull).toList();
+            var selectedPermitted = resultIds.stream().filter(permitted::contains).collect(Collectors.toSet());
+            snapshots.put(id, new Snapshot(selected, selectedResults, selectedPermitted,
+                    !selected.isEmpty() && selectedResults.size() == resultIds.size() && selectedPermitted.containsAll(resultIds)));
+        }
+        return snapshots;
     }
 
     public List<FeedbackBasisDTO> bound(long workspaceId, Snapshot snapshot) {
@@ -53,12 +69,12 @@ public class FeedbackBasisRead {
                 .collect(Collectors.toMap(view -> view.result().getId(), view -> view));
         return snapshot.edges().stream()
                 .map(edge -> new FeedbackBasisDTO(
-                        edge.getResultId(),
-                        edge.getProblemId(),
-                        edge.getOrdinal(),
+                        edge.resultId(),
+                        edge.problemId(),
+                        edge.ordinal(),
                         presentation.bound(
-                                Objects.requireNonNull(resultViews.get(edge.getResultId())),
-                                snapshot.permitted().contains(edge.getResultId()))))
+                                Objects.requireNonNull(resultViews.get(edge.resultId())),
+                                snapshot.permitted().contains(edge.resultId()))))
                 .toList();
     }
 }
