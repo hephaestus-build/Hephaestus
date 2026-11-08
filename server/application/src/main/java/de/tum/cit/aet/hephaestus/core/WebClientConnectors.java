@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.core;
 
+import io.netty.channel.ChannelOption;
 import io.netty.resolver.AddressResolverGroup;
 import io.netty.resolver.DefaultAddressResolverGroup;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import org.springframework.http.client.reactive.ClientHttpConnector;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import reactor.netty.http.client.HttpClient;
@@ -10,10 +12,21 @@ import reactor.netty.http.client.HttpClient;
 /** Connectors pinning the JVM/system DNS resolver instead of Netty's async resolver. */
 public final class WebClientConnectors {
 
+    public static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    public static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
+
     private WebClientConnectors() {}
 
+    /** A finite connect and read wait, with the caller's address-resolution policy. */
+    public static HttpClient httpClient(AddressResolverGroup<InetSocketAddress> resolver) {
+        return HttpClient.create()
+                .resolver(resolver)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, Math.toIntExact(CONNECT_TIMEOUT.toMillis()))
+                .responseTimeout(REQUEST_TIMEOUT);
+    }
+
     public static ClientHttpConnector systemDns() {
-        return new ReactorClientHttpConnector(HttpClient.create().resolver(DefaultAddressResolverGroup.INSTANCE));
+        return new ReactorClientHttpConnector(httpClient(DefaultAddressResolverGroup.INSTANCE));
     }
 
     /**
@@ -23,7 +36,7 @@ public final class WebClientConnectors {
      * {@link SsrfGuardedResolverGroup}.
      */
     public static ClientHttpConnector ssrfGuarded() {
-        return new ReactorClientHttpConnector(HttpClient.create().resolver(SsrfGuardedResolverGroup.INSTANCE));
+        return ssrfGuarded(false);
     }
 
     /**
@@ -32,7 +45,7 @@ public final class WebClientConnectors {
      * private/reserved range stays blocked either way.
      */
     public static ClientHttpConnector ssrfGuarded(boolean allowLoopback) {
-        return new ReactorClientHttpConnector(HttpClient.create().resolver(resolverGroup(allowLoopback)));
+        return new ReactorClientHttpConnector(httpClient(resolverGroup(allowLoopback)));
     }
 
     /** The raw Netty resolver group backing {@link #ssrfGuarded(boolean)} — for callers that build their own {@code HttpClient}. */
