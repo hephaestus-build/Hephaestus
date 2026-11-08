@@ -50,22 +50,20 @@ export function flakyJobs(attempts: ReadonlyMap<number, readonly AttemptJob[]>):
 	const flaky: FlakyJob[] = [];
 	const counted = new Set<string>();
 	const ordered = [...attempts.keys()].toSorted((a, b) => a - b);
-	for (const [index, attempt] of ordered.entries()) {
+	for (const attempt of ordered) {
 		for (const job of attempts.get(attempt) ?? []) {
 			if (job.conclusion !== "failure" || AGGREGATE_JOBS.has(job.name) || counted.has(job.name)) {
 				continue;
 			}
-			const passedLater = ordered
-				.slice(index + 1)
-				.some((later) =>
-					(attempts.get(later) ?? []).some(
-						(retry) => retry.name === job.name && retry.conclusion === "success",
-					),
-				);
-			if (passedLater) {
-				counted.add(job.name);
-				flaky.push({ attempt, job });
+			const latest = ordered
+				.toReversed()
+				.flatMap((later) => attempts.get(later) ?? [])
+				.find((retry) => retry.name === job.name);
+			if (latest?.conclusion !== "success") {
+				continue;
 			}
+			counted.add(job.name);
+			flaky.push({ attempt, job });
 		}
 	}
 	return flaky;
@@ -166,19 +164,35 @@ export function attributable(
 	);
 }
 
-/** Completed runs that needed another attempt, once each: adjacent day windows share their bound. */
-export function rerunsOf(pages: readonly unknown[]): Record<string, unknown>[] {
+/** Completed runs, once each: adjacent day windows share their bound. */
+export function completedRuns(pages: readonly unknown[]): Record<string, unknown>[] {
 	const seen = new Set<unknown>();
 	return pages
 		.flatMap((page) => asArray(asRecord(page, "runs page").workflow_runs, "workflow_runs"))
 		.map((run) => asRecord(run, "run"))
 		.filter((run) => {
-			if (typeof run.run_attempt !== "number" || run.run_attempt < 2 || seen.has(run.id)) {
+			if (seen.has(run.id)) {
 				return false;
 			}
 			seen.add(run.id);
 			return true;
 		});
+}
+
+/** Reruns keep one record per run, while same-SHA runs remain available as evidence. */
+export const rerunsOf = (pages: readonly unknown[]) =>
+	completedRuns(pages).filter((run) => typeof run.run_attempt === "number" && run.run_attempt >= 2);
+
+/** Cancellations describe queue churn, never a flaky test or a failed build. */
+export function runOutcomes(runs: readonly Record<string, unknown>[]) {
+	return ["pull_request", "merge_group", "push", "workflow_dispatch"].map((event) => {
+		const selected = runs.filter((run) => run.event === event);
+		return {
+			event,
+			total: selected.length,
+			cancelled: selected.filter((run) => run.conclusion === "cancelled").length,
+		};
+	});
 }
 
 /** Report artifacts of one attempt: CI names them `<suite>-reports-<attempt>`. */
@@ -203,20 +217,42 @@ function cell(text: string): string {
 	return text.replaceAll("|", String.raw`\|`);
 }
 
-export function renderFlakes(runs: readonly FlakyRun[], windowDays: number): string {
-	const tests = new Map<string, { count: number; latest: string; runs: Set<number> }>();
-	const jobs = new Map<string, { count: number; latest: string; steps: Set<string> }>();
+export function renderFlakes(
+	runs: readonly FlakyRun[],
+	windowDays: number,
+	observed: readonly Record<string, unknown>[] = [],
+): string {
+	const tests = new Map<
+		string,
+		{ count: number; latest: string; runs: Set<number>; commits: Set<string> }
+	>();
+	const jobs = new Map<
+		string,
+		{ count: number; latest: string; steps: Set<string>; commits: Set<string> }
+	>();
 	for (const run of runs) {
 		for (const name of new Set(run.failedTests)) {
-			const entry = tests.get(name) ?? { count: 0, latest: run.createdAt, runs: new Set() };
-			entry.count += 1;
+			const entry = tests.get(name) ?? {
+				count: 0,
+				latest: run.createdAt,
+				runs: new Set(),
+				commits: new Set(),
+			};
+			entry.commits.add(run.sha);
+			entry.count = entry.commits.size;
 			entry.latest = entry.latest > run.createdAt ? entry.latest : run.createdAt;
 			entry.runs.add(run.runId);
 			tests.set(name, entry);
 		}
 		for (const { job } of run.jobs) {
-			const entry = jobs.get(job.name) ?? { count: 0, latest: run.createdAt, steps: new Set() };
-			entry.count += 1;
+			const entry = jobs.get(job.name) ?? {
+				count: 0,
+				latest: run.createdAt,
+				steps: new Set(),
+				commits: new Set(),
+			};
+			entry.commits.add(run.sha);
+			entry.count = entry.commits.size;
 			entry.latest = entry.latest > run.createdAt ? entry.latest : run.createdAt;
 			for (const step of job.failedSteps) {
 				entry.steps.add(step);
@@ -228,6 +264,13 @@ export function renderFlakes(runs: readonly FlakyRun[], windowDays: number): str
 		`## Flaky CI (last ${windowDays} days)`,
 		"",
 		`${runs.length} runs failed and then passed on a rerun of the same commit.`,
+		"Counts below include each commit once per test or job. Run links retain all observations.",
+		"",
+		"### Run outcomes",
+		"",
+		"| Event | Completed runs | Cancelled runs |",
+		"| --- | ---: | ---: |",
+		...runOutcomes(observed).map((row) => `| ${row.event} | ${row.total} | ${row.cancelled} |`),
 		"",
 		"### Tests",
 		"",
@@ -338,6 +381,7 @@ if (import.meta.main) {
 			)),
 		);
 	}
+	const observed = completedRuns(pages);
 	for (const run of rerunsOf(pages)) {
 		const runId = run.id;
 		const lastAttempt = run.run_attempt;
@@ -370,9 +414,9 @@ if (import.meta.main) {
 	await mkdir("tmp/ci-metrics", { recursive: true });
 	await writeFile(
 		"tmp/ci-metrics/flakes.json",
-		`${JSON.stringify({ observedAt: new Date(now).toISOString(), windowDays: WINDOW_DAYS, runs: flakyRuns }, null, 2)}\n`,
+		`${JSON.stringify({ observedAt: new Date(now).toISOString(), windowDays: WINDOW_DAYS, outcomes: runOutcomes(observed), runs: flakyRuns }, null, 2)}\n`,
 	);
-	const rendered = renderFlakes(flakyRuns, WINDOW_DAYS);
+	const rendered = renderFlakes(flakyRuns, WINDOW_DAYS, observed);
 	process.stdout.write(rendered);
 	if (process.env.GITHUB_STEP_SUMMARY !== undefined) {
 		await appendFile(process.env.GITHUB_STEP_SUMMARY, rendered);

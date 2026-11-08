@@ -10,6 +10,7 @@ permissions: {}
 jobs:
   report:
     name: "Completed CI diagnostics"
+    if: github.event.workflow_run.conclusion != 'cancelled'
     runs-on: ubuntu-slim
     timeout-minutes: 15
     permissions:
@@ -41,12 +42,14 @@ jobs:
               per_page: 100,
             });
             // The attempt endpoint selects jobs; the job response need not expose run_attempt.
-            if (jobs.length === 0 || jobs.some((job) => job.run_id !== run.id
-              || job.status !== 'completed')) {
-              throw new Error('Expected completed jobs from the upstream attempt');
+            if (jobs.length === 0 || jobs.some((job) => job.run_id !== run.id)) {
+              throw new Error('Expected jobs from the upstream attempt');
             }
             const gate = jobs.find((job) => job.name === 'CI Status Gate');
-            if (!gate) throw new Error('Missing upstream CI verdict');
+            const incomplete = jobs.filter((job) => job.status !== 'completed');
+            if (incomplete.length > 0 || !gate) {
+              core.notice('This attempt has incomplete job metadata; its timings remain unavailable.');
+            }
             const duration = (start, end) => {
               const seconds = (Date.parse(end) - Date.parse(start)) / 1000;
               return start && end && Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
@@ -56,7 +59,7 @@ jobs:
             const text = (value) => String(value ?? 'Unavailable')
               .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
             const runnerTimes = jobs.filter((job) => job.conclusion !== 'skipped')
-              .map((job) => duration(job.started_at, job.completed_at));
+              .map((job) => duration(job.started_at, job.status === 'completed' ? job.completed_at : null));
             const runnerSeconds = runnerTimes.every((value) => value !== null)
               ? runnerTimes.reduce((total, value) => total + value, 0) : null;
             await core.summary
@@ -64,8 +67,8 @@ jobs:
               .addLink(`Upstream run ${run.id}, attempt ${run.run_attempt}`, run.html_url)
               .addTable([
                 [{ data: 'Metric', header: true }, { data: 'Value', header: true }],
-                ['Required gate conclusion', text(gate.conclusion)],
-                ['Attempt-to-gate time', format(duration(run.run_started_at, gate.completed_at))],
+                ['Required gate conclusion', text(gate?.conclusion)],
+                ['Attempt-to-gate time', format(duration(run.run_started_at, gate?.completed_at))],
                 ['Completed runner time', format(runnerSeconds)],
               ])
               .addHeading('Job timing', 3)
@@ -73,7 +76,7 @@ jobs:
                 ['Job', 'Result', 'Creation to start', 'Execution'].map((data) => ({ data, header: true })),
                 ...jobs.map((job) => [text(job.name), text(job.conclusion),
                   format(duration(job.created_at, job.started_at)),
-                  format(duration(job.started_at, job.completed_at))]),
+                  format(duration(job.started_at, job.status === 'completed' ? job.completed_at : null))]),
               ])
               .addHeading('Step timing', 3)
               .addTable([
