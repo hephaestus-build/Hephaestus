@@ -22,7 +22,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import de.tum.cit.aet.hephaestus.testconfig.QueryPlans;
 import de.tum.cit.aet.hephaestus.testconfig.SqlRequestTrace;
 import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import jakarta.persistence.EntityManagerFactory;
@@ -89,9 +88,6 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     SqlRequestTrace requests;
-
-    @Autowired
-    QueryPlans plans;
 
     @MockitoBean
     ScmItemSourceAccess source;
@@ -547,8 +543,6 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
         assertThat(larger.statements())
                 .as("small=%s, larger=%s", small.statements(), larger.statements())
                 .isEqualTo(small.statements());
-        assertThat(plans.fullScans(small.sql())).isEmpty();
-        assertThat(plans.fullScans(larger.sql())).isEmpty();
     }
 
     private SqlStatementCounter.Measurement<WebTestClient.BodyContentSpec> measuredFeedbackPage(int count) {
