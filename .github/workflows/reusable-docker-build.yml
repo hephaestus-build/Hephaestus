@@ -331,6 +331,7 @@ jobs:
         if: ${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish && inputs.scan-images }}
         with:
           install-syft: "true"
+          cache: "false"
 
       # A blocking gate inherits Trivy's database availability as a hard dependency, so the
       # retries and the mirror fallback live in one action rather than in each caller.

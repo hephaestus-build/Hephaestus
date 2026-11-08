@@ -1,5 +1,5 @@
 name: Install verified Cosign
-description: Install Cosign with cached pinned bytes and both upstream signatures
+description: Install pinned Cosign with verified fallbacks and both upstream signatures
 runs:
   using: composite
   steps:
@@ -8,20 +8,25 @@ runs:
         node-version-file: ${{ github.action_path }}/../../../package.json
     - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@7c638c35e9184f6cd568ea06a21efac7b39f5e82
       with:
+        cache: "false"
         tool: cosign-bootstrap
     - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@7c638c35e9184f6cd568ea06a21efac7b39f5e82
       with:
+        cache: "false"
         tool: cosign
     - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@7c638c35e9184f6cd568ea06a21efac7b39f5e82
       with:
+        cache: "false"
         tool: cosign
         variant: key
     - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@7c638c35e9184f6cd568ea06a21efac7b39f5e82
       with:
+        cache: "false"
         tool: cosign
         variant: keyless
     - uses: hephaestus-build/Hephaestus/.github/actions/setup-ci-tool@7c638c35e9184f6cd568ea06a21efac7b39f5e82
       with:
+        cache: "false"
         tool: cosign
         variant: kms
     - name: Verify and install Cosign

@@ -1432,5 +1432,8 @@ They retain the GHCR and ECR fallbacks and the existing freshness checks.
 No pinned tool source uses Docker Hub.
 
 Signing jobs use the Cosign installer action at an immutable commit, with no checkout of the build branch.
-The installer also pins its shared cache action to an immutable commit.
+The installer also pins its shared resolver action to an immutable commit.
+Signing jobs disable Actions cache archives for Cosign, security tools and Helm.
+Archive extraction happens before the tool checksum check and can change other runner files.
+These jobs use GHCR, API and direct downloads, with verified files reused only within the job.
 Publish and review a new installer commit before updating those references.

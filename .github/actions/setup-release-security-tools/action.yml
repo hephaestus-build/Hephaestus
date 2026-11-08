@@ -1,6 +1,9 @@
 name: Setup release security tools
 description: Install pinned and verified release security tools
 inputs:
+  cache:
+    description: Restore and save GitHub Actions cache archives; disable in signing jobs
+    default: "true"
   install-syft:
     description: Install Syft; Cosign and Trivy are always installed
     default: "true"
@@ -12,36 +15,45 @@ runs:
         install: "none"
     - uses: ./.github/actions/setup-ci-tool
       with:
+        cache: ${{ inputs.cache }}
         tool: cosign-bootstrap
     - uses: ./.github/actions/setup-ci-tool
       with:
+        cache: ${{ inputs.cache }}
         tool: cosign
     - uses: ./.github/actions/setup-ci-tool
       with:
+        cache: ${{ inputs.cache }}
         tool: cosign
         variant: key
     - uses: ./.github/actions/setup-ci-tool
       with:
+        cache: ${{ inputs.cache }}
         tool: cosign
         variant: keyless
     - uses: ./.github/actions/setup-ci-tool
       with:
+        cache: ${{ inputs.cache }}
         tool: cosign
         variant: kms
     - uses: ./.github/actions/setup-ci-tool
       if: inputs.install-syft == 'true'
       with:
+        cache: ${{ inputs.cache }}
         tool: syft
     - uses: ./.github/actions/setup-ci-tool
       if: inputs.install-syft == 'true'
       with:
+        cache: ${{ inputs.cache }}
         tool: syft
         variant: checksums
     - uses: ./.github/actions/setup-ci-tool
       with:
+        cache: ${{ inputs.cache }}
         tool: trivy
     - uses: ./.github/actions/setup-ci-tool
       with:
+        cache: ${{ inputs.cache }}
         tool: trivy
         variant: checksums
     - name: Install verified release security tools

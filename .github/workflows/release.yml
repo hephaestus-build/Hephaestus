@@ -9,8 +9,7 @@ on:
         description: Promote the latest immutable vX.Y.Z-rc.N on the exact main commit, without rebuilding images
         required: true
         type: string
-  workflow_run:
-    # zizmor: ignore[dangerous-triggers] The guard authenticates the completed run before privileged jobs start.
+  workflow_run: # zizmor: ignore[dangerous-triggers] The guard authenticates the completed run before privileged jobs start.
     workflows: ["CI/CD"]
     types: [completed]
     branches: [main]
@@ -234,6 +233,8 @@ jobs:
           node scripts/sandbox-security.ts --image "$IMAGE" --report "$RUNNER_TEMP/sandbox-security.json"
 
       - uses: ./.github/actions/setup-release-security-tools
+        with:
+          cache: "false"
 
       # The database the whole evidence bundle is scanned against: recorded into the bundle, and
       # refused beyond the freshness limit, so a stale mirror cannot be signed as a fresh scan.
@@ -283,6 +284,8 @@ jobs:
         run: node scripts/verify-release-evidence.ts evidence --verify-signatures
 
       - uses: ./.github/actions/setup-helm
+        with:
+          cache: "false"
 
       # The chart is packaged from a copy of this checkout, the released commit, at the release
       # version. Its values pin the images of the verified evidence; the lock that names the
@@ -533,6 +536,8 @@ jobs:
 
       # Verifying the durable assets pulls the chart by its locked digest.
       - uses: ./.github/actions/setup-helm
+        with:
+          cache: "false"
 
       - name: Log in to GitHub Container Registry
         uses: ./.github/actions/ghcr-login

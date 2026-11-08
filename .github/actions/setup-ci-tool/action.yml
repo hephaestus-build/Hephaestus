@@ -4,6 +4,9 @@ inputs:
   tool:
     description: Tool identifier in the repository pin files
     required: true
+  cache:
+    description: Restore and save GitHub Actions cache archives; disable in signing jobs
+    default: "true"
   variant:
     description: Optional key, keyless, kms or checksums asset
     default: ""
@@ -30,6 +33,7 @@ runs:
       run: node "$ACTION_PATH/../../../scripts/ci-tool.ts" metadata
     - name: Restore the pinned tool
       id: restore
+      if: inputs.cache == 'true'
       continue-on-error: true
       env:
         SEGMENT_DOWNLOAD_TIMEOUT_MINS: "1"
@@ -47,7 +51,7 @@ runs:
         GITHUB_TOKEN: ${{ github.token }}
       run: node "$ACTION_PATH/../../../scripts/ci-tool.ts" resolve
     - name: Save verified tool bytes
-      if: steps.resolve.outputs.verified == 'true' && steps.resolve.outputs.cacheable == 'true' && (steps.restore.outputs.cache-hit != 'true' || steps.resolve.outputs.source != 'cache')
+      if: inputs.cache == 'true' && steps.resolve.outputs.verified == 'true' && steps.resolve.outputs.cacheable == 'true' && (steps.restore.outputs.cache-hit != 'true' || steps.resolve.outputs.source != 'cache')
       continue-on-error: true
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:

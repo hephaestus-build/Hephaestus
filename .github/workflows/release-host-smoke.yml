@@ -64,6 +64,8 @@ jobs:
           install: "frozen"
 
       - uses: ./.github/actions/setup-helm
+        with:
+          cache: "false"
 
       - name: Install Cosign
         uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@1f4a99eec77bf8504060ba1ca0fba492a809a930

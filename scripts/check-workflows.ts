@@ -617,13 +617,12 @@ export async function checkRepository(
 }
 
 if (import.meta.main) {
+	console.info("Workflow validation: prepare the pinned ShellCheck");
+	const shellcheck = await prepareShellCheck();
+	console.info("Workflow validation: check workflow and action templates");
 	const language = await openActionsLanguage();
 	try {
-		const { problems, compatible } = await checkRepository(
-			language,
-			process.cwd(),
-			await prepareShellCheck(),
-		);
+		const { problems, compatible } = await checkRepository(language, process.cwd(), shellcheck);
 		for (const problem of problems) {
 			console.error(problem);
 		}

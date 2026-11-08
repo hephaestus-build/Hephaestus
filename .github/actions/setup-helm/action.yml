@@ -1,11 +1,16 @@
 name: Setup Helm
 description: Install the pinned Helm CLI from get.helm.sh after a checksum check, and put it first on PATH
+inputs:
+  cache:
+    description: Restore and save GitHub Actions cache archives; disable in signing jobs
+    default: "true"
 runs:
   using: composite
   steps:
     - uses: ./.github/actions/setup-ci-tool
       id: tool
       with:
+        cache: ${{ inputs.cache }}
         tool: helm
     - name: Install Helm
       id: install
