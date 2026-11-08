@@ -48,8 +48,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 @ExtendWith(MockitoExtension.class)
 @Tag("unit")
@@ -282,22 +285,8 @@ class WorkspaceProvisioningServiceTest {
             String origin = "http://127.0.0.1:" + gitlab.getPort();
             MockEnvironment environment = new MockEnvironment().withProperty("hephaestus.e2e.scm-origin", origin);
             environment.setActiveProfiles("e2e");
-            WorkspaceProvisioningService service = new WorkspaceProvisioningService(
-                    workspaceProperties,
-                    workspaceRepository,
-                    repositoryToMonitorRepository,
-                    workspaceService,
-                    workspaceSlugs,
-                    userRepository,
-                    gitProviderRepository,
-                    workspaceMembershipRepository,
-                    workspaceMembershipService,
-                    connectionService,
-                    List.of(),
-                    new ScmServerEndpointPolicy(environment, WebClient.builder(), new ScmEgressProperties(List.of())),
-                    WebClient.builder(),
-                    List.of(),
-                    List.of());
+            WorkspaceProvisioningService service = serviceWith(
+                    new ScmServerEndpointPolicy(environment, WebClient.builder(), new ScmEgressProperties(List.of())));
             gitlab.enqueue(new MockResponse.Builder()
                     .addHeader("Content-Type", "application/json")
                     .body("{\"id\":90001,\"username\":\"ab12cde\",\"name\":\"Student\""
@@ -327,5 +316,69 @@ class WorkspaceProvisioningServiceTest {
                             any(),
                             any());
         }
+    }
+
+    @Test
+    void shouldProvisionTheGroupTokenOwnerWhenProjectDetailsExceedTheResponseLimit() {
+        String origin = "https://gitlab.example.com";
+        ScmServerEndpointPolicy endpoints = mock(ScmServerEndpointPolicy.class);
+        WebClient client = WebClient.builder()
+                .exchangeFunction(request -> {
+                    if (request.url().getPath().endsWith("/user")) {
+                        return Mono.just(
+                                ClientResponse.create(HttpStatus.UNAUTHORIZED).build());
+                    }
+                    String projects = "with_projects=false".equals(request.url().getRawQuery())
+                            ? ""
+                            : ",\"projects\":[{\"description\":\"" + "x".repeat(300_000) + "\"}]";
+                    return Mono.just(ClientResponse.create(HttpStatus.OK)
+                            .header("Content-Type", "application/json")
+                            .body("{\"id\":42,\"name\":\"Test group\"" + projects + "}")
+                            .build());
+                })
+                .build();
+        when(endpoints.clientFor(origin)).thenReturn(client);
+        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, origin))
+                .thenReturn(Optional.of(TestEntities.gitProvider(5L, IdentityProviderType.GITLAB)));
+        User owner = new User();
+        owner.setId(7L);
+        when(userRepository.findByLoginAndProviderId("test-group", 5L))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(owner));
+
+        assertThat(serviceWith(endpoints).resolveOrCreateGitLabUser("token", origin, "test-group"))
+                .isEqualTo(7L);
+
+        verify(userRepository)
+                .upsertUser(
+                        eq(42L),
+                        eq(5L),
+                        eq("test-group"),
+                        eq("Test group"),
+                        any(),
+                        any(),
+                        eq("BOT"),
+                        any(),
+                        any(),
+                        any());
+    }
+
+    private WorkspaceProvisioningService serviceWith(ScmServerEndpointPolicy endpoints) {
+        return new WorkspaceProvisioningService(
+                workspaceProperties,
+                workspaceRepository,
+                repositoryToMonitorRepository,
+                workspaceService,
+                workspaceSlugs,
+                userRepository,
+                gitProviderRepository,
+                workspaceMembershipRepository,
+                workspaceMembershipService,
+                connectionService,
+                List.of(),
+                endpoints,
+                WebClient.builder(),
+                List.of(),
+                List.of());
     }
 }

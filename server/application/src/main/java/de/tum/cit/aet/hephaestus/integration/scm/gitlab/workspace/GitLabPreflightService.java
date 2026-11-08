@@ -44,7 +44,7 @@ import reactor.core.publisher.Mono;
  * <h2>Token Validation Flow</h2>
  * <ol>
  *   <li>Try {@code GET /api/v4/user}</li>
- *   <li>If that is refused and {@code groupFullPath} is provided, try {@code GET /api/v4/groups/{path}}</li>
+ *   <li>If that is refused and {@code groupFullPath} is provided, read the group's identity without its projects</li>
  *   <li>Return structured success/failure result</li>
  * </ol>
  *
@@ -57,6 +57,8 @@ public class GitLabPreflightService implements SelectedRepositoryVerifier {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
     private static final int VERIFY_CONCURRENCY = 4;
     private static final String NEXT_PAGE_HEADER = "X-Next-Page";
+    /** Group verification needs no project bodies; project discovery uses its paginated endpoint below. */
+    private static final String GROUP_IDENTITY_PATH = "/api/v4/groups/{groupPath}?with_projects=false";
 
     /** The group's own and its subgroups' projects, without those only shared into it. */
     private static final String GROUP_PROJECTS_PATH = "/api/v4/groups/{group}/projects?include_subgroups=true"
@@ -128,7 +130,7 @@ public class GitLabPreflightService implements SelectedRepositoryVerifier {
             GitLabGroupResponse group = endpoints
                     .clientFor(serverUrl)
                     .get()
-                    .uri(serverUrl + "/api/v4/groups/{groupPath}", groupFullPath)
+                    .uri(serverUrl + GROUP_IDENTITY_PATH, groupFullPath)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .retrieve()
                     .bodyToMono(GitLabGroupResponse.class)
@@ -326,7 +328,7 @@ public class GitLabPreflightService implements SelectedRepositoryVerifier {
             GitLabGroupResponse group = endpoints
                     .clientFor(resolvedUrl)
                     .get()
-                    .uri(resolvedUrl + "/api/v4/groups/{groupPath}", accountLogin)
+                    .uri(resolvedUrl + GROUP_IDENTITY_PATH, accountLogin)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .retrieve()
                     .bodyToMono(GitLabGroupResponse.class)

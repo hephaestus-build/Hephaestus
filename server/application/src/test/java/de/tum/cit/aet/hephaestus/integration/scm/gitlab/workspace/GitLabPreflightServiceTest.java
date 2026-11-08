@@ -38,8 +38,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClient.RequestHeadersSpec;
 import org.springframework.web.reactive.function.client.WebClient.RequestHeadersUriSpec;
@@ -108,10 +110,46 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
         lenient().when(responseSpec.bodyToFlux(any(Class.class))).thenReturn(Flux.error(exception));
     }
 
+    private void respondWithLargeGroup() {
+        WebClient client = WebClient.builder()
+                .exchangeFunction(request -> {
+                    if (request.url().getPath().endsWith("/user")) {
+                        return Mono.just(
+                                ClientResponse.create(HttpStatus.UNAUTHORIZED).build());
+                    }
+                    boolean omitProjects =
+                            "with_projects=false".equals(request.url().getRawQuery());
+                    String projects =
+                            omitProjects ? "" : ",\"projects\":[{\"description\":\"" + "x".repeat(300_000) + "\"}]";
+                    String body = "{\"id\":42,\"name\":\"Test group\",\"full_path\":\"my-group\"" + projects + "}";
+                    return Mono.just(ClientResponse.create(HttpStatus.OK)
+                            .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                            .body(body)
+                            .build());
+                })
+                .build();
+        lenient().doReturn(client).when(endpoints).clientFor(anyString());
+    }
+
     @Test
     void shouldResolveTheNativeGroupIdFromGitLabBeforeWorkspaceCreation() {
         mockGetRequest(new GitLabPreflightService.GitLabGroupResponse(42L, "Group", "my-group", null, null));
         assertThat(preflightService.resolveAccountId("token", null, "my-group")).isEqualTo(42L);
+    }
+
+    @Test
+    void shouldResolveTheGroupWhenItsProjectDetailsExceedTheResponseLimit() {
+        respondWithLargeGroup();
+
+        assertThat(preflightService.resolveAccountId("token", null, "my-group")).isEqualTo(42L);
+    }
+
+    @Test
+    void shouldAcceptTheGroupTokenWhenItsProjectDetailsExceedTheResponseLimit() {
+        respondWithLargeGroup();
+
+        assertThat(preflightService.validateToken("token", null, "my-group").valid())
+                .isTrue();
     }
 
     @Test
