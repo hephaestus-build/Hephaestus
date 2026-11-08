@@ -499,7 +499,7 @@ public class KubernetesIsolationProbe {
             return new Outcome(List.of(probe + " failed: " + e.getMessage()), null, false);
         } finally {
             try {
-                jobs.delete(name);
+                jobs.deleteWithPod(name);
             } catch (RuntimeException e) {
                 log.warn(
                         "Could not delete isolation probe Job {}: {}",

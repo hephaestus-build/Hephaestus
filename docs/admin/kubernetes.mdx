@@ -1460,8 +1460,8 @@ The gauge `sandbox_review_starved_seconds` shows how long no review could start 
 
 The worker learns of the refusal from the events of the sandbox namespace.
 It reads its quotas to tell whether a sandbox can fit at all.
-It needs `get` and `list` on `events`, and `list` and `watch` on `resourcequotas` there. The chart's Role grants them.
-Without the verbs on `events`, the worker logs one warning, and a refused review waits 2 minutes and spends a retry.
+It needs `list` on `events`, and `list` and `watch` on `resourcequotas` there. The chart's Role grants them.
+Without `list` on `events`, the worker logs one warning, and a refused review waits 2 minutes and spends a retry.
 Without `list` and `watch` on `resourcequotas`, `pods` or `jobs`, the worker stays not ready ([Troubleshooting](#troubleshooting)).
 
 The worker watches the Pods, Jobs and quotas of the sandbox namespace.
@@ -1475,12 +1475,15 @@ The chart has no default for them, because only the running cluster knows them.
 
 The worker's service account has these permissions in the sandbox namespace, and none elsewhere:
 
-- Pods: `get`, `list`, `watch`, `create`, `delete`, and `patch`. A cancellation or a timeout patches the deadline of the sandbox's Pod.
+- Pods: `get`, `list`, `watch`, and `create`. The worker creates Pods only through Jobs. The isolation probe uses `create` for a Pod Security dry run, which creates nothing.
 - `pods/log`: `get`.
-- Jobs: `get`, `list`, `watch`, `create`, and `delete`. Each review attempt and each tools Pod is a Job.
-- Events: `get` and `list`. A review Pod that the sandbox quota refuses waits for room: the Job controller reports the refusal as an event.
+- Jobs: `get`, `list`, `watch`, `create`, and `delete`. Each review attempt and each tools Pod is a Job. A cancellation or a timeout deletes the Job, and Kubernetes deletes its Pod before the Job goes.
+- Events: `list`. A review Pod that the sandbox quota refuses waits for room: the Job controller reports the refusal as an event.
 - ResourceQuotas: `list` and `watch`. The quota tells how many reviews fit and whether a review can ever fit.
 - SandboxClaims (`extensions.agents.x-k8s.io`): `list`, `create`, and `delete`. A subject's sandbox is a claim, and the agent-sandbox controller creates its Pod from the kind's template. The worker deletes each claim that no work needs.
+
+The worker cannot patch or delete a Pod, and it cannot run a command in one.
+A patch could change the image of a sandbox that runs.
 
 A practice review attempt runs as one Job.
 The Job ends at the attempt's upload deadline plus two minutes, also when its worker is gone.

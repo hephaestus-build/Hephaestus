@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInitializationException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxRoom;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
@@ -29,6 +30,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
 import io.fabric8.kubernetes.api.model.ContainerStatusBuilder;
+import io.fabric8.kubernetes.api.model.DeleteOptions;
 import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodBuilder;
@@ -68,6 +70,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -108,6 +111,9 @@ class KubernetesSandboxRuntimeTest {
 
     private final AtomicReference<@Nullable String> watchedPod = new AtomicReference<>();
 
+    /** The watches of {@link #watchedPod} that the mock registered: each wait on the Pod opens one. */
+    private final AtomicInteger watches = new AtomicInteger();
+
     private final ExecutorService background = Executors.newCachedThreadPool();
     private final SandboxGatewaySessions sessions = new SandboxGatewaySessions();
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
@@ -147,6 +153,7 @@ class KubernetesSandboxRuntimeTest {
                         && path.contains("watch=true")
                         && path.contains("/namespaces/" + SANDBOXES + "/pods")
                         && path.contains(pod)) {
+                    watches.incrementAndGet();
                     watching.countDown();
                 }
                 return response;
@@ -537,9 +544,10 @@ class KubernetesSandboxRuntimeTest {
 
         adapter.cancel(jobId);
 
-        assertThat(storedPod(child).getSpec().getActiveDeadlineSeconds())
-                .as("the kubelet ends the Pod as at its deadline, and keeps its logs")
-                .isEqualTo(1L);
+        assertThat(job(name))
+                .as("the kill deletes the Job, and the garbage collector its Pod")
+                .isNull();
+        // The mock runs no garbage collector: the Pod ends as the kubelet would end it.
         setStatus(
                 SANDBOXES,
                 child,
@@ -549,8 +557,14 @@ class KubernetesSandboxRuntimeTest {
         assertThatThrownBy(() -> execution.get(10, TimeUnit.SECONDS))
                 .hasCauseInstanceOf(SandboxCancelledException.class);
         assertThat(job(name)).isNull();
-        assertThat(api().pods().inNamespace(SANDBOXES).withName(child).get()).isNull();
+        assertDeletedOnlyByItsJob(name);
         assertThat(executions("cancelled")).isEqualTo(1);
+        assertThat(exits("deadline_exceeded"))
+                .as("the kill records the exit before it deletes the Pod")
+                .isEqualTo(1);
+        assertThat(exits("completed"))
+                .as("the removal does not record it a second time")
+                .isZero();
     }
 
     @Test
@@ -590,6 +604,169 @@ class KubernetesSandboxRuntimeTest {
                 .hasCauseInstanceOf(SandboxCancelledException.class);
         assertThat(job(name)).isNull();
         assertThat(api().pods().inNamespace(SANDBOXES).list().getItems()).isEmpty();
+        assertDeletedOnlyByItsJob(name);
+    }
+
+    @Test
+    void shouldKeepTheInitializersLogAndStopTheReviewByItsJobWhenItsInitializerOutrunsTheWorkDeadline()
+            throws Exception {
+        var adapter = adapter();
+        UUID jobId = UUID.randomUUID();
+        String name = KubernetesSandboxBackend.jobName(jobId, 2);
+        serveLogOnce(name + "-child", KubernetesPods.INITIALIZER, "cloning the workspace\n");
+        var shortWork = new ResourceLimits(LIMITS.cpus(), Duration.ofSeconds(3));
+        CompletableFuture<SandboxResult> execution =
+                CompletableFuture.supplyAsync(() -> adapter.execute(spec(jobId, shortWork)), background);
+        String child = startWatchedChild(name);
+        setStatus(SANDBOXES, child, "Pending", List.of(running(KubernetesPods.INITIALIZER)), List.of());
+
+        assertThatThrownBy(() -> execution.get(30, TimeUnit.SECONDS))
+                .cause()
+                .isInstanceOfSatisfying(SandboxInitializationException.class, failure -> {
+                    assertThat(failure.timedOut()).isTrue();
+                    assertThat(failure.exitCode()).isNull();
+                    assertThat(failure.transcriptTail())
+                            .as("read before the stop, which deletes the Pod with its log")
+                            .isEqualTo("cloning the workspace");
+                });
+        assertThat(job(name)).isNull();
+        assertDeletedOnlyByItsJob(name);
+        assertThat(executions("timeout")).isEqualTo(1);
+        assertThat(exits("deadline_exceeded")).isEqualTo(1);
+        assertThat(exits("start_failed"))
+                .as("a running initializer did not fail to start")
+                .isZero();
+    }
+
+    /**
+     * Another process kills the review: it deletes the Job with its Pod, which stops the runtime as a deadline does.
+     * The runtime's exit, and the result it uploads in the grace period, come after the deletion starts.
+     */
+    @Test
+    void shouldReportTheRuntimesOwnExitWhenAKillDeletesItsPodWhileItRuns() throws Exception {
+        Killed killed = killedReview();
+
+        // The runtime exits in its grace period; only then does the kubelet let the Pod go.
+        setStatus(
+                SANDBOXES,
+                killed.pod(),
+                "Running",
+                List.of(exited(KubernetesPods.INITIALIZER, 0)),
+                List.of(exited(KubernetesPods.LOOP, SandboxLayout.EXIT_UPLOAD_FAILED)));
+
+        assertThat(killed.ended().get(10, TimeUnit.SECONDS))
+                .as("the runtime's own exit, not the kill's")
+                .isEqualTo(new SandboxBackend.Observation(false, SandboxLayout.EXIT_UPLOAD_FAILED));
+        assertThat(job(killed.handle().id())).isNull();
+    }
+
+    @Test
+    void shouldReportTheKillWhenThePodGoesBeforeItsRuntimeReportsAnExit() throws Exception {
+        Killed killed = killedReview();
+
+        release(killed.pod());
+
+        assertThat(killed.ended().get(10, TimeUnit.SECONDS))
+                .isEqualTo(new SandboxBackend.Observation(false, SandboxLayout.EXIT_KILLED));
+    }
+
+    /** A killed review: its handle, its held Pod, and the observation of its end that it still waits for. */
+    private record Killed(
+            SandboxBackend.Handle handle, String pod, CompletableFuture<SandboxBackend.Observation> ended) {}
+
+    /**
+     * A review whose runtime runs, killed by another process while the review waits for its end. Returns once the
+     * review waits again, for the stopped runtime's exit.
+     */
+    private Killed killedReview() {
+        UUID jobId = UUID.randomUUID();
+        String name = KubernetesSandboxBackend.jobName(jobId, 1);
+        var reviews = backend();
+        SandboxBackend.Handle handle = reviews.launch(new SandboxBackend.Launch(
+                SandboxBackend.Kind.REVIEW,
+                jobId,
+                1,
+                IMAGE,
+                List.of("node", "run.ts"),
+                LIMITS,
+                Instant.now().plus(Duration.ofMinutes(5)),
+                gateway -> Map.of(),
+                false));
+        watchedPod.set(name + "-child");
+        String child = startChild(name);
+        // As the kubelet holds a Pod until its containers stopped: the deletion only marks it.
+        Pod held = awaitPod(SANDBOXES, child);
+        held.getMetadata().setFinalizers(List.of("hephaestus.build/test-hold"));
+        api().pods().inNamespace(SANDBOXES).resource(held).update();
+        setStatus(
+                SANDBOXES,
+                child,
+                "Running",
+                List.of(exited(KubernetesPods.INITIALIZER, 0)),
+                List.of(running(KubernetesPods.LOOP)));
+        CompletableFuture<SandboxBackend.Observation> ended = CompletableFuture.supplyAsync(
+                () -> reviews.observe(
+                        handle, SandboxBackend.Stage.ENDED, Instant.now().plusSeconds(60)),
+                background);
+        await().atMost(Duration.ofSeconds(10)).until(() -> watches.get() >= 1);
+
+        backend().kill(handle);
+        api().pods().inNamespace(SANDBOXES).withName(child).delete();
+        assertThat(awaitPod(SANDBOXES, child).getMetadata().getDeletionTimestamp())
+                .as("fixture condition: the deletion marks the held Pod")
+                .isNotNull();
+
+        await().atMost(Duration.ofSeconds(10))
+                .alias("the review waits for the stopped runtime's exit")
+                .until(() -> watches.get() >= 2);
+        return new Killed(handle, child, ended);
+    }
+
+    /** Lets a held Pod go, as the kubelet does once its containers stopped. */
+    private void release(String pod) {
+        Pod held = awaitPod(SANDBOXES, pod);
+        held.getMetadata().setFinalizers(List.of());
+        api().pods().inNamespace(SANDBOXES).resource(held).update();
+    }
+
+    @Test
+    void shouldKeepTheRuntimesLogAndStopTheReviewByItsJobWhenItOutrunsItsDeadline() {
+        UUID jobId = UUID.randomUUID();
+        String name = KubernetesSandboxBackend.jobName(jobId, 1);
+        serveLogOnce(name + "-child", KubernetesPods.LOOP, "practice.started\n");
+        var reviews = backend();
+        SandboxBackend.Handle handle = reviews.launch(new SandboxBackend.Launch(
+                SandboxBackend.Kind.REVIEW,
+                jobId,
+                1,
+                IMAGE,
+                List.of("node", "run.ts"),
+                LIMITS,
+                Instant.now().plus(Duration.ofMinutes(5)),
+                gateway -> Map.of(),
+                false));
+        String child = startChild(name);
+        setStatus(
+                SANDBOXES,
+                child,
+                "Running",
+                List.of(exited(KubernetesPods.INITIALIZER, 0)),
+                List.of(running(KubernetesPods.LOOP)));
+
+        SandboxBackend.Observation ended = reviews.observe(
+                handle, SandboxBackend.Stage.ENDED, Instant.now().plusSeconds(1));
+
+        assertThat(ended).isEqualTo(new SandboxBackend.Observation(true, null));
+        assertThat(job(name)).isNull();
+        assertThat(reviews.transcript(handle, SandboxBackend.Container.RUNTIME))
+                .as("kept from before the stop: the log API serves it once here")
+                .isEqualTo("practice.started\n");
+        reviews.remove(handle);
+        assertDeletedOnlyByItsJob(name);
+        assertThat(exits("deadline_exceeded")).isEqualTo(1);
+        assertThat(exits("completed"))
+                .as("the removal does not record the exit a second time")
+                .isZero();
     }
 
     @Test
@@ -643,7 +820,7 @@ class KubernetesSandboxRuntimeTest {
                 .hasCauseInstanceOf(SandboxException.class)
                 .hasMessageContaining("initialization failed");
         assertThat(job(name)).isNull();
-        assertThat(api().pods().inNamespace(SANDBOXES).withName(child).get()).isNull();
+        assertDeletedOnlyByItsJob(name);
     }
 
     @Test
@@ -661,7 +838,7 @@ class KubernetesSandboxRuntimeTest {
                 .hasCauseInstanceOf(SandboxInfrastructureException.class)
                 .hasMessageContaining("network policy");
         assertThat(job(name)).isNull();
-        assertThat(api().pods().inNamespace(SANDBOXES).withName(child).get()).isNull();
+        assertDeletedOnlyByItsJob(name);
     }
 
     @Test
@@ -685,7 +862,7 @@ class KubernetesSandboxRuntimeTest {
         assertThat(result.outputFiles()).isEmpty();
         assertThat(result.timedOut()).isFalse();
         assertThat(job(name)).isNull();
-        assertThat(api().pods().inNamespace(SANDBOXES).withName(child).get()).isNull();
+        assertDeletedOnlyByItsJob(name);
     }
 
     @Test
@@ -715,7 +892,7 @@ class KubernetesSandboxRuntimeTest {
                 .hasCauseInstanceOf(SandboxInfrastructureException.class)
                 .hasMessageContaining("TerminationByKubelet");
         assertThat(job(name)).isNull();
-        assertThat(api().pods().inNamespace(SANDBOXES).withName(child).get()).isNull();
+        assertDeletedOnlyByItsJob(name);
     }
 
     @Test
@@ -740,7 +917,7 @@ class KubernetesSandboxRuntimeTest {
         assertThat(executions("timeout")).isEqualTo(1);
         assertThat(executions("success")).isZero();
         assertThat(job(name)).isNull();
-        assertThat(api().pods().inNamespace(SANDBOXES).withName(child).get()).isNull();
+        assertDeletedOnlyByItsJob(name);
     }
 
     @Test
@@ -1140,6 +1317,28 @@ class KubernetesSandboxRuntimeTest {
     }
 
     @Test
+    void shouldNotListAReviewJobThatIsBeingDeleted() {
+        UUID jobId = UUID.randomUUID();
+        String name = "hephaestus-review-" + jobId + "-1";
+        createJob(name, labels -> gone(withJob(labels, jobId)));
+        // A finalizer keeps the Job after its delete, as a Foreground delete keeps it until its Pod is gone.
+        api().batch()
+                .v1()
+                .jobs()
+                .inNamespace(SANDBOXES)
+                .withName(name)
+                .edit(job -> new JobBuilder(job)
+                        .editMetadata()
+                        .addToFinalizers("hephaestus.build/test-hold")
+                        .endMetadata()
+                        .build());
+        api().batch().v1().jobs().inNamespace(SANDBOXES).withName(name).delete();
+        assertThat(job(name)).as("the finalizer keeps the Job").isNotNull();
+
+        assertThat(backend().list()).isEmpty();
+    }
+
+    @Test
     void shouldKillAndRemoveAReviewThatAnotherWorkerLaunchedByItsName() {
         UUID jobId = UUID.randomUUID();
         String name = KubernetesSandboxBackend.jobName(jobId, 1);
@@ -1148,11 +1347,15 @@ class KubernetesSandboxRuntimeTest {
         var handle = new SandboxBackend.Handle(name);
 
         backend().kill(handle);
-        assertThat(storedPod(child).getSpec().getActiveDeadlineSeconds()).isEqualTo(1L);
+        assertThat(job(name)).isNull();
+        assertThat(storedPod(child).getSpec().getContainers())
+                .as("the Pod keeps its spec: the worker's Role grants no Pod patch")
+                .extracting(Container::getImage)
+                .contains(IMAGE);
 
         backend().remove(handle);
         assertThat(job(name)).isNull();
-        assertThat(api().pods().inNamespace(SANDBOXES).withName(child).get()).isNull();
+        assertDeletedOnlyByItsJob(name);
     }
 
     @Test
@@ -1164,6 +1367,7 @@ class KubernetesSandboxRuntimeTest {
         backend().kill(new SandboxBackend.Handle(name));
 
         assertThat(job(name)).isNull();
+        assertDeletedOnlyByItsJob(name);
     }
 
     @Test
@@ -1239,8 +1443,59 @@ class KubernetesSandboxRuntimeTest {
     // --- fixtures ---
 
     private KubernetesSandboxBackend backend() {
-        return new KubernetesSandboxBackend(
-                pods, reviewJobs, worker, new SandboxExits(pods, new SimpleMeterRegistry()), cache());
+        return new KubernetesSandboxBackend(pods, reviewJobs, worker, new SandboxExits(pods, meters), cache());
+    }
+
+    /** The container's log, which the CRUD mock does not serve, for one read. */
+    private void serveLogOnce(String pod, String container, String log) {
+        Objects.requireNonNull(server)
+                .expect()
+                .get()
+                .withPath(
+                        "/api/v1/namespaces/" + SANDBOXES + "/pods/" + pod + "/log?pretty=false&container=" + container)
+                .andReturn(200, log)
+                .once();
+    }
+
+    private double exits(String reason) {
+        return meters.get(AgentMetrics.SANDBOX_EXITS)
+                .tag("kind", "review")
+                .tag("reason", reason)
+                .counter()
+                .count();
+    }
+
+    /**
+     * What the chart's Role allows: the worker deleted the Job with its Pod ({@code Foreground}), and never patched or
+     * deleted a Pod itself.
+     */
+    private void assertDeletedOnlyByItsJob(String job) {
+        KubernetesMockServer api = Objects.requireNonNull(server);
+        List<RecordedRequest> received = new ArrayList<>();
+        try {
+            for (RecordedRequest request = api.takeRequest(10, TimeUnit.MILLISECONDS);
+                    request != null;
+                    request = api.takeRequest(10, TimeUnit.MILLISECONDS)) {
+                received.add(request);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted while reading the mock's requests", e);
+        }
+        assertThat(received)
+                .filteredOn(request -> request.getPath().startsWith("/api/v1/namespaces/" + SANDBOXES + "/pods")
+                        && List.of("PATCH", "DELETE").contains(request.getMethod()))
+                .as("the worker's Role grants no Pod patch or delete")
+                .isEmpty();
+        assertThat(received)
+                .filteredOn(request -> "DELETE".equals(request.getMethod())
+                        && request.getPath().equals("/apis/batch/v1/namespaces/" + SANDBOXES + "/jobs/" + job))
+                .as("the Job goes with its Pod, so that it starts no other")
+                .isNotEmpty()
+                .allSatisfy(request -> assertThat(api().getKubernetesSerialization()
+                                .unmarshal(request.getUtf8Body(), DeleteOptions.class)
+                                .getPropagationPolicy())
+                        .isEqualTo("Foreground"));
     }
 
     private SandboxAttemptRunner adapter() {

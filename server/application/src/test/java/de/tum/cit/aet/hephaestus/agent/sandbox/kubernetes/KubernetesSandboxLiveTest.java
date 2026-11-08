@@ -728,12 +728,12 @@ class KubernetesSandboxLiveTest {
                 .extracting(kept -> kept.getMetadata().getUid())
                 .isEqualTo(pod.getMetadata().getUid());
 
-        reviewJobs.delete(name);
+        reviewJobs.deleteWithPod(name);
         awaitJobGone(name, job.getMetadata().getUid());
         // Only the garbage collector deletes the Pod here: nothing of this run deletes it by name.
         awaitGone(pod.getMetadata().getName(), pod.getMetadata().getUid());
         // A Job that is gone is no error.
-        reviewJobs.delete(name);
+        reviewJobs.deleteWithPod(name);
     }
 
     @Test
@@ -1196,7 +1196,7 @@ class KubernetesSandboxLiveTest {
             }
             String name = job.getMetadata().getName();
             log.warn("Removing Job {}, which this run left", name);
-            reviewJobs.delete(name);
+            reviewJobs.deleteWithPod(name);
             awaitJobGone(name, job.getMetadata().getUid());
         }
     }

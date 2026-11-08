@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.BoundedTranscript;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
@@ -259,9 +258,6 @@ public class KubernetesPods {
             "CreateContainerError",
             "RunContainerError");
 
-    /** How long a stopped Pod may take to report its end beyond its grace period. */
-    private static final Duration STOP_SETTLE = Duration.ofSeconds(30);
-
     private final KubernetesClient client;
     private final KubernetesWorker worker;
     private final long stopGraceSeconds;
@@ -288,6 +284,9 @@ public class KubernetesPods {
 
     /** What waiting for a Pod saw: its last state, or null when it is gone. */
     public record Waited(boolean timedOut, @Nullable Pod pod) {}
+
+    /** How long a deleted Pod may take, beyond its grace period, to report its runtime's exit. */
+    private static final Duration STOP_SETTLE = Duration.ofSeconds(30);
 
     /** The command under the system call filter of a review's tools side (see tools-launch.sh). */
     static List<String> filtered(List<String> command) {
@@ -727,28 +726,6 @@ public class KubernetesPods {
         return client.newClient(requests).adapt(KubernetesClient.class);
     }
 
-    /**
-     * @throws SandboxException when a Pod of the name exists: an attempt runs once
-     * @throws SandboxInfrastructureException when the API refuses or fails
-     */
-    public void create(Pod pod) {
-        try {
-            client.pods().inNamespace(worker.namespace()).resource(pod).create();
-        } catch (KubernetesClientException e) {
-            if (e.getCode() == 409) {
-                throw new SandboxException("A sandbox Pod of this name already exists", e);
-            }
-            if (e.getCode() == 403 && e.getMessage() != null && e.getMessage().contains("exceeded quota")) {
-                var full = new SandboxCapacityException(
-                        "The sandbox quota has no room for another Pod",
-                        SandboxCapacityException.Reason.QUOTA_EXCEEDED);
-                full.initCause(e);
-                throw full;
-            }
-            throw failure("Could not create a sandbox Pod", e);
-        }
-    }
-
     public @Nullable Pod get(String name) {
         try {
             return client.pods().inNamespace(worker.namespace()).withName(name).get();
@@ -811,54 +788,31 @@ public class KubernetesPods {
     }
 
     /**
-     * Stops the Pod as the kubelet stops a Pod past its deadline: SIGTERM, the grace period, SIGKILL. The Pod stays,
-     * with its statuses and logs, until it is deleted. Returns its last state, or null when it is gone.
-     */
-    public @Nullable Pod stop(String name) {
-        if (!terminate(name)) {
-            return null;
-        }
-        return waitFor(
-                        name,
-                        KubernetesPods::terminal,
-                        Duration.ofSeconds(stopGraceSeconds).plus(STOP_SETTLE))
-                .pod();
-    }
-
-    /**
-     * Asks the kubelet to stop the Pod, as at its deadline, and returns at once. A Pod whose deadline cannot be set is
-     * deleted with its grace period instead.
+     * Waits for the runtime of a Pod that is being deleted to exit. The deletion stops it as a deadline does (SIGTERM,
+     * the grace period, SIGKILL), and the kubelet reports the exit before the Pod goes, so the runtime can still upload
+     * its result in the grace period.
      *
-     * @return whether the Pod stays, with its logs
+     * @return the Pod with its runtime's exit, or null when the Pod went first or reported no exit in time
+     * @throws SandboxInfrastructureException when the watch fails or the thread is interrupted
      */
-    public boolean terminate(String name) {
+    public @Nullable Pod awaitRuntimeExit(String name) {
         try {
-            client.pods()
+            return client.pods()
                     .inNamespace(worker.namespace())
                     .withName(name)
-                    .edit(pod -> new PodBuilder(pod)
-                            .editSpec()
-                            .withActiveDeadlineSeconds(1L)
-                            .endSpec()
-                            .build());
-            return true;
+                    .waitUntilCondition(
+                            candidate -> candidate == null || runtimeEnded(candidate),
+                            Duration.ofSeconds(stopGraceSeconds)
+                                    .plus(STOP_SETTLE)
+                                    .toMillis(),
+                            TimeUnit.MILLISECONDS);
+        } catch (KubernetesClientTimeoutException e) {
+            return null;
         } catch (KubernetesClientException e) {
-            log.warn("Could not stop sandbox Pod {}: HTTP {}", name, e.getCode());
-            delete(name, stopGraceSeconds);
-            return false;
-        }
-    }
-
-    /** Deletes the Pod; a Pod that is already gone is no error. */
-    public void delete(String name, long graceSeconds) {
-        try {
-            client.pods()
-                    .inNamespace(worker.namespace())
-                    .withName(name)
-                    .withGracePeriod(graceSeconds)
-                    .delete();
-        } catch (KubernetesClientException e) {
-            throw failure("Could not delete a sandbox Pod", e);
+            if (Thread.currentThread().isInterrupted()) {
+                throw new SandboxInfrastructureException("Interrupted while waiting for a sandbox Pod", e);
+            }
+            throw failure("Could not watch a sandbox Pod", e);
         }
     }
 

@@ -56,8 +56,8 @@ public interface SandboxBackend {
      *   <li>{@link Stage#ENDED}: the runtime ended, with its exit code; none when it never ran.
      * </ul>
      *
-     * When the deadline passes first, the backend stops the stage's process (as {@link #kill}) and reports it timed out,
-     * with the exit code that the stop left, if any.
+     * When the deadline passes first, the backend keeps the stage's transcript, stops the sandbox (as {@link #kill})
+     * and reports it timed out, with no exit code.
      */
     Observation observe(Handle handle, Stage stage, Instant deadline);
 
@@ -72,8 +72,8 @@ public interface SandboxBackend {
     String transcript(Handle handle, Container container);
 
     /**
-     * Ends the sandbox's processes, with their grace period; the sandbox keeps its transcripts until it is removed. A
-     * sandbox that already ended, or is gone, is no error.
+     * Ends the sandbox's processes, with their grace period. Their transcripts can go with them: a caller that needs one
+     * reads it first. A sandbox that already ended, or is gone, is no error.
      */
     void kill(Handle handle);
 

@@ -318,6 +318,32 @@ class SandboxExitsTest extends BaseUnitTest {
                 .isEqualTo(1.0);
     }
 
+    @Test
+    void shouldCountAPodThatItsWorkerStopsBeforeItEndedAsPastItsDeadlineAndAnEndedOneAsItEnded() {
+        var meters = new SimpleMeterRegistry();
+        var pods = mock(KubernetesPods.class);
+        // An initializer that runs leaves the Pod pending; a runtime that runs leaves it running.
+        when(pods.get("hephaestus-review-initializing")).thenReturn(phase("Pending"));
+        when(pods.get("hephaestus-review-running")).thenReturn(phase("Running"));
+        when(pods.get("hephaestus-review-failed")).thenReturn(pod("Error", ended(KubernetesPods.LOOP, 1, "Error")));
+        when(pods.tail(anyString(), anyString(), anyInt(), anyInt())).thenReturn("");
+        var exits = new SandboxExits(pods, meters);
+
+        exits.recordStop(SandboxExits.Kind.REVIEW, "hephaestus-review-initializing");
+        exits.recordStop(SandboxExits.Kind.REVIEW, "hephaestus-review-running");
+        exits.recordStop(SandboxExits.Kind.REVIEW, "hephaestus-review-failed");
+        exits.record(SandboxExits.Kind.REVIEW, "hephaestus-review-running");
+
+        assertThat(Stream.of("deadline_exceeded", "error", "completed", "start_failed")
+                        .map(reason -> meters.get(AgentMetrics.SANDBOX_EXITS)
+                                .tag("kind", "review")
+                                .tag("reason", reason)
+                                .counter()
+                                .count()))
+                .as("a stop, not the Pod, ended the first two; a removal finds the last one running")
+                .containsExactly(2.0, 1.0, 1.0, 0.0);
+    }
+
     private static Pod pod(@Nullable String reason, ContainerStatus... containers) {
         return new PodBuilder()
                 .withNewMetadata()
