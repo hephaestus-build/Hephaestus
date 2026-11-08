@@ -45,16 +45,16 @@ git rebase --exec 'git commit --amend --no-edit -S' origin/main
 
 ## Compliance
 
-A pull request title or body carries no model, agent, harness, or tool attribution.
+A pull request title, body, or commit message carries no harness or tool marker.
+Examples are a `Claude-Session:` trailer, a "Generated with" line, and a session link.
 `AGENTS.md` § Pull requests has the rule.
-The `Validate PR` job in `pull-request.yml` checks the body for it.
+The `Validate PR` job in `pull-request.yml` checks for these markers.
 Its primary-author check follows the [commit identity policy](docs/contributor/ci-cd.mdx#quality-gates).
 Keep the original authorship when a maintainer corrects another developer’s pull request.
 
-A commit trailer is different.
-`Co-authored-by:` is Git's own way to record who or what worked on a commit.
-You can credit a tool there.
-A human co-author is welcome under the same trailer.
+A `Co-authored-by:` trailer is different.
+It is Git's own way to record who or what worked on a commit.
+The trailer can name a person or a model, and `Validate PR` accepts both.
 
 Contributions that do not adhere to these guidelines will be rejected. We align with [GitHub Acceptable Use Policies](https://docs.github.com/en/site-policy/acceptable-use-policies).
 

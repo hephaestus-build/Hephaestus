@@ -171,7 +171,8 @@ Good: Reloading the practice list reset its filters, so a shared link showed a d
 ```
 
 Before you create the PR, check the title and the body for secrets, tokens, and private details.
-Add no model, agent, or tool attribution: `Validate PR` fails a body that has one.
+Add no harness or tool marker, such as a "Generated with" line or a session link: `Validate PR` fails a body that has one.
+A `Co-authored-by:` trailer that names a model is allowed.
 Open it ready for review. A draft is for unfinished work.
 
 ```bash

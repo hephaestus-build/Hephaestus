@@ -102,7 +102,7 @@ Resolving a thread you disagreed with, without a reply, hides the disagreement r
 - Separate what you verified from what you judge.
 - No thanks, no filler, no status narration.
 - Check the whole reply for secrets and private details before you post.
-- Add no model, agent, or tool attribution.
+- Add no harness or tool marker, such as a "Generated with" line or a session link.
 
 Bad:
 

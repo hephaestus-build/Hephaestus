@@ -169,7 +169,7 @@ Suites: `vp run test:webapp`, `test:agents`, and `test:server:unit`.
   Do not put `!` in the title: the changeset carries a breaking change.
 - The body states the problem in one or two sentences, then the fix and verification,
   in the shape of `.github/PULL_REQUEST_TEMPLATE.md`.
-  Do not add model, agent, harness, or tool attribution to titles, bodies, or commits.
+  A `Co-authored-by:` trailer may name a model. Add no other tool marker.
 - UI changes need before/after images, and motion needs a short video.
   `/land-pr` owns them. Never commit PR-only evidence.
 - A PR that changes shipped code ships a changeset, written as a release note in the operator's or user's voice.
