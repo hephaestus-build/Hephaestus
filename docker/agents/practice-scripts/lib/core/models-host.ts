@@ -21,6 +21,7 @@ import {
 	type SlotModels,
 } from "./contract.ts";
 import { decisionOutputTokens, logprobDecisionModel } from "./decision-logprobs.ts";
+import { gatewayConnectionFailed } from "./gateway-connection.ts";
 import { registerForcedToolChoice } from "./model-capabilities.ts";
 import { MAX_OUTPUT_TOKENS } from "./model-options.ts";
 import { reasonOf } from "./practice-script.ts";
@@ -224,7 +225,18 @@ export function modelCall<S extends ModelSlot>(
 	}
 	return {
 		reserve: reservationOf(slot, kept),
-		run: async () => entry.call(model, { ...kept, abortSignal: signal }),
+		run: async () => {
+			for (;;) {
+				try {
+					return await entry.call(model, { ...kept, abortSignal: signal });
+				} catch (error) {
+					if (signal.aborted || !gatewayConnectionFailed(error)) {
+						throw error;
+					}
+					await sleep(1000, undefined, { signal });
+				}
+			}
+		},
 	};
 }
 

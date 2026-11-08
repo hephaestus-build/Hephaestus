@@ -5,32 +5,9 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 
 import { diagnose } from "./pi-diagnostics.ts";
 import { errorText } from "./pi-error-text.ts";
-import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
+import { gatewayConnectionFailed } from "./work/practice-scripts/lib/core/gateway-connection.ts";
 
 type Stream = AgentSession["agent"]["streamFunction"];
-
-const NETWORK_CODES = new Set([
-	"ECONNREFUSED",
-	"ECONNRESET",
-	"EHOSTUNREACH",
-	"ENETUNREACH",
-	"ETIMEDOUT",
-	"EAI_AGAIN",
-	"ENOTFOUND",
-	"UND_ERR_CONNECT_TIMEOUT",
-	"UND_ERR_SOCKET",
-]);
-
-function connectionFailure(error: unknown): boolean {
-	let cause = error;
-	for (let depth = 0; depth < 5 && isRecord(cause); depth += 1) {
-		if (typeof cause.code === "string" && NETWORK_CODES.has(cause.code)) {
-			return true;
-		}
-		cause = cause.cause;
-	}
-	return false;
-}
 
 /** The lease wrapper stops the process at lease expiry; this wait also obeys the model call's cancellation and work bound. */
 export function waitForGateway(stream: Stream, workDeadline: number): Stream {
@@ -48,7 +25,7 @@ export function waitForGateway(stream: Stream, workDeadline: number): Stream {
 			try {
 				response = await transport(input, init);
 			} catch (error) {
-				disconnected = !isAborted() && connectionFailure(error);
+				disconnected = !isAborted() && gatewayConnectionFailed(error);
 				throw error;
 			}
 			if (response.body === null) {
@@ -66,7 +43,7 @@ export function waitForGateway(stream: Stream, workDeadline: number): Stream {
 							controller.enqueue(next.value);
 						}
 					} catch (error) {
-						disconnected = !isAborted() && connectionFailure(error);
+						disconnected = !isAborted() && gatewayConnectionFailed(error);
 						reader.releaseLock();
 						controller.error(error);
 					}

@@ -775,3 +775,11 @@ A loop that cannot renew stops when its last confirmed lease expires.
 
 This closes the lease-renewal tie in decision F.
 Durable completion and portable composition remain separate changes, so the long drain stays.
+
+### Gateway outage handling (2026-11-08)
+
+A gateway connection failure stays inside the current model call while the review holds its lease and work deadline.
+The loop keeps the same request and does not send a model failure to the session retry policy.
+The same rule applies to a direct practice-program model call, including a disconnected response body.
+An HTTP error from a provider keeps the existing model retry behavior.
+Cancellation and lease loss stop the wait.
