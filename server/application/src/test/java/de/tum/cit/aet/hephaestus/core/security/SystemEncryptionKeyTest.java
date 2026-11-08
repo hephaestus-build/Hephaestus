@@ -49,7 +49,12 @@ class SystemEncryptionKeyTest extends BaseUnitTest {
      */
     private List<ILoggingEvent> keyLogEvents() {
         String testThread = Thread.currentThread().getName();
-        return List.copyOf(appender.list).stream()
+        List<ILoggingEvent> snapshot;
+        // AppenderBase.doAppend writes the list while it holds the appender's monitor.
+        synchronized (appender) {
+            snapshot = List.copyOf(appender.list);
+        }
+        return snapshot.stream()
                 .filter(event -> event.getThreadName().equals(testThread))
                 .toList();
     }
