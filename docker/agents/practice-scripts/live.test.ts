@@ -20,7 +20,7 @@ import { hostModels, ModelBudget } from "./lib/core/models-host.ts";
 import { runPracticeProgram, type ProgramOutcome } from "./lib/core/program-host.ts";
 import { forkedProgram } from "./lib/core/script-run.ts";
 import { COMMIT, pullRequestRecord, REVIEWED } from "./run-bundled.ts";
-import { REQUESTED_PULL_REQUEST, stagePracticeScripts } from "./stage.ts";
+import { REQUESTED_PULL_REQUEST, stageToolkitPrograms } from "./stage.ts";
 import { startStandIn, type StandInRequest } from "./test/proxy-stand-in.ts";
 
 const { env } = process;
@@ -49,7 +49,7 @@ const EVERY_SLOT = await readFile(path.join(import.meta.dirname, "fixtures/every
 const DECIDES = `import { expectKind, requireChange, scm } from "@hephaestus/practice-scripts/scm";
 import { addedComments, commentKinds } from "./comment-kinds.ts";
 import { definePracticeScript } from "@hephaestus/practice-scripts";
-import { classify } from "@hephaestus/practice-scripts/models";
+import { classify } from "../lib/core/practice-script.ts";
 
 export default definePracticeScript({
 	meta: { models: { decision: "required" } },
@@ -157,7 +157,7 @@ async function runLive(slug: string, source: string, bound: BoundModels): Promis
 		return response.ok ? body : { status: response.status, body };
 	});
 	try {
-		const { root, practices } = await stagePracticeScripts({ [slug]: source }, {});
+		const { root, practices } = await stageToolkitPrograms({ [slug]: source }, {});
 		await cp(
 			path.join(import.meta.dirname, "fixtures/comment-kinds.ts"),
 			path.join(practices, "comment-kinds.ts"),

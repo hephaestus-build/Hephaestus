@@ -1,4 +1,5 @@
 import type { Facts, Omission, ReviewLead, EvidenceLocation } from "@hephaestus/practice-scripts";
+import { languageOf, scm, type DiffFile } from "@hephaestus/practice-scripts/scm";
 import {
 	definePracticeScript,
 	agent,
@@ -12,8 +13,7 @@ import {
 	z,
 	type QuestionSet,
 	type PracticeScriptContext,
-} from "@hephaestus/practice-scripts/models";
-import { languageOf, scm, type DiffFile } from "@hephaestus/practice-scripts/scm";
+} from "../lib/core/practice-script.ts";
 
 export const LABELS = {
 	untrackedTodo: "A TODO without a tracking reference.",

@@ -34,16 +34,16 @@ export function guardScriptImports(): void {
 	const entries = publicEntries();
 	registerHooks({
 		resolve(specifier, context, nextResolve) {
+			const url = entries.get(specifier);
+			if (url !== undefined) {
+				return nextResolve(url, context);
+			}
 			if (!isScript(context.parentURL)) {
 				return nextResolve(specifier, context);
 			}
-			const url = entries.get(specifier);
-			if (url === undefined) {
-				throw new Error(
-					`A practice script can import only ${[...entries.keys()].join(", ")}, not ${specifier}. Rewrite the script for this API.`,
-				);
-			}
-			return nextResolve(url, context);
+			throw new Error(
+				`A practice script can import only ${[...entries.keys()].join(", ")}, not ${specifier}. Rewrite the script for this API.`,
+			);
 		},
 	});
 }

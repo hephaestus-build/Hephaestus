@@ -1,4 +1,4 @@
-import { definePracticeScript, embedMany } from "@hephaestus/practice-scripts/models";
+import { definePracticeScript, embedMany } from "../lib/core/practice-script.ts";
 
 export default definePracticeScript({
 	meta: { models: { embedding: "required" } },

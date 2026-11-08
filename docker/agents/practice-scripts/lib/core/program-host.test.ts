@@ -12,7 +12,7 @@ import { chatOptionsSchema } from "./model-options.ts";
 import { MockEmbeddingModelV4, MockLanguageModelV4 } from "ai/test";
 
 import { parseDiff } from "../../kits/scm/diff-parser.ts";
-import { stagePracticeScripts } from "../../stage.ts";
+import { stagePracticeScripts, stageToolkitPrograms } from "../../stage.ts";
 import { MODEL_CONCURRENCY } from "./concurrency.ts";
 import {
 	executionEntrySchema,
@@ -94,7 +94,7 @@ const fixture = async (name: string) => readFile(path.join(FIXTURES, `${name}.ts
 
 const program = (imports: string, body: string) =>
 	`import {scm} from "@hephaestus/practice-scripts/scm";
-import { reasonOf } from "@hephaestus/practice-scripts/models";
+import { reasonOf } from "../lib/core/practice-script.ts";
 import { ${imports} } from "@hephaestus/practice-scripts";\nexport default definePracticeScript(${body});\n`;
 
 const cited = `await ctx.evidence.citeRecord("metadata.json", 36)`;
@@ -141,8 +141,11 @@ const malformed = async (ws: Workspace) => {
 		sourceFile === "context/metadata.json" ? "scm.pull-request.core" : "scm.review-threads";
 };
 
-async function workspace(scripts: Record<string, string | null>): Promise<Workspace> {
-	const { root, practices } = await stagePracticeScripts(scripts);
+async function workspace(
+	scripts: Record<string, string | null>,
+	stage: typeof stagePracticeScripts = stageToolkitPrograms,
+): Promise<Workspace> {
+	const { root, practices } = await stage(scripts);
 	roots.push(root);
 	const repo = path.join(root, "repo");
 	await mkdir(path.join(repo, "src"), { recursive: true });
@@ -588,16 +591,22 @@ void describe("a practice's result", () => {
 		["a deep name", `import "@hephaestus/practice-scripts/lib/core/contract.ts";`],
 		["a Node module", `import "node:fs";`],
 		["a package", `import "zod";`],
+		["the retired models entry", `import "@hephaestus/practice-scripts/models";`],
+		["the private chat schema", `import "@hephaestus/practice-scripts/chat/records";`],
+		["the private document schema", `import "@hephaestus/practice-scripts/docs/records";`],
 		["a data URL", `import "data:text/javascript,export default 1";`],
 		["a dynamic import", `await import("../lib/core/contract.ts");`],
 	] as const) {
 		void test(`a script that imports ${form} stops as an invalid program, and names the import`, async () => {
-			const ws = await workspace({
-				importer: `${line}
+			const ws = await workspace(
+				{
+					importer: `${line}
 import { definePracticeScript } from "@hephaestus/practice-scripts";
 export default definePracticeScript({ meta: {}, run: async (ctx) => ctx.review({}) });
 `,
-			});
+				},
+				stagePracticeScripts,
+			);
 			const { outcome, reviews } = await run(ws, "importer");
 			assert.equal(outcome.status, "failed");
 			assert.equal(outcome.stopReason, "invalid-program");
@@ -611,15 +620,18 @@ export default definePracticeScript({ meta: {}, run: async (ctx) => ctx.review({
 	}
 
 	void test("a script with a name in the export map runs", async () => {
-		const ws = await workspace({
-			importer: `import { definePracticeScript, listWithin } from "@hephaestus/practice-scripts";
+		const ws = await workspace(
+			{
+				importer: `import { definePracticeScript, listWithin } from "@hephaestus/practice-scripts";
 import { chat } from "@hephaestus/practice-scripts/chat";
 import { docs } from "@hephaestus/practice-scripts/docs";
 import { issueReferences } from "@hephaestus/practice-scripts/scm";
 void [chat, docs, listWithin, issueReferences];
 export default definePracticeScript({ meta: {}, run: async (ctx) => ctx.review({}) });
 `,
-		});
+			},
+			stagePracticeScripts,
+		);
 		const { outcome } = await run(ws, "importer");
 		assert.equal(outcome.status, "ok", outcome.error);
 	});

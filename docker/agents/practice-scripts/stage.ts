@@ -56,13 +56,29 @@ export async function stagePracticeScripts(
 	scripts: Record<string, string | null>,
 	inputs: StagedInputs = REQUESTED_PULL_REQUEST,
 ): Promise<StagedPracticeScripts> {
+	return stagePrograms(scripts, inputs, "practices");
+}
+
+/** Private toolkit fixtures exercise model transport without entering the author import boundary. */
+export async function stageToolkitPrograms(
+	scripts: Record<string, string | null>,
+	inputs: StagedInputs = REQUESTED_PULL_REQUEST,
+): Promise<StagedPracticeScripts> {
+	return stagePrograms(scripts, inputs, "toolkit-fixtures");
+}
+
+async function stagePrograms(
+	scripts: Record<string, string | null>,
+	inputs: StagedInputs,
+	directory: string,
+): Promise<StagedPracticeScripts> {
 	const root = await realpath(await mkdtemp(path.join(tmpdir(), "practice-script-")));
 	const stage = path.join(root, "stage");
-	const practices = path.join(stage, "practices");
+	const practices = path.join(stage, directory);
 	await mkdir(practices, { recursive: true });
 	await writeFile(path.join(root, "package.json"), '{"type":"module"}\n');
-	for (const directory of ["lib", "kits"]) {
-		await symlink(path.join(import.meta.dirname, directory), path.join(stage, directory));
+	for (const kitDirectory of ["lib", "kits"]) {
+		await symlink(path.join(import.meta.dirname, kitDirectory), path.join(stage, kitDirectory));
 	}
 	for (const [slug, source] of Object.entries(scripts)) {
 		if (source !== null) {

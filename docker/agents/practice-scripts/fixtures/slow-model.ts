@@ -1,6 +1,6 @@
 import { scm } from "@hephaestus/practice-scripts/scm";
 
-import { definePracticeScript, embedMany, step } from "@hephaestus/practice-scripts/models";
+import { definePracticeScript, embedMany, step } from "../lib/core/practice-script.ts";
 
 const { setTimeout: sleep } = process.getBuiltinModule("node:timers/promises");
 

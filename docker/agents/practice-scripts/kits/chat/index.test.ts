@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { threadRecordSchema } from "./index.ts";
+import { threadRecordSchema } from "./records.ts";
 
 void test("chat records preserve distinct native authors and nullable account identities", () => {
 	const thread = {

@@ -22,7 +22,7 @@ import { UnratedError } from "./lib/core/practice-script.ts";
 import { runPracticeProgram, type ProgramOutcome } from "./lib/core/program-host.ts";
 import { InputReader } from "./lib/core/script-inputs.ts";
 import { forkedProgram } from "./lib/core/script-run.ts";
-import { stagePracticeScripts } from "./stage.ts";
+import { stageToolkitPrograms } from "./stage.ts";
 import {
 	chatMessage,
 	chatToolCall,
@@ -104,7 +104,7 @@ interface RunOptions {
 }
 
 async function stage(slugs: Record<string, string>) {
-	const { root, practices } = await stagePracticeScripts(slugs);
+	const { root, practices } = await stageToolkitPrograms(slugs);
 	roots.push(root);
 	const repo = path.join(root, "repo");
 	await mkdir(path.join(repo, "lib"), { recursive: true });
@@ -604,7 +604,7 @@ void describe("the attempt's direct model budget", () => {
 				async (standIn) => {
 					const budget = new ModelBudget(5000, MODEL_CONCURRENCY);
 					const source = `import { definePracticeScript } from "@hephaestus/practice-scripts";
-import { generateText } from "@hephaestus/practice-scripts/models";
+import { generateText } from "../lib/core/practice-script.ts";
 export default definePracticeScript({ meta: { models: { chat: "required" } }, async run(ctx) {
 await generateText({ model: ctx.models.chat, prompt: "Say yes.", maxOutputTokens: 1000 });
 return ctx.review();
@@ -842,7 +842,7 @@ void describe("a program the host refuses", () => {
 		}
 		const runs = await runSource(
 			`import { definePracticeScript } from "@hephaestus/practice-scripts";
-import { generateText } from "@hephaestus/practice-scripts/models";
+import { generateText } from "../lib/core/practice-script.ts";
 export default definePracticeScript({
 	meta: {},
 	run: async (ctx) => ctx.review({ leads: [{ at: { change: "src/cart.ts", line: 400 }, label: "A lead." }] }),
