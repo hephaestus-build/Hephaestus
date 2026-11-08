@@ -136,7 +136,7 @@ void test("a custom program that returns a result directly opens no session, and
 		{
 			practiceSlug: "a-direct",
 			program: { kind: "custom", digest: digestOf(main.cwd, "a-direct") },
-			models: [{ slot: "chat", need: "optional", bound: false, failures: {} }],
+			models: [],
 			status: "ok",
 			stopReason: null,
 			calls: noCalls,

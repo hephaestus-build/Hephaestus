@@ -14,7 +14,7 @@ import {
 } from "../../../../../../docker/agents/practice-scripts/test/proxy-stand-in.ts";
 import {
 	capturedLines,
-	directProgram,
+	privateModelProgram,
 	field,
 	readJsonFile,
 	runRunner,
@@ -42,12 +42,17 @@ after(async () => {
 	rmSync(cwd, { recursive: true, force: true });
 });
 
-stagePractices(cwd, [
-	{ slug: "a-spends", program: directProgram(call(100)) },
-	{ slug: "b-native" },
-	{ slug: "c-refused", program: directProgram(`${atStart}${call(4096)}`) },
-	{ slug: "d-small", program: directProgram(`${atStart}${call(100)}`) },
-]);
+// Direct-model accounting exercises private toolkit helpers.
+stagePractices(
+	cwd,
+	[
+		{ slug: "a-spends", program: privateModelProgram(call(100)) },
+		{ slug: "b-native" },
+		{ slug: "c-refused", program: privateModelProgram(`${atStart}${call(4096)}`) },
+		{ slug: "d-small", program: privateModelProgram(`${atStart}${call(100)}`) },
+	],
+	"work/practice-scripts/toolkit-fixtures",
+);
 writeFileSync(
 	nodePath.join(cwd, "practice-script-models.json"),
 	JSON.stringify({ chat: { protocol: "openai-completions", modelId: "chat-model" } }),
