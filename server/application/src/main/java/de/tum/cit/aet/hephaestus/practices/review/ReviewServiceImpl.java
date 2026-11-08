@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OccasionKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RoleHolder;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -426,7 +427,9 @@ public class ReviewServiceImpl implements ReviewService {
                 : covered.accounts().getOrDefault(definition.about(), List.of());
         String reason = definition.about() == null
                 ? null
-                : roles.isEmpty() ? "ROLE_UNAVAILABLE" : roles.size() > 1 ? "ROLE_AMBIGUOUS" : null;
+                : roles.isEmpty()
+                        ? missingRoleReason(definition.about(), pinned)
+                        : roles.size() > 1 ? "ROLE_AMBIGUOUS" : null;
         if (reason == null
                 && !covered.admission()
                         .admits(
@@ -438,6 +441,16 @@ public class ReviewServiceImpl implements ReviewService {
             reason = "OUTSIDE_REVIEW_SCOPE";
         if (reason == null) reason = readiness(definition, checksSource, checks);
         return new SelectedPractice(practice, version, roles, reason);
+    }
+
+    private static String missingRoleReason(AboutRole role, ItemSnapshot item) {
+        boolean authoredWork = role == AboutRole.AUTHOR
+                || (role == AboutRole.REVIEWER && item.item().kind().value().equals("scm.pull_request_review"));
+        var holders =
+                item.roles().stream().filter(holder -> holder.role() == role).toList();
+        return authoredWork && !holders.isEmpty() && holders.stream().allMatch(RoleHolder::bot)
+                ? role == AboutRole.REVIEWER ? "BOT_REVIEWER" : "BOT_AUTHOR"
+                : "ROLE_UNAVAILABLE";
     }
 
     private record SelectedPractice(

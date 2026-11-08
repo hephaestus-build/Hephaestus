@@ -46,6 +46,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RoleHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewThreadContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
@@ -127,12 +128,14 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewUsageSnapshot;
 import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
@@ -167,8 +170,10 @@ import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
+import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -245,6 +250,12 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     @Autowired
     ReviewService service;
+
+    @Autowired
+    WebTestClient http;
+
+    @Autowired
+    ObjectMapper mapper;
 
     @Autowired
     ReviewStart starts;
@@ -331,6 +342,79 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     @AfterEach
     void restoreInstanceDeliveryBrake() {
         jdbc.update("UPDATE instance_settings SET silent_mode_engaged=true WHERE id=1");
+    }
+
+    @Test
+    void shouldReadRetainedRoleFactsWithTheApplicationMapper() {
+        var human = mapper.readValue("""
+                {"role":"AUTHOR","identity":{"providerId":1,"subject":"42","teamId":null},"human":true}
+                """, RoleHolder.class);
+        var unknown = mapper.readValue("""
+                {"role":"AUTHOR","identity":{"providerId":1,"subject":"43","teamId":null},"human":false}
+                """, RoleHolder.class);
+
+        assertThat(human.human()).isTrue();
+        assertThat(human.bot()).isFalse();
+        assertThat(unknown.human()).isFalse();
+        assertThat(unknown.bot()).isFalse();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "GITHUB,false,BOT,BOT_AUTHOR", "GITLAB,false,BOT,BOT_AUTHOR",
+        "GITHUB,true,BOT,BOT_REVIEWER", "GITLAB,true,BOT,BOT_REVIEWER",
+        "GITHUB,false,ORGANIZATION,ROLE_UNAVAILABLE", "GITLAB,false,ORGANIZATION,ROLE_UNAVAILABLE",
+        "GITHUB,true,ORGANIZATION,ROLE_UNAVAILABLE", "GITLAB,true,ORGANIZATION,ROLE_UNAVAILABLE"
+    })
+    void shouldNameAKnownBotAuthorWithoutCallingOtherIdentitiesBots(
+            IdentityProviderType provider, boolean submittedReview, User.Type type, String reason) {
+        var prepared = prepare(provider, submittedReview);
+        var identity = source.pin(prepared.item(), prepared.version())
+                .roles()
+                .getFirst()
+                .identity();
+        var author = users.findByNativeIdAndProviderId(Long.parseLong(identity.subject()), identity.providerId())
+                .orElseThrow();
+        author.setType(type);
+        users.saveAndFlush(author);
+        long workspace = prepared.item().workspaceId();
+        var id = service.request(ReviewRequest.builder()
+                .workspaceId(workspace)
+                .itemId(prepared.item().itemId())
+                .kind(ReviewKind.ITEM)
+                .version(prepared.version())
+                .origin(ReviewOrigin.REQUEST)
+                .requestedById(memberAccount(workspace))
+                .practiceIds(List.of())
+                .build());
+
+        assertThat(reviews.findById(id).orElseThrow()).satisfies(review -> {
+            assertThat(review.getStatus()).isEqualTo(ReviewStatus.PARTIAL);
+            assertThat(review.getStopReason()).isEqualTo(ReviewStopReason.READINESS_REFUSED);
+        });
+        assertThat(jdbc.queryForObject("SELECT reason FROM review_practice WHERE review_id=?", String.class, id))
+                .isEqualTo(reason);
+        assertThat(jdbc.queryForObject(
+                        "SELECT state||':'||reason FROM review_item WHERE review_id=?", String.class, id))
+                .isEqualTo("WITHHELD:" + reason);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM review_job WHERE review_id=?", Long.class, id))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM result WHERE workspace_id=?", Long.class, workspace))
+                .isZero();
+        when(runtime.usage(workspace, id))
+                .thenReturn(new ReviewUsageSnapshot(BigDecimal.ZERO, true, 0, 0, 0, List.of()));
+        http.get()
+                .uri(
+                        "/workspaces/{slug}/practices/reviews/{id}",
+                        workspaces.findById(workspace).orElseThrow().getWorkspaceSlug(),
+                        id)
+                .headers(headers -> headers.setBearerAuth("mock-jwt-sub-" + memberAccount(workspace)))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.practices[0].reason")
+                .isEqualTo(reason);
     }
 
     @ParameterizedTest

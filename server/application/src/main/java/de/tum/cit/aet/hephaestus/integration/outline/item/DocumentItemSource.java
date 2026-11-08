@@ -155,7 +155,7 @@ public class DocumentItemSource implements ItemSource, ItemSourceAccess {
                         ItemCaptureCode.ITEM_NOT_VISIBLE, "Outline is not connected for this document"));
         var roles = permission.identities(item.workspaceId(), doc.getId()).stream()
                 .filter(identity -> identity.subject().equals(doc.getCreatedBySubject()))
-                .map(identity -> new RoleHolder(AboutRole.AUTHOR, identity, true))
+                .map(identity -> new RoleHolder(AboutRole.AUTHOR, identity, true, false))
                 .distinct()
                 .toList();
         String title = doc.getTitle();

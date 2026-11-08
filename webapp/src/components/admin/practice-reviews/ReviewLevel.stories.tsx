@@ -19,6 +19,7 @@ import { minutesBefore } from "@/stories/story-clock";
 import { levelsOpenedBy, listOpenedBy } from "@/test/detail-stack";
 
 import {
+	feedbackCounts,
 	reviewDetailBackingOff,
 	reviewDetailCancelledOnBudget,
 	reviewDetailCompleted,
@@ -990,6 +991,40 @@ export const NoPracticeResultsRecordedYet: Story = {
 		const panel = within(await settledDrawerPanel());
 		panel.getByText("Practices appear here as the review reaches them.");
 		await expect(panel.queryByRole("list", { name: "Every practice in this review" })).toBeNull();
+	},
+};
+
+export const BotAuthoredWorkRefused: Story = {
+	args: {
+		review: ready({
+			...reviewDetailCompleted,
+			status: "PARTIAL",
+			stopReason: "READINESS_REFUSED",
+			jobCount: 0,
+			activeJobCount: 0,
+			model: null,
+			usage: reviewDetailPreparationFailed.usage,
+			feedback: feedbackCounts([]),
+			runtime: null,
+			generatedPaths: null,
+			progress: null,
+			stageTiming: [],
+			results: { met: 0, notMet: 0, doesNotApply: 0, couldNotDetermine: 0 },
+			practices: reviewDetailCompleted.practices.slice(0, 1).map((practice) => ({
+				...practice,
+				status: "WITHHELD",
+				reason: "BOT_AUTHOR",
+				results: { met: 0, notMet: 0, doesNotApply: 0, couldNotDetermine: 0 },
+				itemCounts: { listed: 1, reviewed: 0, reused: 0, withheld: 1, notReviewed: 0 },
+			})),
+		}),
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		const list = within(panel.getByRole("list", { name: "Every practice in this review" }));
+		await expect(list.getByText("Hephaestus does not review work by bots.")).toBeVisible();
+		await expect(list.queryByText("BOT_AUTHOR")).toBeNull();
+		await expect(list.queryByText(/No eligible person holds the role/u)).toBeNull();
 	},
 };
 

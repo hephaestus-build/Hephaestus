@@ -607,7 +607,8 @@ public class ScmItemService implements ItemSource {
                             Objects.requireNonNull(user.getProvider().getId(), "Persisted SCM provider requires an id"),
                             Long.toString(user.getNativeId()),
                             null),
-                    user.getType() == User.Type.USER));
+                    user.getType() == User.Type.USER,
+                    user.getType() == User.Type.BOT));
     }
 
     /**

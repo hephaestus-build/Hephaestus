@@ -109,7 +109,11 @@ Reviewed by People or Nobody prevents automated execution.
 An ITEM review pins one item.
 A provider pull request review is its own item, with its pull request as parent.
 The practice's role must resolve to exactly one eligible human account.
-No holder records ROLE_UNAVAILABLE. Multiple distinct holders record ROLE_AMBIGUOUS.
+
+When only confirmed bots hold AUTHOR, selection records `BOT_AUTHOR`.
+When only confirmed bots hold REVIEWER on a provider pull request review, selection records `BOT_REVIEWER`.
+If no eligible holder exists in other cases, selection records `ROLE_UNAVAILABLE`, including unknown identities.
+Multiple distinct eligible holders record `ROLE_AMBIGUOUS`.
 The server never picks the first assignee or makes an unresolved person anonymous.
 
 Explicit `about=null` permits a developerless result.
