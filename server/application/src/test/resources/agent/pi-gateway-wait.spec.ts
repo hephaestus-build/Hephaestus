@@ -77,7 +77,7 @@ await test("gateway connection failures stay inside one model stream beyond the 
 
 await test("a disconnected partial response is replaced by one complete model response", async () => {
 	let calls = 0;
-	const output = await waitForGateway(stream, Date.now() + 10000)(model, context, {
+	const output = await waitForGateway(stream, Date.now() + 5000)(model, context, {
 		...options,
 		fetch: async () => {
 			calls += 1;
@@ -115,7 +115,7 @@ await test("a disconnected partial response is replaced by one complete model re
 for (const status of [429, 503]) {
 	await test(`a provider HTTP ${status} remains a model failure`, async () => {
 		let calls = 0;
-		const output = await waitForGateway(stream, Date.now() + 10000)(model, context, {
+		const output = await waitForGateway(stream, Date.now() + 5000)(model, context, {
 			...options,
 			fetch: async () => {
 				calls += 1;
@@ -134,7 +134,7 @@ await test("cancellation ends a gateway wait without another model request", asy
 	const abort = new AbortController();
 	const called = Promise.withResolvers<undefined>();
 	let calls = 0;
-	const output = await waitForGateway(stream, Date.now() + 10000)(model, context, {
+	const output = await waitForGateway(stream, Date.now() + 5000)(model, context, {
 		...options,
 		signal: abort.signal,
 		fetch: async () => {
@@ -206,7 +206,7 @@ for (const providerCase of [
 		let calls = 0;
 		const native = (...args: Parameters<typeof providerCase.provider.streamSimple>) =>
 			providerCase.provider.streamSimple(...args);
-		const output = await waitForGateway(native, Date.now() + 10000)(
+		const output = await waitForGateway(native, Date.now() + 5000)(
 			{ ...model, api: providerCase.api },
 			context,
 			{
