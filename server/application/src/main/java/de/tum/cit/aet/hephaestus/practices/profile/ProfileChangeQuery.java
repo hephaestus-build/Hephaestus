@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.practices.profile;
 
-import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
@@ -11,10 +10,9 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileChangeDTO;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeStandingService;
-import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
-import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.practices.result.trend.PracticeTrendService;
 import de.tum.cit.aet.hephaestus.practices.result.trend.WorkResolution;
 import de.tum.cit.aet.hephaestus.practices.result.trend.WorkResolution.Work;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
@@ -51,29 +49,43 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ProfileChangeQuery {
     private final PracticeStandingService practiceStandingService;
+    private final PracticeTrendService practiceTrendService;
     private final PracticeGroupStandingService practiceGroupStandingService;
     private final PracticeGroupRepository groups;
-    private final ResultRepository read;
-    private final ResultViewQuery views;
     private final ResultVisibilityPolicy visibility;
     private final ProductReferenceQuery references;
     private final ProfileFeedbackQuery feedbackFacts;
     private final ProfileOverviewRepository ledger;
 
     public List<ProfileChangeDTO> changes(long workspaceId, long accountId, OverviewWindow window) {
-        return visibility.asOneRead(workspaceId, () -> readChanges(workspaceId, accountId, window));
+        return visibility.asOneRead(
+                workspaceId,
+                () -> readChanges(
+                        workspaceId,
+                        accountId,
+                        window,
+                        practiceStandingService.history(workspaceId, accountId, since(window))));
     }
 
-    private List<ProfileChangeDTO> readChanges(long workspaceId, long accountId, OverviewWindow window) {
-        var rows = read.forDevelopersSince(workspaceId, List.of(accountId), window.since(), false).stream()
-                .filter(r -> window.contains(r.getRecordedAt()))
+    /** The changes read off a history that reaches back to the window's start and the standing's look-back. */
+    public List<ProfileChangeDTO> changes(
+            long workspaceId, long accountId, OverviewWindow window, PracticeStandingService.History history) {
+        return visibility.asOneRead(workspaceId, () -> readChanges(workspaceId, accountId, window, history));
+    }
+
+    // The changes read the window's rows and the standings as of its edges, which read back to the look-back.
+    private Instant since(OverviewWindow window) {
+        Instant lookBack = practiceTrendService.horizon();
+        return lookBack.isBefore(window.since()) ? lookBack : window.since();
+    }
+
+    private List<ProfileChangeDTO> readChanges(
+            long workspaceId, long accountId, OverviewWindow window, PracticeStandingService.History history) {
+        var projected = history.from(window.since()).permittedViews().stream()
+                .filter(v -> window.contains(v.result().getRecordedAt()))
                 .toList();
-        var permitted = visibility.permitsHistory(workspaceId, rows, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
-        var projected = views.views(
-                workspaceId,
-                rows.stream().filter(r -> permitted.contains(r.getId())).toList());
         var snapshots = practiceStandingService.getStandingSnapshots(
-                workspaceId, accountId, List.of(window.since(), window.until()));
+                workspaceId, List.of(window.since(), window.until()), history);
         var before = snapshots.getFirst();
         var after = snapshots.getLast();
         var shown = groups.findByWorkspaceIdAndShownToDevelopersTrueOrderByPositionAscNameAsc(workspaceId);

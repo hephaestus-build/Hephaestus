@@ -13,6 +13,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -22,14 +23,20 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @ConditionalOnCaptureRole
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class ResultViewQuery {
 
     private final PracticeRepository practices;
     private final PracticeVersionRepository versions;
     private final ReviewRepository reviews;
     private final ProductReferenceQuery references;
+    private final ResultRepository results;
 
-    @Transactional(readOnly = true)
+    public Optional<ResultView> latestForDeveloper(long workspaceId, long developerId) {
+        return results.findFirstByWorkspaceIdAndDeveloperIdOrderByRecordedAtDescIdDesc(workspaceId, developerId)
+                .map(result -> views(workspaceId, List.of(result)).getFirst());
+    }
+
     public List<ResultView> views(long workspaceId, Collection<Result> results) {
         if (results.isEmpty()) {
             return List.of();

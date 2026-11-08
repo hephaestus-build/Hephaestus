@@ -170,6 +170,19 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldReadTheDevelopersResultHistoryOnceForTheOverview() {
+        seed(2 * works.size());
+        var context = WorkspaceContext.fromWorkspace(scenario.workspace(), Set.of(), null);
+        var measured = reads.measure(() -> overview.getOverview(context));
+
+        assertThat(measured.value().latestReview()).isNotNull();
+        // The page, its changes and both standing snapshots filter one history; the newest result is its own read.
+        assertThat(measured.sql())
+                .filteredOn(sql -> sql.startsWith("SELECT r.* FROM result r JOIN practice p"))
+                .hasSize(1);
+    }
+
+    @Test
     void shouldShowPracticePageFeedbackAsItStandsWhenTheReadingTransactionLoadedItBefore() {
         seed(works.size());
         var piece = practicePageFeedback(Objects.requireNonNull(newestProblem), true);
