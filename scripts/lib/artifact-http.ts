@@ -26,6 +26,9 @@ export class ArtifactHttpError extends Error {
 }
 
 export function artifactFailure(error: unknown): string {
+	if (error instanceof Error && error.cause instanceof ArtifactHttpError) {
+		return artifactFailure(error.cause);
+	}
 	return error instanceof ArtifactHttpError
 		? `HTTP ${String(error.status)}`
 		: "metadata, transport or filesystem error";

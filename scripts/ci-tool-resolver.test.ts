@@ -6,7 +6,12 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { allCiToolPins, ciToolPin } from "./lib/ci-tool-catalog.ts";
-import { resolveCiTool, toolCacheDirectory, type ToolSource } from "./lib/ci-tool-resolver.ts";
+import {
+	CiToolResolutionError,
+	resolveCiTool,
+	toolCacheDirectory,
+	type ToolSource,
+} from "./lib/ci-tool-resolver.ts";
 
 const bytes = new TextEncoder().encode("pinned tool fixture");
 const pin = {
@@ -101,10 +106,14 @@ void test("all failed or mismatched sources produce a clear refusal", async (t) 
 		},
 		{ name: "direct", read: async () => new TextEncoder().encode("corrupt direct source") },
 	];
-	await assert.rejects(
-		resolveCiTool(pin, { cacheRoot: root, sources }),
-		/No verified source.*fixture@1\.2\.3.*github-api:.*direct: checksum mismatch/u,
-	);
+	await assert.rejects(resolveCiTool(pin, { cacheRoot: root, sources }), (error: unknown) => {
+		assert.ok(error instanceof CiToolResolutionError);
+		assert.match(
+			error.message,
+			/No verified source.*fixture@1\.2\.3.*github-api:.*direct: checksum mismatch/u,
+		);
+		return true;
+	});
 });
 
 void test(

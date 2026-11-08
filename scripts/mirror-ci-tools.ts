@@ -1,7 +1,15 @@
 import { allCiToolPins } from "./lib/ci-tool-catalog.ts";
-import { publishCiToolGroup, type MirrorEntry } from "./lib/ci-tool-registry.ts";
-import { resolveCiTool } from "./lib/ci-tool-resolver.ts";
-import { fetchReleaseAssetApi, fetchReleaseAssetDirect } from "./lib/release-asset.ts";
+import {
+	CiToolRegistryError,
+	publishCiToolGroup,
+	type MirrorEntry,
+} from "./lib/ci-tool-registry.ts";
+import { CiToolResolutionError, resolveCiTool } from "./lib/ci-tool-resolver.ts";
+import {
+	downloadFailure,
+	fetchReleaseAssetApi,
+	fetchReleaseAssetDirect,
+} from "./lib/release-asset.ts";
 
 const policy = { attempts: 4, timeoutMs: 60_000, delayMs: 5000 };
 const groups = new Map<string, Awaited<ReturnType<typeof allCiToolPins>>>();
@@ -32,9 +40,15 @@ for (const [name, pins] of groups) {
 		}
 		await publishCiToolGroup(entries, policy);
 		console.info(`Mirrored CI tool ${name}: ${entries.length} verified assets`);
-	} catch {
+	} catch (error) {
 		failed.push(name);
-		console.error(`CI tool mirror failed for ${name}; the existing tag was not replaced.`);
+		const reason =
+			error instanceof CiToolRegistryError || error instanceof CiToolResolutionError
+				? error.message
+				: downloadFailure(error);
+		console.error(
+			`CI tool mirror failed for ${name}: ${reason}; the existing tag was not replaced.`,
+		);
 	}
 }
 if (failed.length > 0) {
