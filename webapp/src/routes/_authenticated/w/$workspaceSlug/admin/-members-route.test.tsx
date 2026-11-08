@@ -88,7 +88,7 @@ function mockMembersRoute(members: Wire<WorkspaceMembership>[] = [ADA, SAM]) {
 		http.get("*/workspaces/:workspaceSlug/members", () =>
 			HttpResponse.json(membershipPage(members)),
 		),
-		http.get("*/workspaces/:workspaceSlug/team", () => HttpResponse.json([])),
+		http.get("*/workspaces/:workspaceSlug/teams", () => HttpResponse.json([])),
 	);
 }
 
@@ -256,7 +256,7 @@ describe("workspace members route", () => {
 			const requests: Record<string, string>[] = [];
 			mockMembersRoute();
 			server.use(
-				http.get("*/workspaces/:workspaceSlug/team", () => HttpResponse.json([REVIEWERS])),
+				http.get("*/workspaces/:workspaceSlug/teams", () => HttpResponse.json([REVIEWERS])),
 				http.get("*/workspaces/:workspaceSlug/members", ({ request }) => {
 					const params = new URL(request.url).searchParams;
 					requests.push(Object.fromEntries(params));
@@ -353,7 +353,7 @@ describe("workspace members route", () => {
 			const requests: Record<string, string>[] = [];
 			mockMembersRoute();
 			server.use(
-				http.get("*/workspaces/:workspaceSlug/team", () => HttpResponse.json([REVIEWERS])),
+				http.get("*/workspaces/:workspaceSlug/teams", () => HttpResponse.json([REVIEWERS])),
 				holdMembersReadNaming("q", searched.promise, requests),
 			);
 			// A failed assertion must still answer the held search, or cleanup waits on it.
@@ -386,7 +386,7 @@ describe("workspace members route", () => {
 		const reviewers = deferred();
 		mockMembersRoute();
 		server.use(
-			http.get("*/workspaces/:workspaceSlug/team", () => HttpResponse.json([REVIEWERS])),
+			http.get("*/workspaces/:workspaceSlug/teams", () => HttpResponse.json([REVIEWERS])),
 			holdMembersReadNaming("team", reviewers.promise),
 		);
 		try {

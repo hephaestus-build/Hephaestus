@@ -25,7 +25,7 @@ export interface TeamsTableProps {
 		repositoryId: number,
 		hidden: boolean,
 	) => Promise<void>;
-	onAddLabelToTeam?: (teamId: number, repositoryId: number, label: string) => Promise<void>;
+	onAddLabelToTeam?: (teamId: number, labelId: number) => Promise<void>;
 	onRemoveLabelFromTeam?: (teamId: number, labelId: number) => Promise<void>;
 }
 

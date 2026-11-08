@@ -624,7 +624,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
 
             webTestClient
                     .get()
-                    .uri("/workspaces/{slug}/team", workspaceA.getWorkspaceSlug())
+                    .uri("/workspaces/{slug}/teams", workspaceA.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
                     .exchange()
                     .expectStatus()
@@ -714,11 +714,11 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     private StatusAssertions expectVisibilityWriteStatus(Long teamId) {
         return webTestClient
-                .post()
-                .uri("/workspaces/{slug}/team/{id}/visibility", workspaceA.getWorkspaceSlug(), teamId)
+                .patch()
+                .uri("/workspaces/{slug}/teams/{id}/visibility", workspaceA.getWorkspaceSlug(), teamId)
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(true)
+                .bodyValue(Map.of("hidden", true))
                 .exchange()
                 .expectStatus();
     }

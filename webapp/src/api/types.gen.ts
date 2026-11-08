@@ -6571,6 +6571,13 @@ export type VerifyPasskeyRequest = {
 };
 
 /**
+ * Whether a team or repository is hidden from workspace activity.
+ */
+export type VisibilityUpdate = {
+    hidden: boolean;
+};
+
+/**
  * One measurement of a page visit
  */
 export type WebVital = {
@@ -15445,7 +15452,7 @@ export type GetAllTeamsData = {
         workspaceSlug: string;
     };
     query?: never;
-    url: '/workspaces/{workspaceSlug}/team';
+    url: '/workspaces/{workspaceSlug}/teams';
 };
 
 export type GetAllTeamsResponses = {
@@ -15458,7 +15465,7 @@ export type GetAllTeamsResponses = {
 export type GetAllTeamsResponse = GetAllTeamsResponses[keyof GetAllTeamsResponses];
 
 export type UpdateTeamVisibilityData = {
-    body?: boolean;
+    body: VisibilityUpdate;
     path: {
         /**
          * Workspace slug
@@ -15466,36 +15473,11 @@ export type UpdateTeamVisibilityData = {
         workspaceSlug: string;
         id: number;
     };
-    query?: {
-        hidden?: boolean;
-    };
-    url: '/workspaces/{workspaceSlug}/team/{id}/visibility';
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/teams/{id}/visibility';
 };
 
 export type UpdateTeamVisibilityResponses = {
-    /**
-     * OK
-     */
-    200: unknown;
-};
-
-export type UpdateRepositoryVisibilityData = {
-    body?: boolean;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        teamId: number;
-        repositoryId: number;
-    };
-    query?: {
-        hiddenFromContributions?: boolean;
-    };
-    url: '/workspaces/{workspaceSlug}/team/{teamId}/repositories/{repositoryId}/visibility';
-};
-
-export type UpdateRepositoryVisibilityResponses = {
     /**
      * OK
      */
@@ -15533,11 +15515,10 @@ export type AddLabelToTeamData = {
          */
         workspaceSlug: string;
         teamId: number;
-        repositoryId: number;
-        label: string;
+        labelId: number;
     };
     query?: never;
-    url: '/workspaces/{workspaceSlug}/teams/{teamId}/labels/{repositoryId}/{label}';
+    url: '/workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}';
 };
 
 export type AddLabelToTeamResponses = {
@@ -15548,6 +15529,27 @@ export type AddLabelToTeamResponses = {
 };
 
 export type AddLabelToTeamResponse = AddLabelToTeamResponses[keyof AddLabelToTeamResponses];
+
+export type UpdateRepositoryVisibilityData = {
+    body: VisibilityUpdate;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        teamId: number;
+        repositoryId: number;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/teams/{teamId}/repositories/{repositoryId}/visibility';
+};
+
+export type UpdateRepositoryVisibilityResponses = {
+    /**
+     * OK
+     */
+    200: unknown;
+};
 
 export type UpdateTokenData = {
     body: UpdateWorkspaceTokenRequest;

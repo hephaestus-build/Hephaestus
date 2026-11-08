@@ -97,12 +97,12 @@ function serveTwoWorkspaces(state: AcmeState) {
 		),
 		http.get("*/workspaces/:workspaceSlug/connections/catalog", () => HttpResponse.json([])),
 		http.get("*/workspaces/:workspaceSlug/members", () => HttpResponse.json([])),
-		http.get("*/workspaces/acme/team", async () => {
+		http.get("*/workspaces/acme/teams", async () => {
 			reads.acme += 1;
 			await gate;
 			return HttpResponse.json(acmeTeams(state));
 		}),
-		http.get("*/workspaces/beta/team", async () => {
+		http.get("*/workspaces/beta/teams", async () => {
 			reads.beta += 1;
 			return reads.beta === 1 ? HttpResponse.json(BETA_TEAMS) : pending<Response>();
 		}),
@@ -140,7 +140,7 @@ describe("a team change belongs to its workspace", () => {
 		{
 			change: "a team's visibility",
 			serve: (resolver: HttpResponseResolver) =>
-				http.post("*/workspaces/acme/team/1/visibility", resolver),
+				http.patch("*/workspaces/acme/teams/1/visibility", resolver),
 			start: async (user: User) => {
 				await user.click(
 					screen.getByRole("button", { name: "Hide Frontend Team from workspace activity" }),
@@ -159,7 +159,7 @@ describe("a team change belongs to its workspace", () => {
 		{
 			change: "a repository's visibility",
 			serve: (resolver: HttpResponseResolver) =>
-				http.post("*/workspaces/acme/team/1/repositories/21/visibility", resolver),
+				http.patch("*/workspaces/acme/teams/1/repositories/21/visibility", resolver),
 			start: async (user: User) => {
 				await user.click(screen.getByRole("button", { name: "Hide acme/web from contributions" }));
 			},
@@ -172,7 +172,7 @@ describe("a team change belongs to its workspace", () => {
 		{
 			change: "a team's labels",
 			serve: (resolver: HttpResponseResolver) =>
-				http.post("*/workspaces/acme/teams/1/labels/21/bug", resolver),
+				http.put("*/workspaces/acme/teams/1/labels/31", resolver),
 			start: async (user: User) => {
 				await openLabels(user);
 				await user.click(await screen.findByRole("button", { name: "Add bug label" }));
@@ -240,7 +240,7 @@ describe("a team change belongs to its workspace", () => {
 			labelled: false,
 			toggle: "Add bug label",
 			serve: (resolver: HttpResponseResolver) =>
-				http.post("*/workspaces/acme/teams/1/labels/21/bug", resolver),
+				http.put("*/workspaces/acme/teams/1/labels/31", resolver),
 			settled: async () => {
 				await screen.findByText("bug", undefined, SETTLE);
 			},
@@ -308,9 +308,9 @@ describe("a team change belongs to its workspace", () => {
 		const state = { teamHidden: false, repositoryHidden: false, labelled: false };
 		const acme = serveTwoWorkspaces(state);
 		server.use(
-			http.post("*/workspaces/acme/team/1/visibility", async () => teamReply.promise),
+			http.patch("*/workspaces/acme/teams/1/visibility", async () => teamReply.promise),
 			// The server records the repository change as it arrives; its answer is held.
-			http.post("*/workspaces/acme/team/1/repositories/21/visibility", async () => {
+			http.patch("*/workspaces/acme/teams/1/repositories/21/visibility", async () => {
 				state.repositoryHidden = true;
 				return repositoryReply.promise;
 			}),
@@ -376,7 +376,7 @@ function serveAcmeRead(state: AcmeState) {
 		return new HttpResponse(null, { status: 200 });
 	};
 	server.use(
-		http.get("*/workspaces/acme/team", async () => {
+		http.get("*/workspaces/acme/teams", async () => {
 			read.count += 1;
 			await read.hold;
 			return read.status === 200
@@ -518,7 +518,7 @@ it("renders verified nonmember target teams and withdraws them when its workspac
 			HttpResponse.json({ status: 403 }, { status: 403 }),
 		),
 		http.get("*/workspaces/tutors/connections/catalog", () => HttpResponse.json([])),
-		http.get("*/workspaces/tutors/team", ({ request }) => {
+		http.get("*/workspaces/tutors/teams", ({ request }) => {
 			requests.push(new URL(request.url).pathname);
 			return HttpResponse.json([team(55, "Tutors Team")]);
 		}),
@@ -528,7 +528,7 @@ it("renders verified nonmember target teams and withdraws them when its workspac
 	expect(router.state.location.pathname).toBe("/w/tutors/admin/teams");
 	screen.getByText("Tutors administration");
 	expect(requests).toHaveLength(1);
-	expect(requests[0]).toMatch(/\/workspaces\/tutors\/team$/u);
+	expect(requests[0]).toMatch(/\/workspaces\/tutors\/teams$/u);
 	server.use(
 		http.get("*/workspaces/tutors", () => HttpResponse.json({ status: 403 }, { status: 403 })),
 	);

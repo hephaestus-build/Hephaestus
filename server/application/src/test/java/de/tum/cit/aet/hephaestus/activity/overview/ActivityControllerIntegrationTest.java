@@ -2587,8 +2587,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     onUnlabeled.getId(),
                     DAY.plusSeconds(60),
                     monitored);
-            assertThat(teamSettingsService.addLabelFilterByName(
-                            workspace, platform.getId(), monitored.getId(), platformLabel.getName()))
+            assertThat(teamSettingsService.addLabelFilter(workspace, platform.getId(), platformLabel.getId()))
                     .isPresent();
 
             assertThat(summary(uri -> uri.queryParam("team", platform.getSlug()))
@@ -2678,8 +2677,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         @Test
         void shouldAddUpToTheSummaryWhenEveryPageOfATeamsWorkIsWalked() {
             Label platformLabel = label("platform", monitored);
-            assertThat(teamSettingsService.addLabelFilterByName(
-                            workspace, platform.getId(), monitored.getId(), platformLabel.getName()))
+            assertThat(teamSettingsService.addLabelFilter(workspace, platform.getId(), platformLabel.getId()))
                     .isPresent();
             seedMixedActivity(monitored);
             record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -150L, DAY, unmonitored);

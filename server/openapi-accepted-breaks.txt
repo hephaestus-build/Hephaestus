@@ -315,3 +315,9 @@ in API DELETE /user/sessions removed the success response with the status `200`
 in API DELETE /user/sessions/{jti} removed the success response with the status `200`
 in API DELETE /workspaces/{workspaceSlug}/repositories removed the success response with the status `200`
 in API POST /workspaces/{workspaceSlug}/repositories removed the success response with the status `200`
+
+# Teams use a plural resource, PATCH visibility bodies, and label identifiers.
+in API GET /workspaces/{workspaceSlug}/team api path removed without deprecation
+in API POST /workspaces/{workspaceSlug}/team/{id}/visibility api path removed without deprecation
+in API POST /workspaces/{workspaceSlug}/team/{teamId}/repositories/{repositoryId}/visibility api path removed without deprecation
+in API POST /workspaces/{workspaceSlug}/teams/{teamId}/labels/{repositoryId}/{label} api path removed without deprecation

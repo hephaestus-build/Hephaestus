@@ -6,7 +6,7 @@ export interface RepositoryLabelsToggleProps {
 	team: TeamInfo;
 	repository: RepositoryInfo;
 	catalogLabels: LabelInfo[];
-	onAddLabel?: (teamId: number, repositoryId: number, label: string) => Promise<void>;
+	onAddLabel?: (teamId: number, labelId: number) => Promise<void>;
 	onRemoveLabel?: (teamId: number, labelId: number) => Promise<void>;
 }
 
@@ -33,9 +33,7 @@ export function RepositoryLabelsToggle({
 	const handleToggle = async (label: LabelInfo) => {
 		const key = label.name.toLowerCase();
 		const active = activeByName.get(key);
-		await (active
-			? onRemoveLabel?.(team.id, active.id)
-			: onAddLabel?.(team.id, repository.id, label.name));
+		await (active ? onRemoveLabel?.(team.id, active.id) : onAddLabel?.(team.id, label.id));
 	};
 
 	return (

@@ -5960,6 +5960,13 @@ export const zVerifyPasskeyRequest = z.object({
 });
 
 /**
+ * Whether a team or repository is hidden from workspace activity.
+ */
+export const zVisibilityUpdate = z.object({
+    hidden: z.boolean()
+});
+
+/**
  * One measurement of a page visit
  */
 export const zWebVital = z.object({

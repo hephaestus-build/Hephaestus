@@ -60,7 +60,7 @@ function AdminTeamsContainer() {
 			await queryClient.cancelQueries({ queryKey: teamsQueryKey });
 			const prev = queryClient.getQueryData<TeamInfo[]>(teamsQueryKey);
 			const teamId = vars.path.id;
-			const hidden = typeof vars.body === "boolean" ? vars.body : vars.query?.hidden;
+			const { hidden } = vars.body;
 			let optimistic: TeamInfo[] | undefined;
 			if (prev && typeof teamId === "number" && typeof hidden === "boolean") {
 				const next = prev.map((t) => (t.id === teamId ? { ...t, hidden } : t));
@@ -125,8 +125,7 @@ function AdminTeamsContainer() {
 			const prev = queryClient.getQueryData<TeamInfo[]>(teamsQueryKey);
 			const { teamId } = vars.path;
 			const { repositoryId } = vars.path;
-			const hidden =
-				typeof vars.body === "boolean" ? vars.body : vars.query?.hiddenFromContributions;
+			const { hidden } = vars.body;
 			let optimistic: TeamInfo[] | undefined;
 			if (
 				prev &&
@@ -175,21 +174,20 @@ function AdminTeamsContainer() {
 		try {
 			await updateTeamVisibility.mutateAsync({
 				path: { workspaceSlug: slug, id: teamId },
-				body: hidden,
-				query: { hidden },
+				body: { hidden },
 			});
 		} catch {
 			// onError has reported the failure for the submitted workspace.
 		}
 	};
 
-	const handleAddLabelToTeam = async (teamId: number, repositoryId: number, label: string) => {
+	const handleAddLabelToTeam = async (teamId: number, labelId: number) => {
 		if (!hasWorkspace) {
 			return;
 		}
 		try {
 			await addLabelToTeam.mutateAsync({
-				path: { workspaceSlug: slug, teamId, repositoryId, label },
+				path: { workspaceSlug: slug, teamId, labelId },
 			});
 		} catch {
 			// onError has reported the failure for the submitted workspace.
@@ -220,8 +218,7 @@ function AdminTeamsContainer() {
 		try {
 			await updateRepositoryVisibility.mutateAsync({
 				path: { workspaceSlug: slug, teamId, repositoryId },
-				body: hidden,
-				query: { hiddenFromContributions: hidden },
+				body: { hidden },
 			});
 		} catch {
 			// onError has reported the failure for the submitted workspace.

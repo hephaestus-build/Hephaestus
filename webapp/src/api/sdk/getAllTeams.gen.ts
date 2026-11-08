@@ -14,6 +14,6 @@ import type { GetAllTeamsData, GetAllTeamsResponses } from '../types.gen.js';
 export const getAllTeams = <ThrowOnError extends boolean = false>(options: Options<GetAllTeamsData, ThrowOnError>): RequestResult<GetAllTeamsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetAllTeamsResponses, unknown, ThrowOnError>({
     responseTransformer: getAllTeamsResponseTransformer,
     security: [{ scheme: 'bearer', type: 'http' }],
-    url: '/workspaces/{workspaceSlug}/team',
+    url: '/workspaces/{workspaceSlug}/teams',
     ...options
 });

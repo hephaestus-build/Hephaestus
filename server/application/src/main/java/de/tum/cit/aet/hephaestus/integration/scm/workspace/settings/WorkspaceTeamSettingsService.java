@@ -213,8 +213,8 @@ public class WorkspaceTeamSettingsService {
         return labelFilterRepository.findTeamIdsWithLabelFilters(workspaceId);
     }
 
-    private Optional<WorkspaceTeamLabelFilter> addLabelFilterInTransaction(
-            Workspace workspace, Long teamId, Long labelId) {
+    @Transactional
+    public Optional<WorkspaceTeamLabelFilter> addLabelFilter(Workspace workspace, Long teamId, Long labelId) {
         Optional<Team> teamOpt = teamRepository.findById(teamId);
         if (teamOpt.isEmpty() || !belongsToWorkspace(teamOpt.get(), workspace)) {
             log.warn(
@@ -258,25 +258,6 @@ public class WorkspaceTeamSettingsService {
                 LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()));
 
         return Optional.of(saved);
-    }
-
-    /** Returns empty when the team or label does not exist in the workspace. */
-    @Transactional
-    public Optional<WorkspaceTeamLabelFilter> addLabelFilterByName(
-            Workspace workspace, Long teamId, Long repositoryId, String labelName) {
-        Optional<Label> labelOpt = repositoryRepository.isMonitored(workspace.getId(), repositoryId)
-                ? labelRepository.findByRepositoryIdAndName(repositoryId, labelName)
-                : Optional.empty();
-        if (labelOpt.isEmpty()) {
-            log.warn(
-                    "Skipped label filter addition: reason=labelNotInMonitoredRepository, labelName={},"
-                            + " repositoryId={}",
-                    labelName,
-                    repositoryId);
-            return Optional.empty();
-        }
-
-        return addLabelFilterInTransaction(workspace, teamId, labelOpt.get().getId());
     }
 
     @Transactional
