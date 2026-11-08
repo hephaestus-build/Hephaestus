@@ -86,8 +86,12 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
             INSERT INTO feedback_decision(id,workspace_id,feedback_id,action,actor_account_id,note,decided_at)
             VALUES(:id,:ws,:feedback,'WITHDRAW',:actor,'Withdraw this note.',:at)
             """)
-                .param("id", UUID.randomUUID()).param("ws", ws).param("feedback", feedbackId)
-                .param("actor", account).param("at", Timestamp.from(at.plusSeconds(2))).update();
+                .param("id", UUID.randomUUID())
+                .param("ws", ws)
+                .param("feedback", feedbackId)
+                .param("actor", account)
+                .param("at", Timestamp.from(at.plusSeconds(2)))
+                .update();
         when(evidenceAuthorization.permitsAll(eq(ws), anyCollection(), eq(SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW)))
                 .thenReturn(Set.of(visible.getId(), foreign.getId()));
 
@@ -141,24 +145,32 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
                     Collection<Result> rows = invocation.getArgument(1);
                     return rows.stream().map(Result::getId).collect(Collectors.toSet());
                 });
-        var small = reads.measure(() -> results.list(ws, ResultQueryFilter.ALL, ResultSort.NEWEST, PageRequest.of(0, 32)));
+        var small =
+                reads.measure(() -> results.list(ws, ResultQueryFilter.ALL, ResultSort.NEWEST, PageRequest.of(0, 32)));
         for (int index = 2; index < 8; index++) {
             var work = data.onOtherWork(scenario);
             var developer = data.member(ws);
-            data.result(new ReviewIntegrationData.Scenario(work.workspace(), developer, work.practice(), work.item()),
-                    ResultOutcome.NOT_MET, at.plusSeconds(index));
+            data.result(
+                    new ReviewIntegrationData.Scenario(work.workspace(), developer, work.practice(), work.item()),
+                    ResultOutcome.NOT_MET,
+                    at.plusSeconds(index));
         }
 
-        var larger = reads.measure(() -> results.list(ws, ResultQueryFilter.ALL, ResultSort.NEWEST, PageRequest.of(0, 32)));
+        var larger =
+                reads.measure(() -> results.list(ws, ResultQueryFilter.ALL, ResultSort.NEWEST, PageRequest.of(0, 32)));
 
         assertThat(small.value().getContent()).hasSize(2);
         assertThat(larger.value().getContent()).hasSize(8).allSatisfy(row -> {
             assertThat(row.summary()).isEqualTo("Recorded result");
-            assertThat(row.problems()).singleElement().satisfies(problem -> assertThat(problem.summary()).isEqualTo("A recorded problem"));
+            assertThat(row.problems())
+                    .singleElement()
+                    .satisfies(problem -> assertThat(problem.summary()).isEqualTo("A recorded problem"));
             assertThat(row.developer()).isNotNull();
         });
-        assertThat(larger.cost().statements()).as("small=%s, larger=%s", small.cost(), larger.cost())
-                .isEqualTo(small.cost().statements()).isLessThanOrEqualTo(15);
+        assertThat(larger.cost().statements())
+                .as("small=%s, larger=%s", small.cost(), larger.cost())
+                .isEqualTo(small.cost().statements())
+                .isLessThanOrEqualTo(15);
         assertThat(plans.fullScans(small.sql())).isEmpty();
         assertThat(plans.fullScans(larger.sql())).isEmpty();
     }

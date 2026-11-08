@@ -151,6 +151,7 @@ class ReviewResultListReadCostIntegrationTest extends BaseIntegrationTest {
 
     private ReviewIntegrationData.Scenario otherDeveloperWork(ReviewIntegrationData.Scenario scenario) {
         var work = data.onOtherWork(scenario);
-        return new ReviewIntegrationData.Scenario(work.workspace(), data.member(work.workspace().getId()), work.practice(), work.item());
+        return new ReviewIntegrationData.Scenario(
+                work.workspace(), data.member(work.workspace().getId()), work.practice(), work.item());
     }
 }
