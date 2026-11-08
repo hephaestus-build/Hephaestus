@@ -50,6 +50,8 @@ describe("legacy withholding reasons", () => {
 	});
 	it.each([
 		["readiness_refused", "Evidence that this practice requires could not be captured."],
+		["BOT_AUTHOR", "Hephaestus does not review work by bots."],
+		["BOT_REVIEWER", "Hephaestus does not review work by bots."],
 		[
 			"ROLE_UNAVAILABLE",
 			"No eligible person holds the role that this practice is about on this work.",

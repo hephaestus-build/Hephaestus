@@ -22,6 +22,8 @@ import type {
 
 import type { StatusDef, StatusDefs } from "@/components/common/status-def";
 
+import { BOT_REVIEW_REFUSAL_SENTENCE } from "./item-event-defs";
+
 export type ReviewStatus = ReviewRef["status"];
 export type ReviewStopReason = NonNullable<ReviewSummary["stopReason"]>;
 export type ReviewPracticeStatus = ReviewPractice["status"];
@@ -190,6 +192,8 @@ const REVIEW_WITHHELD_REASON_SENTENCES: Readonly<Record<string, string>> = {
 	...REVIEW_STOP_REASON_SENTENCES,
 	...Object.fromEntries(CANDIDATE_REFUSALS.map((code) => [code, CANDIDATE_REFUSAL_SENTENCE])),
 	readiness_refused: "Evidence that this practice requires could not be captured.",
+	BOT_AUTHOR: BOT_REVIEW_REFUSAL_SENTENCE,
+	BOT_REVIEWER: BOT_REVIEW_REFUSAL_SENTENCE,
 	ROLE_UNAVAILABLE: "No eligible person holds the role that this practice is about on this work.",
 	ROLE_AMBIGUOUS:
 		"More than one eligible person holds the role that this practice is about, and Hephaestus does not guess which one.",

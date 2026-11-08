@@ -16,6 +16,8 @@ export type ItemEventState = ItemEvent["state"];
 export type ItemEventReason = NonNullable<ItemEvent["reason"]>;
 export type ItemEventFoundBy = ItemEvent["foundBy"];
 
+export const BOT_REVIEW_REFUSAL_SENTENCE = "Hephaestus does not review work by bots.";
+
 // Withheld events record a decision and reason, never a practice verdict.
 export const ITEM_EVENT_STATE_DEFS: StatusDefs<ItemEventState> = {
 	RECORDED: {
@@ -60,8 +62,8 @@ export const ITEM_EVENT_REASON_SENTENCES: Record<ItemEventReason, string> = {
 	CONCURRENT_DUPLICATE: "Another review of the same work was already starting.",
 	COALESCED: "It was joined with another event on the same work into one review.",
 	OUT_OF_REVIEW_SCOPE: "The work is outside the workspace’s review scope.",
-	BOT_AUTHOR: "A bot wrote the work.",
-	BOT_REVIEWER: "A bot submitted the review.",
+	BOT_AUTHOR: BOT_REVIEW_REFUSAL_SENTENCE,
+	BOT_REVIEWER: BOT_REVIEW_REFUSAL_SENTENCE,
 	STALE_ROLLOUT_REVISION: "Review settings changed before the review could start.",
 	WORKSPACE_INACTIVE: "The workspace is not active.",
 	PRACTICES_DISABLED: "Practice review is turned off for this workspace.",

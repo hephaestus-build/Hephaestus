@@ -180,7 +180,8 @@ public class ThreadItemSource implements ItemSource, ItemSourceAccess {
                                                             providerId,
                                                             Objects.requireNonNull(row.authorSlackUserId()),
                                                             row.slackTeamId()),
-                                                    true))
+                                                    true,
+                                                    false))
                                             .distinct()
                                             .toList();
                                     return new ItemSnapshot(

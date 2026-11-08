@@ -34,6 +34,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class ReviewRequestServiceTest extends BaseUnitTest {
     final AccountIdentityQuery identities = mock(AccountIdentityQuery.class);
@@ -67,10 +69,19 @@ class ReviewRequestServiceTest extends BaseUnitTest {
                 .isFalse();
     }
 
-    @Test
-    void botsCannotRequestAsPeople() {
-        assertThat(service.mayRequest(1, snapshot(1, AboutRole.AUTHOR, false), 7))
-                .isFalse();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void botsAndUnknownIdentitiesCannotRequestAsPeople(boolean bot) {
+        var item = snapshot(1, AboutRole.AUTHOR, false);
+        var holder = item.roles().getFirst();
+        var snapshot = new ItemSnapshot(
+                item.item(),
+                item.version(),
+                item.integration(),
+                item.state(),
+                List.of(new RoleHolder(holder.role(), holder.identity(), false, bot)),
+                item.label());
+        assertThat(service.mayRequest(1, snapshot, 7)).isFalse();
         verifyNoInteractions(identities);
     }
 
@@ -161,7 +172,7 @@ class ReviewRequestServiceTest extends BaseUnitTest {
         var person = new PersonIdentity(1, "native-user", null);
         return ItemFixtures.snapshot(new ItemRef(ws, 3, new ItemKind("scm.pull_request"), 3L, null, null), Map.of())
                 .integration(new IntegrationRef(IntegrationKind.GITHUB, 1, "Test", null))
-                .roles(List.of(new RoleHolder(role, person, human)))
+                .roles(List.of(new RoleHolder(role, person, human, false)))
                 .label(ItemFixtures.label()
                         .itemId(3)
                         .title("Item")
