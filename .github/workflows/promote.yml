@@ -55,6 +55,7 @@ jobs:
       contents: write
       deployments: write
       id-token: write
+      packages: read
     env:
       # The deployment record and the channel commit both name who asked and link this run.
       REQUESTED_BY: ${{ github.triggering_actor }}
@@ -86,10 +87,8 @@ jobs:
           CHANNEL: ${{ inputs.environment }}
         run: node scripts/automatic-promotion.ts
 
-      - uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
+      - uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@6276400edd5816b2904ef9141f4db8cf5b4a1044
         if: ${{ steps.policy.outputs.apply != 'false' }}
-        with:
-          cosign-release: v3.1.4
 
       # Unlike tooling, upstream image pins must come from the deployment target.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

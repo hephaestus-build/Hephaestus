@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { isSet } from "./env.ts";
 import { run } from "./process.ts";
+import { downloadReleaseAsset } from "./release-asset.ts";
 
 const DOWNLOAD_TIMEOUT_MS = 5 * 60_000;
 
@@ -41,11 +42,7 @@ export async function downloadReleaseAssets(
 	await Promise.all(
 		names.map(async (name) => {
 			const url = `https://github.com/${repository}/releases/download/${release}/${name}`;
-			const response = await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
-			if (!response.ok) {
-				throw new Error(`GET ${url} returned ${response.status}`);
-			}
-			await writeFile(path.join(into, name), Buffer.from(await response.arrayBuffer()));
+			await writeFile(path.join(into, name), await downloadReleaseAsset(url));
 		}),
 	);
 }

@@ -1,0 +1,18 @@
+{
+	"version": "1.55.0",
+	"url": "https://github.com/anchore/syft/releases/download/v1.55.0/",
+	"assets": {
+		"linux-x64": {
+			"name": "syft_1.55.0_linux_amd64.tar.gz",
+			"sha256": "bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d"
+		},
+		"linux-arm64": {
+			"name": "syft_1.55.0_linux_arm64.tar.gz",
+			"sha256": "929bd163db2d7cd2255d3bcb8967208079813d7b46b0c952f7b794d8e2c7d304"
+		},
+		"checksums": {
+			"name": "syft_1.55.0_checksums.txt",
+			"sha256": "aba5ac8ee870bb93fd3b2058471ffe7e57492ba673b5e0bcbfca92006c2f4dc7"
+		}
+	}
+}

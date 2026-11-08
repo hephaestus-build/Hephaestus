@@ -48,6 +48,8 @@ import { isDeepStrictEqual, parseArgs, parseEnv } from "node:util";
 
 import { readInventory } from "./commit-image-lock.ts";
 import type { ChartImage } from "./kubernetes-chart.ts";
+import { ciToolPin } from "./lib/ci-tool-catalog.ts";
+import { resolveCiTool } from "./lib/ci-tool-resolver.ts";
 import { claimDevNamespace, DEV_OWNER, ownsDevNamespace } from "./lib/dev-namespace.ts";
 import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
@@ -66,12 +68,6 @@ const HOST = "hephaestus.cluster.test";
 export const DEV_CLUSTER = "hephaestus";
 export const DEV_HOST = "hephaestus.localhost";
 const DEV_WORK = path.join(homedir(), ".hephaestus", "kubernetes-cluster");
-
-/** The Gateway API resource definitions that the route needs, at a pinned release and checksum. */
-const GATEWAY_API = {
-	url: "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.3/standard-install.yaml",
-	sha256: "356c2b8e286a964dc20995435659ad1095386329974793af10bbfe3eff977fe5",
-};
 
 /** What `verify` reads in a worker's log once its probe passed (KubernetesIsolationProbe). */
 export const PROBE_PASSED = "The sandbox isolation probe passed";
@@ -438,17 +434,7 @@ async function gatewayApi(work: string): Promise<void> {
 	) {
 		return;
 	}
-	const response = await fetch(GATEWAY_API.url);
-	if (!response.ok) {
-		throw new Error(`could not download the Gateway API definitions: HTTP ${response.status}`);
-	}
-	const body = Buffer.from(await response.arrayBuffer());
-	const digest = createHash("sha256").update(body).digest("hex");
-	if (digest !== GATEWAY_API.sha256) {
-		throw new Error(
-			`the Gateway API definitions have SHA-256 ${digest}, not the pinned ${GATEWAY_API.sha256}`,
-		);
-	}
+	const { bytes: body } = await resolveCiTool(await ciToolPin("gateway-api"));
 	const file = path.join(work, "gateway-api.yaml");
 	await writeFile(file, body);
 	await kubectl(["apply", "--server-side", "-f", file]);

@@ -13,6 +13,7 @@ import type { TemplateToken } from "@actions/workflow-parser/templates/tokens/te
 import { TextDocument } from "vscode-languageserver-textdocument";
 
 import { type ActionsLanguage, openActionsLanguage } from "./lib/actions-language.ts";
+import { requestArtifact } from "./lib/artifact-http.ts";
 import { asArray, asRecord, isRecord, parseJson } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { prepareShellCheck } from "./lib/shellcheck.ts";
@@ -270,15 +271,16 @@ export async function checkRepository(
 		const base = `https://raw.githubusercontent.com/${[first, second, ref, ...rest].join("/")}`;
 		return cached(action, async () => {
 			for (const entry of ["action.yml", "action.yaml"]) {
-				const response = await fetch(`${base}/${entry}`, {
-					redirect: "error",
-					signal: AbortSignal.timeout(5000),
-				});
+				const response = await requestArtifact(
+					`${base}/${entry}`,
+					{ redirects: false, acceptedStatuses: [404] },
+					{ timeoutMs: 5000 },
+				);
 				if (response.status === 404) {
 					continue;
 				}
-				const content = response.ok ? await response.text() : "";
-				if (!response.ok || content.length > METADATA_LIMIT) {
+				const content = new TextDecoder().decode(response.bytes);
+				if (content.length > METADATA_LIMIT) {
 					throw new Error(
 						`${base}/${entry} answered ${response.status} with ${content.length} characters`,
 					);
@@ -615,13 +617,12 @@ export async function checkRepository(
 }
 
 if (import.meta.main) {
+	console.info("Workflow validation: prepare the pinned ShellCheck");
+	const shellcheck = await prepareShellCheck();
+	console.info("Workflow validation: check workflow and action templates");
 	const language = await openActionsLanguage();
 	try {
-		const { problems, compatible } = await checkRepository(
-			language,
-			process.cwd(),
-			await prepareShellCheck(),
-		);
+		const { problems, compatible } = await checkRepository(language, process.cwd(), shellcheck);
 		for (const problem of problems) {
 			console.error(problem);
 		}

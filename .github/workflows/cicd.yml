@@ -349,6 +349,7 @@ jobs:
               - '!server/**/AGENTS.md'
               - '!server/**/CLAUDE.md'
             tooling:
+              - '.github/ci-tools/**'
               - '.vale/**'
               - '.vale.ini'
               - 'scripts/**'
@@ -539,6 +540,7 @@ jobs:
               - 'docker/postgres/**'
               - '.github/workflows/ci-kubernetes.yml'
               - '.github/actions/setup-kubernetes-tools/**'
+              - '.github/ci-tools/{helm,k3d,kind,kubeconform,gateway-api}.json'
             docs:
               - 'docs/**'
             # Changes the queue tier judges best before the queue: migrations, which the database
@@ -553,6 +555,7 @@ jobs:
               - 'extension/e2e/**'
               - 'extension/playwright.config.ts'
             ci-config:
+              - '.github/ci-tools/shellcheck.json'
               - '.github/workflows/**'
               - '.github/actions/**'
               - 'scripts/check-workflows.ts'
@@ -590,6 +593,13 @@ jobs:
               - '.github/actions/setup-toolchain/**'
               - '.github/actions/setup-caches/**'
             security-config:
+              - '.github/ci-tools/{cosign,cosign-bootstrap,syft,trivy}.json'
+              - '.github/actions/setup-ci-tool/**'
+              - '.github/actions/setup-release-security-tools/**'
+              - 'scripts/setup-release-security-tools.ts'
+              - 'scripts/lib/ci-tool-*.ts'
+              - 'scripts/lib/artifact-http.ts'
+              - 'scripts/lib/release-asset.ts'
               - '.github/workflows/cicd.yml'
               - '.github/workflows/ci-security-scan.yml'
               # A suppression has to re-run the gate it suppresses.
@@ -665,6 +675,7 @@ jobs:
       )
     permissions:
       contents: read
+      packages: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -674,10 +685,16 @@ jobs:
         with:
           install: "frozen"
 
+      - uses: ./.github/actions/setup-ci-tool
+        with:
+          tool: shellcheck
+
       # GitHub's own parser validates every workflow and action, and the scripts of those Actionlint
       # cannot read. docs/contributor/ci-cd.mdx § Workflow validation says which check owns what.
       - name: Validate workflows with GitHub's parser
         id: native
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-workflows.ts
 
       # Without file arguments Actionlint reads every workflow, so an empty list must skip it.
@@ -739,6 +756,7 @@ jobs:
       contents: read
       pull-requests: write
       statuses: write
+      packages: read
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       webapp_changed: ${{ (needs.detect-changes.outputs.webapp == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
@@ -861,6 +879,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      packages: read
     outputs:
       artifact-id: ${{ steps.snapshot.outputs.artifact-id }}
     steps:
@@ -891,6 +910,7 @@ jobs:
       actions: write
       contents: read
       checks: write
+      packages: read
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
       postgres_base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
@@ -917,6 +937,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      packages: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -970,6 +991,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      packages: read
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
 
@@ -989,6 +1011,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      packages: read
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
 
@@ -1089,6 +1112,7 @@ jobs:
     permissions:
       actions: write
       contents: read
+      packages: read
     with:
       leg: chart
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -1107,6 +1131,7 @@ jobs:
     permissions:
       contents: read
       actions: write
+      packages: read
     with:
       application-artifact: ${{ needs.server-package.result == 'success' && format('server-build-{0}', github.run_id) || '' }}
       leg: ${{ matrix.leg }}

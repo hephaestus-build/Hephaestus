@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -67,7 +67,74 @@ void test("artifact checks have no registry publishing permissions", async () =>
 	const permissions = workflow.getIn(["jobs", "Build", "permissions"]);
 	assert.ok(isMap(permissions));
 	// This call forwards cancellation permission; the artifact workers keep their own narrow scopes.
-	assert.deepEqual(permissions.toJSON(), { actions: "write", contents: "read", checks: "write" });
+	assert.deepEqual(permissions.toJSON(), {
+		actions: "write",
+		contents: "read",
+		checks: "write",
+		packages: "read",
+	});
+});
+
+void test("signing and publication jobs do not restore tool cache archives", async () => {
+	const action = parseDocument(await readFile(".github/actions/setup-cosign/action.yml", "utf8"));
+	const steps = action.getIn(["runs", "steps"]);
+	assert.ok(isSeq(steps));
+	const tools = steps.items.filter(
+		(step) => isMap(step) && String(step.get("uses")).includes("/.github/actions/setup-ci-tool@"),
+	);
+	assert.equal(tools.length, 5);
+	for (const step of tools) {
+		assert.ok(isMap(step));
+		assert.equal(step.getIn(["with", "cache"]), "false");
+	}
+	const resolver = parseDocument(
+		await readFile(".github/actions/setup-ci-tool/action.yml", "utf8"),
+	);
+	const sources = resolver.getIn(["runs", "steps"]);
+	assert.ok(isSeq(sources));
+	for (const step of sources.items) {
+		if (isMap(step) && String(step.get("uses")).startsWith("actions/cache/")) {
+			assert.match(String(step.get("if")), /^inputs\.cache == 'true'/u);
+		}
+	}
+	for (const file of await readdir(".github/workflows")) {
+		if (!file.endsWith(".yml")) {
+			continue;
+		}
+		const workflow = parseDocument(await readFile(`.github/workflows/${file}`, "utf8"));
+		const jobs = workflow.get("jobs");
+		assert.ok(isMap(jobs));
+		for (const pair of jobs.items) {
+			const job = pair.value;
+			if (
+				!isMap(job) ||
+				!["contents", "packages", "id-token", "attestations"].some(
+					(scope) => job.getIn(["permissions", scope]) === "write",
+				)
+			) {
+				continue;
+			}
+			const jobSteps = job.get("steps");
+			if (!isSeq(jobSteps)) {
+				continue;
+			}
+			for (const step of jobSteps.items) {
+				if (
+					!isMap(step) ||
+					!/^\.\/\.github\/actions\/setup-(?:ci-tool|helm|release-security-tools|kubernetes-tools)$/u.test(
+						String(step.get("uses")),
+					)
+				) {
+					continue;
+				}
+				assert.equal(
+					step.getIn(["with", "cache"]),
+					"false",
+					`${file}: ${String(pair.key)}: publishing jobs must not extract cache archives`,
+				);
+			}
+		}
+	}
 });
 
 const repository = "hephaestus-build/Hephaestus";

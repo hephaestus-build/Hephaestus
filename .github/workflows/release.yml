@@ -183,9 +183,7 @@ jobs:
 
       - name: Install cosign for candidate verification
         if: needs.release.outputs.candidate != ''
-        uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
-        with:
-          cosign-release: v3.1.4
+        uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@6276400edd5816b2904ef9141f4db8cf5b4a1044
 
       # The images this release promotes, resolved through the same script the pre-merge evidence
       # preflight resolves them with, so the two can never disagree about which artefact is subject.
@@ -235,6 +233,8 @@ jobs:
           node scripts/sandbox-security.ts --image "$IMAGE" --report "$RUNNER_TEMP/sandbox-security.json"
 
       - uses: ./.github/actions/setup-release-security-tools
+        with:
+          cache: "false"
 
       # The database the whole evidence bundle is scanned against: recorded into the bundle, and
       # refused beyond the freshness limit, so a stale mirror cannot be signed as a fresh scan.
@@ -284,6 +284,8 @@ jobs:
         run: node scripts/verify-release-evidence.ts evidence --verify-signatures
 
       - uses: ./.github/actions/setup-helm
+        with:
+          cache: "false"
 
       # The chart is packaged from a copy of this checkout, the released commit, at the release
       # version. Its values pin the images of the verified evidence; the lock that names the
@@ -530,12 +532,12 @@ jobs:
           install: "none"
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
-        with:
-          cosign-release: v3.1.4
+        uses: hephaestus-build/Hephaestus/.github/actions/setup-cosign@6276400edd5816b2904ef9141f4db8cf5b4a1044
 
       # Verifying the durable assets pulls the chart by its locked digest.
       - uses: ./.github/actions/setup-helm
+        with:
+          cache: "false"
 
       - name: Log in to GitHub Container Registry
         uses: ./.github/actions/ghcr-login

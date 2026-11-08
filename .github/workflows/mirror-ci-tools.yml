@@ -1,0 +1,41 @@
+name: Cache / Mirror pinned CI tools
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 5 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - .github/ci-tools/**
+      - .vale/toolchain.json
+      - .github/workflows/mirror-ci-tools.yml
+      - scripts/mirror-ci-tools.ts
+      - scripts/lib/ci-tool-*.ts
+      - scripts/lib/artifact-http.ts
+      - scripts/lib/release-asset.ts
+
+permissions: {}
+concurrency:
+  group: mirror-ci-tools
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    if: github.repository == 'hephaestus-build/Hephaestus' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - name: Verify upstream assets and publish OCI mirrors
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/mirror-ci-tools.ts

@@ -15,6 +15,7 @@ import { type Document, isMap, isScalar, isSeq, parseDocument, visit, type YAMLM
 
 import { commandsFor, scopesFor } from "./check-affected.ts";
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
+import { ciToolPin } from "./lib/ci-tool-catalog.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
@@ -2915,8 +2916,11 @@ void describe("CI contract", () => {
 		assert.doesNotMatch(merge, /node (?:\.\/)?scripts\//u);
 		// The tools are installed for the runner's own CPU, since arm64 scans on an arm64 runner.
 		const tools = await readFile(".github/actions/setup-release-security-tools/action.yml", "utf8");
-		assert.match(tools, /ARM64\) syft_arch=arm64 trivy_arch=ARM64/u);
-		assert.doesNotMatch(tools, /linux_amd64|Linux-64bit\.tar/u);
+		assert.match(tools, /node scripts\/setup-release-security-tools\.ts/u);
+		const amd64 = await ciToolPin("trivy", "linux-x64");
+		const arm64 = await ciToolPin("trivy", "linux-arm64");
+		assert.match(amd64.name, /Linux-64bit/u);
+		assert.match(arm64.name, /Linux-ARM64/u);
 
 		let callSites = 0;
 		for (const [file, source] of await workflowSources()) {
@@ -4231,22 +4235,25 @@ void describe("CI contract", () => {
 		assert.deepEqual(invalid, [], "External uses must match @<40 lowercase hex>");
 	});
 
-	void test("selects the supported Cosign release at every installer site", async () => {
+	void test("all signers use one immutable Cosign installer without caller-selected versions", async () => {
 		const installers = new Set<string>();
 		for (const [file, source] of await readSources(
 			await posixGlob(".github/{actions,workflows}/**/*.{yml,yaml}"),
 		)) {
+			assert.doesNotMatch(source, /sigstore\/cosign-installer@/u, file);
 			visit(parseDocument(source), {
 				Map(_key, declaration) {
-					if (!String(declaration.get("uses")).startsWith("sigstore/cosign-installer@")) {
+					const reference = String(declaration.get("uses"));
+					if (!reference.startsWith("hephaestus-build/Hephaestus/.github/actions/setup-cosign@")) {
 						return;
 					}
-					installers.add(file);
-					assert.equal(stepInputs(declaration).get("cosign-release"), "v3.1.4", file);
+					installers.add(reference);
+					assert.match(reference, /@[a-f0-9]{40}$/u, file);
+					assert.equal(declaration.has("with"), false, file);
 				},
 			});
 		}
-		assert.ok(installers.size > 0, "Workflow and composite installers must be checked");
+		assert.equal(installers.size, 1);
 	});
 
 	void test("centralises dependency installation and browser setup", async () => {
@@ -5461,31 +5468,31 @@ const HELM_ARCHIVES = new Map([
 void test("one pinned Helm installer verifies the official archive before it extracts the binary", async () => {
 	const action = parseDocument(await readFile(".github/actions/setup-helm/action.yml", "utf8"));
 	const install = namedStep(action, ["runs"], "Install Helm");
-	assert.equal(install.getIn(["env", "HELM_VERSION"]), "v4.3.1");
+	assert.equal(install.getIn(["env", "HELM_VERSION"]), `v\${{ steps.tool.outputs.version }}`);
 	assert.equal(install.getIn(["env", "RUNNER_PLATFORM"]), `\${{ runner.os }}/\${{ runner.arch }}`);
 	const script = runScript(action, ["runs"], "Install Helm");
+	const helm = asRecord(
+		JSON.parse(await readFile(".github/ci-tools/helm.json", "utf8")),
+		"Helm pins",
+	);
+	assert.equal(helm.version, "4.3.1");
+	assert.equal(helm.url, "https://get.helm.sh/");
+	const assets = asRecord(helm.assets, "Helm assets");
 	for (const [platform, [name, format, checksum]] of HELM_ARCHIVES) {
-		assert.match(
-			script,
-			new RegExp(
-				`^\\s*${escapeRegExp(platform)}\\) platform=${name} format=${escapeRegExp(format)} binary=helm(?:\\.exe)?\\n\\s*checksum=${checksum} ;;$`,
-				"mu",
-			),
-			platform,
-		);
+		const key = platform
+			.replace("Linux", "linux")
+			.replace("macOS", "darwin")
+			.replace("Windows", "win32")
+			.replace("/X64", "-x64")
+			.replace("/ARM64", "-arm64");
+		const asset = asRecord(assets[key], "Helm asset");
+		assert.equal(asset.name, `helm-v4.3.1-${name}.${format}`);
+		assert.equal(asset.sha256, checksum);
 	}
-	// A closed mapping: any other runner fails, and no checksum exists that the table above lacks.
-	assert.equal((script.match(/checksum=[a-f0-9]{64}/gu) ?? []).length, HELM_ARCHIVES.size);
 	assert.match(
 		script,
-		/^\s*\*\) echo "::error::No pinned Helm archive for \$RUNNER_PLATFORM"; exit 1 ;;$/mu,
+		/CI_TOOL=helm node "\$ACTION_PATH\/\.\.\/\.\.\/\.\.\/scripts\/ci-tool\.ts" file/u,
 	);
-	// The official host only, bounded, and the archive is compared before it is opened.
-	assert.match(
-		script,
-		/--max-time 120 -o "\$work\/\$archive" "https:\/\/get\.helm\.sh\/\$archive"/u,
-	);
-	assert.equal((script.match(/https:\/\//gu) ?? []).length, 1);
 	const compared = script.indexOf('if [ "$actual" != "$checksum" ]; then');
 	assert.ok(compared > 0, "the archive checksum must be compared");
 	for (const extraction of ["unzip -q", "tar -xzf"]) {

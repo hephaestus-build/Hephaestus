@@ -1,0 +1,30 @@
+{
+	"version": "1.34.1",
+	"url": "https://github.com/oasdiff/oasdiff/releases/download/v1.34.1/",
+	"assets": {
+		"linux-x64": {
+			"name": "oasdiff_1.34.1_linux_amd64.tar.gz",
+			"sha256": "75775f65b0adebd26a8e013af51a799342dfdc6262d89efa9e3b7bdf89657d90"
+		},
+		"linux-arm64": {
+			"name": "oasdiff_1.34.1_linux_arm64.tar.gz",
+			"sha256": "e8f99bbf102a4b7f235104da72d0b9d67702e78622d1d4d37169e698ee90a249"
+		},
+		"win32-x64": {
+			"name": "oasdiff_1.34.1_windows_amd64.tar.gz",
+			"sha256": "15e6f32ece94244534a61ce4fb1d60912e51e67e363a05bb6561d89b28df73bb"
+		},
+		"win32-arm64": {
+			"name": "oasdiff_1.34.1_windows_arm64.tar.gz",
+			"sha256": "4794300521a2ff76d14205f5141884e6f6052212484caf1d3655c149b314492c"
+		},
+		"darwin-x64": {
+			"name": "oasdiff_1.34.1_darwin_all.tar.gz",
+			"sha256": "64948ba30c5555d3d15b95a7f3eda22fa83c15cf37fd4dad1720c0deb0a07cb5"
+		},
+		"darwin-arm64": {
+			"name": "oasdiff_1.34.1_darwin_all.tar.gz",
+			"sha256": "64948ba30c5555d3d15b95a7f3eda22fa83c15cf37fd4dad1720c0deb0a07cb5"
+		}
+	}
+}

@@ -45,6 +45,7 @@ jobs:
     permissions:
       actions: write
       contents: read
+      packages: read
     with:
       leg: chart
       commit: ${{ needs.build.outputs.commit }}
@@ -61,6 +62,7 @@ jobs:
     permissions:
       contents: read
       actions: write
+      packages: read
     with:
       leg: ${{ matrix.leg }}
       minor: ${{ matrix.minor }}

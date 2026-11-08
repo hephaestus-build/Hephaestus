@@ -57,6 +57,7 @@ jobs:
     if: inputs.leg == 'chart'
     permissions:
       contents: read
+      packages: read
     outputs:
       queue: ${{ inputs.queue }}
       # Native workflow data stays independent of the tested ref, which a nightly run can select
@@ -92,6 +93,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      packages: read
     timeout-minutes: 45
     runs-on: ${{ inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     env:
@@ -135,6 +137,7 @@ jobs:
             --k3s-arg "--kubelet-arg=pod-max-pids=4096@all" --port "127.0.0.1:443:443@loadbalancer"
       - name: Install, upgrade and verify
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           COMMIT: ${{ inputs.commit }}
         run: |
           set -euo pipefail
@@ -187,6 +190,7 @@ jobs:
     if: inputs.leg == 'calico'
     permissions:
       contents: read
+      packages: read
     timeout-minutes: 45
     runs-on: ubuntu-24.04
     env:
@@ -205,6 +209,8 @@ jobs:
           install: "none"
       - uses: ./.github/actions/setup-helm
       - uses: ./.github/actions/setup-kubernetes-tools
+        with:
+          gateway-api: "true"
       - name: Resolve this run's images
         env:
           COMMIT: ${{ inputs.commit }}
