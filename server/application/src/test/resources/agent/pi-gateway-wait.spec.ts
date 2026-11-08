@@ -75,6 +75,43 @@ await test("gateway connection failures stay inside one model stream beyond the 
 	assert.deepEqual(result.content, [{ type: "text", text: "complete answer" }]);
 });
 
+await test("an ambiguous timeout bounds possible billed response replays", async () => {
+	let calls = 0;
+	let interrupted = false;
+	const output = await waitForGateway(stream, Date.now() + 10_000, {
+		unavailable: () => {
+			interrupted = true;
+		},
+	})(model, context, {
+		...options,
+		fetch: async () => {
+			calls += 1;
+			throw new TypeError("fetch failed", { cause: { code: "ETIMEDOUT" } });
+		},
+	});
+	await eventsFrom(output);
+	assert.equal(calls, 3);
+	assert.equal(interrupted, true);
+	assert.equal((await output.result()).stopReason, "aborted");
+});
+
+await test("a proven connect timeout waits within the same model stream", async () => {
+	let calls = 0;
+	const output = await waitForGateway(stream, Date.now() + 10_000)(model, context, {
+		...options,
+		fetch: async () => {
+			calls += 1;
+			if (calls <= 3)
+				throw new TypeError("fetch failed", { cause: { code: "ETIMEDOUT", syscall: "connect" } });
+			return completed();
+		},
+	});
+	const events = await eventsFrom(output);
+	assert.equal(calls, 4);
+	assert.equal(events.filter((event) => event.type === "error").length, 0);
+	assert.equal((await output.result()).stopReason, "stop");
+});
+
 await test("a disconnected partial response is replaced by one complete model response", async () => {
 	let calls = 0;
 	const output = await waitForGateway(stream, Date.now() + 5000)(model, context, {

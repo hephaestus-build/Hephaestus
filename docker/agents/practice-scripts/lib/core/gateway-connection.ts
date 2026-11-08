@@ -18,12 +18,14 @@ export class GatewayUnavailableError extends Error {
 	override name = "GatewayUnavailableError";
 }
 
-/** A reset may follow a billed request even when response headers did not reach the caller. */
+/** A reset or ambiguous timeout may follow a billed request before response headers reach the caller. */
 export function gatewayConnectionFailure(error: unknown): "connection" | "response" | undefined {
 	let cause = error;
 	for (let depth = 0; depth < 5 && isRecord(cause); depth += 1) {
 		if (typeof cause.code === "string" && NETWORK_CODES.has(cause.code)) {
-			return cause.code === "ECONNRESET" || cause.code === "UND_ERR_SOCKET"
+			return cause.code === "ECONNRESET" ||
+				cause.code === "UND_ERR_SOCKET" ||
+				(cause.code === "ETIMEDOUT" && cause.syscall !== "connect")
 				? "response"
 				: "connection";
 		}
