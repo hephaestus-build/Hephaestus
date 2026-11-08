@@ -34,6 +34,18 @@ public class ProductReferenceQuery {
 
     @Transactional(readOnly = true)
     public Map<Long, ItemRefDTO> items(long workspaceId, Collection<Long> ids) {
+        return read(workspaceId, ids).entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey, entry -> entry.getValue().reference()));
+    }
+
+    /** {@link #items} with the stored identity that produced each reference, from the same read. */
+    @Transactional(readOnly = true)
+    public Map<Long, ReferencedItem> referenced(long workspaceId, Collection<Long> ids) {
+        return read(workspaceId, ids);
+    }
+
+    private Map<Long, ReferencedItem> read(long workspaceId, Collection<Long> ids) {
         if (ids.isEmpty()) {
             return Map.of();
         }
@@ -48,18 +60,27 @@ public class ProductReferenceQuery {
             String fallback = catalog.descriptorFor(ref.kind())
                     .map(descriptor -> descriptor.displayName())
                     .orElse("Item");
-            return new ItemRefDTO(
-                    Long.toString(ref.itemId()),
-                    ref.kind().value(),
-                    ref.parentId() == null ? null : Long.toString(ref.parentId()),
-                    label == null ? null : label.integration(),
-                    label == null ? fallback : label.label(),
-                    label == null ? null : label.title(),
-                    label == null ? null : label.url(),
-                    label == null ? null : label.container(),
-                    ref.path(),
-                    item.removedAt());
+            return new ReferencedItem(
+                    ref,
+                    new ItemRefDTO(
+                            Long.toString(ref.itemId()),
+                            ref.kind().value(),
+                            ref.parentId() == null ? null : Long.toString(ref.parentId()),
+                            label == null ? null : label.integration(),
+                            label == null ? fallback : label.label(),
+                            label == null ? null : label.title(),
+                            label == null ? null : label.url(),
+                            label == null ? null : label.container(),
+                            ref.path(),
+                            item.removedAt()));
         }));
+    }
+
+    /** A reference for display and the identity it was read from; a removed item keeps both. */
+    public record ReferencedItem(ItemRef ref, ItemRefDTO reference) {
+        public boolean active() {
+            return reference.removedAt() == null;
+        }
     }
 
     @Transactional(readOnly = true)

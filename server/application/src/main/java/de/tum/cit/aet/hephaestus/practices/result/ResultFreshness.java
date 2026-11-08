@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.result;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
@@ -12,6 +13,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -32,17 +34,24 @@ public class ResultFreshness {
     private final ProductItemQuery items;
 
     public Map<UUID, Currentness> states(long workspaceId, Collection<Result> rows) {
-        return statesFor(
-                workspaceId,
-                rows.stream()
-                        .map(result -> new Claim(
-                                result.getId(),
-                                result.getWorkspaceId(),
-                                result.getReviewId(),
-                                result.getPracticeId(),
-                                result.getItemId(),
-                                result.getEndedAt()))
-                        .toList());
+        return statesFor(workspaceId, claims(rows));
+    }
+
+    /** {@link #states(long, Collection)} for a caller that has already read these results' active items. */
+    public Map<UUID, Currentness> states(long workspaceId, Collection<Result> rows, Map<Long, ItemRef> activeItems) {
+        return statesFor(workspaceId, claims(rows), activeItems);
+    }
+
+    private static List<Claim> claims(Collection<Result> rows) {
+        return rows.stream()
+                .map(result -> new Claim(
+                        result.getId(),
+                        result.getWorkspaceId(),
+                        result.getReviewId(),
+                        result.getPracticeId(),
+                        result.getItemId(),
+                        result.getEndedAt()))
+                .toList();
     }
 
     /** Only these identity and lifecycle fields are needed when a query filters freshness before pagination. */
@@ -55,6 +64,17 @@ public class ResultFreshness {
             @Nullable Instant endedAt) {}
 
     public Map<UUID, Currentness> statesFor(long workspaceId, Collection<Claim> rows) {
+        return statesFor(
+                workspaceId,
+                rows,
+                rows.isEmpty()
+                        ? Map.of()
+                        : items.findAll(
+                                workspaceId,
+                                rows.stream().map(Claim::itemId).distinct().toList()));
+    }
+
+    private Map<UUID, Currentness> statesFor(long workspaceId, Collection<Claim> rows, Map<Long, ItemRef> refs) {
         if (rows.stream().anyMatch(result -> result.workspaceId() != workspaceId))
             throw new IllegalArgumentException("Results do not belong to the workspace");
         if (rows.isEmpty()) return Map.of();
@@ -82,8 +102,6 @@ public class ResultFreshness {
             expected.put(
                     result.id(), decision.map(ResultFreshness::fingerprints).orElse(Map.of()));
         }
-        var refs = items.findAll(
-                workspaceId, rows.stream().map(Claim::itemId).distinct().toList());
         var states = new HashMap<UUID, Currentness>();
         for (var group : rows.stream()
                 .collect(Collectors.groupingBy(result -> new ReadScope(

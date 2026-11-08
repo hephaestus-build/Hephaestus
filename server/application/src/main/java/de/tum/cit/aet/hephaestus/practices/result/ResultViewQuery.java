@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -51,32 +52,41 @@ public class ResultViewQuery {
                         results.stream().map(Result::getPracticeId).distinct().toList())
                 .stream()
                 .collect(Collectors.toMap(practice -> Objects.requireNonNull(practice.getId()), Function.identity()));
-        Map<Long, PracticeVersion> versionById = versions
-                .findByWorkspaceIdAndIdIn(
-                        workspaceId,
-                        results.stream()
-                                .map(Result::getPracticeVersionId)
-                                .filter(Objects::nonNull)
-                                .distinct()
-                                .toList())
-                .stream()
-                .collect(Collectors.toMap(version -> Objects.requireNonNull(version.getId()), Function.identity()));
+        // A practice arrives with its current version; only a result pinned to an older one needs a read.
+        Map<Long, PracticeVersion> versionById = new HashMap<>();
+        practiceById.values().forEach(practice -> {
+            var current = practice.getCurrentVersion();
+            versionById.put(Objects.requireNonNull(current.getId()), current);
+        });
+        var pinnedElsewhere = results.stream()
+                .map(Result::getPracticeVersionId)
+                .filter(Objects::nonNull)
+                .filter(id -> !versionById.containsKey(id))
+                .distinct()
+                .toList();
+        if (!pinnedElsewhere.isEmpty())
+            versions.findByWorkspaceIdAndIdIn(workspaceId, pinnedElsewhere)
+                    .forEach(version -> versionById.put(Objects.requireNonNull(version.getId()), version));
         var reviewById = reviews
                 .findAllById(
                         results.stream().map(Result::getReviewId).distinct().toList())
                 .stream()
                 .filter(review -> review.getWorkspaceId() == workspaceId)
                 .collect(Collectors.toMap(Review::getId, Function.identity()));
-        var itemById = references.items(
+        var itemById = references.referenced(
                 workspaceId, results.stream().map(Result::getItemId).distinct().toList());
-        var sourceStates = freshness.states(workspaceId, results);
+        var activeItems = itemById.entrySet().stream()
+                .filter(entry -> entry.getValue().active())
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey, entry -> entry.getValue().ref()));
+        var sourceStates = freshness.states(workspaceId, results, activeItems);
         return results.stream()
                 .map(result -> new ResultView(
                         result,
                         Objects.requireNonNull(practiceById.get(result.getPracticeId())),
                         versionById.get(result.getPracticeVersionId()),
                         Objects.requireNonNull(reviewById.get(result.getReviewId())),
-                        Objects.requireNonNull(itemById.get(result.getItemId())),
+                        Objects.requireNonNull(itemById.get(result.getItemId())).reference(),
                         Objects.requireNonNull(sourceStates.get(result.getId()))))
                 .toList();
     }
