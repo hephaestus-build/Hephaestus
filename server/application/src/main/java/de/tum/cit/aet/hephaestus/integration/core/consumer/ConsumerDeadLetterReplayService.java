@@ -77,12 +77,21 @@ public class ConsumerDeadLetterReplayService {
         }
         // Fetch from NATS before opening a database transaction or holding a row lock.
         try {
-            return consumer.serialDispatch(
-                    workspaceId,
+            return consumer.exclusive(
                     row.getStreamName(),
+                    row.getConsumerName(),
                     () -> apply(workspaceId, actorId, row, stored, storedTime.toInstant()));
         } catch (ResponseStatusException failure) {
             throw failure;
+        } catch (ConsumerFenceException failure) {
+            log.warn(
+                    "Replay fence failed: deadLetterId={}, error.type={}",
+                    row.getId(),
+                    failure.getClass().getName());
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Another event from this source is still being processed. Try again in a minute.",
+                    failure);
         } catch (RuntimeException failure) {
             log.warn(
                     "Replay failed: deadLetterId={}, error.type={}",

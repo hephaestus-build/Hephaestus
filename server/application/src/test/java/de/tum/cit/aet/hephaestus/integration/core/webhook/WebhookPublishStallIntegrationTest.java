@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.nats.client.Connection;
 import io.nats.client.Nats;
@@ -31,7 +32,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -57,7 +57,7 @@ class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     @SuppressWarnings("resource") // stopped in stopBroker
     void startBroker() throws Exception {
-        broker = new GenericContainer<>(DockerImageName.parse("nats:2.10-alpine"))
+        broker = new GenericContainer<>(NatsTestContainer.IMAGE)
                 .withCommand("-js")
                 .withExposedPorts(4222)
                 .waitingFor(Wait.forLogMessage(".*Server is ready.*", 1));

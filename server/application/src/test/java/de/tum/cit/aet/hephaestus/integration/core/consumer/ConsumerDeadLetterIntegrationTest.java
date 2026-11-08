@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider.NatsSubscriptionInfo;
 import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider.StreamSubscription;
+import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
@@ -61,7 +62,7 @@ import org.testcontainers.containers.wait.strategy.Wait;
 
 class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest {
     // This broker is private: real provider subjects must not overlap other integration suites.
-    private static final GenericContainer<?> BROKER = new GenericContainer<>("nats:2.10.27-alpine")
+    private static final GenericContainer<?> BROKER = new GenericContainer<>(NatsTestContainer.IMAGE)
             .withCommand("-js")
             .withExposedPorts(4222)
             .waitingFor(Wait.forLogMessage(".*Server is ready.*", 1));

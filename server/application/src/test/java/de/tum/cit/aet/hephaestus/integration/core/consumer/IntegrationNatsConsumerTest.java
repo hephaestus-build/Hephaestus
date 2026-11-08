@@ -399,38 +399,6 @@ class IntegrationNatsConsumerTest {
         }
 
         @Test
-        void shouldSerializeReplayWithLiveDispatchWithoutJoiningOtherStreams() throws Exception {
-            CountDownLatch entered = new CountDownLatch(1);
-            CountDownLatch release = new CountDownLatch(1);
-            FutureTask<String> live = new FutureTask<>(() -> consumer.serialDispatch(SCOPE_ID, "github", () -> {
-                entered.countDown();
-                try {
-                    release.await();
-                } catch (InterruptedException failure) {
-                    Thread.currentThread().interrupt();
-                }
-                return "live";
-            }));
-            FutureTask<String> replay =
-                    new FutureTask<>(() -> consumer.serialDispatch(SCOPE_ID, "github", () -> "replay"));
-            FutureTask<String> other =
-                    new FutureTask<>(() -> consumer.serialDispatch(SCOPE_ID, "slack", () -> "other stream"));
-            Thread.ofVirtual().start(live);
-            try {
-                assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
-                Thread.ofVirtual().start(replay);
-                Thread.ofVirtual().start(other);
-                assertThat(other.get(5, TimeUnit.SECONDS)).isEqualTo("other stream");
-                assertThat(replay.isDone()).isFalse();
-                release.countDown();
-                assertThat(live.get(5, TimeUnit.SECONDS)).isEqualTo("live");
-                assertThat(replay.get(5, TimeUnit.SECONDS)).isEqualTo("replay");
-            } finally {
-                release.countDown();
-            }
-        }
-
-        @Test
         void skipsRecorderWhenUnmatched() {
             consumer = newConsumer();
             when(dispatcher.dispatch("github.acme.repo.issues")).thenReturn(Optional.empty());

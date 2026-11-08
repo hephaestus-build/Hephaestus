@@ -57,9 +57,15 @@ A long job holds one thread.
 
 No server migrates at start: the [migrate run mode](/admin/runtime-roles#database-migrations) migrates once per release.
 
-Two server replicas are not safe yet.
-Two servers pull from the same durable consumer of a scope (`IntegrationNatsConsumer`).
-Thus, they can process the events of one scope at the same time and out of order.
+Every server pulls from the same durable consumer of a scope (`IntegrationNatsConsumer`).
+The consumer allows one unacknowledged message (`MaxAckPending=1`).
+Thus, the broker gives the next event of a scope to a server only after the previous event is acknowledged.
+A handler that runs sends an in-progress acknowledgement at a third of the ack wait.
+Thus, the broker does not give its message to another server while the handler runs.
+A replay does not come through the consumer.
+It pauses the consumer, waits until no server holds a message of the consumer, and resumes the consumer after the replay (NATS 2.11 or later).
+`ServerReplicasConsumerIntegrationTest` checks both with two consumers on one broker.
+Other server state is not yet safe across replicas, so the chart runs one server.
 
 ## Module boundaries
 

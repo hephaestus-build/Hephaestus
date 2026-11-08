@@ -10,7 +10,12 @@ import org.testcontainers.utility.DockerImageName;
 public final class NatsTestContainer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NatsTestContainer.class);
-    private static final DockerImageName IMAGE = DockerImageName.parse("nats:2.10.27-alpine");
+    /**
+     * The NATS version that the release ships ({@code security/release-images.json}). The server needs 2.11 or
+     * later, for consumer pause.
+     */
+    public static final DockerImageName IMAGE = DockerImageName.parse("nats:2.14.9-alpine");
+
     private static final int CLIENT_PORT = 4222;
 
     private static @Nullable GenericContainer<?> container;

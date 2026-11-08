@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.activity.ConnectionActivi
 import io.nats.client.Connection;
 import io.nats.client.ConsumerContext;
 import io.nats.client.JetStreamApiException;
+import io.nats.client.JetStreamManagement;
 import io.nats.client.JetStreamOptions;
 import io.nats.client.Message;
 import io.nats.client.Nats;
@@ -26,6 +27,8 @@ import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -40,10 +43,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -104,9 +108,21 @@ public class IntegrationNatsConsumer {
 
     private final Object connectionLock = new Object();
 
-    private record DispatchScope(@Nullable Long workspaceId, String stream) {}
+    /**
+     * How long one fence pauses a consumer. The fence renews the pause while its work runs, so a pause outlives its
+     * work only when the replica that holds it stops; the broker then resumes the consumer on its own.
+     */
+    static final Duration FENCE_PAUSE = Duration.ofMinutes(1);
 
-    private final Map<DispatchScope, ReentrantLock> dispatchLocks = new ConcurrentHashMap<>();
+    /** How long a fence waits for the message that another replica handles to be acknowledged. */
+    static final Duration FENCE_WAIT = Duration.ofSeconds(30);
+
+    private static final Duration FENCE_POLL = Duration.ofMillis(250);
+
+    /** Sends the in-progress acknowledgements of running handlers and renews the pauses of running fences. */
+    private final ScheduledExecutorService keepAlive = Executors.newSingleThreadScheduledExecutor(
+            Thread.ofVirtual().name("integration-consumer-keep-alive").factory());
+
     private final Object scopeLifecycleMonitor = new Object();
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
@@ -262,6 +278,7 @@ public class IntegrationNatsConsumer {
             stats.setInstallationConsumerActive(false);
         }
 
+        keepAlive.shutdownNow();
         virtualThreadExecutor.shutdown();
         try {
             if (!virtualThreadExecutor.awaitTermination(SHUTDOWN_WAIT.toMillis(), TimeUnit.MILLISECONDS)) {
@@ -867,6 +884,7 @@ public class IntegrationNatsConsumer {
         }
         String subject = msg.getSubject();
         long start = System.nanoTime();
+        @Nullable ScheduledFuture<?> holding = holdWhileHandling(msg);
         try {
             IntegrationMessageHandler resolvedHandler = dispatch(scopeId, msg);
             if (scopeId != null && resolvedHandler != null) {
@@ -888,6 +906,7 @@ public class IntegrationNatsConsumer {
                 }
             }
         } catch (Throwable e) {
+            if (holding != null) holding.cancel(false);
             if (e instanceof VirtualMachineError && !(e instanceof StackOverflowError)) throw e;
             if (!shuttingDown.get()) {
                 // Exception messages can contain raw provider payloads. Log only the failure type.
@@ -916,6 +935,7 @@ public class IntegrationNatsConsumer {
             poisonHandler.handleFailure(scopeId, msg, e);
             return;
         }
+        if (holding != null) holding.cancel(false);
         messageMeters.handled(msg, true, System.nanoTime() - start);
         try {
             msg.ack();
@@ -931,23 +951,113 @@ public class IntegrationNatsConsumer {
 
     @Nullable
     IntegrationMessageHandler dispatch(@Nullable Long scopeId, Message msg) {
-        var metadata = msg.isJetStream() ? msg.metaData() : null;
-        String stream =
-                metadata != null ? metadata.getStream() : msg.getSubject().split("\\.", 2)[0];
-        return serialDispatch(
-                scopeId,
-                stream,
-                () -> new IntegrationDispatchScope(scopeId).call(() -> dispatchAdmitted(scopeId, msg)));
+        return new IntegrationDispatchScope(scopeId).call(() -> dispatchAdmitted(scopeId, msg));
     }
 
-    <T extends @Nullable Object> T serialDispatch(@Nullable Long scopeId, String stream, Supplier<T> work) {
-        // Replay and live delivery share the scope, even though replay is an explicit late event.
-        var lock = dispatchLocks.computeIfAbsent(new DispatchScope(scopeId, stream), ignored -> new ReentrantLock());
-        lock.lock();
+    /**
+     * Tells JetStream, at a third of the ack wait, that this replica still handles the message. Without it, a handler
+     * that outlasts the ack wait has its message redelivered to another replica while it still runs, and the
+     * consumer's next message can then be handled before this one ends.
+     */
+    private @Nullable ScheduledFuture<?> holdWhileHandling(Message msg) {
+        if (!msg.isJetStream()) return null;
+        long period = Math.max(100L, consumerProperties.ackWait().toMillis() / 3);
+        return keepAlive.scheduleAtFixedRate(
+                () -> {
+                    try {
+                        msg.inProgress();
+                    } catch (RuntimeException failure) {
+                        log.debug(
+                                "In-progress acknowledgement failed: error.type={}",
+                                failure.getClass().getName());
+                    }
+                },
+                period,
+                period,
+                TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Runs work while no replica handles a message of one consumer, so a replayed event and the consumer's live events
+     * are never handled at the same time. A replayed event bypasses the consumer, so {@code MaxAckPending=1} alone
+     * cannot order it. The fence pauses the consumer, waits until it holds no unacknowledged message, and resumes it
+     * after the work. A consumer that does not exist delivers nothing, so the work runs at once. After the resume, the
+     * consumer's next live message waits for the next pull request of a replica, at most one pull expiry.
+     *
+     * @throws ConsumerFenceException when the broker refuses the pause, or another replica still handles a message
+     *     after {@link #FENCE_WAIT}
+     */
+    <T extends @Nullable Object> T exclusive(String stream, String consumerName, Supplier<T> work) {
+        Connection connection = natsConnection;
+        if (connection == null) throw new ConsumerFenceException("NATS consumer connection is unavailable", null);
+        JetStreamManagement management;
         try {
+            management = connection.jetStreamManagement();
+            if (!pause(management, stream, consumerName)) return work.get();
+        } catch (IOException | JetStreamApiException failure) {
+            throw new ConsumerFenceException("The broker did not pause the consumer", failure);
+        }
+        ScheduledFuture<?> renewal = null;
+        try {
+            awaitNoPendingMessage(management, stream, consumerName);
+            long period = FENCE_PAUSE.toMillis() / 3;
+            renewal = keepAlive.scheduleAtFixedRate(
+                    () -> {
+                        try {
+                            pause(management, stream, consumerName);
+                        } catch (IOException | JetStreamApiException | RuntimeException failure) {
+                            log.warn(
+                                    "Consumer fence renewal failed: consumerName={}, error.type={}",
+                                    consumerName,
+                                    failure.getClass().getName());
+                        }
+                    },
+                    period,
+                    period,
+                    TimeUnit.MILLISECONDS);
             return work.get();
         } finally {
-            lock.unlock();
+            if (renewal != null) renewal.cancel(false);
+            try {
+                management.resumeConsumer(stream, consumerName);
+            } catch (IOException | JetStreamApiException failure) {
+                // The pause ends on its own within FENCE_PAUSE.
+                log.warn(
+                        "Consumer resume failed: consumerName={}, error.type={}",
+                        consumerName,
+                        failure.getClass().getName());
+            }
+        }
+    }
+
+    /** False when the consumer does not exist. */
+    private static boolean pause(JetStreamManagement management, String stream, String consumerName)
+            throws IOException, JetStreamApiException {
+        try {
+            management.pauseConsumer(
+                    stream, consumerName, ZonedDateTime.now(ZoneOffset.UTC).plus(FENCE_PAUSE));
+            return true;
+        } catch (JetStreamApiException failure) {
+            // 10014 = consumer not found.
+            if (failure.getApiErrorCode() == 10014) return false;
+            throw failure;
+        }
+    }
+
+    private static void awaitNoPendingMessage(JetStreamManagement management, String stream, String consumerName) {
+        long deadline = System.nanoTime() + FENCE_WAIT.toNanos();
+        try {
+            while (management.getConsumerInfo(stream, consumerName).getNumAckPending() > 0) {
+                if (System.nanoTime() > deadline) {
+                    throw new ConsumerFenceException("Another replica still handles a message of the consumer", null);
+                }
+                TimeUnit.MILLISECONDS.sleep(FENCE_POLL.toMillis());
+            }
+        } catch (IOException | JetStreamApiException failure) {
+            throw new ConsumerFenceException("The broker did not report the consumer", failure);
+        } catch (InterruptedException failure) {
+            Thread.currentThread().interrupt();
+            throw new ConsumerFenceException("Interrupted while waiting for the consumer", failure);
         }
     }
 

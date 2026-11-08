@@ -71,6 +71,7 @@ Confirm that `replayedAt` contains a time.
 
 A handler failure returns HTTP 409 and leaves the record pending.
 A broker outage returns HTTP 503.
+An event of the same workspace and stream that is still in progress after 30 seconds also returns HTTP 503. Try again later.
 An event that has expired or been removed from the stream returns HTTP 410.
 Reconcile that gap from the provider.
 The database record cannot restore an expired payload.
@@ -78,7 +79,8 @@ A record from another workspace returns HTTP 404.
 
 Replay reads the original bytes, routing headers and arrival time from NATS.
 The database record contains no payload or headers.
-Replay waits for any active handler in the same workspace and stream.
+Replay pauses the workspace's consumer of that stream on every server, and waits for the event in progress.
+The next live event of that stream can wait up to 30 seconds after the replay.
 It does not publish the event to other workspaces.
 
 A replay is an explicit late event.
