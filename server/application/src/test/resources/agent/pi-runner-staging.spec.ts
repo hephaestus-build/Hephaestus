@@ -82,59 +82,63 @@ void test("a provider outage stages no withholding and a later attempt measures 
 	}
 });
 
-void test("repeated gateway response loss requeues the run and stages no program result", async () => {
-	const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-gateway-requeue-")));
-	let calls = 0;
-	const server = createServer((request, response) => {
-		request.on("end", () => {
-			calls += 1;
-			response.writeHead(200, { "content-type": "application/json" });
-			response.write("{");
-			setImmediate(() => {
-				response.destroy();
+for (const concurrent of [false, true]) {
+	void test(`gateway response loss requeues without staging${concurrent ? " while another review is active" : ""}`, async () => {
+		const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-gateway-requeue-")));
+		let calls = 0;
+		const server = createServer((request, response) => {
+			request.on("end", () => {
+				calls += 1;
+				response.writeHead(200, { "content-type": "application/json" });
+				response.write("{");
+				setImmediate(() => {
+					response.destroy();
+				});
 			});
+			request.resume();
 		});
-		request.resume();
-	});
-	server.listen(0, "127.0.0.1");
-	await once(server, "listening");
-	try {
-		const address = server.address();
-		assert.ok(address !== null && typeof address !== "string");
-		stagePractices(cwd, [
-			{
-				slug: "direct",
-				program: directProgram(`
+		server.listen(0, "127.0.0.1");
+		await once(server, "listening");
+		try {
+			const address = server.address();
+			assert.ok(address !== null && typeof address !== "string");
+			stagePractices(cwd, [
+				...(concurrent ? [{ slug: "a-waiting" }] : []),
+				{
+					slug: "b-direct",
+					program: directProgram(`
 			await step("one call", () => generateText({
 				model: ctx.models.chat, prompt: "Say yes.", maxOutputTokens: 1000,
 			}));`),
-			},
-		]);
-		writeFileSync(
-			path.join(cwd, "practice-script-models.json"),
-			JSON.stringify({
-				chat: { protocol: "openai-completions", modelId: "chat-model" },
-			}),
-		);
+				},
+			]);
+			writeFileSync(
+				path.join(cwd, "practice-script-models.json"),
+				JSON.stringify({
+					chat: { protocol: "openai-completions", modelId: "chat-model" },
+				}),
+			);
 
-		const interrupted = await runRunner(
-			cwd,
-			{},
-			{
+			const interrupted = await runRunner(cwd, concurrent ? { "a-waiting": "hang" } : {}, {
 				LLM_PROXY_URL: `http://127.0.0.1:${address.port}`,
-			},
-		);
+			});
 
-		assert.equal(interrupted.status, 75, interrupted.stderr);
-		assert.equal(calls, 3);
-		assert.deepEqual(capturedLines(cwd, "staging"), []);
-		assert.deepEqual(capturedLines(cwd, "admission"), []);
-		assert.doesNotMatch(interrupted.stderr, /provider\.retrying/u);
-	} finally {
-		const closed = once(server, "close");
-		server.closeAllConnections();
-		server.close();
-		await closed;
-		rmSync(cwd, { recursive: true, force: true });
-	}
-});
+			assert.equal(interrupted.status, 75, interrupted.stderr);
+			assert.equal(calls, 3);
+			if (concurrent) {
+				assert.ok(
+					capturedLines(cwd, "model-start").some((entry) => field(entry, "slug") === "a-waiting"),
+				);
+			}
+			assert.deepEqual(capturedLines(cwd, "staging"), []);
+			assert.deepEqual(capturedLines(cwd, "admission"), []);
+			assert.doesNotMatch(interrupted.stderr, /provider\.retrying/u);
+		} finally {
+			const closed = once(server, "close");
+			server.closeAllConnections();
+			server.close();
+			await closed;
+			rmSync(cwd, { recursive: true, force: true });
+		}
+	});
+}

@@ -783,7 +783,7 @@ The loop keeps the same request and does not send a model failure to the session
 The same rule applies to a direct practice-program model call.
 
 A disconnected response can have incurred provider cost.
-After two replays, another disconnected response aborts measurement and uses the infrastructure exit code for a no-fault requeue.
+After two replays, another disconnected response aborts measurement and uses the infrastructure exit code for a bounded retry.
 It does not consume a model retry or admit incomplete results.
 The proxy meters each accepted request, including an abandoned response.
 

@@ -190,11 +190,8 @@ public final class SandboxLayout {
     public static final Duration RESULT_UPLOAD_GRACE = Duration.ofMinutes(10);
 
     /**
-     * Exit code emitted by the Pi runner when the review finished but the call admitting it never
-     * reached this server — the sandbox holds the app server's address as it was when the container
-     * started, so a server that came back somewhere else is unreachable for the rest of the run. The
-     * work is requeued rather than ended, since the same review against a reachable server is the
-     * outcome that was wanted.
+     * The sandbox gateway stayed unavailable for admission, or repeatedly disconnected a model response. The server
+     * retries the review without treating this infrastructure failure as a finding about the reviewed work.
      */
     public static final int EXIT_SERVER_UNREACHABLE = 75;
 
