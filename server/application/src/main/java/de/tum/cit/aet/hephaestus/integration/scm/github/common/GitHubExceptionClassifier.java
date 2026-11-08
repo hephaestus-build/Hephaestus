@@ -250,14 +250,18 @@ public class GitHubExceptionClassifier {
         // Default for unrecognized errors
         unknownCounter.increment();
         Object type = firstErrorType(response);
-        String message = errors.getFirst().getMessage();
         log.warn(
                 "Unclassified GitHub GraphQL error: type={}, errors={}, message={}",
                 errorType(type),
                 errors.size(),
-                sanitizeForLog(message != null ? truncate(message, 1024) : "<absent>"));
+                graphQlMessageForLog(errors.getFirst()));
         return ClassificationResult.of(
                 Category.UNKNOWN, "Unclassified GraphQL error: type=" + errorType(type) + ", errors=" + errors.size());
+    }
+
+    private static @Nullable String graphQlMessageForLog(ResponseError error) {
+        String message = error.getMessage();
+        return sanitizeForLog(message != null ? truncate(message, 1024) : "<absent>");
     }
 
     private ClassificationResult doClassify(@Nullable Throwable e) {

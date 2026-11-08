@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.spi.LoggingEventBuilder;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.graphql.ResponseError;
 
 class LoggingExamples {
     Logger log;
@@ -108,5 +109,20 @@ class LoggingExamples {
             // ok: java-exception-content-in-logs
             logger.warn("Resource failed");
         }
+    }
+}
+
+class GitHubGraphQlLoggingExamples {
+    Logger log;
+
+    void structuredDiagnostic(ResponseError error, RestClientResponseException response) {
+        // ok: java-exception-content-in-logs
+        log.warn("GraphQL message: {}", GitHubExceptionClassifier.graphQlMessageForLog(error));
+        // ruleid: java-exception-content-in-logs
+        log.warn("GraphQL message: {}", error.getMessage());
+        // ruleid: java-exception-content-in-logs
+        log.warn("GraphQL message: {}", LoggingUtils.sanitizeForLog(error.getMessage()));
+        // ruleid: java-exception-content-in-logs
+        log.warn("Body: {}", response.getResponseBodyAsString());
     }
 }
