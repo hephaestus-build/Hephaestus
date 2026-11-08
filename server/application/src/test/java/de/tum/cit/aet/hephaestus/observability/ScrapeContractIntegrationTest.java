@@ -49,6 +49,7 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
             Map.entry("web_vital_duration_seconds_count", "a browser report creates it"),
             Map.entry("commit_identity_pending", "the commit link correction job registers it when enabled"),
             Map.entry("commit_identity_resolutions_total", "the commit link correction job counts each answer"),
+            Map.entry("tenancy_violation_total", "a refused statement creates its series"),
             Map.entry("agent_job_infra_retry_requeued_total", "worker role"),
             Map.entry("agent_job_server_error_total", "worker role"),
             Map.entry("agent_queue_oldest_age_seconds", "worker role"),

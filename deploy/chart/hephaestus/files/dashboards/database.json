@@ -43,16 +43,6 @@
 			"title": "Does tenancy hold?",
 			"panels": [
 				{
-					"title": "Reads that a broad exemption let through, per day",
-					"description": "tenancy_bypassed_violation_total: statements with no workspace predicate that a type-level marker silenced, by the code that holds the marker. The value must reach zero before enforcement can tighten.",
-					"expr": [
-						"sum by (type) (increase(tenancy_bypassed_violation_total{job=\"hephaestus\"}[1d]))"
-					],
-					"alias": ["{{type}}"],
-					"showLegend": true,
-					"width": 6
-				},
-				{
 					"title": "Reads that tenancy refused or reported, per day",
 					"description": "tenancy_violation_total, by table and enforcement mode.",
 					"expr": [
@@ -60,7 +50,7 @@
 					],
 					"alias": ["{{table}} {{mode}}"],
 					"showLegend": true,
-					"width": 6
+					"width": 12
 				}
 			]
 		},
