@@ -94,6 +94,52 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
             @Param("repositoryId") Long repositoryId,
             @Param("committerId") @Nullable Long committerId);
 
+    /** A stored email cannot refill a link while the provider clears it. Lock its queue row before the commit. */
+    @WorkspaceAgnostic("Stored-email resolution is bound to one shared repository")
+    @Modifying
+    @Transactional
+    @Query(value = """
+        WITH answers AS MATERIALIZED (
+            SELECT q.state FROM commit_identity_resolution q
+            JOIN git_commit representative ON representative.id = q.commit_id
+            LEFT JOIN commit_contributor contributor ON contributor.id = q.contributor_id
+            WHERE q.repository_id = :repositoryId
+              AND CASE q.source WHEN 'AUTHOR' THEN representative.author_email
+                                WHEN 'COMMITTER' THEN representative.committer_email
+                                ELSE contributor.email END = :email
+            ORDER BY q.id
+            FOR UPDATE OF q
+        )
+        UPDATE git_commit SET author_id = :userId, updated_at = NOW()
+        WHERE repository_id = :repositoryId AND author_id IS NULL AND author_email = :email
+          AND NOT EXISTS (SELECT 1 FROM answers WHERE state IN ('RESOLVED', 'NO_ACCOUNT'))
+        """, nativeQuery = true)
+    int bulkUpdateAuthorIdFromStoredEmail(
+            @Param("email") String email, @Param("repositoryId") Long repositoryId, @Param("userId") Long userId);
+
+    /** A stored email cannot refill a link while the provider clears it. Lock its queue row before the commit. */
+    @WorkspaceAgnostic("Stored-email resolution is bound to one shared repository")
+    @Modifying
+    @Transactional
+    @Query(value = """
+        WITH answers AS MATERIALIZED (
+            SELECT q.state FROM commit_identity_resolution q
+            JOIN git_commit representative ON representative.id = q.commit_id
+            LEFT JOIN commit_contributor contributor ON contributor.id = q.contributor_id
+            WHERE q.repository_id = :repositoryId
+              AND CASE q.source WHEN 'AUTHOR' THEN representative.author_email
+                                WHEN 'COMMITTER' THEN representative.committer_email
+                                ELSE contributor.email END = :email
+            ORDER BY q.id
+            FOR UPDATE OF q
+        )
+        UPDATE git_commit SET committer_id = :userId, updated_at = NOW()
+        WHERE repository_id = :repositoryId AND committer_id IS NULL AND committer_email = :email
+          AND NOT EXISTS (SELECT 1 FROM answers WHERE state IN ('RESOLVED', 'NO_ACCOUNT'))
+        """, nativeQuery = true)
+    int bulkUpdateCommitterIdFromStoredEmail(
+            @Param("email") String email, @Param("repositoryId") Long repositoryId, @Param("userId") Long userId);
+
     /**
      * Find one representative SHA per unresolved email for GraphQL author lookup.
      * Returns pairs of (email, sha) where author_id or committer_id is NULL.
@@ -137,6 +183,8 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
      * existing value where the caller passes null, because a webhook or API payload carries less
      * than JGit. What JGit captured — {@code git_details_captured_at} set — is never
      * overwritten by a lesser source: the message, the timestamps and the statistics stay.
+     * Existing actor links take precedence over the stored-email match supplied by commit capture.
+     * Only provider resolution may replace a linked actor.
      */
     @Modifying
     @Transactional
@@ -165,8 +213,10 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
                 ELSE COALESCE(EXCLUDED.changed_files, git_commit.changed_files) END,
             last_sync_at = EXCLUDED.last_sync_at,
             updated_at = NOW(),
-            author_id = COALESCE(EXCLUDED.author_id, git_commit.author_id),
-            committer_id = COALESCE(EXCLUDED.committer_id, git_commit.committer_id),
+            author_id = CASE WHEN :fromStoredEmail THEN COALESCE(git_commit.author_id, EXCLUDED.author_id)
+                ELSE COALESCE(EXCLUDED.author_id, git_commit.author_id) END,
+            committer_id = CASE WHEN :fromStoredEmail THEN COALESCE(git_commit.committer_id, EXCLUDED.committer_id)
+                ELSE COALESCE(EXCLUDED.committer_id, git_commit.committer_id) END,
             author_email = COALESCE(EXCLUDED.author_email, git_commit.author_email),
             committer_email = COALESCE(EXCLUDED.committer_email, git_commit.committer_email),
             git_details_captured_at = COALESCE(EXCLUDED.git_details_captured_at, git_commit.git_details_captured_at)
@@ -187,7 +237,8 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
             @Param("committerId") @Nullable Long committerId,
             @Param("authorEmail") @Nullable String authorEmail,
             @Param("committerEmail") @Nullable String committerEmail,
-            @Param("gitDetailsCapturedAt") @Nullable Instant gitDetailsCapturedAt);
+            @Param("gitDetailsCapturedAt") @Nullable Instant gitDetailsCapturedAt,
+            @Param("fromStoredEmail") boolean fromStoredEmail);
 
     /**
      * Find SHAs of commits that have no contributor rows yet.

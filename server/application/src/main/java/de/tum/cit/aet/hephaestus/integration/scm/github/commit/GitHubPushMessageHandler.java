@@ -283,7 +283,8 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
                     webhookCommit.committer() != null
                             ? webhookCommit.committer().email()
                             : null,
-                    null);
+                    null,
+                    false);
 
             publishCommitCreated(webhookCommit.sha(), repository);
 

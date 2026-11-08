@@ -491,20 +491,21 @@ It logs a count and no personal values.
 
 Earlier releases could set a commit's author or contributor without an answer from the provider.
 Person export and erasure follow those values, so they can reach a commit that the person did not write, or miss one that they did.
-On GitHub, the commit link correction job reads these values from the provider again when an administrator enables it.
-The limit stays on GitLab until a later release does the same.
-GitLab gives no answer for an email that appears in no merge request, so that value will stay.
+The commit link correction job reads these values from GitHub and GitLab again when an administrator enables it.
+GitLab answers only for the author email of the representative commit.
+An email that appears only as a committer or co-author has no answer, so its value stays.
 
-The commit link correction job overwrites `git_commit.author_id`, `git_commit.committer_id`, and `commit_contributor.user_id` with GitHub's answer for an email on a repository.
-If GitHub says that no account owns the email, the job clears these values.
+The commit link correction job overwrites `git_commit.author_id`, `git_commit.committer_id`, and `commit_contributor.user_id` with the provider’s answer for an email on a repository.
+If the provider says that no account owns the email, the job clears these values.
 The stored-email pass of later enrichment does not restore cleared links.
 
 Commit ingestion can still link a new or existing commit through an email stored on exactly one user of its provider.
 That ingestion can refill a link that the job cleared. The queue does not reopen automatically.
+Stored-email capture preserves an existing actor link, including a link from the provider’s answer.
 A new GitHub commit can also link through the account id in a noreply address.
-If GitHub gives no answer, the job changes nothing.
+If the provider gives no answer, the job changes nothing.
 
-The job never links an erased person.
+The job never links an erased person. It clears a link that the provider contradicts when it names an erased person.
 Person export and erasure follow the new values from then on, and earlier exports are not recalled.
 
 Each provider answer also corrects the actor of existing commit Activity events, including an explicit clear.

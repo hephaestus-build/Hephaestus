@@ -99,7 +99,8 @@ class CommitDetailsPersisterTest extends BaseUnitTest {
                         eq(null),
                         eq("author@example.com"),
                         eq("committer@example.com"),
-                        any(Instant.class));
+                        any(Instant.class),
+                        eq(true));
         assertThat(message.getValue()).hasSize(Commit.MESSAGE_LENGTH);
         assertThat(commit.getFileChanges()).singleElement().satisfies(change -> {
             assertThat(change.getFilename()).hasSize(CommitFileChange.FILENAME_LENGTH);
@@ -153,7 +154,8 @@ class CommitDetailsPersisterTest extends BaseUnitTest {
                         any(),
                         any(),
                         any(),
-                        any(Instant.class));
+                        any(Instant.class),
+                        eq(true));
         verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
@@ -178,7 +180,8 @@ class CommitDetailsPersisterTest extends BaseUnitTest {
                         any(),
                         any(),
                         any(),
-                        any());
+                        any(),
+                        eq(true));
 
         assertThat(persister.persist(details("subject", "file"), repository, origin))
                 .isEqualTo(Outcome.FAILED);
@@ -212,6 +215,7 @@ class CommitDetailsPersisterTest extends BaseUnitTest {
                         any(),
                         any(),
                         any(),
-                        any());
+                        any(),
+                        eq(true));
     }
 }

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794094224585-1" author="hephaestus">
+        <comment>Queues each author email on each GitLab repository for the provider’s answer.</comment>
+        <customChange class="de.tum.cit.aet.hephaestus.core.database.GitLabCommitIdentityResolutionSeedChange"/>
+        <rollback><sql>DELETE FROM commit_identity_resolution WHERE repository_id IN (SELECT r.id FROM repository r JOIN identity_provider p ON p.id = r.provider_id WHERE p.type = 'GITLAB')</sql></rollback>
+    </changeSet>
+</databaseChangeLog>

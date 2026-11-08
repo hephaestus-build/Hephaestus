@@ -42,7 +42,7 @@ public interface CommitContributorRepository extends JpaRepository<CommitContrib
         ON CONFLICT ON CONSTRAINT uq_commit_contributor_commit_email_role DO UPDATE SET
             name = COALESCE(EXCLUDED.name, commit_contributor.name),
             ordinal = EXCLUDED.ordinal,
-            user_id = COALESCE(EXCLUDED.user_id, commit_contributor.user_id)
+            user_id = COALESCE(commit_contributor.user_id, EXCLUDED.user_id)
         """, nativeQuery = true)
     void upsertContributor(
             @Param("commitId") Long commitId,

@@ -87,7 +87,8 @@ class CommitDetailsCheckpointIntegrationTest extends BaseIntegrationTest {
                 null,
                 "author@example.com",
                 "author@example.com",
-                captured);
+                captured,
+                false);
 
         upsert(repository, sha, "Webhook subject", null);
 
@@ -207,6 +208,7 @@ class CommitDetailsCheckpointIntegrationTest extends BaseIntegrationTest {
                 null,
                 "author@example.com",
                 "author@example.com",
-                capturedAt);
+                capturedAt,
+                false);
     }
 }

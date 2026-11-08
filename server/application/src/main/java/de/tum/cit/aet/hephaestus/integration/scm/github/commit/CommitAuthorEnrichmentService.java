@@ -245,7 +245,7 @@ public class CommitAuthorEnrichmentService {
         for (String email : unresolvedAuthorEmails) {
             Long userId = authorResolver.resolveByEmail(email, providerId);
             if (userId != null) {
-                int updated = commitRepository.bulkUpdateAuthorIdByEmail(email, repositoryId, userId);
+                int updated = commitRepository.bulkUpdateAuthorIdFromStoredEmail(email, repositoryId, userId);
                 enriched += updated;
                 log.debug("Enriched {} commits author by email: email={}, repoId={}", updated, email, repositoryId);
             }
@@ -254,7 +254,7 @@ public class CommitAuthorEnrichmentService {
         for (String email : unresolvedCommitterEmails) {
             Long userId = authorResolver.resolveByEmail(email, providerId);
             if (userId != null) {
-                int updated = commitRepository.bulkUpdateCommitterIdByEmail(email, repositoryId, userId);
+                int updated = commitRepository.bulkUpdateCommitterIdFromStoredEmail(email, repositoryId, userId);
                 enriched += updated;
                 log.debug("Enriched {} commits committer by email: email={}, repoId={}", updated, email, repositoryId);
             }

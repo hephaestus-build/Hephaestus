@@ -221,7 +221,8 @@ class CommitEnrichmentOutsideTransactionsIntegrationTest extends BaseIntegration
                 null,
                 "author@example.com",
                 "author@example.com",
-                null);
+                null,
+                false);
         return Objects.requireNonNull(commits.findByShaAndRepositoryId(sha, repository.getId())
                 .orElseThrow()
                 .getId());

@@ -688,7 +688,8 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                 committerId,
                 info.authorEmail(),
                 info.committerEmail(),
-                null);
+                null,
+                false);
 
         var commitOpt = commitRepository.findByShaAndRepositoryId(info.sha(), repository.getId());
         if (commitOpt.isPresent()) {
