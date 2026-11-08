@@ -501,7 +501,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + patToken)
                 .retrieve()
                 .bodyToMono(GitHubAuthenticatedUserDTO.class)
-                .block();
+                .block(WebClientConnectors.READ_TIMEOUT);
 
         if (userInfo == null || userInfo.id() == null) {
             throw new IllegalStateException("Failed to fetch GitHub user info for login '" + accountLogin + "'");

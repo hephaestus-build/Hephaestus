@@ -106,7 +106,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + appJwt)
                     .retrieve()
                     .bodyToMono(AppInfoResponse.class)
-                    .block();
+                    .block(WebClientConnectors.READ_TIMEOUT);
 
             if (appInfo == null) {
                 log.warn("Skipped GitHub App processing: reason=nullAppInfoResponse");
@@ -128,7 +128,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
                     .retrieve()
                     .bodyToFlux(InstallationDto.class)
                     .collectList()
-                    .block();
+                    .block(WebClientConnectors.READ_TIMEOUT);
 
             if (installations == null || installations.isEmpty()) {
                 log.warn(

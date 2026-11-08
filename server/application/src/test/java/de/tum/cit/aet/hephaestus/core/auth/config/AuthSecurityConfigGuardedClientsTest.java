@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCodeGrantRequest;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
@@ -34,6 +35,7 @@ class AuthSecurityConfigGuardedClientsTest extends BaseUnitTest {
 
     @BeforeAll
     static void declareRebind() {
+        OfflineNetwork.answer("api.github.com", "127.0.0.1");
         OfflineNetwork.answer("signin-rebound.corp.example", "169.254.169.254");
         OfflineNetwork.answer("api.github.com.signin-rebound.corp.example", "169.254.169.254");
     }
@@ -42,6 +44,7 @@ class AuthSecurityConfigGuardedClientsTest extends BaseUnitTest {
         return new AuthSecurityConfig(
                 mock(LoginProviderRepository.class),
                 RestClient.builder(),
+                new RestTemplateBuilder(),
                 WebClient.builder(),
                 new ScmServerEndpointPolicy(
                         new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())));
@@ -92,6 +95,31 @@ class AuthSecurityConfigGuardedClientsTest extends BaseUnitTest {
                 .hasMessageContaining("(SSRF guard)");
     }
 
+    @Test
+    void shouldGuardThePrimaryGitHubUserInfoCall() {
+        var repository = mock(LoginProviderRepository.class);
+        var github = new LoginProvider();
+        github.setType(LoginProvider.ProviderType.GITHUB);
+        when(repository.findByRegistrationId("github")).thenReturn(Optional.of(github));
+        var config = new AuthSecurityConfig(
+                repository,
+                RestClient.builder(),
+                new RestTemplateBuilder(),
+                WebClient.builder(),
+                new ScmServerEndpointPolicy(
+                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())));
+        var registration = ClientRegistration.withClientRegistration(registration())
+                .registrationId("github")
+                .userInfoUri("https://api.github.com/user")
+                .build();
+        var token = new OAuth2AccessToken(OAuth2AccessToken.TokenType.BEARER, "token", Instant.now(), null);
+
+        assertThatThrownBy(() -> config.oauthUserService().loadUser(new OAuth2UserRequest(registration, token)))
+                .hasRootCauseInstanceOf(UnknownHostException.class)
+                .rootCause()
+                .hasMessageContaining("(SSRF guard)");
+    }
+
     /** A GitLab whose URL only begins like GitHub's gets the guarded client, by its stored type. */
     @Test
     void shouldGiveAGitLabThatLooksLikeGitHubTheGuardedClient() {
@@ -102,6 +130,7 @@ class AuthSecurityConfigGuardedClientsTest extends BaseUnitTest {
         var config = new AuthSecurityConfig(
                 repository,
                 RestClient.builder(),
+                new RestTemplateBuilder(),
                 WebClient.builder(),
                 new ScmServerEndpointPolicy(
                         new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())));

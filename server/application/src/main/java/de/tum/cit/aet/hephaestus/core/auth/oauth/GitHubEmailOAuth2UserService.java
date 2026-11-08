@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
+import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -8,6 +9,9 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
+import org.springframework.boot.http.client.HttpClientSettings;
+import org.springframework.boot.http.client.HttpRedirects;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -38,11 +42,18 @@ public class GitHubEmailOAuth2UserService implements OAuth2UserService<OAuth2Use
             new ParameterizedTypeReference<>() {};
     private static final String EMAILS_URI = "https://api.github.com/user/emails";
 
-    private final DefaultOAuth2UserService delegate = new DefaultOAuth2UserService();
+    private final DefaultOAuth2UserService delegate;
     private final RestClient restClient;
 
-    public GitHubEmailOAuth2UserService(RestClient.Builder restClients) {
-        this.restClient = restClients.build();
+    public GitHubEmailOAuth2UserService(RestClient.Builder restClients, DefaultOAuth2UserService delegate) {
+        this.delegate = delegate;
+        this.restClient = restClients
+                .clone()
+                .requestFactory(ClientHttpRequestFactoryBuilder.jdk()
+                        .build(HttpClientSettings.defaults()
+                                .withTimeouts(WebClientConnectors.CONNECT_TIMEOUT, WebClientConnectors.READ_TIMEOUT)
+                                .withRedirects(HttpRedirects.DONT_FOLLOW)))
+                .build();
     }
 
     @Override

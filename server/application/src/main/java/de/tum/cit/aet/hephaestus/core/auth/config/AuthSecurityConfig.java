@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.config;
 
+import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.AuthIntentCookie;
 import de.tum.cit.aet.hephaestus.core.auth.oauth.CookieOAuth2AuthorizationRequestRepository;
@@ -20,6 +21,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -49,7 +51,6 @@ import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.netty.http.client.HttpClient;
 
 /**
  * Wires the OAuth login flow on a dedicated, medium-precedence
@@ -83,16 +84,19 @@ public class AuthSecurityConfig {
 
     private final LoginProviderRepository loginProviderRepository;
     private final RestClient.Builder restClients;
+    private final RestTemplateBuilder restTemplates;
     private final WebClient.Builder webClients;
     private final ScmServerEndpointPolicy scmEndpoints;
 
     public AuthSecurityConfig(
             LoginProviderRepository loginProviderRepository,
             RestClient.Builder restClients,
+            RestTemplateBuilder restTemplates,
             WebClient.Builder webClients,
             ScmServerEndpointPolicy scmEndpoints) {
         this.loginProviderRepository = loginProviderRepository;
         this.restClients = restClients;
+        this.restTemplates = restTemplates;
         this.webClients = webClients;
         this.scmEndpoints = scmEndpoints;
     }
@@ -134,23 +138,15 @@ public class AuthSecurityConfig {
     }
 
     /**
-     * OAuth2 user service. Routes GitHub registrations through {@link GitHubEmailOAuth2UserService}
-     * (fetches the primary+verified email from {@code api.github.com/user/emails}) and OUTLINE-typed
-     * registrations through {@link OutlineAuthInfoUserService} (Outline has no GET-userinfo endpoint —
-     * identity is a {@code POST /api/auth.info}); every other registration uses the framework default.
-     * GitHub is detected by its user-info endpoint host ({@value #GITHUB_USERINFO_PREFIX}), NOT by
-     * registration id — the id is operator-chosen (it need not be {@code github}), and GitHub login is
-     * github.com-only (GHE out of scope), so the host is the stable signal. Outline is self-hosted (no
-     * stable host), so it is routed by the {@code login_provider} row's provider TYPE. The GitLab login
-     * is OAuth2 (scope {@code read_user}, no {@code openid}), so it takes the default service and reads
-     * its email from {@code /api/v4/user} — see {@code LoginProviderClientRegistrationRepository}.
+     * Routes by the stored provider type. GitHub adds its primary verified email; Outline reads
+     * identity with POST auth.info. The framework user-info service uses the guarded transport.
      */
     @Bean
     public OAuth2UserService<OAuth2UserRequest, OAuth2User> oauthUserService() {
-        var github = new GitHubEmailOAuth2UserService(restClients);
-        var outline = new OutlineAuthInfoUserService(webClients);
         var fallback = new DefaultOAuth2UserService();
         fallback.setRestOperations(guardedUserInfoClient());
+        var github = new GitHubEmailOAuth2UserService(restClients, fallback);
+        var outline = new OutlineAuthInfoUserService(webClients);
         return request -> {
             ClientRegistration registration = request.getClientRegistration();
             if (isGitHub(registration)) {
@@ -163,16 +159,17 @@ public class AuthSecurityConfig {
         };
     }
 
-    /** A GitLab server comes from configuration, so its user info call checks the address that it connects to. */
+    /** Provider user-info calls check the address that they connect to. */
     private RestTemplate guardedUserInfoClient() {
-        var rest = new RestTemplate(guardedRequestFactory());
-        rest.setErrorHandler(new OAuth2ErrorResponseErrorHandler());
-        return rest;
+        return restTemplates
+                .requestFactory(this::guardedRequestFactory)
+                .errorHandler(new OAuth2ErrorResponseErrorHandler())
+                .build();
     }
 
     private ClientHttpRequestFactory guardedRequestFactory() {
         return new ReactorClientHttpRequestFactory(
-                HttpClient.create().resolver(scmEndpoints.resolverGroup()).followRedirect(false));
+                WebClientConnectors.httpClient(scmEndpoints.resolverGroup()).followRedirect(false));
     }
 
     /** The code exchange sends the client secret, so it checks the address that it connects to as well. */
