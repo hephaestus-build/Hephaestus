@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import { globSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+
+import { parse } from "yaml";
 
 import {
 	alertNames,
@@ -10,6 +15,7 @@ import {
 	findings,
 	metricsIn,
 } from "./check-public-contract.ts";
+import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 
 const CHART = "deploy/chart/hephaestus/values.schema.json";
 const ALERTS = "deploy/chart/hephaestus/files/hephaestus-alerts.yml";
@@ -316,4 +322,117 @@ void test("a closed constant reads across lines and ignores spacing", () => {
 		'["MET","NOT_MET",]',
 	);
 	assert.equal(closedConstant("export const OTHER = 1 as const;\n", "OUTCOMES"), undefined);
+});
+
+function readRepositoryFile(file: string) {
+	return readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
+}
+
+function normalizeApiResource(resource: string) {
+	return resource
+		.replace(/^\/api(?=\/)/u, "")
+		.replace(/\?.*$/u, "")
+		.replace(/[.,;:]$/u, "")
+		.replaceAll(/\{[^/]+?\}|<[^/]+?>/gu, "{}");
+}
+
+void test("the public operation list covers existing documented methods and extension SDK imports", () => {
+	const promised = asArray(
+		parseJson(readRepositoryFile("server/public-api-operations.json")),
+		"public operations",
+	).map((value) => asString(value, "public operation"));
+	assert.notEqual(promised.length, 0);
+	assert.equal(new Set(promised).size, promised.length, "duplicate public operation");
+	const specification = asRecord(parse(readRepositoryFile("server/openapi.yaml")), "OpenAPI");
+	const paths = asRecord(specification.paths, "OpenAPI paths");
+	const methods = new Set(["get", "post", "put", "patch", "delete", "head", "options", "trace"]);
+	const operations = new Map<string, string>();
+	for (const [resource, raw] of Object.entries(paths)) {
+		for (const [method, value] of Object.entries(asRecord(raw, resource))) {
+			if (!methods.has(method)) {
+				continue;
+			}
+			const operation = asRecord(value, `${method} ${resource}`);
+			operations.set(
+				asString(operation.operationId, "operation ID"),
+				`${method.toUpperCase()} ${resource}`,
+			);
+		}
+	}
+	for (const operation of promised) {
+		assert.ok(
+			[...operations.values()].includes(operation),
+			`Unknown public operation: ${operation}`,
+		);
+	}
+
+	const extension = fileURLToPath(new URL("../extension/src/", import.meta.url));
+	const imported = new Set<string>();
+	for (const file of globSync("**/*.{ts,tsx}", {
+		cwd: extension,
+		exclude: ["api/**", "**/*.test.*", "testing/**"],
+	})) {
+		const source = readFileSync(path.join(extension, file), "utf8");
+		for (const match of source.matchAll(
+			/import\s*\{(?<names>[^}]+)\}\s*from\s*["']~\/api\/sdk\.gen["']/gu,
+		)) {
+			const { groups } = match;
+			assert.ok(groups !== undefined);
+			const { names } = groups;
+			assert.ok(names !== undefined && names !== "");
+			for (const binding of names.split(",")) {
+				const name = binding.trim().split(/\s+as\s+/u)[0];
+				if (name === undefined || name === "" || name.startsWith("type ")) {
+					continue;
+				}
+				const operation = operations.get(name);
+				assert.ok(
+					operation !== undefined && operation !== "",
+					`${file} imports unknown SDK operation ${name}`,
+				);
+				imported.add(operation);
+				assert.ok(
+					promised.includes(operation),
+					`${file} uses ${operation} outside the public promise`,
+				);
+			}
+		}
+	}
+	assert.notEqual(imported.size, 0, "extension operations were not inspected");
+
+	const canonical = new Map(
+		[...operations.values()].map((operation) => {
+			const [method, resource] = operation.split(" ");
+			assert.ok(method !== undefined && resource !== undefined);
+			assert.notEqual(method, "");
+			assert.notEqual(resource, "");
+			return [`${method} ${normalizeApiResource(resource)}`, operation];
+		}),
+	);
+	const root = fileURLToPath(new URL("../", import.meta.url));
+	for (const file of globSync("docs/{admin,user}/**/*.{md,mdx}", {
+		cwd: root,
+		exclude: ["docs/admin/_configuration-reference/**"],
+	})) {
+		const text = readFileSync(path.join(root, file), "utf8").replaceAll("`", "");
+		for (const match of text.matchAll(
+			/\b(?<verbs>(?:(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE)(?:\s*(?:,|and|or)\s*)?)+)\s+(?<resource>\/[^\s]+)/gu,
+		)) {
+			const { groups } = match;
+			assert.ok(groups !== undefined);
+			const { verbs, resource } = groups;
+			assert.ok(verbs !== undefined && resource !== undefined);
+			assert.notEqual(verbs, "");
+			assert.notEqual(resource, "");
+			for (const method of verbs.match(/GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE/gu) ?? []) {
+				const operation = canonical.get(`${method} ${normalizeApiResource(resource)}`);
+				if (operation !== undefined) {
+					assert.ok(
+						promised.includes(operation),
+						`${file} documents ${operation} outside the public promise`,
+					);
+				}
+			}
+		}
+	}
 });
