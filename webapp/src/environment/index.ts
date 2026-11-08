@@ -38,14 +38,16 @@ interface RuntimeEnvVars {
  */
 const SECURE_XSRF_COOKIE_NAME = "__Host-XSRF-TOKEN";
 
-// Dev defaults (used when window.__ENV__ is not set)
+// Runtime URLs stay on this origin in a production build, even if its config script is unavailable.
 const defaults: RuntimeEnvVars = {
 	APPLICATION_VERSION: "DEV",
-	APPLICATION_CLIENT_URL: "http://localhost:4200",
-	APPLICATION_SERVER_URL: "http://localhost:8080",
+	APPLICATION_CLIENT_URL: import.meta.env.DEV ? "http://localhost:4200" : window.location.origin,
+	APPLICATION_SERVER_URL: import.meta.env.DEV
+		? "http://localhost:8080"
+		: `${window.location.origin}/api`,
 	XSRF_COOKIE_NAME: SECURE_XSRF_COOKIE_NAME,
-	DEPLOYMENT_ENVIRONMENT: "local",
-	TANSTACK_DEVTOOLS_ENABLED: "true",
+	DEPLOYMENT_ENVIRONMENT: import.meta.env.DEV ? "local" : "unknown",
+	TANSTACK_DEVTOOLS_ENABLED: import.meta.env.DEV ? "true" : "false",
 	GIT_BRANCH: "",
 	GIT_COMMIT: "",
 	DEPLOYED_AT: "",
@@ -55,12 +57,14 @@ const defaults: RuntimeEnvVars = {
 const env = (key: keyof RuntimeEnvVars): string => window.__ENV__?.[key] ?? defaults[key] ?? "";
 
 const DEPLOYMENT_NAMES: Record<string, string> = {
+	unknown: "Unknown",
 	production: "Production",
 	staging: "Staging",
 	preview: "Preview",
 	local: "Local",
 };
-const deploymentEnvironment = env("DEPLOYMENT_ENVIRONMENT") || "local";
+const deploymentEnvironment =
+	env("DEPLOYMENT_ENVIRONMENT") || (import.meta.env.DEV ? "local" : "unknown");
 
 /**
  * Which pull request this preview is of. Every preview shares the name "Preview", so without this

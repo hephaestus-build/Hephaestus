@@ -16,6 +16,7 @@ async function deploymentFor(runtime: Window["__ENV__"]) {
 }
 
 afterEach(() => {
+	vi.unstubAllEnvs();
 	delete window.__ENV__;
 });
 
@@ -76,5 +77,37 @@ describe("CSRF cookie name", () => {
 		});
 
 		expect(environment.xsrfCookieName).toBe("XSRF-TOKEN");
+	});
+});
+
+describe("runtime configuration defaults", () => {
+	it("keeps a production build on its own origin when the runtime script is unavailable", async () => {
+		vi.stubEnv("DEV", false);
+		const environment = await environmentFor(undefined);
+		expect(environment.clientUrl).toBe(window.location.origin);
+		expect(environment.serverUrl).toBe(`${window.location.origin}/api`);
+		expect(environment.deployment.environment).toBe("unknown");
+		expect(environment.deployment.name).toBe("Unknown");
+		expect(environment.devtools.tanstack).toBe(false);
+	});
+
+	it("uses the explicit runtime URLs when the script is available", async () => {
+		vi.stubEnv("DEV", false);
+		const environment = await environmentFor({
+			APPLICATION_CLIENT_URL: "https://app.example.test",
+			APPLICATION_SERVER_URL: "https://app.example.test/api",
+			DEPLOYMENT_ENVIRONMENT: "staging",
+		});
+		expect(environment.clientUrl).toBe("https://app.example.test");
+		expect(environment.serverUrl).toBe("https://app.example.test/api");
+		expect(environment.deployment.environment).toBe("staging");
+	});
+
+	it("keeps separate development origins for the local webapp and server", async () => {
+		vi.stubEnv("DEV", true);
+		const environment = await environmentFor(undefined);
+		expect(environment.clientUrl).toBe("http://localhost:4200");
+		expect(environment.serverUrl).toBe("http://localhost:8080");
+		expect(environment.devtools.tanstack).toBe(true);
 	});
 });
