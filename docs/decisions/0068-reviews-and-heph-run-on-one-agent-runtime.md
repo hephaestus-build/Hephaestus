@@ -776,13 +776,14 @@ A loop that cannot renew stops when its last confirmed lease expires.
 This closes the lease-renewal tie in decision F.
 Durable completion and portable composition remain separate changes, so the long drain stays.
 
-### Gateway outage handling (2026-11-08)
+### Decision F: sandbox gateway outage handling (2026-11-08)
 
 A gateway connection failure stays inside the current model call while the review holds its lease and work deadline.
 The loop keeps the same request and does not send a model failure to the session retry policy.
 The same rule applies to a direct practice-program model call.
 
 A disconnected response can have incurred provider cost.
+A network error that cannot be proved to precede the connection uses the same replay bound.
 After two replays, another disconnected response aborts measurement and uses the infrastructure exit code for a bounded retry.
 It does not consume a model retry or admit incomplete results.
 The proxy meters each accepted request, including an abandoned response.
