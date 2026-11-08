@@ -406,14 +406,14 @@ config:
     # Step-up and passkey assurance for administration. The application default is true. Set false
     # only as a deliberate operator decision; the chart never derives it from the environment name.
     assuranceEnforced: true
-    bootstrapAdmins: ""
-    browserExtensionIds: ""
+    bootstrapAdmins: []
+    browserExtensionIds: []
     # docs/admin/passkeys.mdx. An empty relying party ID and origin list use the host.
     passkeys:
       instanceAdminRequired: true
       workspaceAdminRequired: false
       rpId: ""
-      allowedOrigins: ""
+      allowedOrigins: []
   github:
     oauthClientId: ""
     appId: 0
@@ -430,7 +430,7 @@ config:
     redirectUri: ""
   outline:
     enabled: false
-    allowedOrigins: ""
+    allowedOrigins: []
     oauthBaseUrl: ""
     oauthClientId: ""
     oauthDisplayName: Outline

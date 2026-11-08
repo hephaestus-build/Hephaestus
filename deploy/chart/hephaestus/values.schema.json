@@ -35,6 +35,10 @@
 		"duration": { "type": "string", "pattern": "^[0-9]+(?:ms|s|m|h|d)$" },
 		"dataSize": { "type": "string", "pattern": "^[0-9]+(?:B|KB|MB|GB|TB)$" },
 		"text": { "type": "string", "maxLength": 2048 },
+		"stringList": {
+			"type": "array",
+			"items": { "type": "string", "maxLength": 2048, "pattern": "^[^,]+$" }
+		},
 		"name": {
 			"type": "string",
 			"pattern": "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"
@@ -884,8 +888,8 @@
 					"required": ["assuranceEnforced", "bootstrapAdmins", "browserExtensionIds", "passkeys"],
 					"properties": {
 						"assuranceEnforced": { "type": "boolean" },
-						"bootstrapAdmins": { "$ref": "#/definitions/text" },
-						"browserExtensionIds": { "$ref": "#/definitions/text" },
+						"bootstrapAdmins": { "$ref": "#/definitions/stringList" },
+						"browserExtensionIds": { "$ref": "#/definitions/stringList" },
 						"passkeys": {
 							"type": "object",
 							"additionalProperties": false,
@@ -899,7 +903,7 @@
 								"instanceAdminRequired": { "type": "boolean" },
 								"workspaceAdminRequired": { "type": "boolean" },
 								"rpId": { "$ref": "#/definitions/text" },
-								"allowedOrigins": { "$ref": "#/definitions/text" }
+								"allowedOrigins": { "$ref": "#/definitions/stringList" }
 							}
 						}
 					}
@@ -948,7 +952,7 @@
 					],
 					"properties": {
 						"enabled": { "type": "boolean" },
-						"allowedOrigins": { "$ref": "#/definitions/text" },
+						"allowedOrigins": { "$ref": "#/definitions/stringList" },
 						"oauthBaseUrl": { "$ref": "#/definitions/text" },
 						"oauthClientId": { "$ref": "#/definitions/text" },
 						"oauthDisplayName": { "$ref": "#/definitions/text" }

@@ -37,9 +37,9 @@ The admin UI requires admin access.
 The **first instance admin must therefore come from operator config**, not the UI.
 
 1. Before the first start, set the first admin.
-   Set `config.auth.bootstrapAdmins: "github:@your-github-username"` in `site.yaml`.
+   Set `config.auth.bootstrapAdmins: ["github:@your-github-username"]` in `site.yaml`.
 
-   The format is comma-separated `<provider>:@<username>` or `<provider>:<numeric-id>`.
+   Add one array item for each admin, as `<provider>:@<username>` or `<provider>:<numeric-id>`.
    Promotion occurs **on sign-in**.
    It is idempotent and never demotes.
 

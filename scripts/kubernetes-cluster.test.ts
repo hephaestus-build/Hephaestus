@@ -187,7 +187,7 @@ await test("the dev values route the dev host through Traefik, and pass the GitH
 				namespace: "kube-system",
 				podLabels: { "app.kubernetes.io/name": "traefik" },
 			},
-			signIn: { clientId: "Iv1.client", bootstrapAdmins: "github:@octocat" },
+			signIn: { clientId: "Iv1.client", bootstrapAdmins: "github:@octocat,gitlab:@example" },
 		}),
 	);
 	const spec = (kind: string, name: string) => {
@@ -215,7 +215,10 @@ await test("the dev values route the dev host through Traefik, and pass the GitH
 		server.env.filter(isRecord).map((variable) => [variable.name, variable.value]),
 	);
 	assert.equal(environment.get("GITHUB_OAUTH_CLIENT_ID"), "Iv1.client");
-	assert.equal(environment.get("HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS"), "github:@octocat");
+	assert.equal(
+		environment.get("HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS"),
+		"github:@octocat,gitlab:@example",
+	);
 	assert.equal(environment.get("HEPHAESTUS_AUTH_ISSUER"), `https://${DEV_HOST}`);
 });
 
