@@ -25,7 +25,8 @@ export function gatewayConnectionFailure(error: unknown): "connection" | "respon
 		if (typeof cause.code === "string" && NETWORK_CODES.has(cause.code)) {
 			return cause.code === "ECONNRESET" ||
 				cause.code === "UND_ERR_SOCKET" ||
-				(cause.code === "ETIMEDOUT" && cause.syscall !== "connect")
+				(["ETIMEDOUT", "EHOSTUNREACH", "ENETUNREACH"].includes(cause.code) &&
+					cause.syscall !== "connect")
 				? "response"
 				: "connection";
 		}

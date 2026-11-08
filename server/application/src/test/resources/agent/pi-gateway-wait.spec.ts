@@ -75,25 +75,27 @@ await test("gateway connection failures stay inside one model stream beyond the 
 	assert.deepEqual(result.content, [{ type: "text", text: "complete answer" }]);
 });
 
-await test("an ambiguous timeout bounds possible billed response replays", async () => {
-	let calls = 0;
-	let interrupted = false;
-	const output = await waitForGateway(stream, Date.now() + 10_000, {
-		unavailable: () => {
-			interrupted = true;
-		},
-	})(model, context, {
-		...options,
-		fetch: async () => {
-			calls += 1;
-			throw new TypeError("fetch failed", { cause: { code: "ETIMEDOUT" } });
-		},
+for (const code of ["ETIMEDOUT", "EHOSTUNREACH", "ENETUNREACH"]) {
+	await test(`an ambiguous ${code} bounds possible billed response replays`, async () => {
+		let calls = 0;
+		let interrupted = false;
+		const output = await waitForGateway(stream, Date.now() + 10_000, {
+			unavailable: () => {
+				interrupted = true;
+			},
+		})(model, context, {
+			...options,
+			fetch: async () => {
+				calls += 1;
+				throw new TypeError("fetch failed", { cause: { code } });
+			},
+		});
+		await eventsFrom(output);
+		assert.equal(calls, 3);
+		assert.equal(interrupted, true);
+		assert.equal((await output.result()).stopReason, "aborted");
 	});
-	await eventsFrom(output);
-	assert.equal(calls, 3);
-	assert.equal(interrupted, true);
-	assert.equal((await output.result()).stopReason, "aborted");
-});
+}
 
 await test("a proven connect timeout waits within the same model stream", async () => {
 	let calls = 0;
