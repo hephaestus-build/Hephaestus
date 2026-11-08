@@ -16,7 +16,7 @@ spring:
         # Only @ApplicationModuleListener methods get a registry row; the plain
         # @TransactionalEventListener fan-out elsewhere in the tree keeps its fire-and-forget
         # semantics. A completed row is deleted, a failed one stays until
-        # notification.NotificationRedeliveryJob resubmits it; each listener owns expiration.
+        # notification.NotificationRedeliveryJob resubmits it; each listener owns source eligibility or expiration.
         events:
             registry-trigger-annotation: org.springframework.modulith.events.ApplicationModuleListener
             completion-mode: delete

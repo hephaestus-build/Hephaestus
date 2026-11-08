@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.activity.ActivityFact;
 import de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
@@ -275,6 +276,7 @@ final class PersonErasureAllStoresFixture {
         row("consumer_dead_letter", "workspace_id", workspace, "replayed_by", account);
         row("activity_event", "workspace_id", workspace, "actor_id", person.user(), "event_key", CANARY);
         row("activity_automation", "workspace_id", workspace, "user_id", person.user());
+        seedActivityPublication(workspace, person.user(), CANARY);
         row(
                 "review_batch",
                 "workspace_id",
@@ -408,6 +410,20 @@ final class PersonErasureAllStoresFixture {
                 CANARY,
                 "note",
                 CANARY);
+    }
+
+    /** A queued activity fact that names {@code actor}; person erasure deletes it. */
+    void seedActivityPublication(long workspace, long actor, String sourceKey) {
+        row(
+                "event_publication",
+                "event_type",
+                ActivityFact.class.getName(),
+                "listener_id",
+                "activity-recording-" + actor,
+                "serialized_event",
+                "{\"workspaceId\":" + workspace + ",\"eventType\":\"PULL_REQUEST_OPENED\",\"occurredAt\":\""
+                        + Instant.now() + "\",\"actorId\":" + actor + ",\"targetType\":\"PULL_REQUEST\","
+                        + "\"targetId\":1,\"sourceKey\":\"" + sourceKey + "\"}");
     }
 
     void seedScm(long user, long provider, long base) {

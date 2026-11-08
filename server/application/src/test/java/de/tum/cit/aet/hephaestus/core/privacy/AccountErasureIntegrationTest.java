@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.activity.ActivityFact;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
@@ -971,6 +972,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         allStores.seedOutline(firstWorkspace, Objects.requireNonNull(outlineConnection.getId()), outlineSubject);
         var otherSourceRows = new PersonErasureAllStoresFixture(jdbc, 995100L);
         otherSourceRows.seedScm(other.getId(), Objects.requireNonNull(scm.getId()), 997100L);
+        otherSourceRows.seedActivityPublication(firstWorkspace, other.getId(), "other-person-activity");
         var otherGitHub = users.saveAndFlush(TestUserFactory.createUser(8484L, "other-github", github));
         link(otherAccount, github, "8484", null);
         otherSourceRows.seedScm(otherGitHub.getId(), Objects.requireNonNull(github.getId()), 998100L);
@@ -1040,6 +1042,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 .doesNotContain(targetSession.toString(), "code_hash", "code_challenge");
 
         assertThat(counts.get("person_evidence_copy")).isEqualTo(2L);
+        assertThat(counts.get("activity_publication")).isEqualTo(1L);
         assertThat(export.path("stores").path("review_job"))
                 .extracting(row -> row.path("id").asString())
                 .containsExactlyInAnyOrderElementsOf(targetDerived.stream()
@@ -1148,6 +1151,15 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         }
 
         allStores.assertNoPersonalContentOrReferences(subject, mapper);
+        assertThat(jdbc.queryForList(
+                        "SELECT serialized_event FROM event_publication WHERE event_type = ?",
+                        String.class,
+                        ActivityFact.class.getName()))
+                .as("queued activity facts: the person's are deleted, the other person's stay")
+                .singleElement()
+                .asString()
+                .contains("\"actorId\":" + other.getId())
+                .doesNotContain(PersonErasureAllStoresFixture.CANARY);
         assertThat(otherSourceRows.snapshot())
                 .as("another person's GitHub, GitLab and Outline source rows")
                 .isEqualTo(preservedSourceRows);

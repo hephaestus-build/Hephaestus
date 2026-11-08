@@ -18,6 +18,7 @@ The alert or the objective tells the operator when the answer needs work.
 
 | Question | Signal | Alert or objective |
 | --- | --- | --- |
+| Can provider activity be recorded? | `activity_events_failed_total` and `activity_events_recorded_total` | Investigate sustained failure increases. A write failure stays queued and retries within minutes. Inspect its exception in server logs. A vanished or unmonitored source ends its pending fact without a write and also increments the failure counter. No workspace or person labels are emitted |
 | Do item reviews end complete? | `practice_review_ended_total` | `HephaestusReviewsIncomplete` |
 | Which items got no result, and why? | `practice_review_items_ended_total`, by `state` and `reason` | `HephaestusReviewsIncomplete` |
 | Does feedback reach each destination, and why was it withheld? | `practice_feedback_settled_total`, by `destination`, `state` and `reason` | `HephaestusFeedbackDeliveriesFailing` |
