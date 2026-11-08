@@ -225,7 +225,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
         int reconciliationWindowDays = Math.max(
                 binder().bind("hephaestus.sync.timeframe-days", Integer.class).get(),
                 chartDefaults()
-                        .bind("config.monitoring.timeframe-days", Integer.class)
+                        .bind("config.sync.timeframe-days", Integer.class)
                         .get());
 
         long repairableTraffic = reconciliationWindowDays * BUSY_GITHUB_BYTES_PER_DAY;

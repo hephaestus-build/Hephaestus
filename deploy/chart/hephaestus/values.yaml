@@ -393,7 +393,7 @@ config:
   # metrics. In the EU this can need consent or a documented legal basis: docs/admin/legal-pages.mdx.
   browserFaultReports: false
   # The scheduled sync of each workspace's repositories.
-  monitoring:
+  sync:
     runOnStartup: true
     timeframeDays: 7
     syncCron: "0 0 * * * *"

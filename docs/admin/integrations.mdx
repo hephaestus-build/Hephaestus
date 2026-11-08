@@ -43,7 +43,7 @@ Do not create a project webhook instead: Hephaestus accepts only the webhooks th
 
 Hephaestus still works, but it sees changes only when a sync runs:
 
-- The scheduled sync (`MONITORING_SYNC_CRON`, hourly by default) reads new and changed work.
+- The scheduled sync (`SYNC_CRON`, hourly by default) reads new and changed work.
 - **Sync now** on the connection runs a sync at once.
 - A person can request a review only of work that a sync has read.
 - Feedback delivery does not depend on webhooks. Hephaestus still posts its comments through the GitLab API.

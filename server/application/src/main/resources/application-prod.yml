@@ -107,15 +107,15 @@ hephaestus:
                 privateKey: ${GH_APP_PRIVATE_KEY:}
 
     sync:
-        run-on-startup: ${MONITORING_RUN_ON_STARTUP:true}
-        timeframe-days: ${MONITORING_TIMEFRAME:7}
-        cron: ${MONITORING_SYNC_CRON:0 0 * * * *}
-        cooldown-minutes: ${MONITORING_SYNC_COOLDOWN_IN_MINUTES:60}
+        run-on-startup: ${SYNC_RUN_ON_STARTUP:true}
+        timeframe-days: ${SYNC_TIMEFRAME_DAYS:7}
+        cron: ${SYNC_CRON:0 0 * * * *}
+        cooldown-minutes: ${SYNC_COOLDOWN_MINUTES:60}
         backfill:
-            enabled: ${MONITORING_BACKFILL_ENABLED:true}
-            batch-size: ${MONITORING_BACKFILL_BATCH_SIZE:50}
-            rate-limit-threshold: ${MONITORING_BACKFILL_RATE_LIMIT_THRESHOLD:500}
-            interval-seconds: ${MONITORING_BACKFILL_INTERVAL_SECONDS:60}
+            enabled: ${SYNC_BACKFILL_ENABLED:true}
+            batch-size: ${SYNC_BACKFILL_BATCH_SIZE:50}
+            rate-limit-threshold: ${SYNC_BACKFILL_RATE_LIMIT_THRESHOLD:500}
+            interval-seconds: ${SYNC_BACKFILL_INTERVAL_SECONDS:60}
         nats:
             # The server role consumes provider events; the worker profile turns this off.
             enabled: true

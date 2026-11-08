@@ -2218,10 +2218,10 @@ await test("the server's operator settings reach the server alone", () => {
 		"HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED",
 		"HEPHAESTUS_AUTH_PASSKEYS_RP_ID",
 		"HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS",
-		"MONITORING_RUN_ON_STARTUP",
-		"MONITORING_TIMEFRAME",
-		"MONITORING_SYNC_CRON",
-		"MONITORING_SYNC_COOLDOWN_IN_MINUTES",
+		"SYNC_RUN_ON_STARTUP",
+		"SYNC_TIMEFRAME_DAYS",
+		"SYNC_CRON",
+		"SYNC_COOLDOWN_MINUTES",
 	];
 	// The application's defaults under the prod profile (application.yml, application-prod.yml).
 	const defaults = workload(rendered(layersFor("small")), "server");
@@ -2244,7 +2244,7 @@ await test("the server's operator settings reach the server alone", () => {
 						allowedOrigins: ["https://hephaestus.example.com"],
 					},
 				},
-				monitoring: {
+				sync: {
 					runOnStartup: false,
 					timeframeDays: 14,
 					syncCron: "0 0 3 * * *",
@@ -2270,6 +2270,16 @@ await test("the server's operator settings reach the server alone", () => {
 			"15",
 		],
 	);
+	for (const workloadRole of ["server", "webhook", "worker"]) {
+		for (const retired of [
+			"MONITORING_RUN_ON_STARTUP",
+			"MONITORING_TIMEFRAME",
+			"MONITORING_SYNC_CRON",
+			"MONITORING_SYNC_COOLDOWN_IN_MINUTES",
+		]) {
+			assert.equal(env(workload(resources, workloadRole), retired), undefined, workloadRole);
+		}
+	}
 	for (const role of ["webhook", "worker"]) {
 		for (const name of settings) {
 			assert.equal(env(workload(resources, role), name), undefined, `${role} ${name}`);

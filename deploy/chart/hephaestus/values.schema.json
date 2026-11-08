@@ -801,7 +801,7 @@
 				"publicActivity",
 				"pageExperienceMetrics",
 				"browserFaultReports",
-				"monitoring",
+				"sync",
 				"credentialKey",
 				"auth",
 				"github",
@@ -857,7 +857,7 @@
 				},
 				"pageExperienceMetrics": { "type": "boolean" },
 				"browserFaultReports": { "type": "boolean" },
-				"monitoring": {
+				"sync": {
 					"type": "object",
 					"additionalProperties": false,
 					"required": ["runOnStartup", "timeframeDays", "syncCron", "cooldownMinutes"],

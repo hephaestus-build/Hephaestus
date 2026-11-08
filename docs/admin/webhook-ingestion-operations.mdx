@@ -15,7 +15,7 @@ GitHub counts a delivery as failed when the receiver answers with an error or ta
 It never retries a failed delivery on its own, but it keeps deliveries from the past three days and can [redeliver](https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/redelivering-webhooks) them.
 Hephaestus asks GitHub to redeliver failed deliveries of its GitHub App automatically. See [Failed GitHub deliveries](#failed-github-deliveries).
 Hephaestus does not redeliver GitLab, Slack and Outline deliveries that the receiver did not accept.
-The reconciliation sync recovers their effect over `MONITORING_TIMEFRAME` days.
+The reconciliation sync recovers their effect over `SYNC_TIMEFRAME_DAYS` days.
 
 ## Durability and availability
 
@@ -105,7 +105,7 @@ After that, only the reconciliation sync recovers their effect.
 | Provider | Delivers a failed event again | What else recovers it |
 | --- | --- | --- |
 | GitHub | Hephaestus asks GitHub to redeliver, on the schedule above. | Manual redelivery for three days, then reconciliation. |
-| GitLab | No. GitLab does not retry a failed webhook. It disables a hook after 4 failures in a row, for 1 minute up to 24 hours, and for good after 40. See [GitLab webhooks](https://docs.gitlab.com/user/project/integrations/webhooks/). | Reconciliation over `MONITORING_TIMEFRAME` days. |
+| GitLab | No. GitLab does not retry a failed webhook. It disables a hook after 4 failures in a row, for 1 minute up to 24 hours, and for good after 40. See [GitLab webhooks](https://docs.gitlab.com/user/project/integrations/webhooks/). | Reconciliation over `SYNC_TIMEFRAME_DAYS` days. |
 | Slack | Yes. Slack retries 3 times: at once, after 1 minute and after 5 minutes. With [Delayed Events](https://docs.slack.dev/apis/events-api/) turned on in the Slack app, it also retries every hour for 24 hours. The receiver answers Slack within 2 seconds and stores a retry once, by its `event_id`. | Reconciliation of monitored channels. |
 | Outline | No. Outline waits 5 seconds and does not retry. It disables a subscription when 80 % of its deliveries in 24 hours fail. | Reconciliation of the Outline connection. |
 
@@ -242,12 +242,12 @@ To apply the new age once:
 3. Look for `Reconciled JetStream stream limits and DELETED stored messages` in the log.
 4. Set the flag back to `false`.
 
-Scheduled sync (`MONITORING_SYNC_CRON`, hourly by default in production) fetches the last `MONITORING_TIMEFRAME` days from the provider API again.
+Scheduled sync (`SYNC_CRON`, hourly by default in production) fetches the last `SYNC_TIMEFRAME_DAYS` days from the provider API again.
 Other means can recover a delivery removed inside that window.
 Nothing can recover one removed outside it.
 
 1. The age bound removes messages in steady state.
-   A deployment that was offline gets back what it missed inside `MONITORING_TIMEFRAME` days through reconciliation.
+   A deployment that was offline gets back what it missed inside `SYNC_TIMEFRAME_DAYS` days through reconciliation.
 2. The byte bound only protects the disk.
    Keep it above twice your daily GitHub volume times the age, so the age binds first.
 
@@ -438,7 +438,7 @@ Use the names below for a release named `hephaestus` in namespace `hephaestus`.
    dropped at the edge. The provider saw a 503 or a timeout. Hephaestus redelivers failed GitHub App
    deliveries of the past two hours. Redeliver older GitHub deliveries in the App settings, within three days.
 8. Under **Administration → Integrations → GitHub/GitLab**, select **Sync now** on the workspace connection.
-   It fetches what falls inside `MONITORING_TIMEFRAME` again. Anything older than that window is gone.
+   It fetches what falls inside `SYNC_TIMEFRAME_DAYS` again. Anything older than that window is gone.
 
 ## Payload size
 
