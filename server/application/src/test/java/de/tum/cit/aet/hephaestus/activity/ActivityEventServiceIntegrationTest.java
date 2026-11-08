@@ -180,13 +180,15 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldRefuseFactPublicationOutsideTheSourceTransaction() {
-            assertThatThrownBy(() -> activityFacts.recordDeleted(
+            assertThatThrownBy(() -> activityFacts.publish(new ActivityFact(
                             testWorkspace.getId(),
                             ActivityEventType.ISSUE_DELETED,
                             Instant.now(),
+                            null,
+                            testRepository.getId(),
                             ActivityTargetType.ISSUE,
                             95002L,
-                            testRepository.getId()))
+                            null)))
                     .isInstanceOf(IllegalTransactionStateException.class);
         }
 

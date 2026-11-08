@@ -1,10 +1,9 @@
 package de.tum.cit.aet.hephaestus.activity;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -30,10 +29,12 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -92,16 +93,14 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onPullRequestCreated(event);
 
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.PULL_REQUEST_OPENED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.PULL_REQUEST),
-                            eq(1L),
-                            isNull());
+            assertRecorded(
+                    42L,
+                    ActivityEventType.PULL_REQUEST_OPENED,
+                    testUser,
+                    testRepository,
+                    ActivityTargetType.PULL_REQUEST,
+                    1L,
+                    null);
             verify(userRepository).getReferenceById(100L);
             verify(repositoryRepository).getReferenceById(200L);
         }
@@ -109,9 +108,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
         @Test
         void shouldRollBackSourceWhenFactPublicationFails() {
             var failure = new TransientDataAccessResourceException("database unavailable");
-            doThrow(failure)
-                    .when(activityFacts)
-                    .record(anyLong(), any(), any(), any(), any(), any(), anyLong(), isNull());
+            doThrow(failure).when(activityFacts).publish(any());
             var event = new ScmDomainEvent.PullRequestCreated(
                     createPullRequestData(createPullRequest(1L)), createContext());
 
@@ -148,16 +145,14 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onPullRequestMerged(event);
 
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.PULL_REQUEST_MERGED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.PULL_REQUEST),
-                            eq(2L),
-                            isNull());
+            assertRecorded(
+                    42L,
+                    ActivityEventType.PULL_REQUEST_MERGED,
+                    testUser,
+                    testRepository,
+                    ActivityTargetType.PULL_REQUEST,
+                    2L,
+                    null);
             verify(userRepository, never()).getReferenceById(999L);
         }
 
@@ -192,16 +187,14 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onPullRequestClosed(event);
 
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.PULL_REQUEST_CLOSED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.PULL_REQUEST),
-                            eq(3L),
-                            isNull());
+            assertRecorded(
+                    42L,
+                    ActivityEventType.PULL_REQUEST_CLOSED,
+                    testUser,
+                    testRepository,
+                    ActivityTargetType.PULL_REQUEST,
+                    3L,
+                    null);
         }
 
         @Test
@@ -227,16 +220,14 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onPullRequestReopened(event);
 
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.PULL_REQUEST_REOPENED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.PULL_REQUEST),
-                            eq(5L),
-                            isNull());
+            assertRecorded(
+                    42L,
+                    ActivityEventType.PULL_REQUEST_REOPENED,
+                    testUser,
+                    testRepository,
+                    ActivityTargetType.PULL_REQUEST,
+                    5L,
+                    null);
         }
     }
 
@@ -251,16 +242,14 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onPullRequestReady(event);
 
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.PULL_REQUEST_READY),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.PULL_REQUEST),
-                            eq(6L),
-                            isNull());
+            assertRecorded(
+                    42L,
+                    ActivityEventType.PULL_REQUEST_READY,
+                    testUser,
+                    testRepository,
+                    ActivityTargetType.PULL_REQUEST,
+                    6L,
+                    null);
         }
     }
 
@@ -290,16 +279,14 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onReviewSubmitted(event);
 
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.REVIEW_APPROVED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.REVIEW),
-                            eq(5L),
-                            isNull());
+            assertRecorded(
+                    42L,
+                    ActivityEventType.REVIEW_APPROVED,
+                    testUser,
+                    testRepository,
+                    ActivityTargetType.REVIEW,
+                    5L,
+                    null);
         }
 
         @Test
@@ -327,16 +314,14 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onIssueCreated(event);
 
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.ISSUE_CREATED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.ISSUE),
-                            eq(10L),
-                            isNull());
+            assertRecorded(
+                    42L,
+                    ActivityEventType.ISSUE_CREATED,
+                    testUser,
+                    testRepository,
+                    ActivityTargetType.ISSUE,
+                    10L,
+                    null);
         }
 
         @Test
@@ -361,16 +346,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
             listener.onIssueCreated(event);
 
             // Recorded for the audit trail, with no actor
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.ISSUE_CREATED),
-                            any(Instant.class),
-                            isNull(), // null actor - user deleted or bot
-                            eq(testRepository),
-                            eq(ActivityTargetType.ISSUE),
-                            eq(14L),
-                            isNull());
+            assertRecorded(
+                    42L, ActivityEventType.ISSUE_CREATED, null, testRepository, ActivityTargetType.ISSUE, 14L, null);
         }
     }
 
@@ -386,16 +363,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onIssueClosed(event);
 
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.ISSUE_CLOSED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.ISSUE),
-                            eq(12L),
-                            isNull());
+            assertRecorded(
+                    42L, ActivityEventType.ISSUE_CLOSED, testUser, testRepository, ActivityTargetType.ISSUE, 12L, null);
         }
 
         @Test
@@ -422,16 +391,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
             listener.onIssueClosed(event);
 
             // Recorded for the audit trail, with no actor
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.ISSUE_CLOSED),
-                            any(Instant.class),
-                            isNull(), // null actor - user deleted or bot
-                            eq(testRepository),
-                            eq(ActivityTargetType.ISSUE),
-                            eq(15L),
-                            isNull());
+            assertRecorded(
+                    42L, ActivityEventType.ISSUE_CLOSED, null, testRepository, ActivityTargetType.ISSUE, 15L, null);
         }
     }
 
@@ -446,16 +407,14 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onCommitCreated(event);
 
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.COMMIT_CREATED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.COMMIT),
-                            eq(20L),
-                            isNull());
+            assertRecorded(
+                    42L,
+                    ActivityEventType.COMMIT_CREATED,
+                    testUser,
+                    testRepository,
+                    ActivityTargetType.COMMIT,
+                    20L,
+                    null);
         }
 
         @Test
@@ -468,16 +427,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
             listener.onCommitCreated(event);
 
             // Recorded for the audit trail, with no actor
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.COMMIT_CREATED),
-                            any(Instant.class),
-                            isNull(), // null actor - user deleted or bot
-                            eq(testRepository),
-                            eq(ActivityTargetType.COMMIT),
-                            eq(21L),
-                            isNull());
+            assertRecorded(
+                    42L, ActivityEventType.COMMIT_CREATED, null, testRepository, ActivityTargetType.COMMIT, 21L, null);
         }
 
         @Test
@@ -525,16 +476,14 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onReviewCommentCreated(event);
 
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.REVIEW_COMMENT_CREATED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.REVIEW_COMMENT),
-                            eq(77L),
-                            isNull());
+            assertRecorded(
+                    42L,
+                    ActivityEventType.REVIEW_COMMENT_CREATED,
+                    testUser,
+                    testRepository,
+                    ActivityTargetType.REVIEW_COMMENT,
+                    77L,
+                    null);
         }
 
         @Test
@@ -556,16 +505,14 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onReviewCommentCreated(event);
 
-            verify(activityFacts)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.REVIEW_COMMENT_CREATED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.REVIEW_COMMENT),
-                            eq(78L),
-                            isNull());
+            assertRecorded(
+                    42L,
+                    ActivityEventType.REVIEW_COMMENT_CREATED,
+                    testUser,
+                    testRepository,
+                    ActivityTargetType.REVIEW_COMMENT,
+                    78L,
+                    null);
         }
 
         @Test
@@ -654,6 +601,37 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             verify(activityEventService).backfillCommitActors(200L);
         }
+    }
+
+    private void assertRecorded(
+            Long workspaceId,
+            ActivityEventType type,
+            @Nullable User actor,
+            @Nullable Repository repository,
+            ActivityTargetType targetType,
+            Long targetId,
+            @Nullable String sourceKey) {
+        var captured = ArgumentCaptor.forClass(ActivityFact.class);
+        verify(activityFacts).publish(captured.capture());
+        var fact = captured.getValue();
+        assertThat(fact)
+                .extracting(
+                        ActivityFact::workspaceId,
+                        ActivityFact::eventType,
+                        ActivityFact::actorId,
+                        ActivityFact::repositoryId,
+                        ActivityFact::targetType,
+                        ActivityFact::targetId,
+                        ActivityFact::sourceKey)
+                .containsExactly(
+                        workspaceId,
+                        type,
+                        actor != null ? actor.getId() : null,
+                        repository != null ? repository.getId() : null,
+                        targetType,
+                        targetId,
+                        sourceKey);
+        assertThat(fact.occurredAt()).isNotNull();
     }
 
     private Commit createCommit(Long id) {

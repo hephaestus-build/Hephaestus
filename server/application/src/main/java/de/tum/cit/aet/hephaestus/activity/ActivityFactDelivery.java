@@ -2,15 +2,11 @@ package de.tum.cit.aet.hephaestus.activity;
 
 import de.tum.cit.aet.hephaestus.activity.metrics.ActivityMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.time.Instant;
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.scheduling.annotation.Async;
@@ -21,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-class ActivityFactDelivery {
+public class ActivityFactDelivery {
     private final ApplicationEventPublisher publisher;
     private final ActivityEventService activity;
     private final ActivityPersonWriteAdmission admission;
@@ -32,37 +28,9 @@ class ActivityFactDelivery {
     private final MeterRegistry meters;
 
     @Transactional(propagation = Propagation.MANDATORY)
-    void record(
-            Long workspaceId,
-            ActivityEventType type,
-            Instant occurredAt,
-            @Nullable User actor,
-            @Nullable Repository repository,
-            ActivityTargetType targetType,
-            Long targetId,
-            @Nullable String sourceKey) {
-        if (actor != null && !admission.hold(actor)) return;
-        publisher.publishEvent(new ActivityFact(
-                workspaceId,
-                type,
-                occurredAt,
-                actor != null ? actor.getId() : null,
-                repository != null ? repository.getId() : null,
-                targetType,
-                targetId,
-                sourceKey));
-    }
-
-    @Transactional(propagation = Propagation.MANDATORY)
-    void recordDeleted(
-            Long workspaceId,
-            ActivityEventType type,
-            Instant occurredAt,
-            ActivityTargetType targetType,
-            Long targetId,
-            @Nullable Long repositoryId) {
-        publisher.publishEvent(
-                new ActivityFact(workspaceId, type, occurredAt, null, repositoryId, targetType, targetId, null));
+    public void publish(ActivityFact fact) {
+        if (fact.actorId() != null && !admission.holdActor(fact.actorId())) return;
+        publisher.publishEvent(fact);
     }
 
     @Async("activityExecutor")

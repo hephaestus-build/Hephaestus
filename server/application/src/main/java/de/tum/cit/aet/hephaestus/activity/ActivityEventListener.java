@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -68,6 +69,37 @@ public class ActivityEventListener {
         return userRepository.findById(authorId).orElse(null);
     }
 
+    private void record(
+            Long workspaceId,
+            ActivityEventType type,
+            Instant occurredAt,
+            @Nullable User actor,
+            @Nullable Repository repository,
+            ActivityTargetType targetType,
+            Long targetId,
+            @Nullable String sourceKey) {
+        activityFacts.publish(new ActivityFact(
+                workspaceId,
+                type,
+                occurredAt,
+                actor != null ? actor.getId() : null,
+                repository != null ? repository.getId() : null,
+                targetType,
+                targetId,
+                sourceKey));
+    }
+
+    private void recordDeleted(
+            Long workspaceId,
+            ActivityEventType type,
+            Instant occurredAt,
+            ActivityTargetType targetType,
+            Long targetId,
+            @Nullable Long repositoryId) {
+        activityFacts.publish(
+                new ActivityFact(workspaceId, type, occurredAt, null, repositoryId, targetType, targetId, null));
+    }
+
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onPullRequestCreated(ScmDomainEvent.PullRequestCreated event) {
         var pr = event.pullRequest();
@@ -85,7 +117,7 @@ public class ActivityEventListener {
                     pr.createdAt());
             return;
         }
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.PULL_REQUEST_OPENED,
                 createdAt,
@@ -116,7 +148,7 @@ public class ActivityEventListener {
         final Instant finalOccurredAt = occurredAt;
         // A close or a merge is its stored moment, so the time key already identifies it on every path and
         // matches the entries recorded before source keys existed.
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.PULL_REQUEST_MERGED,
                 finalOccurredAt,
@@ -149,7 +181,7 @@ public class ActivityEventListener {
         final Instant finalOccurredAt = occurredAt;
         // A close or a merge is its stored moment, so the time key already identifies it on every path and
         // matches the entries recorded before source keys existed.
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.PULL_REQUEST_CLOSED,
                 finalOccurredAt,
@@ -174,7 +206,7 @@ public class ActivityEventListener {
         }
         Instant occurredAt =
                 pr.updatedAt() != null ? pr.updatedAt() : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.PULL_REQUEST_REOPENED,
                 occurredAt,
@@ -199,7 +231,7 @@ public class ActivityEventListener {
         }
         Instant occurredAt =
                 pr.updatedAt() != null ? pr.updatedAt() : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.PULL_REQUEST_READY,
                 occurredAt,
@@ -227,7 +259,7 @@ public class ActivityEventListener {
         }
         Instant occurredAt =
                 pr.updatedAt() != null ? pr.updatedAt() : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.PULL_REQUEST_DRAFTED,
                 occurredAt,
@@ -253,7 +285,7 @@ public class ActivityEventListener {
         }
         Instant occurredAt =
                 pr.updatedAt() != null ? pr.updatedAt() : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.PULL_REQUEST_SYNCHRONIZED,
                 occurredAt,
@@ -278,7 +310,7 @@ public class ActivityEventListener {
         }
         Instant occurredAt =
                 pr.updatedAt() != null ? pr.updatedAt() : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.PULL_REQUEST_LABELED,
                 occurredAt,
@@ -303,7 +335,7 @@ public class ActivityEventListener {
         }
         Instant occurredAt =
                 pr.updatedAt() != null ? pr.updatedAt() : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.PULL_REQUEST_UNLABELED,
                 occurredAt,
@@ -344,7 +376,7 @@ public class ActivityEventListener {
         if (occurredAt == null) {
             return;
         }
-        activityFacts.record(
+        record(
                 scopeId,
                 mapReviewState(reviewData.state()),
                 occurredAt,
@@ -377,7 +409,7 @@ public class ActivityEventListener {
         Instant occurredAt = reviewData.updatedAt() != null
                 ? reviewData.updatedAt()
                 : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.REVIEW_DISMISSED,
                 occurredAt,
@@ -419,7 +451,7 @@ public class ActivityEventListener {
         if (occurredAt == null) {
             return;
         }
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.REVIEW_EDITED,
                 occurredAt,
@@ -451,7 +483,7 @@ public class ActivityEventListener {
         Instant occurredAt = commentData.createdAt() != null
                 ? commentData.createdAt()
                 : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.COMMENT_CREATED,
                 occurredAt,
@@ -489,7 +521,7 @@ public class ActivityEventListener {
         Instant occurredAt = commentData.updatedAt() != null
                 ? commentData.updatedAt()
                 : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.COMMENT_UPDATED,
                 occurredAt,
@@ -517,7 +549,7 @@ public class ActivityEventListener {
         // For deleted comments, we don't have author info from the event
         // We record with a null user reference - this is acceptable for audit trail
         log.debug("Recording comment deleted event: commentId={}", commentId);
-        activityFacts.recordDeleted(
+        recordDeleted(
                 scopeId,
                 ActivityEventType.COMMENT_DELETED,
                 event.context().occurredAt(),
@@ -554,7 +586,7 @@ public class ActivityEventListener {
         Instant occurredAt = commentData.createdAt() != null
                 ? commentData.createdAt()
                 : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.REVIEW_COMMENT_CREATED,
                 occurredAt,
@@ -587,7 +619,7 @@ public class ActivityEventListener {
         Instant occurredAt = commentData.updatedAt() != null
                 ? commentData.updatedAt()
                 : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.REVIEW_COMMENT_EDITED,
                 occurredAt,
@@ -613,7 +645,7 @@ public class ActivityEventListener {
             return;
         }
         log.debug("Recording review comment deleted event: commentId={}", commentId);
-        activityFacts.recordDeleted(
+        recordDeleted(
                 scopeId,
                 ActivityEventType.REVIEW_COMMENT_DELETED,
                 event.context().occurredAt(),
@@ -661,7 +693,7 @@ public class ActivityEventListener {
             return;
         }
         Long repositoryId = thread.getPullRequest().getRepository().getId();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.REVIEW_THREAD_RESOLVED,
                 threadData.resolvedAt() != null
@@ -708,7 +740,7 @@ public class ActivityEventListener {
             return;
         }
         Long repositoryId = thread.getPullRequest().getRepository().getId();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.REVIEW_THREAD_UNRESOLVED,
                 event.context().occurredAt(),
@@ -748,7 +780,7 @@ public class ActivityEventListener {
         Instant occurredAt = issueData.createdAt() != null
                 ? issueData.createdAt()
                 : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.ISSUE_CREATED,
                 occurredAt,
@@ -783,7 +815,7 @@ public class ActivityEventListener {
         final Instant finalOccurredAt = occurredAt;
         // A close or a merge is its stored moment, so the time key already identifies it on every path and
         // matches the entries recorded before source keys existed.
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.ISSUE_CLOSED,
                 finalOccurredAt,
@@ -814,7 +846,7 @@ public class ActivityEventListener {
         Instant occurredAt = issueData.updatedAt() != null
                 ? issueData.updatedAt()
                 : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.ISSUE_REOPENED,
                 occurredAt,
@@ -839,7 +871,7 @@ public class ActivityEventListener {
             return;
         }
         log.debug("Recording issue deleted event: issueId={}", issueId);
-        activityFacts.recordDeleted(
+        recordDeleted(
                 scopeId,
                 ActivityEventType.ISSUE_DELETED,
                 event.context().occurredAt(),
@@ -870,7 +902,7 @@ public class ActivityEventListener {
         Instant occurredAt = issueData.updatedAt() != null
                 ? issueData.updatedAt()
                 : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.ISSUE_LABELED,
                 occurredAt,
@@ -901,7 +933,7 @@ public class ActivityEventListener {
         Instant occurredAt = issueData.updatedAt() != null
                 ? issueData.updatedAt()
                 : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.ISSUE_UNLABELED,
                 occurredAt,
@@ -935,7 +967,7 @@ public class ActivityEventListener {
         Instant occurredAt = issueData.updatedAt() != null
                 ? issueData.updatedAt()
                 : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.ISSUE_TYPED,
                 occurredAt,
@@ -969,7 +1001,7 @@ public class ActivityEventListener {
         Instant occurredAt = issueData.updatedAt() != null
                 ? issueData.updatedAt()
                 : event.context().occurredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.ISSUE_UNTYPED,
                 occurredAt,
@@ -1009,7 +1041,7 @@ public class ActivityEventListener {
         }
         User actor = getActorOrNull(commitData.authorId());
         Instant occurredAt = commitData.authoredAt();
-        activityFacts.record(
+        record(
                 scopeId,
                 ActivityEventType.COMMIT_CREATED,
                 occurredAt,
