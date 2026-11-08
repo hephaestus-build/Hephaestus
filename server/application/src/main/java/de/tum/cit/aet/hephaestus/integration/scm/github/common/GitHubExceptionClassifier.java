@@ -1,5 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 
+import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
+import static de.tum.cit.aet.hephaestus.core.LoggingUtils.truncate;
+
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationSuspendedException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.metrics.GitHubMetrics;
 import io.micrometer.core.instrument.Counter;
@@ -196,19 +199,12 @@ public class GitHubExceptionClassifier {
 
         List<ResponseError> errors = response.getErrors();
 
-        // Check for specific error types
-        for (ResponseError error : errors) {
-            Map<String, Object> extensions = error.getExtensions();
-            if (extensions == null) {
+        for (int index = 0; index < errors.size(); index++) {
+            ResponseError error = errors.get(index);
+            String type = GitHubGraphQlErrorUtils.errorType(response, index);
+            if (type == null) {
                 continue;
             }
-
-            Object errorType = extensions.get("type");
-            if (errorType == null) {
-                continue;
-            }
-
-            String type = errorType.toString();
             switch (type) {
                 case "NOT_FOUND" -> {
                     notFoundCounter.increment();
@@ -253,9 +249,19 @@ public class GitHubExceptionClassifier {
 
         // Default for unrecognized errors
         unknownCounter.increment();
+        Object type = firstErrorType(response);
+        log.warn(
+                "Unclassified GitHub GraphQL error: type={}, errors={}, message={}",
+                errorType(type),
+                errors.size(),
+                graphQlMessageForLog(errors.getFirst()));
         return ClassificationResult.of(
-                Category.UNKNOWN,
-                "Unclassified GraphQL error: type=" + errorType(firstErrorType(errors)) + ", errors=" + errors.size());
+                Category.UNKNOWN, "Unclassified GraphQL error: type=" + errorType(type) + ", errors=" + errors.size());
+    }
+
+    private static @Nullable String graphQlMessageForLog(ResponseError error) {
+        String message = error.getMessage();
+        return sanitizeForLog(message != null ? truncate(message, 1024) : "<absent>");
     }
 
     private ClassificationResult doClassify(@Nullable Throwable e) {
@@ -395,7 +401,8 @@ public class GitHubExceptionClassifier {
     /**
      * The summary is logged by every sync service, so it names a failure by its HTTP status, GraphQL error type or
      * exception class only. Provider, client and driver texts quote request URIs, private repository and user
-     * names and rejected row values; the classification above reads them but never repeats them.
+     * names and rejected row values. Classification summaries exclude those texts. A server diagnostic can log
+     * one sanitized, truncated GraphQL message prefix.
      */
     private static String type(Throwable e) {
         return e.getClass().getSimpleName();
@@ -407,11 +414,11 @@ public class GitHubExceptionClassifier {
         return text.matches("[A-Za-z][A-Za-z0-9_]{0,63}") ? text : "other";
     }
 
-    private static @Nullable Object firstErrorType(List<ResponseError> errors) {
-        Map<String, Object> extensions = errors.get(0).getExtensions();
-        if (extensions == null) return null;
-        Object type = extensions.get("type");
-        return type != null ? type : extensions.get("code");
+    private static @Nullable Object firstErrorType(ClientGraphQlResponse response) {
+        String type = GitHubGraphQlErrorUtils.errorType(response, 0);
+        if (type != null) return type;
+        Map<String, Object> extensions = response.getErrors().getFirst().getExtensions();
+        return extensions != null ? extensions.get("code") : null;
     }
 
     private static @Nullable InstallationSuspendedException suspendedInstallation(Throwable e) {

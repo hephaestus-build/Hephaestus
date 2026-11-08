@@ -11,8 +11,9 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 /**
  * Utility class for analyzing GitHub GraphQL API errors.
  * <p>
- * GitHub's GraphQL API returns structured errors with an extensions field that
- * contains error classification. This utility helps detect specific error types
+ * GitHub's GraphQL API reports an error type beside its message.
+ * Spring exposes standard extensions separately, but retains the native fields in the response map.
+ * This utility helps detect specific error types
  * like NOT_FOUND to enable appropriate handling (e.g., soft-deleting stale data
  * rather than logging errors for expected scenarios).
  */
@@ -74,8 +75,9 @@ public final class GitHubGraphQlErrorUtils {
             return false;
         }
 
-        for (ResponseError error : errors) {
-            if (matchesErrorType(error, errorType) && matchesPath(error, pathPrefix)) {
+        for (int index = 0; index < errors.size(); index++) {
+            ResponseError error = errors.get(index);
+            if (errorType.equals(errorType(response, index)) && matchesPath(error, pathPrefix)) {
                 return true;
             }
         }
@@ -84,16 +86,20 @@ public final class GitHubGraphQlErrorUtils {
     }
 
     /**
-     * Checks if the error has the specified type in its extensions.
+     * Reads the native GitHub error type that Spring retains in its response map, or its standard extension.
      */
-    private static boolean matchesErrorType(ResponseError error, String errorType) {
-        Map<String, Object> extensions = error.getExtensions();
-        if (extensions == null) {
-            return false;
+    public static @Nullable String errorType(ClientGraphQlResponse response, int index) {
+        Map<String, Object> extensions = response.getErrors().get(index).getExtensions();
+        if (extensions != null && extensions.get("type") instanceof String type) {
+            return type;
         }
-
-        Object type = extensions.get("type");
-        return errorType.equals(type);
+        if (response.toMap().get("errors") instanceof List<?> errors
+                && index < errors.size()
+                && errors.get(index) instanceof Map<?, ?> error
+                && error.get("type") instanceof String type) {
+            return type;
+        }
+        return null;
     }
 
     /**
@@ -161,9 +167,9 @@ public final class GitHubGraphQlErrorUtils {
             return null;
         }
 
-        for (ResponseError error : errors) {
-            if (matchesErrorType(error, ERROR_TYPE_NOT_FOUND)) {
-                return error.getMessage();
+        for (int index = 0; index < errors.size(); index++) {
+            if (ERROR_TYPE_NOT_FOUND.equals(errorType(response, index))) {
+                return errors.get(index).getMessage();
             }
         }
 
@@ -196,13 +202,10 @@ public final class GitHubGraphQlErrorUtils {
             return null;
         }
 
-        for (ResponseError error : errors) {
+        for (int index = 0; index < errors.size(); index++) {
+            ResponseError error = errors.get(index);
             String message = error.getMessage();
-            if (message == null) {
-                continue;
-            }
-
-            String lowerMessage = message.toLowerCase(Locale.ROOT);
+            String lowerMessage = message != null ? message.toLowerCase(Locale.ROOT) : "";
 
             // GitHub timeout responses - these come back as HTTP 200 with error in body
             // Examples: "couldn't respond in time", "Something went wrong while executing your query"
@@ -222,24 +225,19 @@ public final class GitHubGraphQlErrorUtils {
                 return new TransientError(TransientErrorType.RATE_LIMIT, "GitHub rate limit");
             }
 
-            // Check extensions for error type
-            Map<String, Object> extensions = error.getExtensions();
-            if (extensions != null) {
-                Object errorType = extensions.get("type");
-                if (errorType != null) {
-                    String type = errorType.toString();
-                    // Resource limits exceeded - new September 2025 error type
-                    // GitHub caps per-query execution resources to prevent excessive load
-                    if ("RESOURCE_LIMITS_EXCEEDED".equals(type) || "MAX_NODE_LIMIT_EXCEEDED".equals(type)) {
-                        return new TransientError(TransientErrorType.RESOURCE_LIMIT, type);
-                    }
-                    if ("INTERNAL_ERROR".equals(type) || "SERVICE_UNAVAILABLE".equals(type)) {
-                        return new TransientError(TransientErrorType.SERVER_ERROR, type);
-                    }
-                    if ("FORBIDDEN".equals(type) && lowerMessage.contains("rate")) {
-                        return new TransientError(TransientErrorType.RATE_LIMIT, "GitHub rate limit");
-                    }
-                }
+            String type = errorType(response, index);
+            if (type == null) continue;
+            if ("RATE_LIMIT".equals(type) || "RATE_LIMITED".equals(type)) {
+                return new TransientError(TransientErrorType.RATE_LIMIT, "GitHub rate limit");
+            }
+            if ("RESOURCE_LIMITS_EXCEEDED".equals(type) || "MAX_NODE_LIMIT_EXCEEDED".equals(type)) {
+                return new TransientError(TransientErrorType.RESOURCE_LIMIT, type);
+            }
+            if ("INTERNAL_ERROR".equals(type) || "SERVICE_UNAVAILABLE".equals(type)) {
+                return new TransientError(TransientErrorType.SERVER_ERROR, type);
+            }
+            if ("FORBIDDEN".equals(type) && lowerMessage.contains("rate")) {
+                return new TransientError(TransientErrorType.RATE_LIMIT, "GitHub rate limit");
             }
         }
 
