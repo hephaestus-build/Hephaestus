@@ -35,34 +35,36 @@ function repository(pin: ToolSubject): string {
 function registryClient(repo: string, write: boolean, policy: ArtifactPolicy) {
 	let bearer: string | undefined;
 	async function authenticate() {
-		const token = githubToken();
-		const actor = process.env.GITHUB_ACTOR;
-		const authenticated =
-			token !== undefined && token !== "" && actor !== undefined && actor !== "";
-		if (write && !authenticated) {
-			throw new Error("Publishing CI tools needs GITHUB_TOKEN and GITHUB_ACTOR");
-		}
-		const credentials = authenticated
-			? {
-					header: `Basic ${Buffer.from(`${actor}:${token}`).toString("base64")}`,
-					origins: [registry],
-				}
-			: undefined;
-		const scope = encodeURIComponent(`repository:${repo}:${write ? "pull,push" : "pull"}`);
-		const response = await requestArtifact(
-			`${registry}/token?service=ghcr.io&scope=${scope}`,
-			{ accept: "application/json", credentials },
-			policy,
-		).catch((error: unknown) => {
+		try {
+			const token = githubToken();
+			const actor = process.env.GITHUB_ACTOR;
+			const authenticated =
+				token !== undefined && token !== "" && actor !== undefined && actor !== "";
+			if (write && !authenticated) {
+				throw new Error("Publishing CI tools needs GITHUB_TOKEN and GITHUB_ACTOR");
+			}
+			const credentials = authenticated
+				? {
+						header: `Basic ${Buffer.from(`${actor}:${token}`).toString("base64")}`,
+						origins: [registry],
+					}
+				: undefined;
+			const scope = encodeURIComponent(`repository:${repo}:${write ? "pull,push" : "pull"}`);
+			const response = await requestArtifact(
+				`${registry}/token?service=ghcr.io&scope=${scope}`,
+				{ accept: "application/json", credentials },
+				policy,
+			);
+			const value = asRecord(
+				parseJson(new TextDecoder().decode(response.bytes)),
+				"registry credentials",
+			);
+			bearer = asString(value.token ?? value.access_token, "registry token");
+			if (!bearer) {
+				throw new Error("Empty registry token");
+			}
+		} catch (error) {
 			throw new CiToolRegistryError("authentication", error);
-		});
-		const value = asRecord(
-			parseJson(new TextDecoder().decode(response.bytes)),
-			"registry credentials",
-		);
-		bearer = asString(value.token ?? value.access_token, "registry token");
-		if (!bearer) {
-			throw new Error("Empty registry token");
 		}
 	}
 	return async (url: string, options: ArtifactRequest = {}) => {

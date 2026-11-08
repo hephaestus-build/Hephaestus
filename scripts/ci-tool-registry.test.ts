@@ -158,31 +158,37 @@ void test("the mirror refuses mismatched bytes before making any request", async
 	);
 });
 
-void test("a foreign upload location is refused before any credentials or bytes can leave GHCR", async (t) => {
-	credentials(t);
-	t.mock.method(
-		globalThis,
-		"fetch",
-		async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-			const url = input instanceof Request ? input.url : input.toString();
-			assert.ok(url.startsWith("https://ghcr.io/"));
-			if (url.startsWith("https://ghcr.io/token?")) {
-				return Response.json({ token: "scoped-token" });
-			}
-			if (init?.method === "HEAD") {
-				return new Response(null, { status: 404 });
-			}
-			return new Response(null, {
-				status: 202,
-				headers: { location: "https://example.invalid/upload" },
-			});
-		},
-	);
-	await assert.rejects(
-		publishCiToolGroup([{ pin, bytes }]),
-		/GHCR upload location validation failed/u,
-	);
-});
+for (const location of [
+	"https://example.invalid/upload",
+	"https://ghcr.io/v2/hephaestus-build/ci-tools/other/blobs/upload/session",
+]) {
+	void test(`an upload outside the pinned repository is refused: ${location}`, async (t) => {
+		credentials(t);
+		t.mock.method(
+			globalThis,
+			"fetch",
+			async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+				const url = input instanceof Request ? input.url : input.toString();
+				assert.ok(url.startsWith("https://ghcr.io/"));
+				if (url.startsWith("https://ghcr.io/token?")) {
+					return Response.json({ token: "scoped-token" });
+				}
+				if (init?.method === "HEAD") {
+					return new Response(null, { status: 404 });
+				}
+				assert.equal(init?.method, "POST", "no bytes may be sent to an untrusted location");
+				return new Response(null, {
+					status: 202,
+					headers: { location },
+				});
+			},
+		);
+		await assert.rejects(
+			publishCiToolGroup([{ pin, bytes }]),
+			/GHCR upload location validation failed/u,
+		);
+	});
+}
 
 void test("a rejected registry token is refreshed once and then fails closed", async (t) => {
 	credentials(t);
@@ -263,3 +269,21 @@ void test("registry authentication failures are distinct from upload permission 
 		message: "GHCR authentication failed (HTTP 403)",
 	});
 });
+
+for (const scenario of ["missing actor", "invalid token response"]) {
+	void test(`${scenario} is reported as an authentication failure`, async (t) => {
+		credentials(t);
+		if (scenario === "missing actor") {
+			delete process.env.GITHUB_ACTOR;
+		}
+		t.mock.method(globalThis, "fetch", async (input: Parameters<typeof fetch>[0]) => {
+			assert.equal(scenario, "invalid token response");
+			const url = input instanceof Request ? input.url : input.toString();
+			assert.ok(url.startsWith("https://ghcr.io/token?"));
+			return Response.json({ token: 123, untrusted: "fixture-github-token" });
+		});
+		await assert.rejects(publishCiToolGroup([{ pin, bytes }]), {
+			message: "GHCR authentication failed (metadata, transport or filesystem error)",
+		});
+	});
+}

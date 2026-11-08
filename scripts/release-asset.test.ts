@@ -1,27 +1,8 @@
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, test } from "node:test";
+import { test } from "node:test";
 
 import { downloadReleaseAsset } from "./lib/release-asset.ts";
 import { checksumFor, verifyChecksum } from "./setup-release-security-tools.ts";
-
-const originalRepository = process.env.GITHUB_REPOSITORY;
-const originalActions = process.env.GITHUB_ACTIONS;
-beforeEach(() => {
-	process.env.GITHUB_REPOSITORY = "example/tool";
-	process.env.GITHUB_ACTIONS = "false";
-});
-afterEach(() => {
-	if (originalRepository === undefined) {
-		delete process.env.GITHUB_REPOSITORY;
-	} else {
-		process.env.GITHUB_REPOSITORY = originalRepository;
-	}
-	if (originalActions === undefined) {
-		delete process.env.GITHUB_ACTIONS;
-	} else {
-		process.env.GITHUB_ACTIONS = originalActions;
-	}
-});
 
 const direct = "https://github.com/example/tool/releases/download/v1.2.3/tool.tar.gz";
 const tag = "https://api.github.com/repos/example/tool/releases/tags/v1.2.3";
@@ -216,43 +197,3 @@ void test("a redirect between GitHub API paths retains authentication", async (t
 	);
 	assert.equal(new TextDecoder().decode(await downloadReleaseAsset(direct)), "archive");
 });
-
-for (const publicAvailable of [true, false]) {
-	void test(`cross-repository metadata keeps asset authentication (public metadata ${publicAvailable})`, async (t) => {
-		const previous = process.env.GITHUB_TOKEN;
-		process.env.GITHUB_TOKEN = "fixture-token";
-		process.env.GITHUB_ACTIONS = "true";
-		process.env.GITHUB_REPOSITORY = "example/workflow";
-		t.after(() => {
-			if (previous === undefined) {
-				delete process.env.GITHUB_TOKEN;
-			} else {
-				process.env.GITHUB_TOKEN = previous;
-			}
-		});
-		const calls: { url: string; authenticated: boolean }[] = [];
-		t.mock.method(
-			globalThis,
-			"fetch",
-			async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-				const url = input instanceof Request ? input.url : input.toString();
-				const authenticated = new Headers(init?.headers).has("Authorization");
-				calls.push({ url, authenticated });
-				if (url === tag) {
-					return !authenticated && !publicAvailable
-						? new Response(null, { status: 404 })
-						: Response.json(metadata);
-				}
-				assert.equal(url, asset);
-				assert.equal(authenticated, true);
-				return new Response("archive");
-			},
-		);
-		assert.equal(new TextDecoder().decode(await downloadReleaseAsset(direct)), "archive");
-		assert.deepEqual(calls, [
-			{ url: tag, authenticated: false },
-			...(publicAvailable ? [] : [{ url: tag, authenticated: true }]),
-			{ url: asset, authenticated: true },
-		]);
-	});
-}

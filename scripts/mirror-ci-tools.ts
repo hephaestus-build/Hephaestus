@@ -4,7 +4,7 @@ import {
 	publishCiToolGroup,
 	type MirrorEntry,
 } from "./lib/ci-tool-registry.ts";
-import { resolveCiTool } from "./lib/ci-tool-resolver.ts";
+import { CiToolResolutionError, resolveCiTool } from "./lib/ci-tool-resolver.ts";
 import {
 	downloadFailure,
 	fetchReleaseAssetApi,
@@ -42,7 +42,10 @@ for (const [name, pins] of groups) {
 		console.info(`Mirrored CI tool ${name}: ${entries.length} verified assets`);
 	} catch (error) {
 		failed.push(name);
-		const reason = error instanceof CiToolRegistryError ? error.message : downloadFailure(error);
+		const reason =
+			error instanceof CiToolRegistryError || error instanceof CiToolResolutionError
+				? error.message
+				: downloadFailure(error);
 		console.error(
 			`CI tool mirror failed for ${name}: ${reason}; the existing tag was not replaced.`,
 		);

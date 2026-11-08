@@ -8,6 +8,13 @@ import { matchesToolPin } from "./ci-tool-integrity.ts";
 import { fetchMirroredCiTool } from "./ci-tool-registry.ts";
 import { downloadFailure, fetchReleaseAssetApi, fetchReleaseAssetDirect } from "./release-asset.ts";
 
+export class CiToolResolutionError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "CiToolResolutionError";
+	}
+}
+
 export type ToolSubject = Pick<CiToolPin, "tool" | "version" | "sha256" | "url" | "name">;
 export interface ToolSource {
 	name: "ghcr" | "github-api" | "direct";
@@ -121,7 +128,7 @@ export async function resolveCiTool(
 			log(`CI tool ${pin.tool}@${pin.version}: ${source.name} unavailable (${reason})`);
 		}
 	}
-	throw new Error(
+	throw new CiToolResolutionError(
 		`No verified source for CI tool ${pin.tool}@${pin.version}, sha256=${pin.sha256}. ${failures.join("; ")}`,
 	);
 }

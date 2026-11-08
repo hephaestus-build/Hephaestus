@@ -1446,8 +1446,7 @@ Mirror and upstream requests make at most three attempts, with waits of one and 
 The timeout is ten seconds for API metadata and 30 seconds for each asset attempt, including its body.
 
 The asset API uses the job token first, then tries the public endpoint without credentials.
-For another repository, release metadata uses the public API first, with the job token as a fallback.
-This metadata choice does not remove authentication from the asset download.
+A denied authenticated request can still succeed through the public API.
 The token stays on `api.github.com` and `github.com`, including redirects between those origins.
 Storage redirects retain their signed URL credentials. Other hosts receive no repository token.
 

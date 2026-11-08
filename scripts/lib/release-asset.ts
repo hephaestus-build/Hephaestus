@@ -42,30 +42,6 @@ export async function fetchReleaseAssetDirect(
 	);
 }
 
-async function releaseMetadata(
-	url: string,
-	repository: string,
-	credential: string | undefined,
-	policy: AssetDownloadPolicy,
-) {
-	const jobRepository = process.env.GITHUB_REPOSITORY;
-	const outsideJobRepository =
-		process.env.GITHUB_ACTIONS === "true" &&
-		jobRepository !== undefined &&
-		jobRepository.toLowerCase() !== repository.toLowerCase();
-	// Installation tokens belong to the workflow repository; public metadata needs no cross-repository grant.
-	if (credential !== undefined && outsideJobRepository) {
-		try {
-			return await download(url, undefined, "application/vnd.github+json", policy);
-		} catch (error) {
-			console.warn(
-				`GitHub public API release metadata failed (${downloadFailure(error)}); trying the job token.`,
-			);
-		}
-	}
-	return download(url, credential, "application/vnd.github+json", policy);
-}
-
 async function apiAssetLocation(
 	url: string,
 	credential: string | undefined,
@@ -93,7 +69,7 @@ async function apiAssetLocation(
 	const tag = asString(release.tag, "release tag");
 	const name = asString(release.name, "release asset");
 	const base = `https://api.github.com/repos/${owner}/${repository}/releases`;
-	const bytes = await releaseMetadata(`${base}/tags/${tag}`, `${owner}/${repository}`, credential, {
+	const bytes = await download(`${base}/tags/${tag}`, credential, "application/vnd.github+json", {
 		...policy,
 		timeoutMs: Math.min(policy.timeoutMs ?? 30_000, 10_000),
 	});
@@ -117,7 +93,7 @@ async function apiAssetLocation(
 	return { url: `${base}/assets/${String(asset.id)}`, accept: "application/octet-stream" };
 }
 
-/** Assets use the authenticated API first; cross-repository public metadata has its own credential choice. */
+/** Authenticated API first, then the same public API without repository-scoped credentials. */
 export async function fetchReleaseAssetApi(
 	url: string,
 	policy: AssetDownloadPolicy = {},
