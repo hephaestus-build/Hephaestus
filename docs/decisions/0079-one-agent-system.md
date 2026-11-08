@@ -335,8 +335,9 @@ There is no warm pool. The sandbox **pulls** its work from the gateway. The serv
 **Evidence authority.** The sandbox's files are not evidence, because a command can change them.
 
 - Admission checks each citation against the bytes that the server captured.
-- A read counts for coverage only when its bytes match the digest that the server captured for that file. The loop checks the digest when it reads.
-- A proved search searches only files that match their digests. A search over changed files proves nothing.
+- For each read and each proved search, the loop reports the path and the digest of each file.
+- Admission counts a read for coverage only when its digest equals the digest that the server captured for that file.
+- Admission refuses a claim of absence when any searched file's digest differs from the captured one. A search over changed files proves nothing.
 
 **No persistent volume.** The server rebuilds the sandbox's context from PostgreSQL at each start.
 
@@ -394,8 +395,8 @@ erDiagram
 **`agent_run`** leases one unit of agent work.
 
 - **Columns:** `id`, `workspace_id`, `kind`, `band`, `concurrency_key` (the subject key), `state`, `attempt`, `lease_epoch`, `leased_until`, `available_at`, `deadline`, `stop_reason`, and the created, started and ended times.
-- **Kinds:** `review_measure`, `review_compose`, `turn`, `report_draft` and `digest`. A new kind of work is a new value, not a new table.
-- **Bands:** `interactive`, `batch` and `background`. The kind and the origin set the band:
+- **Kinds:** `review_measure`, `review_compose`, `turn`, `report_draft` and `digest` (see [Interactive and proactive work](#interactive-and-proactive-work)). A new kind of work is a new value, not a new table.
+- **Bands:** `interactive`, `batch` and `background`. The kind and the origin set the band. This is the default, and the implementation can change it:
   - `turn` and `report_draft`: `interactive`. A person waits.
   - `review_measure` and `review_compose` of an event or a request: `batch`.
   - A scheduled or backfill review, and `digest`: `background`.
@@ -409,6 +410,7 @@ erDiagram
 
 - **Columns:** `id`, `workspace_id`, `subject_key` (unique among the live rows), `claim_name`, `state`, `template`, `created_at`, `last_used_at`, `shutdown_at`.
 - **States:** `REQUESTED`, then `READY`, then `DELETING`, then `GONE`.
+- **Start limit:** a sandbox that is not `READY` within the start limit of the capacity home is deleted and requested again. Each such start counts against the attempt budget of the subject's next run.
 - **Reaper rule:** the reaper deletes the claim when the subject has no live need. A queued or leased run of the subject is a live need, for example the `review_compose` run after a seal. The reaper also deletes the claim when the sandbox is idle past the limit.
 - **Erasure and access.** An erasure of a person, or a change of access to a conversation, deletes the subject's sandbox at once.
 
@@ -499,9 +501,9 @@ Capture stays a server step. The gateway serves only captured bytes and archives
 ### Interactive and proactive work
 
 - **Turns.** Each turn is a `turn` run in band `interactive`, keyed to its conversation. Turns of one conversation run in order.
-- **Proactive work.** A `digest` run is the scheduled run of a conversation, in its sandbox. A proactive trigger starts that sandbox as a message does.
-  ADR 0057 § Weekly digest stays: Java writes the digest from facts, and no model writes it.
-  A model-written digest needs its own decision. ADR 0057 rejected it as a claim about a person outside admission, approval and withdrawal.
+- **Proactive work.** A `digest` run is the kind for scheduled, proactive work of a conversation, in its sandbox. A proactive trigger starts that sandbox as a message does.
+  The kind waits for a decision on what a model may write proactively. ADR 0057 rejected a model-written digest as a claim about a person outside admission, approval and withdrawal.
+  Until that decision, the weekly digest of ADR 0057 stays a Java step of the server, and no `digest` run exists.
 - **Cold start.** The cold start is a measured product number. The target is the first text at most 6 s from a cold sandbox. A follow-up turn in a warm sandbox starts at once.
 - **Reviews.** The `review_measure` run measures and stages each practice (ADR 0063). The server admits and seals. The `review_compose` run then composes in the same sandbox, and the outbox delivers.
 

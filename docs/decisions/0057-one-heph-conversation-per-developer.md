@@ -567,6 +567,7 @@ The ledger, the conversation model, the context model and delivery of this decis
 - **§ Weekly digest, the delivery.** The Slack note and the email of a digest are `slack_post` and `email` actions.
 
 § Weekly digest otherwise stays as it is. Java writes the digest from facts, and no model writes it.
-A `digest` run is the scheduled run of a conversation, in its sandbox.
+The digest stays a Java step of the server. ADR 0079 reserves a `digest` run for proactive work in the conversation's sandbox, which waits for its own decision.
+
 Weekly digest option 1, "A model writes a weekly summary", stays rejected. A model-written digest needs its own decision, because the reason still holds.
 Such a summary is a new claim about a person, outside admission, approval and withdrawal.
