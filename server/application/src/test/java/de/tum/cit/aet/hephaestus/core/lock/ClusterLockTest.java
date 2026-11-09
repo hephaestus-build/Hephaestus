@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.lock;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.mock;
@@ -52,6 +53,21 @@ class ClusterLockTest extends BaseUnitTest {
                 .isEmpty();
 
         verify(connection).close();
+    }
+
+    @Test
+    void shouldAbortTheConnectionWhenTheLockQueryFailsAfterTheServerMayHaveTakenTheLock() throws Exception {
+        Connection connection = mock(Connection.class);
+        when(connection.prepareStatement(startsWith("SELECT pg_try_advisory_lock")))
+                .thenThrow(new SQLException("socket timeout"));
+        DataSource dataSource = mock(DataSource.class);
+        when(dataSource.getConnection()).thenReturn(connection);
+
+        assertThatThrownBy(() -> new ClusterLock(dataSource).call("work", Duration.ZERO, () -> "done"))
+                .isInstanceOf(ClusterLock.UnavailableException.class);
+
+        verify(connection).abort(any(Executor.class));
+        verify(connection, never()).close();
     }
 
     private static PreparedStatement statement(boolean answer) throws SQLException {

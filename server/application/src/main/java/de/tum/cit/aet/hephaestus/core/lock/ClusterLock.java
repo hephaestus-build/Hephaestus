@@ -87,7 +87,13 @@ public class ClusterLock {
             try {
                 held = query(connection, LOCK, name);
             } catch (SQLException | RuntimeException failure) {
-                connection.close();
+                // The server may have taken the lock before the failure reached us, so the connection must not
+                // return to the pool.
+                try {
+                    connection.abort(Runnable::run);
+                } catch (SQLException abortFailure) {
+                    failure.addSuppressed(abortFailure);
+                }
                 throw failure;
             }
             if (held) return connection;
