@@ -11,4 +11,6 @@ here=$(dirname "$0")
 DATABASE_OWNER_VERIFIER=$(perl "$here/scram-sha-256.pl" DATABASE_OWNER_PASSWORD)
 DATABASE_APP_VERIFIER=$(perl "$here/scram-sha-256.pl" DATABASE_APP_PASSWORD)
 export DATABASE_OWNER_VERIFIER DATABASE_APP_VERIFIER
+# psql needs only the verifiers: it does not inherit the passwords.
+unset DATABASE_OWNER_PASSWORD DATABASE_APP_PASSWORD
 exec psql --no-psqlrc --quiet --file="$here/database-quiet.sql" --file="$here/database-roles.sql" "$@"
