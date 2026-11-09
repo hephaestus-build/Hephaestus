@@ -178,7 +178,11 @@ public class MentorTurnService {
 
     /** Starts the oldest turn a worker may run, if there is one. */
     @Transactional
-    public Optional<MentorTurn> claimNext(Duration lease) {
+    public Optional<MentorTurn> claimNext(Duration lease, int cap) {
+        turns.lockClaims();
+        if (turns.countLeased() >= cap) {
+            return Optional.empty();
+        }
         return turns.lockClaimable().map(turn -> {
             // The lease ends on the database clock, the clock the server's reaper judges it by (expireLease).
             Instant now = turns.databaseNow();

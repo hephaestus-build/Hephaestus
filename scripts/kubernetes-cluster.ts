@@ -13,6 +13,9 @@
  *            SandboxTemplate passed the sandbox isolation gate (scripts/sandbox-isolation.ts)
  *   request  one HTTPS request to the webapp and the API through that Gateway
  *   backup-drill  pgBackRest to a throwaway S3 server, then a point-in-time restore on a fresh node
+ *   turn-roll  a conversation turn that runs `bash` in its tools Pod through a rollout restart of
+ *            the workers and then of the conversation loop, with the capacity bench's fake model
+ *            provider. --pod-cidr opens the provider to the release
  *   render   the manifests of those values for synthetic images, with backups on and with an external
  *            PostgreSQL, for a schema check without a cluster
  *   release-smoke  the one-host install of docs/admin/kubernetes.mdx § Install on one host (k3s) on
@@ -28,7 +31,8 @@
  * generated value stays in the work directory, which only the user can read; the script prints no
  * secret value.
  */
-import { createHash, randomBytes } from "node:crypto";
+import { spawn } from "node:child_process";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import {
 	access,
@@ -50,11 +54,14 @@ import { isDeepStrictEqual, parseArgs, parseEnv } from "node:util";
 
 import { readInventory } from "./commit-image-lock.ts";
 import type { ChartImage } from "./kubernetes-chart.ts";
+import { submitTurn } from "./lib/capacity-chat.ts";
+import { rollOutput } from "./lib/capacity-replay.ts";
+import { bindReplayModel, syntheticApi, syntheticSession } from "./lib/capacity-seed.ts";
 import { ciToolPin } from "./lib/ci-tool-catalog.ts";
 import { resolveCiTool } from "./lib/ci-tool-resolver.ts";
 import { claimDevNamespace, DEV_OWNER, ownsDevNamespace } from "./lib/dev-namespace.ts";
 import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
-import { output, run, succeeds } from "./lib/process.ts";
+import { exitStatus, output, run, succeeds } from "./lib/process.ts";
 import { parseResolvedImages } from "./resolve-release-images.ts";
 import { isolationGate } from "./sandbox-isolation.ts";
 
@@ -229,6 +236,7 @@ export function applicationSecret(): Record<string, string> {
 		HEPHAESTUS_SECURITY_ENCRYPTION_KEY: key,
 		HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: key,
 		HEPHAESTUS_AUTH_STATE_COOKIE_KEY: randomBytes(32).toString("base64"),
+		HEPHAESTUS_CONVERSATION_LOOP_SECRET: randomBytes(32).toString("hex"),
 		WEBHOOK_SECRET: secretValue(32),
 		WEBHOOK_ROUTING_SECRET: secretValue(32),
 	};
@@ -1274,6 +1282,13 @@ async function s3Storage(work: string): Promise<{ key: string; secret: string }>
 	return credentials;
 }
 
+/** A values file in the work directory, as the Helm arguments that add it to an install. */
+async function layer(work: string, name: string, values: object): Promise<string[]> {
+	const file = path.join(work, `${name}.yaml`);
+	await writeFile(file, `${JSON.stringify(values, null, 2)}\n`, { mode: 0o600 });
+	return ["--values", file];
+}
+
 /**
  * The backup and restore drill of docs/admin/kubernetes.mdx § Backup and restore, on the bundled
  * PostgreSQL: a full backup, a row that only the WAL archive holds, a dropped table, and then a
@@ -1341,12 +1356,7 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 			},
 		},
 	});
-	const layer = async (name: string, values: object) => {
-		const file = path.join(work, `${name}.yaml`);
-		await writeFile(file, `${JSON.stringify(values, null, 2)}\n`, { mode: 0o600 });
-		return ["--values", file];
-	};
-	const backupOn = await layer("backup", backup({ enabled: false, time: "" }));
+	const backupOn = await layer(work, "backup", backup({ enabled: false, time: "" }));
 	await install(work, backupOn);
 	// PostgreSQL reads the bucket's keys at its start, and an install that changes no value of its Pod keeps it.
 	await kubectl(["-n", NAMESPACE, "rollout", "restart", `statefulset/${RELEASE}-postgresql`]);
@@ -1503,7 +1513,7 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 			}),
 		);
 		await install(work, [
-			...(await layer("restore", backup({ enabled: true, time: target }))),
+			...(await layer(work, "restore", backup({ enabled: true, time: target }))),
 			...paused,
 		]);
 		const job = `${RELEASE}-postgresql-backup-restore-${await revision()}`;
@@ -1581,6 +1591,468 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 	await psql(await readFile(path.join(CHART, "files", "restore-clone-lockdown.sql"), "utf8"));
 	await install(work, backupOn);
 	await verify();
+}
+
+/** The fake model provider's namespace: the capacity fixture renders only `capacity-bench-*` names. */
+const ROLL_PROVIDER = "capacity-bench-turn-roll";
+/** The synthetic workspace and admin that `scripts/capacity-bench/seed-identities.sql` links. */
+const ROLL_WORKSPACE = "capacity-bench-course";
+const ROLL_ADMIN = "capacity-bench-000";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+const DNS_LABEL = /^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/u;
+
+/**
+ * A one-shot Pod from the chart's server template with the e2e sign-in, for the drill's synthetic
+ * admin. The production profile refuses that sign-in, so the Pod runs the e2e profile on the
+ * release's database and secrets. It listens on loopback, and a readiness gate that nothing sets
+ * keeps it out of every Service: only `kubectl port-forward` reaches it.
+ */
+export function signInPod(deployment: unknown, name: string): Record<string, unknown> {
+	const root = asRecord(deployment, "server Deployment");
+	const metadata = asRecord(root.metadata, "server metadata");
+	const template = asRecord(asRecord(root.spec, "server spec").template, "server template");
+	const spec = asRecord(template.spec, "server Pod spec");
+	const containers = asArray(spec.containers, "server containers");
+	if (containers.length !== 1) {
+		throw new Error("the sign-in Pod needs the chart's single-container server template");
+	}
+	const container = asRecord(containers[0], "server container");
+	const overrides: Record<string, string> = {
+		SPRING_PROFILES_ACTIVE: "e2e",
+		// The production profile's database settings. Kubernetes expands the chart's variables above.
+		SPRING_DATASOURCE_URL: "jdbc:$(DATABASE_URL)",
+		SPRING_DATASOURCE_USERNAME: "$(DATABASE_USERNAME)",
+		SPRING_DATASOURCE_PASSWORD: "$(DATABASE_PASSWORD)",
+		// The migration Job owns the schema, and the release's server consumes the broker.
+		SPRING_LIQUIBASE_ENABLED: "false",
+		SPRING_DOCKER_COMPOSE_ENABLED: "false",
+		HEPHAESTUS_SYNC_NATS_ENABLED: "false",
+		HEPHAESTUS_SYNC_RUN_ON_STARTUP: "false",
+		// The e2e profile turns GitLab on; keep the release's choice.
+		HEPHAESTUS_INTEGRATION_GITLAB_ENABLED: "$(GITLAB_ENABLED)",
+		// The synthetic admin has no passkey.
+		HEPHAESTUS_AUTH_ASSURANCE_ENFORCED: "false",
+		SERVER_ADDRESS: "127.0.0.1",
+		// The release's issuer and passkey origins are HTTPS, which refuse the e2e profile's insecure cookies. The
+		// drill reads its session token from the response header, so a secure cookie is no obstacle over the port-forward.
+		HEPHAESTUS_AUTH_COOKIE_SECURE: "true",
+	};
+	const env = asArray(container.env ?? [], "server env")
+		.map((variable) => asRecord(variable, "server env variable"))
+		.filter((variable) => !Object.hasOwn(overrides, String(variable.name)));
+	return {
+		apiVersion: "v1",
+		kind: "Pod",
+		metadata: {
+			...asRecord(template.metadata, "server template metadata"),
+			name,
+			namespace: metadata.namespace,
+		},
+		spec: {
+			...spec,
+			restartPolicy: "Never",
+			readinessGates: [{ conditionType: "hephaestus.build/never-ready" }],
+			containers: [
+				{
+					...container,
+					env: [...env, ...Object.entries(overrides).map(([key, value]) => ({ name: key, value }))],
+				},
+			],
+		},
+	};
+}
+
+/** The local port that `kubectl port-forward` reports: `Forwarding from 127.0.0.1:<port> -> <port>`. */
+export function forwardedPort(text: string): number | undefined {
+	const port = /^Forwarding from 127\.0\.0\.1:(?<port>\d+) -> \d+$/mu.exec(text)?.groups?.port;
+	return port === undefined ? undefined : Number(port);
+}
+
+/** A local port to `port` of the Pod, until `stop`. */
+async function portForward(pod: string, port: number): Promise<{ port: number; stop: () => void }> {
+	const child = spawn(
+		"kubectl",
+		["-n", NAMESPACE, "port-forward", "--address", "127.0.0.1", `pod/${pod}`, `:${port}`],
+		{ stdio: ["ignore", "pipe", "inherit"] },
+	);
+	const stop = () => {
+		child.kill("SIGTERM");
+	};
+	const local = Promise.withResolvers<number>();
+	let seen = "";
+	child.stdout.on("data", (chunk: Buffer) => {
+		seen += chunk.toString();
+		const found = forwardedPort(seen);
+		if (found !== undefined) {
+			local.resolve(found);
+		}
+	});
+	child.once("error", local.reject);
+	child.once("exit", (code, signal) => {
+		local.reject(new Error(`kubectl port-forward ended with ${exitStatus(code, signal)}`));
+	});
+	const timer = setTimeout(() => {
+		local.reject(new Error(`kubectl port-forward to ${pod} opened no port in 60 seconds`));
+	}, 60_000);
+	try {
+		return { port: await local.promise, stop };
+	} catch (error) {
+		stop();
+		throw error;
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/** The drill turn's status, attempt and bound tools Pod, from the database. */
+export interface TurnState {
+	status: string;
+	attempt: number;
+	pod: string | null;
+}
+
+export function turnState(text: string): TurnState {
+	const row = asRecord(parseJson(text), "turn state");
+	const { status, attempt, pod } = row;
+	if (typeof status !== "string" || typeof attempt !== "number") {
+		throw new TypeError(`the turn state has no status or attempt: ${text}`);
+	}
+	if (pod !== null && (typeof pod !== "string" || !DNS_LABEL.test(pod))) {
+		throw new TypeError(`the turn's tools Pod has no valid name: ${text}`);
+	}
+	return { status, attempt, pod };
+}
+
+/** What the drill turn left: its status and attempt, its answer, and each `bash` result in order. */
+export interface TurnOutcome {
+	status: string;
+	attempt: number;
+	answer: string;
+	bash: readonly { isError: boolean; text: string }[];
+}
+
+export function turnOutcome(text: string): TurnOutcome {
+	const row = asRecord(parseJson(text), "turn outcome");
+	const { status, attempt, answer } = row;
+	if (typeof status !== "string" || typeof attempt !== "number" || typeof answer !== "string") {
+		throw new TypeError("the turn outcome has no status, attempt or answer");
+	}
+	const bash = asArray(row.bash, "bash results").map((entry) => {
+		const result = asRecord(entry, "bash result");
+		return { isError: result.isError === true, text: asString(result.text, "bash result text") };
+	});
+	return { status, attempt, answer, bash };
+}
+
+/** One check of the drill: its claim, and why it failed when it did. */
+export interface RollCheck {
+	claim: string;
+	failure: string | undefined;
+}
+
+/** The checks that the turn still runs `recorded`'s attempt with the same tools Pod. */
+export function heldChecks(
+	after: string,
+	recorded: { attempt: number; pod: string },
+	observed: TurnState,
+): RollCheck[] {
+	return [
+		{
+			claim: `${after}, the turn is RUNNING`,
+			failure: observed.status === "RUNNING" ? undefined : `the turn is ${observed.status}`,
+		},
+		{
+			claim: `${after}, the turn runs attempt ${recorded.attempt}`,
+			failure:
+				observed.attempt === recorded.attempt ? undefined : `it runs attempt ${observed.attempt}`,
+		},
+		{
+			claim: `${after}, the attempt holds tools Pod ${recorded.pod}`,
+			failure:
+				observed.pod === recorded.pod ? undefined : `it holds ${observed.pod ?? "no tools Pod"}`,
+		},
+	];
+}
+
+/** The checks of the ended turn: DONE on its first attempt, every `bash` call succeeded, and the answer has their output. */
+export function outcomeChecks(outcome: TurnOutcome): RollCheck[] {
+	const outputs = outcome.bash.map((_, index) => rollOutput(index + 1));
+	const failed = outcome.bash.findIndex(
+		(result, index) => result.isError || !result.text.includes(outputs[index] ?? ""),
+	);
+	let bashFailure: string | undefined;
+	if (outcome.bash.length === 0) {
+		bashFailure = "the turn stored no bash result";
+	} else if (failed !== -1) {
+		bashFailure = `bash call ${failed + 1} returned ${JSON.stringify(outcome.bash[failed]?.text.slice(0, 200))}`;
+	}
+	const missing = outputs.filter((printed) => !outcome.answer.includes(printed));
+	return [
+		{
+			claim: "the turn ended DONE",
+			failure: outcome.status === "DONE" ? undefined : `it ended ${outcome.status}`,
+		},
+		{
+			claim: "the turn ran one attempt",
+			failure: outcome.attempt === 1 ? undefined : `it ran ${outcome.attempt} attempts`,
+		},
+		{
+			claim: `each of the ${outcome.bash.length} bash calls succeeded in the tools Pod`,
+			failure: bashFailure,
+		},
+		{
+			claim: "the answer contains the output of each bash call",
+			failure:
+				missing.length === 0
+					? undefined
+					: `the answer lacks ${missing.join(", ")}: ${outcome.answer}`,
+		},
+	];
+}
+
+function report(checks: readonly RollCheck[]): void {
+	for (const { claim, failure } of checks) {
+		if (failure !== undefined) {
+			throw new Error(`turn roll: ${claim}: no, ${failure}`);
+		}
+		process.stdout.write(`turn roll: ${claim}\n`);
+	}
+}
+
+/** Reads `read` every five seconds until `done`, for up to `minutes`. */
+async function until<T>(
+	what: string,
+	minutes: number,
+	read: () => Promise<T>,
+	done: (value: T) => boolean,
+): Promise<T> {
+	const deadline = Date.now() + minutes * 60_000;
+	for (;;) {
+		const value = await read();
+		if (done(value)) {
+			return value;
+		}
+		if (Date.now() > deadline) {
+			throw new Error(`turn roll: ${what} in ${minutes} minutes; last ${JSON.stringify(value)}`);
+		}
+		await sleep(5000);
+	}
+}
+
+async function toolsJob(name: string): Promise<boolean> {
+	const found = await kubectl([
+		"-n",
+		SANDBOXES,
+		"get",
+		"job",
+		name,
+		"--ignore-not-found",
+		"-o",
+		"name",
+	]);
+	return found.trim() !== "";
+}
+
+async function rollRestart(deployment: string): Promise<void> {
+	await kubectl(["-n", NAMESPACE, "rollout", "restart", `deployment/${deployment}`]);
+	// The rollout ends when the new Pods are available; an old loop Pod can still end its turn.
+	await kubectl([
+		"-n",
+		NAMESPACE,
+		"rollout",
+		"status",
+		`deployment/${deployment}`,
+		"--timeout=15m",
+	]);
+}
+
+/**
+ * The roll drill of docs/admin/runtime-roles.mdx § The conversation loop: a conversation turn that runs
+ * `bash` in its tools Pod outlives a rollout restart of the workers and then of the loop. The fake
+ * model provider of the capacity bench scripts the turn: a 30 s command after each result, until
+ * the drill releases it after both rollouts, then an answer with each command's output.
+ */
+export async function turnRoll(
+	work: string,
+	podCidr: string,
+	extra: readonly string[],
+	profiles: readonly string[],
+): Promise<void> {
+	const replay = path.join(work, "turn-roll-replay.json");
+	const manifest = path.join(work, "turn-roll-provider.json");
+	await writeFile(
+		replay,
+		JSON.stringify({
+			provenance: "assumed",
+			source: "turn-roll drill: a fast fake, so the commands set the turn's length",
+			samples: [{ ttftMs: 100, durationMs: 500, inputTokens: 100, outputTokens: 20, status: 200 }],
+		}),
+	);
+	await rm(manifest, { force: true });
+	await run(process.execPath, [
+		path.join(ROOT, "scripts", "capacity-fixture.ts"),
+		"--namespace",
+		ROLL_PROVIDER,
+		"--replay",
+		replay,
+		"--out",
+		manifest,
+		"--tool-mode",
+		"roll",
+		"--client",
+		NAMESPACE,
+	]);
+	// A provider of an earlier drill holds its release.
+	await kubectl(["delete", "namespace", ROLL_PROVIDER, "--ignore-not-found", "--wait=true"]);
+	await kubectl(["apply", "-f", manifest]);
+	const signIn = `${RELEASE}-turn-roll-sign-in`;
+	let forward: { port: number; stop: () => void } | undefined;
+	try {
+		await kubectl(["-n", ROLL_PROVIDER, "rollout", "status", "deployment/replay", "--timeout=5m"]);
+		// docs/admin/kubernetes.mdx § A model endpoint on a private network, with the Pod network as that network.
+		const host = `replay.${ROLL_PROVIDER}.svc.cluster.local`;
+		await install(
+			work,
+			[
+				...extra,
+				...(await layer(work, "turn-roll", {
+					config: { llmPrivateHosts: [host], llmPrivateHostsAllowHttp: true },
+					networkPolicy: { modelEndpoints: [{ cidr: podCidr, ports: [8080] }] },
+				})),
+			],
+			profiles,
+		);
+		const server = parseJson(
+			await kubectl(["-n", NAMESPACE, "get", "deployment", `${RELEASE}-server`, "-o", "json"]),
+		);
+		await kubectl(["-n", NAMESPACE, "delete", "pod", signIn, "--ignore-not-found", "--wait=true"]);
+		await apply(signInPod(server, signIn));
+		try {
+			await kubectl([
+				"-n",
+				NAMESPACE,
+				"wait",
+				"--for=jsonpath={.status.phase}=Running",
+				`pod/${signIn}`,
+				"--timeout=5m",
+			]);
+			// The container's readiness probe passes; the Pod's readiness gate keeps it out of the Service.
+			await kubectl([
+				"-n",
+				NAMESPACE,
+				"wait",
+				"--for=jsonpath={.status.containerStatuses[0].ready}=true",
+				`pod/${signIn}`,
+				"--timeout=10m",
+			]);
+		} catch (error) {
+			// The cleanup below deletes the Pod, so what it shows must be printed now.
+			for (const args of [
+				["describe", "pod", signIn],
+				["logs", signIn, "--tail=200"],
+			]) {
+				const shown = await kubectl(["-n", NAMESPACE, ...args]).catch(String);
+				process.stdout.write(`turn-roll: kubectl ${args.join(" ")}\n${shown}\n`);
+			}
+			throw error;
+		}
+		forward = await portForward(signIn, 8080);
+		const base = `http://127.0.0.1:${forward.port}`;
+		const token = await syntheticSession(base, ROLL_ADMIN, true);
+		await psql(
+			await readFile(path.join(ROOT, "scripts", "capacity-bench", "seed-identities.sql"), "utf8"),
+		);
+		await bindReplayModel(
+			syntheticApi(base, token),
+			ROLL_WORKSPACE,
+			`http://${host}:8080/v1`,
+			// The longest turn: AgentBindingLimits.MAX_HEPH_TURN_SECONDS.
+			900,
+		);
+		const submitted = await submitTurn(`${base}/workspaces/${ROLL_WORKSPACE}/mentor`, token, {
+			requestId: randomUUID(),
+			text: "Run the turn-roll command.",
+		});
+		if ("status" in submitted || !UUID.test(submitted.id)) {
+			throw new Error(`turn roll: the question was refused: ${JSON.stringify(submitted)}`);
+		}
+		process.stdout.write(`turn roll: asked turn ${submitted.id}\n`);
+		const state = async () =>
+			turnState(
+				await psql(
+					`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'pod', p.name) FROM mentor_turn t LEFT JOIN conversation_tools_pod p ON p.turn_id = t.id AND p.attempt = t.attempt WHERE t.id = '${submitted.id}'`,
+				),
+			);
+		const running = await until(
+			"the turn did not run bash in a tools Pod",
+			5,
+			state,
+			(observed) =>
+				observed.status !== "QUEUED" && (observed.status !== "RUNNING" || observed.pod !== null),
+		);
+		const { pod } = running;
+		if (running.status !== "RUNNING" || pod === null) {
+			throw new Error(`turn roll: the turn ended ${running.status} before it held a tools Pod`);
+		}
+		const recorded = { attempt: running.attempt, pod };
+		process.stdout.write(
+			`turn roll: attempt ${recorded.attempt} runs bash in tools Pod ${recorded.pod}\n`,
+		);
+		report([
+			{
+				claim: `the tools Job ${pod} exists`,
+				failure: (await toolsJob(pod)) ? undefined : "it does not",
+			},
+		]);
+
+		await rollRestart(`${RELEASE}-worker`);
+		report([
+			...heldChecks("after the worker roll", recorded, await state()),
+			{
+				claim: `after the worker roll, the tools Job ${pod} exists`,
+				failure: (await toolsJob(pod)) ? undefined : "it is gone",
+			},
+		]);
+		await rollRestart(`${RELEASE}-conversation-loop`);
+		report(heldChecks("after the loop roll", recorded, await state()));
+
+		// The fake answers at the next model call, after the command that runs now.
+		await kubectl([
+			"-n",
+			ROLL_PROVIDER,
+			"exec",
+			"deployment/replay",
+			"--",
+			"node",
+			"-e",
+			"fetch('http://127.0.0.1:8080/release',{method:'POST'}).then((r)=>process.exit(r.status===204?0:1))",
+		]);
+		await until(
+			"the turn did not end",
+			5,
+			state,
+			(observed) => !["QUEUED", "RUNNING"].includes(observed.status),
+		);
+		const outcome = turnOutcome(
+			await psql(
+				`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'answer', coalesce((SELECT string_agg(e.text, E'\\n' ORDER BY e.seq) FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH'), ''), 'bash', coalesce((SELECT json_agg(json_build_object('isError', coalesce((e.payload->'message'->>'isError')::boolean, false), 'text', coalesce((SELECT string_agg(c->>'text', '') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(e.payload->'message'->'content') = 'array' THEN e.payload->'message'->'content' ELSE '[]'::jsonb END) c), '')) ORDER BY e.seq) FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'TOOL_RESULT' AND e.payload->'message'->>'toolName' = 'bash'), '[]'::json)) FROM mentor_turn t WHERE t.id = '${submitted.id}'`,
+			),
+		);
+		report(outcomeChecks(outcome));
+		// A worker removes the tools Pod when the attempt ends.
+		await until(
+			"the tools Job stayed",
+			5,
+			async () => toolsJob(pod),
+			(present) => !present,
+		);
+		report([{ claim: `the tools Job ${pod} is removed`, failure: undefined }]);
+	} finally {
+		forward?.stop();
+		await kubectl(["-n", NAMESPACE, "delete", "pod", signIn, "--ignore-not-found", "--wait=false"]);
+		// Without its provider, a turn that a failed drill left fails at its next model call.
+		await kubectl(["delete", "namespace", ROLL_PROVIDER, "--ignore-not-found", "--wait=false"]);
+	}
 }
 
 /** The release and host of the release smoke. The release name is the one the platform files name. */
@@ -2931,6 +3403,21 @@ if (import.meta.main) {
 			await backupDrill(work, cidr);
 			break;
 		}
+		case "turn-roll": {
+			const cidr = values["pod-cidr"];
+			if (cidr === undefined) {
+				throw new Error(
+					"turn-roll needs --pod-cidr <the cluster's Pod CIDR>, for the fake model provider's egress rule",
+				);
+			}
+			await turnRoll(
+				work,
+				cidr,
+				values.set.flatMap((setting) => ["--set", setting]),
+				values.profile,
+			);
+			break;
+		}
 		case "render": {
 			process.stdout.write(await render());
 			break;
@@ -2959,7 +3446,7 @@ if (import.meta.main) {
 		}
 		default: {
 			throw new Error(
-				"usage: kubernetes-cluster <prepare|gateway|install|upgrade|verify|request|backup-drill|render|live|dev|down|reset|release-smoke> [--work dir]",
+				"usage: kubernetes-cluster <prepare|gateway|install|upgrade|verify|request|backup-drill|turn-roll|render|live|dev|down|reset|release-smoke> [--work dir]",
 			);
 		}
 	}

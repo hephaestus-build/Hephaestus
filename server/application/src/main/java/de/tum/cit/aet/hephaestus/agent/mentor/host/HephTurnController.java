@@ -31,46 +31,53 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The endpoints a Hephaestus host calls for one turn, on this worker's sandbox gateway, with the turn's credential. Each
- * acts only for the turn, developer and conversation the credential names, and only while the attempt runs on this
- * worker ({@link MentorLeaseLostException}). The ledger classifies the
- * entries that the end carries; the host's word is not taken for that.
+ * The endpoints the conversation loop calls for one turn attempt, on any worker's sandbox gateway, with the attempt's
+ * credential. Each acts only for the turn, developer and conversation the credential names, and only while the
+ * attempt holds its live lease ({@link MentorLeaseLostException}); every worker reads that from the turn's row. A
+ * stopped attempt, or one past its deadline, may only renew its lease and end ({@link HephTurns.StopException}). The
+ * ledger classifies the entries that the end carries; the loop's word is not taken for that.
  */
 @RestController
 @RequestMapping("/internal/llm/turn/{turnId}")
 @PreAuthorize("isAuthenticated()")
 @ConditionalOnWorkerRole
-@Profile(HephHostConfiguration.PROFILES)
+@Profile(HephTurnConfiguration.PROFILES)
 @WorkspaceAgnostic("The turn credential binds the workspace, the developer and the conversation of every call")
 public class HephTurnController {
 
     private static final Logger log = LoggerFactory.getLogger(HephTurnController.class);
 
-    /**
-     * How long an end waits for the proxy to record the attempt's last model call. The host reads the end of an answer
-     * before the proxy has written the call's usage, which takes milliseconds after it. An end without an answer
-     * cancels the calls first, so it waits only for their usage.
-     */
     private final HephTurnContexts contexts;
 
     private final MentorTurnCompletion completion;
-    private final HephTurnDispatcher dispatcher;
+    private final HephTurns turns;
     private final ProxyCallsInFlight callsInFlight;
 
     public HephTurnController(
             HephTurnContexts contexts,
             MentorTurnCompletion completion,
-            HephTurnDispatcher dispatcher,
+            HephTurns turns,
             ProxyCallsInFlight callsInFlight) {
         this.contexts = contexts;
         this.completion = completion;
-        this.dispatcher = dispatcher;
+        this.turns = turns;
         this.callsInFlight = callsInFlight;
+    }
+
+    /**
+     * Renews the attempt's lease; the loop calls it every few seconds. A {@code 409} says that the attempt must stop
+     * and end, or that it lost its lease.
+     */
+    @PostMapping("/lease")
+    public ResponseEntity<Void> lease(@PathVariable UUID turnId, Authentication authentication) {
+        turns.lease(token(turnId, authentication));
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/context")
@@ -180,14 +187,29 @@ public class HephTurnController {
                 turn, "search_conversation", () -> new SearchResponse(contexts.search(turn, query)), found -> "ok");
     }
 
+    /**
+     * Sends the attempt's newest partial answer to readers.
+     *
+     * @param first whether it is the attempt's first, which times the attempt's first token
+     */
     @PutMapping("/partial")
     public ResponseEntity<Void> partial(
-            @PathVariable UUID turnId, @RequestBody JsonNode partial, Authentication authentication) {
-        TurnAttempt turn = turn(turnId, authentication);
+            @PathVariable UUID turnId,
+            @RequestParam(defaultValue = "false") boolean first,
+            @RequestBody JsonNode partial,
+            Authentication authentication) {
+        AttemptJwt token = token(turnId, authentication);
+        TurnAttempt turn = turns.held(token, false);
         if (!partial.isObject()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A partial answer is a JSON object");
         }
-        dispatcher.partial(turn.turnId(), turn.attempt(), partial);
+        completion.progress(
+                turn.workspaceId(),
+                turn.turnId(),
+                turn.attempt(),
+                turn.leaseId(),
+                partial,
+                first ? token.issuedAt() : null);
         return ResponseEntity.noContent().build();
     }
 
@@ -239,7 +261,7 @@ public class HephTurnController {
     @PostMapping("/end")
     public ResponseEntity<Void> end(
             @PathVariable UUID turnId, @Valid @RequestBody EndRequest request, Authentication authentication) {
-        TurnAttempt turn = turn(turnId, authentication);
+        TurnAttempt turn = turns.held(token(turnId, authentication), true);
         List<JsonNode> entries = validated(request.entries());
         MentorTurn.Status outcome = switch (request.outcome()) {
             case DONE -> MentorTurn.Status.DONE;
@@ -250,16 +272,16 @@ public class HephTurnController {
         String error = outcome != MentorTurn.Status.FAILED
                 ? null
                 : switch (reason) {
-                    case DEADLINE -> HephTurnDispatcher.TOOK_TOO_LONG;
-                    case STALLED -> HephTurnDispatcher.MODEL_STOPPED_ANSWERING;
-                    case ERROR -> HephTurnDispatcher.COULD_NOT_FINISH;
+                    case DEADLINE -> HephTurns.TOOK_TOO_LONG;
+                    case STALLED -> HephTurns.MODEL_STOPPED_ANSWERING;
+                    case ERROR -> HephTurns.COULD_NOT_FINISH;
                 };
         String detail = request.detail();
         String cause = outcome != MentorTurn.Status.FAILED
                 ? null
-                : "its Hephaestus host reported " + reason
+                : "its conversation loop reported " + reason
                         + (detail == null ? "" : ": " + (FAILURE_DETAILS.contains(detail) ? detail : "unrecognized"));
-        // A host that gave up on its model call cannot wait for it: a silent provider would hold the end.
+        // A loop that gave up on its model call cannot wait for it: a silent provider would hold the end.
         if (!callsInFlight.settle(turn.turnId(), turn.attempt(), outcome != MentorTurn.Status.DONE)) {
             log.warn(
                     "conversation turn {} attempt {} ended with a model call still in flight; that call may go unbilled",
@@ -278,41 +300,33 @@ public class HephTurnController {
                             error,
                             cause,
                             callsInFlight.lastFailed(turn.turnId(), turn.attempt()),
-                            dispatcher.sentPartial(turn.turnId(), turn.attempt())));
+                            turns.lastPartial(turn)));
             callsInFlight.forgetFailed(turn.turnId(), turn.attempt());
         } finally {
             contexts.forget(turn);
-            dispatcher.ended(turn.turnId(), turn.attempt());
+            turns.ended(turn);
         }
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * The turn credential of this request, for this turn; any other credential is answered as if it did not exist. The
-     * attempt must run here, which this worker knows without reading the turn.
-     *
-     * @throws MentorLeaseLostException when the attempt no longer runs here
-     */
+    /** The attempt of this request's credential, for a call that neither renews nor ends it. */
     private TurnAttempt turn(UUID turnId, Authentication authentication) {
-        return turn(dispatcher, turnId, authentication);
+        return turn(turns, turnId, authentication);
     }
 
     /** {@link #turn(UUID, Authentication)}, for the other controllers of the turn endpoints. */
-    static TurnAttempt turn(HephTurnDispatcher dispatcher, UUID turnId, Authentication authentication) {
+    static TurnAttempt turn(HephTurns turns, UUID turnId, Authentication authentication) {
+        return turns.held(token(turnId, authentication), false);
+    }
+
+    /** The turn credential of this request, for this turn; any other credential is answered as if it did not exist. */
+    static AttemptJwt token(UUID turnId, Authentication authentication) {
         if (!(authentication.getDetails() instanceof AttemptJwt token)
                 || token.kind() != AttemptJwt.Kind.TURN
                 || !token.id().equals(turnId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        TurnAttempt attempt = dispatcher
-                .running(turnId, token.attempt())
-                .orElseThrow(() -> new MentorLeaseLostException(turnId, token.attempt()));
-        // The token binds its workspace: a token of another workspace reaches no turn, whatever its id.
-        if (!attempt.workspaceId().equals(token.workspaceId())
-                || !attempt.leaseId().equals(token.leaseId())) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        }
-        return attempt;
+        return token;
     }
 
     private static List<JsonNode> validated(List<JsonNode> entries) {

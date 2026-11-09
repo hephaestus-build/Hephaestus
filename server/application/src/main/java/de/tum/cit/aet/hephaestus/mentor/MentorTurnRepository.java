@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -101,6 +102,101 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
             @Param("workspaceId") long workspaceId,
             @Param("attempt") int attempt,
             @Param("leaseId") UUID leaseId);
+
+    /** An attempt that holds its live lease, as any worker reads it for a call of its turn credential. */
+    interface HeldAttempt {
+        String getStatus();
+
+        UUID getConversationId();
+
+        Long getAccountId();
+
+        @Nullable
+        Instant getStartedAt();
+
+        /** When the developer stopped the turn; {@code null} while it runs. */
+        @Nullable
+        Instant getFinishedAt();
+    }
+
+    /**
+     * The attempt, while it holds its live lease, running or stopped, on the database clock.
+     *
+     * @return empty when the attempt lost its lease or ended
+     */
+    @WorkspaceAgnostic("The turn credential names the workspace; the statement filters by it")
+    @Query(value = """
+            SELECT t.status AS status, t.conversation_id AS conversationId, c.account_id AS accountId,
+                   t.started_at AS startedAt, t.finished_at AS finishedAt
+              FROM mentor_turn t
+              JOIN mentor_conversation c ON c.id = t.conversation_id AND c.workspace_id = t.workspace_id
+             WHERE t.workspace_id = :workspaceId AND t.id = :id AND t.attempt = :attempt AND t.lease_id = :leaseId
+               AND t.status IN ('RUNNING', 'STOPPED') AND t.leased_until > clock_timestamp()
+            """, nativeQuery = true)
+    Optional<HeldAttempt> findHeldAttempt(
+            @Param("workspaceId") long workspaceId,
+            @Param("id") UUID id,
+            @Param("attempt") int attempt,
+            @Param("leaseId") UUID leaseId);
+
+    /** An attempt that holds its lease, so an erasure can end it. */
+    interface LeasedAttempt {
+        UUID getId();
+
+        Long getWorkspaceId();
+
+        int getAttempt();
+
+        UUID getLeaseId();
+
+        @Nullable
+        Instant getStartedAt();
+    }
+
+    /** The attempts that hold a live lease, in one workspace, or in every workspace when it is {@code null}. */
+    @WorkspaceAgnostic("Erasure ends the leased attempts of the workspace it names, or of all after a reconnect")
+    @Query(value = """
+            SELECT id, workspace_id AS workspaceId, attempt, lease_id AS leaseId, started_at AS startedAt
+              FROM mentor_turn
+             WHERE (CAST(:workspaceId AS bigint) IS NULL OR workspace_id = :workspaceId)
+               AND status IN ('RUNNING', 'STOPPED') AND leased_until > clock_timestamp()
+            """, nativeQuery = true)
+    List<LeasedAttempt> findLeasedAttempts(@Param("workspaceId") @Nullable Long workspaceId);
+
+    /** The turns that hold a lease in the installation: a claim admits one more only below the cap. */
+    @WorkspaceAgnostic("The cap bounds the turns of every workspace at once")
+    @Query(value = """
+            SELECT count(*) FROM mentor_turn
+             WHERE status IN ('RUNNING', 'STOPPED') AND leased_until > clock_timestamp()
+            """, nativeQuery = true)
+    long countLeased();
+
+    /** One claim at a time in the installation, so two claims cannot both pass the cap. */
+    @WorkspaceAgnostic("A lock of the installation's claims; it reads no row")
+    @Query(
+            value = "SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended('mentor-turn-claim', 0))) locked",
+            nativeQuery = true)
+    int lockClaims();
+
+    /**
+     * Counts one load of the attempt's context folder, on the database clock, while the attempt holds its live lease
+     * and has loaded fewer than {@code max} items.
+     *
+     * @return 1 when the load counts, 0 when the attempt reached {@code max} or lost its lease
+     */
+    @Modifying
+    @Transactional
+    @Query(value = """
+            UPDATE mentor_turn SET tools_loads = tools_loads + 1
+             WHERE id = :id AND workspace_id = :workspaceId AND attempt = :attempt AND lease_id = :leaseId
+               AND status = 'RUNNING' AND leased_until > clock_timestamp() AND tools_loads < :max
+            """, nativeQuery = true)
+    int countToolsLoad(
+            @Param("id") UUID id,
+            @Param("workspaceId") long workspaceId,
+            @Param("attempt") int attempt,
+            @Param("leaseId") UUID leaseId,
+            @Param("max") int max);
 
     /** Locks the row, so a state change reads the proxy's latest totals and the proxy waits for it. */
     @WorkspaceAgnostic("Locks by primary key; callers hold the id from a workspace-scoped read or a lease")

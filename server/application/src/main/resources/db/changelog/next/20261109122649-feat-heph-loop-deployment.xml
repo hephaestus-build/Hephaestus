@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794141834980-1" author="hephaestus">
+        <createTable tableName="conversation_tools_pod">
+            <column name="name" type="VARCHAR(63)">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="conversation_tools_podPK"/>
+            </column>
+            <column name="address" type="VARCHAR(45)"/>
+            <column name="attempt" type="INTEGER"/>
+            <column defaultValueComputed="now()" name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="nonce" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueBoolean="false" name="revoked" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+            <column name="turn_id" type="UUID"/>
+            <column name="workspace_id" type="BIGINT"/>
+        </createTable>
+    </changeSet>
+    <changeSet id="1794141834980-2" author="hephaestus">
+        <addColumn tableName="mentor_turn">
+            <column defaultValueNumeric="0" name="tools_loads" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794141834980-3" author="hephaestus">
+        <addUniqueConstraint columnNames="turn_id, attempt" constraintName="uq_conversation_tools_pod_attempt" tableName="conversation_tools_pod"/>
+    </changeSet>
+    <changeSet id="1794141834980-4" author="hephaestus">
+        <createIndex indexName="idx_conversation_tools_pod_workspace" tableName="conversation_tools_pod">
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

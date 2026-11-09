@@ -2,11 +2,21 @@ package de.tum.cit.aet.hephaestus.agent.mentor.sandbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoadException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
+import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,7 +25,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -26,15 +35,21 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import tools.jackson.databind.node.ObjectNode;
 
+/**
+ * The context folder over a mocked tools Pod binder and turn rows. {@code ConversationToolsPodsIntegrationTest} owns
+ * the binds, and {@code MentorTurnRepository#countToolsLoad} is fenced in SQL.
+ */
 class TurnContextFolderTest extends BaseUnitTest {
 
     private static final Instant NOW = Instant.parse("2026-10-20T10:00:00Z");
@@ -43,15 +58,29 @@ class TurnContextFolderTest extends BaseUnitTest {
     @TempDir
     Path temp;
 
-    private final FakeToolsPods runtime = new FakeToolsPods();
-    private final TurnSandboxes sandboxes = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry());
+    private final ConversationToolsPods toolsPods = mock(ConversationToolsPods.class);
+    private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
+    private final MutableClock clock = new MutableClock(NOW, ZoneOffset.UTC);
     private final DefaultListableBeanFactory beans = new DefaultListableBeanFactory();
-    private final TurnContextFolder folder = new TurnContextFolder(
-            sandboxes, beans.getBeanProvider(ContextLoader.class), Clock.fixed(NOW, ZoneOffset.UTC));
+    private final TurnContextFolder folder =
+            new TurnContextFolder(toolsPods, turns, beans.getBeanProvider(ContextLoader.class), clock);
 
-    @AfterEach
-    void close() {
-        sandboxes.close();
+    /** Whether the attempt holds its live lease, as its turn row says. */
+    private final AtomicBoolean leased = new AtomicBoolean(true);
+
+    /** The loads that the turn row counted. */
+    private final AtomicInteger loads = new AtomicInteger();
+
+    @BeforeEach
+    void leaseTheAttempt() {
+        lenient().when(turns.hasLiveLease(any(), anyLong(), anyInt(), any())).thenAnswer(call -> leased.get());
+        lenient()
+                .when(turns.countToolsLoad(any(), anyLong(), anyInt(), any(), anyInt()))
+                .thenAnswer(call -> {
+                    if (!leased.get() || loads.get() >= call.<Integer>getArgument(4)) return 0;
+                    loads.incrementAndGet();
+                    return 1;
+                });
     }
 
     private static TurnAttempt turn() {
@@ -100,7 +129,6 @@ class TurnContextFolderTest extends BaseUnitTest {
         assertThat(fields).isNotBlank();
         assertThat(user).isEqualTo("{\n  \"counts\" : 3\n}");
         assertThat(item).as("an item document is read from its source").isEqualTo("{}");
-        assertThat(runtime.createdCount()).as("documents need no tools Pod").isZero();
     }
 
     @Test
@@ -159,35 +187,31 @@ class TurnContextFolderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldBindTheAttemptsToolsPodAndSayOnceThatTheContextChanged() {
+    void shouldAnswerWhereTheHostDialsTheAttemptsToolsPodWhenItBindsOne() {
         TurnAttempt turn = turn();
+        when(toolsPods.bind(any(), any()))
+                .thenReturn(new ToolsPods.Started("hephaestus-tools-a", "10.0.0.1", ToolsPods.PORT, "nonce-1"));
 
         ObjectNode bound = folder.bind(turn, DEADLINE);
 
         assertThat(bound.path("ok").asBoolean()).as(bound.toString()).isTrue();
+        assertThat(bound.path("id").asString()).isEqualTo("hephaestus-tools-a");
         assertThat(bound.path("host").asString()).isEqualTo("10.0.0.1");
         assertThat(bound.path("port").asInt()).isEqualTo(7100);
         assertThat(bound.path("nonce").asString()).isEqualTo("nonce-1");
-        assertThat(folder.bind(turn, DEADLINE).path("id").asString())
-                .as("the attempt keeps its Pod")
-                .isEqualTo(bound.path("id").asString());
-
-        sandboxes.releaseWorkspace(turn.workspaceId());
-
-        assertThat(folder.bind(turn, DEADLINE).path("error").asString()).isEqualTo("CONTEXT_CHANGED");
-        assertThat(folder.bind(turn, DEADLINE).path("id").asString())
-                .isNotEqualTo(bound.path("id").asString());
     }
 
     @Test
-    void shouldBindANewToolsPodAfterTheHostFoundTheOldOneBroken() {
+    void shouldAnswerContextChangedUnavailableOrTimeoutWhenNoToolsPodBinds() {
         TurnAttempt turn = turn();
-        String broken = folder.bind(turn, DEADLINE).path("id").asString();
+        when(toolsPods.bind(any(), any()))
+                .thenThrow(new ConversationToolsPods.ContextChanged())
+                .thenThrow(new SandboxException("no Kubernetes here"));
 
-        folder.discard(turn, broken);
-
-        await().atMost(Duration.ofSeconds(5)).until(() -> runtime.removed.contains(broken));
-        assertThat(folder.bind(turn, DEADLINE).path("id").asString()).isNotEqualTo(broken);
+        assertThat(folder.bind(turn, DEADLINE).path("error").asString()).isEqualTo("CONTEXT_CHANGED");
+        assertThat(folder.bind(turn, DEADLINE).path("error").asString()).isEqualTo("UNAVAILABLE");
+        doThrow(new SandboxException("the wait ended")).when(toolsPods).bind(any(), any());
+        assertThat(folder.bind(turn, NOW).path("error").asString()).isEqualTo("TIMEOUT");
     }
 
     @Test
@@ -278,7 +302,9 @@ class TurnContextFolderTest extends BaseUnitTest {
         TurnAttempt turn = turn();
         Thread.startVirtualThread(() -> {
             waitFor(started);
-            sandboxes.release(turn.turnId(), turn.attempt());
+            // The attempt ended; the load reads its lease again after two seconds.
+            leased.set(false);
+            clock.advance(Duration.ofSeconds(2));
             released.countDown();
         });
 

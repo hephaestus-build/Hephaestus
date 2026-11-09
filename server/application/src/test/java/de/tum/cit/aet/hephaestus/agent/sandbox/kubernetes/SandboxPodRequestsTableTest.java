@@ -3,9 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.host.HephHostConfiguration;
-import de.tum.cit.aet.hephaestus.agent.mentor.host.HephHostSpec;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
+import de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnConfiguration;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.ConversationToolsPods;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
@@ -53,21 +52,14 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
                 .defaultResourceLimits()
                 .forAttempt(ResourceLimits.MAX_RUNTIME);
 
-        assertCounts("review", List.of(workspacePod(KubernetesWorker.KIND_REVIEW, review, KubernetesPods.REVIEW)));
-    }
-
-    @Test
-    @DisplayName("a Hephaestus host counts what the table says")
-    void shouldMatchTheTableWhenTheWorkerBuildsAHephHostPod() throws IOException {
-        assertCounts(
-                "hephHost",
-                List.of(workspacePod(KubernetesWorker.KIND_HOST, HephHostSpec.LIMITS, KubernetesPods.HOST)));
+        assertCounts("review", List.of(reviewPod(review)));
     }
 
     @Test
     @DisplayName("a conversation's tools Pod counts what the table says")
     void shouldMatchTheTableWhenTheWorkerBuildsAToolsPod() throws IOException {
-        Pod tools = pods.toolsPod(workload(KubernetesWorker.KIND_TOOLS), TurnSandboxes.LIMITS, "nonce", Map.of());
+        Pod tools =
+                pods.toolsPod(workload(KubernetesWorker.KIND_TOOLS), ConversationToolsPods.LIMITS, "nonce", Map.of());
 
         assertCounts("toolsPod", List.of(tools));
     }
@@ -96,7 +88,7 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
     void shouldMatchTheWorkerWhenTheTableCountsPooledSandboxes() throws IOException {
         JsonNode table = table();
 
-        assertThat(table.path("pooledToolsPods").asInt()).isEqualTo(HephHostConfiguration.SANDBOX_POOL);
+        assertThat(table.path("pooledToolsPods").asInt()).isEqualTo(HephTurnConfiguration.SANDBOX_POOL);
     }
 
     private void assertCounts(String entry, List<Pod> counted) throws IOException {
@@ -145,12 +137,15 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
         return quantity == null ? BigDecimal.ZERO : quantity.getNumericalAmount();
     }
 
-    /** As {@code KubernetesSandboxBackend.launch} builds it: a review's or a host's size by its kind. */
-    private Pod workspacePod(String kind, ResourceLimits limits, KubernetesPods.Size size) {
-        // A review with a custom program is the largest: every side that a review can have.
-        KubernetesPods.Sidecars sides =
-                KubernetesWorker.KIND_REVIEW.equals(kind) ? new KubernetesPods.Sidecars("nonce", true) : null;
-        return pods.workspacePod(workload(kind), Map.of(), List.of("node"), limits, size, sides);
+    /** As {@code KubernetesSandboxBackend.launch} builds it, with a custom program: the largest review, every side. */
+    private Pod reviewPod(ResourceLimits limits) {
+        return pods.workspacePod(
+                workload(KubernetesWorker.KIND_REVIEW),
+                Map.of(),
+                List.of("node"),
+                limits,
+                KubernetesPods.REVIEW,
+                new KubernetesPods.Sidecars("nonce", true));
     }
 
     private static KubernetesPods.Workload workload(String kind) {

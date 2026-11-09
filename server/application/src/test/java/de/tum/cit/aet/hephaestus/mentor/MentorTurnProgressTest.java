@@ -126,6 +126,20 @@ class MentorTurnProgressTest {
         assertThat(reader.snapshot(turn)).isNull();
     }
 
+    /** The end of a stopped turn, on any worker, reads what readers may have seen. */
+    @Test
+    void shouldKeepTheAnswerOfAStoppedTurnUntilItEnds() {
+        assertThat(deliver(send(answer("Pin"), START))).isTrue();
+
+        reader.changed(new MentorLedgerEvents.TurnChanged(
+                WORKSPACE, CONVERSATION, turnId, MentorTurn.Status.STOPPED, MentorTurn.Surface.APP, 1));
+
+        assertThat(reader.snapshot(WORKSPACE, turnId, 1)).isEqualTo(mapper.readTree(answer("Pin")));
+        reader.changed(new MentorLedgerEvents.TurnChanged(
+                WORKSPACE, CONVERSATION, turnId, MentorTurn.Status.DONE, MentorTurn.Surface.APP, 1));
+        assertThat(reader.snapshot(WORKSPACE, turnId, 1)).isNull();
+    }
+
     private List<MentorLedgerEvents.ProgressChanged> send(String text, Instant now) {
         return sender.frames(
                 WORKSPACE,

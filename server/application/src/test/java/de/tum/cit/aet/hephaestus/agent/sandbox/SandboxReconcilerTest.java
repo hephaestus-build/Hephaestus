@@ -61,18 +61,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
     }
 
     private static SandboxBackend.Listed review(String name, UUID job, @Nullable Instant created) {
-        return new SandboxBackend.Listed(
-                new SandboxBackend.Handle(name), SandboxBackend.Kind.REVIEW, job, 1, created, false);
-    }
-
-    private static SandboxBackend.Listed host(String name, boolean creatorGone) {
-        return new SandboxBackend.Listed(
-                new SandboxBackend.Handle(name),
-                SandboxBackend.Kind.HOST,
-                UUID.randomUUID(),
-                null,
-                LONG_AGO,
-                creatorGone);
+        return new SandboxBackend.Listed(new SandboxBackend.Handle(name), SandboxBackend.Kind.REVIEW, job, 1, created);
     }
 
     private double sweeps(String outcome) {
@@ -128,18 +117,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
 
     private static SandboxBackend.Listed attempt(String name, UUID job, int attempt) {
         return new SandboxBackend.Listed(
-                new SandboxBackend.Handle(name), SandboxBackend.Kind.REVIEW, job, attempt, NOW, false);
-    }
-
-    @Test
-    void shouldRemoveAHostOnlyOnceItsWorkerIsGone() {
-        activeJobs();
-        when(backend.list()).thenReturn(List.of(host("gone", true), host("alive", false)));
-
-        reconciler.onStartup();
-
-        verify(backend).remove(new SandboxBackend.Handle("gone"));
-        verify(backend, never()).remove(new SandboxBackend.Handle("alive"));
+                new SandboxBackend.Handle(name), SandboxBackend.Kind.REVIEW, job, attempt, NOW);
     }
 
     @Test

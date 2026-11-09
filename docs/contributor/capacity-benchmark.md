@@ -55,6 +55,8 @@ The sweep sets `CAPACITY_RUN_LABEL` on the fake and includes stable user/turn ke
 Replay samples use that key and its call ordinal, so request UUIDs and arrival order do not change the sample.
 Use the logged `replayKey` and `callOrdinal` for phase joins in these runs.
 
+`--tool-mode roll` scripts the turn of the k3s turn-roll drill ([CI/CD](./ci-cd.mdx)), not a capacity case.
+
 ## 3. Install the test release
 
 Use the chart's small profiles and the same image digests as the system to compare.

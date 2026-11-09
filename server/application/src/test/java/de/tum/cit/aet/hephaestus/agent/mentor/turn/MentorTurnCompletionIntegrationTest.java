@@ -315,7 +315,8 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         reaper.reap();
 
         assertThat(settled(called)).isEqualTo("UNCONFIRMED/WRITE_STARTED/true/-");
-        MentorTurn second = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn second =
+                turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
         assertThat(second.getAttempt()).isEqualTo(2);
         assertThat(feedback.claimConversationCopy(workspace.getId(), called, second.getId(), second.getAttempt()))
                 .isEmpty();
@@ -332,7 +333,8 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 main.getId(),
                 new MentorTurnService.Question(
                         MentorTurn.Surface.APP, "Question", UUID.randomUUID().toString(), null, null));
-        MentorTurn turn = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn turn =
+                turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
         admit(turn);
         if (lease.isNegative()) expire(turn);
         return turn;
@@ -388,7 +390,8 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 transactionTemplate.execute(status -> turns.requeueRunning(workspace.getId(), first.getConversationId())
                         .orElseThrow()));
         ConversationReceipts.awaitSettled(jdbc);
-        MentorTurn second = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn second =
+                turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
         admit(second);
         proxyCall(second, 70_000);
         end(second, MentorTurn.Status.DONE, List.of());
@@ -546,7 +549,8 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(requeued.getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
         assertThat(requeued.getInputTokens()).isZero();
         assertThat(requeued.getQueuedAt()).isAfter(queuedBeforeLoss);
-        MentorTurn second = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn second =
+                turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
         admit(second);
         expire(second);
         proxyCall(second, 70_000);

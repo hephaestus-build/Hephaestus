@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
@@ -95,7 +94,7 @@ class LlmProxySecurityConfig {
             ReviewJobRepository agentJobRepository,
             AgentRuns agentRuns,
             MentorTurnRepository mentorTurnRepository,
-            SandboxGatewaySessions gatewaySessions,
+            ConversationLoopProperties conversationLoop,
             AttemptTokenVerifier jwtVerifier,
             BucketResolver bucketResolver,
             SandboxGatewayBodyBudget bodyBudget,
@@ -118,7 +117,7 @@ class LlmProxySecurityConfig {
                 paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}"),
                 paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/workspace"));
         RequestMatcher resultUpload = paths.matcher(HttpMethod.POST, "/internal/llm/runtime/{id}/result");
-        RequestMatcher hostCommands = paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/commands");
+        RequestMatcher assignments = paths.matcher(HttpMethod.POST, JobTokenAuthenticationFilter.ASSIGNMENTS_PATH);
         RequestMatcher turnTools = new OrRequestMatcher(
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/link-result"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/link-problem"),
@@ -131,12 +130,13 @@ class LlmProxySecurityConfig {
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/sandbox/load"));
         RequestMatcher turnBookkeeping = new OrRequestMatcher(
                 paths.matcher(HttpMethod.GET, "/internal/llm/turn/{id}/context"),
+                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/lease"),
                 paths.matcher(HttpMethod.PUT, "/internal/llm/turn/{id}/partial"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/end"));
         RequestMatcher turnEndpoints = new OrRequestMatcher(turnTools, turnBookkeeping);
         RequestMatcher bodies = new OrRequestMatcher(modelCalls, turnEndpoints);
         RequestMatcher capabilities =
-                new OrRequestMatcher(modelCalls, runtimeReads, resultUpload, hostCommands, turnEndpoints);
+                new OrRequestMatcher(modelCalls, runtimeReads, resultUpload, assignments, turnEndpoints);
         var limit = new AuthRateLimitProperties.Limit(gatewayProperties.requestsPerMinute(), Duration.ofMinutes(1));
         var sourceLimit =
                 new AuthRateLimitProperties.Limit(gatewayProperties.sourceRequestsPerMinute(), Duration.ofMinutes(1));
@@ -150,14 +150,12 @@ class LlmProxySecurityConfig {
                             accounting.gatewayRefused(SandboxGatewayRefusal.FORBIDDEN);
                             response.setStatus(HttpStatus.FORBIDDEN.value());
                         }))
-                .authorizeHttpRequests(auth -> auth.requestMatchers(hostCommands)
-                        .access(caller(identity -> identity.hostSession() != null))
+                .authorizeHttpRequests(auth -> auth.requestMatchers(assignments)
+                        .access(caller(ProxyIdentity::loop))
                         .requestMatchers(runtimeReads)
-                        .access(AuthorizationManagers.anyOf(
-                                caller(identity -> identity.hostSession() != null),
-                                AuthorizationManagers.allOf(
-                                        hasScope(AttemptTokenIssuer.LLM_PROXY_SCOPE),
-                                        caller(identity -> identity.job() != null))))
+                        .access(AuthorizationManagers.allOf(
+                                hasScope(AttemptTokenIssuer.LLM_PROXY_SCOPE),
+                                caller(identity -> identity.job() != null)))
                         .requestMatchers(models)
                         .access(AuthorizationManagers.allOf(
                                 hasScope(AttemptTokenIssuer.LLM_PROXY_SCOPE),
@@ -175,7 +173,7 @@ class LlmProxySecurityConfig {
                                 agentJobRepository,
                                 agentRuns,
                                 mentorTurnRepository,
-                                gatewaySessions,
+                                conversationLoop,
                                 jwtVerifier,
                                 accounting),
                         UsernamePasswordAuthenticationFilter.class)

@@ -1033,6 +1033,25 @@ async function checkStoppedUpgrade(
 	) {
 		throw new Error("installed chart has no valid sandbox namespace");
 	}
+	// Tools Pods hold nothing that outlives their turn, and with every worker stopped no turn goes on. No worker
+	// reaps them now, so the stop removes them instead of waiting for their Job deadline.
+	if (sandboxNamespace !== "") {
+		await output(
+			"kubectl",
+			[
+				"delete",
+				"jobs",
+				"--namespace",
+				sandboxNamespace,
+				"--selector",
+				"hephaestus.build/sandbox-kind=tools",
+				"--cascade=foreground",
+				"--ignore-not-found",
+				"--timeout=100s",
+			],
+			{ signal: AbortSignal.timeout(120_000) },
+		);
+	}
 	for (const namespace of new Set(
 		[settings.namespace, sandboxNamespace].filter((name) => name !== ""),
 	)) {

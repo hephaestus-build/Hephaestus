@@ -84,7 +84,7 @@ capabilities:
 {{- end -}}
 
 {{/*
-The sandbox namespace, of review sandboxes, the conversation host and tools Pods. The operator creates
+The sandbox namespace, of review sandboxes and tools Pods. The operator creates
 it with the Restricted Pod Security level and names it here; the chart writes into it and never
 creates it. The worker receives the same string, and the runtime derives no name of its own.
 */}}
@@ -483,16 +483,15 @@ readinessProbe:
 {{- end -}}
 
 {{/*
-The sandbox pods that may reach the workers' gateway, by their kind: review sandboxes, conversation hosts,
-and the sandboxes of every SandboxTemplate kind. A sandbox's credential, not this selector, binds it to
-its own subject. Tools Pods never match.
+The sandbox pods that may reach the workers' gateway, by their kind: review sandboxes and the sandboxes of
+every SandboxTemplate kind. A sandbox's credential, not this selector, binds it to its own subject. Tools
+Pods never match.
 */}}
-
 {{- define "hephaestus.policy.gatewaySources" -}}
 matchExpressions:
   - key: hephaestus.build/sandbox-kind
     operator: In
-    values: ["review", "host", "conversation", "action"]
+    values: ["review", "conversation", "action"]
 {{- end -}}
 
 {{/* The scraper's way in, on the named port of the metrics: management for the roles, metrics for the exporter. */}}
@@ -754,13 +753,16 @@ below one review fails the render: the JVM would stop at its start, or run out o
 {{- end -}}
 
 {{/*
-Turn admission uses the same declared CPU budget as the fit gate. Model calls and tools Pods have
-independent pool and quota admission. The ceiling is the qualified model-only replay, not provider capacity.
+The conversation turns that the whole installation runs at once: conversationLoop.turns, or auto. Auto
+uses the same declared CPU budget as the fit gate. It takes away the resident role requests, the loop's
+replicas and one surge replica, the tools Pods and the review reservations. Then it gives 50m to each
+turn, up to 32. Model calls and tools Pods have their own pool and quota admission. The ceiling is the
+qualified model-only replay, not provider capacity.
 */}}
 {{- define "hephaestus.conversationTurns" -}}
-{{- if eq (toString .Values.worker.conversationTurns) "auto" -}}
+{{- $loop := .Values.conversationLoop -}}
+{{- if eq (toString $loop.turns) "auto" -}}
 {{- $budget := .Files.Get "turn-admission.json" | fromJson -}}
-{{- $replicas := int .Values.worker.replicas -}}
 {{- $roles := 0 -}}
 {{- range $component := list "server" "webhook" "webapp" "worker" -}}
 {{- $role := get $.Values $component -}}
@@ -777,21 +779,21 @@ independent pool and quota admission. The ceiling is the qualified model-only re
 {{- if and .Values.postgresql.bundled .Values.postgresql.backup.enabled -}}
 {{- $roles = add $roles (int (include "hephaestus.cpuMillis" .Values.postgresql.backup.resources.requests.cpu)) -}}
 {{- end -}}
+{{- if .Values.worker.enabled -}}
+{{- $roles = add $roles (mul (add (int $loop.replicas) 1) (int (include "hephaestus.cpuMillis" $loop.resources.requests.cpu))) -}}
+{{- end -}}
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
-{{- $running := ternary $replicas (mul $replicas 2) (eq .Values.worker.rolloutStrategy "Recreate") -}}
 {{- $tools := add (int $table.activeToolsPods) (int $table.pooledToolsPods) -}}
-{{- $conversationPods := add (int $table.hephHost.pods) (mul $tools (int $table.toolsPod.pods)) -}}
-{{- $roles = add $roles (mul $running (add (int $table.hephHost.cpuMillis) (mul $tools (int $table.toolsPod.cpuMillis)) (mul $conversationPods (int .Values.worker.runtime.podOverhead.cpuMillis)))) -}}
+{{- $roles = add $roles (mul $tools (add (int $table.toolsPod.cpuMillis) (int .Values.worker.runtime.podOverhead.cpuMillis))) -}}
 {{- $reviews := int (include "hephaestus.reviewCpuMillis" .) -}}
 {{- $available := max 0 (sub (int $budget.allocatableCpuMillis) (add $roles $reviews)) -}}
 {{- $turns := min (int $budget.maximumTurns) (div $available (int $budget.cpuMillisPerTurn)) -}}
-{{- $perWorker := div $turns (max 1 $replicas) -}}
-{{- if and .Values.worker.enabled (gt $replicas 0) (lt $perWorker 1) -}}
-{{- fail "Automatic turn admission has no CPU room in its budget of one small node; set worker.conversationTurns to a count, or to 0 to disable turns" -}}
+{{- if and .Values.worker.enabled (gt (int .Values.worker.replicas) 0) (lt $turns 1) -}}
+{{- fail "Automatic turn admission has no CPU room in its budget of one small node; set conversationLoop.turns to a count, or to 0 to disable turns" -}}
 {{- end -}}
-{{- $perWorker -}}
+{{- $turns -}}
 {{- else -}}
-{{- .Values.worker.conversationTurns | int -}}
+{{- $loop.turns | int -}}
 {{- end -}}
 {{- end -}}
 

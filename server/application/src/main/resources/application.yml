@@ -647,8 +647,13 @@ hephaestus:
         default-resource-limits:
             cpus: ${SANDBOX_CPUS:1.0}
 
-    # Per-workspace readiness of Heph is the Heph model binding. hephaestus.worker.capacity.mentor-max and the other
-    # hephaestus.mentor.turn.* keys keep their code defaults: docs/admin/runtime-roles.mdx § Tunables.
+    # The conversation loop's credential for its turn pulls (ConversationLoopProperties). The worker profile requires it.
+    conversation-loop:
+        secret: ${HEPHAESTUS_CONVERSATION_LOOP_SECRET:}
+
+    # Per-workspace readiness of Heph is the Heph model binding. The capacity is the turns that the whole installation
+    # runs at once. The other hephaestus.mentor.turn.* keys keep their code defaults: docs/admin/runtime-roles.mdx
+    # § Tunables.
     mentor:
         turn:
             capacity: ${HEPHAESTUS_MENTOR_TURN_CAPACITY:}

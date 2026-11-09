@@ -9,12 +9,14 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelSlugConflictException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUpstreamIdConflictException;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingSlotMismatchException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobStateConflictException;
+import de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurns;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.exception.MentorRefusedException;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorRejectedException;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import java.util.Locale;
 import java.util.Optional;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -132,6 +134,15 @@ public class AgentControllerAdvice {
     @ExceptionHandler(MentorLeaseLostException.class)
     ProblemDetail handleMentorLeaseLost(MentorLeaseLostException exception) {
         return problem(HttpStatus.CONFLICT, ProblemType.MENTOR_LEASE_LOST, "Turn lease lost", exception);
+    }
+
+    /** A turn attempt that must stop and end: the developer stopped it, or its deadline passed. */
+    @ExceptionHandler(HephTurns.StopException.class)
+    ProblemDetail handleTurnStop(HephTurns.StopException exception) {
+        ProblemDetail problem =
+                problem(HttpStatus.CONFLICT, ProblemType.MENTOR_TURN_STOPPED, "Turn stopped", exception);
+        problem.setProperty("stop", exception.reason().name().toLowerCase(Locale.ROOT));
+        return problem;
     }
 
     private ProblemDetail problem(HttpStatus status, ProblemType type, String title, Exception exception) {

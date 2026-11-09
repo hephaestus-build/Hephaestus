@@ -225,7 +225,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 "id",
                 now,
                 now.plusSeconds(60),
-                null);
+                now.plusSeconds(30));
     }
 
     private MentorTurn leasedTurn(AttemptJwt jwt, boolean live) {

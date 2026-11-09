@@ -1,0 +1,12 @@
+### `conversationLoop`
+
+| Key | Type | Default | Required in object | Constraints |
+| --- | --- | --- | --- | --- |
+| `conversationLoop.replicas` | integer | `2` | yes | `minimum: 1. maximum: 8` |
+| `conversationLoop.resources.limits.cpu` | string | `"2"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `conversationLoop.resources.limits.ephemeral-storage` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `conversationLoop.resources.limits.memory` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `conversationLoop.resources.requests.cpu` | string | `"100m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `conversationLoop.resources.requests.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `conversationLoop.resources.requests.memory` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `conversationLoop.turns` | string or integer | `8` | yes | HEPHAESTUS_MENTOR_TURN_CAPACITY: auto, or the conversation turns that the whole installation runs at once. The server, each worker and each loop replica get this one count. |

@@ -373,6 +373,7 @@ const withWorker = (name: (typeof profiles)[number]) =>
 const workerOwned = (resource: Resource) =>
 	["worker", "sandbox"].includes(String(componentOf(resource)));
 const imageOf = {
+	"conversation-loop": "agent-pi",
 	server: "application-server",
 	webhook: "application-server",
 	webapp: "webapp",
@@ -387,6 +388,7 @@ for (const name of profiles) {
 			.map((resource) => String(componentOf(resource)))
 			.toSorted(byCodePoint);
 		assert.deepEqual(components, [
+			...(runsReviews(name) ? ["conversation-loop"] : []),
 			...(bundled(name) ? ["nats", "postgresql"] : []),
 			"server",
 			"webapp",
@@ -1370,6 +1372,16 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 	);
 	assert.equal(envValue(worker, "HEPHAESTUS_AGENT_IMAGE_REFERENCE"), prepared.images["agent-pi"]);
 	assert.equal(get(container(worker), "image"), prepared.images["application-server"]);
+	// A worker hands a turn only to the loop that presents the release Secret's credential.
+	assert.deepEqual(
+		get(env(worker, "HEPHAESTUS_CONVERSATION_LOOP_SECRET"), "valueFrom", "secretKeyRef"),
+		{ name: secretName, key: "HEPHAESTUS_CONVERSATION_LOOP_SECRET" },
+	);
+	assert.equal(
+		env(worker, "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"),
+		undefined,
+		"no cap per worker",
+	);
 
 	// The single-node worker drains before its replacement, within its configured grace.
 	assert.equal(kindOf(worker), "Deployment");
@@ -1444,10 +1456,10 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 		String(get(sandboxQuota(resources), "spec", "hard", "requests.ephemeral-storage")),
 		/^[1-9][0-9]*Mi$/u,
 	);
-	// One worker with Recreate: its five reviews, one probe run of two Pods, one host and the unchanged
-	// eight-plus-two tools quota.
+	// One worker with Recreate: its five reviews and one probe run of two Pods. The installation's tools
+	// Pods: eight assigned and two warm, whatever the workers.
 	assert.equal(get(tierQuota(resources, "reviews"), "spec", "hard", "pods"), "7");
-	assert.equal(get(tierQuota(resources, "conversations"), "spec", "hard", "pods"), "11");
+	assert.equal(get(tierQuota(resources, "conversations"), "spec", "hard", "pods"), "10");
 
 	// Exactly the calls that the runtime makes, each in one namespace, and no cluster-wide authority.
 	for (const kind of ["ClusterRole", "ClusterRoleBinding"]) {
@@ -1496,8 +1508,8 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 		);
 	}
 
-	// Turn sandboxes have no network. Reviews and hosts reach the workers' gateway port only; the
-	// credential, not the network, binds a sandbox to its own worker.
+	// Tools Pods have no egress. Reviews reach the workers' gateway port only; the credential, not the
+	// network, binds a sandbox to its own worker.
 	const policiesIn = (namespace: string) =>
 		resources
 			.filter(
@@ -1510,22 +1522,27 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 	assert.deepEqual(policiesIn(sandboxes), [
 		"heph-sandbox-deny",
 		"heph-sandbox-gateway",
-		"heph-sandbox-host-tools",
 		"heph-sandbox-tools",
 	]);
 	const policy = (name: string) =>
 		resources.find((resource) => kindOf(resource) === "NetworkPolicy" && nameOf(resource) === name);
-	// A tools Pod accepts its host on the tools port, and nothing else; its host may dial it there.
+	// A tools Pod accepts the conversation loop of this release on the tools port, and nothing else.
 	const toolsPort = [{ port: 7100, protocol: "TCP" }];
+	const loop = workload(resources, "conversation-loop");
 	assert.deepEqual(get(policy("heph-sandbox-tools"), "spec"), {
 		podSelector: sandboxKind("tools"),
 		policyTypes: ["Ingress"],
-		ingress: [{ from: [{ podSelector: sandboxKind("host") }], ports: toolsPort }],
-	});
-	assert.deepEqual(get(policy("heph-sandbox-host-tools"), "spec"), {
-		podSelector: sandboxKind("host"),
-		policyTypes: ["Egress"],
-		egress: [{ to: [{ podSelector: sandboxKind("tools") }], ports: toolsPort }],
+		ingress: [
+			{
+				from: [
+					{
+						namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": "hephaestus" } },
+						podSelector: { matchLabels: get(loop, "spec", "selector", "matchLabels") },
+					},
+				],
+				ports: toolsPort,
+			},
+		],
 	});
 	const gateway = resources.find(
 		(resource) =>
@@ -1536,7 +1553,7 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 			{
 				key: "hephaestus.build/sandbox-kind",
 				operator: "In",
-				values: ["review", "host", "conversation", "action"],
+				values: ["review", "conversation", "action"],
 			},
 		],
 	};
@@ -1577,6 +1594,153 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 			ports: [{ port: kubernetesApi.port, protocol: "TCP" }],
 		},
 	]);
+});
+
+await test("the conversation loop runs the agent image without authority, beside the workers", () => {
+	const resources = rendered(withWorker("dev"));
+	const loop = workload(resources, "conversation-loop");
+	const spec = podSpec(loop);
+	const entry = container(loop);
+	// Two loops where the cluster has two nodes; a new one is ready before an old one stops.
+	assert.equal(get(loop, "spec", "replicas"), 2);
+	assert.equal(get(loop, "spec", "minReadySeconds"), 5);
+	assert.deepEqual(get(loop, "spec", "strategy"), {
+		type: "RollingUpdate",
+		rollingUpdate: { maxSurge: 1, maxUnavailable: 0 },
+	});
+	const selector = get(loop, "spec", "selector", "matchLabels");
+	assert.equal(get(selector, "app.kubernetes.io/component"), "conversation-loop");
+	assert.deepEqual(
+		get(
+			spec,
+			"affinity",
+			"podAntiAffinity",
+			"preferredDuringSchedulingIgnoredDuringExecution",
+			0,
+			"podAffinityTerm",
+		),
+		{ topologyKey: "kubernetes.io/hostname", labelSelector: { matchLabels: selector } },
+	);
+	assert.equal(get(spec, "topologySpreadConstraints", 0, "whenUnsatisfiable"), "ScheduleAnyway");
+	// A role, with no token and the agent image's user.
+	assert.equal(
+		get(spec, "priorityClassName"),
+		get(podSpec(workload(resources, "server")), "priorityClassName"),
+	);
+	assert.equal(get(spec, "automountServiceAccountToken"), false);
+	const account = resources.find(
+		(resource) =>
+			kindOf(resource) === "ServiceAccount" && nameOf(resource) === get(spec, "serviceAccountName"),
+	);
+	assert.equal(get(account, "automountServiceAccountToken"), false);
+	assert.equal(get(spec, "securityContext", "runAsUser"), 1000);
+	assert.equal(get(spec, "securityContext", "runAsGroup"), 1000);
+	assert.equal(get(entry, "securityContext", "readOnlyRootFilesystem"), true);
+	// The longest turn, its stop grace and the stop.
+	assert.equal(get(spec, "terminationGracePeriodSeconds"), 900 + 30 + 30);
+	assert.equal(get(entry, "image"), prepared.images["agent-pi"]);
+	// Node grants no spawn, no read outside the code and the scratch directory, and no other write.
+	assert.deepEqual(get(entry, "command"), [
+		"node",
+		"--disable-sigusr1",
+		"--enable-source-maps",
+		"--permission",
+		"--allow-fs-read=/opt/pi-sdk",
+		"--allow-fs-read=/tmp/heph-loop",
+		"--allow-fs-write=/tmp/heph-loop",
+		"/opt/pi-sdk/heph-host.js",
+	]);
+	assert.deepEqual(get(entry, "volumeMounts"), [{ name: "scratch", mountPath: "/tmp/heph-loop" }]);
+	assert.deepEqual(get(spec, "volumes"), [{ name: "scratch", emptyDir: { sizeLimit: "256Mi" } }]);
+	assert.deepEqual(
+		list(get(entry, "env")).map((variable) => get(variable, "name")),
+		[
+			"LLM_PROXY_URL",
+			"HEPHAESTUS_CONVERSATION_LOOP_SECRET",
+			"HEPHAESTUS_MENTOR_TURN_CAPACITY",
+			"HOME",
+			"PI_CODING_AGENT_DIR",
+		],
+	);
+	assert.equal(
+		envValue(loop, "LLM_PROXY_URL"),
+		"http://heph-sandbox-gateway.hephaestus.svc:8081/internal/llm",
+	);
+	assert.deepEqual(
+		get(env(loop, "HEPHAESTUS_CONVERSATION_LOOP_SECRET"), "valueFrom", "secretKeyRef"),
+		{
+			name: secretName,
+			key: "HEPHAESTUS_CONVERSATION_LOOP_SECRET",
+		},
+	);
+	assert.equal(envValue(loop, "HEPHAESTUS_MENTOR_TURN_CAPACITY"), "8");
+	assert.equal(envValue(loop, "PI_CODING_AGENT_DIR"), "/tmp/heph-loop/.pi");
+	// The probes read the files that the loop writes: no port.
+	assert.equal(get(entry, "ports"), undefined);
+	assert.deepEqual(get(entry, "readinessProbe", "exec", "command"), [
+		"test",
+		"-f",
+		"/tmp/heph-loop/ready",
+	]);
+	assert.deepEqual(get(entry, "livenessProbe", "exec", "command"), [
+		"node",
+		"-e",
+		"process.exit(Date.now()-require('node:fs').statSync('/tmp/heph-loop/alive').mtimeMs<120000?0:1)",
+	]);
+	assert.equal(get(entry, "livenessProbe", "periodSeconds"), 30);
+	assert.equal(get(entry, "livenessProbe", "failureThreshold"), 3);
+	assert.equal(
+		resources.some(
+			(resource) =>
+				kindOf(resource) === "Service" &&
+				get(resource, "spec", "selector", "app.kubernetes.io/component") === "conversation-loop",
+		),
+		false,
+		"no Service selects the loop",
+	);
+
+	// No ingress at all. Egress to the workers' gateway port and to the tools port of tools Pods only.
+	const policy = resources.find(
+		(resource) =>
+			kindOf(resource) === "NetworkPolicy" && nameOf(resource) === get(loop, "metadata", "name"),
+	);
+	assert.deepEqual(get(policy, "spec"), {
+		podSelector: { matchLabels: selector },
+		policyTypes: ["Ingress", "Egress"],
+		egress: [
+			{
+				to: [
+					{
+						podSelector: {
+							matchLabels: get(workload(resources, "worker"), "spec", "selector", "matchLabels"),
+						},
+					},
+				],
+				ports: [{ port: 8081, protocol: "TCP" }],
+			},
+			{
+				to: [
+					{
+						namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": sandboxNamespace } },
+						podSelector: sandboxKind("tools"),
+					},
+				],
+				ports: [{ port: 7100, protocol: "TCP" }],
+			},
+		],
+	});
+
+	// One node: one loop.
+	assert.equal(
+		get(workload(rendered(layersFor("small")), "conversation-loop"), "spec", "replicas"),
+		1,
+	);
+});
+
+await test("the turn count is the conversation loop's, and the worker's former value fails", () => {
+	const retired = render([...layersFor("small"), { worker: { conversationTurns: 8 } }]);
+	assert.equal(retired.ok, false);
+	assert.match(retired.stderr, /conversationTurns/u);
 });
 
 await test("a worker without the optional runtime settings uses the cluster's defaults, and the quota can be left out", () => {
@@ -2000,7 +2164,10 @@ const workerCapacity = (reviewCount: number) => {
 	const worker = workload(
 		rendered([
 			...layersFor("small"),
-			{ worker: { sandbox: { reviewMemory: memoryFor(reviewCount) }, conversationTurns: 8 } },
+			{
+				worker: { sandbox: { reviewMemory: memoryFor(reviewCount) } },
+				conversationLoop: { turns: 8 },
+			},
 			workerMemory("3Gi"),
 		]),
 		"worker",
@@ -2051,7 +2218,7 @@ await test("what a worker holds for its reviews follows the reviews that the san
 await test("a worker runs the reviews that its memory limit holds, and the quota holds no more", () => {
 	const base = [
 		...layersFor("small"),
-		{ worker: { conversationTurns: 8, sandbox: { reviewMemory: memoryFor(66) } } },
+		{ worker: { sandbox: { reviewMemory: memoryFor(66) } }, conversationLoop: { turns: 8 } },
 	];
 	// One worker, which drains before its replacement starts: its reviews and one probe of two Pods.
 	assert.deepEqual(reviewWidth([...base, workerMemory("3Gi")]), { sandboxes: "66", pods: "68" });
@@ -2084,7 +2251,10 @@ await test("the small profile keeps personal content inside the transport-buffer
 	assert.equal(env(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_OUTLINE"), undefined);
 });
 
-await test("practice reviews run exactly when a worker runs, with its Heph turn capacity", () => {
+/** One turn count for the server, every worker and each of the loop's replicas. */
+const everywhere = (count: string) => ({ worker: count, loop: [count], server: count });
+
+await test("practice reviews run exactly when a worker runs, with the installation's Heph turn capacity", () => {
 	// Without a worker, a submitted review job would wait for a worker that never comes.
 	assert.equal(envValue(workload(rendered(layersFor("dev")), "server"), "AGENT_ENABLED"), "false");
 	// The switch the CI clusters did not exercise: a worker without it claims no review. Every shipped
@@ -2111,83 +2281,97 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 			);
 		}
 	}
-	// CPU-based auto is resolved once for the worker and server. Explicit counts remain overrides.
+	// CPU-based auto is resolved once for the whole installation: the server, every worker and every
+	// loop get the same count. Explicit counts remain overrides.
 	const capacities = (layers: readonly Layer[]) => {
 		const resources = rendered(layers);
 		const budget = readJsonFileSync(path.join(chart, "turn-admission.json"));
+		// No turns: the chart sets no capacity, as for the server.
 		const turns = Number(
-			envValue(workload(resources, "worker"), "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"),
+			envValue(workload(resources, "worker"), "HEPHAESTUS_MENTOR_TURN_CAPACITY") ?? "0",
 		);
-		const replicas = Number(get(workload(resources, "worker"), "spec", "replicas"));
+		const loops = workloads(resources).filter(
+			(resource) => componentOf(resource) === "conversation-loop",
+		);
+		// A loop rolls out with one more replica beside the old ones.
 		const roleCpu = workloads(resources).reduce(
-			(cpu, role) => cpu + podRequests(podSpec(role)).cpu * Number(get(role, "spec", "replicas")),
+			(cpu, role) =>
+				cpu +
+				podRequests(podSpec(role)).cpu *
+					(Number(get(role, "spec", "replicas")) +
+						(componentOf(role) === "conversation-loop" ? surge(role) : 0)),
 			0,
 		);
 		const quotaCpu = (["reviews", "conversations"] as const).reduce(
 			(cpu, tier) => cpu + amount(get(tierQuota(resources, tier), "spec", "hard", "requests.cpu")),
 			0,
 		);
+		// In whole millicores: the sum of fractions of a core is not exact.
 		const planned =
-			roleCpu + quotaCpu + (turns * replicas * Number(get(budget, "cpuMillisPerTurn"))) / 1000;
+			Math.round((roleCpu + quotaCpu) * 1000) + turns * Number(get(budget, "cpuMillisPerTurn"));
 		assert.ok(
-			planned <= Number(get(budget, "allocatableCpuMillis")) / 1000,
-			`steady CPU plan ${planned}`,
+			planned <= Number(get(budget, "allocatableCpuMillis")),
+			`steady CPU plan ${planned}m`,
 		);
-		assert.ok(turns * replicas <= Number(get(budget, "maximumTurns")));
+		assert.ok(turns <= Number(get(budget, "maximumTurns")));
 		return {
-			worker: envValue(workload(resources, "worker"), "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"),
+			worker: envValue(workload(resources, "worker"), "HEPHAESTUS_MENTOR_TURN_CAPACITY"),
+			loop: loops.map((loop) => envValue(loop, "HEPHAESTUS_MENTOR_TURN_CAPACITY")),
 			server: envValue(workload(resources, "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY"),
 		};
 	};
-	assert.deepEqual(capacities(layersFor("small")), { worker: "32", server: "32" });
-	assert.deepEqual(capacities([...layersFor("small"), { worker: { conversationTurns: "auto" } }]), {
-		worker: "32",
-		server: "32",
-	});
+	// The loop's request, with the one more replica of its rollout, comes out of the 32.
+	assert.deepEqual(capacities(layersFor("small")), everywhere("31"));
+	assert.deepEqual(
+		capacities([...layersFor("small"), { conversationLoop: { turns: "auto" } }]),
+		everywhere("31"),
+	);
 	assert.deepEqual(
 		capacities([
 			...layersFor("small"),
 			{
-				worker: { replicas: 3, conversationTurns: "auto" },
+				worker: { replicas: 3 },
+				conversationLoop: { turns: "auto" },
 				postgresql: { parameters: { max_connections: 180 } },
 			},
 		]),
-		// Three workers share the node's five reviews, and auto divides what is left across them.
-		{
-			worker: "2",
-			server: "6",
-		},
+		// Three workers share the node's five reviews, and the installation's turns get what is left.
+		everywhere("17"),
 	);
+	// More workers do not multiply the turns: the count is the installation's.
 	assert.deepEqual(
 		capacities([
 			...layersFor("small"),
 			{
-				worker: { replicas: 2, conversationTurns: 5 },
+				worker: { replicas: 2 },
+				conversationLoop: { turns: 5 },
 				postgresql: { parameters: { max_connections: 130 } },
 			},
 		]),
-		{
-			worker: "5",
-			server: "10",
-		},
+		everywhere("5"),
 	);
 	assert.deepEqual(
 		capacities([...layersFor("small"), { worker: { sandbox: { reviewMemory: memoryFor(15) } } }]),
-		{
-			worker: "24",
-			server: "24",
-		},
+		everywhere("21"),
 	);
 	// A larger server request comes out of the turns. One review keeps room for a few.
 	assert.deepEqual(
 		capacities([
 			...layersFor("small"),
 			{
-				server: { resources: { requests: { cpu: "2" } } },
+				server: { resources: { requests: { cpu: "1800m" } } },
 				worker: { sandbox: { reviewMemory: memoryFor(1) } },
 			},
 		]),
-		{ worker: "3", server: "3" },
+		everywhere("4"),
+	);
+	// So does a larger loop, with the one more replica of its rollout.
+	assert.deepEqual(
+		capacities([
+			...layersFor("small"),
+			{ conversationLoop: { resources: { requests: { cpu: "500m" } } } },
+		]),
+		everywhere("15"),
 	);
 	const exhausted = render([
 		...layersFor("small"),
@@ -2210,8 +2394,10 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 	);
 
 	// No Heph slot at all: the server knows no capacity, so no question says that every slot is taken.
-	assert.deepEqual(capacities([...layersFor("small"), { worker: { conversationTurns: 0 } }]), {
-		worker: "0",
+	// The workers hand out no turn, and no loop runs.
+	assert.deepEqual(capacities([...layersFor("small"), { conversationLoop: { turns: 0 } }]), {
+		worker: undefined,
+		loop: [],
 		server: undefined,
 	});
 	assert.equal(
@@ -2362,7 +2548,7 @@ function podRequests(spec: unknown) {
 	};
 }
 /** The Pods that a rollout adds beside the old ones: maxSurge, 25 % by default, none for Recreate. */
-const surge = (deployment: Resource) => {
+function surge(deployment: Resource): number {
 	const replicas = Number(get(deployment, "spec", "replicas") ?? 1);
 	if (get(deployment, "spec", "strategy", "type") === "Recreate") {
 		return 0;
@@ -2373,7 +2559,7 @@ const surge = (deployment: Resource) => {
 	return value.endsWith("%")
 		? Math.ceil((replicas * Number(value.slice(0, -1))) / 100)
 		: Number(value);
-};
+}
 
 const gib = (bytes: number) => (bytes / 2 ** 30).toFixed(1);
 
@@ -2429,7 +2615,6 @@ const sandboxPods = (() => {
 	};
 	return {
 		review: entry("review"),
-		hephHost: entry("hephHost"),
 		turn: entry("toolsPod"),
 		probe: entry("isolationProbe"),
 		pooledTurns: count("pooledToolsPods"),
@@ -2438,7 +2623,6 @@ const sandboxPods = (() => {
 })();
 const sandboxGib = {
 	review: sandboxPods.review.gib,
-	hephHost: sandboxPods.hephHost.gib,
 	turn: sandboxPods.turn.gib,
 	pooledTurns: sandboxPods.pooledTurns,
 	probe: sandboxPods.probe.gib,
@@ -2494,8 +2678,8 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	process.stdout.write(
 		`single-node role requests: ${gib(residents)} GiB; upgrade additions: ${gib(memory - residents)} GiB\n`,
 	);
-	// Every sandbox Pod is inside a tier quota, which counts its requests: reviews, Heph hosts, turn
-	// sandboxes and probe Pods. The namespace's unscoped quota counts the disk of both tiers.
+	// Every sandbox Pod is inside a tier quota, which counts its requests: reviews, tools Pods and probe
+	// Pods. The namespace's unscoped quota counts the disk of both tiers.
 	for (const tier of ["reviews", "conversations"] as const) {
 		const quota = tierQuota(resources, tier);
 		cpu += amount(get(quota, "spec", "hard", "requests.cpu"));
@@ -2503,9 +2687,11 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	}
 	disk += amount(get(sandboxQuota(resources), "spec", "hard", "requests.ephemeral-storage"));
 	assert.equal(get(workload(resources, "worker"), "spec", "replicas"), 1);
+	assert.equal(get(workload(resources, "conversation-loop"), "spec", "replicas"), 1);
+	// The backup's request comes out of the turns too.
 	assert.equal(
-		Number(envValue(workload(resources, "worker"), "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX")),
-		32,
+		Number(envValue(workload(resources, "worker"), "HEPHAESTUS_MENTOR_TURN_CAPACITY")),
+		29,
 	);
 	assert.ok(cpu <= node.cpu, `${cpu.toFixed(2)} CPU requested, ${node.cpu} on the node`);
 	assert.ok(
@@ -2535,8 +2721,8 @@ for (const name of profiles) {
 			const worker = workload(resources, "worker");
 			assert.ok(worker, "the profile runs a worker");
 			// The reviews tier holds the reviews that the sandbox nodes hold, once: new workers wait for the old
-			// ones' room. Every running worker, the old ones during a surge included, has its probe, Heph host
-			// and turn sandboxes.
+			// ones' room. Every running worker, the old ones during a surge included, has its probe. The
+			// installation's tools Pods are one pool, whatever the workers.
 			const replicas = Number(get(worker, "spec", "replicas"));
 			const running = replicas + surge(worker);
 			const perWorker = Number(envValue(worker, "SANDBOX_MAX_CONCURRENT"));
@@ -2547,7 +2733,7 @@ for (const name of profiles) {
 				assert.equal(held, reviewCount);
 			}
 			const workerReviews = Math.min(held, replicas * perWorker);
-			const turns = Number(envValue(worker, "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"));
+			const turns = Number(envValue(worker, "HEPHAESTUS_MENTOR_TURN_CAPACITY"));
 			assert.ok(Number.isInteger(turns), "the profile bounds the Heph turns");
 			const turnSandboxes = sandboxPods.pooledTurns + Math.min(turns, sandboxPods.activeToolsPods);
 			const sum = (parts: [typeof sandboxPods.review, number][]) => ({
@@ -2560,10 +2746,7 @@ for (const name of profiles) {
 					[sandboxPods.review, workerReviews],
 					[sandboxPods.probe, running],
 				]),
-				conversations: sum([
-					[sandboxPods.hephHost, running],
-					[sandboxPods.turn, running * turnSandboxes],
-				]),
+				conversations: sum([[sandboxPods.turn, turnSandboxes]]),
 			};
 			for (const tier of ["reviews", "conversations"] as const) {
 				const hard = get(tierQuota(resources, tier), "spec", "hard");
@@ -2653,16 +2836,16 @@ const tierHard = (layers: Layer[]) => {
 
 await test("each tier's quota counts the RuntimeClass overhead of every sandbox Pod that it holds", () => {
 	const overhead = { runtimeClassName: "gvisor", podOverhead: { cpuMillis: 100, memoryMi: 40 } };
-	const without = tierHard([...layersFor("small"), { worker: { conversationTurns: 32 } }]);
+	const without = tierHard([...layersFor("small"), { conversationLoop: { turns: 32 } }]);
 	// The same five reviews, in memory that holds each review Pod's overhead too.
 	const withOverhead = tierHard([
 		...layersFor("small"),
 		{
 			worker: {
-				conversationTurns: 32,
 				runtime: overhead,
 				sandbox: { reviewMemory: `${5 * (reviewPodMi + 40)}Mi` },
 			},
+			conversationLoop: { turns: 32 },
 		},
 	]);
 	for (const tier of ["reviews", "conversations"] as const) {
@@ -2676,7 +2859,10 @@ await test("each tier's quota counts the RuntimeClass overhead of every sandbox 
 	// In the profile's memory, the overhead leaves room for fewer reviews.
 	assert.equal(reviewWidth(layersFor("small")).sandboxes, "5");
 	assert.equal(
-		reviewWidth([...layersFor("small"), { worker: { runtime: overhead } }]).sandboxes,
+		reviewWidth([
+			...layersFor("small"),
+			{ worker: { runtime: overhead }, conversationLoop: { turns: 32 } },
+		]).sandboxes,
 		"4",
 	);
 });
@@ -2741,7 +2927,7 @@ await test("the small profile on 16 GiB runs its reviews and Heph turns, and an 
 	const worker = workload(resources, "worker");
 	assert.ok(worker, "the profile runs a worker");
 	assert.equal(get(worker, "spec", "replicas"), 1);
-	const turns = Number(envValue(worker, "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"));
+	const turns = Number(envValue(worker, "HEPHAESTUS_MENTOR_TURN_CAPACITY"));
 	const reviewSlots = Number(envValue(worker, "SANDBOX_MAX_CONCURRENT"));
 	const backup = get(
 		resources.find((resource) => kindOf(resource) === "CronJob"),
@@ -2755,20 +2941,19 @@ await test("the small profile on 16 GiB runs its reviews and Heph turns, and an 
 		podSpec(resource),
 		Number(get(resource, "spec", "replicas") ?? 1),
 	]);
-	// Steady: every role, one backup, every review, the Heph host, the pooled turn sandboxes and one turn each running.
+	// Steady: every role, the conversation loop included, one backup, every review, the pooled tools Pods
+	// and one for each turn up to the assigned ones.
 	const steady = sum(total([...roles, [backup, 1]]), {
 		cpu:
 			reviewSlots * sandboxPods.review.cpu +
-			sandboxPods.hephHost.cpu +
 			(sandboxPods.pooledTurns + Math.min(turns, sandboxPods.activeToolsPods)) *
 				sandboxPods.turn.cpu,
 		memory:
 			(reviewSlots * sandboxGib.review +
-				sandboxGib.hephHost +
 				(sandboxGib.pooledTurns + Math.min(turns, sandboxPods.activeToolsPods)) * sandboxGib.turn) *
 			2 ** 30,
 	});
-	assert.equal(turns, 32);
+	assert.equal(turns, 29);
 	assert.equal(reviewSlots, 5);
 	assert.ok(steady.cpu <= node.cpu, `steady: ${steady.cpu.toFixed(2)} CPU of ${node.cpu}`);
 	assert.ok(
@@ -2777,9 +2962,9 @@ await test("the small profile on 16 GiB runs its reviews and Heph turns, and an 
 	);
 	// The isolation probe may wait for room then: a probe whose Pods cannot start keeps the last proof.
 	const probing = sum(steady, sandboxes(sandboxGib.probe, sandboxPods.probe.pods));
-	// An upgrade: the old worker is gone (Recreate), the webhook and webapp surge, the server restarts in
-	// place, and the migration and stanza Jobs run. The new worker must pass its probe at its start, while
-	// the old worker's pooled turn sandboxes wait for the reconciler; the new pool waits for room.
+	// An upgrade: the old worker is gone (Recreate), the webhook, webapp and conversation loop surge, the
+	// server restarts in place, and the migration and stanza Jobs run. The new worker must pass its probe at
+	// its start, beside the installation's pooled tools Pods.
 	const jobs = resources
 		.filter((resource) => kindOf(resource) === "Job")
 		.map((job): [unknown, number] => [podSpec(job), 1]);
@@ -3118,7 +3303,7 @@ await test("PostgreSQL has a lower kubelet OOM adjustment than review and conver
 	const requests = get(container(postgres), "resources", "requests");
 	assert.ok(amount(get(requests, "cpu")) < amount(get(limits, "cpu")), "CPU remains burstable");
 	const score = adjustment(amount(get(requests, "memory")));
-	for (const sandbox of [sandboxPods.review, sandboxPods.hephHost, sandboxPods.turn]) {
+	for (const sandbox of [sandboxPods.review, sandboxPods.turn]) {
 		assert.ok(
 			score < adjustment(sandbox.gib * 2 ** 30),
 			"database precedes sandbox in OOM protection",
@@ -3965,24 +4150,26 @@ await test("disruption budgets protect singleton roles and select only their own
 			prepared,
 			operator,
 			workerLayer,
-			{ worker: { replicas }, webhook: { replicas: 2 } },
+			{ worker: { replicas }, conversationLoop: { replicas }, webhook: { replicas: 2 } },
 		]);
 		const budgets = resources.filter((resource) => kindOf(resource) === "PodDisruptionBudget");
-		assert.equal(budgets.length, 5);
-		for (const component of ["postgresql", "nats", "server", "worker", "webhook"]) {
+		assert.equal(budgets.length, 6);
+		// The workers and the loops leave one Pod at a time where they have more than one.
+		const several = (component: string) =>
+			["worker", "conversation-loop"].includes(component) && replicas > 1;
+		for (const component of [
+			"postgresql",
+			"nats",
+			"server",
+			"worker",
+			"conversation-loop",
+			"webhook",
+		]) {
 			const budget = budgets.find((resource) => componentOf(resource) === component);
 			assert.ok(budget, component);
 			const spec = get(budget, "spec");
-			assert.equal(
-				get(spec, "minAvailable"),
-				component === "worker" && replicas > 1 ? undefined : 1,
-				component,
-			);
-			assert.equal(
-				get(spec, "maxUnavailable"),
-				component === "worker" && replicas > 1 ? 1 : undefined,
-				component,
-			);
+			assert.equal(get(spec, "minAvailable"), several(component) ? undefined : 1, component);
+			assert.equal(get(spec, "maxUnavailable"), several(component) ? 1 : undefined, component);
 			const selector = get(spec, "selector", "matchLabels");
 			assert.deepEqual(
 				selector,

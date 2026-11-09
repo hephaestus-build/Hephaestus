@@ -20,6 +20,8 @@ import {
 	devClusterArguments,
 	devSignIn,
 	devSummary,
+	forwardedPort,
+	heldChecks,
 	trustSteps,
 	mergeSecret,
 	livePod,
@@ -28,9 +30,13 @@ import {
 	RELEASE,
 	restartedPods,
 	SANDBOXES,
+	signInPod,
 	statefulPods,
+	outcomeChecks,
+	turnOutcome,
+	turnState,
 } from "./kubernetes-cluster.ts";
-import { isRecord } from "./lib/json.ts";
+import { asArray, asRecord, isRecord } from "./lib/json.ts";
 
 const chart = fileURLToPath(new URL("../deploy/chart/hephaestus/", import.meta.url));
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -90,6 +96,7 @@ await test("the generated Secret holds every key that the chart reads", () => {
 		"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
 		"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
 		"HEPHAESTUS_AUTH_STATE_COOKIE_KEY",
+		"HEPHAESTUS_CONVERSATION_LOOP_SECRET",
 		"WEBHOOK_SECRET",
 		"WEBHOOK_ROUTING_SECRET",
 	]) {
@@ -513,4 +520,135 @@ await test("replacement-storage drill refuses local execution before invoking cl
 	} finally {
 		rmSync(emptyPath, { recursive: true, force: true });
 	}
+});
+
+await test("the sign-in Pod runs the server template with the e2e sign-in, on loopback and outside every Service", () => {
+	const template = {
+		metadata: { labels: { "app.kubernetes.io/component": "server" } },
+		spec: {
+			serviceAccountName: "heph-server",
+			containers: [
+				{
+					name: "server",
+					image: "server@sha256:original",
+					env: [
+						{ name: "DATABASE_URL", value: "postgresql://heph-postgresql:5432/hephaestus" },
+						{ name: "SPRING_PROFILES_ACTIVE", value: "prod" },
+						{ name: "HEPHAESTUS_AUTH_ASSURANCE_ENFORCED", value: "true" },
+					],
+					readinessProbe: { httpGet: { path: "/actuator/health/readiness", port: "management" } },
+				},
+			],
+		},
+	};
+	const deployment = { metadata: { namespace: "hephaestus" }, spec: { template } };
+	const before = structuredClone(deployment);
+	const pod = signInPod(deployment, "heph-turn-roll-sign-in");
+	assert.deepEqual(deployment, before);
+	assert.deepEqual(pod.metadata, {
+		...template.metadata,
+		name: "heph-turn-roll-sign-in",
+		namespace: "hephaestus",
+	});
+	const spec = asRecord(pod.spec, "Pod spec");
+	assert.equal(spec.restartPolicy, "Never");
+	assert.equal(spec.serviceAccountName, "heph-server");
+	assert.deepEqual(spec.readinessGates, [{ conditionType: "hephaestus.build/never-ready" }]);
+	const container = asRecord(asArray(spec.containers, "containers")[0], "container");
+	assert.equal(container.image, "server@sha256:original");
+	assert.deepEqual(container.readinessProbe, template.spec.containers[0]?.readinessProbe);
+	const variables = asArray(container.env, "env").map((variable) => asRecord(variable, "variable"));
+	const env = new Map(variables.map((variable) => [variable.name, variable.value]));
+	assert.equal(env.get("SPRING_PROFILES_ACTIVE"), "e2e");
+	assert.equal(env.get("HEPHAESTUS_AUTH_ASSURANCE_ENFORCED"), "false");
+	assert.equal(env.get("SERVER_ADDRESS"), "127.0.0.1");
+	assert.equal(env.get("HEPHAESTUS_AUTH_ISSUER"), undefined);
+	assert.equal(env.get("HEPHAESTUS_AUTH_COOKIE_SECURE"), "true");
+	assert.equal(env.get("SPRING_DATASOURCE_URL"), "jdbc:$(DATABASE_URL)");
+	// Kubernetes expands a variable only from one that an earlier entry defines.
+	const names = variables.map((variable) => variable.name);
+	assert.ok(names.indexOf("DATABASE_URL") < names.indexOf("SPRING_DATASOURCE_URL"));
+	assert.equal(new Set(names).size, names.length);
+	assert.throws(
+		() => signInPod({ metadata: {}, spec: { template: { spec: { containers: [] } } } }, "x"),
+		/single-container server template/u,
+	);
+});
+
+await test("the drill reads the local port that kubectl port-forward reports", () => {
+	assert.equal(forwardedPort("Forwarding from 127.0.0.1:43127 -> 8080\n"), 43_127);
+	assert.equal(
+		forwardedPort("Forwarding from 127.0.0.1:43127 -> 8080\nForwarding from [::1]:43127 -> 8080\n"),
+		43_127,
+	);
+	assert.equal(forwardedPort("Forwarding from [::1]:43127 -> 8080\n"), undefined);
+	assert.equal(forwardedPort(""), undefined);
+});
+
+await test("the drill reads the turn's state and refuses a tools Pod name that is no DNS label", () => {
+	assert.deepEqual(turnState('{"status":"RUNNING","attempt":1,"pod":"hephaestus-tools-0a1b"}'), {
+		status: "RUNNING",
+		attempt: 1,
+		pod: "hephaestus-tools-0a1b",
+	});
+	assert.deepEqual(turnState('{"status":"QUEUED","attempt":0,"pod":null}'), {
+		status: "QUEUED",
+		attempt: 0,
+		pod: null,
+	});
+	assert.throws(() => turnState('{"status":"RUNNING","attempt":1,"pod":"../x"}'), /valid name/u);
+	assert.throws(() => turnState('{"attempt":1,"pod":null}'), /no status/u);
+});
+
+await test("a roll keeps the turn only when it still runs the recorded attempt with the recorded tools Pod", () => {
+	const recorded = { attempt: 1, pod: "hephaestus-tools-a" };
+	const failures = (observed: { status: string; attempt: number; pod: string | null }) =>
+		heldChecks("after the roll", recorded, observed).flatMap((check) =>
+			check.failure === undefined ? [] : [check.failure],
+		);
+	assert.deepEqual(failures({ status: "RUNNING", attempt: 1, pod: "hephaestus-tools-a" }), []);
+	assert.deepEqual(failures({ status: "QUEUED", attempt: 2, pod: null }), [
+		"the turn is QUEUED",
+		"it runs attempt 2",
+		"it holds no tools Pod",
+	]);
+	assert.deepEqual(failures({ status: "RUNNING", attempt: 1, pod: "hephaestus-tools-b" }), [
+		"it holds hephaestus-tools-b",
+	]);
+});
+
+await test("the ended turn passes only DONE on attempt 1, with every bash output in its results and its answer", () => {
+	const outcome = turnOutcome(
+		JSON.stringify({
+			status: "DONE",
+			attempt: 1,
+			answer: "The commands printed: rolled-1 rolled-2.",
+			bash: [
+				{ isError: false, text: "rolled-1\n" },
+				{ isError: false, text: "rolled-2\n" },
+			],
+		}),
+	);
+	const failures = (changed: Partial<typeof outcome>) =>
+		outcomeChecks({ ...outcome, ...changed }).flatMap((check) =>
+			check.failure === undefined ? [] : [check.failure],
+		);
+	assert.deepEqual(failures({}), []);
+	assert.deepEqual(failures({ status: "FAILED", attempt: 2 }), [
+		"it ended FAILED",
+		"it ran 2 attempts",
+	]);
+	assert.deepEqual(failures({ bash: [] }), ["the turn stored no bash result"]);
+	assert.deepEqual(
+		failures({
+			bash: [
+				{ isError: false, text: "rolled-1\n" },
+				{ isError: true, text: "Command timed out" },
+			],
+		}),
+		['bash call 2 returned "Command timed out"'],
+	);
+	assert.deepEqual(failures({ answer: "The commands printed: rolled-1." }), [
+		"the answer lacks rolled-2: The commands printed: rolled-1.",
+	]);
 });

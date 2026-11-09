@@ -367,7 +367,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
 
     private static SandboxBackend.Listed reviewSandbox(String name, UUID jobId, int attempt) {
         return new SandboxBackend.Listed(
-                new SandboxBackend.Handle(name), SandboxBackend.Kind.REVIEW, jobId, attempt, Instant.now(), false);
+                new SandboxBackend.Handle(name), SandboxBackend.Kind.REVIEW, jobId, attempt, Instant.now());
     }
 
     @Test

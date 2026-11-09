@@ -327,7 +327,7 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 main.getId(),
                 new MentorTurnService.Question(
                         MentorTurn.Surface.APP, text, UUID.randomUUID().toString(), null, null));
-        return turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+        return turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
     }
 
     /** Ends the turn as a host does after a {@code fetch_context} read that copied the person's data. */

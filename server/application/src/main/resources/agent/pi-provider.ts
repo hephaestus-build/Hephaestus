@@ -4,7 +4,11 @@ import type { ExtensionFactory, ModelRuntime } from "@earendil-works/pi-coding-a
 
 import { diagnose, errorKind } from "./pi-diagnostics.ts";
 import { hasText } from "./pi-text.ts";
-import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
+
+/** A JSON object: the loop's compiled code imports nothing from the practice-script toolkit. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 /** One chat model as {@link ModelRuntime.registerProvider} takes it; the extension-facing type omits sampling. */
 export type RegisteredModel = Extract<

@@ -7,6 +7,8 @@ import {
 	logicalReplayKey,
 	parseReplay,
 	replaySample,
+	ROLL_CALL_LIMIT,
+	rollStep,
 	sensitivityGrid,
 } from "./lib/capacity-replay.ts";
 
@@ -87,4 +89,38 @@ await test("the synthetic provider ends after one tool call even when the client
 	assert.equal(claimReplayTool(sent, "synthetic-turn-a"), true);
 	assert.equal(claimReplayTool(sent, "synthetic-turn-a"), false);
 	assert.equal(claimReplayTool(sent, "synthetic-turn-b"), true);
+});
+
+await test("the turn-roll script runs bash after each result until its release, then repeats each output", () => {
+	// As the loop sends them: the stored messages, then the turn's situation, which it never stores.
+	const situation = { role: "user", content: [{ type: "text", text: "<situation>\nNow: Mon." }] };
+	const history = [
+		{ role: "user", content: "An earlier question." },
+		{ role: "tool", content: "rolled-9\n" },
+		{ role: "user", content: "Run the turn-roll command." },
+	];
+	assert.deepEqual(rollStep([...history, situation], false), {
+		command: "sleep 30; echo rolled-1",
+	});
+	const ran = [
+		...history,
+		{ role: "assistant", content: "Running the command." },
+		{ role: "tool", content: "rolled-1\n" },
+		{ role: "assistant", content: "Running the command." },
+		{ role: "tool", content: [{ type: "text", text: "rolled-2\n" }] },
+	];
+	assert.deepEqual(rollStep([...ran, situation], false), { command: "sleep 30; echo rolled-3" });
+	assert.deepEqual(rollStep([...ran, situation], true), {
+		text: "The commands printed: rolled-1 rolled-2.",
+	});
+	const timedOut = [...history, { role: "tool", content: "Command timed out after 60 seconds" }];
+	assert.deepEqual(rollStep([...timedOut, situation], true), { text: "The commands printed: ." });
+	const limit = [
+		...history,
+		...Array.from({ length: ROLL_CALL_LIMIT }, (_, index) => ({
+			role: "tool",
+			content: `rolled-${index + 1}`,
+		})),
+	];
+	assert.ok("text" in rollStep([...limit, situation], false));
 });

@@ -11,6 +11,8 @@ const { values } = parseArgs({
 		replay: { type: "string" },
 		out: { type: "string" },
 		"tool-mode": { type: "string", default: "mixed-read" },
+		// The namespaces whose Pods may call the provider; the fixture's own when absent.
+		client: { type: "string", multiple: true, default: [] },
 	},
 });
 if (
@@ -22,8 +24,12 @@ if (
 ) {
 	throw new Error("Use a capacity-bench-* namespace and supply --replay and --out");
 }
-if (!["none", "mixed-read"].includes(values["tool-mode"])) {
-	throw new Error("--tool-mode must be none|mixed-read");
+if (!["none", "mixed-read", "roll"].includes(values["tool-mode"])) {
+	throw new Error("--tool-mode must be none|mixed-read|roll");
+}
+const clients = values.client.length === 0 ? [values.namespace] : values.client;
+if (!clients.every((client) => /^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/u.test(client))) {
+	throw new Error("--client must name a namespace");
 }
 const replay = parseReplay(parseJson(await readFile(values.replay, "utf8")));
 const data: Record<string, string> = { "replay.json": JSON.stringify(replay) };
@@ -131,13 +137,9 @@ await writeFile(
 						egress: [],
 						ingress: [
 							{
-								from: [
-									{
-										namespaceSelector: {
-											matchLabels: { "kubernetes.io/metadata.name": values.namespace },
-										},
-									},
-								],
+								from: clients.map((client) => ({
+									namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": client } },
+								})),
 								ports: [{ protocol: "TCP", port: 8080 }],
 							},
 						],

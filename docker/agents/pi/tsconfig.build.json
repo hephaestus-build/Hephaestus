@@ -1,12 +1,14 @@
 {
-	// The image runs the gateway as JavaScript: Node's TypeScript loader is the largest part of a small
-	// process's memory. CI type-checks these files (tsconfig.node.json); this build only emits them.
+	// The image runs the gateway, the tools program and the conversation loop as JavaScript: Node's TypeScript
+	// loader is the largest part of a small process's memory. CI type-checks these files (tsconfig.node.json);
+	// this build only emits them.
 	"compilerOptions": {
 		"target": "ES2024",
 		"module": "NodeNext",
 		"moduleResolution": "NodeNext",
 		"rewriteRelativeImportExtensions": true,
 		"erasableSyntaxOnly": true,
+		"resolveJsonModule": true,
 		"noCheck": true,
 		"types": [],
 		"sourceMap": true,
@@ -19,6 +21,7 @@
 		"gateway-run.ts",
 		"tools-server.ts",
 		"tool-client.ts",
-		"tools-seccomp.ts"
+		"tools-seccomp.ts",
+		"heph-host.ts"
 	]
 }

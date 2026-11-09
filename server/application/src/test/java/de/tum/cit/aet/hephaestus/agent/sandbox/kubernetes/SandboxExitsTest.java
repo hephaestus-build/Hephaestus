@@ -139,11 +139,11 @@ class SandboxExitsTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNeverReadTheOutputOfAHephHostThatFailed() {
+    void shouldNeverReadTheOutputOfAToolsPodThatFailed() {
         var pods = mock(KubernetesPods.class);
-        when(pods.get("hephaestus-host-1")).thenReturn(pod(null, ended(KubernetesPods.LOOP, 1, "Error")));
+        when(pods.get("hephaestus-tools-1")).thenReturn(pod(null, ended(KubernetesPods.TOOLS, 1, "Error")));
 
-        new SandboxExits(pods, new SimpleMeterRegistry()).record(SandboxExits.Kind.HOST, "hephaestus-host-1");
+        new SandboxExits(pods, new SimpleMeterRegistry()).record(SandboxExits.Kind.TOOLS, "hephaestus-tools-1");
 
         verify(pods, never()).tail(anyString(), anyString(), anyInt(), anyInt());
     }
@@ -288,13 +288,12 @@ class SandboxExitsTest extends BaseUnitTest {
 
     @Test
     void shouldKeepTheOtherExitsOfAReviewAndThePartialCodeOfAnotherSandboxAnError() {
-        var partialHost = pod(null, ended(KubernetesPods.LOOP, SandboxLayout.EXIT_PARTIAL_REVIEW, "Error"));
+        var partial = pod(null, ended(KubernetesPods.LOOP, SandboxLayout.EXIT_PARTIAL_REVIEW, "Error"));
         var failedReview = pod(null, ended(KubernetesPods.LOOP, 1, "Error"));
 
-        assertThat(SandboxExits.exit(SandboxExits.Kind.REVIEW, partialHost).reason())
+        assertThat(SandboxExits.exit(SandboxExits.Kind.REVIEW, partial).reason())
                 .isEqualTo(SandboxExits.Reason.PARTIAL);
-        assertThat(SandboxExits.exit(SandboxExits.Kind.HOST, partialHost).reason())
-                .isEqualTo(SandboxExits.Reason.ERROR);
+        assertThat(SandboxExits.exit(SandboxExits.Kind.PROBE, partial).reason()).isEqualTo(SandboxExits.Reason.ERROR);
         assertThat(SandboxExits.exit(SandboxExits.Kind.REVIEW, failedReview).reason())
                 .isEqualTo(SandboxExits.Reason.ERROR);
     }
@@ -303,16 +302,16 @@ class SandboxExitsTest extends BaseUnitTest {
     void shouldCountEveryKindAndReasonFromZeroAndAPodThatIsGoneAsNotFound() {
         var meters = new SimpleMeterRegistry();
         var pods = mock(KubernetesPods.class);
-        when(pods.get("hephaestus-host-gone")).thenReturn(null);
+        when(pods.get("hephaestus-tools-gone")).thenReturn(null);
         var exits = new SandboxExits(pods, meters);
 
         assertThat(meters.find(AgentMetrics.SANDBOX_EXITS).counters())
                 .hasSize(SandboxExits.Kind.values().length * SandboxExits.Reason.values().length);
 
-        exits.record(SandboxExits.Kind.HOST, "hephaestus-host-gone");
+        exits.record(SandboxExits.Kind.TOOLS, "hephaestus-tools-gone");
 
         assertThat(meters.get(AgentMetrics.SANDBOX_EXITS)
-                        .tag("kind", "host")
+                        .tag("kind", "tools")
                         .tag("reason", "not_found")
                         .counter()
                         .count())
@@ -322,7 +321,7 @@ class SandboxExitsTest extends BaseUnitTest {
     private static Pod pod(@Nullable String reason, ContainerStatus... containers) {
         return new PodBuilder()
                 .withNewMetadata()
-                .withName("hephaestus-host-1")
+                .withName("hephaestus-sandbox-1")
                 .endMetadata()
                 .withNewStatus()
                 .withPhase(reason == null ? "Succeeded" : "Failed")
@@ -339,7 +338,7 @@ class SandboxExitsTest extends BaseUnitTest {
     private static Pod phase(String phase) {
         return new PodBuilder()
                 .withNewMetadata()
-                .withName("hephaestus-host-1")
+                .withName("hephaestus-sandbox-1")
                 .endMetadata()
                 .withNewStatus()
                 .withPhase(phase)

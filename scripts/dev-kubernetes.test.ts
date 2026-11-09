@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import {
+	conversationLoopSecret,
 	hostAddress,
 	hostPorts,
 	hostResources,
@@ -45,7 +46,30 @@ await test("five host edit loops have distinct namespaces derived from their por
 	assert.throws(() => hostPorts({ MANAGEMENT_PORT: "8081" }), /must differ/u);
 });
 
-await test("host sandboxes retain the chart's quotas and restricted authority without deploying the application", async () => {
+await test("each port set makes its loop secret once and keeps it private", async () => {
+	const work = await mkdtemp(path.join(tmpdir(), "heph-dev-test-"));
+	try {
+		const file = path.join(work, "conversation-loop-secret");
+		const secret = await conversationLoopSecret(file);
+		assert.match(secret, /^[0-9a-f]{64}$/u);
+		assert.equal(await conversationLoopSecret(file), secret);
+		// Windows keeps no POSIX mode bits for the check to read.
+		if (process.platform !== "win32") {
+			const { mode } = await stat(file);
+			assert.equal(mode % 0o1000, 0o600);
+		}
+		await writeFile(file, "short");
+		await assert.rejects(conversationLoopSecret(file), /64 lowercase hex/u);
+		assert.equal(await readFile(file, "utf8"), "short");
+	} finally {
+		await rm(work, { recursive: true, force: true });
+	}
+});
+
+const IMAGE = `ghcr.io/hephaestus-build/agent-pi@sha256:${"1".repeat(64)}`;
+const LOOP_SECRET = "a".repeat(64);
+
+await test("host sandboxes keep the chart's quotas and authority, and only the conversation loop of the application runs in k3d", async () => {
 	const work = await mkdtemp(path.join(tmpdir(), "heph-dev-test-"));
 	const { namespace } = hostPorts({});
 	try {
@@ -66,13 +90,14 @@ await test("host sandboxes retain the chart's quotas and restricted authority wi
 		const env = hostWorkerEnvironment(rendered);
 		assert.equal(env.AGENT_ENABLED, "true");
 		assert.equal(env.SANDBOX_MAX_CONCURRENT, "1");
-		assert.equal(env.HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX, "1");
+		assert.equal(env.HEPHAESTUS_MENTOR_TURN_CAPACITY, "1");
 		assert.equal(env.HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST, "true");
 		assert.equal(env.SPRING_PROFILES_ACTIVE, undefined);
 		assert.equal(env.HEPHAESTUS_RUNTIME_SERVER_ENABLED, undefined);
 		assert.equal(env.SPRING_DATASOURCE_URL, undefined);
 
-		const resources = hostResources(rendered, namespace, "192.0.2.1", 8081).map((value) =>
+		const host = { address: "192.0.2.1", port: 8091, image: IMAGE, loopSecret: LOOP_SECRET };
+		const resources = hostResources(rendered, namespace, host).map((value) =>
 			asRecord(value, "resource"),
 		);
 		assert.ok(
@@ -84,15 +109,46 @@ await test("host sandboxes retain the chart's quotas and restricted authority wi
 					"ResourceQuota",
 					"PriorityClass",
 					"NetworkPolicy",
+					"Secret",
+					"Deployment",
 				].includes(String(resource.kind)),
 			),
 		);
-		assert.ok(
-			resources.every(
+		const named = (kind: string, name: string) =>
+			resources.find(
 				(resource) =>
-					resource.kind === "PriorityClass" ||
-					asRecord(resource.metadata, "metadata").namespace === namespace,
-			),
+					resource.kind === kind && asRecord(resource.metadata, "metadata").name === name,
+			);
+		// Only the loop, its credential and its policy are in the release namespace.
+		assert.deepEqual(
+			resources
+				.filter(
+					(resource) =>
+						resource.kind !== "PriorityClass" &&
+						asRecord(resource.metadata, "metadata").namespace !== namespace,
+				)
+				.map((resource) => [
+					resource.kind,
+					asRecord(resource.metadata, "metadata").name,
+					asRecord(resource.metadata, "metadata").namespace,
+				]),
+			[
+				["Secret", "heph-app", `${namespace}-host`],
+				["NetworkPolicy", "heph-conversation-loop", `${namespace}-host`],
+				["ServiceAccount", "heph-conversation-loop", `${namespace}-host`],
+				["Deployment", "heph-conversation-loop", `${namespace}-host`],
+			],
+		);
+		assert.deepEqual(
+			resources
+				.filter((resource) => resource.kind === "PriorityClass")
+				.map((resource) => String(asRecord(resource.metadata, "metadata").name))
+				.toSorted(),
+			[
+				`${namespace}-host-heph-conversations`,
+				`${namespace}-host-heph-reviews`,
+				`${namespace}-host-heph-roles`,
+			],
 		);
 		const quotas = resources.filter((resource) => resource.kind === "ResourceQuota");
 		assert.equal(quotas.length, 3);
@@ -108,32 +164,92 @@ await test("host sandboxes retain the chart's quotas and restricted authority wi
 		assert.deepEqual(binding?.subjects, [
 			{ kind: "ServiceAccount", name: "host-worker", namespace },
 		]);
-		const policies = new Map(
+		assert.deepEqual(
 			resources
 				.filter((resource) => resource.kind === "NetworkPolicy")
-				.map((resource) => [String(asRecord(resource.metadata, "metadata").name), resource]),
+				.map((resource) => String(asRecord(resource.metadata, "metadata").name))
+				.toSorted(),
+			["heph-conversation-loop", "heph-sandbox-deny", "heph-sandbox-gateway", "heph-sandbox-tools"],
 		);
-		assert.deepEqual([...policies.keys()].toSorted(), [
-			"heph-sandbox-deny",
-			"heph-sandbox-gateway",
-			"heph-sandbox-host-tools",
-			"heph-sandbox-tools",
-		]);
-		assert.deepEqual(policies.get("heph-sandbox-deny")?.spec, {
+		const policy = (name: string) => asRecord(named("NetworkPolicy", name)?.spec, name);
+		assert.deepEqual(policy("heph-sandbox-deny"), {
 			podSelector: {},
 			policyTypes: ["Ingress", "Egress"],
 		});
-		// The gateway is the host's address; the host still reaches the tools Pods inside the cluster.
-		assert.deepEqual(asRecord(policies.get("heph-sandbox-gateway")?.spec, "policy").egress, [
-			{ to: [{ ipBlock: { cidr: "192.0.2.1/32" } }], ports: [{ protocol: "TCP", port: 8081 }] },
-		]);
-		assert.deepEqual(
-			asArray(
-				asRecord(policies.get("heph-sandbox-host-tools")?.spec, "policy").egress,
-				"egress",
-			).map((rule) => asRecord(rule, "rule").ports),
-			[[{ protocol: "TCP", port: 7100 }]],
+		const gateway = {
+			to: [{ ipBlock: { cidr: "192.0.2.1/32" } }],
+			ports: [{ protocol: "TCP", port: 8091 }],
+		};
+		const loopPod = {
+			"app.kubernetes.io/name": "hephaestus",
+			"app.kubernetes.io/instance": "heph",
+			"app.kubernetes.io/component": "conversation-loop",
+		};
+		assert.deepEqual(policy("heph-sandbox-gateway").egress, [gateway]);
+		// The loop reaches the host's gateway and the tools port of tools Pods, and nothing else.
+		assert.deepEqual(policy("heph-conversation-loop"), {
+			podSelector: { matchLabels: loopPod },
+			policyTypes: ["Ingress", "Egress"],
+			egress: [
+				gateway,
+				{
+					to: [
+						{
+							namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": namespace } },
+							podSelector: { matchLabels: { "hephaestus.build/sandbox-kind": "tools" } },
+						},
+					],
+					ports: [{ port: 7100, protocol: "TCP" }],
+				},
+			],
+		});
+		// Tools Pods admit the loop where it runs, and only on the tools port.
+		assert.deepEqual(policy("heph-sandbox-tools"), {
+			podSelector: { matchLabels: { "hephaestus.build/sandbox-kind": "tools" } },
+			policyTypes: ["Ingress"],
+			ingress: [
+				{
+					from: [
+						{
+							namespaceSelector: {
+								matchLabels: { "kubernetes.io/metadata.name": `${namespace}-host` },
+							},
+							podSelector: { matchLabels: loopPod },
+						},
+					],
+					ports: [{ port: 7100, protocol: "TCP" }],
+				},
+			],
+		});
+		const loop = named("Deployment", "heph-conversation-loop");
+		assert.ok(loop);
+		const loopSpec = asRecord(loop.spec, "loop");
+		assert.equal(loopSpec.replicas, 1);
+		const template = asRecord(loopSpec.template, "loop template");
+		assert.deepEqual(asRecord(template.metadata, "loop metadata").labels, {
+			...loopPod,
+			"app.kubernetes.io/managed-by": "Helm",
+			"app.kubernetes.io/part-of": "hephaestus",
+		});
+		const container = asRecord(
+			asArray(asRecord(template.spec, "loop Pod").containers, "containers")[0],
+			"loop container",
 		);
+		assert.equal(container.image, IMAGE);
+		const loopEnv = new Map(
+			asArray(container.env, "loop environment").map((entry) => {
+				const variable = asRecord(entry, "variable");
+				return [variable.name, variable];
+			}),
+		);
+		assert.equal(loopEnv.get("LLM_PROXY_URL")?.value, "http://192.0.2.1:8091/internal/llm");
+		assert.equal(loopEnv.get("HEPHAESTUS_MENTOR_TURN_CAPACITY")?.value, "1");
+		assert.deepEqual(loopEnv.get("HEPHAESTUS_CONVERSATION_LOOP_SECRET")?.valueFrom, {
+			secretKeyRef: { name: "heph-app", key: "HEPHAESTUS_CONVERSATION_LOOP_SECRET" },
+		});
+		assert.deepEqual(named("Secret", "heph-app")?.data, {
+			HEPHAESTUS_CONVERSATION_LOOP_SECRET: Buffer.from(LOOP_SECRET).toString("base64"),
+		});
 		const role = resources.find((resource) => resource.kind === "Role");
 		assert.ok(role);
 		assert.ok(
@@ -141,8 +257,11 @@ await test("host sandboxes retain the chart's quotas and restricted authority wi
 				(rule) => !asArray(asRecord(rule, "rule").resources, "resources").includes("secrets"),
 			),
 		);
-		assert.throws(() => hostResources(rendered, namespace, "host.k3d.internal", 8081), /IPv4/u);
-		assert.throws(() => hostResources("", namespace, "192.0.2.1", 8081), /expected sandbox/u);
+		assert.throws(
+			() => hostResources(rendered, namespace, { ...host, address: "host.k3d.internal" }),
+			/IPv4/u,
+		);
+		assert.throws(() => hostResources("", namespace, host), /expected sandbox/u);
 	} finally {
 		await rm(work, { recursive: true, force: true });
 	}

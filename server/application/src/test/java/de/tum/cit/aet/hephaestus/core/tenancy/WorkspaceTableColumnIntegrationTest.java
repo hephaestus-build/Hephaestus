@@ -49,6 +49,9 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
     private static final Map<String, String> GLOBAL_NAMING_A_WORKSPACE = Map.of(
             "auth_event",
             "an account's audit trail; workspace_id only names the workspace of an event that has one",
+            "conversation_tools_pod",
+            "the installation's tools Pods; workspace_id names a bound Pod's turn, so a context change revokes the"
+                    + " workspace's Pods, and is NULL for a pooled Pod",
             "llm_call_permit",
             "instance-owned admission to shared provider capacity; workspace_id only orders fair grants, and is NULL"
                     + " only for a product feedback call",

@@ -581,7 +581,8 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private MentorTurn claim(MentorTurnService.Submission submission) {
-        MentorTurn claimed = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn claimed =
+                turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
         assertThat(claimed.getId()).isEqualTo(submission.turn().getId());
         return claimed;
     }

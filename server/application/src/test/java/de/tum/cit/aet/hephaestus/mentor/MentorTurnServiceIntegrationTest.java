@@ -101,7 +101,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldStoreNothingAndRefuseNewQuestionsWhenTheDevelopersErasureWasRequestedWhileTheAttemptRan() {
         ask(main, "Question");
-        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
         requestErasure();
 
         turns.end(
@@ -192,12 +192,12 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 conversations.openThread(workspace.getId(), first.question().getId());
         MentorTurnService.Submission inThread = ask(thread, "About this");
 
-        MentorTurn claimedFirst = turns.claimNext(LEASE).orElseThrow();
-        MentorTurn claimedSecond = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn claimedFirst = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
+        MentorTurn claimedSecond = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
 
         assertThat(claimedFirst.getId()).isEqualTo(first.turn().getId());
         assertThat(claimedSecond.getId()).isEqualTo(inThread.turn().getId());
-        turns.claimNext(LEASE);
+        turns.claimNext(LEASE, Integer.MAX_VALUE);
         assertThat(stored(followUp.turn()).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
         assertThat(stored(claimedFirst).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
         assertThat(stored(claimedFirst).getAttempt()).isEqualTo(1);
@@ -208,7 +208,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     void shouldStartTheFollowUpWhenTheRunningTurnEnds() {
         ask(main, "First");
         MentorTurnService.Submission followUp = ask(main, "Follow-up");
-        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
 
         turns.end(
                 running.getWorkspaceId(),
@@ -217,7 +217,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 Objects.requireNonNull(running.getLeaseId()),
                 new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null));
 
-        assertThat(turns.claimNext(LEASE))
+        assertThat(turns.claimNext(LEASE, Integer.MAX_VALUE))
                 .hasValueSatisfying(next ->
                         assertThat(next.getId()).isEqualTo(followUp.turn().getId()));
     }
@@ -238,10 +238,10 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 .setParameter("followUp", followUp.turn().getId())
                 .executeUpdate());
 
-        assertThat(turns.claimNext(LEASE))
+        assertThat(turns.claimNext(LEASE, Integer.MAX_VALUE))
                 .hasValueSatisfying(
                         next -> assertThat(next.getId()).isEqualTo(first.turn().getId()));
-        assertThat(turns.claimNext(LEASE))
+        assertThat(turns.claimNext(LEASE, Integer.MAX_VALUE))
                 .as("the follow-up waits for the question before it")
                 .isEmpty();
         assertThat(stored(followUp.turn()).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
@@ -277,12 +277,12 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         MentorTurn shown = stored(waiting.turn());
         int twoSlots = Math.toIntExact(held + 2);
 
-        assertThat(turns.claimNext(LEASE)).isPresent();
+        assertThat(turns.claimNext(LEASE, Integer.MAX_VALUE)).isPresent();
         assertThat(waits(twoSlots).waits(shown.getWorkspaceId(), List.of(shown)))
                 .as("one of two slots is free, so the question may start at once")
                 .isEmpty();
 
-        assertThat(turns.claimNext(LEASE)).isPresent();
+        assertThat(turns.claimNext(LEASE, Integer.MAX_VALUE)).isPresent();
         assertThat(waits(twoSlots).waits(shown.getWorkspaceId(), List.of(stored(waiting.turn()))))
                 .as("every workspace shares the slots, and both are taken")
                 .containsExactly(entry(waiting.turn().getId(), MentorTurn.WaitingFor.FREE_HEPH));
@@ -300,7 +300,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     void shouldGiveAFollowUpNoReasonWhileTheQuestionBeforeItWaitsOrRuns() {
         ask(main, "First");
         MentorTurnService.Submission followUp = ask(main, "Follow-up");
-        assertThat(turns.claimNext(LEASE)).isPresent();
+        assertThat(turns.claimNext(LEASE, Integer.MAX_VALUE)).isPresent();
 
         assertThat(waits(1).waits(workspace.getId(), List.of(stored(followUp.turn()))))
                 .as("it waits for its own conversation, not for a free Hephaestus")
@@ -322,7 +322,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 ask(conversations.openThread(workspace.getId(), first.question().getId()), "About this");
         published.clear();
 
-        assertThat(turns.claimNext(LEASE)).isPresent();
+        assertThat(turns.claimNext(LEASE, Integer.MAX_VALUE)).isPresent();
 
         assertThat(publishedQueued())
                 .as("the start can have taken the last Hephaestus slot")
@@ -412,7 +412,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     /** Claims turns until the submitted one starts; a turn of another test that starts first is left running. */
     private MentorTurn startedTurn(MentorTurnService.Submission submitted) {
         while (true) {
-            MentorTurn claimed = turns.claimNext(LEASE).orElseThrow();
+            MentorTurn claimed = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
             if (claimed.getId().equals(submitted.turn().getId())) {
                 return claimed;
             }
@@ -422,7 +422,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldRejectAWriteWhenTheAttemptNoLongerHoldsTheLease() {
         ask(main, "Question");
-        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
 
         assertThatThrownBy(() -> turns.updatePartial(
                         running.getWorkspaceId(),
@@ -443,7 +443,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldRefuseEveryAttemptOperationAfterItsLeaseExpiresBeforeTheReaperRuns() {
         ask(main, "Question");
-        MentorTurn expired = turns.claimNext(EXPIRED).orElseThrow();
+        MentorTurn expired = turns.claimNext(EXPIRED, Integer.MAX_VALUE).orElseThrow();
         UUID leaseId = Objects.requireNonNull(expired.getLeaseId());
         long workspaceId = expired.getWorkspaceId();
         UUID turnId = expired.getId();
@@ -471,7 +471,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldRefuseAnotherWorkspaceEvenWithTheCorrectLeaseIdentity() {
         ask(main, "Question");
-        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
         UUID leaseId = Objects.requireNonNull(running.getLeaseId());
 
         assertThat(turnRepository.hasLiveLease(
@@ -495,10 +495,10 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldGiveTheNextAttemptANewLeaseIdentity() {
         ask(main, "Question");
-        MentorTurn first = turns.claimNext(EXPIRED).orElseThrow();
+        MentorTurn first = turns.claimNext(EXPIRED, Integer.MAX_VALUE).orElseThrow();
         UUID firstLease = Objects.requireNonNull(first.getLeaseId());
         assertThat(turns.expireLease(first.getId())).isPresent();
-        MentorTurn next = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn next = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
 
         assertThat(next.getLeaseId()).isNotNull().isNotEqualTo(firstLease);
         assertThatThrownBy(() ->
@@ -516,7 +516,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldStoreThePiEntriesAndRecordTheQuestionsPiEntryWhenTheHostEndsTheTurn() {
         MentorTurnService.Submission submission = ask(main, "Question");
-        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
         String userPiId = MentorLedgerFixtures.piId();
 
         turns.end(
@@ -551,7 +551,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldKeepOnlyTheSummaryOfAFailedTurnSoTheNextTurnStartsFromIt() {
         MentorTurnService.Submission submission = ask(main, "Question");
-        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
 
         turns.end(
                 running.getWorkspaceId(),
@@ -580,7 +580,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldStoreNothingOfTheTurnWhenTheDeveloperDeletedTheQuestionWhileHephAnswered() {
         MentorTurnService.Submission submission = ask(main, "Question with a secret");
-        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
         entryService.deleteMessage(workspace.getId(), submission.question().getId());
 
         turns.end(
@@ -614,7 +614,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                         UUID.randomUUID().toString(),
                         "17.01",
                         null));
-        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
         entryService.redactSlackEntries(workspace.getId());
 
         turns.end(
@@ -634,7 +634,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldKeepNoFailureReasonWhenAStoppedTurnsLeaseExpires() {
         ask(main, "Question");
-        MentorTurn running = turns.claimNext(EXPIRED).orElseThrow();
+        MentorTurn running = turns.claimNext(EXPIRED, Integer.MAX_VALUE).orElseThrow();
         turns.stop(workspace.getId(), running.getId());
 
         assertThat(turns.expireLease(running.getId())).isPresent();
@@ -647,7 +647,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldSendThePartialAnswerWithoutWritingTheTurnAndRefuseOneAfterTheDeveloperStoppedIt() {
         ask(main, "Question");
-        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
         var snapshot = JsonNodeFactory.instance.objectNode().put("text", "Thinking");
         String version = rowVersion(running);
 
@@ -688,7 +688,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         assertThat(stopped.getStatus()).isEqualTo(MentorTurn.Status.STOPPED);
         assertThat(stored(stopped).isLeased()).isFalse();
         assertThat(entryRepository.findById(submission.question().getId())).isPresent();
-        turns.claimNext(LEASE);
+        turns.claimNext(LEASE, Integer.MAX_VALUE);
         assertThat(stored(stopped).getStatus()).isEqualTo(MentorTurn.Status.STOPPED);
     }
 
@@ -696,10 +696,10 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     void shouldLetTheHostCommitTheAbortedAnswerBeforeTheNextTurnStartsWhenARunningTurnIsStopped() {
         ask(main, "First");
         MentorTurnService.Submission followUp = ask(main, "Follow-up");
-        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
 
         turns.stop(workspace.getId(), running.getId());
-        turns.claimNext(LEASE);
+        turns.claimNext(LEASE, Integer.MAX_VALUE);
         assertThat(stored(followUp.turn()).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
         turns.end(
                 running.getWorkspaceId(),
@@ -717,7 +717,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         assertThat(ended.isLeased()).isFalse();
         assertThat(turns.answer(workspace.getId(), running.getId()).answerEntryId())
                 .isNotNull();
-        assertThat(turns.claimNext(LEASE))
+        assertThat(turns.claimNext(LEASE, Integer.MAX_VALUE))
                 .hasValueSatisfying(next ->
                         assertThat(next.getId()).isEqualTo(followUp.turn().getId()));
     }
@@ -725,7 +725,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldRetryOnceAndThenFailWhenTheLeaseExpiresTwice() {
         ask(main, "Question");
-        MentorTurn first = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn first = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
         turns.updatePartial(
                 first.getWorkspaceId(),
                 first.getId(),
@@ -747,7 +747,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 .as("a lost attempt stored nothing")
                 .isNull();
 
-        MentorTurn second = turns.claimNext(EXPIRED).orElseThrow();
+        MentorTurn second = turns.claimNext(EXPIRED, Integer.MAX_VALUE).orElseThrow();
         assertThat(second.getAttempt()).isEqualTo(2);
         assertThat(turns.expireLease(second.getId())).isPresent();
 
@@ -777,7 +777,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 Clock.offset(Clock.systemUTC(), Duration.ofMinutes(-10)),
                 3);
         MentorTurn running = Objects.requireNonNull(transactionTemplate.execute(
-                tx -> behind.claimNext(Duration.ofMinutes(1)).orElseThrow()));
+                tx -> behind.claimNext(Duration.ofMinutes(1), Integer.MAX_VALUE).orElseThrow()));
         transactionTemplate.executeWithoutResult(tx -> behind.renewLease(
                 running.getWorkspaceId(),
                 running.getId(),
@@ -793,7 +793,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldKeepTheTurnFromTheReaperWhenTheHostRenewsItsLease() {
         ask(main, "Question");
-        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
 
         turns.renewLease(
                 running.getWorkspaceId(),
@@ -811,7 +811,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         ask(main, "Question");
 
         long[] counts = transactionTemplate.execute(tx -> {
-            MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+            MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
             entityManager.flush();
             long[] before = turnUpdatesInThisTransaction();
             UUID leaseId = Objects.requireNonNull(running.getLeaseId());
@@ -849,7 +849,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldKeepTheProxysCountsWhenAStaleTurnSnapshotIsSavedAfterThem() {
         ask(main, "Question");
-        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
 
         transactionTemplate.executeWithoutResult(tx -> {
             MentorTurn stale = turnRepository.findById(running.getId()).orElseThrow();
@@ -868,7 +868,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Test
     void shouldNameTheLastAnswerAndOnlyTheFeedbackItShowedWhenTheTurnShowedSome() {
         ask(main, "Question");
-        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
         UUID shown = UUID.randomUUID();
         UUID refused = UUID.randomUUID();
         Map<String, UUID> calls = new LinkedHashMap<>();

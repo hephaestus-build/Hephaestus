@@ -177,7 +177,7 @@ const workerEnv = asArray(asRecord(workerContainers[0], "worker container").env,
 	(row) => asRecord(row, "variable"),
 );
 if (
-	workerEnv.find((row) => row.name === "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX")?.value !==
+	workerEnv.find((row) => row.name === "HEPHAESTUS_MENTOR_TURN_CAPACITY")?.value !==
 	String(admission)
 ) {
 	throw new Error("Worker admission does not match requested measurement");

@@ -10,7 +10,8 @@
 # --export-keys writes the keys that a restore needs to a new file that only you can read, and
 # --check-keys tells for each key whether that file still matches the Secret. Both change nothing.
 # --rotate replaces a key whose rotation needs only a new value and a restart of the roles that
-# read it: HEPHAESTUS_AUTH_STATE_COOKIE_KEY, or WEBHOOK_ROUTING_SECRET with its previous value.
+# read it: HEPHAESTUS_AUTH_STATE_COOKIE_KEY, HEPHAESTUS_CONVERSATION_LOOP_SECRET, or WEBHOOK_ROUTING_SECRET
+# with its previous value.
 #
 # It uses the current kubectl context. It creates the Secret, or adds only the keys that the Secret
 # lacks. An explicitly supplied GitHub OAuth client secret replaces its stored value.
@@ -174,6 +175,11 @@ if [ -n "$ROTATE" ]; then
 		add HEPHAESTUS_AUTH_STATE_COOKIE_KEY "$(random -base64 32)"
 		roles=server
 		;;
+	HEPHAESTUS_CONVERSATION_LOOP_SECRET)
+		add HEPHAESTUS_CONVERSATION_LOOP_SECRET "$(random -hex 32)"
+		# The loop pulls no turn until both restarted; its turns that run go on with their own credentials.
+		roles="worker conversation-loop"
+		;;
 	WEBHOOK_ROUTING_SECRET)
 		has WEBHOOK_ROUTING_SECRET || die "the Secret has no WEBHOOK_ROUTING_SECRET to rotate: run this without --rotate first"
 		# The receiver accepts the current and one previous value. A second rotation would drop the
@@ -186,7 +192,7 @@ if [ -n "$ROTATE" ]; then
 		# a hook that a webhook role with the old values refuses.
 		roles="webhook server"
 		;;
-	*) die "--rotate takes HEPHAESTUS_AUTH_STATE_COOKIE_KEY or WEBHOOK_ROUTING_SECRET: the Rotate a value section of Secret custody gives the procedure for $ROTATE" ;;
+	*) die "--rotate takes HEPHAESTUS_AUTH_STATE_COOKIE_KEY, HEPHAESTUS_CONVERSATION_LOOP_SECRET or WEBHOOK_ROUTING_SECRET: the Rotate a value section of Secret custody gives the procedure for $ROTATE" ;;
 	esac
 	# A role reads the Secret only at its start, so each role must restart. Find each one before the
 	# Secret changes: a selector that matches nothing restarts nothing and still succeeds.
@@ -246,6 +252,7 @@ has HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY || add HEPHAESTUS_SECURITY_CRE
 has HEPHAESTUS_AUTH_STATE_COOKIE_KEY || add HEPHAESTUS_AUTH_STATE_COOKIE_KEY "$(random -base64 32)"
 has WEBHOOK_SECRET || add WEBHOOK_SECRET "$(random -hex 32)"
 has WEBHOOK_ROUTING_SECRET || add WEBHOOK_ROUTING_SECRET "$(random -hex 32)"
+has HEPHAESTUS_CONVERSATION_LOOP_SECRET || add HEPHAESTUS_CONVERSATION_LOOP_SECRET "$(random -hex 32)"
 if [ "$BACKUPS" = true ]; then
 	has BACKUP_CIPHER_PASS || add BACKUP_CIPHER_PASS "$(random -base64 48)"
 fi

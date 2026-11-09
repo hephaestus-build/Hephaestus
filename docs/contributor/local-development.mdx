@@ -103,8 +103,11 @@ Spring. `vp run dev:server:e2e` uses that interface.
 
 `vp run dev` runs the server and worker roles in a host JVM against one shared k3d cluster.
 Each worktree uses its own sandbox namespace, derived from its port set, with its own ResourceQuota.
-Its sandbox, tools and loop Pods stay in that namespace.
+Its review sandbox and tools Pods stay in that namespace.
 Five worktrees share the cluster. They do not each install a full chart release.
+
+The host cannot reach the tools Pods, so the conversation loop runs in k3d, in the namespace with the suffix `-host`.
+The script makes the loop secret once for each sandbox namespace and keeps it in `.context/kubernetes-host/<namespace>/conversation-loop-secret`.
 
 The cluster has one full chart release for cluster qualification and live suites.
 Run that release on demand with `vp run dev:kubernetes`.

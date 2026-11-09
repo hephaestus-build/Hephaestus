@@ -491,7 +491,8 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
     /** Claims turns until this one starts. A turn of another test that starts first is taken along. */
     private MentorTurn running(UUID turnId) {
         while (true) {
-            MentorTurn claimed = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+            MentorTurn claimed =
+                    turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE).orElseThrow();
             if (claimed.getId().equals(turnId)) {
                 return claimed;
             }

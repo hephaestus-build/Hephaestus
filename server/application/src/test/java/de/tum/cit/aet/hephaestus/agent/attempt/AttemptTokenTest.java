@@ -55,14 +55,16 @@ class AttemptTokenTest extends BaseUnitTest {
     void shouldIssueATurnTokenThatNamesOnlyItsTurnWorkspaceAndAttempt() {
         UUID turnId = UUID.randomUUID();
 
-        AttemptJwt jwt = verifier.verify(issuer.issueForTurn(
-                turnId, 42L, 2, UUID.randomUUID(), Instant.now().plusSeconds(300)));
+        Instant work = Instant.now().plusSeconds(300).truncatedTo(ChronoUnit.SECONDS);
+
+        AttemptJwt jwt =
+                verifier.verify(issuer.issueForTurn(turnId, 42L, 2, UUID.randomUUID(), work, work.plusSeconds(60)));
 
         assertThat(jwt.kind()).isEqualTo(AttemptJwt.Kind.TURN);
         assertThat(jwt.id()).isEqualTo(turnId);
         assertThat(jwt.workspaceId()).isEqualTo(42L);
         assertThat(jwt.attempt()).isEqualTo(2);
-        assertThat(jwt.workDeadline()).isNull();
+        assertThat(jwt.workDeadline()).isEqualTo(work);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -70,8 +72,7 @@ class AttemptTokenTest extends BaseUnitTest {
     void shouldRefuseAnAttemptTokenWithMalformedClaims(String label, AttemptJwt.Kind kind, Map<String, Object> claims) {
         Instant issued = Instant.now().minusSeconds(60);
         Map<String, Object> withDeadline = new HashMap<>(claims);
-        if (kind == AttemptJwt.Kind.REVIEW)
-            withDeadline.putIfAbsent(AttemptTokenIssuer.WORK_DEADLINE_CLAIM, issued.plusSeconds(300));
+        withDeadline.putIfAbsent(AttemptTokenIssuer.WORK_DEADLINE_CLAIM, issued.plusSeconds(300));
         String token = attemptToken(kind, issued, issued.plusSeconds(900), withDeadline);
 
         assertThatThrownBy(() -> verifier.verify(token)).isInstanceOf(AttemptTokenInvalidException.class);
@@ -141,17 +142,13 @@ class AttemptTokenTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseATurnTokenThatCarriesAWorkDeadline() {
+    void shouldRefuseATurnTokenWithoutAWorkDeadline() {
         Instant issued = Instant.now().minusSeconds(60);
-        String token = attemptToken(
-                AttemptJwt.Kind.TURN,
-                issued,
-                issued.plusSeconds(900),
-                Map.<String, Object>of(AttemptTokenIssuer.WORK_DEADLINE_CLAIM, issued.plusSeconds(300)));
+        String token = attemptToken(AttemptJwt.Kind.TURN, issued, issued.plusSeconds(900), Map.<String, Object>of());
 
         assertThatThrownBy(() -> verifier.verify(token))
                 .isInstanceOf(AttemptTokenInvalidException.class)
-                .hasMessageContaining("work_deadline");
+                .hasMessageMatching("(?s).*work[_ ]deadline.*");
     }
 
     @Test

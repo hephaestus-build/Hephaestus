@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextGenerations;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnDocuments;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnEvidence;
+import de.tum.cit.aet.hephaestus.agent.runtime.FeedbackWritingGuide;
+import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
@@ -22,6 +24,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.ZoneId;
@@ -47,7 +50,7 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @Service
 @ConditionalOnWorkerRole
-@Profile(HephHostConfiguration.PROFILES)
+@Profile(HephTurnConfiguration.PROFILES)
 public class HephTurnContexts {
 
     /**
@@ -125,7 +128,7 @@ public class HephTurnContexts {
         }
     }
 
-    /** The model a host runs a turn with: the one the turn was admitted with. */
+    /** The model a loop runs a turn with: the one the turn was admitted with. */
     public record Model(
             String apiProtocol,
             String modelId,
@@ -133,14 +136,20 @@ public class HephTurnContexts {
             @Nullable Integer maxOutputTokens,
             @Nullable String reasoningEffort) {}
 
+    /** Heph's system prompt: the mentor's instructions and the feedback writing guide, the same for every turn. */
+    static final String SYSTEM_PROMPT =
+            new String(PiRuntimeFactory.loadClasspathResource("mentor/system.md"), StandardCharsets.UTF_8) + "\n\n"
+                    + FeedbackWritingGuide.text();
+
     /**
-     * Everything a host needs to run a turn.
+     * Everything the loop needs to run a turn.
      *
      * @param sessionId the Pi session id, which is the conversation id
      * @param entries the Pi session entries before the turn, rendered by the path builder
-     * @param prompt the turn's question as the host passes it to {@code prompt()}
+     * @param prompt the turn's question as the loop passes it to {@code prompt()}
      * @param situation the turn's situation ({@link MentorSituation})
-     * @param contextFolder whether this worker serves read, bash and load_context
+     * @param contextFolder whether the workers serve read, bash and load_context
+     * @param systemPrompt Heph's system prompt, which the loop gives the turn's session
      */
     public record Context(
             UUID sessionId,
@@ -148,7 +157,8 @@ public class HephTurnContexts {
             String prompt,
             Model model,
             String situation,
-            boolean contextFolder) {}
+            boolean contextFolder,
+            String systemPrompt) {}
 
     public Context context(TurnAttempt turn) {
         ZoneId zone = zone(turn);
@@ -174,7 +184,8 @@ public class HephTurnContexts {
                         admitted.maxOutputTokens(),
                         effort == null ? null : effort.name()),
                 situation,
-                contextFolder);
+                contextFolder,
+                SYSTEM_PROMPT);
     }
 
     /** The turn attempt's context documents, built once per attempt; the tools Pod stages them. */

@@ -9,6 +9,7 @@ import { parseArgs } from "node:util";
 import {
 	parseReplay,
 	claimReplayTool,
+	rollStep,
 	selectReplayCall,
 	sensitivityGrid,
 	type ReplaySample,
@@ -34,8 +35,9 @@ if (values.grid === true) {
 	if (runLabel !== undefined && !/^[a-z0-9-]+$/u.test(runLabel)) {
 		throw new Error("Invalid run label");
 	}
-	if (!["none", "mixed-read"].includes(values["tool-mode"])) {
-		throw new Error("--tool-mode must be none|mixed-read");
+	const toolMode = values["tool-mode"];
+	if (!["none", "mixed-read", "roll"].includes(toolMode)) {
+		throw new Error("--tool-mode must be none|mixed-read|roll");
 	}
 	const port = Number(values.port);
 	if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
@@ -44,6 +46,8 @@ if (values.grid === true) {
 	let sequence = 0;
 	const toolSent = new Set<string>();
 	const callOrdinals = new Map<string, number>();
+	// The turn-roll drill releases its turn once both Deployments rolled.
+	let released = false;
 	const server = createServer((request, response) => {
 		void handle();
 		async function handle() {
@@ -56,7 +60,8 @@ if (values.grid === true) {
 				response.end();
 			}
 		}
-		async function serve() {
+		/** Answers a request that is not a completion; false for a completion. */
+		function control(): boolean {
 			if (request.method === "GET" && request.url === "/v1/models") {
 				response.writeHead(200, { "content-type": "application/json" }).end(
 					JSON.stringify({
@@ -66,14 +71,20 @@ if (values.grid === true) {
 						],
 					}),
 				);
-				return;
-			}
-			if (request.url === "/health") {
+			} else if (request.url === "/health") {
 				response.end("ok");
-				return;
-			}
-			if (request.method !== "POST" || request.url !== "/v1/chat/completions") {
+			} else if (toolMode === "roll" && request.method === "POST" && request.url === "/release") {
+				released = true;
+				response.writeHead(204).end();
+			} else if (request.method !== "POST" || request.url !== "/v1/chat/completions") {
 				response.writeHead(404).end();
+			} else {
+				return false;
+			}
+			return true;
+		}
+		async function serve() {
+			if (control()) {
 				return;
 			}
 			const chunks: Buffer[] = [];
@@ -121,14 +132,10 @@ if (values.grid === true) {
 				log("end");
 				return;
 			}
-			const { tool, text, model, usage } = completion(
-				body,
-				call,
-				sample,
-				toolSent,
-				requestKey,
-				values["tool-mode"] === "mixed-read",
-			);
+			const { tool, text, model, usage } =
+				toolMode === "roll"
+					? rollCompletion(body, call, sample, released)
+					: completion(body, call, sample, toolSent, requestKey, toolMode === "mixed-read");
 			await sleep(sample.ttftMs);
 			if (response.destroyed) {
 				log("cancelled");
@@ -236,11 +243,43 @@ function completion(
 		tool,
 		text: " Synthetic benchmark response.".repeat(Math.ceil(sample.outputTokens / 4)),
 		model: typeof body.model === "string" ? body.model : "capacity-replay",
-		usage: {
-			prompt_tokens: sample.inputTokens,
-			completion_tokens: sample.outputTokens,
-			total_tokens: sample.inputTokens + sample.outputTokens,
-		},
+		usage: usageOf(sample),
+	};
+}
+
+function usageOf(sample: ReplaySample) {
+	return {
+		prompt_tokens: sample.inputTokens,
+		completion_tokens: sample.outputTokens,
+		total_tokens: sample.inputTokens + sample.outputTokens,
+	};
+}
+
+/** The turn-roll drill's turn: `bash` while the turn waits for its release, then the answer. */
+function rollCompletion(
+	body: Record<string, unknown>,
+	call: number,
+	sample: ReplaySample,
+	released: boolean,
+) {
+	const tools = asArray(body.tools ?? [], "tools").map((tool) => asRecord(tool, "tool"));
+	const bash = tools.some((tool) => isRecord(tool.function) && tool.function.name === "bash");
+	const step = bash
+		? rollStep(asArray(body.messages, "messages"), released)
+		: { text: "Synthetic turn-roll response." };
+	return {
+		tool:
+			"command" in step
+				? {
+						index: 0,
+						id: `call_${call}`,
+						type: "function",
+						function: { name: "bash", arguments: JSON.stringify({ command: step.command }) },
+					}
+				: null,
+		text: "command" in step ? "Running the command." : step.text,
+		model: typeof body.model === "string" ? body.model : "capacity-replay",
+		usage: usageOf(sample),
 	};
 }
 

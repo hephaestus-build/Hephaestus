@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -10,7 +11,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenInvalidException;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
@@ -40,11 +40,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
-    private final SandboxGatewaySessions sessions = mock(SandboxGatewaySessions.class);
+    private static final String LOOP_SECRET = "0123456789abcdef".repeat(4);
+
     private final AttemptTokenVerifier verifier = mock(AttemptTokenVerifier.class);
     private final AgentRuns runs = mock(AgentRuns.class);
-    private final JobTokenAuthenticationFilter filter =
-            new JobTokenAuthenticationFilter(jobs, runs, turns, sessions, verifier, mock(ProxyAccounting.class));
+    private final JobTokenAuthenticationFilter filter = new JobTokenAuthenticationFilter(
+            jobs, runs, turns, new ConversationLoopProperties(LOOP_SECRET), verifier, mock(ProxyAccounting.class));
 
     @AfterEach
     void clearContext() {
@@ -189,15 +190,14 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"turn", "commands"})
-    void jobTokenReachesNoTurnEndpointAndNoCommandChannel(String target) throws Exception {
+    @ValueSource(strings = {"turn", "assignments"})
+    void jobTokenReachesNoTurnEndpointAndNoAssignmentPull(String target) throws Exception {
         var job = running();
         when(verifier.verify("valid-token")).thenReturn(jwt(job));
         var path = target.equals("turn")
                 ? "/internal/llm/turn/" + UUID.randomUUID() + "/end"
-                : "/internal/llm/runtime/" + job.getId() + "/commands";
+                : JobTokenAuthenticationFilter.ASSIGNMENTS_PATH;
         var request = request(path, "Bearer valid-token");
-        request.setMethod("GET");
         var response = new MockHttpServletResponse();
         filter.doFilter(request, response, (incoming, outgoing) -> {
             throw new AssertionError("Job token served outside its job");
@@ -207,53 +207,48 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     }
 
     @Test
-    void hostSessionTokenReachesOnlyItsOwnRuntimeReadsAndCommandChannel() throws Exception {
-        UUID host = UUID.randomUUID();
-        when(verifier.verify("session-token")).thenThrow(new AttemptTokenInvalidException("not signed", "malformed"));
-        when(sessions.unsignedSessionFor("session-token"))
-                .thenReturn(Optional.of(
-                        new SandboxGatewaySessions.UnsignedSession(host, SandboxGatewaySessions.Kind.HEPH_HOST)));
-        // The host's workspace initializer reads discovery and the workspace archive before the host starts.
-        for (var path : new String[] {
-            "/internal/llm/runtime/" + host,
-            "/internal/llm/runtime/" + host + "/workspace",
-            "/internal/llm/runtime/" + host + "/commands"
-        }) {
-            var principal = new AtomicReference<Authentication>();
-            var own = request(path, "Bearer session-token");
-            own.setMethod("GET");
-            var response = new MockHttpServletResponse();
-            filter.doFilter(
-                    own,
-                    response,
-                    (incoming, outgoing) -> principal.set(Objects.requireNonNull(
-                            SecurityContextHolder.getContext().getAuthentication())));
-            assertThat(response.getStatus()).as(path).isEqualTo(200);
-            var identity = ((JobTokenAuthentication) principal.get()).getPrincipal();
-            assertThat(identity.hostSession()).isEqualTo(host);
-            assertThat(principal.get().getAuthorities()).as("no model scope").isEmpty();
-            SecurityContextHolder.clearContext();
-        }
-        UUID other = UUID.randomUUID();
-        for (var path : new String[] {
-            "/internal/llm/runtime/" + other + "/commands",
-            "/internal/llm/runtime/" + other,
-            "/internal/llm/runtime/" + other + "/workspace",
-            "/internal/llm/runtime/" + host + "/result",
-            "/internal/llm/turn/" + host + "/end",
-            "/internal/llm/responses"
-        }) {
-            var refused = request(path, "Bearer session-token");
-            refused.setMethod(
-                    path.endsWith("/commands") || path.endsWith("/workspace") || path.endsWith(other.toString())
-                            ? "GET"
-                            : "POST");
-            var response = new MockHttpServletResponse();
-            filter.doFilter(refused, response, (incoming, outgoing) -> {
-                throw new AssertionError("Session token served outside its own runtime: " + path);
+    void loopCredentialReachesOnlyTheAssignmentPull() throws Exception {
+        var principal = new AtomicReference<Authentication>();
+        var pull = request(JobTokenAuthenticationFilter.ASSIGNMENTS_PATH, "Bearer " + LOOP_SECRET);
+        var response = new MockHttpServletResponse();
+        filter.doFilter(
+                pull,
+                response,
+                (incoming, outgoing) -> principal.set(Objects.requireNonNull(
+                        SecurityContextHolder.getContext().getAuthentication())));
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(((JobTokenAuthentication) principal.get()).getPrincipal().loop())
+                .isTrue();
+        assertThat(principal.get().getAuthorities()).as("no model scope").isEmpty();
+        verifyNoInteractions(verifier, jobs, turns);
+        SecurityContextHolder.clearContext();
+
+        when(verifier.verify(LOOP_SECRET)).thenThrow(new AttemptTokenInvalidException("not signed", "malformed"));
+        for (var path : new String[] {"/internal/llm/turn/" + UUID.randomUUID() + "/end", "/internal/llm/responses"}) {
+            var refused = new MockHttpServletResponse();
+            filter.doFilter(request(path, "Bearer " + LOOP_SECRET), refused, (incoming, outgoing) -> {
+                throw new AssertionError("The loop's credential served outside its pull: " + path);
             });
-            assertThat(response.getStatus()).as(path).isEqualTo(401);
+            assertThat(refused.getStatus()).as(path).isEqualTo(401);
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void assignmentPullRefusesAWrongCredentialAndAnAttemptToken(boolean attemptToken) throws Exception {
+        String token = attemptToken ? "turn-token" : "f".repeat(64);
+        if (attemptToken) {
+            lenient().when(verifier.verify(token)).thenReturn(turnJwt());
+        }
+        var response = new MockHttpServletResponse();
+        filter.doFilter(
+                request(JobTokenAuthenticationFilter.ASSIGNMENTS_PATH, "Bearer " + token),
+                response,
+                (incoming, outgoing) -> {
+                    throw new AssertionError("A pull served without the loop's credential");
+                });
+        assertThat(response.getStatus()).isEqualTo(401);
+        verifyNoInteractions(jobs, turns);
     }
 
     private static AttemptJwt turnJwt() {
@@ -272,7 +267,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
                 "jti",
                 now,
                 now.plusSeconds(60),
-                null);
+                now.plusSeconds(30));
     }
 
     @ParameterizedTest

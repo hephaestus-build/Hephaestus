@@ -1,8 +1,8 @@
-// heph-host.ts — the Heph host: one long-lived Node process per worker that runs many Heph turns at once.
+// heph-host.ts — the conversation loop: one Node process in each replica of its Deployment runs many Heph turns at once.
 // Nothing about a conversation outlives its turn here: each turn rebuilds its Pi session from the ledger.
-// docs/contributor/unified-pi-runtime.mdx § The Heph host and § Turn lifecycle have the protocol.
+// docs/contributor/unified-pi-runtime.mdx § The conversation loop and § Turn lifecycle have the protocol.
 
-import { readFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import {
@@ -41,7 +41,7 @@ import {
 	isRecord,
 	LINK_TOOLS,
 	type LinkToolName,
-	parseCommand,
+	asAssignment,
 	type PartialMessage,
 	type PartialSnapshot,
 	type SandboxExecAnswer,
@@ -67,13 +67,6 @@ import { hasText } from "./pi-text.ts";
 type PiMessage = SessionMessageEntry["message"];
 type AssistantMessage = Extract<PiMessage, { role: "assistant" }>;
 type ToolResultMessage = Extract<PiMessage, { role: "toolResult" }>;
-
-// The workspace literals below are pinned by SandboxLayoutSyncTest; keep them quoted strings.
-const WORKSPACE_ROOT = "/workspace";
-// SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH
-const MENTOR_SYSTEM_PROMPT_PATH = "agent/mentor/system.md";
-// SandboxLayout.PI_AGENT_DIR
-const PI_AGENT_DIR = "/workspace/.pi";
 
 /** A conversation is compacted by Pi past this many tokens, when the model's window allows it. */
 const MENTOR_WORKING_TOKENS = 49_152;
@@ -208,6 +201,8 @@ export interface TurnApi {
 	link: (tool: LinkToolName, id: string, signal: AbortSignal) => Promise<LinkAnswer>;
 	search: (query: Record<string, unknown>, signal: AbortSignal) => Promise<unknown>;
 	partial: (snapshot: PartialSnapshot) => Promise<void>;
+	/** Renews the attempt's lease; a stop that it learns of goes to the api's `onStop`. */
+	lease: () => Promise<void>;
 	end: (end: TurnEnd) => Promise<void>;
 }
 
@@ -332,12 +327,28 @@ async function loadedArchive(response: Response, what: string): Promise<LoadedAr
 /** The most bytes of a turn's documents that the host holds: they are JSON documents of one turn, never a checkout. */
 const MAX_DOCUMENTS_BYTES = 32 * 1024 * 1024;
 
+/** Why a `409` of a turn endpoint stops the attempt: the worker's word, or a lost lease. */
+async function stopOf(response: Response): Promise<StopReason> {
+	const problem: unknown = await response.json().catch(() => null);
+	const stop = isRecord(problem) ? problem.stop : undefined;
+	return stop === "developer" || stop === "deadline" ? stop : "lease";
+}
+
+/** How long a call waits before it repeats a `401`: a worker that just started may not know the issuer's key yet. */
+const UNKNOWN_KEY_DELAY_MS = 5000;
+
+/**
+ * @param onStop called when a call learns that the attempt must stop, before the call fails
+ */
 export function httpTurnApi(
 	proxyUrl: string,
 	turnId: string,
 	token: string,
+	onStop: (reason: StopReason) => void = () => undefined,
 	retryDelaysMs: readonly number[] = RETRY_DELAYS_MS,
+	unknownKeyDelayMs = UNKNOWN_KEY_DELAY_MS,
 ): TurnApi {
+	let sentPartial = false;
 	async function call(
 		method: string,
 		path: string,
@@ -346,23 +357,38 @@ export function httpTurnApi(
 		timeoutMs: number | null = REQUEST_TIMEOUT_MS,
 	): Promise<Response> {
 		const timeout = timeoutMs === null ? undefined : AbortSignal.timeout(timeoutMs);
-		let response: Response;
-		try {
-			response = await fetch(`${proxyUrl}/turn/${turnId}/${path}`, {
-				method,
-				headers: {
-					Authorization: `Bearer ${token}`,
-					...(body === undefined ? {} : { "content-type": "application/json" }),
-				},
-				body: body === undefined ? undefined : JSON.stringify(body),
-				signal: AbortSignal.any([signal, timeout].filter((part) => part !== undefined)),
-			});
-		} catch (error) {
-			throw signal?.aborted === true ? error : transient(errorText(error));
+		let response: Response | undefined;
+		for (const delayMs of [unknownKeyDelayMs, null]) {
+			try {
+				response = await fetch(`${proxyUrl}/turn/${turnId}/${path}`, {
+					method,
+					headers: {
+						Authorization: `Bearer ${token}`,
+						...(body === undefined ? {} : { "content-type": "application/json" }),
+					},
+					body: body === undefined ? undefined : JSON.stringify(body),
+					signal: AbortSignal.any([signal, timeout].filter((part) => part !== undefined)),
+				});
+			} catch (error) {
+				throw signal?.aborted === true ? error : transient(errorText(error));
+			}
+			if (response.status !== 401 || delayMs === null) {
+				break;
+			}
+			await response.body?.cancel();
+			await sleep(delayMs);
+		}
+		if (response === undefined) {
+			throw transient(`${path} of turn ${turnId} got no answer`);
 		}
 		if (response.status === 409) {
-			await response.body?.cancel();
-			throw leaseLost(`turn ${turnId} lost its lease`);
+			const reason = await stopOf(response);
+			onStop(reason);
+			throw leaseLost(
+				reason === "lease"
+					? `turn ${turnId} lost its lease`
+					: `turn ${turnId} must stop: ${reason}`,
+			);
 		}
 		if (response.status === 413) {
 			await response.body?.cancel();
@@ -491,7 +517,20 @@ export function httpTurnApi(
 			return json(await call("POST", "search", query, signal), "search_conversation");
 		},
 		async partial(snapshot) {
-			await ok(await call("PUT", "partial", snapshot), "reporting the partial answer");
+			// The first partial answer times the attempt's first token on the worker.
+			const path = sentPartial ? "partial" : "partial?first=true";
+			await ok(await call("PUT", path, snapshot), "reporting the partial answer");
+			sentPartial = true;
+		},
+		async lease() {
+			try {
+				await ok(await call("POST", "lease", {}), "renewing the lease");
+			} catch (error) {
+				// A stop went to `onStop`; the next renewal tries again after any other failure.
+				if (!isLeaseLost(error)) {
+					log(`renewing the lease of turn ${turnId} failed:`, error);
+				}
+			}
 		},
 		async end(end) {
 			const what = "ending the turn";
@@ -512,6 +551,7 @@ function asTurnContext(value: unknown): TurnContext {
 		!Array.isArray(value.entries) ||
 		typeof value.prompt !== "string" ||
 		typeof value.situation !== "string" ||
+		typeof value.systemPrompt !== "string" ||
 		!isRecord(value.model) ||
 		typeof value.model.apiProtocol !== "string" ||
 		typeof value.model.modelId !== "string"
@@ -526,6 +566,7 @@ function asTurnContext(value: unknown): TurnContext {
 		prompt: value.prompt,
 		situation: value.situation,
 		contextFolder: value.contextFolder === true,
+		systemPrompt: value.systemPrompt,
 		model: {
 			apiProtocol: value.model.apiProtocol,
 			modelId: value.model.modelId,
@@ -785,8 +826,8 @@ function argumentText(value: unknown): string {
 }
 
 /** Pi's own `read` and `bash`, for their parameter schemas: Heph's tools keep the contracts models know. */
-const PI_READ = createReadToolDefinition(WORKSPACE_ROOT);
-const PI_BASH = createBashToolDefinition(WORKSPACE_ROOT);
+const PI_READ = createReadToolDefinition(FOLDER);
+const PI_BASH = createBashToolDefinition(FOLDER);
 
 const LIMITS = `${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first)`;
 
@@ -1262,7 +1303,17 @@ interface PartialStream {
  * Sends the whole answer in progress at most every interval, the newest snapshot only. One write is in flight at a
  * time. A snapshot taken during that write waits for it, and a newer snapshot replaces it.
  */
-export function partialStream(api: TurnApi, intervalMs: number): PartialStream {
+/**
+ * How long an unchanged partial answer waits before it is sent again: a reader process that started, reconnected or
+ * missed a frame since sees it then, during a long tool call too.
+ */
+const PARTIAL_RESEND_MS = 10_000;
+
+export function partialStream(
+	api: TurnApi,
+	intervalMs: number,
+	resendMs = PARTIAL_RESEND_MS,
+): PartialStream {
 	/** The turn's finished assistant messages; the one Pi writes now follows them in a snapshot. */
 	const written: PartialMessage[] = [];
 	let latest: PartialSnapshot | null = null;
@@ -1271,6 +1322,8 @@ export function partialStream(api: TurnApi, intervalMs: number): PartialStream {
 	/** `latest` was not sent yet. */
 	let dirty = false;
 	let timer: NodeJS.Timeout | undefined;
+	/** Sends `latest` again when nothing changed for `resendMs`. */
+	let resend: NodeJS.Timeout | undefined;
 	let inFlight: Promise<void> | null = null;
 	/** When the last write started: the next one starts at least `intervalMs` later. */
 	let lastWrite = Number.NEGATIVE_INFINITY;
@@ -1305,6 +1358,14 @@ export function partialStream(api: TurnApi, intervalMs: number): PartialStream {
 		lastWrite = Date.now();
 		await report(snapshot);
 		inFlight = null;
+		clearTimeout(resend);
+		resend = setTimeout(() => {
+			if (!closed && !dirty && latest !== null) {
+				dirty = true;
+				schedule(0);
+			}
+		}, resendMs);
+		resend.unref();
 		// A snapshot that came during the write waits for its window, so a slow write never speeds the cadence up.
 		schedule(lastWrite + intervalMs - Date.now());
 	}
@@ -1333,6 +1394,7 @@ export function partialStream(api: TurnApi, intervalMs: number): PartialStream {
 	function stop() {
 		closed = true;
 		clearTimeout(timer);
+		clearTimeout(resend);
 		timer = undefined;
 	}
 
@@ -1403,24 +1465,31 @@ function providerUnavailable(
 export interface HostOptions {
 	cwd: string;
 	agentDir: string;
-	systemPrompt: string;
-	turnApi: (turnId: string, token: string) => TurnApi;
+	/** A stop that one of the turn's calls learns of goes to `onStop`. */
+	turnApi: (turnId: string, token: string, onStop: (reason: StopReason) => void) => TurnApi;
 	models: ModelFactory;
 	partialIntervalMs?: number;
+	/** How often a running turn renews its lease. */
+	leaseIntervalMs?: number;
 }
+
+/** A third of the worker's lease, so two renewals may fail before the lease ends. */
+const LEASE_INTERVAL_MS = 5000;
 
 export interface HephHost {
 	start: (turnId: string, attempt: number, token: string) => void;
 	stop: (turnId: string, attempt: number, reason: StopReason) => void;
 	/** Resolves once no turn runs. */
 	idle: () => Promise<void>;
+	/** Resolves once a turn that runs now ends; at once when none runs. */
+	settled: () => Promise<void>;
 	readonly running: number;
 }
 
 /**
- * The host's turns. Turns of different conversations run at once; the worker never starts two of one. A later attempt
- * of a turn replaces the attempt that runs here: that one lost its lease, so it is stopped and says nothing more, and
- * the later one starts when it settled.
+ * The loop's turns. Turns of different conversations run at once; the workers never hand out two of one. A later
+ * attempt of a turn replaces the attempt that runs here: that one lost its lease, so it is stopped and says nothing
+ * more, and the later one starts when it settled.
  */
 export function createHephHost(options: HostOptions): HephHost {
 	const turns = new Map<string, TurnState>();
@@ -1443,13 +1512,19 @@ export function createHephHost(options: HostOptions): HephHost {
 			session: null,
 		};
 		turns.set(turnId, state);
+		const api = options.turnApi(turnId, token, (reason) => stop(turnId, attempt, reason));
+		// The lease is the only claim on the turn: a loop that stops renewing it lets the worker take the turn back.
+		const renewals = setInterval(() => {
+			void api.lease();
+		}, options.leaseIntervalMs ?? LEASE_INTERVAL_MS);
 		const run = (async () => {
 			try {
 				await earlier;
-				await runTurn(turnId, options.turnApi(turnId, token), token, state);
+				await runTurn(turnId, api, token, state);
 			} catch (error) {
 				log(`turn ${turnId} attempt ${attempt} ended without an answer:`, error);
 			} finally {
+				clearInterval(renewals);
 				// A later attempt that replaced this one keeps its own place.
 				if (turns.get(turnId) === state) {
 					turns.delete(turnId);
@@ -1554,7 +1629,7 @@ export function createHephHost(options: HostOptions): HephHost {
 				noPromptTemplates: true,
 				noThemes: true,
 				extensionFactories: [turnExtension],
-				systemPromptOverride: () => options.systemPrompt,
+				systemPromptOverride: () => context.systemPrompt,
 			});
 			await resourceLoader.reload();
 			const { session: agent } = await createAgentSession({
@@ -1621,7 +1696,8 @@ export function createHephHost(options: HostOptions): HephHost {
 				agent.dispose();
 			}
 		} catch (error) {
-			if (isLeaseLost(error) || state.stopReason === "lease") {
+			// A stop that a call learned of failed that call too: the turn still ends, as stopped. A lost lease is no stop.
+			if (state.stopReason === "lease" || (isLeaseLost(error) && !stopped(state))) {
 				// Also the answer to a repeated end whose earlier try the worker stored.
 				log(`turn ${turnId} is no longer this attempt's to end; abandoning it`);
 				return;
@@ -1637,6 +1713,12 @@ export function createHephHost(options: HostOptions): HephHost {
 		stop,
 		async idle() {
 			await Promise.all(finished.values());
+		},
+		async settled() {
+			await Promise.race([
+				...finished.values(),
+				...(finished.size === 0 ? [Promise.resolve()] : []),
+			]);
 		},
 		get running() {
 			return turns.size;
@@ -1764,96 +1846,117 @@ function answeredBeforeLinks(entries: readonly SessionEntry[], last: SessionEntr
 	return false;
 }
 
-/**
- * Node's WebSocket client (undici) takes request headers. The DOM library this tree is type-checked against types the
- * second argument as subprotocols only, so the constructor is restated with the init Node accepts.
- */
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the lib types the browser's constructor, not Node's.
-const NodeWebSocket = WebSocket as unknown as new (
-	url: URL,
-	init: { headers: Record<string, string> },
-) => WebSocket;
+/** How long the loop waits after each failed pull in a row: the gateway Service can have no ready worker for a while. */
+const PULL_DELAYS_MS = [500, 1000, 2000, 4000];
+
+/** A pull waits on the worker for up to 20 seconds; this bounds a pull that never ends. */
+const PULL_TIMEOUT_MS = 60_000;
 
 /**
- * Waits before each new try to open the command channel when the last try never opened. The worker accepts the
- * channel as soon as it launches the host (`HephHost`), so a try fails only when the worker or the network is briefly
- * unavailable. This is a safety net: 15 seconds of tries, then the host exits and the worker starts another.
+ * Pulls turn attempts from the workers' gateway and runs each on `host`, while it has room for `turns`, until `signal`
+ * aborts. A pull that started ends first: the worker claimed its turn already, and an answer the loop drops costs the
+ * turn its lease. `beat` runs at each pull, so the liveness probe sees the loop work.
  */
-const CONNECT_DELAYS_MS = [1000, 2000, 4000, 8000];
-
-/**
- * Opens the command channel to the worker and runs its commands on `host` until the channel closes. The worker pings
- * the channel; Node's WebSocket answers each ping itself. A channel that never opened is tried again after each of
- * `connectDelaysMs`; a channel that opened and closed is not, because the worker closed it or is gone.
- */
-export async function runCommands(
-	runtimeUrl: string,
-	token: string,
-	host: Pick<HephHost, "start" | "stop">,
-	connectDelaysMs: readonly number[] = CONNECT_DELAYS_MS,
+export async function pullTurns(
+	proxyUrl: string,
+	secret: string,
+	host: Pick<HephHost, "start" | "settled" | "running">,
+	turns: number,
+	signal: AbortSignal,
+	beat: () => void = () => undefined,
+	delaysMs: readonly number[] = PULL_DELAYS_MS,
 ): Promise<void> {
-	const url = new URL(`${runtimeUrl}/commands`);
-	url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-	for (const delayMs of [...connectDelaysMs, null]) {
-		if (await commandChannel(url, token, host)) {
-			return;
-		}
-		if (delayMs === null) {
-			return;
-		}
-		log(`command channel did not open; trying again in ${delayMs} ms`);
+	let failures = 0;
+	const failed = async (why: unknown) => {
+		log("pulling a turn failed:", why);
+		const delayMs = delaysMs[Math.min(failures, delaysMs.length - 1)] ?? 0;
+		failures += 1;
 		await sleep(delayMs);
+	};
+	while (!signal.aborted) {
+		beat();
+		if (host.running >= turns) {
+			// The bound's timer outlives a wait that a turn ended, so it must not hold the process open.
+			await Promise.race([host.settled(), sleep(PULL_TIMEOUT_MS, undefined, { ref: false })]);
+			continue;
+		}
+		let response: Response;
+		try {
+			response = await fetch(`${proxyUrl}/turn-assignments`, {
+				method: "POST",
+				headers: { Authorization: `Bearer ${secret}` },
+				signal: AbortSignal.timeout(PULL_TIMEOUT_MS),
+			});
+		} catch (error) {
+			await failed(withCause(error));
+			continue;
+		}
+		if (response.status === 200) {
+			failures = 0;
+			const assignment = asAssignment(await response.json().catch(() => null));
+			if (assignment === null) {
+				log("ignoring a malformed assignment");
+			} else {
+				host.start(assignment.turnId, assignment.attempt, assignment.token);
+			}
+			continue;
+		}
+		await response.body?.cancel();
+		if (response.status === 204) {
+			failures = 0;
+		} else {
+			// 503: that worker stops; 401: that worker does not know the loop's credential yet, or it is wrong.
+			await failed(response.status);
+		}
 	}
 }
 
-/** Runs one command channel until it closes; whether it opened. */
-async function commandChannel(
-	url: URL,
-	token: string,
-	host: Pick<HephHost, "start" | "stop">,
-): Promise<boolean> {
-	let opened = false;
-	const socket = new NodeWebSocket(url, { headers: { Authorization: `Bearer ${token}` } });
-	socket.addEventListener("open", () => {
-		opened = true;
-		log("command channel open");
-	});
-	socket.addEventListener("message", (event) => {
-		const command = typeof event.data === "string" ? parseCommand(event.data) : null;
-		if (command === null) {
-			log("ignoring a malformed command");
-		} else if (command.type === "start") {
-			host.start(command.turnId, command.attempt, command.token);
-		} else {
-			host.stop(command.turnId, command.attempt, command.reason);
-		}
-	});
-	const closed = Promise.withResolvers<undefined>();
-	socket.addEventListener("close", () => closed.resolve(undefined));
-	socket.addEventListener("error", () => closed.resolve(undefined));
-	await closed.promise;
-	return opened;
+/**
+ * A failed fetch's text with its cause's code, such as `ECONNREFUSED` or `ENOTFOUND`: undici's own message is only
+ * "fetch failed". The cause names an address, never a credential.
+ */
+function withCause(error: unknown): string {
+	const cause = error instanceof Error ? error.cause : undefined;
+	const code = isRecord(cause) && typeof cause.code === "string" ? cause.code : undefined;
+	return code === undefined ? errorText(error) : `${errorText(error)} (${code})`;
 }
+
+/** The loop's own files: Pi's agent directory, and the files its probes read. */
+const LOOP_DIR = "/tmp/heph-loop";
 
 async function main() {
-	const runtimeUrl = process.env.SANDBOX_RUNTIME_URL;
 	const proxyUrl = process.env.LLM_PROXY_URL;
-	const token = process.env.LLM_PROXY_TOKEN;
-	if (!hasText(runtimeUrl) || !hasText(proxyUrl) || !hasText(token)) {
-		throw new Error("SANDBOX_RUNTIME_URL, LLM_PROXY_URL and LLM_PROXY_TOKEN are required");
+	const secret = process.env.HEPHAESTUS_CONVERSATION_LOOP_SECRET;
+	const turns = Number(process.env.HEPHAESTUS_MENTOR_TURN_CAPACITY);
+	if (!hasText(proxyUrl) || !hasText(secret) || !Number.isSafeInteger(turns) || turns < 1) {
+		// A plain line: the log's error summary names only a kind of failure.
+		log(
+			"LLM_PROXY_URL, HEPHAESTUS_CONVERSATION_LOOP_SECRET and HEPHAESTUS_MENTOR_TURN_CAPACITY are required",
+		);
+		process.exit(1);
 	}
-	const agentDir = process.env.PI_CODING_AGENT_DIR ?? PI_AGENT_DIR;
+	const agentDir = process.env.PI_CODING_AGENT_DIR ?? `${LOOP_DIR}/.pi`;
+	mkdirSync(agentDir, { recursive: true });
 	const host = createHephHost({
-		cwd: WORKSPACE_ROOT,
+		cwd: LOOP_DIR,
 		agentDir,
-		systemPrompt: readFileSync(`${WORKSPACE_ROOT}/${MENTOR_SYSTEM_PROMPT_PATH}`, "utf8"),
-		turnApi: (turnId, turnToken) => httpTurnApi(proxyUrl, turnId, turnToken),
+		turnApi: (turnId, turnToken, onStop) => httpTurnApi(proxyUrl, turnId, turnToken, onStop),
 		models: proxyModels(proxyUrl, agentDir),
 	});
-	await runCommands(runtimeUrl, token, host);
-	// The worker removes a host whose channel closed and starts a new one; this one has nothing left to do.
-	log("command channel closed; exiting");
-	process.exit(1);
+	const stopping = new AbortController();
+	// On SIGTERM the loop pulls no more and ends its turns; the grace period is the turn deadline and the stop time.
+	process.once("SIGTERM", () => {
+		log("stopping: no more pulls; waiting for the running turns");
+		rmSync(`${LOOP_DIR}/ready`, { force: true });
+		stopping.abort();
+	});
+	writeFileSync(`${LOOP_DIR}/ready`, "");
+	await pullTurns(proxyUrl, secret, host, turns, stopping.signal, () =>
+		writeFileSync(`${LOOP_DIR}/alive`, ""),
+	);
+	await host.idle();
+	log("stopped");
+	process.exit(0);
 }
 
 if (import.meta.main) {
@@ -1863,9 +1966,7 @@ if (import.meta.main) {
 		log("uncaught exception:", error);
 		process.exit(1);
 	});
-	for (const signal of ["SIGTERM", "SIGINT"] as const) {
-		process.on(signal, () => process.exit(0));
-	}
+	process.once("SIGINT", () => process.exit(0));
 	try {
 		await main();
 	} catch (error) {

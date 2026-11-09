@@ -56,10 +56,12 @@ public class MentorTurnStarter {
      * Claims and admits the next turn. Each step commits on its own, so a declined admission is recorded even
      * though the claim already committed.
      *
-     * @return empty when no turn is waiting, or when admission declined the claimed one
+     * @param cap the most turns that may hold a lease in the installation, this one included
+     * @return empty when no turn is waiting, the installation runs {@code cap} turns, or admission declined the
+     *     claimed one
      */
-    public Optional<StartedTurn> startNext(Duration lease) {
-        Optional<MentorTurn> claimed = turns.claimNext(lease);
+    public Optional<StartedTurn> startNext(Duration lease, int cap) {
+        Optional<MentorTurn> claimed = turns.claimNext(lease, cap);
         if (claimed.isEmpty()) {
             return Optional.empty();
         }

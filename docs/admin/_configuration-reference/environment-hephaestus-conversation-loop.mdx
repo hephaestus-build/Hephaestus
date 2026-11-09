@@ -1,0 +1,5 @@
+### `hephaestus.conversation-loop`
+
+| Variable | Setting | Application default | Containers | Description |
+| --- | --- | --- | --- | --- |
+| `HEPHAESTUS_CONVERSATION_LOOP_SECRET` | `hephaestus.conversation-loop.secret` | `default: (empty); worker: (empty)` | `worker` | The credential of the conversation loop's assignment pulls, as 64 lowercase hexadecimal characters (`openssl rand -hex 32`). The worker and the loop read it; no other role does. The worker profile requires it; a local worker without it hands out no turn. |

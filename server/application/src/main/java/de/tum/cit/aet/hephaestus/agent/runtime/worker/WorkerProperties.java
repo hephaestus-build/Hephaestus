@@ -8,17 +8,10 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
-/**
- * Bound to {@code hephaestus.worker.*}. {@code capacity.{review,mentor}Max} accept an integer or
- * the literal {@code "auto"}; resolution lives on {@link Capacity}. {@code capacity.mentorMax} is the
- * number of Heph turns this worker's Heph host runs at once.
- */
+/** Bound to {@code hephaestus.worker.*}. */
 @ConfigurationProperties(prefix = "hephaestus.worker")
 public record WorkerProperties(
-        @Nullable String workerId,
-        @DefaultValue Capacity capacity,
-        @DefaultValue Drain drain) {
-    public static final String AUTO = "auto";
+        @Nullable String workerId, @DefaultValue Drain drain) {
 
     /**
      * Per-process-instance suffix, stable for the JVM's lifetime. Appended to the hostname default so
@@ -48,33 +41,6 @@ public record WorkerProperties(
             // fall through to the generic prefix
         }
         return host + "-" + INSTANCE_SUFFIX;
-    }
-
-    /**
-     * Concurrency of this worker. {@code hephaestus.sandbox.max-concurrent-containers} is the one number for reviews.
-     *
-     * @param mentorMax Number of conversation turns this worker runs at once. Accepts an integer or auto, which means 8.
-     */
-    public record Capacity(@DefaultValue("auto") String mentorMax) {
-        /** A Heph turn mostly waits for its model, so its default does not follow the processor count. */
-        public int resolveMentorMax() {
-            return resolve(mentorMax, 8);
-        }
-
-        private static int resolve(String configured, int autoDefault) {
-            if (configured == null || configured.isBlank() || AUTO.equalsIgnoreCase(configured.trim())) {
-                return autoDefault;
-            }
-            try {
-                int parsed = Integer.parseInt(configured.trim());
-                if (parsed < 0) {
-                    throw new IllegalArgumentException("capacity must be >= 0 or 'auto', got: " + configured);
-                }
-                return parsed;
-            } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("capacity must be an integer or 'auto', got: " + configured, e);
-            }
-        }
     }
 
     /**

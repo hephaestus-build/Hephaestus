@@ -173,11 +173,11 @@ The same name is the source capture code that causes it.
 | Term                           | Meaning                                                                                                   | Identifier                     |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | **Job**                        | Execution of a review in a sandbox, with attempts and costs.                                              | review_job                     |
-| **Agent**                      | The sandboxed runtime that executes a review, or the conversation host.                                           | agent runtime                  |
+| **Agent**                      | The sandboxed runtime that executes a review.                                                             | agent runtime                  |
 | **Attempt**                    | One claimed execution of a job, protected by its execution fence.                                         | attempt                        |
 | **Browser fault**              | A failure that a reader met in the browser and that the browser reported, such as an error that no code caught. It is not an SCM issue, and "fault" here is not the blame in a no-fault attempt. | browser.fault, browser_faults_total |
 | **Attempt token**              | The signed credential of one attempt, of a review or of a conversation turn. It names the attempt and its workspace, and nothing else. | AttemptJwt |
-| **Lease**                      | A running attempt's own identity, valid until a time on the database clock. Each claim sets a new one. The active step renews it by that identity: the review loop during execution and result upload, or the worker before and after the loop runs. Every write of the attempt names it. When it expires, the server recovers the attempt. | review_job.lease_id, review_job.leased_until |
+| **Lease**                      | A running attempt's own identity, valid until a time on the database clock. Each claim sets a new one. The active step renews it by that identity: the review loop during execution and result upload, or the worker before and after the loop runs. The conversation loop renews the lease of a turn attempt. Every write of the attempt names it. When it expires, the server recovers the attempt. | review_job.lease_id, review_job.leased_until, mentor_turn.lease_id |
 | **Model assignment**           | A workspace's choice of a model for an execution purpose and AI tier.                                     | workspace model configuration  |
 | **Model for practice scripts** | A decision, embedding or reranking model that a script can call through its host.                         | script model purposes          |
 | **Source contract**            | The definition of a source's identity, meaning, capture facts and permitted uses.                         | reads.contract                 |
@@ -199,7 +199,6 @@ The same name is the source capture code that causes it.
 | **Seal**                       | The one transaction that writes a review's staged results and problems. | planned |
 | **Send**                       | One leased provider post, quiet correction, readback or retraction of on-work feedback, with its reconciliation state.               | feedback_send                  |
 | **Review digest**              | The digest of the definition inputs that can change an observation from the same evidence.                | practice_version.review_digest |
-| **Conversation host**                  | The one long-lived sandboxed process on a worker that runs conversation turns.                      | `heph-host.ts`, `HephHost`         |
 | **Turn**                       | One run of Hephaestus for one question in a conversation, with its attempts, lease, partial answer and usage.       | mentor_turn, conversation_turn from 1.0                    |
 | **Call pool**                  | Provider capacity that the models in it share, whichever workspace calls them: a learned limit of calls in flight, a conversation reserve and a cooldown. Every model has one. | llm_call_pool |
 | **Learned limit**              | The calls in flight that a call pool thinks its provider serves. It rises while served calls fill it, and falls when the provider refuses or queues. | llm_call_pool.learned_limit |
@@ -215,8 +214,8 @@ The same name is the source capture code that causes it.
 | **Isolation tier**             | The runtime class and process limit that the isolation probe records. User namespaces are required by the sandbox boundary. | sandbox.isolation.*     |
 | **Runtime attempt**            | One attempt of a review job or of a conversation turn, with one lease, one attempt token and writes fenced on the lease. A sandbox gateway connection wait stays inside this attempt. | AttemptJwt |
 | **Review agent Pod**           | The Pod of one review attempt: a trusted loop container with the token and a tools container without one. A custom program adds a program container. | KubernetesPods.workspacePod |
-| **Tools Pod**                  | A Pod that runs only the tools program of a review agent Pod, bound to one conversation turn attempt, with no token and no egress. | KubernetesToolsPods, TurnSandboxes |
-| **Conversation loop**                  | The one long-lived trusted process that runs the conversation turns of an install and calls tools Pods for their tools. | planned            |
+| **Tools Pod**                  | A Pod that runs only the tools program of a review agent Pod, bound to one conversation turn attempt, with no token and no egress. | conversation_tools_pod, ConversationToolsPods, KubernetesToolsPods |
+| **Conversation loop**          | The long-lived trusted Deployment that runs every conversation turn of an installation. It pulls turns from the workers and calls tools Pods for their tools. | `heph-host.ts`, `<release>-conversation-loop` |
 | **Tool protocol v1**           | The messages from a loop to its tools, each with a request id. It has hello, put, read, streamed exec, cancel and reset, and script runs for reviews. | tool-protocol.ts |
 | **Proved search**              | A search that the loop confirmed by searching the same files itself. Only a proved search can show that the work lacks something. | pi-verified-search.ts |
 | **Subject**                    | The thing that one sandbox serves: a review, a conversation or an action task. Its key, such as `review:<id>`, is the concurrency key of its runs. It is not the item that a review covers. | planned: agent_run.concurrency_key, agent_sandbox.subject_key |
@@ -229,14 +228,13 @@ The same name is the source capture code that causes it.
 | **Action**                     | One side effect that the server executes for a run or for a person, such as a feedback post, a Slack reply or an email. It has an idempotency key, and its adapter reads it back. | planned: agent_action |
 
 Stage and Seal are decided for 1.0 and not shipped yet ([ADR 0063](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0063-each-practice-is-staged-when-it-ends.md)).
-The conversation loop of [ADR 0068](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md) is not shipped.
 [ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) decides the subject, run, lease epoch, band, sandbox, sandbox token, gateway and action for 1.0.
 They are not shipped yet.
 When they ship, they replace the job, attempt, lease, attempt token and send.
 They also replace the review agent Pod, tools Pod, conversation loop, conversation host, tool protocol v1 and the worker.
 
 The job folder of a review is the context folder of that review.
-The [Conversation runtime](./unified-pi-runtime.mdx) owns turns, the conversation host, context documents, context loaders and tools Pods.
+The [Conversation runtime](./unified-pi-runtime.mdx) owns turns, the conversation loop, context documents, context loaders and tools Pods.
 A turn is not a job: it has no job row and no review.
 
 A job can expire without removing its review or observations.

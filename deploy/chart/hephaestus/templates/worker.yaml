@@ -27,8 +27,9 @@ Each PriorityClass tier has its own quota, so that review and conversation sandb
 other's room. sandbox-pod-requests.json holds what each sandbox Pod requests; SandboxPodRequestsTableTest
 pins it to the Pods the worker builds, and the chart's fit tests read it too. The reviews tier holds the
 reviews that worker.sandbox.reviewMemory holds, once: during a rollout the new workers wait for the old
-ones' room. Every running worker, the old ones during a rollout included, has its isolation probe there. The conversations tier holds its host, two warm tools Pods and
-at most eight assigned tools Pods. Resident turn admission does not enlarge that memory quota.
+ones' room. Every running worker, the old ones during a rollout included, has its isolation probe there.
+The conversations tier holds the tools Pods of the whole installation, not of each worker: two warm
+ones, and one for each turn up to eight. Resident turn admission does not enlarge that memory quota.
 */}}
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson }}
 {{- $replicas := int .Values.worker.replicas }}
@@ -36,7 +37,6 @@ at most eight assigned tools Pods. Resident turn admission does not enlarge that
 {{- $turns := int (include "hephaestus.conversationTurns" .) }}
 {{- $review := $table.review }}
 {{- $probe := $table.isolationProbe }}
-{{- $host := $table.hephHost }}
 {{- $turn := $table.toolsPod }}
 {{- $tools := min $turns (int $table.activeToolsPods) }}
 {{- $turnSandboxes := add (int $table.pooledToolsPods) $tools }}
@@ -46,7 +46,7 @@ that the node holds. The scheduler places Pods by their requests; a limit bounds
 {{- /* A quota counts a Pod's RuntimeClass overhead with its requests, so each Pod adds the class's overhead. */}}
 {{- $overhead := $runtime.podOverhead }}
 {{- $reviewPods := add (mul $reviews (int $review.pods)) (mul $running (int $probe.pods)) }}
-{{- $conversationPods := mul $running (add (int $host.pods) (mul $turnSandboxes (int $turn.pods))) }}
+{{- $conversationPods := mul $turnSandboxes (int $turn.pods) }}
 {{- $tiers := list
   (dict "tier" "reviews"
     "pods" $reviewPods
@@ -55,9 +55,9 @@ that the node holds. The scheduler places Pods by their requests; a limit bounds
     "diskMi" (add (mul $reviews (int $review.ephemeralStorageMi)) (mul $running (int $probe.ephemeralStorageMi))))
   (dict "tier" "conversations"
     "pods" $conversationPods
-    "memoryMi" (add (mul $running (add (int $host.memoryMi) (mul $turnSandboxes (int $turn.memoryMi)))) (mul $conversationPods (int $overhead.memoryMi)))
-    "cpuMillis" (add (mul $running (add (int $host.cpuMillis) (mul $turnSandboxes (int $turn.cpuMillis)))) (mul $conversationPods (int $overhead.cpuMillis)))
-    "diskMi" (mul $running (add (int $host.ephemeralStorageMi) (mul $turnSandboxes (int $turn.ephemeralStorageMi))))) }}
+    "memoryMi" (add (mul $turnSandboxes (int $turn.memoryMi)) (mul $conversationPods (int $overhead.memoryMi)))
+    "cpuMillis" (add (mul $turnSandboxes (int $turn.cpuMillis)) (mul $conversationPods (int $overhead.cpuMillis)))
+    "diskMi" (mul $turnSandboxes (int $turn.ephemeralStorageMi))) }}
 {{- if eq (include "hephaestus.priorityClass" (dict "root" . "tier" "reviews")) (include "hephaestus.priorityClass" (dict "root" . "tier" "conversations")) }}
 {{- fail "priorityClasses.reviews and priorityClasses.conversations must differ: each tier's quota selects its Pods by PriorityClass" }}
 {{- end }}
@@ -107,7 +107,7 @@ spec:
 ---
 {{- end }}
 # No ingress and no egress for any pod of the namespace. A conversation's tools Pod gets only the
-# ingress from its host below, so it reaches nothing.
+# ingress from the conversation loop below, so it reaches nothing.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -170,7 +170,7 @@ subjects:
     name: {{ $name }}
     namespace: {{ .Release.Namespace }}
 ---
-# Review sandboxes and conversation hosts may reach the workers on the gateway port, and nothing else: no
+# Review sandboxes may reach the workers on the gateway port, and nothing else: no
 # DNS, no API, no database, no broker. A sandbox is bound to its own worker by its credential, not
 # by the network.
 apiVersion: networking.k8s.io/v1
@@ -196,8 +196,8 @@ spec:
         - port: {{ $port }}
           protocol: TCP
 ---
-# A conversation's tools Pod serves its host on the tools port, and no other Pod reaches it. Its host
-# dials it there, and the tools side answers with the nonce that the worker wrote into its spec.
+# A conversation's tools Pod serves the conversation loop on the tools port, and no other Pod reaches it.
+# The loop dials it there, and the tools side answers with the nonce that the worker wrote into its spec.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -212,31 +212,12 @@ spec:
   policyTypes: ["Ingress"]
   ingress:
     - from:
-        - podSelector:
+        - namespaceSelector:
             matchLabels:
-              hephaestus.build/sandbox-kind: host
-      ports:
-        - port: {{ include "hephaestus.toolsPort" . }}
-          protocol: TCP
----
-# A conversation host may dial the tools Pods on the tools port, besides its gateway.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: {{ include "hephaestus.name" (dict "root" . "component" "sandbox-host-tools") }}
-  namespace: {{ $sandboxes }}
-  labels:
-    {{- include "hephaestus.labels" (dict "root" . "component" "sandbox") | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels:
-      hephaestus.build/sandbox-kind: host
-  policyTypes: ["Egress"]
-  egress:
-    - to:
-        - podSelector:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
             matchLabels:
-              hephaestus.build/sandbox-kind: tools
+              {{- include "hephaestus.selectorLabels" (dict "root" . "component" "conversation-loop") | nindent 14 }}
       ports:
         - port: {{ include "hephaestus.toolsPort" . }}
           protocol: TCP
@@ -425,8 +406,14 @@ spec:
               value: {{ include "hephaestus.gitCacheBytes" (dict "gitCache" .Values.worker.gitCache "role" "worker") | quote }}
             - name: AGENT_ENABLED
               value: "true"
-            - name: HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX
-              value: {{ include "hephaestus.conversationTurns" . | quote }}
+            {{- $capacity := int (include "hephaestus.conversationTurns" .) }}
+            {{- if gt $capacity 0 }}
+            # The installation's turns at once. Each worker's claim checks this cap across all workers.
+            - name: HEPHAESTUS_MENTOR_TURN_CAPACITY
+              value: {{ $capacity | quote }}
+            {{- end }}
+            # The conversation loop presents it when it pulls a turn.
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_CONVERSATION_LOOP_SECRET") | nindent 12 }}
             # Also the review capacity: a worker claims no more reviews than it may run sandboxes. A review that
             # writes its feedback after its sandbox ends holds no slot; AGENT_MAX_CONCURRENT_COMPOSITIONS bounds those.
             - name: SANDBOX_MAX_CONCURRENT

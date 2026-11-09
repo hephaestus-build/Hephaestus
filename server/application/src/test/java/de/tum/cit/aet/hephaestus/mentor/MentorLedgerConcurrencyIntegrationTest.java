@@ -177,9 +177,9 @@ class MentorLedgerConcurrencyIntegrationTest extends AbstractWorkspaceIntegratio
         MentorTurn head = submit("First question").turn();
         MentorTurn next = submit("Second question").turn();
         AtomicReference<Optional<MentorTurn>> first = new AtomicReference<>();
-        HeldTransaction holder = holdIn(() -> first.set(turns.claimNext(Duration.ofMinutes(5))));
+        HeldTransaction holder = holdIn(() -> first.set(turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE)));
         CompletableFuture<Optional<MentorTurn>> second =
-                CompletableFuture.supplyAsync(() -> turns.claimNext(Duration.ofMinutes(5)));
+                CompletableFuture.supplyAsync(() -> turns.claimNext(Duration.ofMinutes(5), Integer.MAX_VALUE));
 
         holder.commitAfter(second);
 
@@ -313,7 +313,7 @@ class MentorLedgerConcurrencyIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     private MentorTurn claimNext(MentorTurnService.Submission submission) {
-        MentorTurn claimed = turns.claimNext(LEASE).orElseThrow();
+        MentorTurn claimed = turns.claimNext(LEASE, Integer.MAX_VALUE).orElseThrow();
         assertThat(claimed.getId()).isEqualTo(submission.turn().getId());
         return claimed;
     }
