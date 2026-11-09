@@ -93,7 +93,16 @@ Archived or redacted proof keeps null text and coordinates instead of fabricated
 
 A search receipt (`SEARCHED`, path `.`) records a grep for its `pattern` over the whole checkout.
 The grep had no file filter and ran to the end.
-The receipt has no digest or line range, and it proves no file read.
+The receipt has no line range, and it proves no file read.
+
+The loop searches the same files again in its own worker, and the receipt carries the checkout digest of the bytes that this search read.
+The checkout digest is the SHA-256 of one line `<path>\0<SHA-256 of the file>\n` for each regular file outside `.git`, in the byte order of the paths.
+`checkoutDigest` in `pi-search-worker.ts` defines it.
+
+A command in the sandbox can change the sandbox's copy of the checkout.
+Thus, before the sandbox starts, the server records the digest of its own copy in the job's capture (`JobEvidenceFiles.checkoutDigests`).
+Admission counts a search only when its digest equals the recorded one (ADR 0079 § Evidence authority).
+When a result needs a search and no receipt of it has the recorded digest, admission withholds the result as `COVERAGE_INCONSISTENT`.
 
 A grep that the runner sees produces a search receipt, also inside a codemode script.
 A cut, failed, filtered or narrower grep produces none.
@@ -114,7 +123,7 @@ In an item review, a result says that the repository lacks something in one of t
 
 Such a result needs a search receipt of the tree.
 Admission records the pattern for audit, but it does not compare the pattern with the claim.
-The capture must hold the tree `COMPLETE` at the version of the receipt.
+The capture must hold the tree `COMPLETE` at the version of the receipt, and the receipt's checkout digest must equal the capture's.
 A could-not-determine result says nothing about the work, so it needs no receipt.
 
 A result keeps only the search receipts of the decision that it keeps.

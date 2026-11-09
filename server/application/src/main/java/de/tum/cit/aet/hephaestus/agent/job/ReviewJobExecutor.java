@@ -1277,6 +1277,10 @@ public class ReviewJobExecutor {
                 "directories",
                 objectMapper.valueToTree(
                         inputDirectories.stream().map(EvidenceDirectory::target).toList()));
+        // Admission compares each search of the sandbox's checkout with these, read from this copy before it starts.
+        stamp.set(
+                JobEvidenceFiles.CHECKOUTS,
+                objectMapper.valueToTree(JobEvidenceFiles.checkoutDigests(inputDirectories)));
         Integer updated = transactionTemplate.execute(
                 status -> jobRepository.updateCapture(jobId, workspaceId, ownLease(jobId), attempt, stamp));
         if (updated == null || updated != 1) {

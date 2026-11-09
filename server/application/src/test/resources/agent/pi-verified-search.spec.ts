@@ -2,13 +2,18 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import type { SearchClaim } from "../../../main/resources/agent/pi-search-worker.ts";
-import { proveSearches } from "../../../main/resources/agent/pi-verified-search.ts";
+import { proveSearches as prove } from "../../../main/resources/agent/pi-verified-search.ts";
+
+const proveSearches = async (...args: Parameters<typeof prove>) => {
+	const { proved } = await prove(...args);
+	return proved;
+};
 
 const root = mkdtempSync(path.join(tmpdir(), "verified-search-"));
 mkdirSync(path.join(root, "src"));
@@ -163,7 +168,58 @@ void test("a checkout past the size bound proves nothing", async () => {
 });
 
 void test("no claims need no worker", async () => {
-	assert.deepEqual(await proveSearches(root, []), []);
+	assert.deepEqual(await prove(root, []), { proved: [], checkoutDigest: null });
+});
+
+/**
+ * The checkout that `JobEvidenceFilesCheckoutDigestTest` stages too: both sides must name this digest for it, or
+ * admission refuses every search.
+ */
+const CHECKOUT_DIGEST = "bda91db5849fd6d92795d99bb6646b48c8e92d78ee215d2e661222554b8e73f5";
+
+function pinnedCheckout(): string {
+	const checkout = mkdtempSync(path.join(tmpdir(), "verified-search-digest-"));
+	mkdirSync(path.join(checkout, "a"));
+	mkdirSync(path.join(checkout, "empty"));
+	mkdirSync(path.join(checkout, ".git"));
+	mkdirSync(path.join(checkout, "nested/.git"), { recursive: true });
+	writeFileSync(path.join(checkout, "a/x.txt"), "one\n");
+	writeFileSync(path.join(checkout, "a.b"), "dot\n");
+	writeFileSync(path.join(checkout, "b.txt"), "two\n");
+	writeFileSync(path.join(checkout, "nested/ü.txt"), "umlaut\n");
+	writeFileSync(path.join(checkout, ".git/HEAD"), "ref: refs/heads/main\n");
+	writeFileSync(path.join(checkout, "nested/.git/config"), "[core]\n");
+	symlinkSync("b.txt", path.join(checkout, "link"));
+	return checkout;
+}
+
+async function digest(checkout: string): Promise<string | null> {
+	const { checkoutDigest } = await prove(checkout, [claim({ pattern: "absent" })]);
+	return checkoutDigest;
+}
+
+void test("a proof names the digest of the checkout it searched, as the server computes it", async () => {
+	const proof = await prove(pinnedCheckout(), [claim({ pattern: "absent" })]);
+	assert.deepEqual(proof, { proved: [true], checkoutDigest: CHECKOUT_DIGEST });
+});
+
+void test("a changed, added or removed file changes the digest, and .git does not", async () => {
+	const changed = pinnedCheckout();
+	writeFileSync(path.join(changed, "b.txt"), "TWO\n");
+	const added = pinnedCheckout();
+	writeFileSync(path.join(added, "c.txt"), "");
+	const git = pinnedCheckout();
+	writeFileSync(path.join(git, ".git/HEAD"), "changed\n");
+	assert.notEqual(await digest(changed), CHECKOUT_DIGEST);
+	assert.notEqual(await digest(added), CHECKOUT_DIGEST);
+	assert.equal(await digest(git), CHECKOUT_DIGEST);
+});
+
+void test("a proof that stops at the size bound names no digest", async () => {
+	assert.deepEqual(await prove(pinnedCheckout(), [claim({ pattern: "absent" })], { maxBytes: 4 }), {
+		proved: [false],
+		checkoutDigest: null,
+	});
 });
 
 const hasRg = spawnSync("rg", ["--version"]).status === 0;

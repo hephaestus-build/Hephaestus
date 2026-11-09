@@ -175,6 +175,25 @@ void describe("listings and searches", () => {
 			},
 		]);
 	});
+	void test("a search that another side ran names the checkout digest of its proof, and an unproved one gets no receipt", async (t) => {
+		const { sources } = await captures(t);
+		const digest = "d".repeat(64);
+		const proved = new EvidenceReader(
+			{ ...sources, proveSearch: async () => digest },
+			noReceipts(),
+		);
+		await proved.answer({ op: "grep", pattern: "ControllerAdvice" });
+		assert.deepEqual(
+			proved.readReceipts.map((receipt) => [receipt.status, receipt.contentDigest]),
+			[["SEARCHED", digest]],
+		);
+		const unproved = new EvidenceReader(
+			{ ...sources, proveSearch: async () => null },
+			noReceipts(),
+		);
+		await unproved.answer({ op: "grep", pattern: "ControllerAdvice" });
+		assert.deepEqual(unproved.readReceipts, []);
+	});
 	void test("an aborted read or search does no work and changes no receipts", async (t) => {
 		const { reader, receipts } = await captures(t);
 		const signal = AbortSignal.abort(new UnratedError("cancelled", "the attempt ended"));

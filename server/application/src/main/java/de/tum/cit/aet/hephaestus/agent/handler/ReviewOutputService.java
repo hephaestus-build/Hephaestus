@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.InapplicabilityWarrant;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemCandidate;
+import de.tum.cit.aet.hephaestus.practices.spi.ReadReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadReceiptStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEvidence;
@@ -40,6 +41,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
@@ -108,6 +110,9 @@ public class ReviewOutputService {
                 .flatMap(entry -> entry.readReceipts().stream())
                 .toList();
         var resolvedManifest = manifest;
+        Predicate<ReadReceipt> searchedAsCaptured = search -> files.capturedCheckoutDigest(job, search)
+                .filter(digest -> digest.equals(search.contentDigest()))
+                .isPresent();
         var admitted = new ArrayList<ResultCandidate>();
         var withheld = new LinkedHashMap<String, AdmissionResponseDTO.Withheld>();
         var refusals = new ArrayList<WithheldAssignment>();
@@ -153,7 +158,7 @@ public class ReviewOutputService {
                 // After the verifier, so every cited source is one the catalog knows.
                 requireDeclaredSources(assignment, review.kind(), verified);
                 // A scan's search covers its assigned file, whose complete read the scan check above requires.
-                if (review.kind() == ReviewKind.ITEM) requireSearchedAbsence(candidate, captured);
+                if (review.kind() == ReviewKind.ITEM) requireSearchedAbsence(candidate, captured, searchedAsCaptured);
                 admitted.add(result(assignment, verified));
             } catch (CandidateEvidenceVerifier.Unverified refusal) {
                 refusals.add(new WithheldAssignment(
@@ -242,9 +247,12 @@ public class ReviewOutputService {
      * whole checkout that ran to the end, captured complete at the searched commit. A complete read of one file is a
      * complete source of that file, not of the checkout (ADR 0064 § Absence). Every other source is staged as captured
      * in the job folder, so one whose capture names a gap cannot be named as consulted either. A checkout that the capture did not hold whole is a capture limit, so no search could support
-     * the claim. A could-not-determine result says nothing about the work.
+     * the claim. A could-not-determine result says nothing about the work. A command in the sandbox can change the
+     * sandbox's checkout, so a search counts only when the digest of the bytes it searched equals the digest of the
+     * captured checkout ({@code searchedAsCaptured}, ADR 0079 § Evidence authority).
      */
-    private void requireSearchedAbsence(Candidate candidate, CapturedEvidence captured) {
+    private void requireSearchedAbsence(
+            Candidate candidate, CapturedEvidence captured, Predicate<ReadReceipt> searchedAsCaptured) {
         if (candidate.outcome() == ResultOutcome.COULD_NOT_DETERMINE
                 || !(candidate.coverage() instanceof HostCoverage host)) return;
         var consulted = new ArrayList<SourceKind>();
@@ -270,12 +278,13 @@ public class ReviewOutputService {
         var named = consulted.stream().filter(checkouts::contains).findFirst().orElse(null);
         if (named == null && (checkouts.isEmpty() || !claimed)) return;
         var searchable = named == null ? checkouts : List.of(named);
-        boolean searched = host.receipts().stream()
-                .anyMatch(receipt -> receipt.status() == ReadReceiptStatus.SEARCHED
+        var searches = host.receipts().stream()
+                .filter(receipt -> receipt.status() == ReadReceiptStatus.SEARCHED
                         && ".".equals(receipt.path())
                         && searchable.contains(receipt.sourceKind())
-                        && captured.completeAt(receipt.sourceKind(), receipt.version()));
-        if (searched) return;
+                        && captured.completeAt(receipt.sourceKind(), receipt.version()))
+                .toList();
+        if (searches.stream().anyMatch(searchedAsCaptured)) return;
         String claim = named != null
                 ? "The result names " + named.value() + " as searched"
                 : "The result says the repository lacks something beyond its citations";
@@ -283,6 +292,11 @@ public class ReviewOutputService {
             throw new CandidateEvidenceVerifier.Unverified(
                     CandidateRefusal.SOURCE_UNAVAILABLE,
                     claim + ", but the capture does not hold the whole checkout, so no search can show that",
+                    null);
+        if (!searches.isEmpty())
+            throw new CandidateEvidenceVerifier.Unverified(
+                    CandidateRefusal.COVERAGE_INCONSISTENT,
+                    claim + ", but its search did not read the checkout as it was captured",
                     null);
         throw new CandidateEvidenceVerifier.Unverified(
                 CandidateRefusal.CONSULTED_SOURCE_UNREAD,

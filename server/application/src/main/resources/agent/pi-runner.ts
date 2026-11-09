@@ -1929,8 +1929,8 @@ export async function runReviewJob(): Promise<void> {
 			headRevision: change?.head ?? (checkout === null ? null : checkoutCommit),
 			search: toolLines(toolSide, CWD),
 			proveSearch: async (claim) => {
-				const [proved] = await proveSearches(repository, [claim]);
-				return proved === true;
+				const { proved, checkoutDigest } = await proveSearches(repository, [claim]);
+				return proved[0] === true ? checkoutDigest : null;
 			},
 			pinnedFile: pinnedText(
 				toolObjects(toolSide, repository),

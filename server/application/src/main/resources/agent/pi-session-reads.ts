@@ -22,7 +22,7 @@ import {
 import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
 import { ReadRanges } from "./work/practice-scripts/lib/core/read-ranges.ts";
 
-import type { SearchClaim } from "./pi-search-worker.ts";
+import type { SearchClaim, SearchProof } from "./pi-search-worker.ts";
 
 const READ_TOOLS = new Set(["read", "grep", "find", "ls", "bash"]);
 
@@ -77,8 +77,8 @@ export class SessionReads {
 	readonly #tree: SessionTree | undefined;
 	/** What each grep without a file filter that searched the whole checkout to the end looked for. */
 	readonly #searches = new Map<string, SearchClaim>();
-	/** The searches that the loop proved: only these are receipts. */
-	readonly #provedPatterns = new Set<string>();
+	/** The searches that the loop proved, with the digest of the checkout it searched: only these are receipts. */
+	readonly #provedPatterns = new Map<string, string>();
 
 	constructor(
 		root: string,
@@ -251,7 +251,7 @@ export class SessionReads {
 	 * counts only when the loop's own search of the same files found nothing that it left out.
 	 */
 	async proveSearches(
-		prove: (root: string, claims: readonly SearchClaim[]) => Promise<boolean[]>,
+		prove: (root: string, claims: readonly SearchClaim[]) => Promise<SearchProof>,
 	): Promise<void> {
 		const tree = this.#tree;
 		const open = [...this.#searches.values()].filter(
@@ -260,10 +260,10 @@ export class SessionReads {
 		if (tree === undefined || !tree.complete || open.length === 0) {
 			return;
 		}
-		const proved = await prove(path.resolve(this.#root, tree.root), open);
+		const { proved, checkoutDigest } = await prove(path.resolve(this.#root, tree.root), open);
 		for (const [index, claim] of open.entries()) {
-			if (proved[index] === true) {
-				this.#provedPatterns.add(claim.pattern);
+			if (proved[index] === true && checkoutDigest !== null) {
+				this.#provedPatterns.set(claim.pattern, checkoutDigest);
 			}
 			this.#searches.delete(claim.pattern);
 		}
@@ -282,10 +282,11 @@ export class SessionReads {
 
 	/**
 	 * The checkout's own proof of what this session read: each search of the whole checkout's contents that ran to
-	 * the end, with its pattern, and then each file read to its last line, with the digest of the pinned bytes. A
-	 * search that was cut, failed, filtered by file, narrower than the checkout or run through the shell proves no
-	 * such search, and so does one that the loop could not prove and any search of a checkout captured only in part. The searches come first, so the receipt
-	 * bound never drops them. The `.git` folder holds no work.
+	 * the end, with its pattern and the digest of the checkout that it searched, and then each file read to its last
+	 * line, with the digest of the pinned bytes. A search that was cut, failed, filtered by file, narrower than the
+	 * checkout or run through the shell proves no such search, and so does one that the loop could not prove and any
+	 * search of a checkout captured only in part. The searches come first, so the receipt bound never drops them. The
+	 * `.git` folder holds no work.
 	 */
 	treeReceipts(): ReadReceipt[] {
 		const tree = this.#tree;
@@ -294,12 +295,13 @@ export class SessionReads {
 		}
 		const root = this.#key(tree.root);
 		const searches = tree.complete ? [...this.#provedPatterns] : [];
-		const receipts: ReadReceipt[] = searches.map((pattern) => ({
+		const receipts: ReadReceipt[] = searches.map(([pattern, contentDigest]) => ({
 			sourceKind: TREE_SOURCE,
 			sourcePath: tree.sourcePath,
 			path: ".",
 			version: tree.version,
 			status: "SEARCHED",
+			contentDigest,
 			pattern,
 		}));
 		for (const key of this.#opened) {

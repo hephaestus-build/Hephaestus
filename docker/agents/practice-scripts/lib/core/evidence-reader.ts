@@ -56,14 +56,16 @@ export interface EvidenceSources {
 	/** How a repository search runs. Its answer is text to look at; a citation still reads the file. */
 	search?: LineRunner;
 	/**
-	 * Whether a search that `search` ran can stand as proof of an absence. Without it, the search ran here.
+	 * Whether a search that `search` ran can stand as proof of an absence: the digest of the checkout that the proof
+	 * searched when it stands, null when it does not. Without it, the search ran here, and its receipt names no
+	 * digest, so admission takes it as proof of nothing.
 	 */
 	proveSearch?: (claim: {
 		pattern: string;
 		literal: boolean;
 		ignoreCase: boolean;
 		found: readonly string[];
-	}) => Promise<boolean>;
+	}) => Promise<string | null>;
 	/** The text of a file at another commit than the head, or null when it cannot be proved. */
 	pinnedFile?: (commit: string, file: string, signal?: AbortSignal) => Promise<string | null>;
 }
@@ -270,20 +272,24 @@ export class EvidenceReader {
 		}
 	}
 
-	/** Whether this search can prove an absence: it always can when it ran in this process. */
+	/**
+	 * Whether this search can prove an absence, and the digest of the checkout it searched. One that ran in this
+	 * process stands with no digest.
+	 */
 	async #searchStands(
 		{ pattern, fixedString }: { pattern: string; fixedString?: boolean },
 		matches: readonly GrepMatch[],
-	): Promise<boolean> {
-		return (
-			this.#sources.proveSearch === undefined ||
-			this.#sources.proveSearch({
-				pattern,
-				literal: fixedString === true,
-				ignoreCase: false,
-				found: matches.map((match) => `${match.file}:${String(match.line)}`),
-			})
-		);
+	): Promise<{ stands: boolean; contentDigest?: string }> {
+		if (this.#sources.proveSearch === undefined) {
+			return { stands: true };
+		}
+		const contentDigest = await this.#sources.proveSearch({
+			pattern,
+			literal: fixedString === true,
+			ignoreCase: false,
+			found: matches.map((match) => `${match.file}:${String(match.line)}`),
+		});
+		return contentDigest === null ? { stands: false } : { stands: true, contentDigest };
 	}
 
 	/**
@@ -302,9 +308,12 @@ export class EvidenceReader {
 			truncated ||
 			glob !== undefined ||
 			this.#sources.permittedPaths !== undefined ||
-			pattern.length > CANDIDATE_LIMITS.warrantFieldChars ||
-			!(await this.#searchStands({ pattern, fixedString }, matches))
+			pattern.length > CANDIDATE_LIMITS.warrantFieldChars
 		) {
+			return;
+		}
+		const { stands, contentDigest } = await this.#searchStands({ pattern, fixedString }, matches);
+		if (!stands) {
 			return;
 		}
 		this.#receipt({
@@ -313,6 +322,7 @@ export class EvidenceReader {
 			path: ".",
 			version: this.#sources.headRevision ?? "unavailable",
 			status: "SEARCHED",
+			...(contentDigest === undefined ? {} : { contentDigest }),
 			pattern,
 		});
 	}
