@@ -99,8 +99,8 @@ jobs:
       # being told.
       unfiltered: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
       # A pull request runs the fast tier unless it carries `ci:full` or changes the queue tier's own
-      # inputs. A merge group, a push and a dispatch also run the queue tier: integration shards,
-      # database tests, PostgreSQL drills and browser suites. An unreadable label runs it too.
+      # inputs. A merge group, a push and a dispatch also run the queue tier: the integration shards
+      # other than `review`, database tests, PostgreSQL drills and browser suites. An unreadable label runs it too.
       # ci-cd.mdx § Two verification tiers says why.
       queue-tier: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.full != 'false' || (github.event.pull_request.draft != true && (steps.filter.outputs.queue-tier-inputs == 'true' || steps.filter.outputs.test-config == 'true' || steps.filter.outputs.build-config == 'true')) }}
       # A draft runs the fast tier and builds no image: no cluster jobs, no image scan, unless it
@@ -1043,7 +1043,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: ${{ fromJSON(needs.detect-changes.outputs.queue-tier == 'true' && '["unit","providers","runtime-and-startup","practices-and-agent","application"]' || '["unit"]') }}
+        shard: ${{ fromJSON(needs.detect-changes.outputs.queue-tier == 'true' && '["unit","providers","runtime-and-startup","practices-and-agent","application","review"]' || '["unit","review"]') }}
     uses: ./.github/workflows/ci-tests.yml
     needs: [detect-changes, server-package, Security-merge-group]
     if: |

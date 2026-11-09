@@ -28,6 +28,7 @@ const requiredJobs = [
 	"Test / App Server: Integration (providers)",
 	"Test / App Server: Integration (runtime-and-startup)",
 	"Test / App Server: Integration (practices-and-agent)",
+	"Test / App Server: Integration (review)",
 	"Security / Dependencies, secrets, and policy",
 	"CI Status Gate",
 ];
@@ -99,6 +100,7 @@ await test("caller matrix names preserve exact-commit build reuse and reject mis
 		"providers",
 		"runtime-and-startup",
 		"practices-and-agent",
+		"review",
 	]) {
 		const caller = String(ci.getIn(["jobs", "Test", "name"])).replace(
 			`\${{ matrix.shard }}`,

@@ -48,6 +48,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("core.privacy.PersonDataRecoveryStartupIntegrationTest", "erasure-recovery"),
             assignment("agent.mentor.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence-freshness"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
+            assignment("practices.review.ReviewEndToEndIntegrationTest", "review-end-to-end"),
             assignment("core.auth.clientsession.ClientSessionConcurrencyIntegrationTest", "dev-login"),
             assignment("core.auth.clientsession.ClientSessionIntegrationTest", "dev-login"),
             assignment("core.auth.consent.ConsentSignInBootstrapIntegrationTest", "consent-sign-in"),
@@ -122,6 +123,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry(
                     "review-enqueue-atomicity",
                     "real review transaction and event listener with an injected fault before queue creation"),
+            Map.entry(
+                    "review-end-to-end",
+                    "real server and worker roles, claim, capture, gateway, proxy and admission with only the sandbox container and the model provider stubbed"),
             Map.entry("base", "shared PostgreSQL, HTTP, security, review fixtures and application acceptance context"),
             Map.entry(
                     "gitlab-workspace-creation",
@@ -282,6 +286,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> DYNAMIC_PROPERTY_TESTS = names(
             "StartupBudgetIntegrationTest",
+            "practices.review.ReviewEndToEndIntegrationTest",
             "core.privacy.PersonDataRecoveryStartupIntegrationTest",
             "agent.practice.live.PracticeScriptLiveLlmTest",
             "core.auth.clientsession.ClientSessionMigratedSchemaTest",
@@ -324,7 +329,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "testconfig.BaseIntegrationTest",
             "testconfig.RealAuthIntegrationTest");
 
-    private static final Set<String> DIRTY_CONTEXT_TESTS = Set.of();
+    // Its context runs the worker's poller, which would claim the review jobs of later classes in an unsharded run.
+    private static final Set<String> DIRTY_CONTEXT_TESTS = names("practices.review.ReviewEndToEndIntegrationTest");
 
     private static final Set<String> CONTEXT_ANNOTATIONS = Set.of(
             "ActiveProfiles",
@@ -355,6 +361,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "productfeedback.ProductFeedbackTrustGatesIntegrationTest",
             "agent.job.ReviewJobEventListenerIntegrationTest",
             "agent.practice.live.PracticeScriptLiveLlmTest",
+            "practices.review.ReviewEndToEndIntegrationTest",
             "core.runtime.WorkerGraphWithoutCluster",
             "workspace.ManualRepositoryAuthorityIntegrationTest",
             "workspace.WorkspaceRepositoryCoverageIntegrationTest",

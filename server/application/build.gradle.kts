@@ -278,6 +278,7 @@ val integrationInventories =
         "integrationRuntimeAndStartupInventory" to "runtime-and-startup",
         "integrationPracticesAndAgentInventory" to "practices-and-agent",
         "integrationApplicationInventory" to "application",
+        "integrationReviewInventory" to "review",
     )
 // The limit of one test task, and of one integration shard.
 val testTaskTimeout: Duration = Duration.ofMinutes(20)
@@ -359,6 +360,10 @@ fun Test.selectIntegrationShard(shard: String) {
         )
     val practicesAndAgentTests =
         listOf("de.tum.cit.aet.hephaestus.practices.*", "de.tum.cit.aet.hephaestus.agent.*")
+    // The fast tier runs this shard on every pull request: one review from its request to its
+    // admitted results.
+    val reviewTests =
+        listOf("de.tum.cit.aet.hephaestus.practices.review.ReviewEndToEndIntegrationTest")
     when (shard) {
         "" -> Unit
         "providers" -> filter { providerTests.forEach(::includeTestsMatching) }
@@ -367,13 +372,13 @@ fun Test.selectIntegrationShard(shard: String) {
         "practices-and-agent" ->
             filter {
                 practicesAndAgentTests.forEach(::includeTestsMatching)
-                runtimeAndStartupTests.forEach(::excludeTestsMatching)
+                (runtimeAndStartupTests + reviewTests).forEach(::excludeTestsMatching)
             }
+        "review" -> filter { reviewTests.forEach(::includeTestsMatching) }
         "application" ->
             filter {
-                (providerTests + runtimeAndStartupTests + practicesAndAgentTests).forEach(
-                    ::excludeTestsMatching
-                )
+                (providerTests + runtimeAndStartupTests + practicesAndAgentTests + reviewTests)
+                    .forEach(::excludeTestsMatching)
             }
         else -> error("Unknown integration shard: $shard")
     }

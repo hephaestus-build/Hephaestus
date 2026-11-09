@@ -88,7 +88,7 @@ The job's own limit cancels the run and can lose its log, so the list is the evi
 | Actionlint, Zizmor                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The title, body, and every commit message contain no `Claude-Session:` trailer, "Generated with" line, or session link (a `Co-authored-by:` trailer is allowed) | —                                                                        |
 
-`Build → App Server: Database`, the PostgreSQL drills, both E2E rows and the integration shards are
+`Build → App Server: Database`, the PostgreSQL drills, both E2E rows and the integration shards other than `review` are
 the queue tier ([Two verification tiers](#two-verification-tiers)).
 
 The browser jobs retain `webapp-e2e-results` and `extension-e2e-results`, each including
@@ -674,14 +674,21 @@ action does not persist configuration-cache entries across jobs.
 
 A pull request runs the **fast tier**. A merge group, a push and a dispatch also run the **queue tier**.
 `detect-changes` publishes the decision once as `queue-tier`, and each queue-tier job adds it to its path condition.
+The integration job adds it for every shard except `review`.
 
 | Tier | Jobs |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Fast (pull request and queue) | Detect changes, the quality legs, unit and architecture tests, packaging, generated-artifact drift, [the images it needs](#the-preview-label), Security, Changesets, Actionlint, Zizmor |
-| Queue (merge group, push, dispatch) | the integration shards, the database contract tests, the PostgreSQL drills, webapp and extension E2E |
+| Fast (pull request and queue) | Detect changes, the quality legs, unit and architecture tests, the `review` integration shard, packaging, generated-artifact drift, [the images it needs](#the-preview-label), Security, Changesets, Actionlint, Zizmor |
+| Queue (merge group, push, dispatch) | the other integration shards, the database contract tests, the PostgreSQL drills, webapp and extension E2E |
 
 Path filters and the main-push rules in [Path filters](#path-filters) still select within each tier.
 Kubernetes qualification stays on same-repository pull requests, because it boots this run's own images. A draft does not select it.
+
+The `review` shard holds `ReviewEndToEndIntegrationTest`: one review of a real pull request, from its request to its admitted results.
+Only the sandbox container and the model provider are stubbed.
+Each pull request that changes the server runs it.
+A change to capture, the gateway, the proxy or admission can stop every review while each unit test still passes.
+The stub fixes the model's judgement, its read receipts and its coverage, so the test does not check how the runner derives them.
 
 The latest-minor `amd64` Kubernetes leg, including pull requests, deliberately exceeds a review container's memory limit through the production sandbox adapter.
 It requires exit code 137 and the recorded `oom_killed` reason, with no `evicted` increment.
@@ -955,11 +962,12 @@ Right after a merge, that run is still building, so the pull request builds ever
 - `Quality` legs start from source. `Test` suites and `Build` gates start when `App Server: Package`
   uploads its artifact. In a merge group, `Quality` and `App Server: Package` start after `Security`:
   [Fail fast in the merge queue](#fail-fast-in-the-merge-queue).
-- `App Server: Integration` has four shards.
+- `App Server: Integration` has five shards.
   `providers` selects the `integration` package.
   `runtime-and-startup` selects the `core.database`, `agent.job` and `core.privacy` packages, plus `StartupBudgetIntegrationTest`.
   `practices-and-agent` selects the `practices` and `agent` packages.
   It excludes the `runtime-and-startup` selection, so `agent.job` stays in that shard.
+  It also excludes `review`, which selects `ReviewEndToEndIntegrationTest` and also runs in the fast tier.
   Package patterns include their subpackages. `application` excludes the selections of all other shards.
   All shards retain the `integration` tag
   filter and run in separate JVMs and Testcontainers databases. The startup test and the

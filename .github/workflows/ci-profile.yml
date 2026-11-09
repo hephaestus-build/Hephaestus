@@ -33,6 +33,7 @@ jobs:
           - shard: runtime-and-startup
           - shard: practices-and-agent
           - shard: application
+          - shard: review
     permissions:
       contents: read
       actions: read
