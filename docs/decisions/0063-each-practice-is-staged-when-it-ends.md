@@ -155,7 +155,8 @@ This layer adds no provider writer, composition template or separate scheduling 
 
 [ADR 0079](0079-one-agent-system.md) supersedes the fence and the owner of the recovery. Staging, the seal, the retry rule and the failure table stay.
 
-- The fence of every stage write is `(run_id, lease_epoch)` on the `review_measure` run. It replaces "job, attempt and worker" and the 2026-10-30 check on `review_job.leased_until`.
+- The fence of every stage write is `(run_id, lease_epoch)` on the `review_measure` run, with an unexpired lease. The write fails unless the run is `LEASED` with that epoch and its `leased_until` is after the database clock. It replaces "job, attempt and worker" and the 2026-10-30 check on `review_job.leased_until`.
 - The server admits each staged candidate when the sandbox proposes it at the gateway. No worker takes part.
 - In the table of § Decision, the row "Attempt, lease and fence" is now kept in `agent_run`, and the server's reaper requeues the run. The rows that name a lost worker now mean a lost sandbox or a lost server replica.
 - Composition after the seal is a `review_compose` run in the same sandbox ([ADR 0061](0061-review-seals-then-feedback-composes.md)).
+- In the 2026-10-30 failure table, the row "Every practice already ended" changes. The server seals without a capture or a measurement. A `review_compose` run then composes, in the review's sandbox if it is live, or in a new one.

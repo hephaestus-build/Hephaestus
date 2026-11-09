@@ -171,7 +171,7 @@ The [retired words](../contributor/practice-feedback-language.md#retired-words) 
 
 [ADR 0079](0079-one-agent-system.md) removes the worker role before 1.0. The cutover rules of this decision stay.
 
-- § Procedure: the 1.0 chart has no `worker.replicas`. Phases 1 and 2 set it on the 0.95 chart only. Phase 4 restores the server replicas.
+- § Procedure: the 1.0 chart has no `worker.replicas`. Phase 1 sets it on the 0.95 chart. Phase 2 uses the 1.0 chart and omits it. Phase 4 restores the server replicas.
 - § In-flight work: the 1.0 migration creates one `agent_run` for each live review job and turn, and ends the rest. Each requeued review keeps its admitted and staged results, as this decision requires.
 - The drain of the workers in phase 1 stays a step of the 0.95 chart.
 

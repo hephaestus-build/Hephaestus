@@ -299,7 +299,8 @@ A **subject** is the thing that a sandbox serves. Its key is the concurrency key
 | `conversation` | `conversation:<id>` | While the conversation is in use. The reaper deletes it after the idle limit. `shutdownTime` is a ceiling from the capacity home, so its token also expires. |
 | `action` | `action:<id>` | Short. One action task, such as a product feedback draft. |
 
-The server creates a sandbox with a `SandboxClaim` from the `SandboxTemplate` of its kind.
+Each kind has one `SandboxTemplate` and one `SandboxWarmPool` with `replicas: 0`.
+A v1beta1 claim requires `warmPoolRef`, so the server creates a sandbox with a `SandboxClaim` that names the pool of its kind. The pool holds no started sandbox.
 The sandbox has **one container**, from the `hephaestus-agent` image. The container holds:
 
 - The one Node loop driver, with the kind as a parameter.
@@ -332,7 +333,7 @@ It allows no ingress.
 - The gateway also checks that `sandbox_id` names a live `agent_sandbox` row (`REQUESTED` or `READY`) of the same subject. A deleted sandbox's token thus stops at once, before its `exp`.
 - The token is plain text in the `SandboxClaim` object. Only the server's Role and cluster administrators can read claims in the sandbox namespace. The liveness check and the short life bound a copy of it.
 
-There is no warm pool. The sandbox **pulls** its work from the gateway. The server pushes nothing into it.
+No sandbox is started before its claim. The claim's `env` forces a cold start from the template. The sandbox **pulls** its work from the gateway. The server pushes nothing into it.
 
 **Evidence authority.** The sandbox's files are not evidence, because a command can change them.
 
@@ -432,8 +433,11 @@ An interactive call gets a grant first. A batch call yields at grant time. Nothi
 
 The band replaces the call class. The conversation reserve becomes the reserve of the `interactive` band.
 
-**Usage.** Each model call writes one `llm_usage_event` row when it ends, keyed by `(run_id, lease_epoch, call)`.
-The usage tables of each kind merge into it. A lost lease needs no billing step, because its calls are already rows.
+**Usage.** Each model call has one `llm_usage_event` row, keyed by `(run_id, lease_epoch, call)`.
+The proxy writes the row before it sends the call to the provider, and completes it with the measured usage when the call ends.
+A row that stays open, because a replica stopped during the call, records an unverifiable call under the existing ledger rules (`USAGE_UNVERIFIABLE`). It is never billed as zero.
+
+The usage tables of each kind merge into it. A lost lease needs no billing step of its own, because each of its calls already has a row.
 
 **Capacity.** One `@ConfigurationProperties` home, `hephaestus.agent.capacity.*`, holds every capacity value:
 
@@ -478,7 +482,7 @@ sequenceDiagram
 - **Order.** The claim order is the band, then the workspace with the fewest running runs, then age. A `NOTIFY` on each new run wakes the replicas.
 - **Sandboxes.** The control concern takes the queued runs in that order, within the counts of the capacity home. It makes sure that a sandbox exists for each of their subjects. If none exists, it creates the claim.
 - **Claim.** The sandbox's `next` call claims its subject's next run, with `SKIP LOCKED`. The claim sets `LEASED`, raises `attempt` and `lease_epoch`, and sets `leased_until` on the database clock. A warm sandbox's `next` waits for the next run of its subject.
-- **One writer.** The sandbox that claimed the run is the only writer of its lease. Every write names `(run_id, lease_epoch)`, and the database refuses a stale epoch.
+- **One writer.** The sandbox that claimed the run is the only writer of its lease. Every write names `(run_id, lease_epoch)`. The database refuses the write unless the run is `LEASED` with that epoch and `leased_until` is after the database clock. Thus, a write after the lease expires fails before the reaper acts.
 - **Reaper.** The reaper is a conditional update on the database clock.
   - An expired lease requeues the run, or ends it with a reason when its attempt budget is spent.
   - The reaper also deletes the claims of subjects that have no need.

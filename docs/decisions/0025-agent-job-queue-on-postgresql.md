@@ -166,5 +166,5 @@ A worker's review slots and the reviews quota still bound how many reviews run.
 - A claim uses `SKIP LOCKED` and wakes on `NOTIFY`. `AGENT_POLL_INTERVAL` and `AGENT_CLAIM_BATCH_SIZE` do not decide the start time.
 - A claim orders by band, then by the workspace with the fewest running runs, then by age. This is the fairness that the revisit trigger named.
 - The band replaces the order by origin with aging. "Started work first" goes: a run of a subject that is already started holds its lease, so it needs no rank.
-- A write is fenced on `(run_id, lease_epoch)`, not on a worker id. `worker_registry` and the sweeps by worker go.
+- A write is fenced on `(run_id, lease_epoch)` and an unexpired lease, not on a worker id. `worker_registry` and the sweeps by worker go.
 - One reaper on the database clock runs on every server replica. The attempt budget of each kind replaces `AGENT_MAX_RETRIES`.

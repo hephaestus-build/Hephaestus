@@ -295,5 +295,6 @@ So the overshoot stays bounded, by capacity rather than by an operator's number.
 [ADR 0079](0079-one-agent-system.md) supersedes the worker in the updates of this decision.
 The server resolves provider keys, because the proxy runs in the server.
 The claim of a `turn` run admits the turn.
-Each model call writes one `llm_usage_event` row with its run and epoch. The spend of a turn whose lease expired is thus already recorded, and no reaper bills it.
+Each model call has one `llm_usage_event` row with its run and epoch. The proxy writes it before the call and completes it when the call ends.
+A turn whose lease expired thus needs no billing step. A call that a lost replica left open stays unverifiable under the ledger's rules.
 The budgets and the governed catalog stay.
