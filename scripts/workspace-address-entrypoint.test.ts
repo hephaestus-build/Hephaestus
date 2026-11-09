@@ -90,10 +90,12 @@ function runEntrypoint(fixture: Fixture, env: Record<string, string>) {
 		.replaceAll("/tmp/hephaestus-webapp", fixture.runtime)
 		.replaceAll("/app/src/environment/index.ts", fixture.envTs);
 	const before = imageBytes(fixture);
+	// No deadline. The script waits on no input and has no unbounded loop, so it cannot hang. Its
+	// run time is its process starts, and on a loaded Windows runner each start can take seconds:
+	// any fixed bound fails a slow run, not a stuck one.
 	const result = spawnSync("bash", [], {
 		input: script,
 		encoding: "utf8",
-		timeout: 10_000,
 		env: { PATH: process.env.PATH, ...env },
 	});
 	assert.deepEqual(imageBytes(fixture), before, "the entrypoint changed the image's files");
