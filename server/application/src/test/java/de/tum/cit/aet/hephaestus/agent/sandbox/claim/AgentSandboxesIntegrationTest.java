@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -224,7 +225,8 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         waitPast(Duration.ofSeconds(1));
         // A poll of the gateway after the idle limit: the sandbox answers, but it leased nothing.
         assertThat(sandboxes.authenticate(token)).contains(sandbox);
-        assertThat(sandboxes.lease(sandbox)).isEmpty();
+        assertThat(sandboxes.lease(sandbox, Set.of(AgentRunKind.REVIEW), lease -> true))
+                .isEmpty();
 
         reaper(Duration.ofHours(1)).reap();
 
@@ -232,18 +234,32 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldLeaseNoRunOfAKindThatNoSandboxDrivesYet() {
+    void shouldLeaseARunOnlyOfTheOfferedKindsAndOnlyWhenItsKindTakesIt() {
         String subject = "review:" + UUID.randomUUID();
         queueRun(subject);
         var sandbox = ensure(subject, AgentSandboxKind.REVIEW);
         sandboxes.authenticate(token(sandbox));
 
-        assertThat(sandboxes.lease(sandbox)).isEmpty();
-        assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM agent_run WHERE concurrency_key = ? AND state = 'QUEUED'",
-                        Integer.class,
-                        subject))
-                .isEqualTo(1);
+        assertThat(sandboxes.lease(sandbox, Set.of(), lease -> true)).isEmpty();
+        assertThat(sandboxes.lease(sandbox, Set.of(AgentRunKind.REVIEW_COMPOSE), lease -> true))
+                .isEmpty();
+        assertThat(runState(subject)).isEqualTo("QUEUED");
+
+        // A kind that finds its work gone ends the run in the transaction of the lease, and the sandbox gets none.
+        assertThat(sandboxes.lease(sandbox, Set.of(AgentRunKind.REVIEW), lease -> !runs.end(lease.fence())))
+                .isEmpty();
+        assertThat(runState(subject)).isEqualTo("ENDED");
+
+        queueRun(subject);
+        assertThat(sandboxes.lease(sandbox, Set.of(AgentRunKind.REVIEW), lease -> true))
+                .hasValueSatisfying(lease -> assertThat(lease.kind()).isEqualTo(AgentRunKind.REVIEW));
+    }
+
+    private String runState(String subject) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT state FROM agent_run WHERE concurrency_key = ? ORDER BY created_at DESC LIMIT 1",
+                String.class,
+                subject));
     }
 
     @Test

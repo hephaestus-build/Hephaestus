@@ -16,6 +16,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -151,18 +152,20 @@ public class AgentSandboxes {
     }
 
     /**
-     * Leases the subject's next run to its sandbox, while the sandbox is live: one transaction holds the sandbox, so
-     * the reaper cannot take it back between the check and the claim. A lease is a use of the sandbox. Only the run
-     * kinds that the sandbox's kind drives are offered ({@link AgentSandboxKind#runs}).
+     * Leases the subject's next run of these kinds to its sandbox, while the sandbox is live: one transaction holds the
+     * sandbox, so the reaper cannot take it back between the check and the claim. {@code claimed} moves the run's
+     * domain row in the same transaction; when it answers false, its kind ended or requeued the run, and the sandbox
+     * gets none. A lease is a use of the sandbox.
      */
-    public Optional<AgentRunLease> lease(LiveSandbox sandbox) {
-        Set<AgentRunKind> kinds = sandbox.kind().runs();
+    public Optional<AgentRunLease> lease(
+            LiveSandbox sandbox, Set<AgentRunKind> kinds, Predicate<AgentRunLease> claimed) {
         if (kinds.isEmpty()) return Optional.empty();
         return Objects.requireNonNull(transactions.execute(status -> {
             if (sandboxes
                     .lockLive(sandbox.id(), sandbox.workspaceId(), sandbox.subjectKey())
                     .isEmpty()) return Optional.<AgentRunLease>empty();
-            var lease = runs.claimSubject(sandbox.workspaceId(), sandbox.subjectKey(), kinds);
+            var lease = runs.claimSubject(sandbox.workspaceId(), sandbox.subjectKey(), kinds)
+                    .filter(claimed);
             lease.ifPresent(leased -> {
                 sandboxes.used(sandbox.id(), sandbox.workspaceId());
                 log.atInfo()

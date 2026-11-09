@@ -93,7 +93,17 @@ The first call makes the sandbox `READY`. A later call that leases no run is no 
 A sandbox token expires at the sandbox's shutdown time, which is at most the life of the key that signs it.
 
 `POST /internal/agent/next` leases the subject's next run to the sandbox with `AgentRuns.claimSubject`: the same rule and order as a claim, within one subject. It holds the sandbox's row in the same transaction, so the reaper cannot take the sandbox back between the check and the lease.
-It offers only the run kinds that the sandbox's kind drives (`AgentSandboxKind.runs`). Review jobs are still claimed by the worker's executor, so no kind drives one yet, and `next` answers `204`.
+It offers only the run kinds that the sandbox's kind drives.
+
+Each run kind that a sandbox drives has one `SandboxRunKind` bean in `agent.gateway`:
+
+- `sandbox()` names the sandbox kind that drives it. The pull of a sandbox of that kind offers its runs, and no other pull does.
+- `claimed(run)` runs in the transaction of the lease. The kind moves its domain row with the run, so the two always agree. When the kind ends or requeues the run instead, for example because the work was erased, the sandbox gets no run from that pull.
+- `context(run)` answers `GET …/runs/{runId}/context`, and `end(run, outcome)` ends the run with its domain row.
+- `attempt(run)` names the attempt that the model gateway bills the run's model calls to. The gateway takes the sandbox token with the run's `X-Agent-Run` and `X-Agent-Epoch` headers. It answers `409` when the claim no longer holds the run, and `401` for a run of another subject.
+
+No kind is registered yet, so `next` answers `204`. Review jobs are still claimed by the worker's executor.
+A `REVIEW_COMPOSE` run continues the `REVIEW` run of its review (`AgentRuns.continueAs`). Its epochs go on from the ended run, and it spends no attempt, because it is the next step of the work, not a retry.
 
 ### Sandbox driver
 

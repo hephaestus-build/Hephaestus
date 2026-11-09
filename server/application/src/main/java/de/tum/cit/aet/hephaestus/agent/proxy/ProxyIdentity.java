@@ -6,19 +6,24 @@ import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A verified gateway caller: a review job attempt, a Heph turn attempt, or the conversation loop pulling turns.
+ * A verified gateway caller: a review job attempt, a Heph turn attempt, or the conversation loop pulling turns. An
+ * attempt token or a sandbox's run names the attempt.
  * Contains no bearer credential or frozen configuration.
  *
  * @param loop the conversation loop, which reaches only its assignment pulls
  */
-record ProxyIdentity(@Nullable AttemptJwt job, @Nullable AttemptJwt turn, boolean loop) {
+record ProxyIdentity(@Nullable ProxyAttempt job, @Nullable ProxyAttempt turn, boolean loop) {
     ProxyIdentity {
         if (Stream.of(job, turn).filter(Objects::nonNull).count() + (loop ? 1 : 0) != 1)
             throw new IllegalArgumentException("Exactly one proxy identity is required");
     }
 
-    static ProxyIdentity of(AttemptJwt attempt) {
-        return switch (attempt.kind()) {
+    static ProxyIdentity of(AttemptJwt token) {
+        return of(ProxyAttempt.of(token));
+    }
+
+    static ProxyIdentity of(ProxyAttempt attempt) {
+        return switch (attempt.caller()) {
             case REVIEW -> new ProxyIdentity(attempt, null, false);
             case TURN -> new ProxyIdentity(null, attempt, false);
         };

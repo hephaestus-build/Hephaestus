@@ -194,6 +194,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 turnRepository,
                 new ConversationLoopProperties(null),
                 jwtVerifier,
+                null,
+                Map.of(),
                 Mockito.mock(ProxyAccounting.class));
         User owner = persistUser("proxy-owner");
         workspace = createWorkspace("proxy-ws", "Proxy Workspace", "proxy-org", AccountType.ORG, owner);

@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -50,14 +51,35 @@ public final class SandboxRunArgumentResolver implements HandlerMethodArgumentRe
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof AgentSandboxes.LiveSandbox sandbox))
             throw hidden();
-        UUID runId = uuid(pathVariable(request));
-        if (!runId.toString().equals(request.getHeader(RUN_HEADER))) throw hidden();
-        int epoch = epoch(request.getHeader(EPOCH_HEADER));
-        var run = runs.find(new AgentRunRef(runId, sandbox.workspaceId()))
-                .filter(found -> found.getConcurrencyKey().equals(sandbox.subjectKey()))
+        String runId = pathVariable(request);
+        if (runId == null || !runId.equals(request.getHeader(RUN_HEADER))) throw hidden();
+        return resolve(runs, sandbox, runId, request.getHeader(EPOCH_HEADER))
                 .orElseThrow(SandboxRunArgumentResolver::hidden);
-        return new SandboxRun(
-                sandbox, new AgentRunFence(runId, sandbox.workspaceId(), epoch), run.getKind(), run.getAttempt());
+    }
+
+    /**
+     * The run that a sandbox's headers name, while it is a run of the sandbox's own subject; empty for a header that is
+     * missing or malformed, and for a run of another workspace or subject. The model gateway reads a sandbox's run the
+     * same way. Whether the claim still holds the run is the route's to check.
+     */
+    public static Optional<SandboxRun> resolve(
+            AgentRuns runs,
+            AgentSandboxes.LiveSandbox sandbox,
+            @Nullable String runHeader,
+            @Nullable String epochHeader) {
+        if (runHeader == null
+                || !UUID_TEXT.matcher(runHeader).matches()
+                || epochHeader == null
+                || !EPOCH_TEXT.matcher(epochHeader).matches()) return Optional.empty();
+        UUID runId = UUID.fromString(runHeader);
+        int epoch = Integer.parseInt(epochHeader);
+        return runs.find(new AgentRunRef(runId, sandbox.workspaceId()))
+                .filter(found -> found.getConcurrencyKey().equals(sandbox.subjectKey()))
+                .map(run -> new SandboxRun(
+                        sandbox,
+                        new AgentRunFence(runId, sandbox.workspaceId(), epoch),
+                        run.getKind(),
+                        run.getAttempt()));
     }
 
     private static @Nullable String pathVariable(NativeWebRequest request) {
@@ -70,16 +92,6 @@ public final class SandboxRunArgumentResolver implements HandlerMethodArgumentRe
     private static final Pattern UUID_TEXT =
             Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
     private static final Pattern EPOCH_TEXT = Pattern.compile("[1-9][0-9]{0,8}");
-
-    private static UUID uuid(@Nullable String value) {
-        if (value == null || !UUID_TEXT.matcher(value).matches()) throw hidden();
-        return UUID.fromString(value);
-    }
-
-    private static int epoch(@Nullable String value) {
-        if (value == null || !EPOCH_TEXT.matcher(value).matches()) throw hidden();
-        return Integer.parseInt(value);
-    }
 
     private static ResponseStatusException hidden() {
         return new ResponseStatusException(HttpStatus.NOT_FOUND);

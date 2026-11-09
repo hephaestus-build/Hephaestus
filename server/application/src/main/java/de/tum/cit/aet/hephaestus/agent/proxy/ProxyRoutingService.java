@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
-import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
@@ -89,30 +88,30 @@ class ProxyRoutingService {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Review job credential required");
             return turnRouting(identity.turn());
         }
-        var jwt = identity.job();
-        if (jwt == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Model credential required");
+        var caller = identity.job();
+        if (caller == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Model credential required");
         var job = agentJobRepository
-                .findById(jwt.id())
+                .findById(caller.id())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable"));
-        if (job.getWorkspaceId() != jwt.workspaceId())
+        if (job.getWorkspaceId() != caller.workspaceId())
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable");
-        if (!job.getRunId().equals(jwt.leaseId())
+        if (!job.getRunId().equals(caller.leaseId())
                 || !runs.isCurrent(
-                        new AgentRunRef(jwt.leaseId(), jwt.workspaceId()), ReviewRunKind.epoch(jwt.attempt())))
+                        new AgentRunRef(caller.leaseId(), caller.workspaceId()), ReviewRunKind.epoch(caller.attempt())))
             throw attemptEnded();
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
-        // The live checks above decide whether this attempt may call at all; the signed deadline decides until when.
-        Instant workDeadline = Objects.requireNonNull(jwt.workDeadline(), "a review attempt has a work deadline");
+        // The live checks above decide whether this attempt may call at all; its work deadline decides until when.
+        Instant workDeadline = Objects.requireNonNull(caller.workDeadline(), "a review attempt has a work deadline");
         if (!request.getRequestURI().startsWith(JobTokenAuthenticationFilter.PRACTICE_SCRIPT_PATH)) {
-            register(job, jwt.leaseId(), ModelKind.CHAT, snapshot.model());
-            return reviewRouting(job, jwt.leaseId(), snapshot, workDeadline);
+            register(job, caller.leaseId(), ModelKind.CHAT, snapshot.model());
+            return reviewRouting(job, caller.leaseId(), snapshot, workDeadline);
         }
         var slot = practiceScriptSlot(request.getRequestURI());
         if (slot == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        ProxyRouting routing = practiceScriptRouting(job, jwt.leaseId(), snapshot, slot, workDeadline)
+        ProxyRouting routing = practiceScriptRouting(job, caller.leaseId(), snapshot, slot, workDeadline)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         FrozenModel model = slot == ModelKind.CHAT ? snapshot.model() : snapshot.practiceScriptSlot(slot);
-        register(job, jwt.leaseId(), slot, model);
+        register(job, caller.leaseId(), slot, model);
         return routing;
     }
 
@@ -159,10 +158,11 @@ class ProxyRoutingService {
      * The routing of a conversation turn attempt while this worker holds its lease: the route frozen at admission. An
      * attempt that ended or moved on gets {@code 409}, so its host stops.
      */
-    private ProxyRouting turnRouting(AttemptJwt jwt) {
+    private ProxyRouting turnRouting(ProxyAttempt caller) {
         var turn = mentorTurns
-                .findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())
-                .filter(found -> mentorTurns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
+                .findByIdAndWorkspaceId(caller.id(), caller.workspaceId())
+                .filter(found ->
+                        mentorTurns.hasLiveLease(caller.id(), caller.workspaceId(), caller.attempt(), caller.leaseId()))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.CONFLICT, "This turn attempt no longer holds its lease"));
         var admitted = MentorTurnAdmission.read(turn.getAdmission())
@@ -177,7 +177,7 @@ class ProxyRoutingService {
                 route.modelId(),
                 turn.getWorkspaceId(),
                 new ProxyRouting.BilledAttempt(
-                        UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), jwt.leaseId()),
+                        UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), caller.leaseId()),
                 null,
                 null,
                 null);

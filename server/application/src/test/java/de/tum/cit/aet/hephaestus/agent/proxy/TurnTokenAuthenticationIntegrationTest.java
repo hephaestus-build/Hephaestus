@@ -30,6 +30,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -139,6 +140,8 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
                 turnRepository,
                 new ConversationLoopProperties(null),
                 jwtVerifier,
+                null,
+                Map.of(),
                 Mockito.mock(ProxyAccounting.class));
         var request = new MockHttpServletRequest(method, path);
         request.setRemoteAddr("10.0.0.2");
