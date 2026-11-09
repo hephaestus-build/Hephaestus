@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -211,9 +212,11 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         job.setStatus(ReviewJobStatus.QUEUED);
         job.setConfigSnapshot(new ObjectMapper().createObjectNode());
         job.prePersist();
-        job.setAvailableAt(availableAt);
         job.setHoldReason(holdReason);
-        return jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
+        ReviewJob saved = jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
+        // The run offers the job no earlier than this.
+        jdbc.update("UPDATE agent_run SET available_at=? WHERE id=?", Timestamp.from(availableAt), saved.getRunId());
+        return jobRepository.findById(saved.getId()).orElseThrow();
     }
 
     @Test
@@ -540,7 +543,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
             Instant availableAt = Instant.now().plus(Duration.ofHours(1));
             ReviewJob running = queuedJob(workspace, availableAt, ReviewJob.HOLD_REASON_BUDGET);
             running.setStatus(ReviewJobStatus.RUNNING);
-            jobRepository.saveAndFlush(running);
+            RuntimeJobTestData.save(transactionTemplate, jdbc, jobRepository, running);
 
             llmUsageService.updateOwnProviderBudget(workspace.getId(), new BigDecimal("50.00"));
 
@@ -683,7 +686,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     setupWorkspace("reprice-partial-" + kind.name().toLowerCase(Locale.ROOT));
             ReviewJob job = queuedJob(workspace, Instant.now(), null);
             job.setStatus(ReviewJobStatus.RUNNING);
-            jobRepository.saveAndFlush(job);
+            RuntimeJobTestData.save(transactionTemplate, jdbc, jobRepository, job);
             accumulate(job, new PracticeScriptCallUsage(kind, "known", null, 1_000_000, 0, 0, 0, 0));
             accumulate(job, new PracticeScriptCallUsage(kind, "unknown", null, 0, 0, 0, 0, 0, false));
             LlmUsageEvent row = scriptRow(workspace, job, kind, MeasurementVerification.UNVERIFIABLE);
@@ -727,10 +730,9 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     setupWorkspace("reprice-complete-" + kind.name().toLowerCase(Locale.ROOT));
             ReviewJob job = queuedJob(workspace, Instant.now(), null);
             job.setStatus(ReviewJobStatus.RUNNING);
-            jobRepository.saveAndFlush(job);
+            RuntimeJobTestData.save(transactionTemplate, jdbc, jobRepository, job);
             accumulate(job, new PracticeScriptCallUsage(kind, "earlier", null, 0, 0, 0, 0, 0, false));
-            job.setAttempt(1);
-            jobRepository.saveAndFlush(job);
+            RuntimeJobTestData.reclaim(jdbc, job);
             accumulate(job, new PracticeScriptCallUsage(kind, "known", null, 1_000_000, 0, 0, 0, 0));
             accumulate(job, new PracticeScriptCallUsage(kind, "reported-zero", null, 0, 0, 0, 0, 0));
             ModelKind other = kind == ModelKind.CHAT ? ModelKind.EMBEDDING : ModelKind.CHAT;

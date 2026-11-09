@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedResults;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ResultsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.RuntimeNonResultDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SubmittedResultDTO;
@@ -56,7 +57,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.WithheldItem;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -107,8 +107,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         var capture = mapper.createObjectNode();
         capture.set("manifest", mapper.valueToTree(manifest));
         job.setCapture(capture);
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
+        job.setRunId(LEASE);
     }
 
     private void acceptReadReceipts() {
@@ -650,7 +649,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         when(verifier.verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(3));
         var prepared = prepare(job, submission("clear-names", "docs:one"));
-        job.setAttempt(1);
+        RuntimeJobTestData.attempt(job, 1);
         assertThatThrownBy(() -> prepared.record(job)).isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
         verifyNoInteractions(results, membership);
     }

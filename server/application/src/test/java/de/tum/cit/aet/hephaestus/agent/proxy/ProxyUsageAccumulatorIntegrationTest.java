@@ -22,8 +22,6 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
@@ -68,8 +66,6 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
         RuntimeJobTestData.initialize(job, workspace.getId());
 
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofHours(1)));
         job.setConfigSnapshot(MAPPER.createObjectNode());
         job.prePersist();
         job = jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
@@ -82,7 +78,7 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
                         job.getId(),
                         job.getWorkspaceId(),
                         job.getAttempt(),
-                        Objects.requireNonNull(job.getLeaseId()),
+                        Objects.requireNonNull(job.getRunId()),
                         ModelKind.CHAT,
                         FrozenCharge.UNKNOWN))
                 .isTrue();
@@ -90,7 +86,7 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
 
     private ProxyRouting.BilledAttempt attempt(ReviewJob job, int number) {
         return new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, job.getId(), number, LEASE, 0L, 0L, job.getWorkspaceId());
+                UsageSourceType.REVIEW_JOB, job.getId(), number, job.getRunId(), 0L, 0L, job.getWorkspaceId());
     }
 
     private void accumulate(ProxyUsageAccumulator accumulator, ProxyRouting.BilledAttempt attempt, String body) {
@@ -213,16 +209,16 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
                 .isEqualTo(1.0);
     }
 
+    /** Requeues the running job and claims it again, until its run carries {@code attempt}. */
     private void requeueTo(ReviewJob job, int attempt) {
-        job.setAttempt(attempt);
-        job.setStatus(ReviewJobStatus.RUNNING);
         job.setLlmCalls(0);
         job.setLlmInputTokens(0);
         job.setLlmOutputTokens(0);
         job.setLlmReasoningTokens(0);
         job.setLlmCacheReadTokens(0);
         job.setLlmCacheWriteTokens(0);
-        jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
+        jobRepository.saveAndFlush(job);
+        while (job.getAttempt() < attempt) RuntimeJobTestData.reclaim(jdbc, job);
     }
 
     /** Only reachable with a stubbed service: a real one has no way to fail on demand. */

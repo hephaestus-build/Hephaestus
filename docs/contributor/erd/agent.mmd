@@ -9,6 +9,24 @@ erDiagram
 
     direction LR
 
+    AgentRun {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(24) kind "NOT NULL"
+        VARCHAR(16) band "NOT NULL"
+        VARCHAR(96) concurrency_key "NOT NULL"
+        VARCHAR(8) state "NOT NULL"
+        INTEGER attempt "NOT NULL"
+        INTEGER lease_epoch "NOT NULL"
+        TIMESTAMPTZ leased_until
+        TIMESTAMPTZ available_at "NOT NULL"
+        TIMESTAMPTZ deadline
+        VARCHAR(24) stop_reason
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ started_at
+        TIMESTAMPTZ ended_at
+    }
+
     AttemptPublicKey {
         VARCHAR(36) kid PK
         TIMESTAMPTZ not_after "NOT NULL"
@@ -207,9 +225,7 @@ erDiagram
         BIGINT workspace_id FK,UK "NOT NULL"
         TIMESTAMPTZ submitted_at "NOT NULL"
         VARCHAR(20) status "NOT NULL"
-        INTEGER attempt "NOT NULL"
         VARCHAR(16) processing_status "NOT NULL"
-        TIMESTAMPTZ available_at "NOT NULL"
         VARCHAR(32) hold_reason
         VARCHAR(32) trace_id "NOT NULL"
         JSONB input "NOT NULL"
@@ -233,11 +249,7 @@ erDiagram
         TIMESTAMPTZ started_at
         TIMESTAMPTZ execution_started_at
         TIMESTAMPTZ completed_at
-        INTEGER drain_count "NOT NULL"
-        INTEGER room_refusals "NOT NULL"
-        TIMESTAMPTZ leased_until
-        UUID lease_id
-        INTEGER progressed_attempts "NOT NULL"
+        UUID run_id FK,UK "NOT NULL"
     }
 
     ReviewJobAttemptCharge {
@@ -378,8 +390,10 @@ erDiagram
     %% Relationships
     %% One-to-One relationships
     ReviewJob ||--|| ReviewCompositionBasi : reviewed
+    AgentRun ||--|| ReviewJob : reviewed
 
     %% One-to-Many relationships
+    Workspace ||--o{ AgentRun : has
     Account ||--o{ InstanceLlmSetting : has
     LlmCallPool ||--o{ LlmCallPermit : has
     LlmConnection ||--o{ LlmModel : has

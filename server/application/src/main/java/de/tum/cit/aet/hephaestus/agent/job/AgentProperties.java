@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PositiveOrZero;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -18,11 +17,7 @@ import org.springframework.validation.annotation.Validated;
  *                          worker role runs them, so set it on both.
  * @param pollInterval      how long the poll loop sleeps when a poll claimed nothing
  * @param claimBatchSize    Maximum candidate batch. A blocked endpoint does not consume a local execution slot.
- * @param maxRetries        How many times a job whose worker was lost goes back to the queue before it fails. The
- *                          counter is the attempt number less the attempts that a worker's drain stopped or that
- *                          found no sandbox room: those spend no retry.
- * @param heartbeatInterval interval between {@code worker_registry} liveness heartbeats, which also renew the leases of
- *     the review attempts that the worker runs
+ * @param heartbeatInterval interval between {@code worker_registry} liveness heartbeats
  * @param payloadRetention  age from {@code completed_at} at which a TERMINAL job's {@code capture}
  *                          and {@code output} are stripped to NULL
  * @param rowRetention      Age, counted from the end of a job, at which an ended job row that waits for no delivery
@@ -41,7 +36,6 @@ public record AgentProperties(
         Duration pollInterval,
 
         @DefaultValue("5") @Min(1) int claimBatchSize,
-        @DefaultValue("5") @PositiveOrZero int maxRetries,
 
         @DurationUnit(ChronoUnit.SECONDS) @DefaultValue("25s") @NotNull
         Duration heartbeatInterval,
@@ -55,10 +49,7 @@ public record AgentProperties(
     /** Floor for {@link #heartbeatInterval}: below this the liveness signal floods {@code worker_registry}. */
     public static final Duration MIN_HEARTBEAT_INTERVAL = Duration.ofSeconds(1);
 
-    /**
-     * Requeues RUNNING jobs after this heartbeat timeout. Allow for the database connection timeout:
-     * a false expiry rotates attempt credentials and invalidates results from a live worker.
-     */
+    /** A worker that did not beat for this long counts as gone, and its Heph sandboxes are removed. */
     public static final Duration WORKER_LEASE_TTL = Duration.ofMinutes(5);
 
     /** Ceiling for {@link #heartbeatInterval} — half the lease, so a worker survives losing one beat. */
@@ -83,7 +74,7 @@ public record AgentProperties(
                     "hephaestus.agent.heartbeat-interval must be <= " + MAX_HEARTBEAT_INTERVAL
                             + " (half the "
                             + WORKER_LEASE_TTL
-                            + " worker lease). A higher value orphans every worker while its jobs still run. Got: "
+                            + " worker liveness window). A higher value counts every worker as gone. Got: "
                             + heartbeatInterval);
         }
         if (payloadRetention == null || payloadRetention.isNegative() || payloadRetention.isZero()) {

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -42,12 +43,13 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
 
     JobTokenAuthenticationFilter(
             ReviewJobRepository jobs,
+            AgentRuns runs,
             MentorTurnRepository turns,
             SandboxGatewaySessions sessions,
             AttemptTokenVerifier verifier,
             ProxyAccounting accounting) {
         super(
-                new ProviderManager(new JobTokenAuthenticationProvider(jobs, turns, sessions, verifier)),
+                new ProviderManager(new JobTokenAuthenticationProvider(jobs, runs, turns, sessions, verifier)),
                 JobTokenAuthenticationFilter::convert);
         setSuccessHandler((request, response, authentication) -> {});
         setFailureHandler((request, response, failure) -> {

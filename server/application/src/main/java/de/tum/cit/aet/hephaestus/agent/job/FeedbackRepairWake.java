@@ -13,12 +13,11 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class FeedbackRepairWake {
-    private final ReviewJobRepository jobs;
-    private final AgentProperties properties;
+    private final ReviewRunKind reviewRuns;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void observed(FeedbackReadbackObservedEvent event) {
-        jobs.resumeFeedbackRepair(event.workspaceId(), event.reviewId(), properties.maxRetries());
+        reviewRuns.resumeComposition(event.workspaceId(), event.reviewId());
     }
 }

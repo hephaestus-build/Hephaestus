@@ -9,7 +9,6 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { FileEntry } from "@earendil-works/pi-coding-agent";
 
 import { present } from "./gateway-capabilities.ts";
-import { GatewayUnavailableError, withReviewLease } from "./gateway-lease.ts";
 
 // The worker follows SIGTERM with SIGKILL after its stop timeout; the child gets this much of it and
 // the upload of whatever out/ holds by then gets the rest.
@@ -19,7 +18,6 @@ const MAX_UPLOAD_BACKOFF_MS = 30_000;
 const UPLOAD_GRACE_MS = 10 * 60_000;
 const EXIT_UPLOAD_FAILED = 43;
 const EXIT_WORK_TIMEOUT = 124;
-const EXIT_SERVER_UNREACHABLE = 75;
 
 function exitCodeOf(code: number | null, signal: NodeJS.Signals | null): number {
 	if (code !== null) {
@@ -672,66 +670,54 @@ async function main() {
 	) {
 		throw new Error("Valid sandbox work and upload deadlines are required");
 	}
-	await withReviewLease(new URL(`${endpoint}/lease`), token, workDeadline, async (leaseSignal) => {
-		const child = spawn(command, args, { stdio: "inherit" });
-		const stopChild = () => {
-			child.kill("SIGTERM");
-			setTimeout(() => {
-				child.kill("SIGKILL");
-			}, CHILD_STOP_GRACE_MS).unref();
-		};
-		leaseSignal.addEventListener("abort", stopChild, { once: true });
-		const workTimeout = new AbortController();
-		const deadlineTimer = setTimeout(
-			() => {
-				workTimeout.abort();
-				child.kill("SIGTERM");
-				setTimeout(() => {
-					child.kill("SIGKILL");
-				}, CHILD_STOP_GRACE_MS).unref();
-			},
-			Math.max(0, workDeadline - Date.now()),
-		);
-		deadlineTimer.unref();
-		process.once("SIGTERM", () => {
-			child.kill("SIGTERM");
-			setTimeout(() => {
-				child.kill("SIGKILL");
-			}, CHILD_STOP_GRACE_MS).unref();
-		});
-		const exitCode = await exited(child);
-		clearTimeout(deadlineTimer);
-		leaseSignal.throwIfAborted();
-		await collectTraces("/workspace/.sessions", "/workspace/out", token);
-		const directory = await mkdtemp(path.join(tmpdir(), "gateway-output-"));
-		try {
-			const archive = path.join(directory, "result.tar");
-			if (
-				(await run("tar", [
-					"--create",
-					"--format=ustar",
-					"--blocking-factor=1",
-					"--file",
-					archive,
-					"--directory",
-					"/workspace",
-					"out",
-				])) !== 0
-			) {
-				throw new Error("Could not package sandbox result");
-			}
-			try {
-				await upload(new URL(`${endpoint}/result`), token, archive, uploadDeadline, leaseSignal);
-			} catch (error) {
-				console.error(error);
-				process.exitCode = EXIT_UPLOAD_FAILED;
-				return;
-			}
-		} finally {
-			await rm(directory, { recursive: true, force: true });
+	const child = spawn(command, args, { stdio: "inherit" });
+	const stopChild = () => {
+		child.kill("SIGTERM");
+		setTimeout(() => {
+			child.kill("SIGKILL");
+		}, CHILD_STOP_GRACE_MS).unref();
+	};
+	const workTimeout = new AbortController();
+	const deadlineTimer = setTimeout(
+		() => {
+			workTimeout.abort();
+			stopChild();
+		},
+		Math.max(0, workDeadline - Date.now()),
+	);
+	deadlineTimer.unref();
+	process.once("SIGTERM", stopChild);
+	const exitCode = await exited(child);
+	clearTimeout(deadlineTimer);
+	await collectTraces("/workspace/.sessions", "/workspace/out", token);
+	const directory = await mkdtemp(path.join(tmpdir(), "gateway-output-"));
+	try {
+		const archive = path.join(directory, "result.tar");
+		if (
+			(await run("tar", [
+				"--create",
+				"--format=ustar",
+				"--blocking-factor=1",
+				"--file",
+				archive,
+				"--directory",
+				"/workspace",
+				"out",
+			])) !== 0
+		) {
+			throw new Error("Could not package sandbox result");
 		}
-		process.exitCode = workTimeout.signal.aborted ? EXIT_WORK_TIMEOUT : exitCode;
-	});
+		try {
+			await upload(new URL(`${endpoint}/result`), token, archive, uploadDeadline);
+		} catch (error) {
+			console.error(error);
+			process.exitCode = EXIT_UPLOAD_FAILED;
+			return;
+		}
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+	process.exitCode = workTimeout.signal.aborted ? EXIT_WORK_TIMEOUT : exitCode;
 }
 
 if (import.meta.main) {
@@ -739,6 +725,6 @@ if (import.meta.main) {
 		await main();
 	} catch (error) {
 		console.error(error);
-		process.exitCode = error instanceof GatewayUnavailableError ? EXIT_SERVER_UNREACHABLE : 1;
+		process.exitCode = 1;
 	}
 }

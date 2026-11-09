@@ -94,7 +94,12 @@ const sidebars: SidebarsConfig = {
 		{
 			type: "category",
 			label: "Agent runtime",
-			items: ["unified-pi-runtime", "agent/agent-workspace-abi", "llm-cost-vocabulary"],
+			items: [
+				"unified-pi-runtime",
+				"agent-runs",
+				"agent/agent-workspace-abi",
+				"llm-cost-vocabulary",
+			],
 		},
 		{
 			type: "category",

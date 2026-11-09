@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
@@ -73,7 +74,8 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
                 sandboxManager,
                 TerminalUsageTestFixtures.attemptUsageOverMocks(jobRepository, usageRecorder),
                 objectMapper,
-                new ReviewJobTelemetry(new SimpleMeterRegistry(), Tracer.NOOP));
+                new ReviewJobTelemetry(new SimpleMeterRegistry(), Tracer.NOOP),
+                mock(AgentRuns.class));
 
         workspace = new Workspace();
         workspace.setId(1L);
@@ -177,7 +179,7 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
         @Test
         void shouldWriteNoUsageWhenACancelledExecutionMadeNoModelCall() {
             ReviewJob job = createJobWithStatus(ReviewJobStatus.RUNNING);
-            job.setLeaseId(UUID.randomUUID());
+            job.setRunId(UUID.randomUUID());
             job.setExecutionStartedAt(Instant.now());
             UUID jobId = job.getId();
 
@@ -186,7 +188,7 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
                     .thenReturn(1);
             ReviewJob cancelledJob = createJobWithStatus(ReviewJobStatus.CANCELLED);
             cancelledJob.setId(jobId);
-            cancelledJob.setLeaseId(UUID.randomUUID());
+            cancelledJob.setRunId(UUID.randomUUID());
             cancelledJob.setExecutionStartedAt(job.getExecutionStartedAt());
             when(jobRepository.findByIdAndWorkspaceId(jobId, 1L))
                     .thenReturn(Optional.of(job))
@@ -227,7 +229,7 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
         @Test
         void shouldPreserveCancellationWhenTheFrozenModelHasNoAdmissionPrice() {
             ReviewJob job = createJobWithStatus(ReviewJobStatus.RUNNING);
-            job.setLeaseId(UUID.randomUUID());
+            job.setRunId(UUID.randomUUID());
             job.setExecutionStartedAt(Instant.now());
             ConfigSnapshot unpricedSnapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper)
                     .withPriceSnapshot(null);
@@ -239,7 +241,7 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
                     .thenReturn(1);
             ReviewJob cancelledJob = createJobWithStatus(ReviewJobStatus.CANCELLED);
             cancelledJob.setId(jobId);
-            cancelledJob.setLeaseId(UUID.randomUUID());
+            cancelledJob.setRunId(UUID.randomUUID());
             cancelledJob.setExecutionStartedAt(job.getExecutionStartedAt());
             cancelledJob.setConfigSnapshot(unpricedSnapshot.toJson(objectMapper));
             when(jobRepository.findByIdAndWorkspaceId(jobId, 1L))
@@ -284,7 +286,7 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
         @Test
         void cancellingAClaimedJobStillInPreparation_neverTouchesTheLedger() {
             ReviewJob job = createJobWithStatus(ReviewJobStatus.RUNNING);
-            job.setLeaseId(UUID.randomUUID());
+            job.setRunId(UUID.randomUUID());
             UUID jobId = job.getId();
 
             when(jobRepository.findByIdAndWorkspaceId(jobId, 1L)).thenReturn(Optional.of(job));
@@ -292,7 +294,7 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
                     .thenReturn(1);
             ReviewJob cancelledJob = createJobWithStatus(ReviewJobStatus.CANCELLED);
             cancelledJob.setId(jobId);
-            cancelledJob.setLeaseId(UUID.randomUUID());
+            cancelledJob.setRunId(UUID.randomUUID());
             when(jobRepository.findByIdAndWorkspaceId(jobId, 1L))
                     .thenReturn(Optional.of(job))
                     .thenReturn(Optional.of(cancelledJob));
@@ -306,7 +308,7 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
         @Test
         void idempotentCancelOfAnAlreadyCancelledStartedJob_doesNotWriteOutsideWinningTransaction() {
             ReviewJob job = createJobWithStatus(ReviewJobStatus.CANCELLED);
-            job.setLeaseId(UUID.randomUUID());
+            job.setRunId(UUID.randomUUID());
             UUID jobId = job.getId();
 
             when(jobRepository.findByIdAndWorkspaceId(jobId, 1L)).thenReturn(Optional.of(job));

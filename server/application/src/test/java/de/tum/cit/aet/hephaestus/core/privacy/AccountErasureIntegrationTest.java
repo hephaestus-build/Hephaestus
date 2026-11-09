@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
@@ -87,7 +88,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -141,8 +141,6 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class AccountErasureIntegrationTest extends BaseIntegrationTest {
-    private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
-    private static final UUID OTHER_LEASE = UUID.fromString("259da655-fd97-5a78-815d-211a9f22ceb8");
 
     @Autowired
     private PracticeModelTestFixtures modelFixtures;
@@ -624,13 +622,14 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 600,
                 null);
         // The fixture ends the job; this run is still executing on its worker when the erasure starts.
-        jdbc.update(
+        RuntimeJobTestData.updateJobs(
+                jdbc,
                 "UPDATE review_job SET status='RUNNING', processing_status='NONE', completed_at=NULL,"
-                        + " lease_id='508d958c-100e-594f-8b4e-6d5c60e59470', leased_until=CURRENT_TIMESTAMP + interval"
-                        + " '10 minutes', started_at=CURRENT_TIMESTAMP, execution_started_at=CURRENT_TIMESTAMP,"
+                        + " started_at=CURRENT_TIMESTAMP, execution_started_at=CURRENT_TIMESTAMP,"
                         + " config_snapshot=CAST(? AS jsonb) WHERE id=?",
                 mapper.writeValueAsString(snapshot.toJson(mapper)),
                 jobId);
+        UUID runId = agentJobRepository.findById(jobId).orElseThrow().getRunId();
 
         // Another workspace's financial row, which the erasure must leave exactly as it is.
         var otherWorkspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("running-usage-other"));
@@ -664,11 +663,11 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var meters = new SimpleMeterRegistry();
         ProxyUsageAccumulator accumulator = accumulator(meters);
         var charge = new FrozenCharge("gpt-5", price);
-        var attempt = new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, jobId, 0, LEASE, 0L, 0L, workspaceId);
-        assertThat(attemptUsage.registerCall(jobId, workspaceId, 0, LEASE, ModelKind.CHAT, charge))
+        var attempt = new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, jobId, 0, runId, 0L, 0L, workspaceId);
+        assertThat(attemptUsage.registerCall(jobId, workspaceId, 0, runId, ModelKind.CHAT, charge))
                 .isTrue();
         accumulator.accumulate(attempt, null, new ProxyTokenUsage(1000, 100, 0, 0, 0));
-        assertThat(attemptUsage.registerCall(jobId, workspaceId, 0, LEASE, ModelKind.CHAT, charge))
+        assertThat(attemptUsage.registerCall(jobId, workspaceId, 0, runId, ModelKind.CHAT, charge))
                 .isTrue();
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM llm_usage_event WHERE workspace_id=?", Long.class, workspaceId))
@@ -1806,11 +1805,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             DerivedConversation derived,
             User owner)
             throws Exception {
+        // The fixture ends the job; its evidence is captured by a run that is still executing.
+        RuntimeJobTestData.updateJobs(jdbc, "UPDATE review_job SET status='RUNNING' WHERE id=?", derived.jobId());
         var job = agentJobRepository.findById(derived.jobId()).orElseThrow();
-        job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(OTHER_LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
-        agentJobRepository.saveAndFlush(job);
         var files = new JobEvidenceFiles(
                 new FabricLayout(evidenceRoot.toString()), agentJobRepository, Clock.systemUTC(), worker);
         files.beginPersonCapture(job);

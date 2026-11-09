@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -92,6 +93,9 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private ReviewJobRepository jobRepository;
 
     @Autowired
+    private AgentRuns agentRuns;
+
+    @Autowired
     private MentorTurnCompletion completion;
 
     @Autowired
@@ -140,6 +144,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
             factory.registerSingleton("hephTurnController", controller);
             factory.registerSingleton("hephTurnSandboxController", sandboxController);
             factory.registerSingleton("reviewJobRepository", jobRepository);
+            factory.registerSingleton("agentRuns", agentRuns);
             // The turn endpoints read no turn row on the gateway; a model call would.
             factory.registerSingleton("mentorTurnRepository", gatewayTurnReads);
             factory.registerSingleton("attemptTokenVerifier", verifier);

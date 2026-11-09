@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateInfoDTO;
 import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateLookup;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.YearMonth;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -33,7 +32,7 @@ public class LlmUsageAdminService {
     private final LlmUsageEventRepository usageRepository;
     private final WorkspaceRepository workspaceRepository;
     private final ConfigAuditPort configAudit;
-    private final ReviewJobRepository jobRepository;
+    private final ReviewRunKind reviewRuns;
 
     /** Display-only; never an input to a cap comparison. */
     private final FxRateLookup fxRateLookup;
@@ -42,12 +41,12 @@ public class LlmUsageAdminService {
             LlmUsageEventRepository usageRepository,
             WorkspaceRepository workspaceRepository,
             ConfigAuditPort configAudit,
-            ReviewJobRepository jobRepository,
+            ReviewRunKind reviewRuns,
             FxRateLookup fxRateLookup) {
         this.usageRepository = usageRepository;
         this.workspaceRepository = workspaceRepository;
         this.configAudit = configAudit;
-        this.jobRepository = jobRepository;
+        this.reviewRuns = reviewRuns;
         this.fxRateLookup = fxRateLookup;
     }
 
@@ -82,9 +81,7 @@ public class LlmUsageAdminService {
                 workspace.getId(),
                 new LlmBudgetSnapshot(before),
                 new LlmBudgetSnapshot(monthlyLlmBudgetUsd)));
-        // So a raised cap takes effect on the next poll rather than up to an hour later. A job released
-        // under a lowered cap is simply re-held on its next claim attempt.
-        jobRepository.releaseBudgetHolds(workspace.getId(), Instant.now());
+        reviewRuns.releaseBudgetHolds(workspace.getId());
     }
 
     private static AdminWorkspaceLlmUsageDTO toRollup(

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
@@ -109,7 +110,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
         UUID requeued = UUID.randomUUID();
         var job = new ReviewJob();
         job.setId(requeued);
-        job.setAttempt(2);
+        RuntimeJobTestData.attempt(job, 2);
         when(jobRepository.findByStatusIn(List.of(ReviewJobStatus.QUEUED, ReviewJobStatus.RUNNING)))
                 .thenReturn(List.of(job));
         when(backend.list())

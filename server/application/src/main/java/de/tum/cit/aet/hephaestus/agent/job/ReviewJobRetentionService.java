@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.agent.BoundedBatchPass;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -11,6 +12,8 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
@@ -30,6 +33,7 @@ public class ReviewJobRetentionService {
     private static final Logger log = LoggerFactory.getLogger(ReviewJobRetentionService.class);
 
     private final ReviewJobRepository jobRepository;
+    private final AgentRuns runs;
     private final ReviewCompositionBasisRepository basisRepository;
     private final PracticeStagingStore staging;
     private final EvidenceFolderPersonDataCatalog evidenceCopies;
@@ -48,8 +52,10 @@ public class ReviewJobRetentionService {
             AgentProperties agentProperties,
             Clock clock,
             TransactionTemplate transactionTemplate,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            AgentRuns runs) {
         this.jobRepository = jobRepository;
+        this.runs = runs;
         this.basisRepository = basisRepository;
         this.staging = staging;
         this.evidenceCopies = evidenceCopies;
@@ -125,8 +131,12 @@ public class ReviewJobRetentionService {
     private void deleteOldRows() {
         Instant cutoff = clock.instant().minus(agentProperties.rowRetention());
         BoundedBatchPass.Result result = pass.run(log, "delete", () -> {
-            Integer removed = transactionTemplate.execute(
-                    status -> jobRepository.deleteUnreferencedTerminalRowsOlderThan(cutoff, pass.batchSize()));
+            // A job's run ends with it, so its deleted rows take their ended runs along.
+            Integer removed = transactionTemplate.execute(status -> {
+                List<UUID> ended = jobRepository.deleteUnreferencedTerminalRowsOlderThan(cutoff, pass.batchSize());
+                runs.retireAll(ended);
+                return ended.size();
+            });
             int batchDeleted = removed != null ? removed : 0;
             if (batchDeleted > 0) {
                 deleted.increment(batchDeleted);

@@ -13,6 +13,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
@@ -25,11 +26,11 @@ import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
-import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
@@ -127,11 +128,10 @@ class WorkerFeedbackComposerTest {
         scenario = Path.of(
                 Objects.requireNonNull(getClass().getResource("/agent/golden-prompts/composition-turns/pull-request"))
                         .toURI());
-        job.setAttempt(0);
+        RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, 0), 0);
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("a".repeat(64));
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
+        job.setRunId(LEASE);
         job.setConfigSnapshot(new ConfigSnapshot(
                         ConfigSnapshot.SCHEMA_VERSION,
                         new FrozenModel(
@@ -203,15 +203,8 @@ class WorkerFeedbackComposerTest {
                 assignments,
                 items,
                 new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200_000, 1000, Duration.ofMinutes(10)),
-                new AgentProperties(
-                        true,
-                        Duration.ofSeconds(1),
-                        5,
-                        MAX_RETRIES,
-                        Duration.ofSeconds(25),
-                        Duration.ofDays(14),
-                        Duration.ofDays(90),
-                        16),
+                new AgentCapacityProperties(
+                        Duration.ofMinutes(5), Duration.ofSeconds(25), MAX_RETRIES, Duration.ofMinutes(10)),
                 meters,
                 mapper,
                 Duration.ZERO,
@@ -419,7 +412,7 @@ class WorkerFeedbackComposerTest {
 
     @Test
     void shouldWithholdWhatTheDeadlineLeftOpenOnTheAttemptAtTheRetryLimit() {
-        job.setAttempt(MAX_RETRIES);
+        RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, MAX_RETRIES), MAX_RETRIES);
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now());
 
@@ -499,7 +492,7 @@ class WorkerFeedbackComposerTest {
 
     @Test
     void shouldWithholdWhatAProviderFailureLeftOpenOnTheAttemptAtTheRetryLimit() {
-        job.setAttempt(MAX_RETRIES);
+        RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, MAX_RETRIES), MAX_RETRIES);
         answerEveryCall(new ReviewModelGateway.Answer(503, new byte[0], true, null));
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
@@ -526,7 +519,7 @@ class WorkerFeedbackComposerTest {
 
     @Test
     void shouldHandTheAttemptOnWhenTheServerRefusesAWithholding() {
-        job.setAttempt(MAX_RETRIES);
+        RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, MAX_RETRIES), MAX_RETRIES);
         doThrow(new PublicationContextRefusedException(FeedbackStopReason.PUBLIC_HISTORY_CHANGED))
                 .when(admission)
                 .publishPackage(any(), any());
@@ -552,7 +545,7 @@ class WorkerFeedbackComposerTest {
 
     @Test
     void shouldWithholdErasedInputsWithoutStagingThem() {
-        job.setAttempt(1);
+        RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, 1), 1);
         when(continuation.restore(job))
                 .thenThrow(new ReviewCompositionContinuation.InputsUnavailableException("erased", true));
         when(continuation.stageWithoutInputs(job)).thenReturn(emptyFolder());
@@ -568,7 +561,7 @@ class WorkerFeedbackComposerTest {
 
     @Test
     void shouldWithholdWithTheCauseTheClaimMetWithoutCallingTheModel() {
-        job.setAttempt(1);
+        RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, 1), 1);
         when(continuation.stageWithoutInputs(job)).thenReturn(emptyFolder());
 
         composer().withholdResumed(job, LEASE, CompositionStop.NO_AI);
@@ -583,7 +576,7 @@ class WorkerFeedbackComposerTest {
 
     @Test
     void shouldWithholdExhaustedRetriesWhenAllCompositionSlotsAreOccupied() {
-        job.setAttempt(MAX_RETRIES + 1);
+        RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, MAX_RETRIES + 1), MAX_RETRIES + 1);
         when(continuation.stageWithoutInputs(job)).thenReturn(emptyFolder());
         var capacity = new CompositionCapacity(1);
         var occupied = capacity.acquire(Instant.now().plusSeconds(5));
@@ -603,7 +596,7 @@ class WorkerFeedbackComposerTest {
 
     @Test
     void shouldOnlyWithholdOnTheAttemptAfterTheRetryLimit() {
-        job.setAttempt(MAX_RETRIES + 1);
+        RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, MAX_RETRIES + 1), MAX_RETRIES + 1);
         when(continuation.stageWithoutInputs(job)).thenReturn(emptyFolder());
 
         composer().composeResumed(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
@@ -755,7 +748,7 @@ class WorkerFeedbackComposerTest {
     @Test
     void shouldKeepAnApprovalWaitWhenPrivateCompositionFails() {
         reviewedEarlier = true;
-        job.setAttempt(MAX_RETRIES);
+        RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, MAX_RETRIES), MAX_RETRIES);
         when(repairs.status(anyLong(), any()))
                 .thenReturn(new FeedbackRepairStatus(
                         UUID.fromString("70000000-0000-4000-8000-000000000001"),

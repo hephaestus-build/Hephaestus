@@ -17,11 +17,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.json.JsonMapper;
 
 public final class RuntimeReviewTestData {
@@ -75,10 +75,12 @@ public final class RuntimeReviewTestData {
         job.setId(UUID.randomUUID());
         job.setReviewId(REVIEW);
         job.setWorkspaceId(1);
-        job.setAvailableAt(Instant.now());
+        job.setRunId(UUID.randomUUID());
         job.setInput(new ReviewJobInput(2, List.of(new ReviewAssignmentId(REVIEW, 31, 2))));
         job.setConfigSnapshot(new JsonMapper().createObjectNode());
         job.prePersist();
+        // A load reads when the job's run is next offered; a fresh run is offered at once.
+        ReflectionTestUtils.setField(job, "availableAt", job.getSubmittedAt());
         return job;
     }
 }

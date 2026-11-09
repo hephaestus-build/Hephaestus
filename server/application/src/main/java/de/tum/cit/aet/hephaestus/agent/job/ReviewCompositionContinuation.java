@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
@@ -20,7 +21,6 @@ import java.util.Objects;
 import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -30,27 +30,27 @@ import tools.jackson.databind.ObjectMapper;
 public class ReviewCompositionContinuation {
     private final ReviewCompositionBasisRepository bases;
     private final JobEvidenceFiles files;
-    private final ReviewJobRepository jobs;
     private final ObjectMapper mapper;
     private final ReviewAssignmentStore membership;
     private final FeedbackRepair repairs;
-    private final AgentProperties properties;
+    private final AgentCapacityProperties capacity;
+    private final ReviewRunKind reviewRuns;
 
     public ReviewCompositionContinuation(
             ReviewCompositionBasisRepository bases,
             JobEvidenceFiles files,
-            ReviewJobRepository jobs,
             ObjectMapper mapper,
             ReviewAssignmentStore membership,
             FeedbackRepair repairs,
-            AgentProperties properties) {
+            AgentCapacityProperties capacity,
+            ReviewRunKind reviewRuns) {
         this.bases = bases;
         this.files = files;
-        this.jobs = jobs;
         this.mapper = mapper;
         this.membership = membership;
         this.repairs = repairs;
-        this.properties = properties;
+        this.capacity = capacity;
+        this.reviewRuns = reviewRuns;
     }
 
     public boolean hasStaged(ReviewJob job) {
@@ -59,15 +59,6 @@ public class ReviewCompositionContinuation {
 
     public void holdRecoveryCustody() {
         files.holdCopyAdmission();
-    }
-
-    /**
-     * Hands a lost admitted attempt on to a new attempt that composes what it left open, whatever its retained inputs
-     * permit: the new attempt checks them before it stages anything, and withholds what they no longer permit.
-     */
-    @Transactional(propagation = Propagation.MANDATORY)
-    public int requeue(ReviewJob job, UUID leaseId, ReviewJobRepository.CompositionRequeue request) {
-        return jobs.requeueAdmittedForComposition(job.getId(), leaseId, request);
     }
 
     /**
@@ -172,10 +163,10 @@ public class ReviewCompositionContinuation {
 
     @Transactional
     public void forget(ReviewJob job) {
-        if (job.spentAttempts() > properties.maxRetries())
+        if (job.spentAttempts() > capacity.reviewRetries())
             repairs.stop(job.getWorkspaceId(), job.getReviewId(), "RETRIES_EXHAUSTED");
         if (repairs.pending(job.getWorkspaceId(), job.getReviewId())) {
-            jobs.resumeFeedbackRepair(job.getWorkspaceId(), job.getReviewId(), properties.maxRetries());
+            reviewRuns.resumeComposition(job.getWorkspaceId(), job.getReviewId());
             return;
         }
         var retained = bases.findByWorkspaceIdAndJobId(job.getWorkspaceId(), job.getId());

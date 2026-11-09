@@ -161,13 +161,13 @@ public class ReviewOutputService {
             }
         }
         int attempt = job.getAttempt();
-        UUID lease = job.getLeaseId();
+        UUID runId = job.getRunId();
         JsonNode capture = Objects.requireNonNull(job.getCapture()).deepCopy();
         var retainedManifest = resolvedManifest;
         return owned -> {
             if (!job.getId().equals(owned.getId())
                     || attempt != owned.getAttempt()
-                    || !Objects.equals(lease, owned.getLeaseId())
+                    || !runId.equals(owned.getRunId())
                     || !capture.equals(owned.getCapture())) {
                 throw new ResultAdmissionService.StaleAttemptException();
             }

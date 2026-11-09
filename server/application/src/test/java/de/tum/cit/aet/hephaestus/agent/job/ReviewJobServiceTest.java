@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.adapter.ReviewJobService;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
@@ -43,7 +44,8 @@ class ReviewJobServiceTest extends BaseUnitTest {
                 models,
                 new JsonMapper(),
                 mock(LlmAdmissionService.class),
-                mock(ReviewMethodVerifier.class));
+                mock(ReviewMethodVerifier.class),
+                mock(AgentRuns.class));
         assertThat(service.enqueue(review, 2, List.of(assigned.id()))).isEqualTo(job.getId());
         verifyNoInteractions(policy, models, assignments);
     }
@@ -64,7 +66,8 @@ class ReviewJobServiceTest extends BaseUnitTest {
                 mock(LlmModelResolver.class),
                 new JsonMapper(),
                 mock(LlmAdmissionService.class),
-                mock(ReviewMethodVerifier.class));
+                mock(ReviewMethodVerifier.class),
+                mock(AgentRuns.class));
         var other = new ReviewAssignmentId(review.id(), 31, 7);
         assertThatThrownBy(() -> service.enqueue(review, 7, List.of(other)))
                 .isInstanceOf(ReviewJobStateConflictException.class);
@@ -82,7 +85,8 @@ class ReviewJobServiceTest extends BaseUnitTest {
                 mock(LlmModelResolver.class),
                 new JsonMapper(),
                 mock(LlmAdmissionService.class),
-                mock(ReviewMethodVerifier.class));
+                mock(ReviewMethodVerifier.class),
+                mock(AgentRuns.class));
         var review = RuntimeReviewTestData.review(ReviewKind.ITEM, RuntimeReviewTestData.assignment(null, null));
         assertThatThrownBy(() -> service.enqueue(review, 2, List.of())).isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(jobs);

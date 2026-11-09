@@ -1,12 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateLookup;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
@@ -15,7 +13,6 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,7 +44,7 @@ class LlmBudgetCapWriteTest extends BaseUnitTest {
     private ConfigAuditPort configAudit;
 
     @Mock
-    private ReviewJobRepository jobRepository;
+    private ReviewRunKind reviewRuns;
 
     @Mock
     private FxRateLookup fxRateLookup;
@@ -58,10 +55,10 @@ class LlmBudgetCapWriteTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        adminService = new LlmUsageAdminService(
-                usageRepository, workspaceRepository, configAudit, jobRepository, fxRateLookup);
+        adminService =
+                new LlmUsageAdminService(usageRepository, workspaceRepository, configAudit, reviewRuns, fxRateLookup);
         workspaceService = new LlmUsageService(
-                usageRepository, workspaceRepository, llmBudgetService, configAudit, jobRepository, fxRateLookup);
+                usageRepository, workspaceRepository, llmBudgetService, configAudit, reviewRuns, fxRateLookup);
         workspace = new Workspace();
         workspace.setId(WORKSPACE_ID);
         workspace.setWorkspaceSlug(SLUG);
@@ -90,7 +87,7 @@ class LlmBudgetCapWriteTest extends BaseUnitTest {
 
         // Raising a cap must free the jobs held on it immediately, not up to an hour later — and only
         // for this workspace, or one admin's raise would un-hold every tenant's parked work.
-        verify(jobRepository).releaseBudgetHolds(eq(WORKSPACE_ID), any(Instant.class));
+        verify(reviewRuns).releaseBudgetHolds(WORKSPACE_ID);
     }
 
     @Test
@@ -110,6 +107,6 @@ class LlmBudgetCapWriteTest extends BaseUnitTest {
         assertThat(entry.getValue().after())
                 .isEqualTo(new LlmUsageService.OwnProviderLlmBudgetSnapshot(new BigDecimal("40.00")));
 
-        verify(jobRepository).releaseBudgetHolds(eq(WORKSPACE_ID), any(Instant.class));
+        verify(reviewRuns).releaseBudgetHolds(WORKSPACE_ID);
     }
 }

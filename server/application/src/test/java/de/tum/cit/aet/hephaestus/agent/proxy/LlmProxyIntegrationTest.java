@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.job.TerminalUsageTestFixtures;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
@@ -117,14 +118,15 @@ import reactor.netty.http.server.HttpServer;
 import tools.jackson.databind.ObjectMapper;
 
 class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
-    private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
-    private static final UUID ANOTHER_WORKER_LEASE = UUID.fromString("639735d1-9da6-5a13-bfa7-3666a2901218");
-    private static final UUID WORKER_2_LEASE = UUID.fromString("0d04a54e-90c7-5859-a7f8-4d339567192d");
+    private static final UUID OTHER_RUN = UUID.fromString("0d04a54e-90c7-5859-a7f8-4d339567192d");
 
     private static final String PRACTICE = "comment-quality";
 
     @Autowired
     private ReviewJobRepository jobRepository;
+
+    @Autowired
+    private AgentRuns agentRuns;
 
     @Autowired
     private MentorTurnRepository turnRepository;
@@ -189,6 +191,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         meterRegistry = new SimpleMeterRegistry();
         filter = new JobTokenAuthenticationFilter(
                 jobRepository,
+                agentRuns,
                 turnRepository,
                 new SandboxGatewaySessions(),
                 jwtVerifier,
@@ -227,7 +230,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .bindNow();
         try {
             ReviewJob job = practiceScriptJob("http://127.0.0.1:" + upstream.port() + "/v1");
-            job.setLeasedUntil(Instant.now().plusSeconds(60));
             job = jobRepository.saveAndFlush(job);
             var model = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper)
                     .practiceScriptSlot(ModelKind.EMBEDDING);
@@ -313,7 +315,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                 job.getId(),
                                 job.getWorkspaceId(),
                                 job.getAttempt(),
-                                Objects.requireNonNull(job.getLeaseId()),
+                                Objects.requireNonNull(job.getRunId()),
                                 work,
                                 work.plus(Duration.ofMinutes(10))));
 
@@ -330,7 +332,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 job.getId(),
                 workspace.getId() + 1,
                 job.getAttempt(),
-                Objects.requireNonNull(job.getLeaseId()),
+                Objects.requireNonNull(job.getRunId()),
                 work,
                 work.plus(Duration.ofMinutes(10))));
 
@@ -365,8 +367,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldRejectAJobTokenMintedForAnEarlierAttempt() throws Exception {
         ReviewJob job = runningJob(true);
         String earlierAttempt = tokenFor(job);
-        job.setAttempt(job.getAttempt() + 1);
-        jobRepository.save(RuntimeJobTestData.persistParent(jdbc, job));
+        RuntimeJobTestData.reclaim(jdbc, job);
 
         AuthenticationResult result = authenticate(earlierAttempt);
 
@@ -398,15 +399,10 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         .status())
                 .isEqualTo(401);
 
-        job.setLeaseId(ANOTHER_WORKER_LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
-        jobRepository.save(RuntimeJobTestData.persistParent(jdbc, job));
+        RuntimeJobTestData.leaseUntil(jdbc, job, Instant.now().minusSeconds(1));
         assertThat(authenticate(method, path, token).status()).isEqualTo(409);
 
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
-        job.setAttempt(job.getAttempt() + 1);
-        jobRepository.save(RuntimeJobTestData.persistParent(jdbc, job));
+        RuntimeJobTestData.reclaim(jdbc, job);
         assertThat(authenticate(method, path, token).status()).isEqualTo(409);
     }
 
@@ -469,7 +465,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             for (int i = 0; i < 3; i++)
                 upstream.enqueue(json("{\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":2}}"));
             ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
-            job.setLeasedUntil(Instant.now().plusSeconds(60));
             job = jobRepository.saveAndFlush(job);
             var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
             var pool = new LlmCallPool();
@@ -517,13 +512,13 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             job.setAdmissionAttempt(job.getAttempt());
             job.setAdmissionDigest("admitted");
             job = jobRepository.saveAndFlush(job);
-            var routes =
-                    new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots);
+            var routes = new ProxyRoutingService(
+                    jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots, agentRuns);
             var route = routes.attemptRouting(
                     job.getId(),
                     workspace.getId(),
                     job.getAttempt(),
-                    LEASE,
+                    job.getRunId(),
                     Instant.now().plusSeconds(5));
             byte[] request = "{\"messages\":[]}".getBytes(StandardCharsets.UTF_8);
             var composed = Objects.requireNonNull(
@@ -533,7 +528,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     job.getId(),
                     workspace.getId(),
                     job.getAttempt(),
-                    LEASE,
+                    job.getRunId(),
                     Instant.now().plusMillis(100));
             var blocked = Objects.requireNonNull(service.serve(
                     blockedRoute, LlmApiProtocol.OPENAI_COMPLETIONS, null, null, new HttpHeaders(), request));
@@ -575,7 +570,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             });
             upstream.start();
             ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
-            job.setLeasedUntil(Instant.now().plusSeconds(120));
             job = jobRepository.saveAndFlush(job);
             var model = Objects.requireNonNull(ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper)
                     .model());
@@ -780,7 +774,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private LlmCallPool streamUntilTheWorkEnds(
             String baseUrl, int limit, @Nullable Integer baselineMillis, Duration silence) throws Exception {
         ReviewJob job = practiceScriptJob(baseUrl);
-        job.setLeasedUntil(Instant.now().plusSeconds(60));
         job = jobRepository.saveAndFlush(job);
         var model = Objects.requireNonNull(
                 ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper).model());
@@ -990,7 +983,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     + "\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3}}"));
             ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
             var gateway = new ReviewModelGateway(
-                    new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots),
+                    new ProxyRoutingService(
+                            jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots, agentRuns),
                     proxyService(200_000),
                     objectMapper);
             byte[] body = "{\"model\":\"any\",\"messages\":[{\"role\":\"user\",\"content\":\"Compose.\"}]}"
@@ -998,17 +992,17 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             Instant deadline = Instant.now().plusSeconds(60);
 
             var served = gateway.call(
-                    new ReviewModelGateway.Attempt(job.getId(), workspace.getId(), 0, LEASE, deadline), body);
+                    new ReviewModelGateway.Attempt(job.getId(), workspace.getId(), 0, job.getRunId(), deadline), body);
             var staleAttempt = gateway.call(
-                    new ReviewModelGateway.Attempt(job.getId(), workspace.getId(), 1, LEASE, deadline), body);
+                    new ReviewModelGateway.Attempt(job.getId(), workspace.getId(), 1, job.getRunId(), deadline), body);
             var otherLease = gateway.call(
-                    new ReviewModelGateway.Attempt(job.getId(), workspace.getId(), 0, WORKER_2_LEASE, deadline), body);
+                    new ReviewModelGateway.Attempt(job.getId(), workspace.getId(), 0, OTHER_RUN, deadline), body);
             var late = gateway.call(
                     new ReviewModelGateway.Attempt(
                             job.getId(),
                             workspace.getId(),
                             0,
-                            LEASE,
+                            job.getRunId(),
                             Instant.now().minusSeconds(1)),
                     body);
 
@@ -1044,7 +1038,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     job.getId(),
                     workspace.getId(),
                     job.getAttempt(),
-                    Objects.requireNonNull(job.getLeaseId()),
+                    Objects.requireNonNull(job.getRunId()),
                     work,
                     work.plus(Duration.ofMinutes(10)));
             // Real time passes the signed work deadline; the token itself stays valid for the upload.
@@ -1274,8 +1268,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         accumulator.accumulate(attemptZero, decision, new ProxyTokenUsage(10, 2, 0, 0, 0));
         accumulator.accumulate(attemptZero, decision, new ProxyTokenUsage(5, 1, 0, 0, 0));
 
-        job.setAttempt(1);
-        job = jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
+        RuntimeJobTestData.reclaim(jdbc, job);
         register(job, ModelKind.DECISION);
         accumulator.accumulate(attemptZero, decision, new ProxyTokenUsage(1000, 0, 0, 0, 0));
         accumulator.accumulate(
@@ -1290,7 +1283,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldDropAPracticeScriptCallWhenItsAttemptWasNeverRegistered() {
         ReviewJob job = practiceScriptJob("https://models.example.com/v1");
         job.setStatus(ReviewJobStatus.COMPLETED);
-        job = jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
+        job = RuntimeJobTestData.save(transactionTemplate, jdbc, jobRepository, job);
 
         accumulator()
                 .accumulate(
@@ -1476,7 +1469,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         BigDecimal.ZERO,
                         null,
                         null));
-        var lease = Objects.requireNonNull(job.getLeaseId());
+        var lease = Objects.requireNonNull(job.getRunId());
         attemptUsage.registerCall(job.getId(), workspaceId, job.getAttempt(), lease, ModelKind.CHAT, chat);
         attemptUsage.registerCall(job.getId(), workspaceId, job.getAttempt(), lease, ModelKind.EMBEDDING, embedding);
         attemptUsage.registerCall(
@@ -1516,7 +1509,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 other.getId(),
                 workspace.getId(),
                 other.getAttempt(),
-                Objects.requireNonNull(other.getLeaseId()),
+                Objects.requireNonNull(other.getRunId()),
                 ModelKind.CHAT,
                 chat);
         new TransactionTemplate(transactionManager)
@@ -1530,10 +1523,11 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(runningSpend.of(own.getId()).instanceUsd()).isEqualByComparingTo("10");
 
         // A hand-off to the next attempt bills the old one, so the new attempt starts from nothing.
-        jdbc.update("UPDATE review_job SET attempt=attempt+1 WHERE id=?", other.getId());
+        RuntimeJobTestData.reclaim(jdbc, other);
         assertThat(runningSpend.of(workspace.getId()).instanceUsd()).isEqualByComparingTo("0");
 
-        jdbc.update("UPDATE review_job SET status='FAILED',completed_at=now() WHERE id=?", job.getId());
+        RuntimeJobTestData.updateJobs(
+                jdbc, "UPDATE review_job SET status='FAILED',completed_at=now() WHERE id=?", job.getId());
         assertThat(runningSpend.of(workspaceId).instanceUsd()).isEqualByComparingTo("0");
     }
 
@@ -1595,7 +1589,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         objectMapper),
                 policy,
                 mock(ScanCallGuard.class),
-                new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots),
+                new ProxyRoutingService(
+                        jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots, agentRuns),
                 new ProxyCallsInFlight(12),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 capacity,
@@ -1608,7 +1603,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private static ProxyRouting.BilledAttempt billed(ReviewJob job, int attempt, UsageSourceType sourceType) {
-        return new ProxyRouting.BilledAttempt(sourceType, job.getId(), attempt, LEASE, 0L, 0L, job.getWorkspaceId());
+        return new ProxyRouting.BilledAttempt(
+                sourceType, job.getId(), attempt, job.getRunId(), 0L, 0L, job.getWorkspaceId());
     }
 
     private void register(ReviewJob job, ModelKind kind) {
@@ -1616,7 +1612,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         job.getId(),
                         job.getWorkspaceId(),
                         job.getAttempt(),
-                        Objects.requireNonNull(job.getLeaseId()),
+                        Objects.requireNonNull(job.getRunId()),
                         kind,
                         FrozenCharge.UNKNOWN))
                 .isTrue();
@@ -1723,8 +1719,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         RuntimeJobTestData.initialize(job, workspace.getId());
 
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         return jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
     }
@@ -1762,14 +1756,15 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 job.getId(),
                 workspace.getId(),
                 job.getAttempt(),
-                Objects.requireNonNull(job.getLeaseId()),
+                Objects.requireNonNull(job.getRunId()),
                 work,
                 work.plus(Duration.ofMinutes(10)));
     }
 
     private ProxyRouting routingOf(AuthenticationResult result) {
         Authentication authentication = Objects.requireNonNull(result.authentication(), "token did not authenticate");
-        return new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots)
+        return new ProxyRoutingService(
+                        jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots, agentRuns)
                 .resolve(
                         (ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal()),
                         new MockHttpServletRequest("POST", "/internal/llm/chat/completions"));
@@ -1821,8 +1816,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         RuntimeJobTestData.initialize(job, workspace.getId());
 
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         job.setConfigSnapshot(snapshot);
         return jobRepository.save(RuntimeJobTestData.persistParent(jdbc, job));
     }

@@ -25,13 +25,8 @@ class AgentPropertiesTest extends BaseUnitTest {
     private static final Duration VALID_ROW_RETENTION = Duration.ofDays(90);
 
     private static AgentProperties props(
-            Duration pollInterval,
-            int maxRetries,
-            Duration heartbeatInterval,
-            Duration payloadRetention,
-            Duration rowRetention) {
-        return new AgentProperties(
-                false, pollInterval, 5, maxRetries, heartbeatInterval, payloadRetention, rowRetention, 16);
+            Duration pollInterval, Duration heartbeatInterval, Duration payloadRetention, Duration rowRetention) {
+        return new AgentProperties(false, pollInterval, 5, heartbeatInterval, payloadRetention, rowRetention, 16);
     }
 
     static Stream<Arguments> invalidConfigurations() {
@@ -70,7 +65,7 @@ class AgentPropertiesTest extends BaseUnitTest {
                         VALID_PAYLOAD_RETENTION,
                         VALID_ROW_RETENTION,
                         "heartbeat-interval",
-                        "slower than the worker lease, so every worker would orphan its own running jobs"),
+                        "slower than the worker liveness window, so every worker would count as gone"),
                 Arguments.of(
                         VALID_POLL_INTERVAL,
                         VALID_HEARTBEAT_INTERVAL,
@@ -103,7 +98,7 @@ class AgentPropertiesTest extends BaseUnitTest {
             Duration rowRetention,
             String offendingProperty,
             String why) {
-        assertThatThrownBy(() -> props(pollInterval, 5, heartbeatInterval, payloadRetention, rowRetention))
+        assertThatThrownBy(() -> props(pollInterval, heartbeatInterval, payloadRetention, rowRetention))
                 .as(why)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining(offendingProperty);
@@ -113,58 +108,45 @@ class AgentPropertiesTest extends BaseUnitTest {
         return Stream.of(
                 Arguments.of(
                         VALID_POLL_INTERVAL,
-                        5,
                         VALID_HEARTBEAT_INTERVAL,
                         VALID_PAYLOAD_RETENTION,
                         VALID_ROW_RETENTION,
                         "the documented defaults"),
                 Arguments.of(
                         AgentProperties.MIN_POLL_INTERVAL,
-                        5,
                         VALID_HEARTBEAT_INTERVAL,
                         VALID_PAYLOAD_RETENTION,
                         VALID_ROW_RETENTION,
                         "the poll-interval floor exactly"),
                 Arguments.of(
                         VALID_POLL_INTERVAL,
-                        5,
                         AgentProperties.MIN_HEARTBEAT_INTERVAL,
                         VALID_PAYLOAD_RETENTION,
                         VALID_ROW_RETENTION,
                         "the heartbeat-interval floor exactly"),
                 Arguments.of(
                         VALID_POLL_INTERVAL,
-                        5,
                         AgentProperties.MAX_HEARTBEAT_INTERVAL,
                         VALID_PAYLOAD_RETENTION,
                         VALID_ROW_RETENTION,
                         "the heartbeat-interval ceiling exactly"),
                 Arguments.of(
                         VALID_POLL_INTERVAL,
-                        5,
                         VALID_HEARTBEAT_INTERVAL,
                         Duration.ofDays(30),
                         Duration.ofDays(30),
-                        "row-retention equal to payload-retention"),
-                Arguments.of(
-                        VALID_POLL_INTERVAL,
-                        0,
-                        VALID_HEARTBEAT_INTERVAL,
-                        VALID_PAYLOAD_RETENTION,
-                        VALID_ROW_RETENTION,
-                        "zero max-retries, a valid 'no retries' policy"));
+                        "row-retention equal to payload-retention"));
     }
 
-    @ParameterizedTest(name = "accepts {5}")
+    @ParameterizedTest(name = "accepts {4}")
     @MethodSource("validConfigurations")
     void acceptsAUsableConfiguration(
             Duration pollInterval,
-            int maxRetries,
             Duration heartbeatInterval,
             Duration payloadRetention,
             Duration rowRetention,
             String why) {
-        assertThatCode(() -> props(pollInterval, maxRetries, heartbeatInterval, payloadRetention, rowRetention))
+        assertThatCode(() -> props(pollInterval, heartbeatInterval, payloadRetention, rowRetention))
                 .as(why)
                 .doesNotThrowAnyException();
     }
@@ -174,14 +156,12 @@ class AgentPropertiesTest extends BaseUnitTest {
     void preservesConfiguredValues() {
         AgentProperties properties = props(
                 AgentProperties.MIN_POLL_INTERVAL,
-                0,
                 AgentProperties.MIN_HEARTBEAT_INTERVAL,
                 VALID_PAYLOAD_RETENTION,
                 VALID_ROW_RETENTION);
 
         assertThat(properties.pollInterval()).isEqualTo(AgentProperties.MIN_POLL_INTERVAL);
         assertThat(properties.heartbeatInterval()).isEqualTo(AgentProperties.MIN_HEARTBEAT_INTERVAL);
-        assertThat(properties.maxRetries()).isZero();
         assertThat(properties.payloadRetention()).isEqualTo(VALID_PAYLOAD_RETENTION);
         assertThat(properties.rowRetention()).isEqualTo(VALID_ROW_RETENTION);
     }

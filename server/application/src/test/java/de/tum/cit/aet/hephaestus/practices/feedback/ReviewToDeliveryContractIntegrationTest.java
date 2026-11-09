@@ -23,15 +23,15 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
-import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRecovery;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobZombieSweeper;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
@@ -39,6 +39,9 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedResultDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.RuntimeNonResultDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SubmittedResultDTO;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
@@ -179,7 +182,6 @@ import tools.jackson.databind.node.ObjectNode;
  * transport is scripted.
  */
 class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
-    private static final UUID WORKER_LEASE = UUID.fromString("3e9b7c41-58d2-4a6f-b0e1-7c2d9a4f6b18");
     private static final Duration KILLED_WORKER_LEASE = Duration.ofSeconds(5);
     private static final String RECORD = "context/pull-request.md";
     private static final String QUOTE = "The export handler now catches the failure and returns without its cause.";
@@ -222,7 +224,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private PracticeReviewProperties reviewProperties;
 
     @Autowired
-    private AgentProperties agentProperties;
+    private AgentRuns agentRuns;
 
     @Autowired
     private MeterRegistry meters;
@@ -320,10 +322,10 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private PracticeStagingStore stagingStore;
 
     @Autowired
-    private ReviewJobRecovery attemptRecovery;
+    private ReviewRunKind reviewRuns;
 
     @Autowired
-    private ReviewJobZombieSweeper sweeper;
+    private AgentRunReaper reaper;
 
     @Autowired
     private ReviewJobCompletionService completion;
@@ -365,13 +367,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var directory = files.renderingDirectory(before);
             review.inputs().close();
             FileUtils.deleteDirectory(directory.toFile());
-            before.setAttempt(1);
-            var replacement = UUID.fromString("5c1f8e2a-93b4-4d7e-a6c0-2b8f4e1d9a37");
-            before.setLeaseId(replacement);
-            before.setLeasedUntil(Instant.now().plusSeconds(3600));
-            jobs.saveAndFlush(before);
-            var identity =
-                    new ResultAdmissionService.AdmissionIdentity(before.getId(), review.workspaceId(), 1, replacement);
+            RuntimeJobTestData.reclaim(jdbc, before);
+            var identity = new ResultAdmissionService.AdmissionIdentity(
+                    before.getId(), review.workspaceId(), 1, before.getRunId());
             assertThatThrownBy(() -> admission.stage(review.identity(), request))
                     .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
             assertThat(admission.sealIfComplete(identity)).isTrue();
@@ -609,7 +607,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             double withheldBefore = count(
                     PracticeMetrics.REVIEW_ITEMS_ENDED, "kind", "item", "state", "withheld", "reason", "cancelled");
             admission.stage(review.identity(), request(review));
-            jdbc.update(
+            RuntimeJobTestData.updateJobs(
+                    jdbc,
                     "UPDATE review_job SET status='CANCELLED',started_at=NULL,completed_at=now(),cancellation_reason='CANCELLED_BY_REQUESTER' WHERE id=?",
                     review.identity().jobId());
             await().untilAsserted(() -> {
@@ -720,29 +719,29 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             admission.stage(review.identity(), request(review));
             var job = jobs.findById(review.identity().jobId()).orElseThrow();
-            job.setAttempt(agentProperties.maxRetries());
             job.setExecutionStartedAt(Instant.now());
             job.setLlmCalls(1);
             jobs.saveAndFlush(job);
-            transactions.executeWithoutResult(
-                    status -> attemptRecovery.recover(job.getId(), WORKER_LEASE, job.getAttempt(), null));
+            int limit = agentRuns.capacity().reviewRetries();
+            // Every retry is lost: losing the attempt after them leaves only the handoff that seals what it staged.
+            for (int lost = 0; lost < limit; lost++) {
+                reapLost(job);
+                claimAgain(job);
+            }
+            reapLost(job);
             assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
-            var last = jobs.findById(job.getId()).orElseThrow();
-            last.setStatus(ReviewJobStatus.RUNNING);
-            last.setLeaseId(WORKER_LEASE);
-            last.setLeasedUntil(Instant.now().plusSeconds(3600));
-            jobs.saveAndFlush(last);
-            transactions.executeWithoutResult(
-                    status -> attemptRecovery.recover(last.getId(), WORKER_LEASE, last.getAttempt(), null));
-            assertThat(jobs.findById(last.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.FAILED);
-            assertThat(jobs.findById(job.getId()).orElseThrow().getAttempt())
-                    .isEqualTo(agentProperties.maxRetries() + 1);
+            assertThat(jobs.findById(job.getId()).orElseThrow().spentAttempts()).isEqualTo(limit + 1);
+            var last = claimAgain(job);
+            reapLost(last);
+            assertThat(jobs.findById(last.getId()).orElseThrow().getStatus())
+                    .as("the handoff was lost too: the retry limit fails the review")
+                    .isEqualTo(ReviewJobStatus.FAILED);
             assertThat(jdbc.queryForObject(
                             "SELECT proxy_calls FROM review_job_attempt_usage WHERE workspace_id=? AND job_id=? AND attempt=?",
                             Integer.class,
                             review.workspaceId(),
                             job.getId(),
-                            agentProperties.maxRetries()))
+                            0))
                     .isOne();
             completion.tick();
             assertThat(reviewItems.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
@@ -820,8 +819,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     void shouldRefuseLateStagingAndSealingAfterTheAttemptLeaseExpires() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var job = jobs.findById(review.identity().jobId()).orElseThrow();
-            job.setLeasedUntil(Instant.now().minusSeconds(1));
-            jobs.saveAndFlush(job);
+            RuntimeJobTestData.leaseUntil(jdbc, job, Instant.now().minusSeconds(1));
             assertThatThrownBy(() -> admission.stage(review.identity(), request(review)))
                     .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
             assertThatThrownBy(() -> admission.sealIfComplete(review.identity()))
@@ -844,7 +842,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             job.setLlmCacheReadTokens(1200);
             job.setLlmCacheWriteTokens(300);
             jobs.saveAndFlush(job);
-            transactions.executeWithoutResult(status -> attemptRecovery.recover(job.getId(), WORKER_LEASE, 0, null));
+            reapLost(job);
             var retry = jobs.findById(job.getId()).orElseThrow();
             assertThat(retry.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
             assertThat(retry.getAttempt()).isEqualTo(1);
@@ -893,7 +891,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             LostWorker.class.getName(),
                             jobId.toString(),
                             Long.toString(review.workspaceId()),
-                            WORKER_LEASE.toString(),
+                            review.identity().runId().toString(),
                             request.toString(),
                             Long.toString(KILLED_WORKER_LEASE.toSeconds()))
                     .redirectErrorStream(true);
@@ -901,7 +899,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             builder.environment().put("LOST_WORKER_JDBC_USER", postgres.getUsername());
             builder.environment().put("LOST_WORKER_JDBC_PASSWORD", postgres.getPassword());
             Process worker = builder.start();
-            Duration renewEvery = agentProperties.heartbeatInterval();
+            Duration renewEvery = agentRuns.capacity().leaseRenewal();
             try {
                 // A reader thread drains the output, so the worker never blocks on a full pipe and a stalled worker
                 // fails the wait instead of hanging it.
@@ -926,7 +924,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 // start plus its one-interval cutoff; the attempt stays the worker's for longer than both.
                 Instant alive = Instant.now().plus(renewEvery.multipliedBy(2)).plusSeconds(5);
                 while (Instant.now().isBefore(alive)) {
-                    sweeper.recoverOrphanedJobs();
+                    reaper.reap();
                     assertThat(worker.isAlive()).isTrue();
                     assertThat(jobs.findById(jobId).orElseThrow().getStatus())
                             .as("the attempt of a worker that renews its lease")
@@ -941,9 +939,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
             var orphan = jobs.findById(jobId).orElseThrow();
             assertThat(orphan.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
-            assertThat(orphan.getLeaseId())
+            assertThat(RuntimeJobTestData.runState(jdbc, orphan))
                     .as("nothing in the killed process released its lease")
-                    .isEqualTo(WORKER_LEASE);
+                    .isEqualTo("LEASED");
             assertThat(stagingStore.staged(review.workspaceId(), review.reviewId(), jobId))
                     .as("the practice the worker staged before it died")
                     .singleElement()
@@ -955,14 +953,14 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .plusSeconds(30);
             while (jobs.findById(jobId).orElseThrow().getStatus() == ReviewJobStatus.RUNNING
                     && Instant.now().isBefore(deadline)) {
-                sweeper.recoverOrphanedJobs();
+                reaper.reap();
                 Thread.sleep(1000);
             }
 
             var retry = jobs.findById(jobId).orElseThrow();
             assertThat(retry.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
             assertThat(retry.getAttempt()).isEqualTo(1);
-            assertThat(retry.getLeaseId()).isNull();
+            assertThat(RuntimeJobTestData.runState(jdbc, retry)).isEqualTo("QUEUED");
             assertThat(stagingStore.staged(review.workspaceId(), review.reviewId(), jobId))
                     .as("the next attempt starts with the practice already staged")
                     .singleElement()
@@ -972,8 +970,24 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     private Instant leasedUntil(UUID jobId) {
-        return Objects.requireNonNull(
-                jdbc.queryForObject("SELECT leased_until FROM review_job WHERE id = ?", Instant.class, jobId));
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT r.leased_until FROM review_job j JOIN agent_run r ON r.id = j.run_id WHERE j.id = ?",
+                Instant.class,
+                jobId));
+    }
+
+    /** The attempt's holder stopped renewing its run, and the reaper takes it back. */
+    private void reapLost(ReviewJob job) {
+        RuntimeJobTestData.leaseUntil(jdbc, job, Instant.now().minusSeconds(1));
+        reaper.reap();
+    }
+
+    /** Claims the requeued job again, as the next claim of its run does. */
+    private ReviewJob claimAgain(ReviewJob job) {
+        var queued = jobs.findById(job.getId()).orElseThrow();
+        assertThat(queued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        queued.setStatus(ReviewJobStatus.RUNNING);
+        return RuntimeJobTestData.save(transactions, jdbc, jobs, queued);
     }
 
     /** Takes the worker's output lines until one holds {@code marker}; fails on its failure line or the deadline. */
@@ -1002,7 +1016,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         public static void main(String[] args) throws Exception {
             UUID jobId = UUID.fromString(args[0]);
             long workspaceId = Long.parseLong(args[1]);
-            UUID leaseId = UUID.fromString(args[2]);
+            UUID runId = UUID.fromString(args[2]);
             byte[] request = Files.readAllBytes(Path.of(args[3]));
             long leaseSeconds = Long.parseLong(args[4]);
             var configuration = BootstrapUtils.resolveTestContextBootstrapper(WorkerGraphWithoutCluster.class)
@@ -1044,12 +1058,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             var roles = RuntimeRole.enabled(application.getEnvironment());
                             if (!roles.equals(List.of(RuntimeRole.WORKER))
                                     || !application
-                                            .getBeansOfType(ReviewJobZombieSweeper.class)
+                                            .getBeansOfType(AgentRunReaper.class)
                                             .isEmpty()) {
                                 System.out.println(FAILED + " not a worker-only process: " + roles);
                                 return;
                             }
-                            var identity = new ResultAdmissionService.AdmissionIdentity(jobId, workspaceId, 0, leaseId);
+                            var identity = new ResultAdmissionService.AdmissionIdentity(jobId, workspaceId, 0, runId);
                             application
                                     .getBean(ResultAdmissionService.class)
                                     .stage(
@@ -1060,11 +1074,21 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             System.out.println(STAGED);
                             var transactions =
                                     new TransactionTemplate(application.getBean(PlatformTransactionManager.class));
-                            var repository = application.getBean(ReviewJobRepository.class);
+                            var runs = application.getBean(AgentRuns.class);
+                            var fence = new AgentRunFence(runId, workspaceId, ReviewRunKind.epoch(0));
+                            var jdbc = application.getBean(JdbcTemplate.class);
                             while (true) {
-                                Integer renewed = transactions.execute(
-                                        status -> repository.renewLease(jobId, workspaceId, 0, leaseId, leaseSeconds));
-                                if (renewed == null || renewed != 1) {
+                                // The renewal of the executor that holds the run, on a lease short enough to expire
+                                // within the test once the process is killed.
+                                Boolean renewed = transactions.execute(
+                                        status -> runs.renew(fence).isPresent()
+                                                && jdbc.update(
+                                                                "UPDATE agent_run SET leased_until = clock_timestamp()"
+                                                                        + " + make_interval(secs => ?) WHERE id = ?",
+                                                                leaseSeconds,
+                                                                runId)
+                                                        == 1);
+                                if (!Boolean.TRUE.equals(renewed)) {
                                     System.out.println(FAILED + " lease lost");
                                     return;
                                 }
@@ -1090,7 +1114,10 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .isInstanceOf(AdmissionConflictException.class);
             assertThatThrownBy(() -> admission.stage(
                             new ResultAdmissionService.AdmissionIdentity(
-                                    review.identity().jobId(), review.workspaceId() + 1000000, 0, WORKER_LEASE),
+                                    review.identity().jobId(),
+                                    review.workspaceId() + 1000000,
+                                    0,
+                                    review.identity().runId()),
                             request(review)))
                     .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
             assertThat(stagingStore.staged(
@@ -1343,8 +1370,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(jobs.findById(review.identity().jobId()).orElseThrow().getPublicReviewDigest())
                     .isNull();
             var job = jobs.findById(review.identity().jobId()).orElseThrow();
-            job.setLeasedUntil(Instant.now().minusSeconds(1));
-            jobs.saveAndFlush(job);
+            RuntimeJobTestData.leaseUntil(jdbc, job, Instant.now().minusSeconds(1));
             assertThatThrownBy(() -> admission.publishPackage(review.identity(), proposal))
                     .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
             assertThat(feedback.findByIdAndWorkspaceId(id, review.workspaceId()))
@@ -1628,8 +1654,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var job = jobs.findById(review.identity().jobId()).orElseThrow();
 
             review.inputs().close();
-            job.setAttempt(agentProperties.maxRetries());
-            jobs.saveAndFlush(job);
+            // Every retry was lost before this attempt, which resumes the composition as the last one.
+            for (int lost = 0; lost < agentRuns.capacity().reviewRetries(); lost++) RuntimeJobTestData.retry(jdbc, job);
             // The final composition window has expired, so it withholds without a model call.
             var composer = new WorkerFeedbackComposer(
                     admission,
@@ -1638,13 +1664,13 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     assignments,
                     descriptors,
                     reviewProperties,
-                    agentProperties,
+                    agentRuns.capacity(),
                     meters,
                     mapper,
                     new CompositionCapacity(4),
                     mock(FeedbackRepair.class),
                     mock(CompositionToolTrace.class));
-            composer.composeResumed(job, WORKER_LEASE, Instant.now());
+            composer.composeResumed(job, job.getRunId(), Instant.now());
 
             assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
                             review.workspaceId(), review.reviewId()))
@@ -1656,8 +1682,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .extracting(Feedback::getDestination)
                     .contains(FeedbackDestination.ON_WORK);
             // The composition left the attempt running and owned, so the worker's terminal write completes it.
-            Integer completed = transactions.execute(status -> jobs.transitionStatusOwnedBy(
-                    job.getId(), ReviewJobStatus.COMPLETED, Instant.now(), null, WORKER_LEASE, job.getAttempt()));
+            Integer completed = transactions.execute(status -> {
+                int ended = jobs.transitionStatusOwnedBy(
+                        job.getId(), ReviewJobStatus.COMPLETED, Instant.now(), null, job.getRunId(), job.getAttempt());
+                RuntimeJobTestData.agree(jdbc, job.getId());
+                return ended;
+            });
             assertThat(completed).isOne();
             assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
         }
@@ -1800,7 +1830,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    /** A running attempt of one ITEM review of a GitHub pull request, claimed by {@link #WORKER_LEASE}, with its capture. */
+    /** A running attempt of one ITEM review of a GitHub pull request, leased under its own run, with its capture. */
     @Test
     void shouldResumeTheApprovedCompositionFromItsOriginalInputsWithoutMeasuringAgain() {
         try (var review = claimedReview(FeedbackMode.APPROVE_FIRST)) {
@@ -1813,7 +1843,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .feedbackId();
             var sealedIds = resultIds(review);
             var originalReport = mapper.createObjectNode().put("sealedReport", "retained");
-            jdbc.update(
+            RuntimeJobTestData.updateJobs(
+                    jdbc,
                     "UPDATE review_job SET status='COMPLETED',completed_at=now(),output=?::jsonb WHERE workspace_id=? AND id=?",
                     originalReport.toString(),
                     review.workspaceId(),
@@ -1851,7 +1882,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             review.workspaceId(),
                             review.reviewId()))
                     .isEqualTo("COMPLETE");
-            jdbc.update(
+            RuntimeJobTestData.updateJobs(
+                    jdbc,
                     "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE workspace_id=? AND id=?",
                     review.workspaceId(),
                     ended.getId());
@@ -1861,9 +1893,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     expired,
                     review.workspaceId(),
                     ended.getId());
-            var expiredResume = transactions.execute(status ->
-                    jobs.resumeFeedbackRepair(review.workspaceId(), review.reviewId(), agentProperties.maxRetries()));
-            assertThat(expiredResume).isZero();
+            var expiredResume = transactions.execute(
+                    status -> reviewRuns.resumeComposition(review.workspaceId(), review.reviewId()));
+            assertThat(expiredResume).isFalse();
         }
     }
 
@@ -1884,7 +1916,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             .getState())
                     .isEqualTo(FeedbackState.DELIVERED);
             repairs.stop(review.workspaceId(), review.reviewId(), reason);
-            jdbc.update(
+            RuntimeJobTestData.updateJobs(
+                    jdbc,
                     "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE workspace_id=? AND id=?",
                     review.workspaceId(),
                     review.identity().jobId());
@@ -1896,8 +1929,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .isEqualTo(reason);
             assertThat(jobs.findById(review.identity().jobId()).orElseThrow().getStatus())
                     .isEqualTo(ReviewJobStatus.COMPLETED);
-            var resumed = transactions.execute(status ->
-                    jobs.resumeFeedbackRepair(review.workspaceId(), review.reviewId(), agentProperties.maxRetries()));
+            var resumed = transactions.execute(
+                    status -> reviewRuns.resumeComposition(review.workspaceId(), review.reviewId()));
             assertThat(compositionBases.findByWorkspaceIdAndJobId(
                             review.workspaceId(), review.identity().jobId()))
                     .isPresent();
@@ -1907,7 +1940,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             .path("readback")
                             .isArray())
                     .isTrue();
-            assertThat(resumed).isZero();
+            assertThat(resumed).isFalse();
             continuation.forget(jobs.findById(review.identity().jobId()).orElseThrow());
         }
     }
@@ -1927,11 +1960,18 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             .orElseThrow()
                             .getState())
                     .isEqualTo(FeedbackState.DELIVERED);
-            jdbc.update(
-                    "UPDATE review_job SET status='COMPLETED',completed_at=now(),attempt=? WHERE workspace_id=? AND id=?",
-                    agentProperties.maxRetries() + 1,
-                    review.workspaceId(),
-                    review.identity().jobId());
+            transactions.executeWithoutResult(status -> {
+                // Requeued with every retry spent, then completed: past the allowance a resume would need.
+                jdbc.update(
+                        "UPDATE agent_run SET state='QUEUED', leased_until=NULL, attempt=? WHERE id=?",
+                        agentRuns.capacity().reviewRetries() + 1,
+                        review.identity().runId());
+                RuntimeJobTestData.updateJobs(
+                        jdbc,
+                        "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE workspace_id=? AND id=?",
+                        review.workspaceId(),
+                        review.identity().jobId());
+            });
             var ended = jobs.findById(review.identity().jobId()).orElseThrow();
             assertThat(compositionBases.findByWorkspaceIdAndJobId(review.workspaceId(), ended.getId()))
                     .isPresent();
@@ -1941,9 +1981,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             .path("readback")
                             .isArray())
                     .isTrue();
-            var resumed = transactions.execute(status ->
-                    jobs.resumeFeedbackRepair(review.workspaceId(), review.reviewId(), agentProperties.maxRetries()));
-            assertThat(resumed).isZero();
+            var resumed = transactions.execute(
+                    status -> reviewRuns.resumeComposition(review.workspaceId(), review.reviewId()));
+            assertThat(resumed).isFalse();
             continuation.forget(ended);
             assertThat(feedback.findByIdAndWorkspaceId(id, review.workspaceId())
                             .orElseThrow()
@@ -1968,7 +2008,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .orElseThrow();
             var arguments = mapper.createObjectNode().put("summary", "Keep the failure cause.");
             toolTrace.record(review.identity(), "checked-1", "check_package", arguments, "Placement accepted.");
-            jdbc.update(
+            RuntimeJobTestData.updateJobs(
+                    jdbc,
                     "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE workspace_id=? AND id=?",
                     review.workspaceId(),
                     review.identity().jobId());
@@ -2204,12 +2245,6 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 version.baseVersion(),
                 workspace.getId(),
                 pending.review().getId());
-        jdbc.update(
-                "UPDATE review_job SET lease_id=?, leased_until=now() + interval '10 minutes' WHERE workspace_id=? AND id=?",
-                WORKER_LEASE,
-                workspace.getId(),
-                pending.jobId());
-
         var job = jobs.findById(pending.jobId()).orElseThrow();
         byte[] record = ("# Retry the invoice export\n\n" + QUOTE + "\n").getBytes(StandardCharsets.UTF_8);
         files.beginPersonCapture(job);
@@ -2222,7 +2257,6 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                         Map.of(RECORD, record, "INDEX.json", mapper.writeValueAsBytes(captured.path("manifest"))),
                         null),
                 null);
-        job.setLeasedUntil(Instant.now().plusSeconds(3600));
         job.setCapture(captured);
         job.setConfigSnapshot(new ConfigSnapshot(
                         ConfigSnapshot.SCHEMA_VERSION,
@@ -2245,7 +2279,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 .toJson(mapper));
         jobs.saveAndFlush(job);
         return new ClaimedReview(
-                new ResultAdmissionService.AdmissionIdentity(job.getId(), workspace.getId(), 0, WORKER_LEASE),
+                new ResultAdmissionService.AdmissionIdentity(job.getId(), workspace.getId(), 0, job.getRunId()),
                 pending.review().getId(),
                 scenario.practice().getId(),
                 scenario.practice().getSlug(),

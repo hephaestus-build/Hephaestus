@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -24,6 +25,9 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
@@ -53,7 +57,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -71,6 +74,7 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 import tools.jackson.databind.json.JsonMapper;
 
 class ResultAdmissionServiceTest extends BaseUnitTest {
+    private final AgentRuns runs = mock(AgentRuns.class);
     private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
 
     private final JsonMapper mapper = new JsonMapper();
@@ -129,13 +133,12 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                         files,
                         bases,
                         mapper,
-                        new PracticeCatalogInjector(mapper)));
-        job.setLeasedUntil(Instant.now().plusSeconds(3600));
+                        new PracticeCatalogInjector(mapper)),
+                runs);
         lenient().when(jobs.databaseClock()).thenAnswer(call -> Instant.now());
         lenient().when(members.endedPractices(anyLong(), any(), any())).thenReturn(Set.of(31L));
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
+        job.setRunId(LEASE);
         job.setCapture(mapper.createObjectNode());
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         when(jobs.findByIdAndWorkspaceIdForUpdate(job.getId(), 1)).thenReturn(Optional.of(job));
@@ -149,17 +152,17 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     @Test
     void shouldAcceptALiveDatabaseLeaseWhenTheServerClockIsAhead() {
         var databaseNow = Instant.now().minusSeconds(7200);
-        job.setLeasedUntil(databaseNow.plusSeconds(60));
         when(jobs.databaseClock()).thenReturn(databaseNow);
 
         assertThat(service.ownedJob(identity())).isSameAs(job);
     }
 
     @Test
-    void shouldRejectALeaseAtItsDatabaseExpiryWhenTheServerClockIsBehind() {
-        var databaseNow = Instant.now().plusSeconds(7200);
-        job.setLeasedUntil(databaseNow);
-        when(jobs.databaseClock()).thenReturn(databaseNow);
+    void shouldRejectAnAttemptWhoseRunLeaseExpiredOnTheDatabaseClock() {
+        // The run's fence refuses a lease that its database clock has passed, whatever the server's clock says.
+        doThrow(new StaleRunException(new AgentRunFence(LEASE, 1, 1)))
+                .when(runs)
+                .requireCurrent(any());
 
         assertThatThrownBy(() -> service.ownedJob(identity()))
                 .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);

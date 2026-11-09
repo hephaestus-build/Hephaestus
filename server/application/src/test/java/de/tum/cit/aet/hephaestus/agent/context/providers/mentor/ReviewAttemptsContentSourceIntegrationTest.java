@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.entry;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -250,11 +251,12 @@ class ReviewAttemptsContentSourceIntegrationTest extends BaseIntegrationTest {
     /** A retained run of the review that ended in {@code status} and was processed. */
     private UUID retainedRun(UUID jobId, UUID reviewId, String status, List<ReviewAssignmentId> recorded) {
         jdbc.sql("""
-            INSERT INTO review_job(id,review_id,workspace_id,status,attempt,processing_status,trace_id,input,config_snapshot,
-                submitted_at,available_at,started_at,completed_at)
-            VALUES(:job,:review,:ws,:status,1,'DONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,now(),now(),now(),now())
+            INSERT INTO review_job(id,review_id,workspace_id,status,run_id,processing_status,trace_id,input,config_snapshot,
+                submitted_at,started_at,completed_at)
+            VALUES(:job,:review,:ws,:status,:run,'DONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,now(),now(),now())
             """)
                 .param("job", jobId)
+                .param("run", RuntimeJobTestData.insertRun(jdbc, workspace(), reviewId, status, 1))
                 .param("review", reviewId)
                 .param("ws", workspace())
                 .param("status", status)
@@ -438,11 +440,12 @@ class ReviewAttemptsContentSourceIntegrationTest extends BaseIntegrationTest {
                 review.getId(), scan.owner().practice().getId(), scan.file().getId());
         var job = UUID.randomUUID();
         jdbc.sql("""
-            INSERT INTO review_job(id,review_id,workspace_id,status,attempt,processing_status,trace_id,input,config_snapshot,
-                submitted_at,available_at,started_at,completed_at)
-            VALUES(:job,:review,:ws,'COMPLETED',1,'DONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,now(),now(),now(),now())
+            INSERT INTO review_job(id,review_id,workspace_id,status,run_id,processing_status,trace_id,input,config_snapshot,
+                submitted_at,started_at,completed_at)
+            VALUES(:job,:review,:ws,'COMPLETED',:run,'DONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,now(),now(),now())
             """)
                 .param("job", job)
+                .param("run", RuntimeJobTestData.insertRun(jdbc, ws, review.getId(), "COMPLETED", 1))
                 .param("review", review.getId())
                 .param("ws", ws)
                 .param("trace", job.toString().replace("-", ""))

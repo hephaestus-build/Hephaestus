@@ -319,20 +319,16 @@ Server maintenance runs independently of this flag:
 
 - **Submission** (turning pull request, issue and bot-command events into queued jobs) needs
   this flag **and** the server role. A worker-only container executes jobs. It does not submit these reviews.
-- **Orphan recovery** reclaims the jobs of a worker that stopped.
-  A worker holds a lease of 5 minutes on each job that it runs, on the database clock.
-  It renews the lease with each heartbeat (`hephaestus.agent.heartbeat-interval`).
-  The server checks the leases every 20 seconds. When a lease expires, the server requeues the job, or fails it at the retry limit.
-  - After the server starts, it requeues nothing for one heartbeat interval.
-    Every live worker renews its leases within that interval.
-  - A stall of more than 40 seconds between two checks also starts such an interval.
-    A slow check alone does not delay recovery.
-  - A job from before the upgrade to 1.0 has no lease.
-    The server recovers it as an expired lease.
-  - Orphan recovery needs the server role, including when `AGENT_ENABLED=false`.
-    It therefore does not run twice on a dedicated worker pod.
-  - If recovery cannot finish, the timeout backstop ends the attempt.
-    [ADR 0070](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md) defines the fresh timeout for a cutover claim.
+- **Lease recovery** takes back the reviews of a worker that stopped.
+  Each review job runs under an agent run.
+  The worker that claims the run holds its lease, on the database clock, for `hephaestus.agent.capacity.lease-ttl` (5 minutes).
+  It renews the lease every `hephaestus.agent.capacity.lease-renewal` (25 seconds). No other process renews it.
+  At the same interval, each server replica takes back the runs whose lease expired.
+  It queues the review again, or fails it at the retry limit (`AGENT_MAX_RETRIES`, `hephaestus.agent.capacity.review-retries`).
+  - Every server replica does this at the same time, without a leader. Each takes back a run with one conditional write, so one replica wins and the others change nothing.
+  - A worker stops renewing an attempt when the attempt passes its time limit and the upload grace. Its lease then expires, and the attempt is taken back.
+  - The upgrade to 1.0 queues again every job that a worker held. The job keeps its admitted and staged results and spends no retry.
+  - Lease recovery needs the server role, including when `AGENT_ENABLED=false`.
 - **Completion** closes the parent review of a terminal job and records its stop reason.
   This server maintenance also runs when `AGENT_ENABLED=false`.
 - **Execution** (the poll loop that claims and runs jobs) needs this flag **and** the worker role.
@@ -912,7 +908,6 @@ The HTTP graceful shutdown starts only after the drain.
 Unadmitted reviews return to the queue for another worker to claim.
 The drain is not the review's fault, so it spends none of `AGENT_MAX_RETRIES`.
 The next attempt still gets its own number, so the stopped sandbox cannot write into it.
-After 3 drains, the next drain cancels the review with its drain reason.
 
 A concurrent cancellation leaves the job terminal instead.
 Admitted results are never measured again.
@@ -936,7 +931,7 @@ The cleanup deadline does not extend this grace period or guarantee that all con
 
 A cancel ends a review on its row at once.
 The sandbox gateway then refuses the review's next model call.
-The worker that runs the review stops its sandbox at its next heartbeat (`hephaestus.agent.heartbeat-interval`).
+The worker that runs the review stops its sandbox at its next lease renewal (`hephaestus.agent.capacity.lease-renewal`).
 A requeue or a reap of the review ends it in the same way.
 
 ## See also

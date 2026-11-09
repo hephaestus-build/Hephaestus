@@ -122,9 +122,12 @@ class ReviewJobRetentionIntegrationTest extends BaseIntegrationTest {
                 .isNotNull();
         assertThat(jobRepository.findById(finished.getId()).orElseThrow().getOutput())
                 .isNull();
-        jobRepository.deleteUnreferencedTerminalRowsOlderThan(cutoff, 500);
-        assertThat(jobRepository.findById(pending.getId())).isPresent();
-        assertThat(jobRepository.findById(finished.getId())).isEmpty();
+        assertThat(jobRepository.deleteUnreferencedTerminalRowsOlderThan(cutoff, 500))
+                .contains(finished.getRunId())
+                .doesNotContain(pending.getRunId());
+        assertThat(runtimeJdbc.queryForList(
+                        "SELECT id FROM review_job WHERE id IN (?, ?)", UUID.class, pending.getId(), finished.getId()))
+                .containsExactly(pending.getId());
     }
 
     private ReviewCompositionBasis basis(ReviewJob job, Instant expiresAt) {

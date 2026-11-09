@@ -24,7 +24,9 @@ public interface ReviewAttemptUsageRepository extends JpaRepository<ReviewAttemp
      */
     @NativeQuery("""
         WITH running AS (
-          SELECT id,attempt FROM review_job WHERE workspace_id=:workspaceId AND status='RUNNING'
+          SELECT j.id,r.lease_epoch-1 AS attempt FROM review_job j
+          JOIN agent_run r ON r.id=j.run_id AND r.workspace_id=j.workspace_id
+          WHERE j.workspace_id=:workspaceId AND j.status='RUNNING'
         ), used AS (
           SELECT u.job_id,u.attempt,'CHAT' AS model_kind,u.proxy_input_tokens AS input_tokens,
             u.proxy_output_tokens AS output_tokens,u.proxy_cache_read_tokens AS cache_read_tokens,

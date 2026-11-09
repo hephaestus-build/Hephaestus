@@ -6,6 +6,9 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.scan.ScanBudget;
 import de.tum.cit.aet.hephaestus.agent.scan.ScanModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
@@ -39,6 +42,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class ScanCallGuard {
     private final ReviewJobRepository jobs;
+    private final AgentRuns runs;
     private final ReviewSnapshotQuery reviews;
     private final ScanBudget budget;
     private final SandboxGatewayProperties gateway;
@@ -76,8 +80,11 @@ public class ScanCallGuard {
         }
         try {
             job = jobs.findByIdAndWorkspaceId(job.getId(), workspace).orElseThrow(ScanCallGuard::refused);
-            if (attempt.leaseId() == null
-                    || !jobs.hasLiveLease(job.getId(), workspace, attempt.number(), attempt.leaseId())) throw refused();
+            UUID runId = attempt.leaseId();
+            if (runId == null
+                    || !job.getRunId().equals(runId)
+                    || !runs.isCurrent(new AgentRunRef(runId, workspace), ReviewRunKind.epoch(attempt.number())))
+                throw refused();
             var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), mapper);
             var model = route.practiceScriptSlot() == null || route.practiceScriptSlot() == ModelKind.CHAT
                     ? snapshot.model()

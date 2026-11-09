@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.CapturedSourceFingerprints;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -268,7 +269,8 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
                         workspace,
                         pending.review().getId());
             } else {
-                jdbc.update(
+                RuntimeJobTestData.updateJobs(
+                        jdbc,
                         "UPDATE review_job SET status=? WHERE workspace_id=? AND id=?",
                         recheck,
                         workspace,

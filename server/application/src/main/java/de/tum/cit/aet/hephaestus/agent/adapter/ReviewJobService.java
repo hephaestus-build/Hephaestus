@@ -11,6 +11,9 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobStateConflictException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMethodVerifier;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
@@ -25,7 +28,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewQueue;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
-import java.time.Instant;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
@@ -53,6 +55,7 @@ public class ReviewJobService implements ReviewQueue {
     private final ObjectMapper mapper;
     private final LlmAdmissionService admission;
     private final ReviewMethodVerifier methods;
+    private final AgentRuns runs;
 
     @Override
     @Transactional
@@ -72,7 +75,13 @@ public class ReviewJobService implements ReviewQueue {
         job.setReviewId(review.id());
         job.setWorkspaceId(review.workspaceId());
         job.setInput(new ReviewJobInput(itemId, selected));
-        job.setAvailableAt(Instant.now());
+        job.setRunId(runs.enqueue(
+                        review.workspaceId(),
+                        AgentRunKind.REVIEW,
+                        ReviewRunKind.band(review.origin()),
+                        ReviewRunKind.subject(review.id()),
+                        null)
+                .id());
         var pinned = assignments.load(job);
         ReviewMethod method = pinned.getFirst().practice().method();
         if (pinned.stream()

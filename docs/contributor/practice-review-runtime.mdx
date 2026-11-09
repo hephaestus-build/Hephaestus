@@ -81,13 +81,16 @@ The [pipeline](./practice-review-pipeline.mdx) owns these stage boundaries.
 A failed attempt cannot overwrite its original admitted results.
 A retry runs under a new fence and reuses durable assignment state.
 
-A running attempt holds a lease (`review_job.leased_until`) on the database clock.
-The claim sets it, and the worker's heartbeat renews it (`WorkerLivenessReporter`).
-`ReviewJobZombieSweeper` recovers an attempt whose lease expired one renewal interval before its previous check, and checks the lease again under the row's lock.
+Each review job points to one agent run (`agent_run`), which holds the job's lease.
+[Agent runs](./agent-runs.mdx) owns the run model: the claim, the epoch fence and the reaper.
+The executor that claims the run is the only writer of its lease, and it renews the lease through every phase of the attempt.
+The job's attempt number is the run's claim epoch less one (`ReviewRunKind.attempt`).
+Every fenced write of the attempt names the run and the attempt.
 
-After a start or a stall, the sweeper recovers nothing for one renewal interval.
-A stall is a gap longer than `STALL_GAP` from the end of one check until the next check reads the database clock.
-The recoveries of a slow check do not count, so a slow check cannot postpone recovery.
+`AgentRunReaper` takes back a run whose lease expired, on every server replica.
+`ReviewRunKind` moves the job in the same transaction, before the run is written.
+It bills the lost attempt, and it queues the job again or fails it at the retry limit.
+The database refuses a commit where a job and its run disagree: queued with queued, running with leased, ended with ended.
 
 Delivery recovery reads persisted copies rather than re-running a writer from raw result text.
 Unknown visibility permits readback, not automatic reposting.

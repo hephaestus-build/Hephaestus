@@ -195,21 +195,35 @@ VALUES ('7d5e0c3a-1b2c-4d3e-8f40-000000000001', 923101, 20, 923101, 'QUEUED', NU
   ('7d5e0c3a-1b2c-4d3e-8f40-000000000002', 923101, 20, 923101, 'FAILED', 'PROCESSING_FAILED')
 ON CONFLICT (review_id, practice_id) DO UPDATE SET status = EXCLUDED.status, reason = EXCLUDED.reason;
 
-INSERT INTO review_job (id, review_id, workspace_id, status, attempt, processing_status, available_at, trace_id, input,
+CREATE TEMP TABLE e2e_review_job (id uuid, review_id uuid, status text, attempt int, processing text,
+  available_at timestamptz, started_at timestamptz, completed_at timestamptz);
+INSERT INTO e2e_review_job VALUES
+  ('7d5e0c3a-1b2c-4d3e-8f41-000000000001', '7d5e0c3a-1b2c-4d3e-8f40-000000000001', 'QUEUED', 0, 'NONE',
+   now() + interval '7 days', NULL, NULL),
+  ('7d5e0c3a-1b2c-4d3e-8f41-000000000002', '7d5e0c3a-1b2c-4d3e-8f40-000000000002', 'COMPLETED', 1, 'FAILED',
+   now() - interval '2 hours', now() - interval '2 hours', now() - interval '110 minutes');
+
+-- Each job's run, in the state its status needs; a queued run's epoch is the number its next attempt takes.
+INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key, state, attempt, lease_epoch, available_at,
+  stop_reason, created_at, started_at, ended_at)
+SELECT j.id, 20, 'REVIEW', 'BATCH', 'review:' || j.review_id,
+  CASE WHEN j.status = 'QUEUED' THEN 'QUEUED' ELSE 'ENDED' END, 0,
+  CASE WHEN j.status = 'QUEUED' THEN j.attempt ELSE j.attempt + 1 END, j.available_at,
+  CASE WHEN j.status = 'QUEUED' THEN NULL ELSE 'COMPLETED' END, r.created_at, j.started_at, j.completed_at
+FROM e2e_review_job j
+JOIN review r ON r.id = j.review_id
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO review_job (id, review_id, workspace_id, status, run_id, processing_status, trace_id, input,
   config_snapshot, submitted_at, started_at, completed_at)
-SELECT j.id, j.review_id, 20, j.status, j.attempt, j.processing, j.available_at, replace(j.id::text, '-', ''),
+SELECT j.id, j.review_id, 20, j.status, j.id, j.processing, replace(j.id::text, '-', ''),
   jsonb_build_object('itemId', 920110, 'assignments',
     jsonb_build_array(jsonb_build_object('reviewId', j.review_id, 'practiceId', 923101, 'itemId', 920110))),
   '{}'::jsonb, r.created_at, j.started_at, j.completed_at
-FROM (VALUES
-  ('7d5e0c3a-1b2c-4d3e-8f41-000000000001'::uuid, '7d5e0c3a-1b2c-4d3e-8f40-000000000001'::uuid, 'QUEUED', 0, 'NONE',
-   now() + interval '7 days', NULL::timestamptz, NULL::timestamptz),
-  ('7d5e0c3a-1b2c-4d3e-8f41-000000000002'::uuid, '7d5e0c3a-1b2c-4d3e-8f40-000000000002'::uuid, 'COMPLETED', 1, 'FAILED',
-   now() - interval '2 hours', now() - interval '2 hours', now() - interval '110 minutes')
-) AS j(id, review_id, status, attempt, processing, available_at, started_at, completed_at)
+FROM e2e_review_job j
 JOIN review r ON r.id = j.review_id
 ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, processing_status = EXCLUDED.processing_status,
-  available_at = EXCLUDED.available_at, completed_at = EXCLUDED.completed_at, cancellation_reason = NULL;
+  completed_at = EXCLUDED.completed_at, cancellation_reason = NULL;
 
 INSERT INTO review_item (workspace_id, review_id, practice_id, item_id, item_version, state, job_id)
 SELECT 20, j.review_id, 923101, 920110, pg_temp.pull_request_version(4, 'Add the login screen'), 'LISTED', j.job_id
@@ -265,9 +279,14 @@ BEGIN
     VALUES (this_review, 20, target.item_id, version, pg_temp.object_id('e2e0', target.number), 'REQUEST', reader,
       'COMPLETE', fixture_time, fixture_time, fixture_time, fixture_time + interval '1 minute')
     ON CONFLICT (id) DO NOTHING;
-    INSERT INTO review_job (id, review_id, workspace_id, status, attempt, processing_status, available_at, trace_id,
+    INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key, state, attempt, lease_epoch, available_at,
+      stop_reason, created_at, started_at, ended_at)
+    VALUES (this_job, 20, 'REVIEW', 'BATCH', 'review:' || this_review, 'ENDED', 0, 2, fixture_time, 'COMPLETED',
+      fixture_time, fixture_time, fixture_time + interval '1 minute')
+    ON CONFLICT (id) DO NOTHING;
+    INSERT INTO review_job (id, review_id, workspace_id, status, run_id, processing_status, trace_id,
       input, config_snapshot, submitted_at, started_at, completed_at)
-    VALUES (this_job, this_review, 20, 'COMPLETED', 1, 'DONE', fixture_time, replace(this_job::text, '-', ''),
+    VALUES (this_job, this_review, 20, 'COMPLETED', this_job, 'DONE', replace(this_job::text, '-', ''),
       jsonb_build_object('itemId', target.item_id, 'assignments', (SELECT jsonb_agg(jsonb_build_object(
         'reviewId', this_review, 'practiceId', p, 'itemId', target.item_id) ORDER BY p)
         FROM unnest(ARRAY[923101, 923102, 923103]) AS p)),

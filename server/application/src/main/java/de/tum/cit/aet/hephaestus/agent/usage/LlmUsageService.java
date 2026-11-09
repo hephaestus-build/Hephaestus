@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateLookup;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.Arrays;
@@ -33,7 +32,7 @@ public class LlmUsageService {
     private final LlmBudgetService llmBudgetService;
 
     private final ConfigAuditPort configAudit;
-    private final ReviewJobRepository jobRepository;
+    private final ReviewRunKind reviewRuns;
 
     /** Display-only; no number it produces is ever compared against a budget. */
     private final FxRateLookup fxRateLookup;
@@ -43,13 +42,13 @@ public class LlmUsageService {
             WorkspaceRepository workspaceRepository,
             LlmBudgetService llmBudgetService,
             ConfigAuditPort configAudit,
-            ReviewJobRepository jobRepository,
+            ReviewRunKind reviewRuns,
             FxRateLookup fxRateLookup) {
         this.usageRepository = usageRepository;
         this.workspaceRepository = workspaceRepository;
         this.llmBudgetService = llmBudgetService;
         this.configAudit = configAudit;
-        this.jobRepository = jobRepository;
+        this.reviewRuns = reviewRuns;
         this.fxRateLookup = fxRateLookup;
     }
 
@@ -167,7 +166,7 @@ public class LlmUsageService {
                 workspaceId,
                 new OwnProviderLlmBudgetSnapshot(before),
                 new OwnProviderLlmBudgetSnapshot(monthlyBudgetUsd)));
-        jobRepository.releaseBudgetHolds(workspaceId, Instant.now());
+        reviewRuns.releaseBudgetHolds(workspaceId);
     }
 
     /**

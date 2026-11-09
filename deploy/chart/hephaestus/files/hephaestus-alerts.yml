@@ -430,11 +430,19 @@ groups:
           summary: One stage of review attempts ran past its bound at least three times in six hours
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewWorkerLost
-        expr: sum(increase(agent_job_orphan_failed_total{job="hephaestus"}[1h])) > 0
+        expr: sum(increase(agent_run_reaped_total{job="hephaestus",kind="review",outcome="attempts_exhausted"}[1h])) > 0
         labels:
           severity: warning
         annotations:
-          summary: A review failed because its workers stopped during every attempt
+          summary: A review failed because the holder of each of its attempts stopped renewing its lease
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusAgentRunReaperFailing
+        expr: sum(increase(agent_run_reaper_failure_total{job="hephaestus"}[10m])) >= 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: The run reaper keeps failing to take back an expired run, so its work waits
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewFeedbackUnconfirmed
         expr: sum(increase(agent_job_composition_stopped_total{job="hephaestus",outcome="unrecorded"}[1h])) > 0

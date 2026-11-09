@@ -1,5 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
@@ -41,10 +44,15 @@ public class ReviewAttemptUsageService {
     private final ReviewJobRepository jobs;
     private final ReviewAttemptUsageRepository attempts;
     private final LlmUsageRecorder recorder;
+    private final AgentRuns runs;
 
     public ReviewAttemptUsageService(
-            ReviewJobRepository jobs, ReviewAttemptUsageRepository attempts, LlmUsageRecorder recorder) {
+            ReviewJobRepository jobs,
+            ReviewAttemptUsageRepository attempts,
+            LlmUsageRecorder recorder,
+            AgentRuns runs) {
         this.jobs = jobs;
+        this.runs = runs;
         this.attempts = attempts;
         this.recorder = recorder;
     }
@@ -75,12 +83,17 @@ public class ReviewAttemptUsageService {
      * the call's model kind. Creating the measurement counts no call. Commits before the call leaves, so no lock is
      * held while the provider works.
      *
-     * @return false when the attempt no longer runs on that worker; the call must not start
+     * @return false when the attempt no longer holds its run; the call must not start
      */
     @Transactional
     public boolean registerCall(
-            UUID jobId, long workspaceId, int attempt, UUID leaseId, ModelKind kind, FrozenCharge charge) {
-        if (jobs.lockRunningAttemptForCall(jobId, workspaceId, attempt, leaseId).isEmpty()) return false;
+            UUID jobId, long workspaceId, int attempt, UUID runId, ModelKind kind, FrozenCharge charge) {
+        if (jobs.lockRunningForCall(jobId, workspaceId, runId).isEmpty() || attempt < 0) return false;
+        try {
+            runs.requireCurrent(new AgentRunFence(runId, workspaceId, ReviewRunKind.epoch(attempt)));
+        } catch (StaleRunException lost) {
+            return false;
+        }
         attempts.registerIfAbsent(jobId, attempt, workspaceId);
         attempts.freezeChargeIfAbsent(jobId, attempt, kind.name(), workspaceId, charge);
         return true;

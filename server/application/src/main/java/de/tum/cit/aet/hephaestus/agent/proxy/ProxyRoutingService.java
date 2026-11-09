@@ -10,8 +10,11 @@ import de.tum.cit.aet.hephaestus.agent.job.PracticeScriptKindTotal;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptUsage;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
@@ -39,14 +42,17 @@ class ProxyRoutingService {
     private final ObjectMapper objectMapper;
     private final ReviewAttemptUsageService attemptUsage;
     private final ReviewSnapshotQuery reviews;
+    private final AgentRuns runs;
 
     ProxyRoutingService(
             ReviewJobRepository jobs,
             MentorTurnRepository mentorTurns,
             ObjectMapper mapper,
             ReviewAttemptUsageService attemptUsage,
-            ReviewSnapshotQuery reviews) {
+            ReviewSnapshotQuery reviews,
+            AgentRuns runs) {
         this.agentJobRepository = jobs;
+        this.runs = runs;
         this.mentorTurns = mentorTurns;
         this.objectMapper = mapper;
         this.attemptUsage = attemptUsage;
@@ -74,7 +80,7 @@ class ProxyRoutingService {
         if (lease == null || workspace == null) return false;
         return routing.hephTurn()
                 ? mentorTurns.hasLiveLease(attempt.sourceId(), workspace, attempt.number(), lease)
-                : agentJobRepository.hasLiveLease(attempt.sourceId(), workspace, attempt.number(), lease);
+                : runs.isCurrent(new AgentRunRef(lease, workspace), ReviewRunKind.epoch(attempt.number()));
     }
 
     ProxyRouting resolve(ProxyIdentity identity, HttpServletRequest request) {
@@ -90,7 +96,9 @@ class ProxyRoutingService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable"));
         if (job.getWorkspaceId() != jwt.workspaceId())
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable");
-        if (!agentJobRepository.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
+        if (!job.getRunId().equals(jwt.leaseId())
+                || !runs.isCurrent(
+                        new AgentRunRef(jwt.leaseId(), jwt.workspaceId()), ReviewRunKind.epoch(jwt.attempt())))
             throw attemptEnded();
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
         // The live checks above decide whether this attempt may call at all; the signed deadline decides until when.
@@ -117,7 +125,9 @@ class ProxyRoutingService {
     ProxyRouting attemptRouting(UUID jobId, long workspaceId, int attempt, UUID leaseId, Instant workDeadline) {
         var job = agentJobRepository
                 .findById(jobId)
-                .filter(found -> agentJobRepository.hasLiveLease(jobId, workspaceId, attempt, leaseId))
+                .filter(found -> found.getWorkspaceId() == workspaceId
+                        && found.getRunId().equals(leaseId)
+                        && runs.isCurrent(new AgentRunRef(leaseId, workspaceId), ReviewRunKind.epoch(attempt)))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable"));
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
         register(job, leaseId, ModelKind.CHAT, snapshot.model());

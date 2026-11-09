@@ -13,7 +13,10 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -39,8 +42,9 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
     private final SandboxGatewaySessions sessions = mock(SandboxGatewaySessions.class);
     private final AttemptTokenVerifier verifier = mock(AttemptTokenVerifier.class);
+    private final AgentRuns runs = mock(AgentRuns.class);
     private final JobTokenAuthenticationFilter filter =
-            new JobTokenAuthenticationFilter(jobs, turns, sessions, verifier, mock(ProxyAccounting.class));
+            new JobTokenAuthenticationFilter(jobs, runs, turns, sessions, verifier, mock(ProxyAccounting.class));
 
     @AfterEach
     void clearContext() {
@@ -50,10 +54,11 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     @Test
     void admissionAuthenticatesWithoutConfigurationOrSpendQueries() throws Exception {
         var job = running();
-        var jwt = jwt(job.getId(), job.getWorkspaceId(), job.getAttempt());
+        var jwt = jwt(job);
         when(verifier.verify("valid-token")).thenReturn(jwt);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        when(jobs.hasLiveLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), jwt.leaseId()))
+        when(runs.isCurrent(
+                        new AgentRunRef(jwt.leaseId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt())))
                 .thenReturn(true);
         var request = request("/internal/llm/admit-results", "Bearer valid-token");
         var response = new MockHttpServletResponse();
@@ -69,7 +74,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
                 .isEqualTo(jwt);
         assertThat(job.getConfigSnapshot()).isNull();
         verify(jobs).findById(job.getId());
-        verify(jobs).hasLiveLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), jwt.leaseId());
+        verify(runs)
+                .isCurrent(new AgentRunRef(jwt.leaseId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt()));
         verifyNoMoreInteractions(jobs);
     }
 
@@ -186,7 +192,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     @ValueSource(strings = {"turn", "commands"})
     void jobTokenReachesNoTurnEndpointAndNoCommandChannel(String target) throws Exception {
         var job = running();
-        when(verifier.verify("valid-token")).thenReturn(jwt(job.getId(), job.getWorkspaceId(), job.getAttempt()));
+        when(verifier.verify("valid-token")).thenReturn(jwt(job));
         var path = target.equals("turn")
                 ? "/internal/llm/turn/" + UUID.randomUUID() + "/end"
                 : "/internal/llm/runtime/" + job.getId() + "/commands";
@@ -293,10 +299,11 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         // A requeue, another lease or a terminal status all leave no live lease for this credential
         // (ReviewJobLeaseIntegrationTest); the gateway asks only that.
         var job = running();
-        var jwt = jwt(job.getId(), job.getWorkspaceId(), job.getAttempt());
+        var jwt = jwt(job);
         when(verifier.verify("valid-token")).thenReturn(jwt);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        when(jobs.hasLiveLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), jwt.leaseId()))
+        when(runs.isCurrent(
+                        new AgentRunRef(jwt.leaseId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt())))
                 .thenReturn(false);
         var response = new MockHttpServletResponse();
         filter.doFilter(request("/internal/llm/responses", "Bearer valid-token"), response, (incoming, outgoing) -> {
@@ -311,7 +318,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     void nonOwnerResultUploadReportsConflictOnlyForItsOwnRuntimeUrl() throws Exception {
         // The job runs, but no longer under this credential's lease.
         var job = running();
-        when(verifier.verify("valid-token")).thenReturn(jwt(job.getId(), job.getWorkspaceId(), job.getAttempt()));
+        when(verifier.verify("valid-token")).thenReturn(jwt(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         for (var id : new UUID[] {job.getId(), UUID.randomUUID()}) {
             var response = new MockHttpServletResponse();
@@ -353,10 +360,11 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     @ValueSource(strings = {"fc00::1", "fd12:3456:789a::2"})
     void shouldAuthenticateAnIpv6PrivateGateway(String address) throws Exception {
         var job = running();
-        var jwt = jwt(job.getId(), job.getWorkspaceId(), job.getAttempt());
+        var jwt = jwt(job);
         when(verifier.verify("valid-token")).thenReturn(jwt);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        when(jobs.hasLiveLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), jwt.leaseId()))
+        when(runs.isCurrent(
+                        new AgentRunRef(jwt.leaseId(), job.getWorkspaceId()), ReviewRunKind.epoch(job.getAttempt())))
                 .thenReturn(true);
         var request = request("/internal/llm/admit-results", "Bearer valid-token");
         request.setRemoteAddr(address);
@@ -372,18 +380,26 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         job.setId(UUID.randomUUID());
         RuntimeJobTestData.initialize(job, 7L);
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setAttempt(3);
+        RuntimeJobTestData.attempt(job, 3);
         return job;
     }
 
+    private static AttemptJwt jwt(ReviewJob job) {
+        return jwt(job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId());
+    }
+
     private static AttemptJwt jwt(UUID id, long workspace, int attempt) {
+        return jwt(id, workspace, attempt, UUID.randomUUID());
+    }
+
+    private static AttemptJwt jwt(UUID id, long workspace, int attempt, UUID runId) {
         var now = Instant.now();
         return new AttemptJwt(
                 AttemptJwt.Kind.REVIEW,
                 id,
                 workspace,
                 attempt,
-                UUID.randomUUID(),
+                runId,
                 Set.of("llm_proxy"),
                 UUID.randomUUID().toString(),
                 now,

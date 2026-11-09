@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
@@ -120,9 +121,10 @@ public class ReviewAdmissionData {
                         scenario.item().getId())));
         jdbc.sql(
                         "INSERT INTO"
-                                + " review_job(id,review_id,workspace_id,status,attempt,processing_status,trace_id,input,config_snapshot,submitted_at,available_at,started_at)"
-                                + " VALUES(:id,:review,:ws,'RUNNING',0,'PENDING',:trace,CAST(:input AS jsonb),'{}'::jsonb,:at,:at,:at)")
+                                + " review_job(id,review_id,workspace_id,status,run_id,processing_status,trace_id,input,config_snapshot,submitted_at,started_at)"
+                                + " VALUES(:id,:review,:ws,'RUNNING',:run,'PENDING',:trace,CAST(:input AS jsonb),'{}'::jsonb,:at,:at)")
                 .param("id", job)
+                .param("run", RuntimeJobTestData.insertRun(jdbc, review.getWorkspaceId(), review.getId(), "RUNNING", 0))
                 .param("review", review.getId())
                 .param("ws", review.getWorkspaceId())
                 .param("trace", job.toString().replace("-", ""))
@@ -234,11 +236,21 @@ public class ReviewAdmissionData {
     @Transactional
     public void running(Pending pending, int attempt) {
         if (attempt < 0) throw new IllegalArgumentException("An attempt must be nonnegative.");
-        jdbc.sql("UPDATE review_job SET status='RUNNING',attempt=:attempt WHERE workspace_id=:ws AND id=:id")
-                .param("attempt", attempt)
-                .param("ws", pending.review().getWorkspaceId())
+        long workspaceId = pending.review().getWorkspaceId();
+        UUID previous = jdbc.sql("SELECT run_id FROM review_job WHERE workspace_id=:ws AND id=:id")
+                .param("ws", workspaceId)
+                .param("id", pending.jobId())
+                .query(UUID.class)
+                .single();
+        // The job's run as the claim of this attempt left it: leased under its number.
+        UUID run =
+                RuntimeJobTestData.insertRun(jdbc, workspaceId, pending.review().getId(), "RUNNING", attempt);
+        jdbc.sql("UPDATE review_job SET status='RUNNING',run_id=:run WHERE workspace_id=:ws AND id=:id")
+                .param("run", run)
+                .param("ws", workspaceId)
                 .param("id", pending.jobId())
                 .update();
+        jdbc.sql("DELETE FROM agent_run WHERE id=:id").param("id", previous).update();
     }
 
     @Transactional

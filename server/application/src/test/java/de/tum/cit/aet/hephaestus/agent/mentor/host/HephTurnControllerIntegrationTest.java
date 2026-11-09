@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
@@ -133,6 +134,9 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private ReviewJobRepository jobRepository;
 
+    @Autowired
+    private AgentRuns agentRuns;
+
     /** This test's worker key: the worker role, which signs attempt tokens, is off in the test context. */
     private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
 
@@ -217,7 +221,8 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .setControllerAdvice(new AgentControllerAdvice(), problemDetails(), new GlobalControllerAdvice())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(mapper))
                 .addFilters(
-                        SandboxGatewayFixtures.credentialFilter(jobRepository, turnRepository, verifier), servletApi)
+                        SandboxGatewayFixtures.credentialFilter(jobRepository, agentRuns, turnRepository, verifier),
+                        servletApi)
                 .build();
     }
 

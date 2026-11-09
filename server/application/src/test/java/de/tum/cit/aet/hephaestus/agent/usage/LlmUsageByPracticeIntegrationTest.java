@@ -21,7 +21,6 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
@@ -42,7 +41,6 @@ import tools.jackson.databind.ObjectMapper;
 
 // Expected costs are independent constants; recomputing weights here would hide lost remainders.
 class LlmUsageByPracticeIntegrationTest extends AbstractWorkspaceIntegrationTest {
-    private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
 
     @Autowired
     private PracticeVersionService runtimePracticeVersions;
@@ -523,15 +521,12 @@ class LlmUsageByPracticeIntegrationTest extends AbstractWorkspaceIntegrationTest
         RuntimeJobTestData.initialize(job, workspace.getId());
 
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         job.setConfigSnapshot(objectMapper.valueToTree(Map.of("model", "test")));
         return jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
     }
 
     private void retry(ReviewJob job) {
-        job.setAttempt(job.getAttempt() + 1);
-        jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
+        RuntimeJobTestData.reclaim(jdbc, job);
     }
 
     private void calls(ReviewJob job, String kind, String practice, long input, long output, int count) {

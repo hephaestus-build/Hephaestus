@@ -17,8 +17,6 @@ import tools.jackson.databind.ObjectMapper;
 
 class ReviewJobEvidenceRefusalIntegrationTest extends BaseIntegrationTest {
 
-    private static final UUID OWNER = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
-
     @Autowired
     private ReviewJobRepository jobs;
 
@@ -45,18 +43,21 @@ class ReviewJobEvidenceRefusalIntegrationTest extends BaseIntegrationTest {
                         .getId());
 
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(OWNER);
         job.setConfigSnapshot(mapper.createObjectNode());
         var id = jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job)).getId();
         var output = mapper.createObjectNode().put("outcome", "INSUFFICIENT_EVIDENCE");
         Integer refused = transactions.execute(
                 status -> jobs.transitionToEvidenceRefused(id, UUID.randomUUID(), 0, Instant.now(), output));
         assertThat(refused).isZero();
-        Integer stale =
-                transactions.execute(status -> jobs.transitionToEvidenceRefused(id, OWNER, 1, Instant.now(), output));
+        Integer stale = transactions.execute(
+                status -> jobs.transitionToEvidenceRefused(id, job.getRunId(), 1, Instant.now(), output));
         assertThat(stale).isZero();
-        Integer settled =
-                transactions.execute(status -> jobs.transitionToEvidenceRefused(id, OWNER, 0, Instant.now(), output));
+        // The run ends with its job, as the executor's refusal ends it.
+        Integer settled = transactions.execute(status -> {
+            int ended = jobs.transitionToEvidenceRefused(id, job.getRunId(), 0, Instant.now(), output);
+            RuntimeJobTestData.agree(jdbc, id);
+            return ended;
+        });
         assertThat(settled).isEqualTo(1);
         var saved = jobs.findById(id).orElseThrow();
         assertThat(saved.getStatus()).isEqualTo(ReviewJobStatus.FAILED);

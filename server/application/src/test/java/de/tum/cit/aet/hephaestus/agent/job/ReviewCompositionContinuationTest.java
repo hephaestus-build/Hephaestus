@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
@@ -25,7 +26,7 @@ class ReviewCompositionContinuationTest extends BaseUnitTest {
         var bases = mock(ReviewCompositionBasisRepository.class);
         var files = mock(JobEvidenceFiles.class);
         var job = RuntimeReviewTestData.job();
-        job.setAttempt(1);
+        RuntimeJobTestData.attempt(job, 1);
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("original");
         var basis = new ReviewCompositionBasis();
@@ -39,11 +40,11 @@ class ReviewCompositionContinuationTest extends BaseUnitTest {
         var continuation = new ReviewCompositionContinuation(
                 bases,
                 files,
-                mock(ReviewJobRepository.class),
                 new JsonMapper(),
                 mock(ReviewAssignmentStore.class),
                 mock(FeedbackRepair.class),
-                mock(AgentProperties.class));
+                mock(AgentCapacityProperties.class),
+                mock(ReviewRunKind.class));
         assertThatThrownBy(() -> continuation.restore(job))
                 .isInstanceOfSatisfying(
                         ReviewCompositionContinuation.InputsUnavailableException.class,
@@ -56,7 +57,7 @@ class ReviewCompositionContinuationTest extends BaseUnitTest {
         var bases = mock(ReviewCompositionBasisRepository.class);
         var files = mock(JobEvidenceFiles.class);
         var job = RuntimeReviewTestData.job();
-        job.setAttempt(1);
+        RuntimeJobTestData.attempt(job, 1);
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("original");
         var basis = new ReviewCompositionBasis();
@@ -72,11 +73,11 @@ class ReviewCompositionContinuationTest extends BaseUnitTest {
         var continuation = new ReviewCompositionContinuation(
                 bases,
                 files,
-                mock(ReviewJobRepository.class),
                 new JsonMapper(),
                 mock(ReviewAssignmentStore.class),
                 mock(FeedbackRepair.class),
-                mock(AgentProperties.class));
+                mock(AgentCapacityProperties.class),
+                mock(ReviewRunKind.class));
         assertThatThrownBy(() -> continuation.restore(job))
                 .isInstanceOfSatisfying(
                         ReviewCompositionContinuation.InputsUnavailableException.class,

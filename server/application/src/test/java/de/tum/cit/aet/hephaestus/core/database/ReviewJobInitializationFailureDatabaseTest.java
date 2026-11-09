@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -18,8 +17,8 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @Tag("database")
 class ReviewJobInitializationFailureDatabaseTest {
     private static final long WORKSPACE = 978001;
-    private static final UUID LEASE = UUID.fromString("00000000-0000-0000-0000-000000978201");
-    private static final UUID OTHER_LEASE = UUID.fromString("00000000-0000-0000-0000-000000978202");
+    private static final UUID RUN = UUID.fromString("00000000-0000-0000-0000-000000978201");
+    private static final UUID OTHER_RUN = UUID.fromString("00000000-0000-0000-0000-000000978202");
     private static final String DIAGNOSIS =
             "{\"attempt\":1,\"exitCode\":2,\"timedOut\":false,\"transcriptTail\":\"tar\"}";
 
@@ -34,15 +33,15 @@ class ReviewJobInitializationFailureDatabaseTest {
                 .value();
         UUID withoutCapture = UUID.fromString("00000000-0000-0000-0000-000000978101");
         UUID withCapture = UUID.fromString("00000000-0000-0000-0000-000000978102");
-        insertFailedJob(database, withoutCapture, null);
-        insertFailedJob(database, withCapture, "{\"manifest\":{\"files\":[]}}");
+        insertFailedJob(database, withoutCapture, RUN, null);
+        insertFailedJob(database, withCapture, OTHER_RUN, "{\"manifest\":{\"files\":[]}}");
 
         // A NULL capture gains the key alone; a present capture keeps its other keys.
-        assertThat(record(jdbc, statement, withoutCapture, 1, LEASE)).isEqualTo(1);
-        assertThat(record(jdbc, statement, withCapture, 1, null)).isEqualTo(1);
-        // Another attempt or another lease writes nothing.
-        assertThat(record(jdbc, statement, withoutCapture, 0, LEASE)).isZero();
-        assertThat(record(jdbc, statement, withoutCapture, 1, OTHER_LEASE)).isZero();
+        assertThat(record(jdbc, statement, withoutCapture, 1, RUN)).isEqualTo(1);
+        assertThat(record(jdbc, statement, withCapture, 1, OTHER_RUN)).isEqualTo(1);
+        // Another attempt or another run writes nothing.
+        assertThat(record(jdbc, statement, withoutCapture, 0, RUN)).isZero();
+        assertThat(record(jdbc, statement, withoutCapture, 1, OTHER_RUN)).isZero();
 
         assertThat(PracticeMigrationFixture.column(
                         database,
@@ -56,22 +55,24 @@ class ReviewJobInitializationFailureDatabaseTest {
                 .containsExactly("true:2");
     }
 
-    private static int record(
-            NamedParameterJdbcTemplate jdbc, String statement, UUID id, int attempt, @Nullable UUID leaseId) {
-        var parameters = new HashMap<String, @Nullable Object>(
-                Map.of("id", id, "workspaceId", WORKSPACE, "attempt", attempt, "diagnosis", DIAGNOSIS));
-        parameters.put("leaseId", leaseId);
-        return jdbc.update(statement, parameters);
+    private static int record(NamedParameterJdbcTemplate jdbc, String statement, UUID id, int attempt, UUID runId) {
+        return jdbc.update(
+                statement,
+                Map.of("id", id, "workspaceId", WORKSPACE, "attempt", attempt, "runId", runId, "diagnosis", DIAGNOSIS));
     }
 
-    private static void insertFailedJob(TestDatabase database, UUID id, @Nullable String capture) {
-        PracticeMigrationFixture.execute(
-                database, """
+    /** A job that failed on attempt 1: its run ended after its claim numbered 2. */
+    private static void insertFailedJob(TestDatabase database, UUID id, UUID runId, @Nullable String capture) {
+        PracticeMigrationFixture.execute(database, """
+                INSERT INTO agent_run
+                    (id,workspace_id,kind,band,concurrency_key,state,attempt,lease_epoch,stop_reason,started_at,ended_at)
+                VALUES ('%s',%d,'REVIEW','BATCH','review:%s','ENDED',0,2,'COMPLETED',now(),now());
                 INSERT INTO review_job
                     (id,review_id,workspace_id,submitted_at,status,processing_status,trace_id,input,config_snapshot,
-                     attempt,lease_id,capture)
+                     run_id,capture)
                 VALUES ('%s','00000000-0000-0000-0000-000000978011',%d,now(),
-                        'FAILED','DONE','00000000000000000000000000000001','{}','{}',1,'00000000-0000-0000-0000-000000978201',%s)
-                """.formatted(id, WORKSPACE, capture == null ? "NULL" : "'" + capture + "'"));
+                        'FAILED','DONE','00000000000000000000000000000001','{}','{}','%s',%s)
+                """.formatted(
+                        runId, WORKSPACE, id, id, WORKSPACE, runId, capture == null ? "NULL" : "'" + capture + "'"));
     }
 }
