@@ -76,12 +76,26 @@ public class IntegrationMessageMeters {
         }
     }
 
-    void handled(Message message, boolean completed, long nanos) {
+    /** How the handling of one delivery ended. */
+    enum Outcome {
+        COMPLETED("completed"),
+        FAILED("failed"),
+        /** The handler outlived the handler timeout, and its event returned to the stream. */
+        TIMED_OUT("timed_out");
+
+        private final String tag;
+
+        Outcome(String tag) {
+            this.tag = tag;
+        }
+    }
+
+    void handled(Message message, Outcome outcome, long nanos) {
         try {
             Timer.builder(IntegrationCoreMetrics.INTEGRATION_MESSAGE_PROCESS_DURATION)
                     .description("How long the handling of one delivery took")
                     .tag("kind", IntegrationPoisonHandler.kindTag(message))
-                    .tag("outcome", completed ? "completed" : "failed")
+                    .tag("outcome", outcome.tag)
                     .serviceLevelObjectives(PROCESS_BOUNDS)
                     .register(registry)
                     .record(Duration.ofNanos(nanos));

@@ -85,6 +85,7 @@ class IngestDurabilityIntegrationTest {
                             .build());
             var properties = new NatsConsumerProperties(
                     Duration.ofMillis(100),
+                    NatsConsumerPropertiesFixture.SHIPPED_HANDLER_TIMEOUT,
                     Duration.ofMillis(20),
                     Duration.ZERO,
                     new NatsConsumerProperties.PoisonProperties(10, Duration.ofMillis(20), Duration.ofMillis(50)));
@@ -109,7 +110,8 @@ class IngestDurabilityIntegrationTest {
                     List.of(),
                     NatsTraceContexts.none(),
                     NatsTraceContexts.messageMeters(),
-                    DeliveryInboxes.passthrough());
+                    DeliveryInboxes.passthrough(),
+                    event -> {});
             ScopeConsumer consumer = new ScopeConsumer(
                     42L,
                     "ordered",

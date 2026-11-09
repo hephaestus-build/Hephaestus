@@ -68,7 +68,8 @@ class IntegrationMessageMetersTest extends BaseUnitTest {
         var message = mock(Message.class);
         when(message.getSubject()).thenThrow(new IllegalStateException("detached message"));
 
-        assertThatCode(() -> meters.handled(message, true, 1)).doesNotThrowAnyException();
+        assertThatCode(() -> meters.handled(message, IntegrationMessageMeters.Outcome.COMPLETED, 1))
+                .doesNotThrowAnyException();
     }
 
     @Test

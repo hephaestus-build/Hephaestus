@@ -21,6 +21,10 @@ public class IntegrationConsumerStats {
     private final AtomicReference<Boolean> installationActive = new AtomicReference<>(Boolean.FALSE);
     private final AtomicReference<Instant> lastDispatchAt = new AtomicReference<>();
     private final AtomicReference<Instant> lastNakAt = new AtomicReference<>();
+    private final AtomicReference<@Nullable BrokerVersion> brokerVersion = new AtomicReference<>();
+
+    /** The version that the connected broker reports, and whether it meets the server's minimum. */
+    public record BrokerVersion(String version, boolean supported) {}
 
     // Readers (called from the health probe; never blocking)
 
@@ -66,6 +70,15 @@ public class IntegrationConsumerStats {
     }
 
     // Writers (called by the consumer fleet's lifecycle + message loop)
+
+    /** {@link Optional#empty()} until a connection reported its broker's version. */
+    public Optional<BrokerVersion> brokerVersion() {
+        return Optional.ofNullable(brokerVersion.get());
+    }
+
+    public void setBrokerVersion(String version, boolean supported) {
+        brokerVersion.set(new BrokerVersion(version, supported));
+    }
 
     /** Update the cached connection-status label. Null tolerated (treated as uninitialised). */
     public void setNatsConnectionStatus(@Nullable String status) {

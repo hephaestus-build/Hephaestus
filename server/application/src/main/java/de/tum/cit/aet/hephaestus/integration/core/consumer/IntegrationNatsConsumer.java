@@ -23,6 +23,7 @@ import io.nats.client.api.AckPolicy;
 import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.DeliverPolicy;
 import io.nats.client.api.MessageInfo;
+import io.nats.client.api.ServerInfo;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;
@@ -40,19 +41,26 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.availability.AvailabilityChangeEvent;
+import org.springframework.boot.availability.LivenessState;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
@@ -114,6 +122,18 @@ public class IntegrationNatsConsumer {
      */
     static final Duration FENCE_PAUSE = Duration.ofMinutes(1);
 
+    /** The oldest broker that can pause a consumer, which a replay's fence needs. */
+    static final String MINIMUM_BROKER_VERSION = "2.11.0";
+
+    static final String BROKER_REQUIREMENT_DOCS =
+            "https://docs.hephaestus.build/admin/kubernetes#external-postgresql-and-nats";
+
+    /**
+     * How long a handler that outlived the handler timeout has to stop after its interrupt, at most the handler timeout
+     * itself.
+     */
+    static final Duration HANDLER_STOP_GRACE = Duration.ofSeconds(30);
+
     /** How long a fence waits for the message that another replica handles to be acknowledged. */
     static final Duration FENCE_WAIT = Duration.ofSeconds(30);
 
@@ -172,6 +192,7 @@ public class IntegrationNatsConsumer {
     private final NatsTraceContext traceContext;
     private final IntegrationMessageMeters messageMeters;
     private final DeliveryInbox inbox;
+    private final ApplicationEventPublisher events;
 
     public IntegrationNatsConsumer(
             NatsConnectionProperties connectionProperties,
@@ -184,7 +205,8 @@ public class IntegrationNatsConsumer {
             List<RouteAdmission> routeAdmissions,
             NatsTraceContext traceContext,
             IntegrationMessageMeters messageMeters,
-            DeliveryInbox inbox) {
+            DeliveryInbox inbox,
+            ApplicationEventPublisher events) {
         this.connectionProperties = connectionProperties;
         this.consumerProperties = consumerProperties;
         this.subscriptionProvider = subscriptionProvider;
@@ -196,6 +218,7 @@ public class IntegrationNatsConsumer {
         this.traceContext = traceContext;
         this.messageMeters = messageMeters;
         this.inbox = inbox;
+        this.events = events;
     }
 
     // Lifecycle
@@ -872,20 +895,105 @@ public class IntegrationNatsConsumer {
 
     // Message dispatch
 
-    /** ACK after the handler commits; liveness reporting must not repeat a completed handler. */
+    /**
+     * ACK after the handler commits; liveness reporting must not repeat a completed handler.
+     *
+     * <p>The handler runs on a thread of its own, and the scope waits for it at most
+     * {@link NatsConsumerProperties#handlerTimeout()}, so a hung handler cannot hold its scope's stream for good. A
+     * handler that takes longer gives its message up first, so nothing it does later settles the message, and its
+     * thread is interrupted. A handler that stops within the stop grace ({@link #HANDLER_STOP_GRACE}) leaves its message to the poison
+     * handling (ADR 0013). One that does not stop could keep writing beside the next event of its scope, so this
+     * replica reports its liveness as broken and keeps the message: Kubernetes restarts the Pod, the stuck thread dies
+     * with it, and the message returns to the stream once its ack wait passes.
+     */
     void handleMessage(@Nullable Long scopeId, Message msg) {
         messageMeters.received(msg);
-        traceContext.process(msg, () -> dispatchMessage(scopeId, msg));
-    }
-
-    private void dispatchMessage(@Nullable Long scopeId, Message msg) {
-        if (shuttingDown.get()) {
+        AtomicBoolean settled = new AtomicBoolean();
+        CountDownLatch stopped = new CountDownLatch(1);
+        @Nullable ScheduledFuture<?> holding = holdWhileHandling(msg);
+        boolean keepHolding = false;
+        long start = System.nanoTime();
+        Future<?> handling;
+        try {
+            handling = virtualThreadExecutor.submit(() -> {
+                try {
+                    traceContext.process(msg, () -> dispatchMessage(scopeId, msg, settled, start));
+                } finally {
+                    stopped.countDown();
+                }
+            });
+        } catch (RejectedExecutionException stopping) {
+            if (holding != null) holding.cancel(false);
             safeNak(msg);
             return;
         }
+        try {
+            handling.get(consumerProperties.handlerTimeout().toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException timedOut) {
+            if (settled.compareAndSet(false, true)) {
+                handling.cancel(true);
+                keepHolding = !awaitStop(stopped, stopGrace());
+                timedOut(scopeId, msg, System.nanoTime() - start, keepHolding);
+            }
+        } catch (InterruptedException stopping) {
+            // The consumer stops: the handler stops with it, and an unsettled message returns after its ack wait.
+            handling.cancel(true);
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException failure) {
+            // dispatchMessage lets only a fatal JVM error out; the consumer's loop stops on it.
+            if (failure.getCause() instanceof Error error) throw error;
+            throw new IllegalStateException("Handler dispatch failed", failure.getCause());
+        } finally {
+            // A handler that would not stop keeps its message until this process ends.
+            if (holding != null && !keepHolding) holding.cancel(false);
+        }
+    }
+
+    private Duration stopGrace() {
+        Duration timeout = consumerProperties.handlerTimeout();
+        return timeout.compareTo(HANDLER_STOP_GRACE) < 0 ? timeout : HANDLER_STOP_GRACE;
+    }
+
+    private static boolean awaitStop(CountDownLatch stopped, Duration grace) {
+        try {
+            return stopped.await(grace.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    /**
+     * Reports a handler that outlived the handler timeout. One that stopped hands its message to the poison handling
+     * as a failure; one that would not stop breaks this replica's liveness.
+     */
+    private void timedOut(@Nullable Long scopeId, Message msg, long nanos, boolean stillRunning) {
+        Duration timeout = consumerProperties.handlerTimeout();
+        var timedOut = log.atError()
+                .addKeyValue("event.name", "integration.message.timed_out")
+                .addKeyValue("integration.route", ConsumerSubjectMath.routeLabel(msg.getSubject()))
+                .addKeyValue("integration.delivery", IntegrationPoisonHandler.readDeliveredCount(msg))
+                .addKeyValue("integration.handler_timeout", timeout.toString())
+                .addKeyValue("integration.handler_stopped", !stillRunning);
+        if (scopeId != null) timedOut = timedOut.addKeyValue("integration.scope.id", scopeId);
+        messageMeters.handled(msg, IntegrationMessageMeters.Outcome.TIMED_OUT, nanos);
+        stats.recordNak(Instant.now());
+        if (stillRunning) {
+            timedOut.log(
+                    "Handler timed out and did not stop; this replica restarts and its event returns to the stream");
+            AvailabilityChangeEvent.publish(events, this, LivenessState.BROKEN);
+            return;
+        }
+        timedOut.log("Handler timed out; its event returns to the stream");
+        poisonHandler.handleFailure(scopeId, msg, new HandlerTimeoutException(timeout));
+    }
+
+    private void dispatchMessage(@Nullable Long scopeId, Message msg, AtomicBoolean settled, long start) {
+        if (shuttingDown.get()) {
+            if (settled.compareAndSet(false, true)) safeNak(msg);
+            return;
+        }
         String subject = msg.getSubject();
-        long start = System.nanoTime();
-        @Nullable ScheduledFuture<?> holding = holdWhileHandling(msg);
         try {
             IntegrationMessageHandler resolvedHandler = dispatch(scopeId, msg);
             if (scopeId != null && resolvedHandler != null) {
@@ -907,8 +1015,9 @@ public class IntegrationNatsConsumer {
                 }
             }
         } catch (Throwable e) {
-            if (holding != null) holding.cancel(false);
             if (e instanceof VirtualMachineError && !(e instanceof StackOverflowError)) throw e;
+            // A handler that timed out already gave its message up.
+            if (!settled.compareAndSet(false, true)) return;
             if (!shuttingDown.get()) {
                 // Exception messages can contain raw provider payloads. Log only the failure type.
                 long delivery = IntegrationPoisonHandler.readDeliveredCount(msg);
@@ -932,12 +1041,12 @@ public class IntegrationNatsConsumer {
                 failure.log("Handler failed");
             }
             stats.recordNak(Instant.now());
-            messageMeters.handled(msg, false, System.nanoTime() - start);
+            messageMeters.handled(msg, IntegrationMessageMeters.Outcome.FAILED, System.nanoTime() - start);
             poisonHandler.handleFailure(scopeId, msg, e);
             return;
         }
-        if (holding != null) holding.cancel(false);
-        messageMeters.handled(msg, true, System.nanoTime() - start);
+        if (!settled.compareAndSet(false, true)) return;
+        messageMeters.handled(msg, IntegrationMessageMeters.Outcome.COMPLETED, System.nanoTime() - start);
         try {
             msg.ack();
             stats.recordDispatch(Instant.now());
@@ -1167,6 +1276,7 @@ public class IntegrationNatsConsumer {
                 natsConnection = Nats.connect(options);
                 stats.setNatsConnectionStatus("CONNECTED");
                 log.info("Established NATS connection: server={}", connectionProperties.server());
+                observeBrokerVersion(natsConnection);
                 return;
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
@@ -1187,6 +1297,29 @@ public class IntegrationNatsConsumer {
                 sleepUninterruptibly(delay);
                 attempt++;
             }
+        }
+    }
+
+    /**
+     * Records the broker's version for the {@code natsBroker} health component, and logs once per connection when it is
+     * older than {@link #MINIMUM_BROKER_VERSION}. Live delivery works on an older broker; only replay needs the newer
+     * one, so the server still starts.
+     */
+    void observeBrokerVersion(@Nullable Connection connection) {
+        ServerInfo info = connection == null ? null : connection.getServerInfo();
+        if (info == null) return;
+        boolean supported = !info.isOlderThanVersion(MINIMUM_BROKER_VERSION);
+        stats.setBrokerVersion(info.getVersion(), supported);
+        if (!supported) {
+            log.atError()
+                    .addKeyValue("event.name", "integration.broker.unsupported")
+                    .addKeyValue("nats.version", info.getVersion())
+                    .addKeyValue("nats.minimum_version", MINIMUM_BROKER_VERSION)
+                    .log(
+                            "The NATS broker runs version {}, older than {}. Every webhook replay fails until it is upgraded: {}",
+                            info.getVersion(),
+                            MINIMUM_BROKER_VERSION,
+                            BROKER_REQUIREMENT_DOCS);
         }
     }
 
@@ -1223,6 +1356,7 @@ public class IntegrationNatsConsumer {
             try {
                 natsConnection = Nats.connect(buildOptions());
                 stats.setNatsConnectionStatus("CONNECTED");
+                observeBrokerVersion(natsConnection);
             } catch (IOException e) {
                 stats.setNatsConnectionStatus("DISCONNECTED");
                 throw new NatsConnectionException("Failed to establish NATS connection", e);

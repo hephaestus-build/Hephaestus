@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -49,6 +51,11 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.boot.availability.ApplicationAvailabilityBean;
+import org.springframework.boot.availability.AvailabilityChangeEvent;
+import org.springframework.boot.availability.LivenessState;
+import org.springframework.boot.health.application.LivenessStateHealthIndicator;
+import org.springframework.boot.health.contributor.Status;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -91,7 +98,8 @@ class IntegrationNatsConsumerTest {
                 List.of(),
                 NatsTraceContexts.none(),
                 NatsTraceContexts.messageMeters(),
-                DeliveryInboxes.passthrough());
+                DeliveryInboxes.passthrough(),
+                event -> {});
         try {
             consumer.stopConsumingScopeForPurge(7L);
             consumer.startConsumingScope(7L);
@@ -122,7 +130,8 @@ class IntegrationNatsConsumerTest {
                         List.of(),
                         NatsTraceContexts.none(),
                         NatsTraceContexts.messageMeters(),
-                        DeliveryInboxes.passthrough()) {
+                        DeliveryInboxes.passthrough(),
+                        event -> {}) {
                     @Override
                     void ensureNatsConnectionEstablished() {}
 
@@ -272,7 +281,8 @@ class IntegrationNatsConsumerTest {
                     List.of(admission),
                     NatsTraceContexts.none(),
                     new IntegrationMessageMeters(meters, Clock.systemUTC()),
-                    DeliveryInboxes.passthrough());
+                    DeliveryInboxes.passthrough(),
+                    event -> {});
         }
 
         @Test
@@ -367,7 +377,8 @@ class IntegrationNatsConsumerTest {
                     List.of(),
                     NatsTraceContexts.none(),
                     NatsTraceContexts.messageMeters(),
-                    DeliveryInboxes.passthrough());
+                    DeliveryInboxes.passthrough(),
+                    event -> {});
         }
 
         @Test
@@ -383,6 +394,106 @@ class IntegrationNatsConsumerTest {
             verify(handler).onMessage(message);
             verify(message).ack();
             verify(activityRecorder).recordEventProcessed(SCOPE_ID, IntegrationKind.GITHUB, "repository.issues");
+        }
+
+        @Test
+        void shouldGiveTheMessageToThePoisonHandlingAndNeverAckItWhenTheHandlerOutlivesItsTimeout() throws Exception {
+            IntegrationPoisonHandler poison = mock(IntegrationPoisonHandler.class);
+            var bounded = new IntegrationNatsConsumer(
+                    new NatsConnectionProperties(
+                            true,
+                            "nats://localhost:4222",
+                            "heph",
+                            new NatsConnectionProperties.Consumer(Duration.ofSeconds(60))),
+                    NatsConsumerPropertiesFixture.withHandlerTimeout(Duration.ofMillis(200)),
+                    scopeId -> Optional.empty(),
+                    dispatcher,
+                    poison,
+                    new IntegrationConsumerStats(),
+                    activityRecorder,
+                    List.of(),
+                    NatsTraceContexts.none(),
+                    NatsTraceContexts.messageMeters(),
+                    DeliveryInboxes.passthrough(),
+                    event -> {});
+            IntegrationMessageHandler handler = mock(IntegrationMessageHandler.class);
+            when(handler.key()).thenReturn(new EventTypeKey(IntegrationKind.GITHUB, "repository.issues"));
+            when(dispatcher.dispatch("github.acme.repo.issues")).thenReturn(Optional.of(handler));
+            CountDownLatch interrupted = new CountDownLatch(1);
+            doAnswer(call -> {
+                        try {
+                            new CountDownLatch(1).await();
+                        } catch (InterruptedException stopped) {
+                            interrupted.countDown();
+                        }
+                        return null;
+                    })
+                    .when(handler)
+                    .onMessage(message);
+
+            bounded.handleMessage(SCOPE_ID, message);
+
+            verify(poison).handleFailure(eq(SCOPE_ID), eq(message), any(HandlerTimeoutException.class));
+            assertThat(interrupted.await(5, TimeUnit.SECONDS)).isTrue();
+            // The interrupted handler then returns normally, but its message stays given up.
+            verify(message, after(500).never()).ack();
+            verify(message, never()).nak();
+        }
+
+        @Test
+        void shouldReportThisReplicaUnhealthyAndKeepTheMessageWhenATimedOutHandlerDoesNotStop() throws Exception {
+            IntegrationPoisonHandler poison = mock(IntegrationPoisonHandler.class);
+            var availability = new ApplicationAvailabilityBean();
+            var bounded = new IntegrationNatsConsumer(
+                    new NatsConnectionProperties(
+                            true,
+                            "nats://localhost:4222",
+                            "heph",
+                            new NatsConnectionProperties.Consumer(Duration.ofSeconds(60))),
+                    NatsConsumerPropertiesFixture.withHandlerTimeout(Duration.ofMillis(200)),
+                    scopeId -> Optional.empty(),
+                    dispatcher,
+                    poison,
+                    new IntegrationConsumerStats(),
+                    activityRecorder,
+                    List.of(),
+                    NatsTraceContexts.none(),
+                    NatsTraceContexts.messageMeters(),
+                    DeliveryInboxes.passthrough(),
+                    event -> availability.onApplicationEvent((AvailabilityChangeEvent<?>) event));
+            IntegrationMessageHandler handler = mock(IntegrationMessageHandler.class);
+            when(handler.key()).thenReturn(new EventTypeKey(IntegrationKind.GITHUB, "repository.issues"));
+            when(dispatcher.dispatch("github.acme.repo.issues")).thenReturn(Optional.of(handler));
+            CountDownLatch release = new CountDownLatch(1);
+            doAnswer(call -> {
+                        // A handler that swallows every interrupt, like a blocking call that ignores it.
+                        while (release.getCount() > 0) {
+                            try {
+                                release.await();
+                            } catch (InterruptedException ignored) {
+                                // keeps running
+                            }
+                        }
+                        return null;
+                    })
+                    .when(handler)
+                    .onMessage(message);
+            try {
+                bounded.handleMessage(SCOPE_ID, message);
+
+                assertThat(availability.getLivenessState()).isEqualTo(LivenessState.BROKEN);
+                assertThat(new LivenessStateHealthIndicator(availability)
+                                .health()
+                                .getStatus())
+                        .isEqualTo(Status.DOWN);
+                verify(poison, never()).handleFailure(any(), any(), any());
+                verify(message, never()).ack();
+                verify(message, never()).nak();
+            } finally {
+                release.countDown();
+            }
+            // The handler that finally returns still settles nothing: the restarted replica takes the event.
+            verify(message, after(500).never()).ack();
         }
 
         @Test
@@ -588,7 +699,8 @@ class IntegrationNatsConsumerTest {
                         List.of(),
                         NatsTraceContexts.none(),
                         NatsTraceContexts.messageMeters(),
-                        DeliveryInboxes.passthrough());
+                        DeliveryInboxes.passthrough(),
+                        event -> {});
                 this.failingStreams = new ConcurrentSkipListSet<>(failingStreams);
                 this.subscribedStreams = subscribedStreams;
             }

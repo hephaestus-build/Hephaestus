@@ -129,7 +129,11 @@ class ScopeConsumerReconcileIntegrationTest {
         afterNextSubscriptionRead.set(null);
         var defaults = NatsConsumerPropertiesFixture.defaults();
         fleet = connectedFleet(new NatsConsumerProperties(
-                Duration.ofMillis(100), defaults.reconnectDelay(), defaults.inactiveThreshold(), defaults.poison()));
+                Duration.ofMillis(100),
+                defaults.handlerTimeout(),
+                defaults.reconnectDelay(),
+                defaults.inactiveThreshold(),
+                defaults.poison()));
         var workspaces = mock(WorkspaceQueryService.class);
         when(workspaces.findActiveIds()).thenReturn(List.of(SCOPE_ID));
         var reconciliation = new WorkspaceConsumerReconciler(workspaces, fleet);
@@ -247,7 +251,8 @@ class ScopeConsumerReconcileIntegrationTest {
                         List.of(),
                         NatsTraceContexts.none(),
                         NatsTraceContexts.messageMeters(),
-                        DeliveryInboxes.passthrough()) {
+                        DeliveryInboxes.passthrough(),
+                        event -> {}) {
                     // A real durable whose second subscribe (the subject recycle) fails once.
                     @Override
                     ScopeConsumer createScopeConsumer(Long scopeId, StreamSubscription subscription)
@@ -315,7 +320,8 @@ class ScopeConsumerReconcileIntegrationTest {
                         List.of(),
                         NatsTraceContexts.none(),
                         NatsTraceContexts.messageMeters(),
-                        DeliveryInboxes.passthrough()) {
+                        DeliveryInboxes.passthrough(),
+                        event -> {}) {
                     // Real durables on both streams; the GitLab filter update fails once when armed.
                     @Override
                     ScopeConsumer createScopeConsumer(Long scopeId, StreamSubscription subscription)
@@ -400,7 +406,8 @@ class ScopeConsumerReconcileIntegrationTest {
                 List.of(),
                 NatsTraceContexts.none(),
                 NatsTraceContexts.messageMeters(),
-                DeliveryInboxes.passthrough());
+                DeliveryInboxes.passthrough(),
+                event -> {});
         consumer.onApplicationReady();
         return consumer;
     }

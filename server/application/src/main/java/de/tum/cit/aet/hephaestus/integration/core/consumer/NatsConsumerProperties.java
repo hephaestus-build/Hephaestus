@@ -28,6 +28,9 @@ import org.springframework.validation.annotation.Validated;
  * arrived while it was gone. {@link #INACTIVE_THRESHOLD_FLOOR} rejects a value short enough that an
  * ordinary restart trips it, which would make the setting the data loss it exists to prevent.
  *
+ * @param handlerTimeout Longest time that one provider event may take to handle. A handler that takes longer gives
+ *     its event back to the stream, as a failed delivery that is retried and, after the retries, stored for replay. The
+ *     default leaves room for the first fetch of a large repository (estimated).
  * @param inactiveThreshold How long JetStream keeps a durable consumer that no running process is bound to before it
  *     deletes it. Set 0s to disable deletion, otherwise use at least 1h. A recreated consumer skips the messages that
  *     arrived while it was gone.
@@ -37,6 +40,12 @@ import org.springframework.validation.annotation.Validated;
 public record NatsConsumerProperties(
         @DurationUnit(ChronoUnit.MINUTES) @DefaultValue("5m") @NotNull(message = "ack-wait must not be null")
         Duration ackWait,
+
+        @DurationUnit(ChronoUnit.MINUTES)
+        @DefaultValue("30m")
+        @NotNull(message = "handler-timeout must not be null")
+        @DurationMin(seconds = 1, message = "handler-timeout must be at least 1s")
+        Duration handlerTimeout,
 
         @DurationUnit(ChronoUnit.SECONDS) @DefaultValue("2s") @NotNull(message = "reconnect-delay must not be null")
         Duration reconnectDelay,

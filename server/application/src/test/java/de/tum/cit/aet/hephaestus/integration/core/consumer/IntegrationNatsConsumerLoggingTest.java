@@ -165,7 +165,8 @@ class IntegrationNatsConsumerLoggingTest {
                 List.of(),
                 NatsTraceContexts.none(),
                 NatsTraceContexts.messageMeters(),
-                DeliveryInboxes.passthrough());
+                DeliveryInboxes.passthrough(),
+                event -> {});
     }
 
     @Test

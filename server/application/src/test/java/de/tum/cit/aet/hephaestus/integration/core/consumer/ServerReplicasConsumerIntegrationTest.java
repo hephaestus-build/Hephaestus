@@ -40,7 +40,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Two server replicas against one real JetStream server, bound to the same durable consumers as two server Pods are.
  * A scope's events are handled one at a time and in stream order, whichever replica receives them, also when a handler
- * outlasts the ack wait. A replay runs only while no replica handles a live event of the scope.
+ * outlasts the ack wait. A replay runs only while no replica handles a live event of the scope. A handler that never
+ * ends gives its event back after the handler timeout.
  */
 @Tag("integration")
 class ServerReplicasConsumerIntegrationTest {
@@ -51,6 +52,8 @@ class ServerReplicasConsumerIntegrationTest {
     private static final String SUBJECT = "github.acme.replicas.issues";
     /** Shorter than the slow handler below, so the broker would redeliver its message without an in-progress ack. */
     private static final Duration ACK_WAIT = Duration.ofSeconds(1);
+    /** Longer than every handler these tests release, shorter than one they never release. */
+    private static final Duration HANDLER_TIMEOUT = Duration.ofSeconds(5);
 
     private final List<String> handled = new CopyOnWriteArrayList<>();
     private final Map<String, AtomicInteger> deliveries = new ConcurrentHashMap<>();
@@ -58,9 +61,11 @@ class ServerReplicasConsumerIntegrationTest {
     private final AtomicInteger mostRunning = new AtomicInteger();
     private final Map<String, CountDownLatch> holds = new ConcurrentHashMap<>();
     private final Map<String, CountDownLatch> entered = new ConcurrentHashMap<>();
+    private final List<String> interrupted = new CopyOnWriteArrayList<>();
 
     private Connection natsConnection;
     private JetStreamManagement jsm;
+    private final IntegrationConsumerStats firstStats = new IntegrationConsumerStats();
     private IntegrationNatsConsumer first;
     private IntegrationNatsConsumer second;
 
@@ -75,8 +80,8 @@ class ServerReplicasConsumerIntegrationTest {
                 .subjects(STREAM + ".>")
                 .storageType(StorageType.Memory)
                 .build());
-        first = replica();
-        second = replica();
+        first = replica(firstStats);
+        second = replica(new IntegrationConsumerStats());
         first.startConsumingScope(SCOPE_ID);
         second.startConsumingScope(SCOPE_ID);
         await().atMost(Duration.ofSeconds(10)).until(() -> attached(first) && attached(second));
@@ -143,11 +148,28 @@ class ServerReplicasConsumerIntegrationTest {
     }
 
     @Test
+    void shouldGiveUpAHungHandlerAndHandleItsEventAgainWhenTheTimeoutPasses() throws Exception {
+        publish("hung");
+        publish("after");
+
+        await().atMost(Duration.ofSeconds(30)).until(() -> handled.size() >= 2);
+        assertThat(handled).containsExactly("hung", "after");
+        assertThat(interrupted).containsExactly("hung");
+        assertThat(deliveries.get("hung")).hasValue(2);
+    }
+
+    @Test
+    void shouldRecordThatTheBrokerMeetsTheMinimumVersion() {
+        assertThat(firstStats.brokerVersion())
+                .hasValueSatisfying(broker -> assertThat(broker.supported()).isTrue());
+    }
+
+    @Test
     void shouldReplayAtOnceWhenTheConsumerDoesNotExist() {
         assertThat(first.exclusive(SCOPE_ID + 1, STREAM, () -> "replayed")).isEqualTo("replayed");
     }
 
-    private IntegrationNatsConsumer replica() {
+    private IntegrationNatsConsumer replica(IntegrationConsumerStats stats) {
         var defaults = NatsConsumerPropertiesFixture.defaults();
         IntegrationNatsConsumer replica = new IntegrationNatsConsumer(
                 new NatsConnectionProperties(
@@ -156,19 +178,24 @@ class ServerReplicasConsumerIntegrationTest {
                         DURABLE,
                         new NatsConnectionProperties.Consumer(Duration.ofSeconds(10))),
                 new NatsConsumerProperties(
-                        ACK_WAIT, defaults.reconnectDelay(), defaults.inactiveThreshold(), defaults.poison()),
+                        ACK_WAIT,
+                        HANDLER_TIMEOUT,
+                        defaults.reconnectDelay(),
+                        defaults.inactiveThreshold(),
+                        defaults.poison()),
                 scopeId -> Optional.of(new NatsSubscriptionInfo(
                         scopeId,
                         List.of(new StreamSubscription(
                                 STREAM, Set.of(ConsumerSubjectMath.repositoryFilter(STREAM, "acme/replicas")))))),
                 dispatcher(),
                 mock(IntegrationPoisonHandler.class),
-                new IntegrationConsumerStats(),
+                stats,
                 mock(ConnectionActivityRecorder.class),
                 List.of(),
                 NatsTraceContexts.none(),
                 NatsTraceContexts.messageMeters(),
-                DeliveryInboxes.passthrough());
+                DeliveryInboxes.passthrough(),
+                event -> {});
         replica.onApplicationReady();
         return replica;
     }
@@ -189,6 +216,15 @@ class ServerReplicasConsumerIntegrationTest {
                 mostRunning.accumulateAndGet(running.incrementAndGet(), Math::max);
                 try {
                     entered(event).countDown();
+                    if (event.equals("hung") && msg.metaData().deliveredCount() == 1) {
+                        // Never released: only the handler timeout ends it.
+                        try {
+                            new CountDownLatch(1).await();
+                        } catch (InterruptedException stopped) {
+                            interrupted.add(event);
+                            return;
+                        }
+                    }
                     CountDownLatch hold = holds.get(event);
                     if (hold != null) awaitUninterruptibly(hold);
                     handled.add(event);
