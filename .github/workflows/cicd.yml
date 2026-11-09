@@ -543,6 +543,7 @@ jobs:
               - 'deploy/platform/**'
               - 'scripts/kubernetes-cluster.ts'
               - 'scripts/sandbox-isolation.ts'
+              - 'scripts/sandbox-prepull-drill.ts'
               - 'scripts/crd-schemas.ts'
               - 'scripts/prepare-kubernetes-runner.ts'
               - 'scripts/lib/runner-disk.ts'
