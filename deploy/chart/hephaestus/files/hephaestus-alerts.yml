@@ -444,6 +444,14 @@ groups:
         annotations:
           summary: The run reaper keeps failing to take back an expired run, so its work waits
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - alert: HephaestusAgentSandboxReaperFailing
+        expr: sum(increase(agent_sandbox_reaper_failure_total{job="hephaestus"}[10m])) >= 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: The sandbox reaper keeps failing to delete sandboxes that no work needs, so they hold cluster capacity
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusReviewFeedbackUnconfirmed
         expr: sum(increase(agent_job_composition_stopped_total{job="hephaestus",outcome="unrecorded"}[1h])) > 0
         labels:

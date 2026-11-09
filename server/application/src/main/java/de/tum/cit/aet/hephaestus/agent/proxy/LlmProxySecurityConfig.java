@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.RateLimitResponse;
@@ -25,6 +26,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -71,6 +73,10 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration
 @ConditionalOnWorkerRole
 class LlmProxySecurityConfig {
+
+    /** The routes of a sandbox's own token: its pull, and later its run's context, lease and proposals. */
+    private static final RequestMatcher AGENT_ROUTES =
+            PathPatternRequestMatcher.withDefaults().matcher("/internal/agent/**");
 
     /** A refused caller asks again this often; each attempt costs one request of its rate limit. */
     private static final long BODY_BUDGET_RETRY_SECONDS = 5;
@@ -195,6 +201,42 @@ class LlmProxySecurityConfig {
         return http.build();
     }
 
+    /**
+     * The agent routes of a sandbox on the gateway connector, authenticated by its sandbox token and rate-limited per
+     * source address before the token is read. Its paths and the first chain's are disjoint, so the two share the
+     * first place; both precede the chain that hides the rest of the connector.
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE)
+    SecurityFilterChain agentGatewayFilterChain(
+            HttpSecurity http,
+            SandboxGatewayProperties gatewayProperties,
+            SandboxGatewayConnector gateway,
+            AttemptTokenVerifier jwtVerifier,
+            ObjectProvider<AgentSandboxes> sandboxes,
+            ProxyAccounting accounting,
+            ObjectMapper objectMapper)
+            throws Exception {
+        var sourceLimit =
+                new AuthRateLimitProperties.Limit(gatewayProperties.sourceRequestsPerMinute(), Duration.ofMinutes(1));
+        var authentication = new SandboxTokenAuthenticationFilter(jwtVerifier, sandboxes.getIfAvailable(), accounting);
+        http.securityMatcher(new AndRequestMatcher(onGatewayConnector(gateway), AGENT_ROUTES))
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(errors -> errors.authenticationEntryPoint(
+                                (request, response, exception) -> response.setStatus(HttpStatus.NOT_FOUND.value()))
+                        .accessDeniedHandler((request, response, exception) -> {
+                            accounting.gatewayRefused(SandboxGatewayRefusal.FORBIDDEN);
+                            response.setStatus(HttpStatus.FORBIDDEN.value());
+                        }))
+                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                .addFilterBefore(authentication, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(
+                        new SandboxGatewaySourceLimitFilter(sourceLimit, objectMapper, accounting),
+                        SandboxTokenAuthenticationFilter.class);
+        return http.build();
+    }
+
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE + 1)
     SecurityFilterChain hideNonGatewayCapabilities(
@@ -209,7 +251,11 @@ class LlmProxySecurityConfig {
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE + 3)
     SecurityFilterChain blockLlmProxyOnOtherConnectors(HttpSecurity http) throws Exception {
-        return hidden(http, PathPatternRequestMatcher.withDefaults().matcher("/internal/llm/**"), request -> {});
+        return hidden(
+                http,
+                new OrRequestMatcher(
+                        PathPatternRequestMatcher.withDefaults().matcher("/internal/llm/**"), AGENT_ROUTES),
+                request -> {});
     }
 
     /** Admits an authenticated sandbox caller of one kind. */

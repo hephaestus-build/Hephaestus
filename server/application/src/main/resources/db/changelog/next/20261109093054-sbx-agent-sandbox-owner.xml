@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794216654000-1" author="hephaestus">
+        <comment>The single owner of each agent sandbox: one row for each live sandbox of a subject, and the SandboxClaim it names.</comment>
+        <sql>
+CREATE TABLE agent_sandbox (
+    id uuid NOT NULL,
+    workspace_id bigint NOT NULL,
+    subject_key varchar(96) NOT NULL,
+    kind varchar(16) NOT NULL,
+    claim_name varchar(63) NOT NULL,
+    state varchar(12) DEFAULT 'REQUESTED' NOT NULL,
+    created_at timestamp(6) with time zone DEFAULT now() NOT NULL,
+    last_used_at timestamp(6) with time zone DEFAULT now() NOT NULL,
+    shutdown_at timestamp(6) with time zone NOT NULL,
+    CONSTRAINT agent_sandbox_pkey PRIMARY KEY (id),
+    CONSTRAINT uk_agent_sandbox_workspace UNIQUE (id, workspace_id),
+    CONSTRAINT uk_agent_sandbox_claim UNIQUE (claim_name),
+    CONSTRAINT sfk_agent_sandbox_workspace FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE RESTRICT,
+    CONSTRAINT ck_agent_sandbox_kind CHECK (kind IN ('REVIEW', 'CONVERSATION', 'ACTION')),
+    CONSTRAINT ck_agent_sandbox_state CHECK (state IN ('REQUESTED', 'READY', 'DELETING')),
+    CONSTRAINT ck_agent_sandbox_subject CHECK (length(subject_key) &gt; 0),
+    CONSTRAINT ck_agent_sandbox_claim_name CHECK (claim_name ~ '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'),
+    CONSTRAINT ck_agent_sandbox_times CHECK (last_used_at &gt;= created_at AND shutdown_at &gt; created_at)
+);
+CREATE UNIQUE INDEX uq_agent_sandbox_live_subject ON agent_sandbox (workspace_id, subject_key)
+    WHERE state IN ('REQUESTED', 'READY');
+CREATE INDEX idx_agent_sandbox_state ON agent_sandbox (state, last_used_at);
+        </sql>
+        <rollback>DROP TABLE agent_sandbox;</rollback>
+    </changeSet>
+    <changeSet id="1794216654000-2" author="hephaestus">
+        <comment>The database refuses every sandbox transition that AgentSandboxState refuses, and every change of a sandbox's identity.</comment>
+        <sql splitStatements="false">
+CREATE FUNCTION guard_agent_sandbox() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF ROW(NEW.id, NEW.workspace_id, NEW.subject_key, NEW.kind, NEW.claim_name, NEW.created_at, NEW.shutdown_at)
+    IS DISTINCT FROM ROW(OLD.id, OLD.workspace_id, OLD.subject_key, OLD.kind, OLD.claim_name, OLD.created_at, OLD.shutdown_at) THEN
+  RAISE EXCEPTION 'a sandbox''s identity is immutable' USING ERRCODE = '55000';
+ END IF;
+ IF OLD.state = 'DELETING' AND NEW.state &lt;&gt; 'DELETING' THEN
+  RAISE EXCEPTION 'a sandbox that is being deleted is never live again' USING ERRCODE = '55000';
+ END IF;
+ IF OLD.state = 'READY' AND NEW.state = 'REQUESTED' THEN
+  RAISE EXCEPTION 'a ready sandbox is never requested again' USING ERRCODE = '23514';
+ END IF;
+ IF NEW.last_used_at &lt; OLD.last_used_at THEN
+  RAISE EXCEPTION 'a sandbox''s last use never goes back' USING ERRCODE = '23514';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER agent_sandbox_transition BEFORE UPDATE ON agent_sandbox FOR EACH ROW EXECUTE FUNCTION guard_agent_sandbox();
+        </sql>
+        <rollback>DROP TRIGGER agent_sandbox_transition ON agent_sandbox; DROP FUNCTION guard_agent_sandbox();</rollback>
+    </changeSet>
+</databaseChangeLog>

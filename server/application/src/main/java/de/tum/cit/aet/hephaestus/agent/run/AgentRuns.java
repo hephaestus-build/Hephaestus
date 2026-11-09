@@ -110,6 +110,22 @@ public class AgentRuns {
                 .map(AgentRuns::lease);
     }
 
+    /**
+     * Leases the next run of these kinds of one subject, for the sandbox that serves only that subject, or none. The
+     * claim order and the rule of one leased run for each subject are the same as for {@link #claim}.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<AgentRunLease> claimSubject(long workspaceId, String concurrencyKey, Set<AgentRunKind> kinds) {
+        if (kinds.isEmpty()) return Optional.empty();
+        return runs.claimSubject(
+                        workspaceId,
+                        concurrencyKey,
+                        kinds.stream().map(Enum::name).toList(),
+                        capacity.leaseTtl().toSeconds(),
+                        capacity.bandAging().toSeconds())
+                .map(AgentRuns::lease);
+    }
+
     /** Extends the lease; empty when the holder no longer holds it, after which it must not write. */
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Instant> renew(AgentRunFence fence) {

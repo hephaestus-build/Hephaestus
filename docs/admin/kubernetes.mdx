@@ -1472,6 +1472,7 @@ The worker's service account has these permissions in the sandbox namespace, and
 - Jobs: `get`, `list`, `watch`, `create`, and `delete`. Each review attempt and each tools Pod is a Job.
 - Events: `get` and `list`. A review Pod that the sandbox quota refuses waits for room: the Job controller reports the refusal as an event.
 - ResourceQuotas: `list` and `watch`. The quota tells how many reviews fit and whether a review can ever fit.
+- SandboxClaims (`extensions.agents.x-k8s.io`): `list`, `create`, and `delete`. A subject's sandbox is a claim, and the agent-sandbox controller creates its Pod from the kind's template. The worker deletes each claim that no work needs.
 
 A practice review attempt runs as one Job.
 The Job ends at the attempt's upload deadline plus two minutes, also when its worker is gone.

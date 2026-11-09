@@ -218,7 +218,13 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         lenient()
                 .when(runs.capacity())
                 .thenReturn(new AgentCapacityProperties(
-                        Duration.ofMinutes(5), Duration.ofSeconds(25), 5, Duration.ofMinutes(10)));
+                        Duration.ofMinutes(5),
+                        Duration.ofSeconds(25),
+                        5,
+                        Duration.ofMinutes(10),
+                        Duration.ofMinutes(2),
+                        Duration.ofMinutes(1),
+                        Duration.ofMinutes(15)));
         lenient().when(reviewStart.start(anyLong(), any())).thenReturn(true);
         lenient().when(reviewStart.compose(anyLong(), any())).thenReturn(true);
         var transactions = mock(TransactionTemplate.class);

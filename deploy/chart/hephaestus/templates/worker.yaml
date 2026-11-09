@@ -148,6 +148,11 @@ rules:
   - apiGroups: [""]
     resources: ["resourcequotas"]
     verbs: ["list", "watch"]
+  # A subject's sandbox is an agent-sandbox claim. The worker creates and deletes claims and lists its own; the
+  # controller creates the sandbox and its Pod from the kind's template.
+  - apiGroups: ["extensions.agents.x-k8s.io"]
+    resources: ["sandboxclaims"]
+    verbs: ["list", "create", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -439,6 +444,14 @@ spec:
             # The review-ledger worker identity stays per process: no HEPHAESTUS_WORKER_ID here.
             - name: HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE
               value: {{ $sandboxes | quote }}
+            # A sandbox claim names its kind's warm pool (sandbox-templates.yaml) and the gateway Service, whose
+            # address the worker resolves for the sandbox: a sandbox has no DNS.
+            {{- range $kind := list "review" "conversation" "action" }}
+            - name: {{ printf "HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_%s" (upper $kind) }}
+              value: {{ include "hephaestus.name" (dict "root" $ "component" (printf "sandbox-%s" $kind)) | quote }}
+            {{- end }}
+            - name: HEPHAESTUS_AGENT_SANDBOX_GATEWAY_URL
+              value: {{ printf "http://%s.%s.svc:%v" (include "hephaestus.name" (dict "root" . "component" "sandbox-gateway")) .Release.Namespace $port | quote }}
             - name: HEPHAESTUS_SANDBOX_KUBERNETES_POD_NAME
               valueFrom:
                 fieldRef:

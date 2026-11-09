@@ -27,6 +27,18 @@ erDiagram
         TIMESTAMPTZ ended_at
     }
 
+    AgentSandbox {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(96) subject_key "NOT NULL"
+        VARCHAR(16) kind "NOT NULL"
+        VARCHAR(63) claim_name UK "NOT NULL"
+        VARCHAR(12) state "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ last_used_at "NOT NULL"
+        TIMESTAMPTZ shutdown_at "NOT NULL"
+    }
+
     AttemptPublicKey {
         VARCHAR(36) kid PK
         TIMESTAMPTZ not_after "NOT NULL"
@@ -394,6 +406,7 @@ erDiagram
 
     %% One-to-Many relationships
     Workspace ||--o{ AgentRun : has
+    Workspace ||--o{ AgentSandbox : has
     Account ||--o{ InstanceLlmSetting : has
     LlmCallPool ||--o{ LlmCallPermit : has
     LlmConnection ||--o{ LlmModel : has

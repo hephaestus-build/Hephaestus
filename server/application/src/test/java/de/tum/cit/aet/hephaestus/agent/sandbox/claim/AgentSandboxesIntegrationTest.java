@@ -1,0 +1,397 @@
+package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
+import de.tum.cit.aet.hephaestus.agent.attempt.SandboxJwt;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
+
+@DisplayName("Agent sandboxes over PostgreSQL Integration")
+class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private AgentSandboxRepository repository;
+
+    @Autowired
+    private AgentRuns runs;
+
+    @Autowired
+    private WorkspaceRepository workspaces;
+
+    @Autowired
+    private TransactionTemplate transactions;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    private final FakeClaims claims = new FakeClaims();
+    private final AttemptSigningKey key = AttemptSigningKey.generate();
+    private final AttemptTokenVerifier verifier =
+            new AttemptTokenVerifier(AttemptKeyFixtures.keyring(key), new SimpleMeterRegistry());
+    private AgentSandboxes sandboxes;
+    private long workspace;
+
+    @BeforeEach
+    void setUp() {
+        sandboxes = new AgentSandboxes(
+                repository,
+                runs,
+                claims,
+                new AttemptTokenIssuer(AttemptKeyFixtures.keyring(key)),
+                transactions,
+                "http://hephaestus-sandbox-gateway.hephaestus.svc:8081",
+                host -> "10.43.0.12");
+        workspace = workspaces
+                .save(TestEntities.activeWorkspace("sandboxes-" + UUID.randomUUID()))
+                .getId();
+    }
+
+    /** Each limit of the capacity home at its floor of one second, except the idle limit of a conversation. */
+    private AgentSandboxReaper reaper(Duration conversationIdle) {
+        return new AgentSandboxReaper(
+                repository,
+                sandboxes,
+                claims,
+                new AgentCapacityProperties(
+                        Duration.ofMinutes(5),
+                        Duration.ofSeconds(25),
+                        5,
+                        Duration.ofMinutes(10),
+                        Duration.ofSeconds(1),
+                        Duration.ofSeconds(1),
+                        conversationIdle),
+                transactions,
+                new SimpleMeterRegistry());
+    }
+
+    private AgentSandboxes.LiveSandbox ensure(String subject, AgentSandboxKind kind) {
+        return sandboxes.ensure(workspace, subject, kind, Instant.now().plus(Duration.ofHours(1)));
+    }
+
+    private SandboxJwt token(AgentSandboxes.LiveSandbox sandbox) {
+        String token = Objects.requireNonNull(claims.created.get(claimName(sandbox)))
+                .env()
+                .get(AgentSandboxes.TOKEN_ENV);
+        return verifier.verifySandbox(Objects.requireNonNull(token));
+    }
+
+    private String claimName(AgentSandboxes.LiveSandbox sandbox) {
+        return "agent-" + sandbox.id();
+    }
+
+    private void queueRun(String subject) {
+        transactions.executeWithoutResult(
+                status -> runs.enqueue(workspace, AgentRunKind.REVIEW, AgentRunBand.BATCH, subject, null));
+    }
+
+    private static void waitPast(Duration limit) {
+        try {
+            Thread.sleep(limit.plusMillis(200).toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @Test
+    void shouldRequestOneSandboxWithItsClaimForASubjectAndAnswerItAgainUntilItIsTakenBack() {
+        var first = ensure("review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
+        var again = sandboxes.ensure(
+                workspace,
+                first.subjectKey(),
+                AgentSandboxKind.REVIEW,
+                Instant.now().plus(Duration.ofHours(2)));
+
+        assertThat(again).isEqualTo(first);
+        assertThat(claims.creates).containsExactly(claimName(first));
+        var claim = Objects.requireNonNull(claims.created.get(claimName(first)));
+        assertThat(claim.kind()).isEqualTo(AgentSandboxKind.REVIEW);
+        assertThat(claim.sandboxId()).isEqualTo(first.id());
+        assertThat(claim.env())
+                .containsEntry(AgentSandboxes.GATEWAY_ENV, "http://10.43.0.12:8081")
+                .containsKey(AgentSandboxes.TOKEN_ENV);
+        var token = token(first);
+        assertThat(token.sandboxId()).isEqualTo(first.id());
+        assertThat(token.workspaceId()).isEqualTo(workspace);
+        assertThat(token.subjectKey()).isEqualTo(first.subjectKey());
+    }
+
+    @Test
+    void shouldRequestOneSandboxWhenTwoReplicasAskForTheSameSubjectAtOnce() throws Exception {
+        String subject = "review:" + UUID.randomUUID();
+        try (var pool = Executors.newFixedThreadPool(4)) {
+            var asked = new ArrayList<Future<AgentSandboxes.LiveSandbox>>();
+            for (int i = 0; i < 4; i++) asked.add(pool.submit(() -> ensure(subject, AgentSandboxKind.REVIEW)));
+            var answered = new ArrayList<AgentSandboxes.LiveSandbox>();
+            for (var future : asked) answered.add(future.get());
+            assertThat(answered)
+                    .map(AgentSandboxes.LiveSandbox::id)
+                    .containsOnly(answered.getFirst().id());
+        }
+        assertThat(claims.creates).hasSize(1);
+    }
+
+    @Test
+    void shouldAcceptALiveSandboxsTokenAndMakeItReadyOnItsFirstCall() {
+        var sandbox = ensure("conversation:" + UUID.randomUUID(), AgentSandboxKind.CONVERSATION);
+
+        assertThat(sandboxes.authenticate(token(sandbox))).contains(sandbox);
+        assertThat(state(sandbox)).isEqualTo("READY");
+    }
+
+    @Test
+    void shouldRefuseTheTokenOfASandboxThatWasTakenBackAndRequestANewOne() {
+        var sandbox = ensure("conversation:" + UUID.randomUUID(), AgentSandboxKind.CONVERSATION);
+        var token = token(sandbox);
+
+        sandboxes.release(workspace, sandbox.subjectKey());
+
+        assertThat(sandboxes.authenticate(token)).isEmpty();
+        assertThat(claims.created).doesNotContainKey(claimName(sandbox));
+        assertThat(repository.findById(sandbox.id())).isEmpty();
+        var next = ensure(sandbox.subjectKey(), AgentSandboxKind.CONVERSATION);
+        assertThat(next.id()).isNotEqualTo(sandbox.id());
+    }
+
+    @Test
+    void shouldRefuseATokenThatNamesAnotherSubjectOrWorkspaceThanItsSandbox() {
+        var sandbox = ensure("review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
+        var token = token(sandbox);
+
+        assertThat(sandboxes.authenticate(new SandboxJwt(
+                        token.sandboxId(), token.workspaceId(), "review:other", token.jti(), token.expiresAt())))
+                .isEmpty();
+        assertThat(sandboxes.authenticate(new SandboxJwt(
+                        token.sandboxId(),
+                        token.workspaceId() + 1,
+                        token.subjectKey(),
+                        token.jti(),
+                        token.expiresAt())))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldNotCountACallThatLeasesNothingAsUseSoAPollingSandboxStillGoesIdle() {
+        var sandbox = ensure("review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
+        var token = token(sandbox);
+        assertThat(sandboxes.authenticate(token)).contains(sandbox);
+        waitPast(Duration.ofSeconds(1));
+        // A poll of the gateway after the idle limit: the sandbox answers, but it leased nothing.
+        assertThat(sandboxes.authenticate(token)).contains(sandbox);
+        assertThat(sandboxes.lease(sandbox)).isEmpty();
+
+        reaper(Duration.ofHours(1)).reap();
+
+        assertThat(repository.findById(sandbox.id())).isEmpty();
+    }
+
+    @Test
+    void shouldLeaseNoRunOfAKindThatNoSandboxDrivesYet() {
+        String subject = "review:" + UUID.randomUUID();
+        queueRun(subject);
+        var sandbox = ensure(subject, AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(sandbox));
+
+        assertThat(sandboxes.lease(sandbox)).isEmpty();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_run WHERE concurrency_key = ? AND state = 'QUEUED'",
+                        Integer.class,
+                        subject))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldLeaveANewerSandboxOfTheSubjectAloneWhenAnOlderOnesClaimFails() {
+        String subject = "review:" + UUID.randomUUID();
+        var older = ensure(subject, AgentSandboxKind.REVIEW);
+        // The reaper took the older sandbox back while its claim was being created, and another replica requested a
+        // newer one.
+        transactions.executeWithoutResult(status -> repository.release(workspace, subject));
+        var newer = ensure(subject, AgentSandboxKind.REVIEW);
+
+        transactions.executeWithoutResult(status -> repository.releaseSandbox(older.id(), workspace));
+
+        assertThat(state(newer)).isEqualTo("REQUESTED");
+    }
+
+    @Test
+    void shouldNotRequestASandboxThatOutlivesTheKeyThatSignsItsToken() {
+        assertThatThrownBy(() -> sandboxes.ensure(
+                        workspace,
+                        "review:" + UUID.randomUUID(),
+                        AgentSandboxKind.REVIEW,
+                        Instant.now().plus(Duration.ofDays(1))))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void shouldTakeBackItsRowWhenTheClaimCannotBeCreated() {
+        claims.failCreates = true;
+        String subject = "review:" + UUID.randomUUID();
+
+        assertThatThrownBy(() -> ensure(subject, AgentSandboxKind.REVIEW)).isInstanceOf(IllegalStateException.class);
+
+        assertThat(repository.findLive(workspace, subject)).isEmpty();
+    }
+
+    @Test
+    void shouldKeepASandboxWhoseSubjectHasAQueuedRunAndTakeItBackAfterItsIdleLimitWithoutOne() {
+        String needed = "review:" + UUID.randomUUID();
+        String done = "review:" + UUID.randomUUID();
+        queueRun(needed);
+        var kept = ensure(needed, AgentSandboxKind.REVIEW);
+        var idle = ensure(done, AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(kept));
+        sandboxes.authenticate(token(idle));
+        waitPast(Duration.ofSeconds(1));
+
+        reaper(Duration.ofHours(1)).reap();
+
+        assertThat(repository.findById(kept.id())).isPresent();
+        assertThat(claims.created).containsKey(claimName(kept)).doesNotContainKey(claimName(idle));
+        assertThat(repository.findById(idle.id())).isEmpty();
+    }
+
+    @Test
+    void shouldKeepAConversationsSandboxWarmUntilItsOwnIdleLimit() {
+        var conversation = ensure("conversation:" + UUID.randomUUID(), AgentSandboxKind.CONVERSATION);
+        sandboxes.authenticate(token(conversation));
+        waitPast(Duration.ofSeconds(1));
+
+        reaper(Duration.ofHours(1)).reap();
+        assertThat(repository.findById(conversation.id())).isPresent();
+
+        reaper(Duration.ofSeconds(1)).reap();
+        assertThat(repository.findById(conversation.id())).isEmpty();
+    }
+
+    @Test
+    void shouldTakeBackASandboxThatNeverCalledTheGatewayWithinTheStartLimitEvenWhileItsSubjectNeedsIt() {
+        String subject = "review:" + UUID.randomUUID();
+        queueRun(subject);
+        var silent = ensure(subject, AgentSandboxKind.REVIEW);
+        waitPast(Duration.ofSeconds(1));
+
+        reaper(Duration.ofHours(1)).reap();
+
+        assertThat(repository.findById(silent.id())).isEmpty();
+        assertThat(claims.created).doesNotContainKey(claimName(silent));
+    }
+
+    @Test
+    void shouldTakeBackASandboxAtItsShutdownWhileItsSubjectStillNeedsIt() {
+        String subject = "review:" + UUID.randomUUID();
+        queueRun(subject);
+        // A token's expiry is a whole second, so the shutdown is far enough ahead that the token still verifies now.
+        var sandbox = sandboxes.ensure(
+                workspace, subject, AgentSandboxKind.REVIEW, Instant.now().plus(Duration.ofSeconds(3)));
+        var token = token(sandbox);
+        sandboxes.authenticate(token);
+        waitPast(Duration.ofSeconds(3));
+
+        assertThat(sandboxes.authenticate(token)).isEmpty();
+        reaper(Duration.ofHours(1)).reap();
+        assertThat(repository.findById(sandbox.id())).isEmpty();
+    }
+
+    @Test
+    void shouldTryAClaimDeleteAgainOnTheNextTickWhenTheApiRefusedIt() {
+        var sandbox = ensure("review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(sandbox));
+        waitPast(Duration.ofSeconds(1));
+        claims.failDeletes = true;
+
+        reaper(Duration.ofHours(1)).reap();
+        assertThat(state(sandbox)).isEqualTo("DELETING");
+        assertThat(sandboxes.authenticate(token(sandbox)))
+                .as("its token stops at once")
+                .isEmpty();
+
+        claims.failDeletes = false;
+        reaper(Duration.ofHours(1)).reap();
+        assertThat(repository.findById(sandbox.id())).isEmpty();
+        assertThat(claims.created).doesNotContainKey(claimName(sandbox));
+    }
+
+    @Test
+    void shouldDeleteAClaimThatNoRowNamesAsAfterItsWorkspaceWasPurged() {
+        var sandbox = ensure("review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
+        queueRun(sandbox.subjectKey());
+
+        transactions.executeWithoutResult(status -> repository.deleteAllByWorkspaceId(workspace));
+        reaper(Duration.ofHours(1)).reap();
+
+        assertThat(claims.created).doesNotContainKey(claimName(sandbox));
+    }
+
+    @Test
+    void shouldRefuseToMakeASandboxThatIsBeingDeletedLiveAgain() {
+        var sandbox = ensure("review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
+        transactions.executeWithoutResult(status -> repository.release(workspace, sandbox.subjectKey()));
+
+        assertThatThrownBy(() -> jdbc.update("UPDATE agent_sandbox SET state = 'READY' WHERE id = ?", sandbox.id()))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("never live again");
+    }
+
+    private String state(AgentSandboxes.LiveSandbox sandbox) {
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT state FROM agent_sandbox WHERE id = ?", String.class, sandbox.id()));
+    }
+
+    /** The claims of one sandbox namespace, in memory. */
+    private static final class FakeClaims implements SandboxClaims {
+        final Map<String, Claim> created = new ConcurrentHashMap<>();
+        final List<String> creates = new CopyOnWriteArrayList<>();
+        volatile boolean failCreates;
+        volatile boolean failDeletes;
+
+        @Override
+        public void create(Claim claim) {
+            if (failCreates) throw new IllegalStateException("the API refused the claim");
+            creates.add(claim.name());
+            created.put(claim.name(), claim);
+        }
+
+        @Override
+        public void delete(String name) {
+            if (failDeletes) throw new IllegalStateException("the API refused the delete");
+            created.remove(name);
+        }
+
+        @Override
+        public List<String> names() {
+            return List.copyOf(Set.copyOf(created.keySet()));
+        }
+    }
+}

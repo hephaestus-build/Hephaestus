@@ -64,3 +64,41 @@ a queued job needs a queued run, a running job a leased run, and an ended job an
 A claim that a budget holds runs nothing, so it takes no attempt: the claim rolls back, and the queued run waits until the budget hold ends.
 A composition that resumes after its run ended continues on a new run (`AgentRuns.continueAfter`).
 The new run goes on with the epochs of the ended one and spends one more attempt, so the retry limit bounds how often a composition resumes.
+
+## Sandboxes
+
+A subject's sandbox is one agent-sandbox `Sandbox`, and its row in `agent_sandbox` is the single owner of its `SandboxClaim` (ADR 0079 § Subject and sandbox).
+`AgentSandboxes` in `agent.sandbox.claim` writes the rows, and `KubernetesSandboxClaims` writes the claims. The claim is the only agent-sandbox object that the server writes. The controller owns the `Sandbox` and its Pod.
+
+| State | Meaning | Next states |
+| --- | --- | --- |
+| `REQUESTED` | The row exists, and its claim exists or is being created. The sandbox has not called the gateway yet. | `READY`, `DELETING` |
+| `READY` | The sandbox called the gateway. Each run that it leases moves `last_used_at`. | `DELETING` |
+| `DELETING` | The claim is being deleted. The sandbox's token no longer works. | none: the row is deleted with its claim |
+
+The trigger `guard_agent_sandbox` refuses every other transition, and every change of a sandbox's identity.
+A subject has at most one live sandbox (`REQUESTED` or `READY`). The partial unique index `uq_agent_sandbox_live_subject` enforces this.
+
+`AgentSandboxes.ensure` commits the row before it creates the claim, outside any transaction. Thus a claim never exists without its row.
+The claim names the zero-replica warm pool of its kind, and it carries two variables:
+
+- `HEPHAESTUS_SANDBOX_TOKEN`: the sandbox token. It names the sandbox, its workspace and its subject, and it expires at the sandbox's shutdown time.
+- `HEPHAESTUS_GATEWAY_URL`: the gateway address. The server resolves the gateway Service to its address, because a sandbox has no DNS.
+
+The gateway accepts a sandbox token only on `/internal/agent/**` on the gateway port. It checks the signature, and then it checks that the token's sandbox is live before its shutdown, so a token stops at once when its sandbox is taken back.
+The first call makes the sandbox `READY`. A later call that leases no run is no use of the sandbox, so a sandbox that only polls still goes idle.
+A sandbox token expires at the sandbox's shutdown time, which is at most the life of the key that signs it.
+
+`POST /internal/agent/next` leases the subject's next run to the sandbox with `AgentRuns.claimSubject`: the same rule and order as a claim, within one subject. It holds the sandbox's row in the same transaction, so the reaper cannot take the sandbox back between the check and the lease.
+It offers only the run kinds that the sandbox's kind drives (`AgentSandboxKind.runs`). Review jobs are still claimed by the worker's executor, so no kind drives one yet, and `next` answers `204`.
+
+### Sandbox reaper
+
+`AgentSandboxReaper` runs where the sandbox namespace's Kubernetes client is, every `hephaestus.agent.capacity.lease-renewal`, without a leader. One statement on the database clock takes back a live sandbox when one of these is true:
+
+- Its shutdown time passed.
+- It did not call the gateway within `hephaestus.agent.capacity.sandbox-start` (2 minutes) of its request.
+- Its subject has no queued or leased run, and it leased no run for `hephaestus.agent.capacity.sandbox-idle` (1 minute). For a conversation, the limit is `conversation-sandbox-idle` (15 minutes).
+
+Then the reaper deletes the claims of the `DELETING` rows, and the rows after them. A claim that the API refuses stays for the next pass.
+Last, the reaper deletes each claim with the label `hephaestus.build/sandbox-id` that no row names, as after a workspace purge. Claims without the label, such as the isolation gate's, are not the server's.

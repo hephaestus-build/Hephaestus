@@ -845,6 +845,36 @@ tests:
         alertname: HephaestusAgentRunReaperFailing
         exp_alerts: []
 
+  - name: a sandbox reaper that keeps failing fires, a short failure does not
+    interval: 1m
+    input_series:
+      - series: 'agent_sandbox_reaper_failure_total{job="hephaestus",instance="worker:9090"}'
+        values: "0+2x40"
+      - series: 'agent_sandbox_reaper_failure_total{job="hephaestus",instance="worker-b:9090"}'
+        values: "0 4 4x38"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: HephaestusAgentSandboxReaperFailing
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: HephaestusAgentSandboxReaperFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The sandbox reaper keeps failing to delete sandboxes that no work needs, so they hold cluster capacity
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a short sandbox reaper failure does not fire
+    interval: 1m
+    input_series:
+      - series: 'agent_sandbox_reaper_failure_total{job="hephaestus",instance="worker:9090"}'
+        values: "0 6 6x38"
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: HephaestusAgentSandboxReaperFailing
+        exp_alerts: []
+
   - name: a job that waits more than an hour fires, a shorter wait does not
     interval: 1m
     input_series:

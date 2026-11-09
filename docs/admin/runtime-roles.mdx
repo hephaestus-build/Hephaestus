@@ -869,7 +869,7 @@ A higher review capacity there has no effect until you also raise the sandbox li
 
 1. Raise the sandbox limit only with sufficient RAM, as [Sizing](./sizing) describes.
 
-Each worker signs the attempt tokens of its sandboxes with a key that it generates at start and keeps in memory.
+Each worker signs the attempt tokens and sandbox tokens of its sandboxes with a key that it generates at start and keeps in memory.
 It stores the public key in the table `attempt_public_key`, so any worker can verify those tokens.
 The key needs no configuration.
 
@@ -882,6 +882,10 @@ The runtime reads the `HEPHAESTUS_SANDBOX_KUBERNETES_*` variables of the [config
 The [Helm chart](./kubernetes#worker) sets each of them, including the worker Pod metadata from the Downward API.
 Missing metadata prevents worker startup.
 The [host development launcher](/contributor/local-development#kubernetes) supplies these values for the shared dev cluster.
+
+A subject's sandbox is an agent-sandbox claim from the warm pool of its kind (`HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_*`).
+The claim passes the address of the gateway Service (`HEPHAESTUS_AGENT_SANDBOX_GATEWAY_URL`), which the worker resolves, to the sandbox.
+Each worker deletes the claims that no work needs, without a leader ([Agent runs](/contributor/agent-runs#sandbox-reaper)).
 
 Every worker beats in `worker_registry`, also with `AGENT_ENABLED=false`.
 The other workers keep a worker's conversation host and tools Pods while it beats.

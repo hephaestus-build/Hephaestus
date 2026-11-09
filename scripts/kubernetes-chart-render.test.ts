@@ -1280,6 +1280,27 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 	assert.equal(envValue(worker, "SPRING_PROFILES_ACTIVE"), "prod,worker");
 	assert.equal(envValue(worker, "HEPHAESTUS_SANDBOX_RUNTIME"), undefined);
 	assert.equal(envValue(worker, "HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE"), sandboxes);
+	// A claim names its kind's warm pool, and passes the gateway Service's address, which the worker resolves.
+	for (const kind of ["review", "conversation", "action"]) {
+		const pool = envValue(worker, `HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_${kind.toUpperCase()}`);
+		assert.ok(
+			resources.some(
+				(resource) =>
+					kindOf(resource) === "SandboxWarmPool" &&
+					nameOf(resource) === pool &&
+					get(resource, "metadata", "namespace") === sandboxes,
+			),
+			`the ${kind} warm pool that the worker names exists in the sandbox namespace`,
+		);
+	}
+	const gatewayService = resources.find(
+		(resource) => kindOf(resource) === "Service" && nameOf(resource).endsWith("-sandbox-gateway"),
+	);
+	assert.ok(gatewayService, "the gateway Service");
+	assert.equal(
+		envValue(worker, "HEPHAESTUS_AGENT_SANDBOX_GATEWAY_URL"),
+		`http://${nameOf(gatewayService)}.hephaestus.svc:${String(get(gatewayService, "spec", "ports", 0, "port"))}`,
+	);
 	for (const [variable, field] of [
 		["POD_NAME", "metadata.name"],
 		["POD_IP", "status.podIP"],
@@ -1444,6 +1465,10 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 				...["get", "list"].map((verb) => `/events:${verb}`),
 				// How many reviews fit, watched as Pods and Jobs are, so a claim poll reads a cache.
 				...["list", "watch"].map((verb) => `/resourcequotas:${verb}`),
+				// A subject's sandbox: its claim, never the Sandbox or its Pod, which the controller owns.
+				...["create", "delete", "list"].map(
+					(verb) => `extensions.agents.x-k8s.io/sandboxclaims:${verb}`,
+				),
 			],
 		],
 	]);

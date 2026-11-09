@@ -94,6 +94,31 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldLeaseOnlyTheNamedSubjectsOldestRunToItsSandboxAndNoSecondWhileOneIsLeased() {
+        AgentRunRef first = enqueue(workspace, AgentRunBand.BATCH, "review:sandboxed");
+        AgentRunRef second = enqueue(workspace, AgentRunBand.BATCH, "review:sandboxed");
+        AgentRunRef elsewhere = enqueue(other, AgentRunBand.INTERACTIVE, "review:sandboxed");
+        AgentRunRef sibling = enqueue(workspace, AgentRunBand.INTERACTIVE, "review:sibling");
+
+        assertThat(claimSubject(workspace, "review:sandboxed"))
+                .map(AgentRunLease::runId)
+                .contains(first.id());
+        assertThat(claimSubject(workspace, "review:sandboxed"))
+                .as("one leased run of a subject at a time")
+                .isEmpty();
+        assertThat(claimSubject(other, "review:sandboxed"))
+                .map(AgentRunLease::runId)
+                .contains(elsewhere.id());
+        assertThat(claimSubject(workspace, "review:sibling"))
+                .map(AgentRunLease::runId)
+                .contains(sibling.id());
+        assertThat(repository.findById(second.id())).map(AgentRun::getState).contains(AgentRunState.QUEUED);
+        Optional<AgentRunLease> none = Objects.requireNonNull(
+                transactions.execute(status -> runs.claimSubject(workspace, "review:sibling", Set.<AgentRunKind>of())));
+        assertThat(none).as("a sandbox leases only the kinds it drives").isEmpty();
+    }
+
+    @Test
     void shouldNeverAgeQueuedWorkAheadOfAnInteractiveRun() {
         AgentRunRef backfill = enqueue(workspace, AgentRunBand.BACKGROUND, "review:old-backfill");
         jdbc.update("UPDATE agent_run SET available_at = now() - interval '1 day' WHERE id = ?", backfill.id());
@@ -403,6 +428,11 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     private Optional<AgentRunLease> claim() {
         return Objects.requireNonNull(
                 transactions.execute(status -> runs.claim(Set.of(AgentRunKind.REVIEW), List.of())));
+    }
+
+    private Optional<AgentRunLease> claimSubject(long workspaceId, String subject) {
+        return Objects.requireNonNull(
+                transactions.execute(status -> runs.claimSubject(workspaceId, subject, Set.of(AgentRunKind.REVIEW))));
     }
 
     private AgentRunRef enqueue(long workspaceId, AgentRunBand band, String subject) {

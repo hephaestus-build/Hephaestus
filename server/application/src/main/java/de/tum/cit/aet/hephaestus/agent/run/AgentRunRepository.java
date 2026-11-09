@@ -86,6 +86,17 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             @Param("ttlSeconds") long ttlSeconds,
             @Param("agingSeconds") long agingSeconds);
 
+    /** The claim of one subject, for the sandbox that serves only it: the same rule and order, within one subject. */
+    @Query(value = "WITH picked AS (SELECT r.id " + CLAIMABLE + """
+                AND r.workspace_id = :workspaceId AND r.concurrency_key = :concurrencyKey AND r.kind IN (:kinds)
+            """ + CLAIM_ORDER + ")" + LEASE, nativeQuery = true)
+    Optional<LeaseRow> claimSubject(
+            @Param("workspaceId") long workspaceId,
+            @Param("concurrencyKey") String concurrencyKey,
+            @Param("kinds") Collection<String> kinds,
+            @Param("ttlSeconds") long ttlSeconds,
+            @Param("agingSeconds") long agingSeconds);
+
     @Query(value = """
             UPDATE agent_run SET leased_until = clock_timestamp() + make_interval(secs => :ttlSeconds)
              WHERE id = :runId AND workspace_id = :workspaceId AND lease_epoch = :epoch AND state = 'LEASED'

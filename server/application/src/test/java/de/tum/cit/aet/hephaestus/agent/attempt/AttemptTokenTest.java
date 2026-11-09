@@ -345,4 +345,56 @@ class AttemptTokenTest extends BaseUnitTest {
                 .isInstanceOf(AttemptTokenInvalidException.class)
                 .hasMessageContaining("missing kid");
     }
+
+    @Test
+    void shouldIssueASandboxTokenThatNamesItsSandboxWorkspaceAndSubjectAndEndsWithTheSandbox() {
+        UUID sandbox = UUID.randomUUID();
+        Instant shutdown = Instant.now().plusSeconds(600).truncatedTo(ChronoUnit.SECONDS);
+
+        SandboxJwt jwt = verifier.verifySandbox(issuer.issueForSandbox(sandbox, 42L, "review:7", shutdown));
+
+        assertThat(jwt.sandboxId()).isEqualTo(sandbox);
+        assertThat(jwt.workspaceId()).isEqualTo(42L);
+        assertThat(jwt.subjectKey()).isEqualTo("review:7");
+        assertThat(jwt.expiresAt()).isEqualTo(shutdown);
+    }
+
+    @Test
+    void shouldNotTakeAnAttemptTokenForASandboxTokenNorTheOtherWayRound() {
+        Instant work = Instant.now().plusSeconds(300);
+        String attempt = issuer.issueForReview(UUID.randomUUID(), 42L, 0, LEASE, work, work.plusSeconds(600));
+        String sandbox = issuer.issueForSandbox(UUID.randomUUID(), 42L, "review:7", work);
+
+        assertThatThrownBy(() -> verifier.verifySandbox(attempt))
+                .isInstanceOf(AttemptTokenInvalidException.class)
+                .hasMessageContaining("token type");
+        assertThatThrownBy(() -> verifier.verify(sandbox))
+                .isInstanceOf(AttemptTokenInvalidException.class)
+                .hasMessageContaining("token type");
+    }
+
+    @Test
+    void shouldRefuseASandboxTokenWhoseSubjectWasChangedAfterSigning() {
+        String token = issuer.issueForSandbox(
+                UUID.randomUUID(), 42L, "review:7", Instant.now().plusSeconds(300));
+        String[] parts = token.split("\\.", -1);
+        var decoder = Base64.getUrlDecoder();
+        String payload = new String(decoder.decode(parts[1]), StandardCharsets.UTF_8).replace("review:7", "review:8");
+        String forged = parts[0] + "."
+                + Base64.getUrlEncoder().withoutPadding().encodeToString(payload.getBytes(StandardCharsets.UTF_8))
+                + "." + parts[2];
+
+        assertThatThrownBy(() -> verifier.verifySandbox(forged))
+                .isInstanceOf(AttemptTokenInvalidException.class)
+                .hasMessageContaining("verify failed");
+    }
+
+    @Test
+    void shouldNotIssueASandboxTokenThatEndsBeforeItStartsOrNamesNoSubject() {
+        assertThatThrownBy(() -> issuer.issueForSandbox(UUID.randomUUID(), 42L, "review:7", Instant.now()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> issuer.issueForSandbox(
+                        UUID.randomUUID(), 42L, " ", Instant.now().plusSeconds(60)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

@@ -41,7 +41,47 @@ public class AttemptTokenVerifier {
         }
     }
 
+    /**
+     * Checks a sandbox token: the credential of one sandbox for its subject, which the gateway then checks against the
+     * sandbox's live row. An attempt token is no sandbox token, nor the other way round.
+     */
+    public SandboxJwt verifySandbox(String token) {
+        try {
+            DecodedJWT verified = verifySigned(token, AttemptTokenIssuer.SANDBOX_TOKEN_TYPE);
+            if (verified.getSubject() != null)
+                throw new AttemptTokenInvalidException("sandbox token contains sub claim", "claim");
+            UUID sandboxId = uuidClaim(verified, AttemptTokenIssuer.SANDBOX_CLAIM);
+            Long workspaceId = longClaim(verified, "workspace_id");
+            String subjectKey =
+                    verified.getClaim(AttemptTokenIssuer.SUBJECT_CLAIM).asString();
+            if (sandboxId == null || workspaceId == null || subjectKey == null || subjectKey.isBlank())
+                throw new AttemptTokenInvalidException("missing or invalid sandbox binding claim", "claim");
+            SandboxJwt jwt = new SandboxJwt(
+                    sandboxId, workspaceId, subjectKey, verified.getId(), verified.getExpiresAtAsInstant());
+            meterRegistry
+                    .counter(AgentMetrics.ATTEMPT_TOKEN_VERIFY, "outcome", "success")
+                    .increment();
+            return jwt;
+        } catch (AttemptTokenInvalidException e) {
+            meterRegistry
+                    .counter(AgentMetrics.ATTEMPT_TOKEN_VERIFY, "outcome", "failed", "reason", e.getReasonTag())
+                    .increment();
+            throw e;
+        }
+    }
+
     private AttemptJwt verifyInternal(String token) {
+        DecodedJWT verified = verifySigned(token, AttemptTokenIssuer.ATTEMPT_TOKEN_TYPE);
+        return attemptJwt(
+                verified,
+                verified.getSubject(),
+                verified.getId(),
+                verified.getIssuedAtAsInstant(),
+                verified.getExpiresAtAsInstant());
+    }
+
+    /** The signature, the algorithm, the key, the type and the registered claims that every token of this keyring has. */
+    private DecodedJWT verifySigned(@Nullable String token, String type) {
         if (token == null || token.isBlank()) {
             throw new AttemptTokenInvalidException("token missing", "missing");
         }
@@ -71,7 +111,7 @@ public class AttemptTokenVerifier {
             throw new AttemptTokenInvalidException(
                     "verify failed: " + e.getClass().getSimpleName(), "sig", e);
         }
-        if (!AttemptTokenIssuer.ATTEMPT_TOKEN_TYPE.equals(verified.getType())) {
+        if (!type.equals(verified.getType())) {
             throw new AttemptTokenInvalidException("token type not allowed", "typ");
         }
         String jti = verified.getId();
@@ -86,7 +126,7 @@ public class AttemptTokenVerifier {
         if (issuedAt == null) {
             throw new AttemptTokenInvalidException("missing iat claim", "claim");
         }
-        return attemptJwt(verified, verified.getSubject(), jti, issuedAt, expiresAt);
+        return verified;
     }
 
     private static AttemptJwt attemptJwt(
