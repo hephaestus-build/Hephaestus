@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -5,7 +6,12 @@ import path from "node:path";
 
 import { parse, parseAllDocuments } from "yaml";
 
-import { resolvePlatformDigest, type Subject } from "./lib/image-scan.ts";
+import {
+	isImageIndex,
+	manifestDigest,
+	resolvePlatformDigest,
+	type Subject,
+} from "./lib/image-scan.ts";
 import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
 import { output, run } from "./lib/process.ts";
 import { PLATFORMS } from "./scan-upstream-images.ts";
@@ -63,6 +69,77 @@ export function platformPins(source: string) {
 		reference: `${repository}:${pin.version.replace("+", "-")}`,
 	});
 	return { version: pin.version, installerSha256: pin.checksum, subjects };
+}
+
+/** The agent-sandbox release that k3s-agent-sandbox.yaml carries, and its controller image. */
+export function agentSandboxPin(source: string) {
+	const pin = /^# pin: agent-sandbox (?<version>v\d+\.\d+\.\d+) (?<checksum>[a-f0-9]{64})$/mu.exec(
+		source,
+	)?.groups;
+	if (pin?.version === undefined || pin.checksum === undefined) {
+		throw new Error("The platform must pin agent-sandbox and its release manifest checksum");
+	}
+	const [reference, ...others] = renderedSubjects(source);
+	if (reference === undefined || others.length > 0) {
+		throw new Error("The agent-sandbox manifest must run exactly one image");
+	}
+	const repository = reference.split("@")[0] ?? "";
+	const subject: Subject = { image: "agent-sandbox-controller", repository, reference };
+	return { version: pin.version, manifestSha256: pin.checksum, subject };
+}
+
+/**
+ * The manifest without the changes that k3s-agent-sandbox.yaml makes to the controller's Deployment
+ * (docs/contributor/release-management.mdx § Platform pins lists them). Anything else must be upstream's.
+ */
+export function withoutPlatformChanges(source: string): unknown[] {
+	return parseAllDocuments(source).map((document) => {
+		if (document.errors.length > 0) {
+			throw new Error("Invalid agent-sandbox YAML");
+		}
+		const resource = document.toJS() as unknown;
+		if (!isRecord(resource) || resource.kind !== "Deployment") {
+			return resource;
+		}
+		const pod = asRecord(
+			asRecord(asRecord(resource.spec, "spec").template, "template").spec,
+			"pod",
+		);
+		delete pod.priorityClassName;
+		delete pod.securityContext;
+		for (const container of asArray(pod.containers, "containers")) {
+			const entry = asRecord(container, "container");
+			delete entry.resources;
+			delete entry.securityContext;
+			entry.image = asString(entry.image, "image").replace(/@sha256:[a-f0-9]{64}$/u, "");
+		}
+		return resource;
+	});
+}
+
+/** The release manifest matches its pin, and the platform's copy differs from it only as stated. */
+export function verifyAgentSandbox(upstream: Uint8Array, source: string): void {
+	const { manifestSha256 } = agentSandboxPin(source);
+	if (createHash("sha256").update(upstream).digest("hex") !== manifestSha256) {
+		throw new Error("The pinned agent-sandbox manifest checksum does not match its release");
+	}
+	// assert's own message names the first field that differs.
+	assert.deepEqual(
+		withoutPlatformChanges(source),
+		withoutPlatformChanges(Buffer.from(upstream).toString("utf8")),
+	);
+}
+
+/** The pinned digest is the multi-platform index that the release tag names, not one platform's manifest. */
+export function verifyIndexDigest(raw: unknown, resolved: string, pinned: string): void {
+	if (!isImageIndex(raw)) {
+		throw new Error("The agent-sandbox release tag names no multi-platform image index");
+	}
+	if (resolved !== pinned) {
+		throw new Error(
+			"The pinned agent-sandbox controller digest is not the index of its release tag",
+		);
+	}
 }
 
 export function verifyInstaller(installer: Uint8Array, expected: string): void {
@@ -174,7 +251,25 @@ export function renderedSubjects(source: string): string[] {
 }
 
 /** Network proof used only for platform-pin pull requests and scheduled rescans. */
-export async function checkPlatformPins(source: string): Promise<void> {
+export async function checkPlatformPins(source: string, agentSandbox: string): Promise<void> {
+	const { version, subject: controller } = agentSandboxPin(agentSandbox);
+	const tagged = `${controller.repository}:${version}`;
+	const signal = AbortSignal.timeout(120_000);
+	verifyIndexDigest(
+		parseJson(
+			await output("docker", ["buildx", "imagetools", "inspect", tagged, "--raw"], { signal }),
+		),
+		await manifestDigest(tagged, signal),
+		controller.reference.split("@")[1] ?? "",
+	);
+	verifyAgentSandbox(
+		Buffer.from(
+			await releaseText(
+				`https://github.com/kubernetes-sigs/agent-sandbox/releases/download/${encodeURIComponent(version)}/sandbox-with-extensions.yaml`,
+			),
+		),
+		agentSandbox,
+	);
 	const pins = platformPins(source);
 	verifyInstaller(
 		Buffer.from(
@@ -234,7 +329,8 @@ if (import.meta.main) {
 		throw new Error("Usage: scan-platform-images.ts [--check-pins]");
 	}
 	const source = await readFile("deploy/platform/k3s-platform.yaml", "utf8");
-	await checkPlatformPins(source);
+	const agentSandbox = await readFile("deploy/platform/k3s-agent-sandbox.yaml", "utf8");
+	await checkPlatformPins(source, agentSandbox);
 	if (mode === "--check-pins") {
 		process.exit(0);
 	}
@@ -245,7 +341,7 @@ if (import.meta.main) {
 		),
 	);
 	// Scan the complete upstream list, including add-ons the host can disable, so a config change cannot silently remove coverage.
-	const subjects = [...pins.subjects, ...bundled];
+	const subjects = [...pins.subjects, agentSandboxPin(agentSandbox).subject, ...bundled];
 	// One SARIF upload has at most 20 runs. Each architecture has its own upload, plus dependencies on amd64.
 	if (subjects.length >= 20) {
 		throw new Error("The platform inventory exceeds one SARIF upload per architecture");

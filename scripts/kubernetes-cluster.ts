@@ -2,8 +2,9 @@
  * Installs the chart on a disposable cluster and checks that it runs: the CI cluster jobs and
  * `vp run dev:kubernetes` both use it, so that a developer runs what CI runs.
  *
- *   prepare  namespaces, Secrets, certificates and the operator's values for the images in a file;
- *            a second run keeps every value. --gateway routes the release through k3s's Traefik
+ *   prepare  the agent-sandbox controller of the platform manifest, namespaces, Secrets, certificates
+ *            and the operator's values for the images in a file; a second run keeps every value.
+ *            --gateway routes the release through k3s's Traefik
  *   gateway  Traefik's Gateway provider and the Gateway `cluster`, on a k3d cluster that publishes 443
  *   install  `helm upgrade --install` with the dev profile, or each --profile in order, and the
  *            prepared values, until ready
@@ -57,6 +58,7 @@ import { parseResolvedImages } from "./resolve-release-images.ts";
 
 const ROOT = path.join(import.meta.dirname, "..");
 const CHART = path.join(ROOT, "deploy", "chart", "hephaestus");
+const AGENT_SANDBOX = path.join(ROOT, "deploy", "platform", "k3s-agent-sandbox.yaml");
 
 export const RELEASE = "heph";
 export const NAMESPACE = "hephaestus";
@@ -440,6 +442,31 @@ async function gatewayApi(work: string): Promise<void> {
 	await kubectl(["apply", "--server-side", "-f", file]);
 }
 
+/**
+ * The agent-sandbox controller of the platform manifest, as the one-host installer gives k3s, and its
+ * resource definitions ready. A second run applies the same file again.
+ */
+async function agentSandbox(): Promise<void> {
+	await kubectl(["apply", "--server-side", "-f", AGENT_SANDBOX]);
+	await kubectl([
+		"wait",
+		"--for=condition=Established",
+		"crd/sandboxes.agents.x-k8s.io",
+		"crd/sandboxtemplates.extensions.agents.x-k8s.io",
+		"crd/sandboxclaims.extensions.agents.x-k8s.io",
+		"crd/sandboxwarmpools.extensions.agents.x-k8s.io",
+		"--timeout=2m",
+	]);
+	await kubectl([
+		"-n",
+		"agent-sandbox-system",
+		"rollout",
+		"status",
+		"deployment/agent-sandbox-controller",
+		"--timeout=5m",
+	]);
+}
+
 /** An operator's PostgreSQL in a namespace of its own, from the release image, with TLS. */
 async function externalPostgresql(
 	image: string,
@@ -579,6 +606,7 @@ export async function prepare(options: PrepareOptions): Promise<{ rotated: boole
 	if (options.gateway === undefined) {
 		await gatewayApi(options.work);
 	}
+	await agentSandbox();
 	await namespace(NAMESPACE);
 	await namespace(SANDBOXES);
 	await namespace(GATEWAY_NAMESPACE, {});

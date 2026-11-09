@@ -903,6 +903,7 @@ The bundle holds these files:
 | `hephaestus-keys.sh` | Creates or completes the release Secret. The installer runs it. [Create the Secret](#create-the-secret) uses it on another cluster. |
 | `k3s-wait-condition.sh` | Waits until a cert-manager resource reports a condition as true, also while the resource has no status yet. The installer runs it. |
 | `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. |
+| `k3s-agent-sandbox.yaml` | The agent-sandbox controller and its resource definitions, with its pin. It goes to the k3s manifests directory. |
 | `k3s-certificates.yaml` | The `Let's Encrypt` issuer, the Gateway certificate, and the PostgreSQL CA and server certificate. The installer writes your host name and address into it. |
 | `k3s-config.yaml` | The k3s configuration: the kubelet configuration file, and no bundled Traefik. |
 | `k3s-kubelet.yaml` | A limit of 4096 processes for each Pod, and the shutdown grace period. Also the memory and CPU reserved for k3s and the host, and the eviction thresholds. |
@@ -917,9 +918,16 @@ The bundle holds these files:
 
 The `pin: k3s` line of `k3s-platform.yaml` sets the k3s release, and its two `HelmChart` objects set the versions of Traefik and cert-manager.
 The file pins each chart by version and each image by digest.
+
 The Gateway API resource definitions come from the `gateway-api-crd` chart that k3s includes, so no second owner installs them.
 k3s deploys each file in `/var/lib/rancher/k3s/server/manifests/`, and it applies a file again every 15 seconds until the apply succeeds.
 Thus, cert-manager and the Gateway start some minutes after k3s.
+
+`k3s-agent-sandbox.yaml` contains the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller, with its extensions.
+The controller creates sandbox Pods from `SandboxTemplate` and `SandboxClaim` objects.
+It runs in the namespace `agent-sandbox-system`, at the priority `system-cluster-critical`, as Traefik and cert-manager do.
+Its `pin: agent-sandbox` line sets the release, and the file pins the controller image by digest.
+The installer waits until the controller is ready.
 
 The installer does not run the application itself as a k3s `HelmChart`.
 The k3s Helm controller does not wait for the migration Job, and it does not roll back a failed upgrade.
@@ -1173,6 +1181,8 @@ After applying an updated server certificate, restart PostgreSQL as [TLS certifi
 
    Keep deployment automation paused until this run finishes.
    It updates the k3s pin and platform files and reapplies the installed release.
+   k3s applies a changed `k3s-agent-sandbox.yaml`, which upgrades the agent-sandbox controller and its resource definitions.
+   The installer waits until k3s has applied the file and the new controller is ready.
    Automatic rollback in that installer can return only to the same release.
    Do not run it while recovering a failed migration.
 

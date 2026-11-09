@@ -210,7 +210,7 @@ if [ "$VERIFY" = false ]; then
 fi
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-for file in hephaestus-keys.sh k3s-wait-condition.sh k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
+for file in hephaestus-keys.sh k3s-wait-condition.sh k3s-platform.yaml k3s-agent-sandbox.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
 	[ -f "$HERE/$file" ] || die "$file is not beside this script: download, verify and unpack the k3s bundle of the release first"
 done
 # Existing values can enable wildcard routing. Require an explicit certificate choice on reruns
@@ -537,6 +537,7 @@ sudo cmp -s "$HERE/k3s-kubelet.yaml" /etc/rancher/k3s/kubelet.yaml || K3S_CONFIG
 sudo install -D -m 0600 "$HERE/k3s-config.yaml" /etc/rancher/k3s/config.yaml
 sudo install -D -m 0600 "$HERE/k3s-kubelet.yaml" /etc/rancher/k3s/kubelet.yaml
 sudo install -D -m 0600 "$HERE/k3s-platform.yaml" "$MANIFESTS/k3s-platform.yaml"
+sudo install -D -m 0600 "$HERE/k3s-agent-sandbox.yaml" "$MANIFESTS/k3s-agent-sandbox.yaml"
 render_certificates >"$TEMP/certificates.yaml"
 sudo install -D -m 0600 "$TEMP/certificates.yaml" "$MANIFESTS/hephaestus-certificates.yaml"
 
@@ -581,6 +582,23 @@ keys=$(sh "$HERE/hephaestus-keys.sh" --namespace "$NAMESPACE" --secret "$SECRET"
 printf '%s\n' "$keys" | sed 's/^/    /'
 oauth_changed=false
 if printf '%s\n' "$keys" | grep -qx 'Changed GITHUB_OAUTH_CLIENT_SECRET'; then oauth_changed=true; fi
+
+say "Waiting for the agent-sandbox controller"
+# k3s records a manifest's SHA-256 on its Addon once it has applied that content, so a rerun with a
+# new pin waits for the new controller and definitions, not for the ones that run already.
+sandbox_sum=$(sha256sum "$HERE/k3s-agent-sandbox.yaml" | cut -d' ' -f1)
+tries=0
+until [ "$(kubectl -n kube-system get addon k3s-agent-sandbox -o jsonpath='{.spec.checksum}' 2>/dev/null || true)" = "$sandbox_sum" ]; do
+	tries=$((tries + 1))
+	[ "$tries" -lt 300 ] || die "k3s did not apply k3s-agent-sandbox.yaml in 10 minutes: kubectl -n kube-system describe addon k3s-agent-sandbox shows why"
+	sleep 2
+done
+for crd in sandboxes.agents.x-k8s.io sandboxtemplates.extensions.agents.x-k8s.io \
+	sandboxclaims.extensions.agents.x-k8s.io sandboxwarmpools.extensions.agents.x-k8s.io; do
+	sh "$HERE/k3s-wait-condition.sh" - "crd/$crd" Established 120
+done
+kubectl -n agent-sandbox-system rollout status deployment/agent-sandbox-controller --timeout=5m >/dev/null ||
+	die "the agent-sandbox controller did not start in 5 minutes: kubectl -n agent-sandbox-system describe pods shows why"
 
 say "Waiting for cert-manager to issue the certificates"
 kubectl wait --for=create crd/certificates.cert-manager.io --timeout=10m >/dev/null

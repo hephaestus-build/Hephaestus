@@ -6,10 +6,12 @@
 # chart owns them, so no other owner installs them. k3s-config.yaml turns off the Traefik that k3s
 # bundles, so that this file pins Traefik as it pins cert-manager.
 #
-# Every version of the platform is set in this file and nowhere else:
+# Every version of the platform is set in this file and in k3s-agent-sandbox.yaml, and nowhere else:
 #   - The pin line below: the k3s release and the SHA-256 of its install script. k3s-install.sh
 #     reads it. That k3s release also sets the Gateway API definitions.
 #   - cert-manager and Traefik: the chart versions and the image digests in their HelmCharts below.
+#   - The agent-sandbox controller: the pin line and the image digest of k3s-agent-sandbox.yaml,
+#     which upstream ships as a manifest and not as a chart.
 #
 # pin: k3s v1.37.1+k3s1 ed01f89fd977bf20ac1516bbebf8370bf3ddbaa55dac8aba610956a4c78cc00b
 ---

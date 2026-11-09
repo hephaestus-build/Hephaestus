@@ -191,6 +191,24 @@ await test("the platform add-ons run at a priority that the release's roles cann
 	const certManager = values("cert-manager");
 	assert.ok(isRecord(certManager.global));
 	assert.equal(certManager.global.priorityClassName, "system-cluster-critical");
+	// A preempted or evicted agent-sandbox controller creates no sandbox until it runs again.
+	const controller = named(
+		documents(read("k3s-agent-sandbox.yaml")),
+		"Deployment",
+		"agent-sandbox-controller",
+	);
+	assert.ok(controller && isRecord(controller.spec) && isRecord(controller.spec.template));
+	const pod = controller.spec.template.spec;
+	assert.ok(isRecord(pod) && Array.isArray(pod.containers));
+	assert.equal(pod.priorityClassName, "system-cluster-critical");
+	const [container] = pod.containers as unknown[];
+	assert.ok(isRecord(container) && isRecord(container.resources));
+	assert.ok(isRecord(container.resources.requests) && isRecord(container.resources.limits));
+	assert.equal(
+		typeof container.resources.limits.memory,
+		"string",
+		"the controller has no memory limit",
+	);
 });
 
 await test("the Gateway, its certificate, the installer and the smoke name one namespace", async () => {

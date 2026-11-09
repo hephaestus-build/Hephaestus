@@ -268,6 +268,7 @@ void test("every custom manager reads every file it claims to read", async () =>
 		["Track platform chart versions", ["deploy/platform/k3s-platform.yaml"]],
 		["Track platform image tags and digests", ["deploy/platform/k3s-platform.yaml"]],
 		["Track the one-host k3s release", ["deploy/platform/k3s-platform.yaml"]],
+		["Track the agent-sandbox controller release", ["deploy/platform/k3s-agent-sandbox.yaml"]],
 		["Track Dockerfile ARG version pins", ["docker/agents/pi/Dockerfile", "webapp/Dockerfile"]],
 		[
 			"Track release security tool versions",
