@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -21,6 +20,7 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionHandedOnException;
@@ -41,6 +41,11 @@ import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunNotifications;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -57,6 +62,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
@@ -79,6 +85,7 @@ import io.micrometer.tracing.Tracer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -124,13 +131,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private final LlmUsageRecorder usageRecorder = mock(LlmUsageRecorder.class);
     private final ReviewAttemptUsageService attemptUsage =
             TerminalUsageTestFixtures.attemptUsageOverMocks(jobs, usageRecorder);
-    private ReviewJobRecovery recovery = new ReviewJobRecovery(
-            jobs,
-            properties(),
-            new JsonMapper(),
-            TerminalUsageTestFixtures.attemptUsageOverMocks(jobs, mock(LlmUsageRecorder.class)),
-            Optional.empty(),
-            new SimpleMeterRegistry());
+    private ReviewRunKind reviewRuns = mock(ReviewRunKind.class);
+    private final AgentRuns runs = mock(AgentRuns.class);
 
     private static final String ADMITTED_RESULT =
             "{\"contractVersion\":3,\"results\":[{\"practiceSlug\":\"silent-failure\","
@@ -146,22 +148,77 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 true,
                 Duration.ofSeconds(1),
                 5,
-                5,
                 Duration.ofSeconds(25),
                 Duration.ofDays(14),
                 Duration.ofDays(90),
                 maxConcurrentCompositions);
     }
 
-    /** The executor runs the attempt as the worker that claimed it, under the attempt's own lease. */
+    /** The executor runs the attempt as the worker that claimed it, under the attempt's own claim. */
     private static ReviewJobExecutor tracking(ReviewJobExecutor executor, ReviewJob job) {
-        if (job.getLeaseId() == null) job.setLeaseId(UUID.randomUUID());
-        executor.track(job);
+        executor.track(claimOf(job));
         return executor;
+    }
+
+    /** The claim of the job's latest attempt, numbered as its run's epoch. */
+    private static ReviewJobClaimService.ClaimResult claimOf(ReviewJob job) {
+        if (job.getRunId() == null) job.setRunId(UUID.randomUUID());
+        var fence = new AgentRunFence(job.getRunId(), job.getWorkspaceId(), ReviewRunKind.epoch(job.getAttempt()));
+        return new ReviewJobClaimService.ClaimResult(job, fence, TEST_SNAPSHOT, "pull_request");
+    }
+
+    private static final ConfigSnapshot TEST_SNAPSHOT = new ConfigSnapshot(
+            ConfigSnapshot.SCHEMA_VERSION,
+            new FrozenModel(
+                    LlmApiProtocol.OPENAI_COMPLETIONS,
+                    "https://api.example.com/v1",
+                    "test-model",
+                    UsageFundingSource.INSTANCE,
+                    1L,
+                    1L,
+                    1L,
+                    null,
+                    null,
+                    null,
+                    false),
+            null,
+            null,
+            600,
+            null);
+
+    /** The claim's next offer is the job's run, which leases it for the job's next attempt. */
+    private void offer(ReviewJob job) {
+        if (job.getRunId() == null) job.setRunId(UUID.randomUUID());
+        UUID runId = job.getRunId();
+        int epoch = ReviewRunKind.epoch(job.getAttempt());
+        when(runs.claim(any(), any()))
+                .thenAnswer(call -> {
+                    return Optional.of(new AgentRunLease(
+                            runId,
+                            job.getWorkspaceId(),
+                            AgentRunKind.REVIEW,
+                            ReviewRunKind.subject(job.getReviewId()),
+                            job.spentAttempts(),
+                            epoch,
+                            Instant.now().plusSeconds(300),
+                            null));
+                })
+                .thenReturn(Optional.empty());
+        lenient().when(jobs.lockQueuedByRun(runId)).thenReturn(Optional.of(job));
+    }
+
+    /** The claim leases a run whose job a lifecycle write holds. */
+    private void offerHeld(ReviewJob job) {
+        offer(job);
+        when(jobs.lockQueuedByRun(job.getRunId())).thenReturn(Optional.empty());
     }
 
     private ReviewJobExecutor executor(AsyncTaskExecutor pool) {
         lenient().when(jobs.lockParentForQueuedClaim(any())).thenReturn(Optional.of(UUID.randomUUID()));
+        lenient()
+                .when(runs.capacity())
+                .thenReturn(new AgentCapacityProperties(
+                        Duration.ofMinutes(5), Duration.ofSeconds(25), 5, Duration.ofMinutes(10)));
         lenient().when(reviewStart.start(anyLong(), any())).thenReturn(true);
         lenient().when(reviewStart.compose(anyLong(), any())).thenReturn(true);
         var transactions = mock(TransactionTemplate.class);
@@ -200,20 +257,25 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         budgets,
                         null,
                         telemetry,
-                        callPermits),
-                recovery);
+                        callPermits,
+                        runs,
+                        reviewRuns),
+                reviewRuns,
+                runs,
+                mock(AgentRunNotifications.class));
     }
 
     @Test
     void shouldRequeueAnAttemptWhoseInitializerFailedBeforeAnyModelCall() {
         var job = configuredJob();
-        recovery = mock(ReviewJobRecovery.class);
-        when(recovery.retryUnadmitted(any(), any(UUID.class), anyBoolean())).thenReturn(true);
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
+        when(reviewRuns.requeue(any(), any(), eq(AgentRuns.Charge.SPEND), any(), any()))
+                .thenReturn(true);
 
-        assertThat(runFailingInitializer(job).processJob(job.getId()))
-                .isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(runFailingInitializer(job).processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
-        verify(recovery).retryUnadmitted(any(), any(UUID.class), anyBoolean());
+        verify(reviewRuns).requeue(any(), any(), eq(AgentRuns.Charge.SPEND), any(), any());
         verify(jobs, never()).transitionStatusOwnedBy(any(), eq(ReviewJobStatus.FAILED), any(), any(), any(), anyInt());
         verify(jobs, never()).recordInitializationFailure(any(), anyLong(), anyInt(), any(), any());
         assertThat(requeued("sandbox")).isEqualTo(1);
@@ -223,9 +285,11 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @Test
     void shouldCountARequeueAsPreparationWhenTheSourceIsNotReadyBeforeTheSandboxStarts() {
         var job = configuredJob();
-        recovery = mock(ReviewJobRecovery.class);
-        when(recovery.retryUnadmitted(any(), any(UUID.class), anyBoolean())).thenReturn(true);
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
+        when(reviewRuns.requeue(any(), any(), eq(AgentRuns.Charge.SPEND), any(), any()))
+                .thenReturn(true);
+        offer(job);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(policy.permitsReview(job)).thenReturn(true);
         var binding = mock(WorkspaceAgentBinding.class);
@@ -243,7 +307,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .when(pool)
                 .execute(any(Runnable.class));
 
-        assertThat(executor(pool).processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor(pool).processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         verify(sandbox, never()).execute(any());
         assertThat(requeued("preparation")).isEqualTo(1);
@@ -274,12 +338,13 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void shouldEndAnAttemptWithoutARetryWhenTheServerAnsweredItsResultsWithAnError() {
         var job = configuredJob();
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(UUID.randomUUID());
+        job.setRunId(UUID.randomUUID());
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(handler.hasStaged(job)).thenReturn(true);
         when(handler.completeStaged(job)).thenReturn(false);
         when(handler.endedPractices(job)).thenReturn(0, 3);
-        recovery = mock(ReviewJobRecovery.class);
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
         var executor = runExecutor(
                 mock(ReviewCompositionContinuation.class),
                 new SandboxResult(SandboxLayout.EXIT_SERVER_ERROR, Map.of(), "", false, Duration.ofSeconds(1)),
@@ -288,7 +353,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class));
 
         verify(handler).finishInterrupted(job, ReviewStopReason.EXECUTION_FAILED);
-        verifyNoInteractions(recovery);
+        verify(reviewRuns, never()).requeue(any(), any(), any(), any(), any());
         assertThat(meters.get("agent.job.server.error").counter().count()).isEqualTo(1);
         assertThat(requeued("sandbox")).isZero();
         assertThat(requeued("server_unreachable")).isZero();
@@ -299,13 +364,15 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void shouldTimeAReviewThatLeftPracticesOpenAsAPartialSandboxAndContinueIt() {
         var job = configuredJob();
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(UUID.randomUUID());
+        job.setRunId(UUID.randomUUID());
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(handler.hasStaged(job)).thenReturn(true);
         when(handler.completeStaged(job)).thenReturn(false);
         when(handler.endedPractices(job)).thenReturn(0, 16);
-        recovery = mock(ReviewJobRecovery.class);
-        when(recovery.continueProgressed(any(), any(UUID.class))).thenReturn(true);
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
+        when(reviewRuns.requeue(any(), any(), eq(AgentRuns.Charge.FREE), any(), any()))
+                .thenReturn(true);
         var executor = runExecutor(
                 mock(ReviewCompositionContinuation.class),
                 new SandboxResult(SandboxLayout.EXIT_PARTIAL_REVIEW, Map.of(), "", false, Duration.ofSeconds(1)),
@@ -314,7 +381,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         assertThat(tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class)))
                 .isNull();
 
-        verify(recovery).continueProgressed(eq(job), any(UUID.class));
+        verify(reviewRuns).requeue(eq(job.getId()), any(), eq(AgentRuns.Charge.FREE), any(), any());
         assertThat(stageCount("sandbox", "partial")).isEqualTo(1);
         assertThat(stageCount("sandbox", "failed")).isZero();
         assertThat(requeued("sandbox")).isZero();
@@ -330,8 +397,10 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private double requeuedAfterExit(int exitCode, String cause) {
         var job = admittedJob();
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        recovery = mock(ReviewJobRecovery.class);
-        when(recovery.retryUnadmitted(any(), any(UUID.class), anyBoolean())).thenReturn(true);
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
+        when(reviewRuns.requeue(any(), any(), eq(AgentRuns.Charge.SPEND), any(), any()))
+                .thenReturn(true);
         var executor = runExecutor(
                 mock(ReviewCompositionContinuation.class),
                 new SandboxResult(exitCode, Map.of(), "", false, Duration.ofSeconds(1)),
@@ -352,15 +421,15 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @Test
     void shouldFailTheJobAndRecordTheInitializersExitOnceWhenNoAttemptIsLeft() throws Exception {
         var job = configuredJob();
-        recovery = mock(ReviewJobRecovery.class);
-        // The retry cap is spent: the recovery refuses another attempt.
-        when(recovery.retryUnadmitted(any(), any(UUID.class), anyBoolean())).thenReturn(false);
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
+        // The retry cap is spent: the run kind refuses another attempt.
+        when(reviewRuns.mayRetry(any())).thenReturn(false);
         when(jobs.transitionStatusOwnedBy(
                         eq(job.getId()), eq(ReviewJobStatus.FAILED), any(), any(), any(UUID.class), anyInt()))
                 .thenReturn(1);
 
-        assertThat(runFailingInitializer(job).processJob(job.getId()))
-                .isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(runFailingInitializer(job).processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         var diagnosis = ArgumentCaptor.forClass(String.class);
         verify(jobs, times(1))
@@ -378,14 +447,11 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @Test
     void shouldCountAReviewThatTheDrainSentBackToTheQueue() {
         var job = configuredJob();
-        recovery = mock(ReviewJobRecovery.class);
-        when(recovery.recover(
-                        eq(job.getId()),
-                        any(UUID.class),
-                        eq(job.getAttempt()),
-                        eq(ReviewJobCancellationReason.DRAIN_GRACEFUL)))
-                .thenReturn(ReviewJobRecovery.Outcome.REQUEUED);
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
+        when(reviewRuns.requeue(eq(job.getId()), any(), eq(AgentRuns.Charge.FREE), any(), any()))
+                .thenReturn(true);
+        offer(job);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(policy.permitsReview(job)).thenReturn(true);
         var binding = mock(WorkspaceAgentBinding.class);
@@ -395,7 +461,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         // Claimed, and still running: the pool has not started it when the worker drains.
         var executor = executor(mock(AsyncTaskExecutor.class));
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         assertThat(executor.cancelInFlight(ReviewJobCancellationReason.DRAIN_GRACEFUL, Duration.ofSeconds(1)))
                 .isTrue();
@@ -405,11 +471,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         .counter()
                         .count())
                 .isEqualTo(1);
-        assertThat(meters.get("agent.job.drained")
-                        .tag("outcome", "cancelled")
-                        .counter()
-                        .count())
-                .isZero();
     }
 
     /** An attempt that reaches the sandbox, whose initializer then exits with 2. */
@@ -448,7 +509,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     private ReviewJobExecutor executorThatReachesTheSandbox(ReviewJob job) {
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        offer(job);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(policy.permitsReview(job)).thenReturn(true);
         var binding = mock(WorkspaceAgentBinding.class);
@@ -499,10 +560,9 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNotStartASandboxAfterAnotherWorkerClaimedTheJob() {
-        UUID id = UUID.randomUUID();
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.empty());
-        assertThat(executor(mock(AsyncTaskExecutor.class)).processJob(id))
+    void shouldNotStartASandboxWhenALifecycleWriteHoldsTheClaimedJob() {
+        offerHeld(RuntimeReviewTestData.job());
+        assertThat(executor(mock(AsyncTaskExecutor.class)).processNext())
                 .isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
         verifyNoInteractions(handler, sandbox);
     }
@@ -510,9 +570,9 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @Test
     void shouldCancelSuppressedWorkBeforeReadingOrRunningItsInputs() {
         var job = RuntimeReviewTestData.job();
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        offer(job);
         when(policy.isProcessingSuppressed(job)).thenReturn(true);
-        assertThat(executor(mock(AsyncTaskExecutor.class)).processJob(job.getId()))
+        assertThat(executor(mock(AsyncTaskExecutor.class)).processNext())
                 .isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
         assertThat(job.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
         assertThat(job.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.PERSON_DATA_ERASED);
@@ -527,18 +587,18 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @Test
     void shouldCancelAReplacedReviewAtClaimWithNoSandbox() {
         var job = configuredJob();
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        offer(job);
         when(policy.permitsReview(job)).thenReturn(true);
         when(reviewStart.replaceByNewerOccasion(job.getWorkspaceId(), job.getReviewId()))
                 .thenReturn(true);
 
-        assertThat(executor(mock(AsyncTaskExecutor.class)).processJob(job.getId()))
+        assertThat(executor(mock(AsyncTaskExecutor.class)).processNext())
                 .isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
 
         assertThat(job.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
         assertThat(job.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.REPLACED);
         assertThat(job.getCompletedAt()).isNotNull();
-        assertThat(job.getLeaseId()).isNull();
+        verify(runs).end(any());
         verify(reviewStart, never()).start(anyLong(), any());
         verifyNoInteractions(sandbox, budgets, assignments);
     }
@@ -548,8 +608,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         var job = RuntimeReviewTestData.job();
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("admitted");
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
-        assertThat(executor(mock(AsyncTaskExecutor.class)).processJob(job.getId()))
+        offer(job);
+        assertThat(executor(mock(AsyncTaskExecutor.class)).processNext())
                 .isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
         assertThat(job.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
         verifyNoInteractions(handler, sandbox);
@@ -623,7 +683,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .when(composer)
                 .composeAfterMeasurement(any(), any(), any());
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        recovery = mock(ReviewJobRecovery.class);
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
         var measured = new SandboxResult(
                 0,
                 Map.of(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE, scriptReport()),
@@ -637,7 +698,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .isNull();
         // No later attempt reports the sandbox's practice-script runs, so the hand-on records them.
         verify(practiceScriptRuns).record(eq(job), aryEq(scriptReport()), any(), any());
-        verify(recovery).recover(job.getId(), Objects.requireNonNull(job.getLeaseId()), job.getAttempt(), null);
+        verify(reviewRuns).requeue(eq(job.getId()), any(), eq(AgentRuns.Charge.SPEND), any(), any());
         verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
         verify(kept, never()).forget(any());
     }
@@ -661,15 +722,17 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void shouldSpendNoRetryWhenATimedOutAttemptEndedANewPractice() {
         var job = unfinishedStagedJob();
         when(handler.endedPractices(job)).thenReturn(2, 3);
-        recovery = mock(ReviewJobRecovery.class);
-        when(recovery.continueProgressed(any(), any(UUID.class))).thenReturn(true);
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
+        when(reviewRuns.requeue(any(), any(), eq(AgentRuns.Charge.FREE), any(), any()))
+                .thenReturn(true);
         var executor = runExecutor(mock(ReviewCompositionContinuation.class), timedOutResult(true), false);
 
         assertThat(tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class)))
                 .isNull();
 
-        verify(recovery).continueProgressed(any(), any(UUID.class));
-        verify(recovery, never()).retryUnadmitted(any(), any(UUID.class), anyBoolean());
+        verify(reviewRuns).requeue(any(), any(), eq(AgentRuns.Charge.FREE), any(), any());
+        verify(reviewRuns, never()).requeue(any(), any(), eq(AgentRuns.Charge.SPEND), any(), any());
         verify(handler, never()).finishInterrupted(any(), any());
     }
 
@@ -677,22 +740,24 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void shouldSpendARetryWhenATimedOutAttemptEndedNoNewPractice() {
         var job = unfinishedStagedJob();
         when(handler.endedPractices(job)).thenReturn(3, 3);
-        recovery = mock(ReviewJobRecovery.class);
-        when(recovery.retryUnadmitted(any(), any(UUID.class), anyBoolean())).thenReturn(true);
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
+        when(reviewRuns.requeue(any(), any(), eq(AgentRuns.Charge.SPEND), any(), any()))
+                .thenReturn(true);
         var executor = runExecutor(mock(ReviewCompositionContinuation.class), timedOutResult(true), false);
 
         assertThat(tracking(executor, job).executePrepared(job.getId(), job, mock(SandboxSpec.class)))
                 .isNull();
 
-        verify(recovery, never()).continueProgressed(any(), any(UUID.class));
-        verify(recovery).retryUnadmitted(any(), any(UUID.class), anyBoolean());
+        verify(reviewRuns, never()).requeue(any(), any(), eq(AgentRuns.Charge.FREE), any(), any());
+        verify(reviewRuns).requeue(any(), any(), eq(AgentRuns.Charge.SPEND), any(), any());
     }
 
     /** A running attempt with staged practices and others still open. */
     private ReviewJob unfinishedStagedJob() {
         var job = configuredJob();
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(UUID.randomUUID());
+        job.setRunId(UUID.randomUUID());
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(handler.hasStaged(job)).thenReturn(true);
         when(handler.completeStaged(job)).thenReturn(false);
@@ -739,7 +804,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private ReviewJob admittedJob() {
         var job = configuredJob();
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(UUID.randomUUID());
+        job.setRunId(UUID.randomUUID());
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("admitted");
         return job;
@@ -772,10 +837,10 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @Test
     void shouldGiveTheSandboxTheConfiguredLimitsAndTheCredentialsDeadlineWhenPreparingAnAttempt() {
         var job = configuredJob();
-        job.setAttempt(2);
+        RuntimeJobTestData.attempt(job, 2);
         sandboxProperties = new SandboxProperties(5, 10, 60, new SandboxProperties.DefaultResourceLimits(1.5));
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), new JsonMapper());
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        offer(job);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(policy.permitsReview(job)).thenReturn(true);
         var binding = mock(WorkspaceAgentBinding.class);
@@ -804,7 +869,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .when(pool)
                 .execute(any(Runnable.class));
 
-        assertThat(executor(pool).processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor(pool).processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         var issuedDeadline = ArgumentCaptor.forClass(Instant.class);
         var issuedExpiry = ArgumentCaptor.forClass(Instant.class);
@@ -852,7 +917,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void sandboxRuntimeReady() {
         when(sandbox.ready()).thenReturn(true);
         // A claim leases its attempt on the database clock.
-        lenient().when(jobs.lease(any(), anyLong())).thenReturn(1);
         lenient().when(jobs.databaseNow()).thenAnswer(invocation -> Instant.now());
         lenient().when(sandbox.roomFor(any())).thenReturn(Integer.MAX_VALUE);
     }
@@ -882,9 +946,10 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @Test
     void shouldFreeTheSandboxSlotWhileComposingAndHandTheAttemptOnWhenTheWorkerDrains() {
         var job = continuedJob();
-        recovery = mock(ReviewJobRecovery.class);
-        when(recovery.recover(eq(job.getId()), any(UUID.class), eq(1), eq(ReviewJobCancellationReason.DRAIN_GRACEFUL)))
-                .thenReturn(ReviewJobRecovery.Outcome.REQUEUED);
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
+        when(reviewRuns.requeue(eq(job.getId()), any(), eq(AgentRuns.Charge.FREE), any(), any()))
+                .thenReturn(true);
         var executor = executor(inlinePool());
         var composer = mock(WorkerFeedbackComposer.class);
         var freeWhileComposing = new AtomicInteger(-1);
@@ -899,23 +964,18 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .composeResumed(any(), any(), any());
         executor.setFeedbackComposer(composer);
 
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         assertThat(freeWhileComposing.get()).isEqualTo(properties().claimBatchSize());
         assertThat(drained).isTrue();
-        verify(recovery)
-                .recover(
-                        job.getId(),
-                        Objects.requireNonNull(job.getLeaseId()),
-                        1,
-                        ReviewJobCancellationReason.DRAIN_GRACEFUL);
+        verify(reviewRuns).requeue(eq(job.getId()), any(), eq(AgentRuns.Charge.FREE), any(), any());
         assertThat(executor.computeCapacity()).isEqualTo(properties().claimBatchSize());
     }
 
     @Test
     void shouldClaimNothingWhileTheMostCompositionsRun() {
         maxConcurrentCompositions = 1;
-        var job = continuedJob();
+        continuedJob();
         var executor = executor(inlinePool());
         var composer = mock(WorkerFeedbackComposer.class);
         var freeWhileComposing = new AtomicInteger(-1);
@@ -927,7 +987,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .composeResumed(any(), any(), any());
         executor.setFeedbackComposer(composer);
 
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         assertThat(freeWhileComposing.get()).isZero();
         assertThat(executor.computeCapacity()).isEqualTo(1);
@@ -936,7 +996,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @Test
     void shouldEndWithoutHandingOnWhenTheJobIsCancelledWhileItComposes() {
         var job = continuedJob();
-        recovery = mock(ReviewJobRecovery.class);
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
         var executor = executor(inlinePool());
         var composer = mock(WorkerFeedbackComposer.class);
         doAnswer(invocation -> {
@@ -949,17 +1010,18 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .composeResumed(any(), any(), any());
         executor.setFeedbackComposer(composer);
 
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         // The cancellation owns the outcome: nothing hands the attempt on, and its fenced terminal write changes
         // nothing.
-        verifyNoInteractions(recovery);
+        verify(reviewRuns, never()).requeue(any(), any(), any(), any(), any());
     }
 
     @Test
     void shouldHandOnAnAttemptWhoseCompositionAPassingCauseStopped() {
         var job = continuedJob();
-        recovery = mock(ReviewJobRecovery.class);
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
         var executor = executor(inlinePool());
         var composer = mock(WorkerFeedbackComposer.class);
         doThrow(new CompositionHandedOnException(CompositionStop.PROVIDER, null))
@@ -967,9 +1029,9 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .composeResumed(any(), any(), any());
         executor.setFeedbackComposer(composer);
 
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
-        verify(recovery).recover(job.getId(), Objects.requireNonNull(job.getLeaseId()), 1, null);
+        verify(reviewRuns).requeue(eq(job.getId()), any(), eq(AgentRuns.Charge.SPEND), any(), any());
         verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
         // A resumed attempt composes without a capture or a sandbox of its own.
         assertThat(stageCount("composition", "handed_on")).isEqualTo(1);
@@ -984,7 +1046,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         var composer = mock(WorkerFeedbackComposer.class);
         executor.setFeedbackComposer(composer);
 
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         verify(composer).withholdResumed(any(), any(UUID.class), eq(CompositionStop.NO_AI));
         verify(composer, never()).composeResumed(any(), any(), any());
@@ -994,8 +1056,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @Test
     void shouldKeepStagedResultsAndRecordModelUnavailableForTheRemainingPractices() {
         var job = configuredJob();
-        job.setAttempt(1);
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        RuntimeJobTestData.attempt(job, 1);
+        offer(job);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(policy.permitsReview(job)).thenReturn(true);
         when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
@@ -1014,22 +1076,22 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         var composer = mock(WorkerFeedbackComposer.class);
         var executor = executor(inlinePool());
         executor.setFeedbackComposer(composer);
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
         verify(handler).finishInterrupted(job, ReviewStopReason.MODEL_UNAVAILABLE);
-        verify(composer).withholdResumed(any(), eq(job.getLeaseId()), eq(CompositionStop.MODEL_UNAVAILABLE));
+        verify(composer).withholdResumed(any(), eq(job.getRunId()), eq(CompositionStop.MODEL_UNAVAILABLE));
         verifyNoInteractions(sandbox);
     }
 
     @Test
     void shouldNeitherSealNorInterruptStagedWorkForTheClaimThatTookTheRow() {
         var job = configuredJob();
-        job.setAttempt(1);
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        RuntimeJobTestData.attempt(job, 1);
+        offer(job);
         // By the time the attempt reads its row again, a later claim holds it under another lease.
         var taken = configuredJob();
         taken.setId(job.getId());
-        taken.setAttempt(2);
-        taken.setLeaseId(UUID.randomUUID());
+        RuntimeJobTestData.attempt(taken, 2);
+        taken.setRunId(UUID.randomUUID());
         when(jobs.findById(job.getId())).thenReturn(Optional.of(taken));
         when(policy.permitsReview(job)).thenReturn(true);
         when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
@@ -1039,7 +1101,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         var executor = executor(inlinePool());
         executor.setFeedbackComposer(composer);
 
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         verify(handler, never()).finishInterrupted(any(), any());
         verify(handler, never()).completeStaged(any());
@@ -1049,13 +1111,13 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @Test
     void shouldLeaveTheLaterAttemptsRowAloneWhenAClaimTakesItWhileTheSandboxRuns() {
         var job = configuredJob();
-        job.setAttempt(1);
+        RuntimeJobTestData.attempt(job, 1);
         var later = configuredJob();
         later.setId(job.getId());
         later.setStatus(ReviewJobStatus.RUNNING);
-        later.setAttempt(2);
+        RuntimeJobTestData.attempt(later, 2);
         UUID laterLease = UUID.randomUUID();
-        later.setLeaseId(laterLease);
+        later.setRunId(laterLease);
         var measured = new SandboxResult(0, Map.of(), "measured", false, Duration.ofSeconds(1));
         when(sandbox.execute(any())).thenAnswer(invocation -> {
             when(jobs.findById(job.getId())).thenReturn(Optional.of(later));
@@ -1070,17 +1132,18 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .when(jobs.transitionStatusOwnedBy(any(), any(), any(), any(), any(UUID.class), anyInt()))
                 .thenReturn(1);
         lenient().when(handler.hasStaged(later)).thenReturn(true);
-        recovery = mock(ReviewJobRecovery.class);
+        reviewRuns = mock(ReviewRunKind.class);
+        lenient().when(reviewRuns.mayRetry(any())).thenReturn(true);
         var composer = mock(WorkerFeedbackComposer.class);
         var executor = executorThatReachesTheSandbox(job);
         executor.setFeedbackComposer(composer);
 
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         verify(sandbox).execute(any());
         assertThat(later.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
         assertThat(later.getAttempt()).isEqualTo(2);
-        assertThat(later.getLeaseId()).isEqualTo(laterLease);
+        assertThat(later.getRunId()).isEqualTo(laterLease);
         assertThat(later.getOutput()).isNull();
         assertThat(later.getExitCode()).isNull();
         assertThat(later.getProcessingStatus()).isEqualTo(ProcessingStatus.NONE);
@@ -1089,16 +1152,17 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         // Only the attempt's own check before the sandbox started.
         verify(handler).completeStaged(any());
         verify(handler, never()).finishInterrupted(any(), any());
-        verifyNoInteractions(recovery, composer);
+        verify(reviewRuns, never()).requeue(any(), any(), any(), any(), any());
+        verifyNoInteractions(composer);
     }
 
     /** An admitted job queued again to compose what its lost attempt left open, claimable by this worker. */
     private ReviewJob continuedJob() {
         var job = configuredJob();
-        job.setAttempt(1);
+        RuntimeJobTestData.attempt(job, 1);
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("admitted");
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        offer(job);
         when(policy.permitsReview(job)).thenReturn(true);
         var binding = mock(WorkspaceAgentBinding.class);
         // A claim that withholds only reads no binding.
@@ -1111,13 +1175,13 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         // The claim committed: the row now runs here.
         var running = configuredJob();
         running.setId(job.getId());
-        running.setAttempt(1);
+        RuntimeJobTestData.attempt(running, 1);
         running.setAdmissionAttempt(0);
         running.setAdmissionDigest("admitted");
         running.setStatus(ReviewJobStatus.RUNNING);
         // The reloaded row carries the lease that the claim gave this attempt.
         when(jobs.findById(job.getId())).thenAnswer(invocation -> {
-            running.setLeaseId(job.getLeaseId());
+            running.setRunId(job.getRunId());
             return Optional.of(running);
         });
         return job;
@@ -1136,10 +1200,10 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldStopTheLocalAttemptOfARequeuedJobInsteadOfClaimingItAgain() {
+    void shouldStopTheLocalAttemptOfAJobBeforeItsNextClaimStartsHere() {
         var job = configuredJob();
-        job.setAttempt(2);
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        RuntimeJobTestData.attempt(job, 2);
+        offer(job);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(policy.permitsReview(job)).thenReturn(true);
         var binding = mock(WorkspaceAgentBinding.class);
@@ -1147,11 +1211,13 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(policy.binding(job)).thenReturn(Optional.of(binding));
         when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
-        // The pool has not run attempt 2 yet, so it still runs here when the job is offered again.
+        // The pool has not run attempt 3 yet, so it still runs here when its run leases the job again.
         var executor = executor(mock(AsyncTaskExecutor.class));
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        job.setStatus(ReviewJobStatus.QUEUED);
+        offer(job);
 
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         verify(sandbox).cancel(job.getId());
         verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
@@ -1161,7 +1227,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @ValueSource(booleans = {true, false})
     void shouldStopTheLocalAttemptOfAJobWhoseRowThisWorkerNoLongerRuns(boolean stillRuns) {
         var job = configuredJob();
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        offer(job);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(policy.permitsReview(job)).thenReturn(true);
         var binding = mock(WorkspaceAgentBinding.class);
@@ -1170,10 +1236,10 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         var executor = executor(mock(AsyncTaskExecutor.class));
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
-        // A cancel, a requeue or a reap ended the attempt on its row alone, so its lease no longer renews.
-        when(jobs.renewLease(eq(job.getId()), anyLong(), eq(job.getAttempt()), eq(job.getLeaseId()), anyLong()))
-                .thenReturn(stillRuns ? 1 : 0);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        // A cancel, a requeue or a reap ended the attempt on its run alone, so its lease no longer renews.
+        when(runs.renew(new AgentRunFence(job.getRunId(), job.getWorkspaceId(), ReviewRunKind.epoch(job.getAttempt()))))
+                .thenReturn(stillRuns ? Optional.of(Instant.now().plusSeconds(300)) : Optional.empty());
 
         executor.stopEndedAttempts(executor.renewLeases());
 
@@ -1187,45 +1253,32 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         verifyNoInteractions(sandbox);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    void shouldNotKeepARunningReviewAliveWithoutItsLoopsRenewal(boolean live) {
-        var job = configuredJob();
-        var executor = tracking(executor(mock(AsyncTaskExecutor.class)), job);
-        var lease = Objects.requireNonNull(job.getLeaseId());
-        when(sandbox.loopRunning(job.getId())).thenReturn(true);
-        when(jobs.hasLiveLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), lease))
-                .thenReturn(live);
-
-        executor.stopEndedAttempts(executor.renewLeases());
-
-        verify(jobs, never()).renewLease(any(), anyLong(), anyInt(), any(), anyLong());
-        verify(sandbox, live ? never() : times(1)).cancel(job.getId());
-    }
-
     @Test
-    void shouldRenewWhileTheReviewLoopHasNotStartedOrHasAlreadyExited() {
+    void shouldRenewEachLocalAttemptsRunThroughEveryPhaseAsItsOnlyWriter() {
         var job = configuredJob();
         var executor = tracking(executor(mock(AsyncTaskExecutor.class)), job);
-        var lease = Objects.requireNonNull(job.getLeaseId());
-        when(sandbox.loopRunning(job.getId())).thenReturn(false);
-        when(jobs.renewLease(
-                        job.getId(),
-                        job.getWorkspaceId(),
-                        job.getAttempt(),
-                        lease,
-                        AgentProperties.WORKER_LEASE_TTL.toSeconds()))
-                .thenReturn(1);
+        var fence = new AgentRunFence(job.getRunId(), job.getWorkspaceId(), ReviewRunKind.epoch(job.getAttempt()));
+        when(runs.renew(fence)).thenReturn(Optional.of(Instant.now().plusSeconds(300)));
 
         assertThat(executor.renewLeases()).isEmpty();
 
-        verify(jobs)
-                .renewLease(
-                        job.getId(),
-                        job.getWorkspaceId(),
-                        job.getAttempt(),
-                        lease,
-                        AgentProperties.WORKER_LEASE_TTL.toSeconds());
+        verify(runs).renew(fence);
+        verifyNoInteractions(sandbox);
+    }
+
+    @Test
+    void shouldStopRenewingAnAttemptPastItsTimeLimitSoItsLeaseExpires() {
+        var job = configuredJob();
+        var executor = tracking(executor(mock(AsyncTaskExecutor.class)), job);
+        executor.clock = Clock.offset(
+                Clock.systemUTC(),
+                Duration.ofSeconds(TEST_SNAPSHOT.timeoutSeconds())
+                        .plus(ReviewJobExecutor.ATTEMPT_GRACE)
+                        .plusMinutes(1));
+
+        assertThat(executor.renewLeases()).containsKey(job.getId());
+
+        verify(runs, never()).renew(any());
     }
 
     @Test
@@ -1241,11 +1294,11 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @Test
     void shouldFailMissingAssignmentsBeforeClaimingInsteadOfRetryingForever() {
         var job = RuntimeReviewTestData.job();
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        offer(job);
         when(policy.isProcessingSuppressed(job))
                 .thenThrow(new JobPreparationException(
                         JobPreparationException.Reason.INPUT_CONTRACT_INVALID, "private SQL/path"));
-        assertThat(executor(mock(AsyncTaskExecutor.class)).processJob(job.getId()))
+        assertThat(executor(mock(AsyncTaskExecutor.class)).processNext())
                 .isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
         assertThat(job.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
         assertThat(job.getErrorMessage()).doesNotContain("private SQL/path");
@@ -1257,13 +1310,12 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void shouldCancelOldBudgetHeldWorkEvenAfterItsAvailabilityWasMoved() {
         var job = RuntimeReviewTestData.job();
         job.setSubmittedAt(Instant.now().minus(Duration.ofDays(8)));
-        job.setAvailableAt(Instant.now().minusSeconds(1));
         job.setHoldReason(ReviewJob.HOLD_REASON_BUDGET);
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        offer(job);
         when(policy.permitsReview(job)).thenReturn(true);
         when(budgets.decide(job.getWorkspaceId()))
                 .thenReturn(new LlmBudgetDecision(LlmBudgetBlockReason.EXHAUSTED, LlmBudgetBlockReason.NONE));
-        assertThat(executor(mock(AsyncTaskExecutor.class)).processJob(job.getId()))
+        assertThat(executor(mock(AsyncTaskExecutor.class)).processNext())
                 .isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
         assertThat(job.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
         assertThat(job.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.BUDGET_EXHAUSTED);
@@ -1274,7 +1326,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void shouldMeasureAgeFromSubmissionAfterARepeatedHold() {
         var job = RuntimeReviewTestData.job();
         job.setSubmittedAt(Instant.now().minus(Duration.ofDays(8)));
-        job.setAvailableAt(Instant.now().plus(Duration.ofHours(1)));
         assertThat(ReviewJobTelemetry.age(job)).isGreaterThanOrEqualTo(Duration.ofDays(8));
     }
 
@@ -1304,7 +1355,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         sandboxProperties = new SandboxProperties(1, 10, 60, new SandboxProperties.DefaultResourceLimits(1.5));
         var workerCapacity = mock(WorkerCapacityState.class);
         capacity = Optional.of(workerCapacity);
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        offer(job);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(jobs.transitionStatusOwnedBy(any(), any(), any(), any(), any(UUID.class), anyInt()))
                 .thenReturn(1);
@@ -1330,7 +1381,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         logger.addAppender(appender);
 
         try {
-            assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+            assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
         } finally {
             logger.detachAppender(appender);
         }
@@ -1353,10 +1404,10 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void shouldResumeAnAdmittedReviewOnTheWorkerWithoutStartingASandbox() {
         var job = configuredJob();
         job.setSubmittedAt(Instant.now().minusSeconds(2));
-        job.setAttempt(1);
+        RuntimeJobTestData.attempt(job, 1);
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("admitted");
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        offer(job);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         // The claim hands the row to this worker; the mock repository returns the same entity.
         when(jobs.markExecutionStarted(eq(job.getId()), any(UUID.class), eq(1), any()))
@@ -1387,7 +1438,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         executor.setFeedbackComposer(composer);
         executor.setCompositionContinuation(kept);
 
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         // It measures nothing again: no inputs are captured and no sandbox starts; it composes, then completes.
         verifyNoInteractions(handler, sandbox);
@@ -1402,8 +1453,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @Test
     void shouldCompleteARetryWhoseEarlierAttemptKeptEveryResultWithNoCapture() {
         var job = configuredJob();
-        job.setAttempt(1);
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        RuntimeJobTestData.attempt(job, 1);
+        offer(job);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(jobs.transitionStatusOwnedBy(any(), any(), any(), any(), any(UUID.class), anyInt()))
                 .thenReturn(1);
@@ -1415,7 +1466,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         when(handler.keptEveryResult(job)).thenReturn(true);
 
-        assertThat(executor(inlinePool()).processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor(inlinePool()).processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         verify(handler).completeWithoutExecution(job);
         verify(handler, never()).prepareInputs(any());
@@ -1452,7 +1503,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         sandboxProperties = new SandboxProperties(1, 10, 60, new SandboxProperties.DefaultResourceLimits(1.5));
         var workerCapacity = mock(WorkerCapacityState.class);
         capacity = Optional.of(workerCapacity);
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        offer(job);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(jobs.transitionStatusOwnedBy(any(), any(), any(), any(), any(UUID.class), anyInt()))
                 .thenReturn(1);
@@ -1521,7 +1572,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .execute(any(Runnable.class));
         var executor = executor(pool);
 
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
         assertThat(executor.computeCapacity()).isEqualTo(1);
         assertThat(job.getProcessingStatus()).isEqualTo(ProcessingStatus.PENDING);

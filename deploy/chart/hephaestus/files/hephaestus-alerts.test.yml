@@ -796,10 +796,12 @@ tests:
   - name: a review failed by lost workers fires, a constant count does not
     interval: 1m
     input_series:
-      - series: 'agent_job_orphan_failed_total{job="hephaestus",instance="server:9090"}'
+      - series: 'agent_run_reaped_total{job="hephaestus",instance="server:9090",kind="review",outcome="attempts_exhausted"}'
         values: "0 0 1x10"
-      - series: 'agent_job_orphan_failed_total{job="hephaestus",instance="server-b:9090"}'
+      - series: 'agent_run_reaped_total{job="hephaestus",instance="server-b:9090",kind="review",outcome="attempts_exhausted"}'
         values: "2x12"
+      - series: 'agent_run_reaped_total{job="hephaestus",instance="server:9090",kind="review",outcome="requeued"}'
+        values: "0 5 10x10"
     alert_rule_test:
       - eval_time: 1m
         alertname: HephaestusReviewWorkerLost
@@ -810,8 +812,38 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: A review failed because its workers stopped during every attempt
+              summary: A review failed because the holder of each of its attempts stopped renewing its lease
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a reaper that keeps failing fires, a short failure does not
+    interval: 1m
+    input_series:
+      - series: 'agent_run_reaper_failure_total{job="hephaestus",instance="server:9090"}'
+        values: "0+2x40"
+      - series: 'agent_run_reaper_failure_total{job="hephaestus",instance="server-b:9090"}'
+        values: "0 4 4x38"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: HephaestusAgentRunReaperFailing
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: HephaestusAgentRunReaperFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The run reaper keeps failing to take back an expired run, so its work waits
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: a short reaper failure does not fire
+    interval: 1m
+    input_series:
+      - series: 'agent_run_reaper_failure_total{job="hephaestus",instance="server:9090"}'
+        values: "0 6 6x38"
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: HephaestusAgentRunReaperFailing
+        exp_alerts: []
 
   - name: a job that waits more than an hour fires, a shorter wait does not
     interval: 1m

@@ -5,6 +5,9 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenInvalidException;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import java.io.Serial;
 import java.util.Set;
@@ -22,16 +25,19 @@ import org.springframework.security.oauth2.server.resource.authentication.Bearer
 // Credential checks must not initialize model configuration.
 final class JobTokenAuthenticationProvider implements AuthenticationProvider {
     private final ReviewJobRepository jobs;
+    private final AgentRuns runs;
     private final MentorTurnRepository turns;
     private final SandboxGatewaySessions sessions;
     private final AttemptTokenVerifier verifier;
 
     JobTokenAuthenticationProvider(
             ReviewJobRepository jobs,
+            AgentRuns runs,
             MentorTurnRepository turns,
             SandboxGatewaySessions sessions,
             AttemptTokenVerifier verifier) {
         this.jobs = jobs;
+        this.runs = runs;
         this.turns = turns;
         this.sessions = sessions;
         this.verifier = verifier;
@@ -65,7 +71,9 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
         if (request.runtimeJobId() != null
                 && !request.runtimeJobId().equals(jwt.id().toString())) throw invalid();
         // A valid credential of an attempt that ended or was requeued, so that it lost its lease: its runner stops.
-        if (!jobs.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
+        if (!job.getRunId().equals(jwt.leaseId())
+                || !runs.isCurrent(
+                        new AgentRunRef(jwt.leaseId(), jwt.workspaceId()), ReviewRunKind.epoch(jwt.attempt())))
             throw new AttemptLeaseConflict("This review attempt no longer holds its lease");
         return new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes(), null);
     }

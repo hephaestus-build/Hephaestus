@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.composer;
 
+import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
@@ -7,7 +8,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedExceptio
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
-import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
@@ -93,7 +93,7 @@ public class WorkerFeedbackComposer {
     private final ReviewJobAssignments assignments;
     private final ItemDescriptorRegistry items;
     private final PracticeReviewProperties properties;
-    private final AgentProperties agentProperties;
+    private final AgentCapacityProperties agentCapacity;
     private final MeterRegistry meters;
     // The wait has no span of its own: the composition span of the attempt covers it.
     private final ReviewStageTelemetry stages;
@@ -113,7 +113,7 @@ public class WorkerFeedbackComposer {
             ReviewJobAssignments assignments,
             ItemDescriptorRegistry items,
             PracticeReviewProperties properties,
-            AgentProperties agentProperties,
+            AgentCapacityProperties agentCapacity,
             MeterRegistry meters,
             ObjectMapper mapper,
             CompositionCapacity capacity,
@@ -126,7 +126,7 @@ public class WorkerFeedbackComposer {
                 assignments,
                 items,
                 properties,
-                agentProperties,
+                agentCapacity,
                 meters,
                 mapper,
                 PROVIDER_RETRY_PAUSE,
@@ -142,7 +142,7 @@ public class WorkerFeedbackComposer {
             ReviewJobAssignments assignments,
             ItemDescriptorRegistry items,
             PracticeReviewProperties properties,
-            AgentProperties agentProperties,
+            AgentCapacityProperties agentCapacity,
             MeterRegistry meters,
             ObjectMapper mapper,
             Duration providerRetryPause,
@@ -158,7 +158,7 @@ public class WorkerFeedbackComposer {
         this.assignments = assignments;
         this.items = items;
         this.properties = properties;
-        this.agentProperties = agentProperties;
+        this.agentCapacity = agentCapacity;
         this.meters = meters;
         this.stages = new ReviewStageTelemetry(meters, Tracer.NOOP);
         this.mapper = mapper;
@@ -196,7 +196,8 @@ public class WorkerFeedbackComposer {
      * Composes the feedback of the attempt that just measured and admitted the review, from the inputs its folder
      * holds.
      *
-     * @param notAfter when the stale-job sweep would end the attempt; composition ends a minute before it at the latest
+     * @param notAfter when the worker stops renewing the attempt's lease; composition ends a minute before it at the
+     *     latest
      * @throws CompositionHandedOnException when a passing cause left a destination open before the retry limit
      */
     public void composeAfterMeasurement(ReviewJob job, UUID leaseId, Instant notAfter) {
@@ -225,7 +226,7 @@ public class WorkerFeedbackComposer {
      * @throws CompositionHandedOnException when a passing cause left a destination open before the retry limit
      */
     public void composeResumed(ReviewJob job, UUID leaseId, Instant notAfter) {
-        if (job.spentAttempts() > agentProperties.maxRetries()) {
+        if (job.spentAttempts() > agentCapacity.reviewRetries()) {
             withholdWithoutInputs(job, leaseId, CompositionStop.RETRIES_EXHAUSTED);
             return;
         }
@@ -357,7 +358,7 @@ public class WorkerFeedbackComposer {
      */
     private void close(
             ReviewJob job, Plan plan, Function<FeedbackDestination, Stop> stops, @Nullable RuntimeException failure) {
-        boolean last = job.spentAttempts() >= agentProperties.maxRetries();
+        boolean last = job.spentAttempts() >= agentCapacity.reviewRetries();
         CompositionStop handedOn = null;
         for (var open : open(job, plan)) {
             var stop = open.routingUnavailable()
@@ -547,7 +548,7 @@ public class WorkerFeedbackComposer {
                     stops.put(FeedbackDestination.ON_WORK, ended);
                     // The private feedback reads the review it follows: a review that another attempt may still
                     // compose comes first.
-                    if (ended.cause().passing() && job.spentAttempts() < agentProperties.maxRetries()) {
+                    if (ended.cause().passing() && job.spentAttempts() < agentCapacity.reviewRetries()) {
                         stops.put(FeedbackDestination.PRACTICE_PAGE, ended);
                         stops.put(FeedbackDestination.CONVERSATION, ended);
                         return;

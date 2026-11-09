@@ -682,12 +682,18 @@ hephaestus:
         # The most review attempts one worker runs at once. An attempt composes its feedback after its sandbox
         # ends and holds no sandbox slot then, so this bounds the concurrent compositions.
         max-concurrent-compositions: ${AGENT_MAX_CONCURRENT_COMPOSITIONS:16}
-        # Retry consumption excludes drains, sandbox room refusals and attempts that made progress.
-        max-retries: ${AGENT_MAX_RETRIES:5}
         heartbeat-interval: 25s
         # Strip heavy job payloads after payload-retention; delete unreferenced terminal jobs after row-retention.
         payload-retention: ${AGENT_PAYLOAD_RETENTION:P14D}
         row-retention: ${AGENT_ROW_RETENTION:P90D}
+        # The one home of the agent runtime's capacity numbers (AgentCapacityProperties).
+        capacity:
+          lease-ttl: 5m
+          lease-renewal: 25s
+          # Lost leases a review survives; requeues for sandbox room, drains and progress spend none.
+          review-retries: ${AGENT_MAX_RETRIES:5}
+          # A queued run that waited this long orders one band higher, never into the interactive band.
+          band-aging: 10m
 
     # ═══════════════════════════════════════════════════════════════════════════
     # LLM GOVERNANCE

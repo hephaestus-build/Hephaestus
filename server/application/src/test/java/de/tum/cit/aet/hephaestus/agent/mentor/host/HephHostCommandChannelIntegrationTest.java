@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
@@ -192,6 +193,11 @@ class HephHostCommandChannelIntegrationTest {
         @Bean
         ReviewJobRepository reviewJobRepository() {
             return mock(ReviewJobRepository.class);
+        }
+
+        @Bean
+        AgentRuns agentRuns() {
+            return mock(AgentRuns.class);
         }
 
         @Bean

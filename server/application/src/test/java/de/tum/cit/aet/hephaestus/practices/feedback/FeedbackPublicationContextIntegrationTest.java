@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
@@ -102,7 +103,6 @@ import org.springframework.web.server.ResponseStatusException;
  * same person, is unchanged and no other review's write has an unknown outcome.
  */
 class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDeliveryIntegrationTest {
-    private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
 
     @Autowired
     WebTestClient client;
@@ -645,7 +645,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
         var job = ownedAdmittedJob();
         var service = admissionService(job, pausing);
         var read = CompletableFuture.supplyAsync(() -> service.publicFeedbackHistory(
-                new ResultAdmissionService.AdmissionIdentity(job.getId(), workspace.getId(), 0, LEASE)));
+                new ResultAdmissionService.AdmissionIdentity(job.getId(), workspace.getId(), 0, job.getRunId())));
         try {
             await(issued);
             new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
@@ -1052,8 +1052,6 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
         job.setWorkspaceId(workspace.getId());
         job.setReviewId(reviewId);
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("admitted");
         return job;
@@ -1107,7 +1105,8 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                 transactionManager,
                 mock(FeedbackCompositionService.class),
                 mock(ReviewWriteGuard.class),
-                mock(PracticeResultStaging.class));
+                mock(PracticeResultStaging.class),
+                mock(AgentRuns.class));
     }
 
     private static void await(CountDownLatch latch) {

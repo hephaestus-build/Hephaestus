@@ -9,6 +9,11 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
@@ -29,7 +34,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -42,7 +49,7 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnWorkerRole
 @ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
-@WorkspaceAgnostic("Claim admission locks one queued job by its global identifier")
+@WorkspaceAgnostic("The claim leases the next review run of every workspace; the run carries its workspace")
 public class ReviewJobClaimService {
     private static final Logger log = LoggerFactory.getLogger(ReviewJobClaimService.class);
     private static final Duration BUDGET_HOLD_INTERVAL = Duration.ofHours(1);
@@ -58,6 +65,8 @@ public class ReviewJobClaimService {
     private final @Nullable LlmAdmissionService llmAdmissionService;
     private final ReviewJobTelemetry jobTelemetry;
     private final LlmCallPermits callPermits;
+    private final AgentRuns runs;
+    private final ReviewRunKind reviewRuns;
 
     public ReviewJobClaimService(
             ReviewJobRepository jobRepository,
@@ -70,8 +79,12 @@ public class ReviewJobClaimService {
             LlmBudgetService llmBudgetService,
             @Nullable LlmAdmissionService llmAdmissionService,
             ReviewJobTelemetry jobTelemetry,
-            LlmCallPermits callPermits) {
+            LlmCallPermits callPermits,
+            AgentRuns runs,
+            ReviewRunKind reviewRuns) {
         this.jobRepository = jobRepository;
+        this.runs = runs;
+        this.reviewRuns = reviewRuns;
         this.callPermits = callPermits;
         this.memberAiPolicy = memberAiPolicy;
         this.methods = methods;
@@ -86,10 +99,17 @@ public class ReviewJobClaimService {
 
     sealed interface ClaimAttempt {}
 
-    record PoolWait(long poolId) implements ClaimAttempt {}
+    /** The run's model pool has background callers waiting; the claim was rolled back, and this poll skips the run. */
+    record PoolWait(UUID runId, long poolId) implements ClaimAttempt {}
+
+    /** The claim was rolled back, and this poll skips the run. */
+    record Declined(UUID runId, ClaimOutcome why) implements ClaimAttempt {}
 
     enum ClaimOutcome implements ClaimAttempt {
-        ALREADY_CLAIMED,
+        /** No review run is offered now. */
+        NOTHING,
+        /** Its review or job is held by a lifecycle write. */
+        LOCKED,
         QUOTA_FULL,
         BUDGET_HELD,
     }
@@ -102,32 +122,45 @@ public class ReviewJobClaimService {
      */
     record ClaimResult(
             ReviewJob job,
+            AgentRunFence fence,
             ConfigSnapshot snapshot,
             String itemKind,
-            @Nullable CompositionStop withholdOnly) implements ClaimAttempt {
-        ClaimResult(ReviewJob job, ConfigSnapshot snapshot, String itemKind) {
-            this(job, snapshot, itemKind, null);
+            @Nullable CompositionStop withholdOnly)
+            implements ClaimAttempt {
+        ClaimResult(ReviewJob job, AgentRunFence fence, ConfigSnapshot snapshot, String itemKind) {
+            this(job, fence, snapshot, itemKind, null);
         }
     }
 
     record TerminalClaim(ReviewJob job, ReviewJobStatus status) implements ClaimAttempt {}
 
-    @Nullable
-    ClaimAttempt claimJob(UUID jobId, BooleanSupplier reviewRoom, int maxRetries) {
-        return transactionTemplate.execute(status -> {
+    /**
+     * Leases the next review run that the claim order offers, and starts its job or settles it. A claim that cannot
+     * start now rolls back, so its run keeps its epoch and its place.
+     *
+     * @param declined the runs this poll already declined
+     */
+    ClaimAttempt claimNext(Set<UUID> declined, BooleanSupplier reviewRoom) {
+        var heldForBudget = new AtomicReference<@Nullable AgentRunRef>();
+        ClaimAttempt attempt = Objects.requireNonNull(transactionTemplate.execute(status -> {
+            AgentRunLease lease =
+                    runs.claim(Set.of(AgentRunKind.REVIEW), declined).orElse(null);
+            if (lease == null) return ClaimOutcome.NOTHING;
             // The review service locks the parent before it changes the review, so the claim takes the parent before
-            // the job. Locking without starting it keeps a refused claim from committing a speculative parent
-            // transition.
-            if (jobRepository.lockParentForQueuedClaim(jobId).isEmpty()) return ClaimOutcome.ALREADY_CLAIMED;
-            Optional<ReviewJob> locked = jobRepository.findByIdQueuedForUpdateSkipLocked(jobId, Instant.now());
+            // the job. Both skip a locked row, so a claim never waits behind a lifecycle write that holds them.
+            Optional<ReviewJob> locked =
+                    jobRepository.lockParentForQueuedClaim(lease.runId()).isEmpty()
+                            ? Optional.empty()
+                            : jobRepository.lockQueuedByRun(lease.runId());
             if (locked.isEmpty()) {
-                log.debug("Job already claimed or not QUEUED: jobId={}", jobId);
-                return ClaimOutcome.ALREADY_CLAIMED;
+                status.setRollbackOnly();
+                return new Declined(lease.runId(), ClaimOutcome.LOCKED);
             }
-
             ReviewJob job = locked.get();
+            AgentRunFence fence = lease.fence();
+            ClaimAttempt claimed;
             try {
-                return claimLocked(job, reviewRoom, maxRetries);
+                claimed = claimLocked(job, fence, reviewRoom);
             } catch (JobPreparationException failure) {
                 PreparationFailure preparation = PreparationFailure.of(PreparationFailure.Stage.INPUTS, failure);
                 job.setStatus(ReviewJobStatus.FAILED);
@@ -140,30 +173,53 @@ public class ReviewJobClaimService {
                         .put("stage", preparation.stage().name())
                         .put("kind", preparation.kind().name())
                         .put("reason", preparation.reason().name());
+                runs.end(fence);
                 jobRepository.recordPreparationFailure(
                         job.getId(),
                         job.getWorkspaceId(),
                         job.getAttempt(),
-                        job.getLeaseId(),
+                        job.getRunId(),
                         objectMapper.writeValueAsString(diagnosis));
                 jobTelemetry.preparationFailed(job, preparation, "FAILED");
                 return new TerminalClaim(job, ReviewJobStatus.FAILED);
             }
-        });
+            switch (claimed) {
+                case TerminalClaim ended -> runs.end(fence);
+                case PoolWait waiting -> status.setRollbackOnly();
+                case ClaimOutcome.QUOTA_FULL -> {
+                    status.setRollbackOnly();
+                    return new Declined(lease.runId(), ClaimOutcome.QUOTA_FULL);
+                }
+                case ClaimOutcome.BUDGET_HELD -> {
+                    // A hold runs nothing, so it takes no attempt: the claim rolls back and the hold is written apart.
+                    status.setRollbackOnly();
+                    heldForBudget.set(new AgentRunRef(lease.runId(), lease.workspaceId()));
+                }
+                default -> {}
+            }
+            return claimed;
+        }));
+        AgentRunRef held = heldForBudget.get();
+        if (held != null) holdForBudget(held);
+        return attempt;
     }
 
     /**
-     * Leases the claimed attempt on the database clock. Within the claim's transaction, {@code now()} is its start, so
-     * the entity takes the very value that the row holds.
+     * Marks the queued job of {@code run} as held by the budget, so raising the cap can release it at once, and offers
+     * the run again after {@link #BUDGET_HOLD_INTERVAL}. A lifecycle write that holds the job meanwhile wins; the next
+     * claim checks the budget again.
      */
-    private void lease(ReviewJob job) {
-        long ttl = AgentProperties.WORKER_LEASE_TTL.toSeconds();
-        if (jobRepository.lease(job.getId(), ttl) != 1)
-            throw new IllegalStateException("The claimed attempt is no longer running");
-        job.setLeasedUntil(jobRepository.databaseNow().plusSeconds(ttl));
+    private void holdForBudget(AgentRunRef run) {
+        transactionTemplate.executeWithoutResult(
+                status -> jobRepository.lockQueuedByRun(run.id()).ifPresent(job -> {
+                    job.setHoldReason(ReviewJob.HOLD_REASON_BUDGET);
+                    jobRepository.save(job);
+                    runs.defer(run, BUDGET_HOLD_INTERVAL);
+                }));
     }
 
-    private ClaimAttempt claimLocked(ReviewJob job, BooleanSupplier reviewRoom, int maxRetries) {
+    private ClaimAttempt claimLocked(ReviewJob job, AgentRunFence fence, BooleanSupplier reviewRoom) {
+        int maxRetries = runs.capacity().reviewRetries();
 
         if (memberAiPolicy.isProcessingSuppressed(job)) {
             job.setStatus(ReviewJobStatus.CANCELLED);
@@ -191,7 +247,7 @@ public class ReviewJobClaimService {
         }
 
         if (!memberAiPolicy.permitsReview(job)) {
-            if (composing) return claimToWithhold(job, CompositionStop.NO_AI);
+            if (composing) return claimToWithhold(job, fence, CompositionStop.NO_AI);
             job.setStatus(ReviewJobStatus.CANCELLED);
             job.setCompletedAt(Instant.now());
             job.setErrorMessage("The developer has not enabled AI practice reviews in this workspace.");
@@ -211,14 +267,27 @@ public class ReviewJobClaimService {
             return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
         }
 
-        if (job.spentAttempts() > maxRetries && assignments.hasStaged(job))
-            return claimToWithhold(job, CompositionStop.RETRIES_EXHAUSTED);
-
         boolean retained = assignments.hasStaged(job);
+        // Past the retry limit, the run still offers a lost attempt a few times, so that a review with staged results
+        // can withhold what it has open. Anything else past the limit ends here.
+        if (reviewRuns.retriesExhausted(job, retained)) {
+            job.setStatus(ReviewJobStatus.FAILED);
+            job.setCompletedAt(Instant.now());
+            if (ResultAdmissionService.isAdmitted(job))
+                // Its results stay. Settlement closes the review as partial: nothing confirms each destination.
+                job.setOutput(
+                        objectMapper.createObjectNode().put("outcome", RefusalOutcome.COMPOSITION_UNCONFIRMED.name()));
+            else job.setErrorMessage(ReviewRunKind.RETRIES_EXHAUSTED);
+            jobRepository.save(job);
+            return new TerminalClaim(job, ReviewJobStatus.FAILED);
+        }
+        if (job.spentAttempts() > maxRetries && retained)
+            return claimToWithhold(job, fence, CompositionStop.RETRIES_EXHAUSTED);
+
         LlmBudgetBlockReason blockReason =
                 llmBudgetService.decide(job.getWorkspaceId()).forFunding(claimedFundingSource(job));
         if (blockReason != LlmBudgetBlockReason.NONE) {
-            if (composing || assignments.readyToSeal(job)) return claimToWithhold(job, CompositionStop.BUDGET);
+            if (composing || assignments.readyToSeal(job)) return claimToWithhold(job, fence, CompositionStop.BUDGET);
             return holdOrCancelOverBudget(job, blockReason);
         }
 
@@ -228,20 +297,20 @@ public class ReviewJobClaimService {
         WorkspaceAgentBinding binding = memberAiPolicy.binding(job).orElse(null);
         if (binding == null) {
             return composing || retained
-                    ? claimToWithhold(job, CompositionStop.MODEL_UNAVAILABLE)
+                    ? claimToWithhold(job, fence, CompositionStop.MODEL_UNAVAILABLE)
                     : refuseUnavailableModel(job);
         }
         var assigned = assignments.load(job);
         ConfigSnapshot snapshot = admitModels(job, binding, assigned);
         if (snapshot == null)
             return composing || retained
-                    ? claimToWithhold(job, CompositionStop.MODEL_UNAVAILABLE)
+                    ? claimToWithhold(job, fence, CompositionStop.MODEL_UNAVAILABLE)
                     : refuseUnavailableModel(job);
         String itemKind = assigned.getFirst().item().kind().value();
         if (!composing) {
             if (!reviewRoom.getAsBoolean()) return ClaimOutcome.QUOTA_FULL;
             long poolId = callPermits.poolFor(snapshot.model().connectionRef());
-            if (callPermits.hasBackgroundWaiters(poolId)) return new PoolWait(poolId);
+            if (callPermits.hasBackgroundWaiters(poolId)) return new PoolWait(fence.runId(), poolId);
         }
 
         if (!(ResultAdmissionService.isContinuation(job)
@@ -249,7 +318,7 @@ public class ReviewJobClaimService {
                 : reviewStart.start(job.getWorkspaceId(), job.getReviewId()))) return cancelWithParent(job);
         Instant claimedAt = Instant.now();
         // The first claim only: a requeued review would sample its submission again, later each time.
-        if (job.getAttempt() == 0 && !job.getAvailableAt().isAfter(claimedAt)) {
+        if (fence.epoch() == 1) {
             jobTelemetry.claimWait(Duration.between(job.getSubmittedAt(), claimedAt));
         }
         job.setStatus(ReviewJobStatus.RUNNING);
@@ -257,13 +326,10 @@ public class ReviewJobClaimService {
         job.setExecutionStartedAt(null);
         // Clear the budget hold marker so a crash requeue cannot inherit an expired hold.
         job.setHoldReason(null);
-        // A fresh lease names this attempt to the gateway and every fenced write, on any worker.
-        job.setLeaseId(UUID.randomUUID());
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         jobRepository.save(job);
-        lease(job);
 
-        return new ClaimResult(job, snapshot, itemKind);
+        return new ClaimResult(job, fence, snapshot, itemKind);
     }
 
     /**
@@ -280,7 +346,7 @@ public class ReviewJobClaimService {
     }
 
     /** Claims an attempt that makes no model call: it withholds what its review still has open, with this cause. */
-    private ClaimAttempt claimToWithhold(ReviewJob job, CompositionStop cause) {
+    private ClaimAttempt claimToWithhold(ReviewJob job, AgentRunFence fence, CompositionStop cause) {
         String itemKind = assignments.load(job).getFirst().item().kind().value();
         if (!(ResultAdmissionService.isContinuation(job)
                 ? reviewStart.compose(job.getWorkspaceId(), job.getReviewId())
@@ -289,10 +355,9 @@ public class ReviewJobClaimService {
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(null);
         job.setHoldReason(null);
-        job.setLeaseId(UUID.randomUUID());
         jobRepository.save(job);
-        lease(job);
-        return new ClaimResult(job, ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper), itemKind, cause);
+        return new ClaimResult(
+                job, fence, ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper), itemKind, cause);
     }
 
     private @Nullable ConfigSnapshot admitModels(
@@ -389,17 +454,12 @@ public class ReviewJobClaimService {
             jobTelemetry.budgetRefused();
             return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
         }
-        job.setAvailableAt(now.plus(BUDGET_HOLD_INTERVAL));
-        // Marks this as a budget hold specifically, so raising the cap can release it at once instead
-        // of leaving the admin to wait out BUDGET_HOLD_INTERVAL.
-        job.setHoldReason(ReviewJob.HOLD_REASON_BUDGET);
-        jobRepository.save(job);
         log.info(
-                "Holding claim — monthly LLM budget {}: jobId={}, workspaceId={}, retryAt={}",
+                "Holding claim — monthly LLM budget {}: jobId={}, workspaceId={}, retryIn={}",
                 blockReason == LlmBudgetBlockReason.EXHAUSTED ? "exhausted" : "unverifiable (cap set)",
                 job.getId(),
                 job.getWorkspaceId(),
-                job.getAvailableAt());
+                BUDGET_HOLD_INTERVAL);
         jobTelemetry.budgetHeld();
         return ClaimOutcome.BUDGET_HELD;
     }

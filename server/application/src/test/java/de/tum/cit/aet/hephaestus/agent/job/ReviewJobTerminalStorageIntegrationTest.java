@@ -28,7 +28,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
 
-    private static final UUID OWNER = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
     private static final UUID OTHER = UUID.fromString("00000000-0000-0000-0000-0000000000b2");
 
     @Autowired
@@ -60,6 +59,7 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
             job.setStatus(ReviewJobStatus.FAILED);
             job.setExitCode(1);
             jobs.saveAndFlush(job);
+            RuntimeJobTestData.agree(jdbc, job.getId());
             TerminalUsageTestFixtures.project(
                     TerminalUsage.resolve(
                             new LlmUsage("model", 0, 0, 0, 0, 0, 0.0, 0),
@@ -92,6 +92,7 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
             job.setStatus(ReviewJobStatus.FAILED);
             job.setExitCode(1);
             jobs.saveAndFlush(job);
+            RuntimeJobTestData.agree(jdbc, job.getId());
             TerminalUsageTestFixtures.project(
                     TerminalUsage.resolve(new LlmUsage("model", 0, 0, 0, 0, 0, 0.0, 2), null, List.of()),
                     usageRecorder,
@@ -127,13 +128,18 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
                 BigDecimal.ONE);
     }
 
+    /** A terminal write ends its run in the same transaction, as the executor's does. */
+    private int ended(int updated, ReviewJob job) {
+        RuntimeJobTestData.agree(jdbc, job.getId());
+        return updated;
+    }
+
     private ReviewJob running(String slug) {
         var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace(slug));
         var job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
         job.setConfigSnapshot(new JsonMapper().createObjectNode());
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(OWNER);
         job.setStartedAt(Instant.now());
         job.prePersist();
         return jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
@@ -143,8 +149,15 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
     void shouldKeepTheReviewAndPinnedInputWhenRecordingTheTerminalState() {
         var job = running("runtime-terminal-owner");
         var input = job.getInput();
-        assertThat(transactions.<Integer>execute(status -> jobs.transitionStatusOwnedBy(
-                        job.getId(), ReviewJobStatus.COMPLETED, Instant.now(), null, OWNER, job.getAttempt())))
+        assertThat(transactions.<Integer>execute(status -> ended(
+                        jobs.transitionStatusOwnedBy(
+                                job.getId(),
+                                ReviewJobStatus.COMPLETED,
+                                Instant.now(),
+                                null,
+                                job.getRunId(),
+                                job.getAttempt()),
+                        job)))
                 .isEqualTo(1);
         var stored =
                 jobs.findByIdAndWorkspaceId(job.getId(), job.getWorkspaceId()).orElseThrow();
@@ -167,19 +180,11 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
     void shouldRefuseATerminalWriteFromAnEarlierAttemptOfTheSameWorker() {
         var job = running("runtime-terminal-stale");
         int stale = job.getAttempt();
-        // The sweeper requeued the attempt and the same worker claimed the job again.
-        jdbc.update("UPDATE review_job SET attempt = attempt + 1 WHERE id = ?", job.getId());
+        // The run was requeued and the same worker claimed the job again.
+        RuntimeJobTestData.reclaim(jdbc, job);
 
         assertThat(transactions.<Integer>execute(status -> jobs.transitionStatusOwnedBy(
-                        job.getId(), ReviewJobStatus.FAILED, Instant.now(), "failed", OWNER, stale)))
-                .isZero();
-        assertThat(transactions.<Integer>execute(status -> jobs.transitionToCancelledOwnedBy(
-                        job.getId(),
-                        Instant.now(),
-                        "cancelled",
-                        ReviewJobCancellationReason.DRAIN_IMMEDIATE,
-                        OWNER,
-                        stale)))
+                        job.getId(), ReviewJobStatus.FAILED, Instant.now(), "failed", job.getRunId(), stale)))
                 .isZero();
         var stored = jobs.findById(job.getId()).orElseThrow();
         assertThat(stored.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
@@ -189,17 +194,18 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldStartTheSandboxOnlyForTheAttemptTheLedgerRuns() {
         var job = running("runtime-start-requeued");
-        // The sweeper requeued the job and the same worker claimed it again; requeue cleared the start.
-        jdbc.update(
-                "UPDATE review_job SET attempt = attempt + 1, execution_started_at = NULL WHERE id = ?", job.getId());
+        int stale = job.getAttempt();
+        // The run was requeued and the same worker claimed the job again; the requeue cleared the start.
+        RuntimeJobTestData.reclaim(jdbc, job);
+        jdbc.update("UPDATE review_job SET execution_started_at = NULL WHERE id = ?", job.getId());
 
         assertThat(transactions.<Integer>execute(
-                        status -> jobs.markExecutionStarted(job.getId(), OWNER, job.getAttempt(), Instant.now())))
+                        status -> jobs.markExecutionStarted(job.getId(), job.getRunId(), stale, Instant.now())))
                 .isZero();
         assertThat(executionStartedAt(job)).isNull();
 
         assertThat(transactions.<Integer>execute(
-                        status -> jobs.markExecutionStarted(job.getId(), OWNER, job.getAttempt() + 1, Instant.now())))
+                        status -> jobs.markExecutionStarted(job.getId(), job.getRunId(), stale + 1, Instant.now())))
                 .isEqualTo(1);
         assertThat(executionStartedAt(job)).isNotNull();
     }
@@ -215,8 +221,10 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("a".repeat(64));
         jobs.saveAndFlush(job);
-        assertThat(transactions.<Integer>execute(status -> jobs.transitionStatusOwnedBy(
-                        job.getId(), ReviewJobStatus.FAILED, Instant.now(), "lost", OWNER, 0)))
+        assertThat(transactions.<Integer>execute(status -> ended(
+                        jobs.transitionStatusOwnedBy(
+                                job.getId(), ReviewJobStatus.FAILED, Instant.now(), "lost", job.getRunId(), 0),
+                        job)))
                 .isEqualTo(1);
         var stored = jobs.findById(job.getId()).orElseThrow();
         assertThat(stored.getAdmissionAttempt()).isZero();

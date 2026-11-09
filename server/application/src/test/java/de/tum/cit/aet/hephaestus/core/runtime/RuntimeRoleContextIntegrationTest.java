@@ -10,7 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceDeliveryAuthorization;
 import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobZombieSweeper;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
 import de.tum.cit.aet.hephaestus.core.auth.AccountReferenceService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
@@ -186,7 +186,7 @@ class RuntimeRoleContextIntegrationTest {
             assertThat(application.getBeansOfType(ScmRepositoryItemLifecycle.class))
                     .hasSize(role == RuntimeRole.SERVER ? 1 : 0);
             if (role == RuntimeRole.SERVER) {
-                assertThat(application).hasSingleBean(ReviewJobZombieSweeper.class);
+                assertThat(application).hasSingleBean(AgentRunReaper.class);
                 assertThat(application).hasSingleBean(ReviewJobCompletionService.class);
                 assertThat(application.getBeansWithAnnotation(WorkspaceScopedController.class))
                         .isNotEmpty();
@@ -202,7 +202,7 @@ class RuntimeRoleContextIntegrationTest {
                 assertThat(application).hasSingleBean(SlackWorkspaceContentEraser.class);
                 assertThat(application).hasSingleBean(SlackWorkspacePurgeAdapter.class);
             } else {
-                assertThat(application).doesNotHaveBean(ReviewJobZombieSweeper.class);
+                assertThat(application).doesNotHaveBean(AgentRunReaper.class);
                 assertThat(application).doesNotHaveBean(ReviewJobCompletionService.class);
                 assertThat(application.getBeansWithAnnotation(WorkspaceScopedController.class))
                         .isEmpty();

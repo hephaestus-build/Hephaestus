@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
@@ -26,6 +27,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -40,6 +42,9 @@ class ReviewOperationalViewsIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     JdbcClient jdbc;
+
+    @Autowired
+    JdbcTemplate jdbcTemplate;
 
     @Autowired
     WebTestClient http;
@@ -181,11 +186,14 @@ class ReviewOperationalViewsIntegrationTest extends BaseIntegrationTest {
                 .param("ws", result.getWorkspaceId())
                 .param("id", result.getReviewId())
                 .update();
-        jdbc.sql("UPDATE review_job SET status='QUEUED',processing_status='NONE',completed_at=NULL WHERE"
-                        + " workspace_id=:ws AND id=:id")
-                .param("ws", result.getWorkspaceId())
-                .param("id", jobId)
-                .update();
+        RuntimeJobTestData.moveJob(
+                jdbcTemplate,
+                jobId,
+                () -> jdbc.sql("UPDATE review_job SET status='QUEUED',processing_status='NONE',completed_at=NULL WHERE"
+                                + " workspace_id=:ws AND id=:id")
+                        .param("ws", result.getWorkspaceId())
+                        .param("id", jobId)
+                        .update());
         when(runtime.queue(eq(scenario.workspace().getId()), any(), eq(5)))
                 .thenReturn(new ReviewQueueSnapshot(
                         FROM,

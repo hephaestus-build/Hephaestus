@@ -71,7 +71,6 @@ class PracticeReviewHealthIndicatorTest extends BaseUnitTest {
                 enabled,
                 Duration.ofSeconds(1),
                 5,
-                5,
                 Duration.ofSeconds(25),
                 Duration.ofDays(14),
                 Duration.ofDays(90),

@@ -10,11 +10,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,7 +46,7 @@ class ReviewJobRetentionServiceTest extends BaseUnitTest {
     private ReviewJobRetentionService service;
 
     private static final AgentProperties AGENT_PROPS = new AgentProperties(
-            true, Duration.ofSeconds(1), 5, 5, Duration.ofSeconds(25), Duration.ofDays(14), Duration.ofDays(90), 16);
+            true, Duration.ofSeconds(1), 5, Duration.ofSeconds(25), Duration.ofDays(14), Duration.ofDays(90), 16);
 
     @BeforeEach
     void setUp() {
@@ -61,7 +64,8 @@ class ReviewJobRetentionServiceTest extends BaseUnitTest {
                 AGENT_PROPS,
                 Clock.systemUTC(),
                 transactionTemplate,
-                meterRegistry);
+                meterRegistry,
+                mock(AgentRuns.class));
     }
 
     @Test
@@ -80,7 +84,7 @@ class ReviewJobRetentionServiceTest extends BaseUnitTest {
     @DisplayName("receipts of deleted review jobs are retired after the rows are deleted, batch by batch")
     void retiresReceiptsAfterDeletingOldRows() {
         when(jobRepository.deleteUnreferencedTerminalRowsOlderThan(any(), anyInt()))
-                .thenReturn(4);
+                .thenReturn(List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()));
         when(evidenceCopies.retireReceiptsOfDeletedJobs(anyInt())).thenReturn(BATCH_SIZE, 2);
 
         service.runRetention();

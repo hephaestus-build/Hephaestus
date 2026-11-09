@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
@@ -28,6 +29,7 @@ public class ReviewJobLifecycleService {
     private final ReviewAttemptUsageService attemptUsage;
     private final ObjectMapper objectMapper;
     private final ReviewJobTelemetry jobTelemetry;
+    private final AgentRuns runs;
 
     public ReviewJobLifecycleService(
             ReviewJobRepository jobRepository,
@@ -35,8 +37,10 @@ public class ReviewJobLifecycleService {
             @Nullable SandboxManager sandboxManager,
             ReviewAttemptUsageService attemptUsage,
             ObjectMapper objectMapper,
-            ReviewJobTelemetry jobTelemetry) {
+            ReviewJobTelemetry jobTelemetry,
+            AgentRuns runs) {
         this.jobRepository = jobRepository;
+        this.runs = runs;
         this.transactionTemplate = transactionTemplate;
         this.sandboxManager = sandboxManager;
         this.attemptUsage = attemptUsage;
@@ -57,7 +61,7 @@ public class ReviewJobLifecycleService {
         CancelOutcome outcome = transactionTemplate.execute(status -> cancelTransition(workspaceId, jobId));
 
         // The proxy refuses the cancelled attempt's next call at once. Its own worker stops the sandbox at its next
-        // heartbeat; a worker in this process stops it now.
+        // lease renewal; a worker in this process stops it now.
         if (outcome.stopContainer()) {
             if (sandboxManager != null) {
                 try {
@@ -113,8 +117,9 @@ public class ReviewJobLifecycleService {
             }
         }
 
-        // Reload to read the lease, which is only set at claim.
         ReviewJob fresh = requireJob(workspaceId, jobId);
+        // The run ends with its job; its holder's next fenced write then changes nothing.
+        runs.cancel(fresh.run());
         recordUsageIfStarted(fresh);
         jobTelemetry.terminal(fresh, ReviewJobStatus.CANCELLED, ReviewJobTelemetry.age(fresh));
         return new CancelOutcome(fresh, true);

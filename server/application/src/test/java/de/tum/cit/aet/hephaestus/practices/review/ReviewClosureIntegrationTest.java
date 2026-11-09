@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompletion;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
@@ -37,8 +38,9 @@ class ReviewClosureIntegrationTest extends BaseIntegrationTest {
     void shouldWithholdAReadyPracticeWhenItsRetryIsCancelledWhileQueued() {
         var pending = admissions.pending(data.scenario(), Instant.now(), null);
         // A lost attempt requeued: capture left the practice READY, and the job holds no claim.
-        jdbc.update(
-                "UPDATE review_job SET status='QUEUED',attempt=1,processing_status='NONE',started_at=NULL WHERE id=?",
+        RuntimeJobTestData.updateJobs(
+                jdbc,
+                "UPDATE review_job SET status='QUEUED',processing_status='NONE',started_at=NULL WHERE id=?",
                 pending.jobId());
 
         assertThat(reviews.cancel(
@@ -88,7 +90,8 @@ class ReviewClosureIntegrationTest extends BaseIntegrationTest {
         jdbc.update("UPDATE review_item SET state='LISTED',reason=NULL WHERE review_id=? AND state='WITHHELD'", id);
         jdbc.update(
                 "UPDATE review_practice SET status='READY',reason=NULL WHERE review_id=? AND status='WITHHELD'", id);
-        jdbc.update(
+        RuntimeJobTestData.updateJobs(
+                jdbc,
                 "UPDATE review_job SET status='FAILED',processing_status='FAILED',completed_at=now() WHERE id=?",
                 pending.jobId());
 

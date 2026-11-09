@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.usage;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRate;
 import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateLookup;
 import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateRepository;
@@ -47,7 +47,7 @@ class LlmUsageFxDisplayIntegrationTest extends AbstractWorkspaceIntegrationTest 
     private ConfigAuditPort configAudit;
 
     @Autowired
-    private ReviewJobRepository jobRepository;
+    private ReviewRunKind reviewRuns;
 
     @Autowired
     private Clock clock;
@@ -66,9 +66,8 @@ class LlmUsageFxDisplayIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL));
         FxRateLookup rates = new FxRateLookup(fxRateRepository, clock, properties);
         usageService = new LlmUsageService(
-                usageRepository, workspaceRepository, budgetService, configAudit, jobRepository, rates);
-        adminService =
-                new LlmUsageAdminService(usageRepository, workspaceRepository, configAudit, jobRepository, rates);
+                usageRepository, workspaceRepository, budgetService, configAudit, reviewRuns, rates);
+        adminService = new LlmUsageAdminService(usageRepository, workspaceRepository, configAudit, reviewRuns, rates);
     }
 
     @Test

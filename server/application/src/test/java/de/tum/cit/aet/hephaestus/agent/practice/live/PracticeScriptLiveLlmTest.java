@@ -399,7 +399,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                 job.getId(),
                 context.id(),
                 job.getAttempt(),
-                Objects.requireNonNull(job.getLeaseId()),
+                Objects.requireNonNull(job.getRunId()),
                 workDeadline,
                 workDeadline.plus(Duration.ofMinutes(10)));
         PracticeSandboxSpec spec = practiceAdapter.buildSandboxSpec(new PracticeAgentRequest(
@@ -797,8 +797,6 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         job.setConfigSnapshot(priced);
         job.setStatus(ReviewJobStatus.RUNNING);
         // No worker heartbeat renews this hand-built attempt, so its lease outlasts the whole live run.
-        job.setLeaseId(UUID.randomUUID());
-        job.setLeasedUntil(Instant.now().plus(Duration.ofHours(1)));
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(Instant.now());
         job.setCapture(snapshot);

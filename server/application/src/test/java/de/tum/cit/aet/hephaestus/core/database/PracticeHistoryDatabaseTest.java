@@ -89,10 +89,10 @@ class PracticeHistoryDatabaseTest {
         var database = migratedDatabase(context);
         assertThat(column(
                         database,
-                        "SELECT status || '|' || processing_status || '|' || cancellation_reason || '|' ||"
-                                + " (lease_id IS NULL) FROM review_job WHERE"
-                                + " id='00000000-0000-0000-0000-000000992112'"))
-                .containsExactly("CANCELLED|DONE|CONTRACT_CHANGED|true");
+                        "SELECT j.status || '|' || j.processing_status || '|' || j.cancellation_reason || '|' ||"
+                                + " r.state FROM review_job j JOIN agent_run r ON r.id=j.run_id WHERE"
+                                + " j.id='00000000-0000-0000-0000-000000992112'"))
+                .containsExactly("CANCELLED|DONE|CONTRACT_CHANGED|ENDED");
         assertThat(column(
                         database,
                         "SELECT status || '|' || processing_status FROM review_job WHERE"

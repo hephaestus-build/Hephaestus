@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartRequestDTO;
@@ -15,6 +16,9 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateProgressDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.StageResponseDTO;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
@@ -60,6 +64,7 @@ public class ResultAdmissionService {
     public static final String INTERRUPTED_AFTER_ADMISSION =
             "The review stopped after its observations were admitted. The recorded observations are kept.";
     private final ReviewJobRepository jobs;
+    private final AgentRuns runs;
     private final AdmittedResultQuery proof;
     private final ReviewJobAssignments assignments;
     private final AdmittedResultProjectionService projection;
@@ -83,8 +88,10 @@ public class ResultAdmissionService {
             PlatformTransactionManager manager,
             FeedbackCompositionService composition,
             ReviewWriteGuard writeGuard,
-            PracticeResultStaging staging) {
+            PracticeResultStaging staging,
+            AgentRuns runs) {
         this.jobs = jobs;
+        this.runs = runs;
         this.proof = proof;
         this.assignments = assignments;
         this.projection = projection;
@@ -251,8 +258,7 @@ public class ResultAdmissionService {
         var progress = PrivateFeedbackProgress.NONE;
         if (assignments.review(job).kind() == ReviewKind.ITEM && !admitted.isEmpty()) {
             progress = composition.privateProgress(job, admitted);
-            var identity = new AdmissionIdentity(
-                    job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getLeaseId()));
+            var identity = new AdmissionIdentity(job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId());
             privateRead = files.indexLateRead(
                     identity,
                     () -> Objects.requireNonNull(transactions.execute(status -> {
@@ -440,9 +446,15 @@ public class ResultAdmissionService {
                 .orElseThrow(StaleAttemptException::new);
         if (job.getStatus() != ReviewJobStatus.RUNNING
                 || job.getAttempt() != identity.attempt()
-                || !identity.leaseId().equals(job.getLeaseId())
-                || job.getLeasedUntil() == null
-                || !job.getLeasedUntil().isAfter(jobs.databaseClock())) throw new StaleAttemptException();
+                || !identity.runId().equals(job.getRunId())
+                || identity.attempt() < 0) throw new StaleAttemptException();
+        // The job row first, then its run, as every writer of both takes them; the lease holds until this commits.
+        try {
+            runs.requireCurrent(new AgentRunFence(
+                    identity.runId(), identity.workspaceId(), ReviewRunKind.epoch(identity.attempt())));
+        } catch (StaleRunException lost) {
+            throw new StaleAttemptException(lost);
+        }
         return job;
     }
 
@@ -470,11 +482,19 @@ public class ResultAdmissionService {
         return isAdmitted(job) && citationAttempt(job) != job.getAttempt();
     }
 
-    public record AdmissionIdentity(UUID jobId, long workspaceId, int attempt, UUID leaseId) {}
+    public record AdmissionIdentity(UUID jobId, long workspaceId, int attempt, UUID runId) {}
 
     public static class StaleAttemptException extends RuntimeException {
         @Serial
         private static final long serialVersionUID = 1L;
+
+        public StaleAttemptException() {
+            super();
+        }
+
+        public StaleAttemptException(Throwable cause) {
+            super(cause);
+        }
     }
 
     public static class PublicHistoryRefusedException extends RuntimeException {

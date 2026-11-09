@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
@@ -86,6 +87,7 @@ class LlmProxySecurityConfig {
             SandboxGatewayProperties gatewayProperties,
             SandboxGatewayConnector gateway,
             ReviewJobRepository agentJobRepository,
+            AgentRuns agentRuns,
             MentorTurnRepository mentorTurnRepository,
             SandboxGatewaySessions gatewaySessions,
             AttemptTokenVerifier jwtVerifier,
@@ -110,7 +112,6 @@ class LlmProxySecurityConfig {
                 paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}"),
                 paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/workspace"));
         RequestMatcher resultUpload = paths.matcher(HttpMethod.POST, "/internal/llm/runtime/{id}/result");
-        RequestMatcher reviewLease = paths.matcher(HttpMethod.POST, "/internal/llm/runtime/{id}/lease");
         RequestMatcher hostCommands = paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/commands");
         RequestMatcher turnTools = new OrRequestMatcher(
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/link-result"),
@@ -127,9 +128,9 @@ class LlmProxySecurityConfig {
                 paths.matcher(HttpMethod.PUT, "/internal/llm/turn/{id}/partial"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/end"));
         RequestMatcher turnEndpoints = new OrRequestMatcher(turnTools, turnBookkeeping);
-        RequestMatcher bodies = new OrRequestMatcher(modelCalls, turnEndpoints, reviewLease);
+        RequestMatcher bodies = new OrRequestMatcher(modelCalls, turnEndpoints);
         RequestMatcher capabilities =
-                new OrRequestMatcher(modelCalls, runtimeReads, resultUpload, hostCommands, turnEndpoints, reviewLease);
+                new OrRequestMatcher(modelCalls, runtimeReads, resultUpload, hostCommands, turnEndpoints);
         var limit = new AuthRateLimitProperties.Limit(gatewayProperties.requestsPerMinute(), Duration.ofMinutes(1));
         var sourceLimit =
                 new AuthRateLimitProperties.Limit(gatewayProperties.sourceRequestsPerMinute(), Duration.ofMinutes(1));
@@ -165,7 +166,12 @@ class LlmProxySecurityConfig {
                                 caller(identity -> identity.job() != null))))
                 .addFilterBefore(
                         new JobTokenAuthenticationFilter(
-                                agentJobRepository, mentorTurnRepository, gatewaySessions, jwtVerifier, accounting),
+                                agentJobRepository,
+                                agentRuns,
+                                mentorTurnRepository,
+                                gatewaySessions,
+                                jwtVerifier,
+                                accounting),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(
                         new SandboxGatewaySourceLimitFilter(sourceLimit, objectMapper, accounting),

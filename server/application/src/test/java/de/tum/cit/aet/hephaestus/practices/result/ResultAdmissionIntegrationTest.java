@@ -12,6 +12,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventRecorded;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
@@ -95,6 +96,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -134,6 +136,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
 
     @Autowired
     JdbcClient jdbc;
+
+    @Autowired
+    JdbcTemplate jdbcTemplate;
 
     @Autowired
     ReviewIntegrationData data;
@@ -398,12 +403,12 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
         long workspaceId = scenario.workspace().getId();
         UUID reviewId = pending.review().getId();
-        jdbc.sql("UPDATE review_job SET"
-                        + " status='FAILED',processing_status='PENDING',started_at=now(),completed_at=now() WHERE"
-                        + " workspace_id=:ws AND id=:id")
-                .param("ws", workspaceId)
-                .param("id", pending.jobId())
-                .update();
+        RuntimeJobTestData.updateJobs(
+                jdbcTemplate,
+                "UPDATE review_job SET status='FAILED',processing_status='PENDING',started_at=now(),completed_at=now()"
+                        + " WHERE workspace_id=? AND id=?",
+                workspaceId,
+                pending.jobId());
         when(runtime.activeJobIds(workspaceId, reviewId)).thenReturn(Set.of());
         when(runtime.unsettledJobIds(workspaceId, reviewId)).thenReturn(Set.of(pending.jobId()));
         var completion = new ReviewCompletion(
@@ -1223,13 +1228,14 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
     }
 
     private void settle(ReviewAdmissionData.Pending pending) {
-        assertThat(jdbc.sql("UPDATE review_job SET status=:status,processing_status='DONE',completed_at=now()"
-                                + " WHERE workspace_id=:ws AND id=:id")
-                        .param("status", ReviewJobStatus.COMPLETED.name())
-                        .param("ws", scenario.workspace().getId())
-                        .param("id", pending.jobId())
-                        .update())
-                .isOne();
+        assertThat(RuntimeJobTestData.updateJobs(
+                        jdbcTemplate,
+                        "UPDATE review_job SET status=?,processing_status='DONE',completed_at=now()"
+                                + " WHERE workspace_id=? AND id=?",
+                        ReviewJobStatus.COMPLETED.name(),
+                        scenario.workspace().getId(),
+                        pending.jobId()))
+                .hasSize(1);
         when(runtime.activeJobIds(scenario.workspace().getId(), pending.review().getId()))
                 .thenReturn(Set.of());
         when(runtime.unsettledJobIds(

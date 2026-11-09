@@ -62,6 +62,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             // when an erasure selects the job.
             "review_job_attempt_usage",
             "review_job_attempt_charge",
+            // A run's queue state: its kind, band, subject key, epoch and times, no content or person; an erasure
+            // deletes the runs of the jobs it deletes.
+            "agent_run",
             "commit_pull_request",
             "connection",
             "connection_activity",

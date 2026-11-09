@@ -33,10 +33,15 @@ class PracticeV1ScanMembershipDatabaseTest {
             INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,item_version)
             VALUES('00000000-0000-0000-0000-000000999811',978001,978004,999841,'file-a-head'),
                 ('00000000-0000-0000-0000-000000999811',978001,978004,999842,'file-b-head');
-            INSERT INTO review_job(id,review_id,workspace_id,status,processing_status,input,config_snapshot,trace_id,submitted_at)
-            VALUES('00000000-0000-0000-0000-000000999821','00000000-0000-0000-0000-000000999811',978001,'COMPLETED','DONE','{}','{}',repeat('f',32),'2026-01-01T00:00:00Z'),
-                ('00000000-0000-0000-0000-000000999822','00000000-0000-0000-0000-000000999811',978001,'COMPLETED','DONE','{}','{}',repeat('f',32),'2026-01-01T00:00:00Z'),
-                ('00000000-0000-0000-0000-000000999823','00000000-0000-0000-0000-000000999811',978001,'QUEUED','NONE','{}','{}',repeat('f',32),'2026-01-01T00:00:00Z');
+            INSERT INTO agent_run(id,workspace_id,kind,band,concurrency_key,state,stop_reason,ended_at)
+            VALUES('00000000-0000-0000-0000-000000999831',978001,'REVIEW','BATCH','review:a','ENDED','COMPLETED',now()),
+                ('00000000-0000-0000-0000-000000999832',978001,'REVIEW','BATCH','review:b','ENDED','COMPLETED',now()),
+                ('00000000-0000-0000-0000-000000999833',978001,'REVIEW','BATCH','review:c','QUEUED',NULL,NULL),
+                ('00000000-0000-0000-0000-000000999834',978001,'REVIEW','BATCH','review:d','QUEUED',NULL,NULL);
+            INSERT INTO review_job(id,review_id,workspace_id,status,processing_status,input,config_snapshot,trace_id,submitted_at,run_id)
+            VALUES('00000000-0000-0000-0000-000000999821','00000000-0000-0000-0000-000000999811',978001,'COMPLETED','DONE','{}','{}',repeat('f',32),'2026-01-01T00:00:00Z','00000000-0000-0000-0000-000000999831'),
+                ('00000000-0000-0000-0000-000000999822','00000000-0000-0000-0000-000000999811',978001,'COMPLETED','DONE','{}','{}',repeat('f',32),'2026-01-01T00:00:00Z','00000000-0000-0000-0000-000000999832'),
+                ('00000000-0000-0000-0000-000000999823','00000000-0000-0000-0000-000000999811',978001,'QUEUED','NONE','{}','{}',repeat('f',32),'2026-01-01T00:00:00Z','00000000-0000-0000-0000-000000999833');
             INSERT INTO result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,outcome,coverage,recorded_at)
             VALUES('00000000-0000-0000-0000-000000999851',978001,'00000000-0000-0000-0000-000000999811',978004,999831,999841,'file-a-head','MET','{}',now());
             UPDATE review_item SET state='JUDGED',result_id='00000000-0000-0000-0000-000000999851',job_id='00000000-0000-0000-0000-000000999821'
@@ -44,8 +49,8 @@ class PracticeV1ScanMembershipDatabaseTest {
             COMMIT;
             """);
         assertThatThrownBy(() -> PracticeMigrationFixture.execute(database, """
-            INSERT INTO review_job(id,review_id,workspace_id,status,input,config_snapshot,trace_id,submitted_at)
-            VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000999811',978001,'QUEUED','{}','{}',repeat('f',32),'2026-01-01T00:00:00Z')
+            INSERT INTO review_job(id,review_id,workspace_id,status,input,config_snapshot,trace_id,submitted_at,run_id)
+            VALUES(gen_random_uuid(),'00000000-0000-0000-0000-000000999811',978001,'QUEUED','{}','{}',repeat('f',32),'2026-01-01T00:00:00Z','00000000-0000-0000-0000-000000999834')
             """))
                 .hasRootCauseInstanceOf(SQLException.class)
                 .hasMessageContaining("uk_review_job_active_review");
@@ -59,6 +64,7 @@ class PracticeV1ScanMembershipDatabaseTest {
         PracticeMigrationFixture.execute(database, """
             DELETE FROM review_job WHERE id='00000000-0000-0000-0000-000000999821';
             UPDATE review_job SET status='CANCELLED',processing_status='DONE',cancellation_reason='CANCELLED_BY_ADMIN',completed_at=now() WHERE id='00000000-0000-0000-0000-000000999823';
+            UPDATE agent_run SET state='ENDED',leased_until=NULL,stop_reason='CANCELLED',ended_at=now() WHERE id=(SELECT run_id FROM review_job WHERE id='00000000-0000-0000-0000-000000999823');
             UPDATE review SET status='PARTIAL',stop_reason='DEADLINE',completed_at=now() WHERE id='00000000-0000-0000-0000-000000999811';
             INSERT INTO review(id,workspace_id,item_id,kind,item_version,origin,status,budget_usd,ordered_at)
             SELECT '00000000-0000-0000-0000-000000999812',workspace_id,item_id,kind,item_version,origin,'QUEUED',budget_usd,now()

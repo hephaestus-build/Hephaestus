@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -15,7 +14,11 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.scan.ScanBudget;
 import de.tum.cit.aet.hephaestus.agent.scan.ScanModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
@@ -59,6 +62,7 @@ class ScanCallGuardTest extends BaseUnitTest {
     private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
 
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
+    private final AgentRuns runs = mock(AgentRuns.class);
     private final ReviewSnapshotQuery reviews = mock(ReviewSnapshotQuery.class);
     private final ScanBudget budget = mock(ScanBudget.class);
     private final JsonMapper mapper = new JsonMapper();
@@ -67,7 +71,13 @@ class ScanCallGuardTest extends BaseUnitTest {
     private static final PracticeReviewProperties PRACTICE_REVIEW =
             new PracticeReviewProperties(false, 15, 5, null, 36, 48_000, 200_000, 1000, Duration.ofMinutes(10));
     private final ScanCallGuard guard = new ScanCallGuard(
-            jobs, reviews, budget, new SandboxGatewayProperties(8081, 10000, 120, 1000, 4096), mapper, PRACTICE_REVIEW);
+            jobs,
+            runs,
+            reviews,
+            budget,
+            new SandboxGatewayProperties(8081, 10000, 120, 1000, 4096),
+            mapper,
+            PRACTICE_REVIEW);
 
     private ProxyRouting route() {
         return route(Instant.now().plusSeconds(60));
@@ -154,8 +164,7 @@ class ScanCallGuardTest extends BaseUnitTest {
     void setup() {
         lenient().when(budget.callCap(ArgumentMatchers.anyInt())).thenReturn(36L);
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
+        job.setRunId(LEASE);
         var price = new LlmPriceSnapshot(
                 UsageFundingSource.INSTANCE,
                 UsagePricingState.PRICED,
@@ -184,10 +193,10 @@ class ScanCallGuardTest extends BaseUnitTest {
                 60,
                 null)));
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
-        // The database answers from the row: a replaced attempt or another lease holds no live lease.
-        when(jobs.hasLiveLease(eq(job.getId()), eq(1L), anyInt(), any(UUID.class)))
-                .thenAnswer(call -> job.getAttempt() == (int) call.getArgument(2)
-                        && call.getArgument(3).equals(job.getLeaseId()));
+        // The database answers from the run: a replaced attempt or another run holds no live lease.
+        when(runs.isCurrent(any(AgentRunRef.class), anyInt()))
+                .thenAnswer(call -> ReviewRunKind.epoch(job.getAttempt()) == (int) call.getArgument(1)
+                        && call.<AgentRunRef>getArgument(0).id().equals(job.getRunId()));
         var old = RuntimeReviewTestData.assignment(null, null).practice();
         var model = new FrozenModel(
                 "instance:1",
@@ -277,7 +286,7 @@ class ScanCallGuardTest extends BaseUnitTest {
 
     @Test
     void refusesAReplacedAttempt() {
-        job.setAttempt(1);
+        RuntimeJobTestData.attempt(job, 1);
         refused("{}");
     }
 

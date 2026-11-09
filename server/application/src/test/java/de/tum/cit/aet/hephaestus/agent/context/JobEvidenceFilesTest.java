@@ -250,7 +250,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         PreparedJobInputsFixtures.prepare(files, job, raw).close();
 
         // The hold moved the job to the next attempt, so the same worker's next claim prepares a folder of its own.
-        job.setAttempt(job.getAttempt() + 1);
+        RuntimeJobTestData.attempt(job, job.getAttempt() + 1);
         try (var retried = PreparedJobInputsFixtures.prepare(files, job, raw)) {
             assertThat(retried.filesOnDisk().get("context/refused.txt")).hasContent("captured once\n");
         }
@@ -275,9 +275,9 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                     .contains(true);
             assertThatThrownBy(() -> PreparedJobInputsFixtures.prepare(files, job, raw))
                     .isInstanceOf(IllegalStateException.class);
-            job.setAttempt(1);
+            RuntimeJobTestData.attempt(job, 1);
             assertThat(read(files, job, "context/source.txt", sha)).isEmpty();
-            job.setAttempt(0);
+            RuntimeJobTestData.attempt(job, 0);
             assertThat(prepared.filesOnDisk().get("context/source.txt")).hasContent(content);
         }
         assertThat(read(files, job, "context/source.txt", sha)).isPresent();
@@ -358,8 +358,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                     .cleanEndedAttempts();
             assertThat(read(files, job, "inputs/source", sha)).isEmpty();
             verify(jobs)
-                    .expireCaptureInventory(
-                            job.getId(), 1L, job.getAttempt(), Objects.requireNonNull(job.getLeaseId()));
+                    .expireCaptureInventory(job.getId(), 1L, job.getAttempt(), Objects.requireNonNull(job.getRunId()));
         } finally {
             prepared.close();
         }
@@ -969,7 +968,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var files = new JobEvidenceFiles(layout, jobs, clock, copies);
         var earlier = files.bind(job.getId(), 0, IMAGE);
         // Requeued: the successor attempt runs on this worker and holds the job's lease.
-        job.setAttempt(1);
+        RuntimeJobTestData.attempt(job, 1);
         var successor = files.bind(job.getId(), 1, IMAGE);
         var notLaunched = files.bind(job.getId(), 5, IMAGE);
 
@@ -1088,8 +1087,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var job = new ReviewJob();
         job.setId(UUID.randomUUID());
         RuntimeJobTestData.initialize(job, workspace.getId());
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
+        job.setRunId(LEASE);
         return job;
     }
 }

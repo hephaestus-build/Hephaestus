@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
@@ -355,10 +356,11 @@ public class ReviewIntegrationData {
         }
         var job = UUID.randomUUID();
         jdbc.sql("""
-            INSERT INTO review_job(id,review_id,workspace_id,status,attempt,processing_status,trace_id,input,config_snapshot,submitted_at,available_at)
-            VALUES(:id,:review,:ws,'QUEUED',3,'NONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,now(),now())
+            INSERT INTO review_job(id,review_id,workspace_id,status,run_id,processing_status,trace_id,input,config_snapshot,submitted_at)
+            VALUES(:id,:review,:ws,'QUEUED',:run,'NONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,now())
             """)
                 .param("id", job)
+                .param("run", RuntimeJobTestData.insertRun(jdbc, s.workspace().getId(), review.getId(), "QUEUED", 3))
                 .param("review", review.getId())
                 .param("ws", s.workspace().getId())
                 .param("trace", job.toString().replace("-", ""))
@@ -452,10 +454,14 @@ public class ReviewIntegrationData {
     public UUID job(Result result) {
         var id = UUID.randomUUID();
         jdbc.sql("""
-            INSERT INTO review_job(id,review_id,workspace_id,status,attempt,processing_status,trace_id,input,config_snapshot,submitted_at,available_at,started_at,completed_at)
-            VALUES(:id,:review,:ws,'COMPLETED',1,'DONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,:at,:at,:at,:at)
+            INSERT INTO review_job(id,review_id,workspace_id,status,run_id,processing_status,trace_id,input,config_snapshot,submitted_at,started_at,completed_at)
+            VALUES(:id,:review,:ws,'COMPLETED',:run,'DONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,:at,:at,:at)
             """)
                 .param("id", id)
+                .param(
+                        "run",
+                        RuntimeJobTestData.insertRun(
+                                jdbc, result.getWorkspaceId(), result.getReviewId(), "COMPLETED", 1))
                 .param("review", result.getReviewId())
                 .param("ws", result.getWorkspaceId())
                 .param("trace", id.toString().replace("-", ""))
@@ -470,10 +476,13 @@ public class ReviewIntegrationData {
     public UUID activeJob(Result result, String status, @Nullable String holdReason) {
         var id = UUID.randomUUID();
         jdbc.sql("""
-            INSERT INTO review_job(id,review_id,workspace_id,status,attempt,processing_status,trace_id,input,config_snapshot,submitted_at,available_at,started_at,hold_reason)
-            VALUES(:id,:review,:ws,:status,0,'NONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,:at,:at,:started,:hold)
+            INSERT INTO review_job(id,review_id,workspace_id,status,run_id,processing_status,trace_id,input,config_snapshot,submitted_at,started_at,hold_reason)
+            VALUES(:id,:review,:ws,:status,:run,'NONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,:at,:started,:hold)
             """)
                 .param("id", id)
+                .param(
+                        "run",
+                        RuntimeJobTestData.insertRun(jdbc, result.getWorkspaceId(), result.getReviewId(), status, 0))
                 .param("review", result.getReviewId())
                 .param("ws", result.getWorkspaceId())
                 .param("status", status)

@@ -8,7 +8,6 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Limit;
@@ -122,30 +121,46 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      * effect immediately. Scoped to {@code hold_reason = 'BUDGET'} rather than "any future
      * {@code available_at}" so it cannot fast-forward a crash-retry backoff.
      *
-     * @return how many held jobs were released
+     * @return the runs of the held jobs, which the caller offers again
      */
     @WorkspaceAgnostic("Workspace-scoped release; caller is the budget writer for that workspace")
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("UPDATE ReviewJob j SET j.availableAt = :now, j.holdReason = null "
-            + "WHERE j.workspaceId = :workspaceId AND j.status = 'QUEUED' AND j.holdReason = 'BUDGET'")
-    int releaseBudgetHolds(@Param("workspaceId") Long workspaceId, @Param("now") Instant now);
+    // A list result runs as a query, which neither flushes nor clears; Hibernate flushes before a native statement.
+    @Query(value = """
+            UPDATE review_job SET hold_reason = NULL
+             WHERE workspace_id = :workspaceId AND status = 'QUEUED' AND hold_reason = 'BUDGET'
+            RETURNING run_id
+            """, nativeQuery = true)
+    List<UUID> clearBudgetHolds(@Param("workspaceId") long workspaceId);
 
     /** The parent before the job, as the review service locks it before it changes the review; no parent state changes here. */
-    @WorkspaceAgnostic("Queued job ID from the global poller; parent join includes its workspace")
+    @WorkspaceAgnostic("Run-based claim; parent join includes its workspace")
     @Query(value = """
             SELECT r.id FROM review r JOIN review_job j ON j.review_id=r.id AND j.workspace_id=r.workspace_id
-            WHERE j.id=:id AND j.status='QUEUED' FOR UPDATE OF r SKIP LOCKED
+            WHERE j.run_id=:runId AND j.status='QUEUED' FOR UPDATE OF r SKIP LOCKED
             """, nativeQuery = true)
-    Optional<UUID> lockParentForQueuedClaim(@Param("id") UUID id);
+    Optional<UUID> lockParentForQueuedClaim(@Param("runId") UUID runId);
 
-    /** Rechecks eligibility under the row lock, using the same application clock that set available_at. */
-    @WorkspaceAgnostic("ID-based claim; job ID from a workspace-scoped candidate poll")
+    /** Locks the queued job of a run that this claim leased; skipped when a lifecycle write holds it. */
+    @WorkspaceAgnostic("Run-based claim; the run carries its workspace")
     @Query(
-            value = "SELECT j.* FROM review_job j JOIN workspace w ON w.id = j.workspace_id "
-                    + "WHERE j.id = :id AND j.status = 'QUEUED' AND j.available_at <= :now AND w.status = 'ACTIVE' "
+            value = "SELECT j.id FROM review_job j WHERE j.run_id = :runId AND j.status = 'QUEUED' "
                     + "FOR UPDATE OF j SKIP LOCKED",
             nativeQuery = true)
-    Optional<ReviewJob> findByIdQueuedForUpdateSkipLocked(@Param("id") UUID id, @Param("now") Instant now);
+    Optional<UUID> lockQueuedIdByRun(@Param("runId") UUID runId);
+
+    /**
+     * The queued job of a run that this claim leased, locked; empty when a lifecycle write holds it. The lock and the
+     * load are two statements because a native entity query cannot fill the attempt that the job reads from its run.
+     */
+    default Optional<ReviewJob> lockQueuedByRun(UUID runId) {
+        return lockQueuedIdByRun(runId).flatMap(this::findById);
+    }
+
+    /** The job of a run, locked: the run's reaper takes it before it takes the run back. */
+    @WorkspaceAgnostic("Run-based lock; the run carries its workspace")
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT j FROM ReviewJob j WHERE j.runId = :runId AND j.workspaceId = :workspaceId")
+    Optional<ReviewJob> lockByRun(@Param("runId") UUID runId, @Param("workspaceId") long workspaceId);
 
     /** Holds the row through the status transition so a concurrent execution-start CAS cannot win afterward. */
     @WorkspaceAgnostic("ID-based locked recovery read; caller performs a fenced status transition")
@@ -166,26 +181,25 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("fromStatuses") Collection<ReviewJobStatus> fromStatuses);
 
     /**
-     * Ends the RUNNING attempt like {@link #transitionStatus}, fenced on its lease and the attempt: a late terminal write
-     * of an attempt that was orphan-requeued cannot end the attempt that runs now, on any worker.
+     * Ends the RUNNING attempt like {@link #transitionStatus}, fenced on its run and attempt: a late terminal write of an
+     * attempt whose run was requeued cannot end the attempt that runs now, on any worker.
      *
      * @return rows updated (0 or 1)
      */
     @WorkspaceAgnostic("ID-based fenced transition; job ID + owner from worker-local execution context")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE ReviewJob j SET j.status = :newStatus, j.completedAt = :now, j.errorMessage = :error "
-            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.leaseId = :leaseId AND j.attempt = :attempt")
+            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.runId = :runId AND j.attempt = :attempt")
     int transitionStatusOwnedBy(
             @Param("id") UUID id,
             @Param("newStatus") ReviewJobStatus newStatus,
             @Param("now") Instant now,
             @Param("error") @Nullable String error,
-            @Param("leaseId") UUID leaseId,
+            @Param("runId") UUID runId,
             @Param("attempt") int attempt);
 
     /**
-     * Unfenced by lease; callers that hold the attempt's lease should prefer
-     * {@link #transitionToCancelledOwnedBy}.
+     * Unfenced by the run: a requester's cancel ends whichever attempt runs, and its run with it.
      *
      * @return rows updated (0 or 1)
      */
@@ -216,25 +230,25 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      * each other in opposite orders. Empty when the job no longer exists in that workspace.
      */
     @Query(
-            value = "SELECT j.status AS status, j.attempt AS attempt, j.review_id AS \"reviewId\" FROM review_job j"
-                    + " WHERE j.id = :id AND j.workspace_id = :workspaceId FOR UPDATE",
+            value = "SELECT j.status AS status, " + ReviewRunKind.ATTEMPT_OF_RUN
+                    + " AS attempt, j.review_id AS \"reviewId\""
+                    + " FROM review_job j"
+                    + " JOIN agent_run r ON r.id = j.run_id"
+                    + " WHERE j.id = :id AND j.workspace_id = :workspaceId FOR UPDATE OF j",
             nativeQuery = true)
     Optional<UsageOwner> lockUsageOwner(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
 
     /**
-     * Holds the job row while the proxy registers a call, and only while the call's attempt still holds its live
-     * lease. A terminal transition waits for the registration, and the registration waits for the transition.
+     * Holds the job row while the proxy registers a call of the attempt that runs it. A terminal transition waits for
+     * the registration, and the registration waits for the transition. The caller then holds the run's lease through
+     * {@code AgentRuns.requireCurrent}: the job row first, then the run, as every writer of both takes them.
      */
     @Query(
-            value = "SELECT j.attempt FROM review_job j WHERE j.id = :id AND j.workspace_id = :workspaceId AND"
-                    + " j.attempt = :attempt AND j.status = 'RUNNING' AND j.lease_id = :leaseId"
-                    + " AND j.leased_until > clock_timestamp() FOR SHARE",
+            value = "SELECT 1 FROM review_job j WHERE j.id = :id AND j.workspace_id = :workspaceId AND"
+                    + " j.status = 'RUNNING' AND j.run_id = :runId FOR SHARE",
             nativeQuery = true)
-    Optional<Integer> lockRunningAttemptForCall(
-            @Param("id") UUID id,
-            @Param("workspaceId") long workspaceId,
-            @Param("attempt") int attempt,
-            @Param("leaseId") UUID leaseId);
+    Optional<Integer> lockRunningForCall(
+            @Param("id") UUID id, @Param("workspaceId") long workspaceId, @Param("runId") UUID runId);
 
     /**
      * Adds one proxied call's tokens to the running totals of the attempt that runs now. These counters are what
@@ -242,7 +256,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      * ledger selected. The attempt's own measurement is its {@link ReviewAttemptUsage} row, which the requeue does
      * not zero.
      *
-     * <p>Fenced on {@code attempt} and {@code RUNNING}: {@link #requeueOrphan} may hand the row to a new attempt
+     * <p>Fenced on {@code attempt} and {@code RUNNING}: {@link #requeueRunning} may hand the row to a new attempt
      * (zeroing these columns) while the proxy is still waiting on the provider, and the new attempt's in-flight
      * spend must not include an earlier attempt's call.
      *
@@ -284,8 +298,9 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             :#{#call.outputTokens()}, :#{#call.cacheReadTokens()}, :#{#call.cacheWriteTokens()},
             :#{#call.searchUnits()}
         FROM review_job j
+        JOIN agent_run r ON r.id = j.run_id
         JOIN practice p ON p.workspace_id = j.workspace_id AND p.slug = :#{#call.practiceSlug()}
-        WHERE j.id = :jobId AND j.attempt >= :attempt
+        WHERE j.id = :jobId AND (CASE WHEN r.state = 'QUEUED' THEN r.lease_epoch ELSE r.lease_epoch - 1 END) >= :attempt
         ON CONFLICT (job_id, attempt, model_kind, practice_id) DO UPDATE SET
             calls = review_job_script_usage.calls + 1,
             reported_calls = review_job_script_usage.reported_calls + EXCLUDED.reported_calls,
@@ -321,73 +336,20 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             + "FROM ReviewJob j WHERE j.id = :id")
     Optional<ReviewJobLlmUsage> findLlmUsageById(@Param("id") UUID id);
 
-    /**
-     * A worker's drain stopped the unadmitted attempt: the next attempt gets its own number, as after any run, and the
-     * drain is counted instead of a retry, up to {@link ReviewJob#MAX_DRAINS}.
-     */
-    @WorkspaceAgnostic("The worker supplies the claimed job id and ownership fence")
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.leaseId = null, j.startedAt = null, j.executionStartedAt ="
-            + " null, j.attempt = j.attempt + 1, j.drainCount = j.drainCount + 1, j.availableAt = :availableAt,"
-            + " j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0,"
-            + " j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0 WHERE j.id = :id AND j.status = 'RUNNING' AND"
-            + " j.leaseId = :leaseId AND j.drainCount < :maxDrains AND j.admissionDigest IS NULL")
-    int requeueDrained(
-            @Param("id") UUID id,
-            @Param("leaseId") UUID leaseId,
-            @Param("maxDrains") int maxDrains,
-            @Param("availableAt") Instant availableAt);
-
-    /**
-     * The attempt staged a practice that no earlier attempt had and then ended unfinished. The next attempt skips what
-     * is staged, so it starts now, and it spends no retry.
-     */
-    @WorkspaceAgnostic("The worker supplies the claimed job id and ownership fence")
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.leaseId = null, j.startedAt = null, j.executionStartedAt ="
-            + " null, j.attempt = j.attempt + 1, j.progressedAttempts = j.progressedAttempts + 1, j.availableAt ="
-            + " :availableAt, j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0,"
-            + " j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0 WHERE j.id = :id AND j.status = 'RUNNING' AND"
-            + " j.leaseId = :leaseId AND j.admissionDigest IS NULL")
-    int requeueProgressed(
-            @Param("id") UUID id, @Param("leaseId") UUID leaseId, @Param("availableAt") Instant availableAt);
-
-    /**
-     * Cancels the RUNNING attempt like {@link #transitionToCancelled}, fenced on its lease and the attempt: a draining
-     * worker must not cancel a later attempt if the job was orphan-requeued out from under it.
-     *
-     * @return rows updated (0 or 1)
-     */
-    @WorkspaceAgnostic("ID-based fenced cancel; job ID + owner from worker-local drain context")
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("UPDATE ReviewJob j SET j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.CANCELLED, "
-            + "j.completedAt = :now, j.errorMessage = :error, j.cancellationReason = :reason "
-            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.leaseId = :leaseId AND j.attempt = :attempt")
-    int transitionToCancelledOwnedBy(
-            @Param("id") UUID id,
-            @Param("now") Instant now,
-            @Param("error") @Nullable String error,
-            @Param("reason") ReviewJobCancellationReason reason,
-            @Param("leaseId") UUID leaseId,
-            @Param("attempt") int attempt);
-
     @WorkspaceAgnostic("ID-based execution-start fence; job ID + owner from worker-local execution context")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE ReviewJob j SET j.executionStartedAt = :now "
             + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.executionStartedAt IS NULL "
-            + "AND j.leaseId = :leaseId AND j.attempt = :attempt")
+            + "AND j.runId = :runId AND j.attempt = :attempt")
     int markExecutionStarted(
-            @Param("id") UUID id,
-            @Param("leaseId") UUID leaseId,
-            @Param("attempt") int attempt,
-            @Param("now") Instant now);
+            @Param("id") UUID id, @Param("runId") UUID runId, @Param("attempt") int attempt, @Param("now") Instant now);
 
     @WorkspaceAgnostic("ID-based evidence-refusal transition; job ID + owner from worker-local execution context")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(EVIDENCE_REFUSAL_TRANSITION)
     int transitionToEvidenceRefused(
             @Param("id") UUID id,
-            @Param("leaseId") UUID leaseId,
+            @Param("runId") UUID runId,
             @Param("attempt") int attempt,
             @Param("now") Instant now,
             @Param("output") JsonNode output);
@@ -398,129 +360,10 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Query(EVIDENCE_REFUSAL_TRANSITION)
     int failCompositionUnconfirmed(
             @Param("id") UUID id,
-            @Param("leaseId") UUID leaseId,
+            @Param("runId") UUID runId,
             @Param("attempt") int attempt,
             @Param("now") Instant now,
             @Param("output") JsonNode output);
-
-    /**
-     * Poll-loop candidates, id-only because {@link #findByIdQueuedForUpdateSkipLocked} re-checks and
-     * locks each one; a stale read here costs at most a skipped candidate.
-     *
-     * <p>Work already started comes first: a job on a later attempt, such as one a drain or a handed-on composition
-     * put back, and a job whose results were admitted. A requeue sets a fresh {@code available_at}, so oldest-first
-     * alone left an admitted review's composition behind every fresh review queued before it. The candidate query
-     * below applies workspace and origin fairness within each group.
-     */
-    @WorkspaceAgnostic("Cross-workspace poll candidates; caller is the workspace-agnostic job poller")
-    default List<UUID> findQueuedIdsStartedFirst(int limit) {
-        return findQueuedIdsStartedFirst(limit, Set.of(), Set.of());
-    }
-
-    /**
-     * Started work, workspace running count plus its batch position, then origin with aging and age. Ten minutes of eligible waiting
-     * offsets one origin priority step. An unavailable endpoint is skipped for the rest of this poll.
-     */
-    @WorkspaceAgnostic("Cross-workspace candidate scan with live catalog membership and per-poll endpoint exclusions")
-    @Query(value = """
-            WITH running AS (
-              SELECT workspace_id,count(*) AS reviews FROM review_job
-              WHERE status='RUNNING' AND admission_digest IS NULL GROUP BY workspace_id
-            )
-            SELECT j.id FROM review_job j JOIN workspace w ON w.id=j.workspace_id
-            LEFT JOIN running ON running.workspace_id=j.workspace_id
-            LEFT JOIN review v ON v.id=j.review_id AND v.workspace_id=j.workspace_id
-            LEFT JOIN llm_model im ON j.config_snapshot->'model'->>'connectionScope'='INSTANCE'
-              AND im.id=CAST(j.config_snapshot->'model'->>'modelId' AS bigint)
-              AND im.connection_id=CAST(j.config_snapshot->'model'->>'connectionId' AS bigint)
-            LEFT JOIN workspace_llm_model wm ON j.config_snapshot->'model'->>'connectionScope'='WORKSPACE'
-              AND wm.id=CAST(j.config_snapshot->'model'->>'modelId' AS bigint)
-              AND wm.connection_id=CAST(j.config_snapshot->'model'->>'connectionId' AS bigint)
-              AND wm.workspace_id=j.workspace_id
-            WHERE j.status='QUEUED' AND w.status='ACTIVE' AND j.available_at<=now()
-              AND (:#{#excludedJobs.isEmpty()} OR j.id NOT IN (:excludedJobs))
-              AND (j.admission_digest IS NOT NULL OR :#{#excludedPools.isEmpty()}
-                OR COALESCE(im.call_pool_id,wm.call_pool_id,0) NOT IN (:excludedPools))
-            ORDER BY (j.attempt>0 OR j.admission_digest IS NOT NULL) DESC,
-              COALESCE(running.reviews,0)+row_number() OVER (
-                PARTITION BY j.workspace_id,(j.attempt>0 OR j.admission_digest IS NOT NULL)
-                ORDER BY (CASE v.origin WHEN 'REQUEST' THEN 0 WHEN 'EVENT' THEN 1 WHEN 'SCHEDULE' THEN 2 ELSE 3 END
-                  - EXTRACT(EPOCH FROM (now()-j.available_at))/600.0),j.available_at,j.id) ASC,
-              (CASE v.origin WHEN 'REQUEST' THEN 0 WHEN 'EVENT' THEN 1 WHEN 'SCHEDULE' THEN 2 ELSE 3 END
-                - EXTRACT(EPOCH FROM (now()-j.available_at))/600.0) ASC,
-              j.available_at ASC,j.id ASC LIMIT :limit
-            """, nativeQuery = true)
-    List<UUID> findQueuedIdsStartedFirst(
-            @Param("limit") int limit,
-            @Param("excludedPools") Set<Long> excludedPools,
-            @Param("excludedJobs") Set<UUID> excludedJobs);
-
-    @WorkspaceAgnostic("Cross-workspace stale job reaper; caller is @WorkspaceAgnostic sweeper")
-    @Query("SELECT j FROM ReviewJob j WHERE j.status = 'RUNNING' AND j.startedAt < :cutoff")
-    List<ReviewJob> findStaleRunningJobs(@Param("cutoff") Instant cutoff);
-
-    /** Running attempts whose lease expired before {@code cutoff}, a time on the database clock. */
-    @WorkspaceAgnostic("Cross-workspace lease recovery; caller is @WorkspaceAgnostic sweeper")
-    @Query(
-            value = "SELECT j.id AS jobId, j.workspace_id AS workspaceId, j.attempt AS attempt, "
-                    + "j.lease_id AS leaseId "
-                    + "FROM review_job j WHERE j.status = 'RUNNING' AND j.lease_id IS NOT NULL "
-                    + "AND j.leased_until < :cutoff",
-            nativeQuery = true)
-    List<OrphanedJobRef> findExpiredLeases(@Param("cutoff") Instant cutoff);
-
-    /** Leases the claimed attempt for {@code ttlSeconds} from now, on the database clock. */
-    @WorkspaceAgnostic("ID-based lease of an attempt that this worker claimed")
-    @Modifying(flushAutomatically = true)
-    @Query(
-            value = "UPDATE review_job SET leased_until = clock_timestamp() + make_interval(secs => :ttlSeconds) "
-                    + "WHERE id = :id AND status = 'RUNNING'",
-            nativeQuery = true)
-    int lease(@Param("id") UUID id, @Param("ttlSeconds") long ttlSeconds);
-
-    /** A live attempt lease is portable across worker processes and cannot be revived after expiry. */
-    @Modifying
-    @Query(value = """
-            UPDATE review_job SET leased_until = clock_timestamp() + make_interval(secs => :ttlSeconds)
-             WHERE id = :id AND workspace_id = :workspaceId AND attempt = :attempt AND lease_id = :leaseId
-               AND status = 'RUNNING' AND leased_until > clock_timestamp()
-            """, nativeQuery = true)
-    int renewLease(
-            @Param("id") UUID id,
-            @Param("workspaceId") long workspaceId,
-            @Param("attempt") int attempt,
-            @Param("leaseId") UUID leaseId,
-            @Param("ttlSeconds") long ttlSeconds);
-
-    @Query(value = """
-            SELECT EXISTS (SELECT 1 FROM review_job
-             WHERE id = :id AND workspace_id = :workspaceId AND attempt = :attempt AND lease_id = :leaseId
-               AND status = 'RUNNING' AND leased_until > clock_timestamp())
-            """, nativeQuery = true)
-    boolean hasLiveLease(
-            @Param("id") UUID id,
-            @Param("workspaceId") long workspaceId,
-            @Param("attempt") int attempt,
-            @Param("leaseId") UUID leaseId);
-
-    @Query(value = """
-            WITH renewed AS (
-                UPDATE review_job
-                   SET leased_until = LEAST(clock_timestamp() + make_interval(secs => :ttlSeconds), :expiresAt)
-                 WHERE id = :id AND workspace_id = :workspaceId AND attempt = :attempt AND lease_id = :leaseId
-                   AND status = 'RUNNING' AND leased_until > clock_timestamp() AND :expiresAt > clock_timestamp()
-                RETURNING leased_until
-            )
-            SELECT GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (leased_until - clock_timestamp())) * 1000))::bigint
-              FROM renewed
-            """, nativeQuery = true)
-    Optional<Long> renewReviewLease(
-            @Param("id") UUID id,
-            @Param("workspaceId") long workspaceId,
-            @Param("attempt") int attempt,
-            @Param("leaseId") UUID leaseId,
-            @Param("ttlSeconds") long ttlSeconds,
-            @Param("expiresAt") Instant expiresAt);
 
     /** The current database time, including time spent waiting for a row lock in this transaction. */
     @WorkspaceAgnostic("Reads the database clock for attempt leases")
@@ -533,61 +376,61 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     Instant databaseNow();
 
     /**
-     * Hands an owned admitted attempt on to a new attempt that measures nothing and composes what is still open, from
-     * the inputs its admission retained or, without them, by withholding. The attempt after the retry limit composes
-     * nothing; it only withholds what is still open.
+     * The ended composition that delivery proof can resume, while its original, unerased capsule is retained: the
+     * completed job, locked, with the run it ended on.
      */
-    @WorkspaceAgnostic("ID-based fenced requeue; caller is @WorkspaceAgnostic sweeper or worker-local drain")
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.leaseId = null, j.startedAt = null, j.executionStartedAt ="
-            + " null, j.attempt = j.attempt + 1, j.availableAt = :#{#request.availableAt}, j.llmCalls = 0,"
-            + " j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0, j.llmCacheReadTokens = 0,"
-            + " j.llmCacheWriteTokens = 0 WHERE j.id = :id AND j.status = 'RUNNING' AND j.leaseId = :leaseId AND"
-            + " j.attempt = :#{#request.attempt} AND j.attempt - j.drainCount - j.roomRefusals - j.progressedAttempts <= :#{#request.maxRetries} AND"
-            + " j.output IS NULL AND NOT (" + NOT_ADMITTED + ")")
-    int requeueAdmittedForComposition(
-            @Param("id") UUID id, @Param("leaseId") UUID leaseId, @Param("request") CompositionRequeue request);
+    interface Resumable {
+        UUID getId();
 
-    /** Only delivery proof can resume an ended composition, while its original, unerased capsule is retained. */
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
+        UUID getRunId();
+
+        int getEpoch();
+    }
+
     @Query(value = """
-        UPDATE review_job j SET status='QUEUED',attempt=attempt+1,lease_id=NULL,leased_until=NULL,
-          started_at=NULL,completed_at=NULL,execution_started_at=NULL,available_at=clock_timestamp(),
-          llm_calls=0,llm_input_tokens=0,llm_output_tokens=0,llm_reasoning_tokens=0,llm_cache_read_tokens=0,llm_cache_write_tokens=0
+        SELECT j.id, j.run_id AS "runId", r.lease_epoch AS epoch FROM review_job j JOIN agent_run r ON r.id=j.run_id
         WHERE j.workspace_id=:workspaceId AND j.review_id=:reviewId AND j.status='COMPLETED' AND j.admission_digest IS NOT NULL
-          AND j.attempt-j.drain_count-j.room_refusals-j.progressed_attempts<=:maxRetries
+          AND r.attempt<=:maxRetries
           AND EXISTS(SELECT 1 FROM review_composition_basis b WHERE b.workspace_id=j.workspace_id AND b.job_id=j.id
             AND b.expires_at>clock_timestamp())
           AND EXISTS(SELECT 1 FROM feedback f WHERE f.workspace_id=j.workspace_id AND f.review_id=j.review_id
             AND f.destination='ON_WORK' AND jsonb_exists(f.composition,'readback') AND NOT jsonb_exists(f.composition,'stop')
             AND NOT EXISTS(SELECT 1 FROM feedback newer WHERE newer.workspace_id=f.workspace_id AND newer.replaces_id=f.id))
+        FOR UPDATE OF j
         """, nativeQuery = true)
-    int resumeFeedbackRepair(
+    Optional<Resumable> lockResumableComposition(
             @Param("workspaceId") long workspaceId,
             @Param("reviewId") UUID reviewId,
             @Param("maxRetries") int maxRetries);
 
-    record CompositionRequeue(int attempt, int maxRetries, Instant availableAt) {}
+    /** Queues the resumed composition on the run that continues the ended one. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+        UPDATE review_job SET status='QUEUED', run_id=:runId, started_at=NULL, completed_at=NULL,
+          execution_started_at=NULL, llm_calls=0, llm_input_tokens=0, llm_output_tokens=0, llm_reasoning_tokens=0,
+          llm_cache_read_tokens=0, llm_cache_write_tokens=0
+        WHERE id=:id AND workspace_id=:workspaceId AND status='COMPLETED'
+        """, nativeQuery = true)
+    int queueOnRun(@Param("id") UUID id, @Param("workspaceId") long workspaceId, @Param("runId") UUID runId);
 
     /**
-     * The sandbox runtime had no room: the job waits in the queue until {@code availableAt}. The next attempt gets its
-     * own number, as after any claim, so nothing of this one is reused; the refusal is counted instead of a retry.
-     * Only starvation ends a review that waits for room, never a count of refusals.
+     * Hands the running attempt back to the queue, keeping what it admitted and staged; its run is requeued in the same
+     * transaction. The next attempt gets its own number when its claim takes the next epoch.
+     *
+     * @param holdReason why the job waits, or {@code null}
+     * @return rows updated (0 or 1)
      */
-    @WorkspaceAgnostic("ID-based self-fenced requeue; caller is the claiming worker itself")
+    @WorkspaceAgnostic("ID-based fenced requeue; the caller holds the attempt's run")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.leaseId = null, j.startedAt = null, "
-            + "j.executionStartedAt = null, j.attempt = j.attempt + 1, j.roomRefusals = j.roomRefusals + 1, "
-            + "j.availableAt = :availableAt, j.holdReason = 'SANDBOX_ROOM', "
-            + "j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0, "
-            + "j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0 "
-            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.leaseId = :leaseId AND j.attempt = :attempt "
-            + "AND j.admissionDigest IS NULL")
-    int holdForSandboxRoom(
+    @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.startedAt = null, j.executionStartedAt = null,"
+            + " j.holdReason = :holdReason, j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0,"
+            + " j.llmReasoningTokens = 0, j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0"
+            + " WHERE j.id = :id AND j.status = 'RUNNING' AND j.runId = :runId AND j.attempt = :attempt")
+    int requeueRunning(
             @Param("id") UUID id,
-            @Param("leaseId") UUID leaseId,
+            @Param("runId") UUID runId,
             @Param("attempt") int attempt,
-            @Param("availableAt") Instant availableAt);
+            @Param("holdReason") @Nullable String holdReason);
 
     /**
      * Cancels this worker's attempt for capacity: nothing of its sandbox ran, so it has no execution time either.
@@ -599,12 +442,12 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Query("UPDATE ReviewJob j SET j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.CANCELLED, "
             + "j.completedAt = :now, j.errorMessage = :error, j.executionStartedAt = null, "
             + "j.cancellationReason = de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason.NO_SANDBOX_ROOM "
-            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.leaseId = :leaseId AND j.attempt = :attempt")
+            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.runId = :runId AND j.attempt = :attempt")
     int cancelForRoomOwnedBy(
             @Param("id") UUID id,
             @Param("now") Instant now,
             @Param("error") String error,
-            @Param("leaseId") UUID leaseId,
+            @Param("runId") UUID runId,
             @Param("attempt") int attempt);
 
     /**
@@ -613,30 +456,25 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      * the next claim, and such a review waits for money, not room, so it stays too. Several workers may run it; the
      * second changes nothing.
      *
-     * @return the reviews cancelled
+     * @return the runs of the reviews cancelled, which the caller ends
      */
     @WorkspaceAgnostic("Fleet-wide capacity verdict over the shared queue; caller is a worker's admission check")
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("UPDATE ReviewJob j SET j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.CANCELLED, "
-            + "j.completedAt = :now, j.errorMessage = :error, "
-            + "j.cancellationReason = de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason.NO_SANDBOX_ROOM "
-            + "WHERE j.status = 'QUEUED' AND j.availableAt <= :now AND j.admissionDigest IS NULL "
-            + "AND (j.holdReason IS NULL OR j.holdReason <> 'BUDGET')")
-    int cancelQueuedForRoom(@Param("now") Instant now, @Param("error") String error);
+    // A list result runs as a query, which neither flushes nor clears; Hibernate flushes before a native statement.
+    @Query(value = """
+            UPDATE review_job j SET status = 'CANCELLED', completed_at = :now, error_message = :error,
+                   cancellation_reason = 'NO_SANDBOX_ROOM'
+              FROM agent_run r
+             WHERE r.id = j.run_id AND j.status = 'QUEUED' AND r.available_at <= clock_timestamp()
+               AND j.admission_digest IS NULL AND (j.hold_reason IS NULL OR j.hold_reason <> 'BUDGET')
+            RETURNING j.run_id
+            """, nativeQuery = true)
+    List<UUID> cancelQueuedForRoom(@Param("now") Instant now, @Param("error") String error);
 
     /** Whether a queued review still needs a sandbox: one held for its budget waits for money, not room. */
     @WorkspaceAgnostic("Fleet-wide capacity verdict over the shared queue; caller is a worker's admission check")
     @Query("SELECT COUNT(j) > 0 FROM ReviewJob j WHERE j.status = 'QUEUED' AND j.admissionDigest IS NULL "
             + "AND (j.holdReason IS NULL OR j.holdReason <> 'BUDGET')")
     boolean existsQueuedForRoom();
-
-    /** Pool rejection leaves attempt, availability, and token unchanged because no sandbox executed. */
-    @WorkspaceAgnostic("ID-based self-fenced requeue; caller is the claiming worker itself")
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.leaseId = null, j.startedAt = null, "
-            + "j.executionStartedAt = null "
-            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.leaseId = :leaseId")
-    int requeueRejectedClaim(@Param("id") UUID id, @Param("leaseId") UUID leaseId);
 
     /** Pending delivery recovery still reads output; stripping it would make delivery permanently unrecoverable. */
     @WorkspaceAgnostic("Cross-workspace retention batch; caller is @WorkspaceAgnostic retention service")
@@ -654,21 +492,22 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     int stripTerminalPayloads(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
 
     @WorkspaceAgnostic("Cross-workspace retention batch; caller is @WorkspaceAgnostic retention service")
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    // A list result runs as a query, which neither flushes nor clears; Hibernate flushes before a native statement.
     @Query(
             value = "DELETE FROM review_job WHERE id IN (" + "  SELECT j.id FROM review_job j "
                     + "  WHERE j.status IN ('COMPLETED','FAILED','TIMED_OUT','CANCELLED') "
                     + "  AND j.completed_at < :cutoff "
                     + "  AND j.processing_status <> 'PENDING' "
                     + "  LIMIT :batchSize"
-                    + ")",
+                    + ") RETURNING run_id",
             nativeQuery = true)
-    int deleteUnreferencedTerminalRowsOlderThan(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
+    List<UUID> deleteUnreferencedTerminalRowsOlderThan(
+            @Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
 
     /**
      * Depth, oldest-eligible-age, held count and running count in a single pass, so the scan cost does
-     * not multiply when the backlog grows. {@code :now} is bound rather than
-     * read from the DB clock, matching {@link #findByIdQueuedForUpdateSkipLocked}.
+     * not multiply when the backlog grows. {@code :now} is the sampler's clock; a run's {@code available_at} is
+     * the database's, so a skew of the two moves a job across the edge of {@code depth} for that long.
      *
      * <p>{@code depth} counts only jobs a worker could claim right now, which is what "are we keeping
      * up?" means — a job on a retry backoff is not work the fleet is behind on. {@code held} is counted
@@ -678,10 +517,12 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      */
     @WorkspaceAgnostic("Fleet-wide queue-health snapshot; caller is @WorkspaceAgnostic health sampler")
     @Query(
-            value = "SELECT   COUNT(*) FILTER (WHERE status = 'QUEUED' AND available_at <= :now) AS depth,  "
-                    + " MIN(available_at) FILTER (WHERE status = 'QUEUED' AND available_at <= :now) AS oldestAvailableAt, "
-                    + "  COUNT(*) FILTER (WHERE status = 'QUEUED' AND hold_reason = 'BUDGET') AS held,   COUNT(*) FILTER"
-                    + " (WHERE status = 'RUNNING') AS running FROM review_job WHERE status IN ('QUEUED', 'RUNNING')",
+            value = "SELECT COUNT(*) FILTER (WHERE j.status = 'QUEUED' AND r.available_at <= :now) AS depth,"
+                    + " MIN(r.available_at) FILTER (WHERE j.status = 'QUEUED' AND r.available_at <= :now)"
+                    + " AS oldestAvailableAt,"
+                    + " COUNT(*) FILTER (WHERE j.status = 'QUEUED' AND j.hold_reason = 'BUDGET') AS held,"
+                    + " COUNT(*) FILTER (WHERE j.status = 'RUNNING') AS running"
+                    + " FROM review_job j JOIN agent_run r ON r.id = j.run_id WHERE j.status IN ('QUEUED', 'RUNNING')",
             nativeQuery = true)
     QueueHealthSnapshot queueHealthSnapshot(@Param("now") Instant now);
 
@@ -701,7 +542,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     String NOT_ADMITTED = "j.admissionDigest IS NULL";
     String EVIDENCE_REFUSAL_TRANSITION =
             "UPDATE ReviewJob j SET j.status = 'FAILED', j.completedAt = :now, j.output = :output "
-                    + "WHERE j.id = :id AND j.leaseId = :leaseId AND j.attempt = :attempt AND j.status = 'RUNNING'";
+                    + "WHERE j.id = :id AND j.runId = :runId AND j.attempt = :attempt AND j.status = 'RUNNING'";
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT j FROM ReviewJob j WHERE j.id = :id AND j.workspaceId = :workspaceId")
@@ -709,11 +550,11 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
 
     @Modifying(flushAutomatically = true)
     @Query("UPDATE ReviewJob j SET j.capture = :capture WHERE j.id = :id AND j.workspaceId = :workspaceId"
-            + " AND j.leaseId = :leaseId AND j.attempt = :attempt AND j.status = 'RUNNING'")
+            + " AND j.runId = :runId AND j.attempt = :attempt AND j.status = 'RUNNING'")
     int updateCapture(
             @Param("id") UUID id,
             @Param("workspaceId") long workspaceId,
-            @Param("leaseId") @Nullable UUID leaseId,
+            @Param("runId") UUID runId,
             @Param("attempt") int attempt,
             @Param("capture") JsonNode capture);
 
@@ -721,14 +562,15 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Query(
             value = "UPDATE review_job SET capture = jsonb_set(COALESCE(capture, '{}'::jsonb), '{preparationFailure}',"
                     + " CAST(:diagnosis AS jsonb)) WHERE id = :id AND workspace_id = :workspaceId AND status ="
-                    + " 'FAILED' AND attempt = :attempt AND (CAST(:leaseId AS uuid) IS NULL OR lease_id ="
-                    + " :leaseId)",
+                    + " 'FAILED' AND run_id = :runId AND (SELECT " + ReviewRunKind.ATTEMPT_OF_RUN
+                    + " FROM agent_run r WHERE r.id = run_id)"
+                    + " = :attempt",
             nativeQuery = true)
     int recordPreparationFailure(
             @Param("id") UUID id,
             @Param("workspaceId") long workspaceId,
             @Param("attempt") int attempt,
-            @Param("leaseId") @Nullable UUID leaseId,
+            @Param("runId") UUID runId,
             @Param("diagnosis") String diagnosis);
 
     /** The sandbox initializer's failure of the last attempt, beside a preparation failure: for operators only. */
@@ -737,39 +579,28 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             value =
                     "UPDATE review_job SET capture = jsonb_set(COALESCE(capture, '{}'::jsonb), '{initializationFailure}',"
                             + " CAST(:diagnosis AS jsonb)) WHERE id = :id AND workspace_id = :workspaceId AND status ="
-                            + " 'FAILED' AND attempt = :attempt AND (CAST(:leaseId AS uuid) IS NULL OR lease_id ="
-                            + " :leaseId)",
+                            + " 'FAILED' AND run_id = :runId AND (SELECT " + ReviewRunKind.ATTEMPT_OF_RUN
+                            + " FROM agent_run r WHERE r.id = run_id)"
+                            + " = :attempt",
             nativeQuery = true)
     int recordInitializationFailure(
             @Param("id") UUID id,
             @Param("workspaceId") long workspaceId,
             @Param("attempt") int attempt,
-            @Param("leaseId") @Nullable UUID leaseId,
+            @Param("runId") UUID runId,
             @Param("diagnosis") String diagnosis);
 
     @Modifying(flushAutomatically = true)
     @Query(
             value = "UPDATE review_job SET capture = capture #- '{manifest,files}' #- '{manifest,citableTexts}' WHERE"
-                    + " id = :jobId AND workspace_id = :workspaceId AND attempt = :attempt AND lease_id = :leaseId AND"
+                    + " id = :jobId AND workspace_id = :workspaceId AND run_id = :runId"
+                    + " AND (SELECT " + ReviewRunKind.ATTEMPT_OF_RUN
+                    + " FROM agent_run r WHERE r.id = run_id) = :attempt AND"
                     + " admission_digest IS NOT NULL",
             nativeQuery = true)
     int expireCaptureInventory(
             @Param("jobId") UUID jobId,
             @Param("workspaceId") long workspaceId,
             @Param("attempt") int attempt,
-            @Param("leaseId") UUID leaseId);
-
-    @WorkspaceAgnostic("The worker supplies the claimed job id and ownership fence")
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(
-            "UPDATE ReviewJob j SET j.status = 'QUEUED', j.leaseId = null, j.startedAt = null, j.executionStartedAt ="
-                    + " null, j.attempt = j.attempt + 1, j.availableAt = :availableAt,"
-                    + " j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0,"
-                    + " j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0 WHERE j.id = :id AND j.status = 'RUNNING' AND"
-                    + " j.leaseId = :leaseId AND j.attempt - j.drainCount - j.roomRefusals - j.progressedAttempts < :maxRetries AND j.admissionDigest IS NULL")
-    int requeueOrphan(
-            @Param("id") UUID id,
-            @Param("leaseId") UUID leaseId,
-            @Param("maxRetries") int maxRetries,
-            @Param("availableAt") Instant availableAt);
+            @Param("runId") UUID runId);
 }

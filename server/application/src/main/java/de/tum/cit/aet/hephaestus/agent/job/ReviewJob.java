@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import jakarta.persistence.Column;
@@ -19,12 +20,14 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.Formula;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
@@ -33,10 +36,15 @@ import tools.jackson.databind.JsonNode;
 @Entity
 @Table(
         name = "review_job",
-        uniqueConstraints =
-                @UniqueConstraint(
-                        name = "uk_review_job_workspace",
-                        columnNames = {"id", "workspace_id"}))
+        uniqueConstraints = {
+            @UniqueConstraint(
+                    name = "uk_review_job_workspace",
+                    columnNames = {"id", "workspace_id"}),
+            // A run belongs to one workspace, so this keeps one job per run; it also indexes the run's foreign key.
+            @UniqueConstraint(
+                    name = "uk_review_job_run",
+                    columnNames = {"run_id", "workspace_id"})
+        })
 @Getter
 @Setter
 @NoArgsConstructor
@@ -45,8 +53,6 @@ import tools.jackson.databind.JsonNode;
 public class ReviewJob {
     public static final String HOLD_REASON_BUDGET = "BUDGET";
 
-    /** How many drains a review survives; the next one cancels it with the drain's reason. */
-    public static final int MAX_DRAINS = 3;
     /** The sandbox runtime had no room for the attempt's sandbox; nothing of it ran, so it spent no retry. */
     public static final String HOLD_REASON_SANDBOX_ROOM = "SANDBOX_ROOM";
 
@@ -69,27 +75,29 @@ public class ReviewJob {
     @Column(name = "status", nullable = false, length = 20)
     private ReviewJobStatus status = ReviewJobStatus.QUEUED;
 
-    @ColumnDefault("0")
-    @Column(name = "attempt", nullable = false)
-    private int attempt = 0;
-
-    /** The attempts that a worker's drain stopped: each ran, so each has its own number, but none spends a retry. */
-    @ColumnDefault("0")
-    @Column(name = "drain_count", nullable = false)
-    private int drainCount = 0;
-
-    /** The attempts whose sandbox the runtime had no room for: each has its own number, but none spends a retry. */
-    @ColumnDefault("0")
-    @Column(name = "room_refusals", nullable = false)
-    private int roomRefusals = 0;
+    /**
+     * The run that leases this job. A job's run changes only when ended work goes on ({@code resumeFeedbackRepair}).
+     */
+    @Column(name = "run_id", nullable = false)
+    private UUID runId;
 
     /**
-     * The attempts that staged a practice and then ran out of time: each moved the review on, so none spends a retry.
-     * Each stages a new practice, so the practices of the review bound them.
+     * The job's attempt number, from 0: the attempt that runs or ran last ({@link ReviewRunKind#attempt} of its run's
+     * epoch), or, while the job waits, the number its next claim takes.
      */
-    @ColumnDefault("0")
-    @Column(name = "progressed_attempts", nullable = false)
-    private int progressedAttempts = 0;
+    @Setter(AccessLevel.NONE)
+    @Formula("(SELECT " + ReviewRunKind.ATTEMPT_OF_RUN + " FROM agent_run r WHERE r.id = run_id)")
+    private int attempt;
+
+    /** The attempts that spent a retry; the run's requeues that its holder did not charge spent none. */
+    @Setter(AccessLevel.NONE)
+    @Formula("(SELECT r.attempt FROM agent_run r WHERE r.id = run_id)")
+    private int spentAttempts;
+
+    /** When the run is next offered to a claim. */
+    @Setter(AccessLevel.NONE)
+    @Formula("(SELECT r.available_at FROM agent_run r WHERE r.id = run_id)")
+    private Instant availableAt;
 
     @Enumerated(EnumType.STRING)
     @ColumnDefault("'NONE'")
@@ -99,15 +107,8 @@ public class ReviewJob {
     @Column(name = "submitted_at", nullable = false, updatable = false)
     private Instant submittedAt;
 
-    @Column(name = "available_at", nullable = false)
-    private Instant availableAt;
-
     @Column(name = "hold_reason", length = 32)
     private @Nullable String holdReason;
-
-    /** Fresh identity for each claimed attempt; independent of the worker process. */
-    @Column(name = "lease_id")
-    private @Nullable UUID leaseId;
 
     @Column(name = "trace_id", nullable = false, length = 32)
     private String traceId;
@@ -184,13 +185,6 @@ public class ReviewJob {
     @Column(name = "started_at")
     private @Nullable Instant startedAt;
 
-    /**
-     * The attempt's expiry on the database clock. Its loop renews during execution and upload; a worker renews during
-     * Pod startup and result collection too. An expired lease cannot be revived, and the server recovers the attempt.
-     */
-    @Column(name = "leased_until")
-    private @Nullable Instant leasedUntil;
-
     @Column(name = "execution_started_at")
     private @Nullable Instant executionStartedAt;
 
@@ -202,8 +196,8 @@ public class ReviewJob {
         if (id == null) id = UUID.randomUUID();
         if (traceId == null) traceId = UUID.randomUUID().toString().replace("-", "");
         if (submittedAt == null) submittedAt = Instant.now();
-        if (availableAt == null) availableAt = submittedAt;
         Objects.requireNonNull(reviewId, "reviewId");
+        Objects.requireNonNull(runId, "runId");
         Objects.requireNonNull(input, "input");
         Objects.requireNonNull(configSnapshot, "configSnapshot");
         if (workspaceId <= 0) throw new IllegalArgumentException("Workspace id must be positive");
@@ -227,8 +221,12 @@ public class ReviewJob {
         }
     }
 
-    /** The attempts that spent a retry: those that a worker's drain stopped, or that found no sandbox room, did not. */
+    /** The attempts that spent a retry. */
     public int spentAttempts() {
-        return attempt - drainCount - roomRefusals - progressedAttempts;
+        return spentAttempts;
+    }
+
+    public AgentRunRef run() {
+        return new AgentRunRef(runId, workspaceId);
     }
 }

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
@@ -68,15 +69,18 @@ class RetainedReviewContextRegressionIntegrationTest extends BaseIntegrationTest
         // Retain only an inert failed invocation and its original key. No assignment, result or evidence is invented,
         // and no persisted row is changed to manufacture unavailable history.
         jdbc.sql("""
-            INSERT INTO review_job(id,review_id,workspace_id,status,attempt,processing_status,trace_id,input,config_snapshot,
-                submitted_at,available_at,started_at,completed_at)
-            VALUES(:job,:review,:ws,'FAILED',1,'DONE',:trace,
+            INSERT INTO review_job(id,review_id,workspace_id,status,run_id,processing_status,trace_id,input,config_snapshot,
+                submitted_at,started_at,completed_at)
+            VALUES(:job,:review,:ws,'FAILED',:run,'DONE',:trace,
                 jsonb_build_object('itemId',CAST(:item AS bigint),'assignments',jsonb_build_array(
                     jsonb_build_object('reviewId',CAST(:review AS text),'practiceId',CAST(:practice AS bigint),
                         'itemId',CAST(:item AS bigint)))),
-                '{}'::jsonb,now(),now(),now(),now())
+                '{}'::jsonb,now(),now(),now())
             """)
                 .param("job", jobId)
+                .param(
+                        "run",
+                        RuntimeJobTestData.insertRun(jdbc, scenario.workspace().getId(), reviewId, "FAILED", 1))
                 .param("review", reviewId)
                 .param("ws", scenario.workspace().getId())
                 .param("trace", jobId.toString().replace("-", ""))

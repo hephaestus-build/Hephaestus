@@ -25,8 +25,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -69,8 +67,7 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
 
     private ReviewJob job() {
         var job = RuntimeReviewTestData.job();
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
+        job.setRunId(LEASE);
         return job;
     }
 

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,12 +32,15 @@ class AgentWorkspacePurgeAdapterTest extends BaseUnitTest {
     @Mock
     private LlmModelWorkspaceGrantRepository grantRepository;
 
+    @Mock
+    private AgentRuns runs;
+
     private AgentWorkspacePurgeAdapter adapter;
 
     @BeforeEach
     void setUp() {
         adapter = new AgentWorkspacePurgeAdapter(
-                jobRepository, bindingRepository, modelRepository, connectionRepository, grantRepository);
+                jobRepository, runs, bindingRepository, modelRepository, connectionRepository, grantRepository);
     }
 
     @Test
@@ -44,8 +48,9 @@ class AgentWorkspacePurgeAdapterTest extends BaseUnitTest {
         adapter.deleteWorkspaceData(42L);
 
         InOrder order =
-                inOrder(jobRepository, bindingRepository, modelRepository, connectionRepository, grantRepository);
+                inOrder(jobRepository, runs, bindingRepository, modelRepository, connectionRepository, grantRepository);
         order.verify(jobRepository).deleteAllByWorkspaceId(42L);
+        order.verify(runs).deleteWorkspace(42L);
         order.verify(bindingRepository).deleteAllByWorkspaceId(42L);
         order.verify(modelRepository).deleteAllByWorkspaceId(42L);
         order.verify(connectionRepository).deleteAllByWorkspaceId(42L);

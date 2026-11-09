@@ -10,15 +10,13 @@ public final class AgentMetrics {
     public static final String AGENT_JOB_INFRA_RETRY_REQUEUED = "agent.job.infra.retry.requeued";
     public static final String AGENT_JOB_DRAINED = "agent.job.drained";
     public static final String AGENT_JOB_MODEL_REFUSED = "agent.job.model.refused";
-    public static final String AGENT_JOB_ORPHAN_FAILED = "agent.job.orphan.failed";
     public static final String AGENT_JOB_SERVER_ERROR = "agent.job.server.error";
-    public static final String AGENT_JOB_ORPHAN_REQUEUED = "agent.job.orphan.requeued";
     public static final String AGENT_JOB_RETENTION_DELETED = "agent.job.retention.deleted";
     public static final String AGENT_JOB_RETENTION_STRIPPED = "agent.job.retention.stripped";
-    public static final String AGENT_JOB_SNAPSHOT_UNREADABLE = "agent.job.snapshot.unreadable";
     public static final String AGENT_JOB_STAGE_DURATION = "agent.job.stage.duration";
     public static final String AGENT_JOB_TOTAL = "agent.job.total";
-    public static final String AGENT_JOB_ZOMBIE_REAPED = "agent.job.zombie.reaped";
+    public static final String AGENT_RUN_REAPED = "agent.run.reaped";
+    public static final String AGENT_RUN_REAPER_FAILURE = "agent.run.reaper.failure";
     public static final String AGENT_PI_ENVELOPE_MISMATCH = "agent.pi.envelope.mismatch";
     public static final String AGENT_PI_RESULT_PARSE_FAILURE = "agent.pi.result.parse.failure";
     public static final String AGENT_QUEUE_DEPTH = "agent.queue.depth";

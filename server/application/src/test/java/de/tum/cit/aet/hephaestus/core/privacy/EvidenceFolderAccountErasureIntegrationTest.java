@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -53,7 +54,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -87,8 +87,6 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
-    private static final UUID LEASE = UUID.fromString("c6c70fa5-5434-5d4b-a30b-561c0e4664cc");
-    private static final UUID OTHER_LEASE = UUID.fromString("357b1a4e-c0c5-53f2-ba0c-53de7d0cb279");
 
     private final AtomicLong sourceIds = new AtomicLong();
 
@@ -307,7 +305,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var admissionFailure = new IllegalStateException("admission close failed");
         var catalog = failingCloseCatalog(provenanceFailure, admissionFailure);
         if (operation.equals("begin")) {
-            jdbc.update("UPDATE review_job SET status='QUEUED' WHERE id=?", job.getId());
+            RuntimeJobTestData.updateJobs(jdbc, "UPDATE review_job SET status='QUEUED' WHERE id=?", job.getId());
         } else {
             catalog.beginCapture(job);
             jdbc.update("UPDATE person_evidence_copy SET state='ERASED' WHERE job_id=?", job.getId());
@@ -863,9 +861,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 sourceIds.incrementAndGet());
         var job = work.job();
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
-        return jobs.saveAndFlush(job);
+        return RuntimeJobTestData.save(new TransactionTemplate(transactions), jdbc, jobs, job);
     }
 
     private PreparedJobInputs copy(
@@ -1082,11 +1078,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 "expired-file-" + UUID.randomUUID().toString().substring(0, 8)));
         var work = modelFixtures.work(
                 workspace, "file-proof-" + UUID.randomUUID().toString().substring(0, 8), "scm.file", 1L);
-        var job = work.job();
-        job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(OTHER_LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
-        jobs.saveAndFlush(job);
+        work.job().setStatus(ReviewJobStatus.RUNNING);
+        var job = RuntimeJobTestData.save(new TransactionTemplate(transactions), jdbc, jobs, work.job());
         var recorder = new ExactPersonDataCopyRecorder();
         var owner = catalog(root, recorder);
         var identity = new PersonCopyIdentity("GITLAB", provider.getServerUrl(), "42", null);
@@ -1104,8 +1097,10 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var folder = root.resolve("jobs")
                 .resolve(Long.toString(job.getWorkspaceId()))
                 .resolve(job.getId().toString());
-        jdbc.update(
-                "UPDATE review_job SET status='COMPLETED',completed_at=CURRENT_TIMESTAMP WHERE" + " id=?", job.getId());
+        RuntimeJobTestData.updateJobs(
+                jdbc,
+                "UPDATE review_job SET status='COMPLETED',completed_at=CURRENT_TIMESTAMP WHERE id=?",
+                job.getId());
         jdbc.update("DELETE FROM review_job WHERE id=?", job.getId());
         var person = new PersonScope(
                 null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)), List.of());
@@ -1172,7 +1167,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         var other = job("folder-workspace-keep");
         copy(mounted, owner, recorder, erased, identity).close();
         copy(mounted, owner, recorder, other, identity).close();
-        jdbc.update("UPDATE review_job SET status='COMPLETED' WHERE id=?", erased.getId());
+        RuntimeJobTestData.updateJobs(jdbc, "UPDATE review_job SET status='COMPLETED' WHERE id=?", erased.getId());
         Path erasedFolder = mounted.resolve("jobs")
                 .resolve(Long.toString(erased.getWorkspaceId()))
                 .resolve(erased.getId().toString());

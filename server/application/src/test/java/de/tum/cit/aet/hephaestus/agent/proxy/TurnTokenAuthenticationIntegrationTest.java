@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.RunningSpend;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -58,6 +59,9 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Autowired
     private ReviewJobRepository jobRepository;
+
+    @Autowired
+    private AgentRuns agentRuns;
 
     @Autowired
     private ReviewAttemptUsageService reviewAttemptUsage;
@@ -131,6 +135,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
     private Result call(String method, String path, String token) throws Exception {
         var filter = new JobTokenAuthenticationFilter(
                 jobRepository,
+                agentRuns,
                 turnRepository,
                 new SandboxGatewaySessions(),
                 jwtVerifier,
@@ -162,7 +167,8 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
                         turnRepository,
                         objectMapper,
                         reviewAttemptUsage,
-                        mock(ReviewSnapshotQuery.class))
+                        mock(ReviewSnapshotQuery.class),
+                        agentRuns)
                 .resolve(identity, new MockHttpServletRequest("POST", "/internal/llm/responses"));
         ProxyRouting.BilledAttempt attempt = routing.attempt();
         assertThat(routing.workspaceId()).isEqualTo(workspace.getId());

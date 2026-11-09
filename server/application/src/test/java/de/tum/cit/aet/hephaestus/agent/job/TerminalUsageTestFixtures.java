@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import java.time.Instant;
@@ -51,7 +52,8 @@ public final class TerminalUsageTestFixtures {
      */
     public static ReviewAttemptUsageService attemptUsageOverMocks(ReviewJobRepository jobs, LlmUsageRecorder recorder) {
         lockedAsStubbed(jobs);
-        return new ReviewAttemptUsageService(jobs, Mockito.mock(ReviewAttemptUsageRepository.class), recorder);
+        return new ReviewAttemptUsageService(
+                jobs, Mockito.mock(ReviewAttemptUsageRepository.class), recorder, Mockito.mock(AgentRuns.class));
     }
 
     /**

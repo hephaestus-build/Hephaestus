@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 public class AgentWorkspacePurgeAdapter implements WorkspacePurgeContributor {
 
     private final ReviewJobRepository jobRepository;
+    private final AgentRuns runs;
     private final WorkspaceAgentBindingRepository bindingRepository;
     private final WorkspaceLlmModelRepository modelRepository;
     private final WorkspaceLlmConnectionRepository connectionRepository;
@@ -22,6 +24,8 @@ public class AgentWorkspacePurgeAdapter implements WorkspacePurgeContributor {
     @Override
     public void deleteWorkspaceData(Long workspaceId) {
         jobRepository.deleteAllByWorkspaceId(workspaceId);
+        // After the domain rows that point to them.
+        runs.deleteWorkspace(workspaceId);
         bindingRepository.deleteAllByWorkspaceId(workspaceId);
         modelRepository.deleteAllByWorkspaceId(workspaceId);
         connectionRepository.deleteAllByWorkspaceId(workspaceId);

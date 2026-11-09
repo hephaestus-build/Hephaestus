@@ -20,8 +20,11 @@ import de.tum.cit.aet.hephaestus.agent.job.PracticeScriptKindTotal;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
@@ -34,7 +37,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -56,8 +58,9 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     private final JsonMapper mapper = new JsonMapper();
     private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
     private final ReviewAttemptUsageService attemptUsage = mock(ReviewAttemptUsageService.class);
+    private final AgentRuns runs = mock(AgentRuns.class);
     private final ProxyRoutingService routing =
-            new ProxyRoutingService(jobs, turns, mapper, attemptUsage, mock(ReviewSnapshotQuery.class));
+            new ProxyRoutingService(jobs, turns, mapper, attemptUsage, mock(ReviewSnapshotQuery.class), runs);
     private final ReviewJob job = new ReviewJob();
     private final Instant workDeadline = Instant.now().plusSeconds(30);
     private ProxyIdentity identity;
@@ -70,9 +73,8 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         job.setId(UUID.randomUUID());
         RuntimeJobTestData.initialize(job, 7L);
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setAttempt(2);
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
+        RuntimeJobTestData.attempt(job, 2);
+        job.setRunId(LEASE);
         job.setLlmInputTokens(100);
         var snapshot = new ConfigSnapshot(
                 ConfigSnapshot.SCHEMA_VERSION,
@@ -88,7 +90,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 job.getId(),
                 7L,
                 2,
-                UUID.randomUUID(),
+                LEASE,
                 Set.of("llm_proxy"),
                 "id",
                 now,
@@ -96,11 +98,8 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 workDeadline));
         lenient().when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         lenient()
-                .when(jobs.hasLiveLease(
-                        job.getId(),
-                        7L,
-                        2,
-                        Objects.requireNonNull(identity.job()).leaseId()))
+                .when(runs.isCurrent(
+                        new AgentRunRef(Objects.requireNonNull(identity.job()).leaseId(), 7L), ReviewRunKind.epoch(2)))
                 .thenReturn(true);
     }
 
@@ -121,12 +120,9 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         assertThat(route.apiProtocol()).isEqualTo("openai-responses");
         assertThat(route.sourceId()).isEqualTo(job.getId());
         verify(jobs).findById(job.getId());
-        verify(jobs)
-                .hasLiveLease(
-                        job.getId(),
-                        7L,
-                        2,
-                        Objects.requireNonNull(identity.job()).leaseId());
+        verify(runs)
+                .isCurrent(
+                        new AgentRunRef(Objects.requireNonNull(identity.job()).leaseId(), 7L), ReviewRunKind.epoch(2));
         verifyNoMoreInteractions(jobs);
     }
 
@@ -146,11 +142,8 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
 
     @Test
     void refusesAnAttemptThatLostItsLeaseSinceAuthentication() {
-        when(jobs.hasLiveLease(
-                        job.getId(),
-                        7L,
-                        2,
-                        Objects.requireNonNull(identity.job()).leaseId()))
+        when(runs.isCurrent(
+                        new AgentRunRef(Objects.requireNonNull(identity.job()).leaseId(), 7L), ReviewRunKind.epoch(2)))
                 .thenReturn(false);
         assertThatThrownBy(() -> routing.resolve(identity, request("/internal/llm/responses")))
                 .isInstanceOfSatisfying(ResponseStatusException.class, failure -> {
@@ -177,12 +170,9 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                         ResponseStatusException.class,
                         failure -> assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
         verify(jobs).findById(job.getId());
-        verify(jobs)
-                .hasLiveLease(
-                        job.getId(),
-                        7L,
-                        2,
-                        Objects.requireNonNull(identity.job()).leaseId());
+        verify(runs)
+                .isCurrent(
+                        new AgentRunRef(Objects.requireNonNull(identity.job()).leaseId(), 7L), ReviewRunKind.epoch(2));
         verifyNoMoreInteractions(jobs);
     }
 

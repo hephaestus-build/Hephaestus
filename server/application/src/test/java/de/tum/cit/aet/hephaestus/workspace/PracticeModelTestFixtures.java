@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobInput;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.item.Item;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
@@ -116,9 +117,8 @@ public class PracticeModelTestFixtures {
                 List.of(new ReviewAssignmentId(
                         review.getId(), practice.getId(), Objects.requireNonNull(item.getId())))));
         job.setConfigSnapshot(mapper.valueToTree(Map.of("model", "fixture")));
-        job.setAvailableAt(now);
         job.setTraceId(job.getId().toString().replace("-", ""));
-        manager.persist(job);
+        manager.persist(RuntimeJobTestData.persistRun(jdbc, job));
         manager.flush();
         return new Work(practice, item, review, job);
     }
@@ -172,9 +172,8 @@ public class PracticeModelTestFixtures {
                         work.practice().getId(),
                         Objects.requireNonNull(work.item().getId())))));
         job.setConfigSnapshot(work.job().getConfigSnapshot());
-        job.setAvailableAt(now);
         job.setTraceId(job.getId().toString().replace("-", ""));
-        manager.persist(job);
+        manager.persist(RuntimeJobTestData.persistRun(jdbc, job));
         manager.flush();
         return new Work(work.practice(), work.item(), review, job);
     }
@@ -287,6 +286,7 @@ public class PracticeModelTestFixtures {
         work.job().setProcessingStatus(ProcessingStatus.DONE);
         work.job().setCompletedAt(Instant.now());
         manager.merge(work.job());
+        RuntimeJobTestData.persistRun(jdbc, work.job());
         work.review().setStatus(ReviewStatus.COMPLETE);
         work.review().setAdmittedAt(result.getRecordedAt());
         work.review().setCompletedAt(Instant.now());

@@ -1,0 +1,66 @@
+---
+id: agent-runs
+title: Agent runs
+description: The one lease model of agent work, with its claim, epoch fence and reaper.
+page_type: reference
+---
+
+# Agent runs
+
+An agent run (`agent_run`) is the lease of one piece of agent work on one subject.
+A subject is the review, conversation or action that the work belongs to, such as `review:<id>`.
+Each kind's domain row points to its run and keeps its own lifecycle.
+Review jobs are on runs. `AgentRuns` in `agent.run` is the only writer of a run.
+
+## States
+
+| State | Meaning | Next states |
+| --- | --- | --- |
+| `QUEUED` | The run waits for a claim. | `LEASED`, `ENDED` |
+| `LEASED` | One holder drives the run under the current `lease_epoch`, until `leased_until`. | `LEASED` (renewal), `QUEUED`, `ENDED` |
+| `ENDED` | Final. Work that must go on gets a new run (`AgentRuns.continueAfter`). | none |
+
+`AgentRunState` holds this table. The trigger `guard_agent_run` refuses every other transition, and every change of a run's identity.
+A claim takes the next epoch. No other write changes the epoch.
+`attempt` counts only the claims that spent the kind's retry budget: a lost lease, or a requeue that the holder charges.
+
+At most one run of a subject is `LEASED`. The partial unique index `uq_agent_run_leased_subject` enforces this.
+The runs of a subject are claimed in the order they were queued.
+
+## Claim
+
+`AgentRuns.claim` leases the next run that is due, with `FOR UPDATE SKIP LOCKED`.
+The order is: band (`INTERACTIVE`, then `BATCH`, then `BACKGROUND`), then the workspace with the fewest leased runs, then age.
+A run that waited `hephaestus.agent.capacity.band-aging` (10 minutes) since it was due orders one band higher, and one more for each further wait.
+It never rises into `INTERACTIVE`. Thus scheduled work waits a bounded time behind steady requested work, and no review overtakes a person.
+A run of a workspace that is not active is not offered.
+A queued run sends a PostgreSQL notification on the channel `agent_run`, which wakes an idle claimer.
+
+## Fence
+
+A holder writes under its `AgentRunFence`: the run, its workspace and the epoch of its claim.
+`AgentRuns.requireCurrent` holds the lease until the caller's transaction ends.
+It refuses a stale epoch, and a lease whose `leased_until` passed, whatever its epoch.
+Every write that a holder makes for the run calls it, or fences its own update on the run and the epoch.
+Lock a domain row before its run: every writer of both takes them in that order.
+
+## Reaper
+
+`AgentRunReaper` runs on every server replica, every `hephaestus.agent.capacity.lease-renewal`, without a leader.
+For each expired lease, it locks the domain row through the kind's `AgentRunHandler`.
+Then the handler moves the domain row, while the run still reads as its lost holder left it.
+Last, one conditional write takes the run back. When another replica or a renewal won meanwhile, the transaction rolls back.
+
+A run with retries left is queued again, after a backoff. At the kind's limit, or past its deadline, it ends.
+A queued run past its deadline also ends.
+A run whose take-back fails is skipped until the next tick, so it cannot hold back the runs behind it.
+
+## Reviews
+
+`ReviewRunKind` is the handler of review jobs. A job's attempt number is its run's epoch less one (`ReviewRunKind.attempt`), and the number its next claim takes while it waits.
+The constraint trigger `review_job_run_agrees` refuses a commit where a job and its run disagree:
+a queued job needs a queued run, a running job a leased run, and an ended job an ended run.
+
+A claim that a budget holds runs nothing, so it takes no attempt: the claim rolls back, and the queued run waits until the budget hold ends.
+A composition that resumes after its run ended continues on a new run (`AgentRuns.continueAfter`).
+The new run goes on with the epochs of the ended one and spends one more attempt, so the retry limit bounds how often a composition resumes.

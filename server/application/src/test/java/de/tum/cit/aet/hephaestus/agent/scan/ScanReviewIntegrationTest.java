@@ -42,6 +42,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -126,6 +127,7 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
             stored.setCompletedAt(Instant.now());
             stored.setProcessingStatus(ProcessingStatus.PENDING);
             jobs.saveAndFlush(stored);
+            RuntimeJobTestData.persistRun(jdbc, stored);
         });
         assertThat(jobs.hasUnsettledInvocation(workspace.getId(), first.getReviewId()))
                 .isTrue();
@@ -145,7 +147,7 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
         });
         assertThat(jobs.hasUnsettledInvocation(workspace.getId(), first.getReviewId()))
                 .isFalse();
-        var saved = jobs.saveAndFlush(second);
+        var saved = jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, second));
         assertThat(saved.getReviewId()).isEqualTo(first.getReviewId());
         assertThat(jobs.findByReviewIdAndWorkspaceIdOrderByAvailableAtAsc(first.getReviewId(), workspace.getId()))
                 .hasSize(2);
@@ -276,19 +278,19 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
         var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("runtime-timing-cohort"));
         var at = Instant.parse("2026-10-14T10:00:00Z");
         var first = job(workspace.getId(), UUID.randomUUID());
-        first.setAvailableAt(at);
+        RuntimeJobTestData.persistParent(jdbc, first);
+        // The run offered the job at `at`; an ended run is final, so it is set while the run still queues.
+        jdbc.update("UPDATE agent_run SET available_at=? WHERE id=?", Timestamp.from(at), first.getRunId());
         first.setStartedAt(at.plusSeconds(10));
         first.setExecutionStartedAt(at.plusSeconds(20));
         first.setCompletedAt(at.plusSeconds(100));
         first.setStatus(ReviewJobStatus.COMPLETED);
         first.setProcessingStatus(ProcessingStatus.DONE);
-        RuntimeJobTestData.persistParent(jdbc, first);
-        jobs.saveAndFlush(first);
+        first = RuntimeJobTestData.save(transactions, jdbc, jobs, first);
         var held = job(workspace.getId(), first.getReviewId());
         held.setInput(first.getInput());
-        held.setAvailableAt(at.minusSeconds(20));
         held.setHoldReason(ReviewJob.HOLD_REASON_BUDGET);
-        jobs.saveAndFlush(held);
+        jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, held));
         var retained = UUID.randomUUID();
         var facts = mock(ReviewTimingFactsQuery.class);
         var from = at.minusSeconds(10);

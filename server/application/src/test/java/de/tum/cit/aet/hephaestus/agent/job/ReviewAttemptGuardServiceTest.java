@@ -37,8 +37,8 @@ class ReviewAttemptGuardServiceTest extends BaseUnitTest {
         job.setId(JOB_ID);
         job.setWorkspaceId(WORKSPACE_ID);
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setAttempt(ATTEMPT);
-        job.setLeaseId(UUID.randomUUID());
+        RuntimeJobTestData.attempt(job, ATTEMPT);
+        job.setRunId(UUID.randomUUID());
         when(jobs.findByIdAndWorkspaceIdForUpdate(JOB_ID, WORKSPACE_ID)).thenReturn(Optional.of(job));
         return job;
     }
@@ -70,7 +70,6 @@ class ReviewAttemptGuardServiceTest extends BaseUnitTest {
 
     @Test
     void shouldRejectAnAttemptWithoutAnOwningWorker() {
-        runningJob().setLeaseId(null);
 
         assertThatThrownBy(() -> guard.requireOwner(WORKSPACE_ID, JOB_ID, ATTEMPT))
                 .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);

@@ -597,7 +597,7 @@ class TerminalUsageTest extends BaseUnitTest {
             ReviewJob job = new ReviewJob();
             job.setId(jobId);
 
-            job.setAttempt(attempt);
+            RuntimeJobTestData.attempt(job, attempt);
             return job;
         }
 

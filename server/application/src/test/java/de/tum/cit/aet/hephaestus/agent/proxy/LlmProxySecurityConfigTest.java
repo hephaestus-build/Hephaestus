@@ -17,8 +17,11 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
@@ -33,7 +36,6 @@ import jakarta.servlet.http.Cookie;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -82,6 +84,9 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
 
     @Mock
     private ReviewJobRepository jobRepository;
+
+    @Mock
+    private AgentRuns agentRuns;
 
     @Mock
     private AttemptTokenVerifier jwtVerifier;
@@ -135,6 +140,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         gateway,
                         new SandboxGatewayConnector(GATEWAY_PORT, gateway.maxConnections()),
                         jobRepository,
+                        agentRuns,
                         turnRepository,
                         sessions,
                         jwtVerifier,
@@ -285,8 +291,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         "POST,/internal/llm/stage-result",
         "GET,/internal/llm/runtime/{job}",
         "GET,/internal/llm/runtime/{job}/workspace",
-        "POST,/internal/llm/runtime/{job}/result",
-        "POST,/internal/llm/runtime/{job}/lease"
+        "POST,/internal/llm/runtime/{job}/result"
     })
     void shouldServeEveryCapabilityWhenTheJobsOneTokenCallsIt(String method, String path) throws Exception {
         ReviewJob job = runningJobOnAttempt(1);
@@ -325,39 +330,12 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldBindReviewLeaseRenewalToTheTokensOwnReviewOnTheGatewayOnly() throws Exception {
+    void shouldServeNoReviewLeaseRenewalBecauseTheWorkerAloneRenewsTheRun() throws Exception {
         ReviewJob job = runningJobOnAttempt(1);
-        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
-        when(jwtVerifier.verify("job-token")).thenReturn(jobJwt(job, 1));
-        String own = "/internal/llm/runtime/" + job.getId() + "/lease";
-
-        assertThat(answerTo(withToken(request("POST", own, GATEWAY_PORT), "job-token")))
-                .isEqualTo(200);
-        assertThat(answerTo(withToken(request("POST", own, APPLICATION_PORT), "job-token")))
-                .isEqualTo(404);
+        // The gateway refuses the path before it reads the credential: no capability serves it.
         assertThat(answerTo(withToken(
-                        request("POST", "/internal/llm/runtime/" + UUID.randomUUID() + "/lease", GATEWAY_PORT),
-                        "job-token")))
-                .isEqualTo(401);
-        turnJwt(1);
-        assertThat(answerTo(withToken(request("POST", own, GATEWAY_PORT), "turn-token")))
-                .isEqualTo(401);
-        assertThat(answerTo(request("POST", own, GATEWAY_PORT))).isEqualTo(401);
-    }
-
-    @Test
-    void shouldApplyTheGatewayRateAndBodyLimitsToReviewLeaseRenewal() throws Exception {
-        ReviewJob job = runningJobOnAttempt(1);
-        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
-        when(jwtVerifier.verify("job-token")).thenReturn(jobJwt(job, 1));
-        String path = "/internal/llm/runtime/" + job.getId() + "/lease";
-        assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "job-token")))
-                .isEqualTo(200);
-        assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "job-token")))
-                .isEqualTo(429);
-        MockHttpServletRequest oversized = request("POST", path, GATEWAY_PORT);
-        oversized.setContent(new byte[GATEWAY.maxRequestBytes() + 1]);
-        assertThat(answerTo(withToken(oversized, "job-token"))).isEqualTo(413);
+                        request("POST", "/internal/llm/runtime/" + job.getId() + "/lease", GATEWAY_PORT), "job-token")))
+                .isEqualTo(404);
     }
 
     /** The turn endpoints a Heph host calls with its turn credential, and their methods. */
@@ -762,13 +740,12 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         job.setId(UUID.randomUUID());
         RuntimeJobTestData.initialize(job, workspace.getId());
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setLeaseId(LEASE);
-        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
-        job.setAttempt(attempt);
+        job.setRunId(LEASE);
+        RuntimeJobTestData.attempt(job, attempt);
         // Only a credential of this attempt's own lease holds it.
         Mockito.lenient()
-                .when(jobRepository.hasLiveLease(
-                        job.getId(), workspace.getId(), attempt, Objects.requireNonNull(job.getLeaseId())))
+                .when(agentRuns.isCurrent(
+                        new AgentRunRef(job.getRunId(), workspace.getId()), ReviewRunKind.epoch(attempt)))
                 .thenReturn(true);
         job.setConfigSnapshot(new ConfigSnapshot(
                         ConfigSnapshot.SCHEMA_VERSION,
@@ -803,7 +780,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 job.getId(),
                 job.getWorkspaceId(),
                 attempt,
-                Objects.requireNonNull(job.getLeaseId()),
+                Objects.requireNonNull(job.getRunId()),
                 Set.of(scope),
                 UUID.randomUUID().toString(),
                 now,

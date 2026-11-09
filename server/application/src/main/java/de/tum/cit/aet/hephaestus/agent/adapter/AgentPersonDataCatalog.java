@@ -3,16 +3,20 @@ package de.tum.cit.aet.hephaestus.agent.adapter;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptUsage;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -70,6 +74,7 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
     private final List<PersonEvidenceErasure> evidenceCopies;
     private final ReviewJobLifecycleService lifecycle;
     private final ReviewAttemptUsageService attemptUsage;
+    private final AgentRuns agentRuns;
 
     @Override
     public List<PersonDataContributor> contributors() {
@@ -125,10 +130,26 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                     "review_job",
                     "review_job",
                     "t.id IN (" + SELECTED_JOBS + ")",
-                    "id,workspace_id,review_id,status,attempt,submitted_at,started_at,completed_at,processing_status",
+                    "id,workspace_id,review_id,status,submitted_at,started_at,completed_at,processing_status",
                     "id,workspace_id",
                     "",
                     -80);
+        }
+
+        /** Deletes the selected jobs, then their runs: a run without its job has nothing left to drive. */
+        @Override
+        public long erase(PersonDataSelection selection, PersonScope frozenScope) {
+            Map<Long, List<UUID>> runs = new HashMap<>();
+            for (var key : keys(selection))
+                jdbc.query(
+                                "SELECT run_id FROM review_job WHERE id=:id AND workspace_id=:workspace",
+                                Map.of("id", key.id(), "workspace", key.workspaceId()),
+                                (row, number) -> Objects.requireNonNull(row.getObject("run_id", UUID.class)))
+                        .forEach(run -> runs.computeIfAbsent(key.workspaceId(), workspace -> new ArrayList<>())
+                                .add(run));
+            long erased = super.erase(selection, frozenScope);
+            runs.forEach(agentRuns::forget);
+            return erased;
         }
 
         private List<JobRow> jobs(PersonDataSelection selection) {

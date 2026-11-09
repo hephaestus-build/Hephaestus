@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
@@ -75,6 +76,9 @@ class ReviewMethodPersistenceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewJobRepository jobs;
+
+    @Autowired
+    private AgentRuns agentRuns;
 
     @Autowired
     private ReviewJobAssignments assignments;
@@ -151,7 +155,8 @@ class ReviewMethodPersistenceIntegrationTest extends BaseIntegrationTest {
                         978004L,
                         978006L))
                 .isEqualTo(jobId);
-        jdbc.update(
+        RuntimeJobTestData.updateJobs(
+                jdbc,
                 "UPDATE review_job SET"
                         + " status='CANCELLED',completed_at=now(),cancellation_reason='CANCELLED_BY_REQUESTER' WHERE id=?"
                         + " AND workspace_id=?",
@@ -316,7 +321,7 @@ class ReviewMethodPersistenceIntegrationTest extends BaseIntegrationTest {
         var policy = mock(ReviewMemberAiPolicy.class);
         when(policy.binding(any())).thenReturn(Optional.of(savedBinding));
         var queue = new ReviewJobService(
-                jobs, guard, assignments, assignmentStore, policy, resolver, mapper, admission, methods);
+                jobs, guard, assignments, assignmentStore, policy, resolver, mapper, admission, methods, agentRuns);
         UUID jobId = Objects.requireNonNull(transactions.execute(status -> {
             var review = snapshots.find(workspace.getId(), reviewId).orElseThrow();
             return queue.enqueue(review, 978006L, List.of(new ReviewAssignmentId(reviewId, 978004L, 978006L)));

@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.PublicReviewEligibility;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.mentor.web.MentorConversationController;
 import de.tum.cit.aet.hephaestus.agent.mentor.web.MentorLiveController;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.scan.ScanDriver;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -58,7 +59,7 @@ class AgentRoleGatingTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(classes = {ReviewJobZombieSweeper.class, ReviewJobCompletionService.class})
+    @ValueSource(classes = {AgentRunReaper.class, ReviewJobCompletionService.class})
     void shouldMaintainJobsWheneverTheServerRoleIsOn(Class<?> maintenance) {
         assertThat(registers(maintenance)).isTrue();
         assertThat(registers(maintenance, AGENT_ON)).isTrue();

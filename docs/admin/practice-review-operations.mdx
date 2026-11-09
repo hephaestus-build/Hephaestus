@@ -251,7 +251,7 @@ Use them for alerts instead of application logs.
   `preparation`: the attempt failed before its sandbox started.
   `sandbox`: the sandbox could not start, initialize or finish.
   `server_unreachable` and `provider_unreachable`: the sandbox could not reach the server's gateway or the model provider.
-- **`agent.job.orphan.failed`** — jobs that failed because their workers stopped during every attempt.
+- **`agent.run.reaped{kind=review,outcome=attempts_exhausted}`** — reviews that failed because the holder of each attempt stopped renewing its lease.
 - **`agent.job.execution.duration`** — tagged by `jobType` and outcome `status`.
 - **`agent.job.delivery.recovered`** — deliveries stopped by an executor crash and successfully retried.
 - **`agent.job.composition.stopped`** — destinations whose feedback the worker did not write, tagged by `cause` and `outcome`.

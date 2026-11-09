@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeQueryAdapter;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository;
+import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
@@ -84,6 +85,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
@@ -164,6 +166,9 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     JdbcClient jdbc;
+
+    @Autowired
+    JdbcTemplate jdbcTemplate;
 
     @MockitoBean
     PersonIdentityResolver people;
@@ -348,10 +353,13 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
         var progress = query.detail(scan.getWorkspaceId(), scan.getId()).progress();
         assertThat(progress.activeJobs()).isOne();
         assertThat(progress.queuedJobs()).isZero();
-        jdbc.sql("UPDATE review_job SET status='QUEUED' WHERE workspace_id=:ws AND id=:id")
-                .param("ws", scan.getWorkspaceId())
-                .param("id", active)
-                .update();
+        RuntimeJobTestData.moveJob(
+                jdbcTemplate,
+                active,
+                () -> jdbc.sql("UPDATE review_job SET status='QUEUED' WHERE workspace_id=:ws AND id=:id")
+                        .param("ws", scan.getWorkspaceId())
+                        .param("id", active)
+                        .update());
         var queued = query.detail(scan.getWorkspaceId(), scan.getId()).progress();
         assertThat(queued.activeJobs()).isZero();
         assertThat(queued.queuedJobs()).isOne();
@@ -447,14 +455,20 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
         var next = invocation(scan.getWorkspaceId(), scan.getId(), ReviewJobStatus.FAILED);
         assertThatThrownBy(() -> assignments.bind(scan.getWorkspaceId(), scan.getId(), next, List.of(assignment)))
                 .isInstanceOf(IllegalStateException.class);
-        jdbc.sql("UPDATE review_job SET status='FAILED' WHERE workspace_id=:ws AND id=:job")
-                .param("ws", scan.getWorkspaceId())
-                .param("job", first)
-                .update();
-        jdbc.sql("UPDATE review_job SET status='QUEUED' WHERE workspace_id=:ws AND id=:job")
-                .param("ws", scan.getWorkspaceId())
-                .param("job", next)
-                .update();
+        RuntimeJobTestData.moveJob(
+                jdbcTemplate,
+                first,
+                () -> jdbc.sql("UPDATE review_job SET status='FAILED' WHERE workspace_id=:ws AND id=:job")
+                        .param("ws", scan.getWorkspaceId())
+                        .param("job", first)
+                        .update());
+        RuntimeJobTestData.moveJob(
+                jdbcTemplate,
+                next,
+                () -> jdbc.sql("UPDATE review_job SET status='QUEUED' WHERE workspace_id=:ws AND id=:job")
+                        .param("ws", scan.getWorkspaceId())
+                        .param("job", next)
+                        .update());
         when(runtime.activeJobIds(scan.getWorkspaceId(), scan.getId())).thenReturn(Set.of(next));
         assertThat(store.pending(scan.getWorkspaceId(), scan.getId(), 10))
                 .extracting(s -> s.id())
@@ -470,12 +484,14 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
 
     private UUID invocation(long workspaceId, UUID reviewId, ReviewJobStatus status) {
         var id = UUID.randomUUID();
+        var run = RuntimeJobTestData.insertRun(jdbc, workspaceId, reviewId, status.name(), 0);
         jdbc.sql("INSERT INTO"
-                        + " review_job(id,review_id,workspace_id,status,attempt,processing_status,trace_id,input,config_snapshot,submitted_at,available_at,started_at,completed_at)"
-                        + " VALUES(:id,:review,:ws,:status,0,'PENDING',:trace,CAST(:input AS jsonb),'{}'::jsonb,:at,:at,CASE WHEN"
+                        + " review_job(id,review_id,workspace_id,status,run_id,processing_status,trace_id,input,config_snapshot,submitted_at,started_at,completed_at)"
+                        + " VALUES(:id,:review,:ws,:status,:run,'PENDING',:trace,CAST(:input AS jsonb),'{}'::jsonb,:at,CASE WHEN"
                         + " :status='QUEUED' THEN NULL ELSE CAST(:at AS timestamptz) END,CASE WHEN :status='FAILED' THEN CAST(:at"
                         + " AS timestamptz) ELSE NULL END)")
                 .param("id", id)
+                .param("run", run)
                 .param("review", reviewId)
                 .param("ws", workspaceId)
                 .param("status", status.name())
@@ -504,12 +520,15 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
         var assignment = new ReviewAssignmentId(
                 reviewId, scenario.owner().practice().getId(), scenario.file().getId());
         assignments.bind(workspaceId, reviewId, jobId, List.of(assignment));
-        jdbc.sql("UPDATE review_job SET"
-                        + " status='CANCELLED',started_at=now(),execution_started_at=now(),completed_at=now()"
-                        + " WHERE workspace_id=:ws AND id=:id")
-                .param("ws", workspaceId)
-                .param("id", jobId)
-                .update();
+        RuntimeJobTestData.moveJob(
+                jdbcTemplate,
+                jobId,
+                () -> jdbc.sql("UPDATE review_job SET"
+                                + " status='CANCELLED',started_at=now(),execution_started_at=now(),completed_at=now()"
+                                + " WHERE workspace_id=:ws AND id=:id")
+                        .param("ws", workspaceId)
+                        .param("id", jobId)
+                        .update());
         when(runtime.activeJobIds(workspaceId, reviewId)).thenReturn(Set.of());
         when(runtime.unsettledJobIds(workspaceId, reviewId)).thenReturn(Set.of(jobId));
         assertThat(reviews.cancel(workspaceId, reviewId, "CANCELLED_BY_ADMIN")).isTrue();

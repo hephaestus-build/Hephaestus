@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794182759048-1" author="hephaestus">
+        <comment>One run model for agent work: the lease of one piece of work on one subject, fenced by its epoch.</comment>
+        <sql>
+CREATE TABLE agent_run (
+    id uuid NOT NULL,
+    workspace_id bigint NOT NULL,
+    kind varchar(24) NOT NULL,
+    band varchar(16) NOT NULL,
+    concurrency_key varchar(96) NOT NULL,
+    state varchar(8) DEFAULT 'QUEUED' NOT NULL,
+    attempt integer DEFAULT 0 NOT NULL,
+    lease_epoch integer DEFAULT 0 NOT NULL,
+    leased_until timestamp(6) with time zone,
+    available_at timestamp(6) with time zone DEFAULT now() NOT NULL,
+    deadline timestamp(6) with time zone,
+    stop_reason varchar(24),
+    created_at timestamp(6) with time zone DEFAULT now() NOT NULL,
+    started_at timestamp(6) with time zone,
+    ended_at timestamp(6) with time zone,
+    CONSTRAINT agent_run_pkey PRIMARY KEY (id),
+    CONSTRAINT uk_agent_run_workspace UNIQUE (id, workspace_id),
+    CONSTRAINT sfk_agent_run_workspace FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE RESTRICT,
+    CONSTRAINT ck_agent_run_kind CHECK (kind IN ('REVIEW')),
+    CONSTRAINT ck_agent_run_band CHECK (band IN ('INTERACTIVE', 'BATCH', 'BACKGROUND')),
+    CONSTRAINT ck_agent_run_state CHECK (state IN ('QUEUED', 'LEASED', 'ENDED')),
+    CONSTRAINT ck_agent_run_stop_reason CHECK (stop_reason IS NULL
+        OR stop_reason IN ('COMPLETED', 'CANCELLED', 'ATTEMPTS_EXHAUSTED', 'DEADLINE')),
+    CONSTRAINT ck_agent_run_counts CHECK (attempt &gt;= 0 AND lease_epoch &gt;= 0),
+    CONSTRAINT ck_agent_run_subject CHECK (length(concurrency_key) &gt; 0),
+    CONSTRAINT ck_agent_run_leased CHECK ((state = 'LEASED') = (leased_until IS NOT NULL)
+        AND (state &lt;&gt; 'LEASED' OR (lease_epoch &gt;= 1 AND started_at IS NOT NULL))),
+    CONSTRAINT ck_agent_run_ended CHECK ((state = 'ENDED') = (ended_at IS NOT NULL)
+        AND (state = 'ENDED') = (stop_reason IS NOT NULL))
+);
+CREATE INDEX idx_agent_run_queued ON agent_run (available_at) WHERE state = 'QUEUED';
+CREATE INDEX idx_agent_run_leased_until ON agent_run (leased_until) WHERE state = 'LEASED';
+CREATE INDEX idx_agent_run_subject ON agent_run (workspace_id, concurrency_key, created_at) WHERE state &lt;&gt; 'ENDED';
+CREATE UNIQUE INDEX uq_agent_run_leased_subject ON agent_run (workspace_id, concurrency_key) WHERE state = 'LEASED';
+        </sql>
+        <rollback>DROP TABLE agent_run;</rollback>
+    </changeSet>
+    <changeSet id="1794182759048-2" author="hephaestus">
+        <comment>The database refuses every run transition that AgentRunState refuses, and every change of a run's identity.</comment>
+        <sql splitStatements="false">
+CREATE FUNCTION guard_agent_run() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF ROW(NEW.id, NEW.workspace_id, NEW.kind, NEW.band, NEW.concurrency_key, NEW.created_at, NEW.deadline)
+    IS DISTINCT FROM ROW(OLD.id, OLD.workspace_id, OLD.kind, OLD.band, OLD.concurrency_key, OLD.created_at, OLD.deadline) THEN
+  RAISE EXCEPTION 'a run''s identity is immutable' USING ERRCODE = '55000';
+ END IF;
+ IF OLD.state = 'ENDED' THEN
+  RAISE EXCEPTION 'an ended run is final' USING ERRCODE = '55000';
+ END IF;
+ IF NEW.attempt &lt; OLD.attempt THEN
+  RAISE EXCEPTION 'a run''s spent attempts never decrease' USING ERRCODE = '23514';
+ END IF;
+ IF OLD.state = 'QUEUED' AND NEW.state = 'LEASED' THEN
+  IF NEW.lease_epoch &lt;&gt; OLD.lease_epoch + 1 THEN
+   RAISE EXCEPTION 'a claim takes the next epoch' USING ERRCODE = '23514';
+  END IF;
+ ELSIF NEW.lease_epoch &lt;&gt; OLD.lease_epoch THEN
+  RAISE EXCEPTION 'only a claim changes the epoch' USING ERRCODE = '23514';
+ END IF;
+ IF OLD.state = 'LEASED' AND NEW.state = 'LEASED' AND NEW.attempt &lt;&gt; OLD.attempt THEN
+  RAISE EXCEPTION 'a renewal spends no attempt' USING ERRCODE = '23514';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER agent_run_transition BEFORE UPDATE ON agent_run FOR EACH ROW EXECUTE FUNCTION guard_agent_run();
+        </sql>
+        <rollback>DROP TRIGGER agent_run_transition ON agent_run; DROP FUNCTION guard_agent_run();</rollback>
+    </changeSet>
+    <changeSet id="1794182759048-3" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <columnExists tableName="review_job" columnName="lease_id"/>
+            <columnExists tableName="review_job" columnName="attempt"/>
+            <columnExists tableName="review_job" columnName="drain_count"/>
+            <columnExists tableName="review_job" columnName="room_refusals"/>
+            <columnExists tableName="review_job" columnName="progressed_attempts"/>
+            <columnExists tableName="review_job" columnName="available_at"/>
+        </preConditions>
+        <comment>Each review job points to its run. A run's epoch is the job's attempt number plus one, and its attempt count holds only the attempts that spent a retry. A job that a worker still held runs on a run whose lease has already expired: the run reaper settles the lost attempt's usage and queues the job again or fails it at its retry limit, as for any lost worker.</comment>
+        <sql>
+ALTER TABLE review_job ADD COLUMN run_id uuid;
+UPDATE review_job SET run_id = gen_random_uuid();
+INSERT INTO agent_run (id, workspace_id, kind, band, concurrency_key, state, attempt, lease_epoch, leased_until,
+                       available_at, stop_reason, created_at, started_at, ended_at)
+SELECT j.run_id, j.workspace_id, 'REVIEW',
+       CASE WHEN r.origin IN ('SCHEDULE', 'BACKFILL') THEN 'BACKGROUND' ELSE 'BATCH' END,
+       'review:' || j.review_id,
+       CASE j.status WHEN 'QUEUED' THEN 'QUEUED' WHEN 'RUNNING' THEN 'LEASED' ELSE 'ENDED' END,
+       GREATEST(0, j.attempt - j.drain_count - j.room_refusals - j.progressed_attempts),
+       CASE WHEN j.status = 'QUEUED' THEN j.attempt ELSE j.attempt + 1 END,
+       CASE WHEN j.status = 'RUNNING' THEN now() END,
+       j.available_at,
+       CASE WHEN j.status IN ('QUEUED', 'RUNNING') THEN NULL
+            WHEN j.status = 'CANCELLED' THEN 'CANCELLED' ELSE 'COMPLETED' END,
+       j.submitted_at,
+       CASE WHEN j.status = 'RUNNING' THEN COALESCE(j.started_at, now()) ELSE j.started_at END,
+       CASE WHEN j.status IN ('QUEUED', 'RUNNING') THEN NULL ELSE COALESCE(j.completed_at, now()) END
+  FROM review_job j
+  LEFT JOIN review r ON r.id = j.review_id AND r.workspace_id = j.workspace_id;
+ALTER TABLE review_job ALTER COLUMN run_id SET NOT NULL;
+ALTER TABLE review_job ADD CONSTRAINT uk_review_job_run UNIQUE (run_id, workspace_id);
+ALTER TABLE review_job ADD CONSTRAINT sfk_review_job_run FOREIGN KEY (run_id, workspace_id)
+    REFERENCES agent_run (id, workspace_id);
+DROP INDEX IF EXISTS idx_review_job_queue;
+DROP INDEX IF EXISTS ix_review_job_running_lease;
+ALTER TABLE review_job DROP CONSTRAINT IF EXISTS ck_review_job_attempt;
+ALTER TABLE review_job DROP COLUMN lease_id, DROP COLUMN leased_until, DROP COLUMN attempt,
+    DROP COLUMN drain_count, DROP COLUMN room_refusals, DROP COLUMN progressed_attempts, DROP COLUMN available_at;
+        </sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup. The previous release reads the lease from review_job.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794182759048-4" author="hephaestus">
+        <comment>A review job and its run agree when each transaction commits: queued with queued, running with leased, ended with ended.</comment>
+        <sql splitStatements="false">
+CREATE FUNCTION enforce_review_job_run() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+ job_status varchar;
+ run_state varchar;
+BEGIN
+ FOR job_status, run_state IN
+  SELECT j.status, r.state FROM review_job j JOIN agent_run r ON r.id = j.run_id
+   WHERE (TG_TABLE_NAME = 'review_job' AND j.id = NEW.id) OR (TG_TABLE_NAME = 'agent_run' AND j.run_id = NEW.id)
+ LOOP
+  IF NOT ((job_status = 'QUEUED' AND run_state = 'QUEUED')
+       OR (job_status = 'RUNNING' AND run_state = 'LEASED')
+       OR (job_status NOT IN ('QUEUED', 'RUNNING') AND run_state = 'ENDED')) THEN
+   RAISE EXCEPTION 'a review job that is % needs a run that agrees, not one that is %', job_status, run_state
+    USING ERRCODE = '23514';
+  END IF;
+ END LOOP;
+ RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER review_job_run_agrees AFTER INSERT OR UPDATE OF status, run_id ON review_job
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION enforce_review_job_run();
+CREATE CONSTRAINT TRIGGER agent_run_review_agrees AFTER UPDATE OF state ON agent_run
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.kind = 'REVIEW') EXECUTE FUNCTION enforce_review_job_run();
+        </sql>
+        <rollback>DROP TRIGGER agent_run_review_agrees ON agent_run; DROP TRIGGER review_job_run_agrees ON review_job; DROP FUNCTION enforce_review_job_run();</rollback>
+    </changeSet>
+</databaseChangeLog>

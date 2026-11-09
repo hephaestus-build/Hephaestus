@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
@@ -9,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEvent;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
@@ -26,16 +28,12 @@ import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.micrometer.tracing.Tracer;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -50,31 +48,23 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 // Real transactions must roll back the state change when ledger append fails and satisfy MANDATORY propagation.
-@DisplayName("Stale RUNNING reaper over PostgreSQL Integration")
+@DisplayName("Lost review attempts over PostgreSQL Integration")
 class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
 
-    private ReviewJobZombieSweeper sweeper;
+    @Autowired
+    private AgentRunReaper reaper;
+
+    @Autowired
+    private AgentCapacityProperties capacity;
 
     @Autowired
     private JdbcTemplate jdbc;
-
-    @Autowired
-    private WorkerRegistryRepository workerRegistryRepository;
-
-    @Autowired
-    private AgentProperties agentProperties;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
 
     @Autowired
     private ReviewJobLifecycleService lifecycleService;
-
-    @Autowired
-    private ReviewAttemptUsageService attemptUsage;
-
-    @Autowired
-    private MeterRegistry meterRegistry;
 
     @Autowired
     private ReviewJobRepository jobRepository;
@@ -106,22 +96,6 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
-        sweeper = new ReviewJobZombieSweeper(
-                jobRepository,
-                workerRegistryRepository,
-                objectMapper,
-                transactionTemplate,
-                attemptUsage,
-                meterRegistry,
-                new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
-                new ReviewJobRecovery(
-                        jobRepository,
-                        agentProperties,
-                        objectMapper,
-                        attemptUsage,
-                        Optional.empty(),
-                        new SimpleMeterRegistry()),
-                agentProperties);
         workspace = workspaceRepository.save(TestEntities.activeWorkspace("stale-reap-ws"));
         LlmConnection connection = connectionRepository.save(LlmCatalogTestFixtures.connection("stale-reap"));
         instanceModel =
@@ -130,7 +104,8 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void runtimeReadsKeepReviewWorkspaceAndPricingBoundaries() {
-        UUID id = staleRunningJob(readableSnapshot(), withProxyUsage());
+        // Every retry is spent, so losing this attempt ends the job and leaves it to settle.
+        UUID id = staleRunningJob(readableSnapshot(), withProxyUsage(), capacity.reviewRetries());
         var job = jobRepository.findById(id).orElseThrow();
         var other = workspaceRepository.save(TestEntities.activeWorkspace("other-runtime-ws"));
         var now = Instant.now();
@@ -147,7 +122,7 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
                 .isEmpty();
         assertThat(runtime.spent(workspace.getId(), job.getReviewId()))
                 .isEqualTo(new ReviewRuntimeRepository.Spend(BigDecimal.ZERO, true));
-        sweeper.reapStaleRunningJobs();
+        reapLost(id);
         assertThat(runtime.unsettledJobIds(workspace.getId(), job.getReviewId()))
                 .containsExactly(id);
         assertThat(runtime.unsettledJobIds(other.getId(), job.getReviewId())).isEmpty();
@@ -171,30 +146,28 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
         var stamp = objectMapper.createObjectNode().put("inputsDigest", "a".repeat(64));
         var other = workspaceRepository.save(TestEntities.activeWorkspace("other-capture-ws"));
         transactionTemplate.executeWithoutResult(status -> {
-            assertThat(jobRepository.updateCapture(id, other.getId(), job.getLeaseId(), job.getAttempt(), stamp))
+            assertThat(jobRepository.updateCapture(id, other.getId(), job.getRunId(), job.getAttempt(), stamp))
                     .isZero();
             assertThat(jobRepository.updateCapture(id, workspace.getId(), UUID.randomUUID(), job.getAttempt(), stamp))
                     .isZero();
-            assertThat(jobRepository.updateCapture(
-                            id, workspace.getId(), job.getLeaseId(), job.getAttempt() + 1, stamp))
+            assertThat(jobRepository.updateCapture(id, workspace.getId(), job.getRunId(), job.getAttempt() + 1, stamp))
                     .isZero();
-            assertThat(jobRepository.updateCapture(id, workspace.getId(), job.getLeaseId(), job.getAttempt(), stamp))
+            assertThat(jobRepository.updateCapture(id, workspace.getId(), job.getRunId(), job.getAttempt(), stamp))
                     .isEqualTo(1);
         });
         assertThat(jobRepository.findById(id).orElseThrow().getCapture()).isEqualTo(stamp);
     }
 
     @Test
-    @DisplayName("a genuinely stale RUNNING job reaches TIMED_OUT and its ledger event is committed with it")
-    void staleRunningJobIsTimedOutAndBilled() {
-        // Past the work timeout, upload grace, and stale-job safety buffer.
+    @DisplayName("an attempt whose lease expired is queued again, and its measured spend is billed with it")
+    void shouldBillALostAttemptWhenTheReaperTakesItBack() {
         UUID jobId = staleRunningJob(readableSnapshot(), withProxyUsage());
 
-        sweeper.reapStaleRunningJobs();
+        reapLost(jobId);
 
         ReviewJob reaped = jobRepository.findById(jobId).orElseThrow();
-        assertThat(reaped.getStatus()).isEqualTo(ReviewJobStatus.TIMED_OUT);
-        assertThat(reaped.getErrorMessage()).contains("exceeded its timeout");
+        assertThat(reaped.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(reaped.spentAttempts()).isEqualTo(1);
 
         LlmUsageEvent event = onlyUsageEvent(jobId);
         assertThat(event.getSourceId()).isEqualTo(jobId);
@@ -208,16 +181,16 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("a job whose snapshot this server cannot read still terminalises, billed UNPRICED")
+    @DisplayName("an attempt whose snapshot this server cannot read is still taken back, billed UNPRICED")
     void unreadableSnapshotStillTerminalisesAndDoesNotWedge() {
         UUID jobId = staleRunningJob(snapshotFromTheFuture(), withProxyUsage());
 
-        sweeper.reapStaleRunningJobs();
+        reapLost(jobId);
 
         ReviewJob reaped = jobRepository.findById(jobId).orElseThrow();
         assertThat(reaped.getStatus())
-                .as("an unreadable price must not cost the job its exit from RUNNING")
-                .isEqualTo(ReviewJobStatus.TIMED_OUT);
+                .as("an unreadable price must not keep the attempt holding its job")
+                .isEqualTo(ReviewJobStatus.QUEUED);
 
         LlmUsageEvent event = onlyUsageEvent(jobId);
         assertThat(event.getSourceId()).isEqualTo(jobId);
@@ -226,22 +199,22 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
         assertThat(event.getModel()).isNull();
         assertThat(event.getInputTokens()).isEqualTo(900L);
 
-        // And the slot is genuinely released: a second sweep finds nothing left to reap, which is the
-        // difference between "recovered" and "wedged in a 2-minute retry loop forever".
-        sweeper.reapStaleRunningJobs();
+        // And the lease is genuinely released: a second pass finds nothing left to take back, which is the
+        // difference between "recovered" and "wedged in a retry loop forever".
+        reaper.reap();
         assertThat(usageEventRepository.findByWorkspaceIdAndSourceTypeAndSourceIdOrderBySourceAttemptAsc(
                         workspace.getId(), UsageSourceType.REVIEW_JOB, jobId))
                 .hasSize(1);
-        assertThat(jobRepository.findById(jobId).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.TIMED_OUT);
+        assertThat(jobRepository.findById(jobId).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
     }
 
     @Test
     @DisplayName("a reaped attempt bills each model for practice scripts at its slot's frozen price and purse")
-    void shouldAppendAPracticeScriptLedgerRowPerKindWhenAStaleJobIsReaped() {
+    void shouldAppendAPracticeScriptLedgerRowPerKindWhenALostAttemptIsTakenBack() {
         UUID jobId = staleRunningJob(practiceScriptSnapshot().toJson(objectMapper), withProxyUsage());
         practiceScriptCalls(jobId);
 
-        sweeper.reapStaleRunningJobs();
+        reapLost(jobId);
 
         assertPracticeScriptLedgerRows(jobId);
     }
@@ -270,8 +243,8 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
             queued.setStatus(ReviewJobStatus.QUEUED);
             queued.setStartedAt(null);
             queued.setExecutionStartedAt(null);
-            queued.setLeaseId(null);
             jobRepository.saveAndFlush(queued);
+            RuntimeJobTestData.persistRun(jdbc, queued);
         });
         lifecycleService.cancel(workspace.getId(), queuedId);
         assertThat(jobRepository.findById(queuedId))
@@ -287,6 +260,7 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
             var completed = jobRepository.findById(completedId).orElseThrow();
             completed.setStatus(ReviewJobStatus.COMPLETED);
             jobRepository.saveAndFlush(completed);
+            RuntimeJobTestData.persistRun(jdbc, completed);
         });
         Integer updated = transactionTemplate.execute(transaction -> jobRepository.transitionToCancelled(
                 completedId,
@@ -299,6 +273,13 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
                 .get()
                 .extracting(ReviewJob::getStatus, ReviewJob::getCancellationReason)
                 .containsExactly(ReviewJobStatus.COMPLETED, null);
+    }
+
+    /** The attempt's holder stopped renewing its run, and the reaper takes it back. */
+    private void reapLost(UUID jobId) {
+        RuntimeJobTestData.leaseUntil(
+                jdbc, jobRepository.findById(jobId).orElseThrow(), Instant.now().minusSeconds(1));
+        reaper.reap();
     }
 
     private void practiceScriptCalls(UUID jobId) {
@@ -481,12 +462,17 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
     }
 
     private UUID staleRunningJob(JsonNode configSnapshot, ReviewJob usage) {
+        return staleRunningJob(configSnapshot, usage, 0);
+    }
+
+    /** A running job whose run has spent {@code spent} retries, on its attempt of that number. */
+    private UUID staleRunningJob(JsonNode configSnapshot, ReviewJob usage, int spent) {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
+        RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, spent), spent);
 
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(configSnapshot);
-        job.setLeaseId(UUID.randomUUID());
         job.setStartedAt(Instant.now().minus(Duration.ofMinutes(30)));
         // Non-null executionStartedAt is what makes this attempt billable: it got past preparation and
         // actually ran, so its spend has to be accounted for.
