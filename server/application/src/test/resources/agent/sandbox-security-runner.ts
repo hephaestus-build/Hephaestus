@@ -199,7 +199,7 @@ const git = {
 	GIT_CONFIG_VALUE_0: "/workspace/repos/primary",
 };
 // As the workspace initializer does, before anything untrusted runs.
-const view = spawnSync(process.execPath, ["/workspace/pi-change-view.ts"], {
+const view = spawnSync(process.execPath, ["/workspace/pi-change-view.js"], {
 	cwd: "/workspace",
 	env: { PATH: process.env.PATH, ...git },
 	stdio: "inherit",
@@ -224,7 +224,7 @@ const tools = spawn(
 		stdio: "ignore",
 	},
 );
-const child = spawn(process.execPath, ["--max-old-space-size=256", "/workspace/pi-runner.ts"], {
+const child = spawn(process.execPath, ["--max-old-space-size=256", "/workspace/pi-runner.js"], {
 	cwd: "/workspace",
 	env: {
 		...process.env,
@@ -274,7 +274,7 @@ assert.ok(calls >= steps.length, "Every adversarial step must execute");
 assert.equal(staged, 1, "The practice must reach staging");
 assert.equal(admitted, 1, "The review must reach admission");
 assert.deepEqual(failures, []);
-// PracticeRunnerProfile permits subprocesses. Mounts, rather than Node permissions, isolate workspaces.
+// This replay checks workspace mounts and network isolation.
 const readRefused = /ENOENT/u.test(toolResults.get("cross-read") ?? "");
 const shellRefused = containsText(
 	JSON.parse(toolResults.get("cross-shell") ?? "null"),

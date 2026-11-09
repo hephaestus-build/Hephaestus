@@ -1,0 +1,15 @@
+{
+	"compilerOptions": {
+		"target": "ES2024",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"rewriteRelativeImportExtensions": true,
+		"erasableSyntaxOnly": true,
+		"verbatimModuleSyntax": true,
+		"noCheck": true,
+		"types": [],
+		"rootDir": "server/application/src/main/resources/agent"
+	},
+	"include": ["server/application/src/main/resources/agent/*.ts"],
+	"exclude": ["server/application/src/main/resources/agent/work/**"]
+}

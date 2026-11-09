@@ -88,13 +88,13 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
         @DisplayName("stages the runner's relative-import sidecars beside the runner")
         void stagesRunnerSidecars() {
             var inputs = factory.build(spec("openai-completions", "m")).inputFiles();
-            // pi-runner.ts imports each relatively; unstaged, the sandbox exits 1 with ERR_MODULE_NOT_FOUND.
+            // The runner imports each relatively; unstaged, the sandbox exits 1 with ERR_MODULE_NOT_FOUND.
             for (String sidecar : PRACTICE.sidecarScripts()) {
                 assertThat(inputs).containsKey(sidecar);
                 assertThat(inputs.get(sidecar)).isNotEmpty();
             }
             assertThat(PRACTICE.sidecarScripts())
-                    .contains("pi-result-normalize.ts", "pi-runner-usage.ts", "pi-provider.ts")
+                    .contains("pi-result-normalize.js", "pi-runner-usage.js", "pi-provider.js")
                     .doesNotContain("pi-observation-normalize.ts", "pi-practice-scripts.ts", "pi-practice-scripts.sh");
         }
 

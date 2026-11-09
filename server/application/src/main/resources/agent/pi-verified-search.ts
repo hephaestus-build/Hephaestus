@@ -5,6 +5,7 @@
 // cannot settle in time proves nothing, and the result then rests on what it read.
 
 import { once } from "node:events";
+import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { Worker } from "node:worker_threads";
 
@@ -16,7 +17,7 @@ const PROOF_TIMEOUT_MS = 20_000;
 /** The most bytes of a checkout that a proof reads. */
 const PROOF_BYTES = 512 * 1024 * 1024;
 
-const WORKER = new URL("pi-search-worker.ts", import.meta.url);
+const WORKER = new URL(`pi-search-worker${path.extname(import.meta.filename)}`, import.meta.url);
 
 /** What a worker answers within `timeoutMs`, or null when it fails or runs out of time; it ends either way. */
 export async function onWorker(

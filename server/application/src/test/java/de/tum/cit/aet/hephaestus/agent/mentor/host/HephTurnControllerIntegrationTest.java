@@ -651,10 +651,10 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Test
     void shouldKnowEveryKindOfFailureWhenTheHostNamesIt() throws Exception {
         String protocol =
-                new ClassPathResource("agent/heph-host-protocol.ts").getContentAsString(StandardCharsets.UTF_8);
+                new ClassPathResource("agent/heph-host-protocol.js").getContentAsString(StandardCharsets.UTF_8);
         int start = protocol.indexOf("FAILURE_DETAILS = [");
-        assertThat(start).as("heph-host-protocol.ts declares FAILURE_DETAILS").isNotNegative();
-        String list = protocol.substring(start, protocol.indexOf("] as const", start));
+        assertThat(start).as("heph-host-protocol.js declares FAILURE_DETAILS").isNotNegative();
+        String list = protocol.substring(start, protocol.indexOf("];", start));
         Set<String> named = new TreeSet<>();
         Matcher kind = Pattern.compile("\"([a-z_]+)\"").matcher(list);
         while (kind.find()) {

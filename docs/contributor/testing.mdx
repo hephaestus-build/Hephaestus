@@ -344,10 +344,14 @@ Qualification must pass before the release is published.
 Run the same qualification on a local Linux Docker host:
 
 ```bash
-node scripts/sandbox-security.ts --image <agent-pi-reference>
+node scripts/sandbox-security.ts --image <agent-pi-reference> \
+  --application-image <application-server-reference>
 ```
 
-Use the candidate image digest as the reference.
+Use image digests from the same candidate release for both references.
+Qualification reads `agent/` from the Paketo image's `/workspace/runner.jar` without starting the image.
+The qualification report records both image references.
+
 Docker's default bridge must permit traffic between containers. The probe collector publishes no host port.
 The replay provider runs on loopback inside each container. No live model or provider credential is required.
 The harness gives each workspace a separate Docker container with a read-only root, no network, and bounded memory and processes.

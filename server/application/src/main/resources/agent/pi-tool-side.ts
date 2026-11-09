@@ -41,7 +41,7 @@ const SEARCH_TIMEOUT_MS = 60_000;
 /** How long one `find` may take: it runs apart from the loop, because a pattern can match for ever. */
 const FIND_TIMEOUT_MS = 20_000;
 
-const GLOB_WORKER = new URL("pi-glob-worker.ts", import.meta.url);
+const GLOB_WORKER = new URL(`pi-glob-worker${path.extname(import.meta.filename)}`, import.meta.url);
 
 /** Pi truncates a `grep` line here and does not export the number; the parity test holds the two together. */
 const GREP_MAX_LINE_LENGTH = 500;

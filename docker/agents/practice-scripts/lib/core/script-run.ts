@@ -76,12 +76,16 @@ export interface ProgramProcess {
 
 /** The program's process as a child of this one. */
 export function forkedProgram(start: ProgramStart): ProgramProcess {
-	const child = fork(path.join(import.meta.dirname, "../..", "child.ts"), [], {
-		env: {},
-		execArgv: [...start.execArgv],
-		stdio: ["ignore", "pipe", "pipe", "ipc"],
-		serialization: "advanced",
-	});
+	const child = fork(
+		path.join(import.meta.dirname, "../..", `child${path.extname(import.meta.filename)}`),
+		[],
+		{
+			env: {},
+			execArgv: [...start.execArgv],
+			stdio: ["ignore", "pipe", "pipe", "ipc"],
+			serialization: "advanced",
+		},
+	);
 	return {
 		get connected() {
 			return child.connected;

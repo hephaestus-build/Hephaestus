@@ -29,7 +29,7 @@ guardScriptImports();
 
 const send = process.send?.bind(process);
 if (send === undefined) {
-	throw new Error("child.ts runs only as a process forked by the program host");
+	throw new Error("The program child runs only as a process forked by the program host");
 }
 const post = (message: ChildMessage) => send(JSON.stringify(message));
 

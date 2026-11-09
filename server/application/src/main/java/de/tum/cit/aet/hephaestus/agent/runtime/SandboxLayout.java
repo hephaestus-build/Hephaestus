@@ -133,7 +133,7 @@ public final class SandboxLayout {
     public static final String PI_AGENT_DIR = WORKSPACE_ROOT + "/" + PI_AGENT_NAME;
 
     /** Workspace-relative filename of the runner script copied from the classpath. */
-    public static final String RUNNER_SCRIPT_FILENAME = ".run-pi.ts";
+    public static final String RUNNER_SCRIPT_FILENAME = ".run-pi.js";
 
     /**
      * Workspace-relative filename of the non-secret LLM-provider spec written by
@@ -147,7 +147,7 @@ public final class SandboxLayout {
     public static final String PRACTICE_SCRIPT_MODELS_FILE = "practice-script-models.json";
 
     /** Workspace-relative filename of the shared provider-registration ES module both runners import. */
-    public static final String PROVIDER_HELPER_FILENAME = "pi-provider.ts";
+    public static final String PROVIDER_HELPER_FILENAME = "pi-provider.js";
 
     /** Workspace-relative filename of the orchestrator instructions loaded into Pi at runtime. */
     public static final String ORCHESTRATOR_FILENAME = "AGENTS.md";
@@ -226,7 +226,7 @@ public final class SandboxLayout {
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";
 
     /** Runtime contract required by the staged runners. */
-    public static final int RUNTIME_CONTRACT_VERSION = 13;
+    public static final int RUNTIME_CONTRACT_VERSION = 14;
 
     /** Node major required by the staged runners. */
     public static final int NODE_MAJOR = 24;

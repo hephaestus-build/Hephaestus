@@ -323,6 +323,8 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
             application-server:
+              - 'tsconfig.agent-runtime.json'
+              - 'scripts/compile-agent-runtime.ts'
               - 'server/**'
               # The server packages the feedback writing guide into its jar.
               - 'docs/contributor/practice-feedback-language.md'
@@ -350,6 +352,7 @@ jobs:
               - '!server/**/CLAUDE.md'
             tooling:
               - '.github/ci-tools/**'
+              - 'tsconfig.agent-runtime.json'
               - '.vale/**'
               - '.vale.ini'
               - 'scripts/**'
@@ -405,6 +408,8 @@ jobs:
               - '!**/AGENTS.md'
               - '!**/CLAUDE.md'
             application-server-image:
+              - 'tsconfig.agent-runtime.json'
+              - 'scripts/compile-agent-runtime.ts'
               - 'scripts/summarize-buildpack-log.ts'
               - 'server/application/src/main/**'
               # The server packages the feedback writing guide into its jar.
@@ -421,6 +426,8 @@ jobs:
               - 'server/gradle/**'
               - 'server/gradlew*'
             e2e:
+              - 'tsconfig.agent-runtime.json'
+              - 'scripts/compile-agent-runtime.ts'
               - 'scripts/install-browser-deps.ts'
               - '.java-version'
               - 'webapp/e2e/**'
@@ -573,6 +580,8 @@ jobs:
               - '.github/actions/setup-browsers/**'
               - '.github/actions/setup-helm/**'
             build-config:
+              - 'tsconfig.agent-runtime.json'
+              - 'scripts/compile-agent-runtime.ts'
               - '.github/workflows/cicd.yml'
               - '.java-version'
               - '.github/workflows/ci-build.yml'
@@ -798,9 +807,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
-        if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         with:
-          install: "none"
+          install: "frozen"
       - name: Find the exact-commit merge-queue build
         id: reuse
         if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
@@ -1217,10 +1225,12 @@ jobs:
       - name: Qualify sandbox boundaries on this ref's image
         env:
           IMAGE: ghcr.io/hephaestus-build/agent-pi@${{ steps.release-evidence.outputs.agent-pi-digest }}
+          APPLICATION_IMAGE: ghcr.io/hephaestus-build/application-server@${{ steps.release-evidence.outputs.application-server-digest }}
         run: |
           set -euo pipefail
           docker pull "$IMAGE"
-          node scripts/sandbox-security.ts --image "$IMAGE" --report "$RUNNER_TEMP/sandbox-security.json"
+          docker pull "$APPLICATION_IMAGE"
+          node scripts/sandbox-security.ts --image "$IMAGE" --application-image "$APPLICATION_IMAGE" --report "$RUNNER_TEMP/sandbox-security.json"
 
       - name: Retain sandbox qualification summary
         if: always()

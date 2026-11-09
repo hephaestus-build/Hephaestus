@@ -227,10 +227,12 @@ jobs:
         background: true
         env:
           IMAGE: ghcr.io/hephaestus-build/agent-pi@${{ steps.retag.outputs.agent-pi-digest }}
+          APPLICATION_IMAGE: ghcr.io/hephaestus-build/application-server@${{ steps.retag.outputs.application-server-digest }}
         run: |
           set -euo pipefail
           docker pull "$IMAGE"
-          node scripts/sandbox-security.ts --image "$IMAGE" --report "$RUNNER_TEMP/sandbox-security.json"
+          docker pull "$APPLICATION_IMAGE"
+          node scripts/sandbox-security.ts --image "$IMAGE" --application-image "$APPLICATION_IMAGE" --report "$RUNNER_TEMP/sandbox-security.json"
 
       - uses: ./.github/actions/setup-release-security-tools
         with:

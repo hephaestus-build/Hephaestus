@@ -128,10 +128,35 @@ dependencies {
     }
 }
 
+val agentJavaScript = layout.buildDirectory.dir("generated/agent-runtime")
+val compileAgentRuntime by
+    tasks.registering(Exec::class) {
+        inputs.files(fileTree("src/main/resources/agent") { include("*.ts") })
+        inputs.files(
+            rootProject.file("../tsconfig.agent-runtime.json"),
+            rootProject.file("../package.json"),
+            rootProject.file("../pnpm-lock.yaml"),
+            rootProject.file("../scripts/compile-agent-runtime.ts"),
+        )
+        outputs.dir(agentJavaScript)
+        workingDir(rootProject.projectDir.parentFile)
+        commandLine(
+            "node",
+            rootProject.file("../scripts/compile-agent-runtime.ts").absolutePath,
+            agentJavaScript.get().asFile.absolutePath,
+        )
+    }
+
 // agent/work/ holds the toolkit link for editors and tests; the practice runtime creates the real
 // one.
 tasks.processResources {
+    dependsOn(compileAgentRuntime)
+    from(agentJavaScript) {
+        include("*.js")
+        into("agent")
+    }
     exclude("agent/work/**")
+    exclude("agent/*.ts")
     from(rootProject.file("../docs/contributor/practice-feedback-language.md")) { into("agent") }
 }
 

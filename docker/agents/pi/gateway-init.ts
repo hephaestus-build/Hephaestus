@@ -133,7 +133,7 @@ export async function extract(
 }
 
 /** Staged for a review; a host has none. */
-const CHANGE_VIEW = "/workspace/pi-change-view.ts";
+const CHANGE_VIEW = "/workspace/pi-change-view.js";
 
 /** What the change view may see of this process's environment: Git's settings, and no credential. */
 export function changeViewEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
