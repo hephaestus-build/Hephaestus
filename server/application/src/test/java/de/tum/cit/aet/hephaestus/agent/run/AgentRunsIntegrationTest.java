@@ -160,13 +160,52 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldOfferAQueuedRunOnlyOnceItIsDue() {
-        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:due");
-        transactions.executeWithoutResult(status -> runs.defer(run, Duration.ofHours(1)));
+    void shouldOfferAHeldRunOnlyOnceItsOwnHoldIsReleasedAndClearTheHoldAtTheClaim() {
+        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:held");
+        assertThat(transactions.<Boolean>execute(status -> runs.hold(run, AgentRunHold.BUDGET, Duration.ofHours(1))))
+                .isTrue();
 
         assertThat(claim()).isEmpty();
-        transactions.executeWithoutResult(status -> runs.releaseAll(run.workspaceId(), List.of(run.id())));
+        assertThat(holdOf(run)).isEqualTo("BUDGET");
+        assertThat(transactions.<Integer>execute(
+                        status -> runs.releaseHolds(run.workspaceId(), AgentRunHold.SANDBOX_ROOM)))
+                .as("another reason's release leaves the hold")
+                .isZero();
+        assertThat(transactions.<Integer>execute(status -> runs.releaseHolds(run.workspaceId(), AgentRunHold.BUDGET)))
+                .isOne();
         assertThat(claim()).map(AgentRunLease::runId).contains(run.id());
+        assertThat(holdOf(run)).as("the claim ends the hold").isNull();
+    }
+
+    @Test
+    void shouldKeepABackoffThatIsNoHoldWhenHoldsAreReleased() {
+        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:backoff");
+        AgentRunLease lease = claim().orElseThrow();
+        assertThat(transactions.<Boolean>execute(
+                        status -> runs.requeue(lease.fence(), AgentRuns.Charge.SPEND, Duration.ofHours(1), null)))
+                .isTrue();
+
+        assertThat(transactions.<Integer>execute(status -> runs.releaseHolds(run.workspaceId(), AgentRunHold.BUDGET)))
+                .isZero();
+        assertThat(claim()).as("a retry's backoff stays").isEmpty();
+    }
+
+    @Test
+    void shouldRefuseAHoldOnARunThatIsNotQueued() {
+        AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:leased-hold");
+        assertThat(claim()).map(AgentRunLease::runId).contains(run.id());
+
+        assertThatThrownBy(() -> jdbc.update("UPDATE agent_run SET hold_reason='BUDGET' WHERE id=?", run.id()))
+                .hasMessageContaining("ck_agent_run_hold_queued");
+        assertThatThrownBy(() -> jdbc.update(
+                        "UPDATE agent_run SET hold_reason='LATER' WHERE id=?",
+                        enqueue(workspace, AgentRunBand.BATCH, "review:unknown-hold")
+                                .id()))
+                .hasMessageContaining("ck_agent_run_hold_reason");
+    }
+
+    private @Nullable String holdOf(AgentRunRef run) {
+        return jdbc.queryForObject("SELECT hold_reason FROM agent_run WHERE id=?", String.class, run.id());
     }
 
     @Test
@@ -185,14 +224,14 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         assertThat(first.epoch()).isEqualTo(1);
         assertThat(first.attempt()).isZero();
         transactions.executeWithoutResult(
-                status -> assertThat(runs.requeue(first.fence(), AgentRuns.Charge.FREE, Duration.ZERO))
+                status -> assertThat(runs.requeue(first.fence(), AgentRuns.Charge.FREE, Duration.ZERO, null))
                         .isTrue());
 
         AgentRunLease second = claim().orElseThrow();
         assertThat(second.epoch()).isEqualTo(2);
         assertThat(second.attempt()).as("a free requeue spends nothing").isZero();
         transactions.executeWithoutResult(
-                status -> assertThat(runs.requeue(second.fence(), AgentRuns.Charge.SPEND, Duration.ZERO))
+                status -> assertThat(runs.requeue(second.fence(), AgentRuns.Charge.SPEND, Duration.ZERO, null))
                         .isTrue());
 
         AgentRunLease third = claim().orElseThrow();
@@ -205,13 +244,14 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     void shouldRefuseEveryWriteOfAStaleClaim() {
         enqueue(workspace, AgentRunBand.BATCH, "review:stale");
         AgentRunLease first = claim().orElseThrow();
-        transactions.executeWithoutResult(status -> runs.requeue(first.fence(), AgentRuns.Charge.FREE, Duration.ZERO));
+        transactions.executeWithoutResult(
+                status -> runs.requeue(first.fence(), AgentRuns.Charge.FREE, Duration.ZERO, null));
         AgentRunLease current = claim().orElseThrow();
         AgentRunFence stale = first.fence();
 
         transactions.executeWithoutResult(status -> {
             assertThat(runs.renew(stale)).isEmpty();
-            assertThat(runs.requeue(stale, AgentRuns.Charge.FREE, Duration.ZERO))
+            assertThat(runs.requeue(stale, AgentRuns.Charge.FREE, Duration.ZERO, null))
                     .isFalse();
             assertThat(runs.end(stale)).isFalse();
             assertThat(runs.renew(new AgentRunFence(current.runId(), other, current.epoch())))

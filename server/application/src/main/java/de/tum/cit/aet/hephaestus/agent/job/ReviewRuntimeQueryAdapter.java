@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
@@ -127,7 +128,7 @@ public class ReviewRuntimeQueryAdapter implements ReviewRuntimeQuery {
                             job.getInput().itemId(),
                             developer,
                             job.getStatus(),
-                            ReviewJob.HOLD_REASON_BUDGET.equals(job.getHoldReason()),
+                            AgentRunHold.BUDGET.name().equals(job.getHoldReason()),
                             job.getAvailableAt());
                 })
                 .toList();
@@ -164,7 +165,7 @@ public class ReviewRuntimeQueryAdapter implements ReviewRuntimeQuery {
         boolean publicBreakdownKnown = true, finishedBreakdownKnown = true;
         for (var row : rows) {
             if (row.status() == ReviewJobStatus.QUEUED
-                    && !ReviewJob.HOLD_REASON_BUDGET.equals(row.holdReason())
+                    && !AgentRunHold.BUDGET.name().equals(row.holdReason())
                     && row.availableAt().isBefore(longWaitThreshold)) longWait++;
             var fact = Objects.requireNonNull(byReview.get(row.reviewId()));
             if (row.attempt() > 0) {

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
@@ -158,7 +159,7 @@ class ReviewRuntimeQueryAdapterTest extends BaseUnitTest {
         var waiting = new ReviewRuntimeRepository.TimingJob(
                 review, ReviewJobStatus.QUEUED, 1, CREATED, null, null, null, null);
         var budgetHeld = new ReviewRuntimeRepository.TimingJob(
-                review, ReviewJobStatus.QUEUED, 1, CREATED, null, null, null, ReviewJob.HOLD_REASON_BUDGET);
+                review, ReviewJobStatus.QUEUED, 1, CREATED, null, null, null, AgentRunHold.BUDGET.name());
 
         var result = timing(List.of(timeline), List.of(waiting, budgetHeld), new ReviewTimingFacts(0, 0, 0, 0, 0));
 

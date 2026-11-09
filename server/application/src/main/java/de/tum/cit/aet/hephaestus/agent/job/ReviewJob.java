@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -51,11 +52,6 @@ import tools.jackson.databind.JsonNode;
 @ToString
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class ReviewJob {
-    public static final String HOLD_REASON_BUDGET = "BUDGET";
-
-    /** The sandbox runtime had no room for the attempt's sandbox; nothing of it ran, so it spent no retry. */
-    public static final String HOLD_REASON_SANDBOX_ROOM = "SANDBOX_ROOM";
-
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int TOKEN_BYTES = 32;
 
@@ -99,6 +95,11 @@ public class ReviewJob {
     @Formula("(SELECT r.available_at FROM agent_run r WHERE r.id = run_id)")
     private Instant availableAt;
 
+    /** Why the run waits beyond a retry's backoff, as {@link AgentRunHold} names it; its run holds it. */
+    @Setter(AccessLevel.NONE)
+    @Formula("(SELECT r.hold_reason FROM agent_run r WHERE r.id = run_id)")
+    private @Nullable String holdReason;
+
     @Enumerated(EnumType.STRING)
     @ColumnDefault("'NONE'")
     @Column(name = "processing_status", nullable = false, length = 16)
@@ -106,9 +107,6 @@ public class ReviewJob {
 
     @Column(name = "submitted_at", nullable = false, updatable = false)
     private Instant submittedAt;
-
-    @Column(name = "hold_reason", length = 32)
-    private @Nullable String holdReason;
 
     @Column(name = "trace_id", nullable = false, length = 32)
     private String traceId;

@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunNotifications;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
@@ -759,7 +760,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(claims.claimNext(Set.of(), () -> true)).isEqualTo(ReviewJobClaimService.ClaimOutcome.BUDGET_HELD);
         var held = jobs.findById(job.getId()).orElseThrow();
         assertThat(held.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
-        assertThat(held.getHoldReason()).isEqualTo(ReviewJob.HOLD_REASON_BUDGET);
+        assertThat(held.getHoldReason()).isEqualTo(AgentRunHold.BUDGET.name());
         assertThat(held.getAttempt()).isZero();
         verifyNoInteractions(modelAdmission);
     }

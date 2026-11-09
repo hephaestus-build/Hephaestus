@@ -1316,7 +1316,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void shouldCancelOldBudgetHeldWorkEvenAfterItsAvailabilityWasMoved() {
         var job = RuntimeReviewTestData.job();
         job.setSubmittedAt(Instant.now().minus(Duration.ofDays(8)));
-        job.setHoldReason(ReviewJob.HOLD_REASON_BUDGET);
         offer(job);
         when(policy.permitsReview(job)).thenReturn(true);
         when(budgets.decide(job.getWorkspaceId()))

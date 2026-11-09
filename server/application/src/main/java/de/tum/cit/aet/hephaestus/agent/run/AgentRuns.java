@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -145,12 +146,20 @@ public class AgentRuns {
     /**
      * Puts the run back in the queue. A charged requeue spends one attempt and waits the backoff of the attempts spent.
      *
+     * @param hold why it waits beyond a retry's backoff, or {@code null}
      * @return whether the holder still held the run
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public boolean requeue(AgentRunFence fence, Charge charge, Duration delay) {
+    public boolean requeue(AgentRunFence fence, Charge charge, Duration delay, @Nullable AgentRunHold hold) {
         int spent = charge == Charge.SPEND ? 1 : 0;
-        boolean requeued = runs.requeue(fence.runId(), fence.workspaceId(), fence.epoch(), spent, seconds(delay)) == 1;
+        boolean requeued = runs.requeue(
+                        fence.runId(),
+                        fence.workspaceId(),
+                        fence.epoch(),
+                        spent,
+                        seconds(delay),
+                        hold == null ? null : hold.name())
+                == 1;
         if (requeued) wake(fence);
         return requeued;
     }
@@ -178,20 +187,23 @@ public class AgentRuns {
         return runIds.isEmpty() ? 0 : runs.cancelAll(runIds);
     }
 
-    /** Offers a queued run no earlier than {@code delay} from now. */
+    /** Holds a queued run for {@code reason}, and offers it again no earlier than {@code delay} from now. */
     @Transactional(propagation = Propagation.MANDATORY)
-    public boolean defer(AgentRunRef run, Duration delay) {
-        return runs.defer(run.id(), run.workspaceId(), seconds(delay)) == 1;
+    public boolean hold(AgentRunRef run, AgentRunHold reason, Duration delay) {
+        return runs.hold(run.id(), run.workspaceId(), reason.name(), seconds(delay)) == 1;
     }
 
-    /** Offers these queued runs of the workspace now: the hold that delayed them was lifted. */
+    /**
+     * Offers now every queued run of the workspace that {@code reason} held, of every kind: the cause was lifted. A
+     * retry's backoff is no hold, so it keeps its wait.
+     *
+     * @return how many runs were released
+     */
     @Transactional(propagation = Propagation.MANDATORY)
-    public int releaseAll(long workspaceId, Collection<UUID> runIds) {
-        if (runIds.isEmpty()) return 0;
-        int released = runs.releaseAll(workspaceId, runIds);
-        if (released > 0)
-            runs.findByRef(runIds.iterator().next(), workspaceId).ifPresent(found -> wake(found.getKind()));
-        return released;
+    public int releaseHolds(long workspaceId, AgentRunHold reason) {
+        List<String> released = runs.releaseHolds(workspaceId, reason.name());
+        released.stream().distinct().map(AgentRunKind::valueOf).forEach(this::wake);
+        return released.size();
     }
 
     /**

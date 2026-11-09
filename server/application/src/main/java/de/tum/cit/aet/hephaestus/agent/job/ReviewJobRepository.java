@@ -116,22 +116,6 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
 
     List<ReviewJob> findByStatusIn(Collection<ReviewJobStatus> statuses);
 
-    /**
-     * Clears the hold a budget block placed on this workspace's queued jobs, so raising the cap takes
-     * effect immediately. Scoped to {@code hold_reason = 'BUDGET'} rather than "any future
-     * {@code available_at}" so it cannot fast-forward a crash-retry backoff.
-     *
-     * @return the runs of the held jobs, which the caller offers again
-     */
-    @WorkspaceAgnostic("Workspace-scoped release; caller is the budget writer for that workspace")
-    // A list result runs as a query, which neither flushes nor clears; Hibernate flushes before a native statement.
-    @Query(value = """
-            UPDATE review_job SET hold_reason = NULL
-             WHERE workspace_id = :workspaceId AND status = 'QUEUED' AND hold_reason = 'BUDGET'
-            RETURNING run_id
-            """, nativeQuery = true)
-    List<UUID> clearBudgetHolds(@Param("workspaceId") long workspaceId);
-
     /** The parent before the job, as the review service locks it before it changes the review; no parent state changes here. */
     @WorkspaceAgnostic("Run-based claim; parent join includes its workspace")
     @Query(value = """
@@ -417,20 +401,15 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      * Hands the running attempt back to the queue, keeping what it admitted and staged; its run is requeued in the same
      * transaction. The next attempt gets its own number when its claim takes the next epoch.
      *
-     * @param holdReason why the job waits, or {@code null}
      * @return rows updated (0 or 1)
      */
     @WorkspaceAgnostic("ID-based fenced requeue; the caller holds the attempt's run")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.startedAt = null, j.executionStartedAt = null,"
-            + " j.holdReason = :holdReason, j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0,"
+            + " j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0,"
             + " j.llmReasoningTokens = 0, j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0"
             + " WHERE j.id = :id AND j.status = 'RUNNING' AND j.runId = :runId AND j.attempt = :attempt")
-    int requeueRunning(
-            @Param("id") UUID id,
-            @Param("runId") UUID runId,
-            @Param("attempt") int attempt,
-            @Param("holdReason") @Nullable String holdReason);
+    int requeueRunning(@Param("id") UUID id, @Param("runId") UUID runId, @Param("attempt") int attempt);
 
     /**
      * Cancels this worker's attempt for capacity: nothing of its sandbox ran, so it has no execution time either.
@@ -465,15 +444,18 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
                    cancellation_reason = 'NO_SANDBOX_ROOM'
               FROM agent_run r
              WHERE r.id = j.run_id AND j.status = 'QUEUED' AND r.available_at <= clock_timestamp()
-               AND j.admission_digest IS NULL AND (j.hold_reason IS NULL OR j.hold_reason <> 'BUDGET')
+               AND j.admission_digest IS NULL AND (r.hold_reason IS NULL OR r.hold_reason <> 'BUDGET')
             RETURNING j.run_id
             """, nativeQuery = true)
     List<UUID> cancelQueuedForRoom(@Param("now") Instant now, @Param("error") String error);
 
     /** Whether a queued review still needs a sandbox: one held for its budget waits for money, not room. */
     @WorkspaceAgnostic("Fleet-wide capacity verdict over the shared queue; caller is a worker's admission check")
-    @Query("SELECT COUNT(j) > 0 FROM ReviewJob j WHERE j.status = 'QUEUED' AND j.admissionDigest IS NULL "
-            + "AND (j.holdReason IS NULL OR j.holdReason <> 'BUDGET')")
+    @Query(value = """
+            SELECT EXISTS (SELECT 1 FROM review_job j JOIN agent_run r ON r.id = j.run_id
+             WHERE j.status = 'QUEUED' AND j.admission_digest IS NULL
+               AND (r.hold_reason IS NULL OR r.hold_reason <> 'BUDGET'))
+            """, nativeQuery = true)
     boolean existsQueuedForRoom();
 
     /** Pending delivery recovery still reads output; stripping it would make delivery permanently unrecoverable. */
@@ -520,7 +502,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             value = "SELECT COUNT(*) FILTER (WHERE j.status = 'QUEUED' AND r.available_at <= :now) AS depth,"
                     + " MIN(r.available_at) FILTER (WHERE j.status = 'QUEUED' AND r.available_at <= :now)"
                     + " AS oldestAvailableAt,"
-                    + " COUNT(*) FILTER (WHERE j.status = 'QUEUED' AND j.hold_reason = 'BUDGET') AS held,"
+                    + " COUNT(*) FILTER (WHERE j.status = 'QUEUED' AND r.hold_reason = 'BUDGET') AS held,"
                     + " COUNT(*) FILTER (WHERE j.status = 'RUNNING') AS running"
                     + " FROM review_job j JOIN agent_run r ON r.id = j.run_id WHERE j.status IN ('QUEUED', 'RUNNING')",
             nativeQuery = true)

@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptUsage;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunHold;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -205,17 +206,17 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         return llmModelRepository.save(LlmCatalogTestFixtures.model(connection, slug + "-model", "gpt-ledger"));
     }
 
-    private ReviewJob queuedJob(Workspace workspace, Instant availableAt, @Nullable String holdReason) {
+    private ReviewJob queuedJob(Workspace workspace, Instant availableAt, @Nullable AgentRunHold hold) {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
 
         job.setStatus(ReviewJobStatus.QUEUED);
         job.setConfigSnapshot(new ObjectMapper().createObjectNode());
         job.prePersist();
-        job.setHoldReason(holdReason);
         ReviewJob saved = jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
         // The run offers the job no earlier than this.
         jdbc.update("UPDATE agent_run SET available_at=? WHERE id=?", Timestamp.from(availableAt), saved.getRunId());
+        if (hold != null) RuntimeJobTestData.hold(jdbc, saved, hold);
         return jobRepository.findById(saved.getId()).orElseThrow();
     }
 
@@ -496,7 +497,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         void updatingTheOwnProviderCapReleasesBudgetHolds() {
             Workspace workspace = setupWorkspace("hold-byo");
             Instant heldUntil = Instant.now().plus(Duration.ofHours(1));
-            ReviewJob held = queuedJob(workspace, heldUntil, ReviewJob.HOLD_REASON_BUDGET);
+            ReviewJob held = queuedJob(workspace, heldUntil, AgentRunHold.BUDGET);
 
             llmUsageService.updateOwnProviderBudget(workspace.getId(), new BigDecimal("50.00"));
 
@@ -511,7 +512,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         void updatingTheInstanceCapReleasesBudgetHolds() {
             Workspace workspace = setupWorkspace("hold-instance");
             Instant heldUntil = Instant.now().plus(Duration.ofHours(1));
-            ReviewJob held = queuedJob(workspace, heldUntil, ReviewJob.HOLD_REASON_BUDGET);
+            ReviewJob held = queuedJob(workspace, heldUntil, AgentRunHold.BUDGET);
 
             llmUsageAdminService.updateBudget(workspace.getWorkspaceSlug(), new BigDecimal("50.00"));
 
@@ -541,7 +542,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         void aRunningJobIsNeverReleased() {
             Workspace workspace = setupWorkspace("hold-running");
             Instant availableAt = Instant.now().plus(Duration.ofHours(1));
-            ReviewJob running = queuedJob(workspace, availableAt, ReviewJob.HOLD_REASON_BUDGET);
+            ReviewJob running = queuedJob(workspace, availableAt, AgentRunHold.BUDGET);
             running.setStatus(ReviewJobStatus.RUNNING);
             RuntimeJobTestData.save(transactionTemplate, jdbc, jobRepository, running);
 
@@ -549,7 +550,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
             ReviewJob reloaded = jobRepository.findById(running.getId()).orElseThrow();
             assertThat(reloaded.getAvailableAt()).isCloseTo(availableAt, within(1, ChronoUnit.MILLIS));
-            assertThat(reloaded.getHoldReason()).isEqualTo(ReviewJob.HOLD_REASON_BUDGET);
+            assertThat(reloaded.getHoldReason()).as("the claim ended the hold").isNull();
         }
 
         @Test
@@ -558,13 +559,13 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
             Workspace mine = setupWorkspace("hold-mine");
             Workspace theirs = setupWorkspace("hold-theirs");
             Instant heldUntil = Instant.now().plus(Duration.ofHours(1));
-            ReviewJob otherTenantJob = queuedJob(theirs, heldUntil, ReviewJob.HOLD_REASON_BUDGET);
+            ReviewJob otherTenantJob = queuedJob(theirs, heldUntil, AgentRunHold.BUDGET);
 
             llmUsageService.updateOwnProviderBudget(mine.getId(), new BigDecimal("50.00"));
 
             ReviewJob reloaded = jobRepository.findById(otherTenantJob.getId()).orElseThrow();
             assertThat(reloaded.getAvailableAt()).isCloseTo(heldUntil, within(1, ChronoUnit.MILLIS));
-            assertThat(reloaded.getHoldReason()).isEqualTo(ReviewJob.HOLD_REASON_BUDGET);
+            assertThat(reloaded.getHoldReason()).isEqualTo(AgentRunHold.BUDGET.name());
         }
 
         @Test
@@ -573,8 +574,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
             Workspace workspace = setupWorkspace("hold-clear");
             workspace.setMonthlyByoLlmBudgetUsd(BigDecimal.ZERO);
             workspaceRepository.save(workspace);
-            ReviewJob held =
-                    queuedJob(workspace, Instant.now().plus(Duration.ofHours(1)), ReviewJob.HOLD_REASON_BUDGET);
+            ReviewJob held = queuedJob(workspace, Instant.now().plus(Duration.ofHours(1)), AgentRunHold.BUDGET);
 
             llmUsageService.updateOwnProviderBudget(workspace.getId(), null);
 

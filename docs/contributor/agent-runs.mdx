@@ -27,6 +27,18 @@ A claim takes the next epoch. No other write changes the epoch.
 At most one run of a subject is `LEASED`. The partial unique index `uq_agent_run_leased_subject` enforces this.
 The runs of a subject are claimed in the order they were queued.
 
+## Holds
+
+A queued run can wait for a reason that is not a retry's backoff. `hold_reason` (`AgentRunHold`) names it:
+
+| Hold | The run waits until |
+| --- | --- |
+| `BUDGET` | the workspace's model budget allows a review again. Raising or clearing a cap releases the workspace's budget holds at once (`AgentRuns.releaseHolds`). |
+| `SANDBOX_ROOM` | the sandbox runtime has room for its sandbox. Nothing of the attempt ran, so it spends no retry. |
+
+Only a queued run has a hold, and the claim clears it. The checks `ck_agent_run_hold_reason` and `ck_agent_run_hold_queued` enforce both rules.
+A retry's backoff is a later `available_at` with no hold, and no release brings it forward.
+
 ## Claim
 
 `AgentRuns.claim` leases the next run that is due, with `FOR UPDATE SKIP LOCKED`.
