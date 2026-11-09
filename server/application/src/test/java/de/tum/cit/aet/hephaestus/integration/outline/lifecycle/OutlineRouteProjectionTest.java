@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -14,10 +15,15 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.nats.client.Connection;
 import io.nats.client.KeyValue;
 import io.nats.client.KeyValueManagement;
+import io.nats.client.api.KeyValueEntry;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,8 +33,8 @@ import org.springframework.dao.DataAccessResourceFailureException;
 
 /**
  * The grace window is what keeps a new subscription's first deliveries from a 410: a route allowed before its
- * connection stores it survives every rebuild for {@link OutlineRouteProjection#REGISTRATION_GRACE}, and a rebuild
- * never drops a route because the database could not be read.
+ * connection stores it survives every rebuild for {@link OutlineRouteProjection#REGISTRATION_GRACE}, on whichever
+ * server it was allowed, and a rebuild never drops a route because the database could not be read.
  */
 class OutlineRouteProjectionTest extends BaseUnitTest {
 
@@ -48,6 +54,9 @@ class OutlineRouteProjectionTest extends BaseUnitTest {
     private ConnectionRepository connections;
 
     private final Set<String> stored = new HashSet<>();
+    /** When the broker stamped each key's write. */
+    private final Map<String, Instant> written = new HashMap<>();
+
     private final MutableClock clock = MutableClock.atFixedInstant();
     private OutlineRouteProjection projection;
 
@@ -59,12 +68,23 @@ class OutlineRouteProjectionTest extends BaseUnitTest {
         lenient().when(bucket.keys()).thenAnswer(invocation -> new ArrayList<>(stored));
         lenient().when(bucket.put(anyString(), any(byte[].class))).thenAnswer(invocation -> {
             stored.add(invocation.getArgument(0));
+            written.put(invocation.getArgument(0), clock.instant());
             return 1L;
         });
         lenient()
-                .doAnswer(invocation -> stored.remove(invocation.<String>getArgument(0)))
+                .doAnswer(invocation -> {
+                    written.remove(invocation.<String>getArgument(0));
+                    return stored.remove(invocation.<String>getArgument(0));
+                })
                 .when(bucket)
                 .delete(anyString());
+        lenient().when(bucket.get(anyString())).thenAnswer(invocation -> {
+            Instant at = written.get(invocation.<String>getArgument(0));
+            if (at == null) return null;
+            KeyValueEntry entry = mock(KeyValueEntry.class);
+            when(entry.getCreated()).thenReturn(at.atZone(ZoneOffset.UTC));
+            return entry;
+        });
         projection = new OutlineRouteProjection(nats, connections, clock);
     }
 
@@ -102,14 +122,15 @@ class OutlineRouteProjectionTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldHoldTheNewRouteWhenTheRebuildFillsAnEmptyBucket() {
-        projection.allow(NEW);
-        stored.clear();
-        databaseHolds();
+    void shouldKeepARouteThatAnotherServerAllowedWhenThisServerRebuilds() {
+        var otherServer = new OutlineRouteProjection(nats, connections, clock);
+        databaseHolds(STORED);
+        otherServer.allow(NEW);
 
+        clock.advance(OutlineRouteProjection.REGISTRATION_GRACE.minusSeconds(1));
         projection.rebuild();
 
-        assertThat(stored).containsExactly(key(NEW));
+        assertThat(stored).containsExactlyInAnyOrder(key(STORED), key(NEW));
     }
 
     @Test

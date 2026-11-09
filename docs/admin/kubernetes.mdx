@@ -851,6 +851,7 @@ The Secret in `postgresql.tls.existingSecret` needs only `ca.crt`, the CA that s
 The chart has no setting for a connection without certificate verification or without TLS.
 
 Set `nats.bundled=false` to use your NATS JetStream broker.
+The broker must run NATS Server 2.11 or later: a replay pauses a consumer.
 Put the broker on a private network that only this release can reach.
 
 For a `tls://` broker, Hephaestus verifies the certificate chain and the broker's hostname.

@@ -262,6 +262,7 @@ public class LoginProviderService {
                         registrationId);
                 return;
             }
+            repository.acquireSeedLock();
             if (repository.existsByRegistrationId(id)) {
                 return; // seed-once (see class javadoc)
             }

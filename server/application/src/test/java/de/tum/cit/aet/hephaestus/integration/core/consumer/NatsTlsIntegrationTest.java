@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
 import io.nats.client.Connection;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -39,7 +40,7 @@ import org.testcontainers.utility.MountableFile;
 class NatsTlsIntegrationTest {
 
     private static final char[] STORE_PASSWORD = "test-only-password".toCharArray();
-    private static final DockerImageName IMAGE = DockerImageName.parse("nats:2.10.27-alpine");
+    private static final DockerImageName IMAGE = NatsTestContainer.IMAGE;
 
     @TempDir
     private static Path directory;

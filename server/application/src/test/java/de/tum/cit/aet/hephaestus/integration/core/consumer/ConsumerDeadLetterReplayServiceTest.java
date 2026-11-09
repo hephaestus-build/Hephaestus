@@ -1,15 +1,18 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.InstallationReplayAudit;
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLocks;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.nats.client.Message;
@@ -22,8 +25,10 @@ import java.util.Optional;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
     @Test
@@ -34,7 +39,8 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
                 repository,
                 consumer,
                 new TransactionTemplate(mock(PlatformTransactionManager.class)),
-                mock(InstallationReplayAudit.class));
+                mock(InstallationReplayAudit.class),
+                ClusterLocks.free());
         var row = new ConsumerDeadLetter();
         row.setId(17L);
         row.setStreamName("github");
@@ -49,9 +55,10 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
         when(stored.getData()).thenReturn(payload);
         when(stored.getHeaders()).thenReturn(new Headers().put("X-Heph-Route", "original"));
         when(consumer.readRetainedMessage("github", 17)).thenReturn(stored);
+        when(consumer.fencedConsumerName(42L, "github")).thenReturn("scope");
         doAnswer(call -> call.<Supplier<ConsumerDeadLetterDTO>>getArgument(2).get())
                 .when(consumer)
-                .serialDispatch(eq(42L), eq("github"), any());
+                .exclusive(eq(42L), eq("github"), any());
         row.setErrorClass("PayloadParsingException");
         row.setFailedAt(Instant.now());
         when(repository.findWorkspace(42L, 17L)).thenReturn(Optional.of(row));
@@ -76,5 +83,41 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
         assertThat(headers).isNotNull();
         if (headers == null) throw new AssertionError("Stored routing headers missing");
         assertThat(headers.getFirst("X-Heph-Route")).isEqualTo("original");
+    }
+
+    @Test
+    void shouldAnswerUnavailableAndLeaveTheRecordPendingWhenAnotherEventHoldsTheConsumer() throws Exception {
+        var repository = mock(ConsumerDeadLetterRepository.class);
+        var consumer = mock(IntegrationNatsConsumer.class);
+        var service = new ConsumerDeadLetterReplayService(
+                repository,
+                consumer,
+                new TransactionTemplate(mock(PlatformTransactionManager.class)),
+                mock(InstallationReplayAudit.class),
+                ClusterLocks.free());
+        var row = new ConsumerDeadLetter();
+        row.setId(18L);
+        row.setStreamName("github");
+        row.setStreamSequence(18);
+        row.setSubject("github.acme.repo.issues");
+        row.setConsumerName("scope");
+        row.setReceivedAt(Instant.ofEpochSecond(1700000000));
+        row.setErrorClass("PayloadParsingException");
+        row.setFailedAt(Instant.now());
+        MessageInfo stored = mock(MessageInfo.class);
+        when(stored.getTime()).thenReturn(row.getReceivedAt().atZone(ZoneOffset.UTC));
+        when(stored.getSubject()).thenReturn(row.getSubject());
+        when(consumer.readRetainedMessage("github", 18)).thenReturn(stored);
+        when(consumer.fencedConsumerName(42L, "github")).thenReturn("scope");
+        when(consumer.exclusive(eq(42L), eq("github"), any()))
+                .thenThrow(new ConsumerFenceException("The consumer still holds a message", null));
+        when(repository.findWorkspace(42L, 18L)).thenReturn(Optional.of(row));
+
+        assertThatThrownBy(() -> service.replayWorkspace(42L, 18L, 8L))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        failure -> assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+        verify(consumer, never()).dispatch(any(), any());
+        assertThat(row.getReplayedAt()).isNull();
     }
 }

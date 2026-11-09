@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
 import io.nats.client.Connection;
 import io.nats.client.Nats;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -65,5 +67,20 @@ class ProjectedKeysIntegrationTest {
         assertThat(keys.contains("a")).isFalse();
         assertThat(keys.contains("b")).isTrue();
         assertThat(keys.contains("c")).isTrue();
+    }
+
+    @Test
+    void shouldKeepAKeyOutsideTheSetOnlyWhileItsWriteIsRecent() {
+        ProjectedKeys allowing = new ProjectedKeys(nats, bucket);
+        ProjectedKeys rebuilding = new ProjectedKeys(nats, bucket);
+        rebuilding.replaceAll(Set.of("stored"));
+        allowing.add("new");
+
+        rebuilding.replaceAll(Set.of("stored"), Instant.now().minus(Duration.ofMinutes(5)));
+        assertThat(rebuilding.contains("new")).isTrue();
+
+        rebuilding.replaceAll(Set.of("stored"), Instant.now().plus(Duration.ofMinutes(5)));
+        assertThat(rebuilding.contains("new")).isFalse();
+        assertThat(rebuilding.contains("stored")).isTrue();
     }
 }

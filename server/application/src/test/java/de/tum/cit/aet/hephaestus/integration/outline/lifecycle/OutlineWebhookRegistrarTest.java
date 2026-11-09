@@ -16,6 +16,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLocks;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -121,6 +122,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                 providerOf(consumer),
                 providerOf(routes),
                 connectionRepository,
+                ClusterLocks.free(),
                 meters);
     }
 

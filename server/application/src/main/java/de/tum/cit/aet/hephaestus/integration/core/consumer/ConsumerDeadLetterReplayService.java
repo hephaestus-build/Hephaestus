@@ -2,15 +2,18 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.InstallationReplayAudit;
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.nats.client.JetStreamApiException;
 import io.nats.client.api.MessageInfo;
 import io.nats.client.impl.NatsJetStreamMetaData;
 import io.nats.client.impl.NatsMessage;
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,16 +30,19 @@ public class ConsumerDeadLetterReplayService {
     private final IntegrationNatsConsumer consumer;
     private final TransactionTemplate transactions;
     private final InstallationReplayAudit audit;
+    private final ClusterLock locks;
 
     public ConsumerDeadLetterReplayService(
             ConsumerDeadLetterRepository repository,
             IntegrationNatsConsumer consumer,
             TransactionTemplate transactions,
-            InstallationReplayAudit audit) {
+            InstallationReplayAudit audit,
+            ClusterLock locks) {
         this.repository = repository;
         this.consumer = consumer;
         this.transactions = transactions;
         this.audit = audit;
+        this.locks = locks;
     }
 
     public ConsumerDeadLetterDTO replayWorkspace(Long workspaceId, Long id, Long actorId) {
@@ -77,12 +83,24 @@ public class ConsumerDeadLetterReplayService {
         }
         // Fetch from NATS before opening a database transaction or holding a row lock.
         try {
-            return consumer.serialDispatch(
-                    workspaceId,
-                    row.getStreamName(),
-                    () -> apply(workspaceId, actorId, row, stored, storedTime.toInstant()));
+            String consumerName = consumer.fencedConsumerName(workspaceId, row.getStreamName());
+            return oneReplayAtATime(
+                    consumerName,
+                    () -> consumer.exclusive(
+                            workspaceId,
+                            row.getStreamName(),
+                            () -> apply(workspaceId, actorId, row, stored, storedTime.toInstant())));
         } catch (ResponseStatusException failure) {
             throw failure;
+        } catch (ConsumerFenceException failure) {
+            log.warn(
+                    "Replay fence failed: deadLetterId={}, error.type={}",
+                    row.getId(),
+                    failure.getClass().getName());
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Another event from this source is still being processed or retried. Try again in a minute.",
+                    failure);
         } catch (RuntimeException failure) {
             log.warn(
                     "Replay failed: deadLetterId={}, error.type={}",
@@ -92,6 +110,16 @@ public class ConsumerDeadLetterReplayService {
                     HttpStatus.CONFLICT,
                     "We could not complete this replay. Check the connection and try again.",
                     failure);
+        }
+    }
+
+    /** One replay of a consumer at a time, on every server: the resume of one replay's fence would end another's. */
+    private <T> T oneReplayAtATime(String consumerName, Supplier<T> replay) {
+        try {
+            return locks.call("consumer-replay:" + consumerName, Duration.ZERO, replay)
+                    .orElseThrow(() -> new ConsumerFenceException("Another replay of the consumer runs", null));
+        } catch (ClusterLock.UnavailableException failure) {
+            throw new ConsumerFenceException("The replay lock is unavailable", failure);
         }
     }
 

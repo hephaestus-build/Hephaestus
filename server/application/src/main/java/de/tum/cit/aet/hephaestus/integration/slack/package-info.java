@@ -32,6 +32,8 @@
             "workspace::spi",
             // Runtime-role gate (@ConditionalOnServerRole) on the Slack beans that run only in the server role.
             "core::runtime",
+            // One consent projection update or rebuild at a time, on every server.
+            "core::lock",
             // Shared core infra: @WorkspaceAgnostic on the inbound Slack-events controller (this path resolves the
             // workspace from the payload's team_id, not the URL).
             "core",

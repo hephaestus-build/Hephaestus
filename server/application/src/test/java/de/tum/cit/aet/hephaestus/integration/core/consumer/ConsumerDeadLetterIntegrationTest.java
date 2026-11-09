@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationCoreConnectionPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
@@ -23,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider.NatsSubscriptionInfo;
 import de.tum.cit.aet.hephaestus.integration.core.spi.NatsSubscriptionProvider.StreamSubscription;
+import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
@@ -43,6 +45,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -61,7 +65,7 @@ import org.testcontainers.containers.wait.strategy.Wait;
 
 class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest {
     // This broker is private: real provider subjects must not overlap other integration suites.
-    private static final GenericContainer<?> BROKER = new GenericContainer<>("nats:2.10.27-alpine")
+    private static final GenericContainer<?> BROKER = new GenericContainer<>(NatsTestContainer.IMAGE)
             .withCommand("-js")
             .withExposedPorts(4222)
             .waitingFor(Wait.forLogMessage(".*Server is ready.*", 1));
@@ -112,6 +116,9 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private WebTestClient client;
+
+    @Autowired
+    private ClusterLock locks;
 
     private Workspace workspace;
     private Workspace other;
@@ -225,6 +232,48 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                         .getFirst()
                         .replayedAt())
                 .isNull();
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldAnswerUnavailableWhileAnotherServerReplaysTheSameConsumer() throws Exception {
+        service.capture(
+                workspace.getId(),
+                delivery("github.acme.repo.issues", "{\"action\":\"ignored\"}", "scope-lock"),
+                new PayloadParsingException("older parser"));
+        var row = service.listWorkspace(workspace.getId(), null, 100).content().getFirst();
+        // Another server's replay of the same consumer holds its lock.
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread other = Thread.ofVirtual()
+                .start(() -> locks.run(
+                        "consumer-replay:" + consumer.fencedConsumerName(workspace.getId(), stream),
+                        Duration.ZERO,
+                        () -> {
+                            held.countDown();
+                            try {
+                                release.await(30, TimeUnit.SECONDS);
+                            } catch (InterruptedException interrupted) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }));
+        try {
+            assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
+            client.post()
+                    .uri("/workspaces/deadletters-a/integrations/dead-letters/{id}/replays", row.id())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isEqualTo(503)
+                    .expectBody(Void.class);
+        } finally {
+            release.countDown();
+            other.join(Duration.ofSeconds(10));
+        }
+        assertThat(service.listWorkspace(workspace.getId(), null, 100).content())
+                .filteredOn(candidate -> candidate.id().equals(row.id()))
+                .singleElement()
+                .satisfies(candidate -> assertThat(candidate.replayedAt()).isNull());
     }
 
     @Test
