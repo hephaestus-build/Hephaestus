@@ -26,4 +26,23 @@
 | `worker.sandbox.namespace` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
 | `worker.sandbox.quota.enabled` | boolean | `true` | yes | — |
 | `worker.sandbox.reviewMemory` | string | `"3840Mi"` | yes | The memory that the sandbox nodes give review Pods, in Mi or Gi. The reviews that run at once are this over one review Pod's request and its RuntimeClass overhead. |
+| `worker.sandbox.templates.action.resources.limits.cpu` | string | `"1"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.action.resources.limits.ephemeral-storage` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.action.resources.limits.memory` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.action.resources.requests.cpu` | string | `"50m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.action.resources.requests.ephemeral-storage` | string | `"128Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.action.resources.requests.memory` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.conversation.resources.limits.cpu` | string | `"2"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.conversation.resources.limits.ephemeral-storage` | string | `"2Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.conversation.resources.limits.memory` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.conversation.resources.requests.cpu` | string | `"100m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.conversation.resources.requests.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.conversation.resources.requests.memory` | string | `"384Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.review.resources.limits.cpu` | string | `"2"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.review.resources.limits.ephemeral-storage` | string | `"4Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.review.resources.limits.memory` | string | `"2Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.review.resources.requests.cpu` | string | `"100m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.review.resources.requests.ephemeral-storage` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.review.resources.requests.memory` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.sandbox.templates.runtimeClassName` | string | `""` | yes | — |
 | `worker.sandboxGateway.maxConnections` | integer | `4096` | yes | Connections that the sandbox gateway holds open at most. |

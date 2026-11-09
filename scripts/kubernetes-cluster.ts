@@ -9,7 +9,8 @@
  *   install  `helm upgrade --install` with the dev profile, or each --profile in order, and the
  *            prepared values, until ready
  *   upgrade  install, and check that PostgreSQL and NATS kept their Pods
- *   verify   every workload ready, and each worker's isolation probe passed
+ *   verify   every workload ready, each worker's isolation probe passed, and a sandbox of each
+ *            SandboxTemplate passed the sandbox isolation gate (scripts/sandbox-isolation.ts)
  *   request  one HTTPS request to the webapp and the API through that Gateway
  *   backup-drill  pgBackRest to a throwaway S3 server, then a point-in-time restore
  *   render   the manifests of those values for synthetic images, with backups on and with an external
@@ -55,6 +56,7 @@ import { claimDevNamespace, DEV_OWNER, ownsDevNamespace } from "./lib/dev-namesp
 import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
 import { parseResolvedImages } from "./resolve-release-images.ts";
+import { isolationGate } from "./sandbox-isolation.ts";
 
 const ROOT = path.join(import.meta.dirname, "..");
 const CHART = path.join(ROOT, "deploy", "chart", "hephaestus");
@@ -63,6 +65,8 @@ const AGENT_SANDBOX = path.join(ROOT, "deploy", "platform", "k3s-agent-sandbox.y
 export const RELEASE = "heph";
 export const NAMESPACE = "hephaestus";
 export const SANDBOXES = "hephaestus-sandboxes";
+/** The kinds of the chart's SandboxTemplates (templates/sandbox-templates.yaml). */
+const SANDBOX_KINDS = ["review", "conversation", "action"] as const;
 const GATEWAY_NAMESPACE = "gateway";
 const EXTERNAL_POSTGRESQL = "external-postgresql";
 const HOST = "hephaestus.cluster.test";
@@ -996,7 +1000,7 @@ export async function keepsStatefulPods(upgrade: () => Promise<void>): Promise<v
 
 /** Every workload ready and each worker's isolation probe passed; the number of those workers. */
 export async function verify(): Promise<number> {
-	for (const kind of ["deployment", "statefulset"]) {
+	for (const kind of ["deployment", "statefulset", "daemonset"]) {
 		const listed = await kubectl(["-n", NAMESPACE, "get", kind, "-o", "name"]);
 		const names = listed.split("\n").filter(Boolean);
 		for (const name of names) {
@@ -1054,8 +1058,52 @@ export async function verify(): Promise<number> {
 	if (leftovers !== "") {
 		throw new Error(`isolation probe Jobs or Pods stayed: ${leftovers}`);
 	}
+	// A sandbox of each template kind reaches the workers' gateway and nothing else: not the
+	// management port of the worker that serves it.
+	const service = asRecord(
+		parseJson(
+			await kubectl([
+				"-n",
+				NAMESPACE,
+				"get",
+				"service",
+				`${RELEASE}-sandbox-gateway`,
+				"-o",
+				"json",
+			]),
+		),
+		"gateway Service",
+	);
+	const sandboxGateway = {
+		host: asString(asRecord(service.spec, "spec").clusterIP, "gateway"),
+		port: 8081,
+	};
+	const worker = asRecord(
+		parseJson(await kubectl(["-n", NAMESPACE, "get", workers[0] ?? "", "-o", "json"])),
+		"worker Pod",
+	);
+	const management = asArray(asRecord(worker.spec, "spec").containers, "containers")
+		.flatMap((container) => asArray(asRecord(container, "container").ports ?? [], "ports"))
+		.map((port) => asRecord(port, "port"))
+		.find((port) => port.name === "management")?.containerPort;
+	const workerIp = asString(asRecord(worker.status, "status").podIP, "worker address");
+	for (const kind of SANDBOX_KINDS) {
+		await isolationGate({
+			namespace: SANDBOXES,
+			template: `${RELEASE}-sandbox-${kind}`,
+			gateway: sandboxGateway,
+			forbid: [
+				{
+					name: "the worker's management port",
+					host: workerIp,
+					port: Number(management),
+					reachable: false,
+				},
+			],
+		});
+	}
 	process.stdout.write(
-		`${workers.length} workers passed the isolation probe; every workload is ready\n`,
+		`${workers.length} workers passed the isolation probe; the ${SANDBOX_KINDS.join(", ")} templates passed the sandbox isolation gate; every workload is ready\n`,
 	);
 	return workers.length;
 }

@@ -30,6 +30,7 @@ Hephaestus supports the chart on a cluster with these items:
   The worker's isolation probe stops the worker on a plugin that does not ([Sandbox prerequisites](#sandbox-prerequisites)).
 - A Gateway API controller for `HTTPRoute` `v1` with the four features in [Gateway routes](#gateway-routes).
 - A storage class for `ReadWriteOnce` volumes, for the bundled PostgreSQL and NATS.
+- With the worker enabled, the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller with its extensions, at the version that the release pins ([Sandbox templates](#sandbox-templates)).
 
 CI installs and upgrades the chart on Kubernetes 1.35 and on the latest minor version, 1.37, on `amd64`.
 1.35 is the lowest version that the chart takes.
@@ -1208,6 +1209,15 @@ For one host, use [Install on one host (k3s)](#install-on-one-host-k3s).
    kubectl label namespace hephaestus hephaestus-sandboxes pod-security.kubernetes.io/enforce=restricted
    ```
 
+   With the worker enabled, install the agent-sandbox controller of the release before the chart ([Sandbox templates](#sandbox-templates)).
+   The file is `k3s-agent-sandbox.yaml` in the release's k3s bundle.
+   Apply it again for each release.
+
+   ```bash
+   kubectl apply --server-side -f k3s-agent-sandbox.yaml
+   kubectl -n agent-sandbox-system rollout status deployment/agent-sandbox-controller
+   ```
+
 2. Make the OAuth App of your login provider, as [First steps § 1](./first-steps#1-configure-a-login-provider) describes.
    Then create the [Secret](#create-the-secret) with its client secret, and the [PostgreSQL TLS Secret](#postgresql-tls-secret).
    The server copies the client secret into the database at its first start.
@@ -1552,6 +1562,55 @@ Kubernetes deletes the finished Job with its Pod after 15 minutes.
 
 Some network plugins apply the policy of a new Pod a few seconds after the Pod starts.
 Each sandbox Pod therefore starts with an init container that waits, at most 60 seconds, until it cannot reach the Kubernetes API.
+
+### Sandbox templates
+
+With the worker enabled, the chart installs a `SandboxTemplate` for each sandbox kind in the sandbox namespace.
+Their names are `<release>-sandbox-review`, `<release>-sandbox-conversation` and `<release>-sandbox-action`.
+Each template has a `SandboxWarmPool` of the same name with no replicas.
+The agent-sandbox controller creates a sandbox's Pod from the template when a `SandboxClaim` names the warm pool.
+No component claims a sandbox yet.
+The release pins the controller in `k3s-agent-sandbox.yaml`: the one-host platform installs it, and on another cluster you apply it yourself ([Install](#install)).
+
+A template's Pod has one container, the agent image, and these settings:
+
+- No ingress, and egress only to the worker's gateway port. The policies of the sandbox namespace set this.
+  The template sets `networkPolicyManagement: Unmanaged`, because the controller's default policy allows the internet.
+- No DNS. A claim gives the sandbox the gateway's address and the sandbox's credential as environment variables.
+- No service account token, a non-root user, no capabilities, and `RuntimeDefault` or the configured seccomp profile.
+- No volumes and no init container, so that a sandbox starts fast. The workspace is in the container's writable layer, and the template's ephemeral-storage limit bounds it.
+- The RuntimeClass `worker.sandbox.templates.runtimeClassName`, or the cluster's default runtime.
+  On the default runtime, or another class except `gvisor`, the Pod sets `hostUsers: false`.
+  A `gvisor` Pod keeps host users, because gVisor does not support user namespaces yet ([google/gvisor#13303](https://github.com/google/gvisor/issues/13303)). Its own kernel separates the sandbox from the node kernel.
+- The resources of `worker.sandbox.templates.<kind>.resources`.
+
+The agent image must be on each sandbox node before a sandbox starts.
+A pull of the image takes longer than the start of a sandbox.
+The DaemonSet `<release>-agent-image` runs the image on every node that `worker.runtime.nodeSelector` and `worker.runtime.tolerations` select.
+It uses the templates' RuntimeClass, so it also runs on the nodes that the class selects.
+Thus, each node pulls a new image when the release changes.
+The kubelet does not remove the image while the DaemonSet runs.
+
+`node scripts/sandbox-isolation.ts` is the sandbox isolation gate.
+It makes a copy of a template that only waits, starts two sandboxes from the copy, and checks from inside one of them:
+
+- The Pod settings above. The Pod has a user namespace of its own, or the gVisor kernel.
+- No Kubernetes token, a non-root user, and no effective capabilities.
+- It reaches the gateway.
+- It does not reach the Kubernetes API, the cluster DNS server, the node's kubelet, or the other sandbox.
+- It does not reach the cloud metadata address, the internet, or a public DNS server.
+- Its container stops reaching the Kubernetes API within 10 seconds of its start.
+
+A network plugin can start a Pod a moment before the Pod's policies hold.
+On k3s, a new sandbox reaches the Kubernetes API for about the first 0.2 seconds.
+The gate's sandbox records when its connections to the API stop.
+
+CI runs the gate for each template on every cluster that it installs the chart on.
+
+```bash
+node scripts/sandbox-isolation.ts --namespace hephaestus-sandboxes --template hephaestus-sandbox-review \
+  --gateway "$(kubectl -n hephaestus get service hephaestus-sandbox-gateway -o jsonpath='{.spec.clusterIP}'):8081"
+```
 
 #### Sandbox sizes
 

@@ -1,0 +1,145 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import {
+	gateTemplate,
+	HOLD,
+	type Inside,
+	insideFailures,
+	parseAddress,
+	specFailures,
+	type Target,
+} from "./sandbox-isolation.ts";
+
+const pod = (spec: Record<string, unknown>) => ({
+	spec: {
+		hostUsers: false,
+		automountServiceAccountToken: false,
+		securityContext: { runAsNonRoot: true, seccompProfile: { type: "RuntimeDefault" } },
+		containers: [
+			{
+				name: "agent",
+				securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } },
+			},
+		],
+		...spec,
+	},
+});
+
+void test("a sandbox Pod must state every isolation setting, and only gVisor may keep host users", () => {
+	assert.deepEqual(specFailures(pod({})), []);
+	assert.deepEqual(specFailures(pod({ hostUsers: undefined })), ["hostUsers is not false"]);
+	assert.deepEqual(specFailures(pod({ hostUsers: undefined, runtimeClassName: "gvisor" })), []);
+	assert.deepEqual(specFailures(pod({ automountServiceAccountToken: undefined })), [
+		"the service account token is mounted",
+	]);
+	assert.deepEqual(specFailures(pod({ initContainers: [{ name: "setup" }] })), ["init containers"]);
+	assert.deepEqual(
+		specFailures(pod({ containers: [{ name: "agent", securityContext: { privileged: true } }] })),
+		["privilege escalation allowed", "privileged", "capabilities not dropped"],
+	);
+});
+
+const targets: Target[] = [
+	{ name: "the gateway", host: "10.0.0.1", port: 8081, reachable: true },
+	{ name: "the Kubernetes API", host: "10.0.0.2", port: 443, reachable: false },
+];
+const inside: Inside = {
+	uid: 1000,
+	gid: 1000,
+	token: false,
+	uidMap: "0 621871104 65536",
+	noNewPrivs: true,
+	capEff: "0000000000000000",
+	kernel: "6.12.0",
+	reached: { "the gateway": true, "the Kubernetes API": false },
+	dns: false,
+	publicDns: false,
+	firstApi: "closed after 120 ms",
+};
+
+void test("from inside, a sandbox reaches the gateway alone, as a non-root user with no token", () => {
+	assert.deepEqual(insideFailures(inside, targets, false), []);
+	assert.deepEqual(
+		insideFailures(
+			{ ...inside, reached: { "the gateway": false, "the Kubernetes API": true }, dns: true },
+			targets,
+			false,
+		),
+		[
+			"cannot reach the gateway (10.0.0.1:8081)",
+			"reaches the Kubernetes API (10.0.0.2:443)",
+			"the cluster DNS resolver answers",
+		],
+	);
+	// The probe runs seconds after the start; the container's own record covers the start.
+	assert.deepEqual(insideFailures({ ...inside, firstApi: "open" }, targets, false), [
+		"still reached the Kubernetes API 10 seconds after its start",
+	]);
+	assert.deepEqual(insideFailures({ ...inside, firstApi: null, publicDns: true }, targets, false), [
+		"a public DNS resolver answers",
+		"recorded no check of the Kubernetes API at its start",
+	]);
+	assert.deepEqual(
+		insideFailures({ ...inside, uid: 0, token: true, capEff: "00000000a80425fb" }, targets, false),
+		["runs as 0:1000", "a Kubernetes token is mounted", "effective capabilities 00000000a80425fb"],
+	);
+	// Without a user namespace of its own, the container's map is the identity.
+	assert.deepEqual(insideFailures({ ...inside, uidMap: "0 0 4294967295" }, targets, false), [
+		"no user namespace of its own",
+	]);
+	assert.deepEqual(insideFailures({ ...inside, uidMap: "0 0 4294967295" }, targets, true), [
+		"kernel 6.12.0 is not gVisor",
+	]);
+	assert.deepEqual(
+		insideFailures({ ...inside, uidMap: "0 0 4294967295", kernel: "4.19.0-gvisor" }, targets, true),
+		[],
+	);
+});
+
+void test("the gate's template keeps the Pod spec, labels and policies and changes only the command", () => {
+	const source = {
+		apiVersion: "extensions.agents.x-k8s.io/v1beta1",
+		kind: "SandboxTemplate",
+		metadata: {
+			name: "heph-sandbox-review",
+			namespace: "sandboxes",
+			uid: "u",
+			resourceVersion: "1",
+		},
+		spec: {
+			networkPolicyManagement: "Unmanaged",
+			podTemplate: {
+				metadata: { labels: { "hephaestus.build/sandbox-kind": "review" } },
+				spec: { hostUsers: false, containers: [{ name: "agent", image: "agent", args: ["x"] }] },
+			},
+		},
+	};
+	const clone = gateTemplate(source, "isolation-gate-1");
+	assert.deepEqual(clone.metadata, {
+		name: "isolation-gate-1",
+		namespace: "sandboxes",
+		labels: { "hephaestus.build/isolation-gate": "true" },
+	});
+	assert.deepEqual(clone.spec, {
+		...source.spec,
+		podTemplate: {
+			...source.spec.podTemplate,
+			spec: {
+				hostUsers: false,
+				containers: [{ name: "agent", image: "agent", command: HOLD, args: [] }],
+			},
+		},
+	});
+	assert.deepEqual(source.spec.podTemplate.spec.containers[0], {
+		name: "agent",
+		image: "agent",
+		args: ["x"],
+	});
+});
+
+void test("a target is a host and a port", () => {
+	assert.deepEqual(parseAddress("10.43.0.10:8081"), { host: "10.43.0.10", port: 8081 });
+	assert.throws(() => parseAddress("10.43.0.10"), /not a host:port/u);
+	assert.throws(() => parseAddress("host:99999"), /not a host:port/u);
+});

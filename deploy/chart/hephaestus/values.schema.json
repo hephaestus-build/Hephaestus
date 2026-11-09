@@ -106,6 +106,12 @@
 				"limits": { "$ref": "#/definitions/resourceSet" }
 			}
 		},
+		"sandboxTemplate": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["resources"],
+			"properties": { "resources": { "$ref": "#/definitions/resources" } }
+		},
 		"sandboxQuota": {
 			"type": "object",
 			"additionalProperties": false,
@@ -765,7 +771,7 @@
 				"sandbox": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["namespace", "reviewMemory", "quota"],
+					"required": ["namespace", "reviewMemory", "quota", "templates"],
 					"properties": {
 						"namespace": {
 							"type": "string",
@@ -776,7 +782,19 @@
 							"type": "string",
 							"pattern": "^[1-9][0-9]*(?:Mi|Gi)$"
 						},
-						"quota": { "$ref": "#/definitions/sandboxQuota" }
+						"quota": { "$ref": "#/definitions/sandboxQuota" },
+						"templates": {
+							"description": "The SandboxTemplates of the sandbox kinds.",
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["runtimeClassName", "review", "conversation", "action"],
+							"properties": {
+								"runtimeClassName": { "type": "string" },
+								"review": { "$ref": "#/definitions/sandboxTemplate" },
+								"conversation": { "$ref": "#/definitions/sandboxTemplate" },
+								"action": { "$ref": "#/definitions/sandboxTemplate" }
+							}
+						}
 					}
 				}
 			}

@@ -1,0 +1,152 @@
+{{- /*
+One SandboxTemplate for each sandbox kind, in the sandbox namespace. The agent-sandbox controller
+(docs/admin/kubernetes.mdx § The agent-sandbox controller) creates a sandbox's Pod from its kind's
+template when a SandboxClaim names the kind's warm pool. A sandbox is one container, the agent image,
+whose entrypoint is the agent loop. The kind is the loop's parameter.
+
+A claim adds the sandbox token and the gateway address as environment variables, so each sandbox
+starts cold. The warm pools hold no sandboxes.
+
+No volumes: a volume mount adds the kubelet's mount wait to every cold start. The loop writes its
+workspace in the container's own layer, which the ephemeral-storage limit bounds.
+
+The namespace's policies apply: no ingress, and egress to the gateway port only, with no DNS. The claim
+passes the gateway's address. The controller manages no policy of its own (`Unmanaged`), because its
+default policy allows the internet.
+*/}}
+{{- if .Values.worker.enabled }}
+{{- $sandboxes := include "hephaestus.sandboxNamespace" (dict "root" .) }}
+{{- $runtime := .Values.worker.runtime }}
+{{- $templates := .Values.worker.sandbox.templates }}
+{{- $class := $templates.runtimeClassName }}
+{{- range $kind, $tier := dict "review" "reviews" "conversation" "conversations" "action" "conversations" }}
+{{- $name := include "hephaestus.name" (dict "root" $ "component" (printf "sandbox-%s" $kind)) }}
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxTemplate
+metadata:
+  name: {{ $name }}
+  namespace: {{ $sandboxes }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" $ "component" "sandbox") | nindent 4 }}
+spec:
+  networkPolicyManagement: Unmanaged
+  envVarsInjectionPolicy: Allowed
+  podTemplate:
+    metadata:
+      labels:
+        {{- include "hephaestus.labels" (dict "root" $ "component" "sandbox") | nindent 8 }}
+        hephaestus.build/sandbox-kind: {{ $kind }}
+    spec:
+      {{- with $class }}
+      runtimeClassName: {{ . | quote }}
+      {{- end }}
+      {{- /* gVisor does not support user namespaces (google/gvisor#13303); its own kernel stands between
+      the sandbox and the host. When #13303 ships, gVisor sandboxes get hostUsers: false too. */}}
+      {{- if ne $class "gvisor" }}
+      hostUsers: false
+      {{- end }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" $tier) }}
+      {{- with $runtime.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $runtime.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          {{- if $runtime.seccompProfile }}
+          type: Localhost
+          localhostProfile: {{ $runtime.seccompProfile | quote }}
+          {{- else }}
+          type: RuntimeDefault
+          {{- end }}
+      containers:
+        - name: agent
+          image: {{ include "hephaestus.image" (dict "root" $ "name" "agent-pi") | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HEPHAESTUS_SANDBOX_KIND
+              value: {{ $kind }}
+          resources:
+            {{- toYaml (get $templates $kind).resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            privileged: false
+            capabilities:
+              drop:
+                - ALL
+---
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxWarmPool
+metadata:
+  name: {{ $name }}
+  namespace: {{ $sandboxes }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" $ "component" "sandbox") | nindent 4 }}
+spec:
+  replicas: 0
+  sandboxTemplateRef:
+    name: {{ $name }}
+---
+{{- end }}
+{{- /*
+The agent image on every sandbox node before a claim needs it: a cold pull takes longer than a
+sandbox's whole cold start. A container that runs the image keeps the kubelet's image collection off
+it, and a new release pulls its image as this DaemonSet rolls. It runs on the sandboxes' RuntimeClass,
+so that it lands on the nodes that the class schedules sandboxes to.
+*/}}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "agent-image") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "agent-image") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "agent-image") | nindent 6 }}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.labels" (dict "root" . "component" "agent-image") | nindent 8 }}
+    spec:
+      {{- with $class }}
+      runtimeClassName: {{ . | quote }}
+      {{- end }}
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" . "tier" "roles") }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 1
+      {{- with $runtime.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $runtime.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 1000 "group" 1000) | nindent 8 }}
+      containers:
+        - name: hold
+          image: {{ include "hephaestus.image" (dict "root" . "name" "agent-pi") | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["sleep", "infinity"]
+          resources:
+            requests: { cpu: 1m, memory: 8Mi, ephemeral-storage: 1Mi }
+            limits: { cpu: 10m, memory: 16Mi, ephemeral-storage: 1Mi }
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+{{- end }}

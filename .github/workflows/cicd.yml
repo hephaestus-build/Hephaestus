@@ -512,7 +512,7 @@ jobs:
             database-upgrade:
               - 'server/application/src/main/resources/db/changelog/**'
               - 'server/application/src/main/java/de/tum/cit/aet/hephaestus/core/database/BaselineSynchronization.java'
-            # What a cluster install of the chart exercises: the chart, its script, the worker's sandbox
+            # What a cluster install of the chart exercises: the chart, its scripts, the worker's sandbox
             # runtime and what it binds, and the agent image that its sandboxes run. A change to the
             # one-host platform files runs it too; the k3s smoke itself runs only at a release or by
             # dispatch.
@@ -525,6 +525,8 @@ jobs:
               - 'deploy/chart/**'
               - 'deploy/platform/**'
               - 'scripts/kubernetes-cluster.ts'
+              - 'scripts/sandbox-isolation.ts'
+              - 'scripts/crd-schemas.ts'
               - 'scripts/prepare-kubernetes-runner.ts'
               - 'scripts/lib/runner-disk.ts'
               - 'server/application/build.gradle.kts'

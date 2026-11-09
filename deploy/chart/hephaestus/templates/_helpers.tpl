@@ -483,15 +483,16 @@ readinessProbe:
 {{- end -}}
 
 {{/*
-The sandbox pods that may reach the workers' gateway: review sandboxes and conversation hosts, by their kind.
-A sandbox's credential, not this selector, binds it to its own worker. Tools Pods never match.
+The sandbox pods that may reach the workers' gateway, by their kind: review sandboxes, conversation hosts,
+and the sandboxes of every SandboxTemplate kind. A sandbox's credential, not this selector, binds it to
+its own subject. Tools Pods never match.
 */}}
 
 {{- define "hephaestus.policy.gatewaySources" -}}
 matchExpressions:
   - key: hephaestus.build/sandbox-kind
     operator: In
-    values: ["review", "host"]
+    values: ["review", "host", "conversation", "action"]
 {{- end -}}
 
 {{/* The scraper's way in, on the named port of the metrics: management for the roles, metrics for the exporter. */}}
