@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { chmod, glob, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, glob, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { isBuiltin } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -1785,7 +1785,9 @@ void describe("CI contract", () => {
 		);
 		const build = ["jobs", "build"];
 		for (const name of [
+			"Resolve the pinned pack",
 			"Set up pack",
+			"Resolve the buildpack dependencies",
 			"Download the executable JAR",
 			"Build with Buildpacks and CDS",
 			"Export digests",
@@ -2125,7 +2127,7 @@ void describe("CI contract", () => {
 		].map((match) => match[0]);
 		assert.ok(packBuilds.length > 0, "the buildpacks path must call pack build");
 		for (const packBuild of packBuilds) {
-			for (const flag of ["--path", "--descriptor", "--run-image"]) {
+			for (const flag of ["--path", "--descriptor", "--run-image", "dependencies[@]"]) {
 				assert.ok(packBuild.includes(flag), `pack build must pass ${flag}`);
 			}
 		}
@@ -2699,6 +2701,7 @@ void describe("CI contract", () => {
 			}
 			const environment = {
 				APPLICATION_DIRECTORY: directory,
+				BUILDPACK_DEPENDENCIES: path.join(directory, "buildpack-dependencies"),
 				RUNNER_TEMP: directory,
 				GITHUB_RUN_ID: "1",
 				INPUT_IMAGE_NAME: "hephaestus-build/application-server",
@@ -2718,6 +2721,10 @@ void describe("CI contract", () => {
 			assert.doesNotMatch(invoked, /--publish/u);
 			assert.doesNotMatch(invoked, /^docker /mu);
 			assert.match(invoked, /^pack build .*--trust-builder/mu);
+			assert.match(
+				invoked,
+				/--volume \S+\/buildpack-dependencies\/bindings:\/platform\/bindings:ro/u,
+			);
 			// A reporting pipe must never turn a failed archive build into a successful image.
 			await writeFile(
 				path.join(directory, "pack"),
@@ -5602,6 +5609,95 @@ void test("one pinned Helm installer verifies the official archive before it ext
 			assert.doesNotMatch(await readFile(file, "utf8"), /get\.helm\.sh|HELM_VERSION/u, file);
 		}
 	}
+});
+
+void test("the image build installs pack from its pin through the CI tool resolver", async () => {
+	const pack = asRecord(
+		JSON.parse(await readFile(".github/ci-tools/pack.json", "utf8")),
+		"pack pin",
+	);
+	assert.equal(
+		pack.url,
+		`https://github.com/buildpacks/pack/releases/download/v${String(pack.version)}/`,
+	);
+	const assets = asRecord(pack.assets, "pack assets");
+	assert.deepEqual(Object.keys(assets).toSorted(), ["linux-arm64", "linux-x64"]);
+	for (const [platform, suffix] of [
+		["linux-x64", "linux"],
+		["linux-arm64", "linux-arm64"],
+	] as const) {
+		const asset = asRecord(assets[platform], `pack ${platform} asset`);
+		assert.equal(asset.name, `pack-v${String(pack.version)}-${suffix}.tgz`);
+	}
+	const workflow = parseDocument(
+		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+	);
+	const build = ["jobs", "build"];
+	const resolve = namedStep(workflow, build, "Resolve the pinned pack");
+	assert.equal(resolve.get("uses"), "./.github/actions/setup-ci-tool");
+	assert.equal(resolve.getIn(["with", "tool"]), "pack");
+	const steps = workflow.getIn([...build, "steps"]);
+	assert.ok(isSeq(steps));
+	// The resolver is a Node script, so the pinned Node.js comes first.
+	const toolchain = steps.items.findIndex(
+		(item) => isMap(item) && item.get("uses") === "./.github/actions/setup-toolchain",
+	);
+	assert.ok(toolchain !== -1 && toolchain < steps.items.indexOf(resolve));
+	const script = runScript(workflow, build, "Set up pack");
+	assert.equal(
+		namedStep(workflow, build, "Set up pack").getIn(["env", "PACK_VERSION"]),
+		`\${{ steps.pack.outputs.version }}`,
+	);
+	const fetched = script.indexOf('CI_TOOL=pack node scripts/ci-tool.ts file "$work/pack.tgz"');
+	assert.ok(fetched > 0, "pack must come from the resolver");
+	assert.ok(script.indexOf('tar -xzf "$work/pack.tgz" -C "$install_dir" pack') > fetched);
+	assert.match(script, /"\$PACK_VERSION"\+\*\) ;;/u);
+	for (const file of await posixGlob(".github/{actions,workflows}/**/*.{yml,yaml}")) {
+		assert.doesNotMatch(
+			await readFile(file, "utf8"),
+			/buildpacks\/github-actions|buildpacks\/pack\/releases/u,
+			file,
+		);
+	}
+});
+
+void test("the App Server image build reads every buildpack dependency from a pinned binding", async () => {
+	const pins = await readdir(".github/ci-tools");
+	const ids = pins
+		.filter((name) => name.startsWith("buildpack-"))
+		.map((name) => name.slice(0, -".json".length));
+	assert.deepEqual(ids.toSorted(), [
+		"buildpack-liberica-jre",
+		"buildpack-spring-cloud-bindings",
+		"buildpack-syft",
+		"buildpack-tiny-health-checker",
+	]);
+	// Each image platform has its own file, or one file serves both.
+	for (const id of ids) {
+		for (const platform of ["linux-x64", "linux-arm64"]) {
+			await ciToolPin(id, platform);
+		}
+	}
+	const workflow = parseDocument(
+		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+	);
+	const build = ["jobs", "build"];
+	const steps = workflow.getIn([...build, "steps"]);
+	assert.ok(isSeq(steps));
+	const resolve = namedStep(workflow, build, "Resolve the buildpack dependencies");
+	assert.equal(resolve.get("id"), "buildpack-dependencies");
+	assert.equal(resolve.get("run"), "node scripts/buildpack-dependencies.ts");
+	const packBuild = namedStep(workflow, build, "Build with Buildpacks and CDS");
+	assert.ok(steps.items.indexOf(resolve) < steps.items.indexOf(packBuild));
+	assert.equal(
+		packBuild.getIn(["env", "BUILDPACK_DEPENDENCIES"]),
+		`\${{ steps.buildpack-dependencies.outputs.directory }}`,
+	);
+	const script = runScript(workflow, build, "Build with Buildpacks and CDS");
+	assert.ok(
+		script.includes('--volume "$BUILDPACK_DEPENDENCIES/files:$BUILDPACK_DEPENDENCIES/files:ro"'),
+		"the files mount at the host path that the binding names",
+	);
 });
 
 /** A workflow step that runs Helm, directly or through the chart release script. */

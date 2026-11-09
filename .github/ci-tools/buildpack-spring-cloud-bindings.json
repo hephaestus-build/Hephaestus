@@ -1,0 +1,10 @@
+{
+	"version": "2.0.4",
+	"url": "https://repo1.maven.org/maven2/org/springframework/cloud/spring-cloud-bindings/2.0.4/",
+	"assets": {
+		"all": {
+			"name": "spring-cloud-bindings-2.0.4.jar",
+			"sha256": "32e47c2139d6379836910f0d1cc253a019ac282f3aeea12237069f00046279ad"
+		}
+	}
+}

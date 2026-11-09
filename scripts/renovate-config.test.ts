@@ -271,11 +271,15 @@ void test("every custom manager reads every file it claims to read", async () =>
 		["Track the agent-sandbox controller release", ["deploy/platform/k3s-agent-sandbox.yaml"]],
 		["Track Dockerfile ARG version pins", ["docker/agents/pi/Dockerfile", "webapp/Dockerfile"]],
 		[
-			"Track release security tool versions",
-			[".github/ci-tools/cosign.json", ".github/ci-tools/syft.json", ".github/ci-tools/trivy.json"],
+			"Track the GitHub release versions of pinned CI tools",
+			[
+				".github/ci-tools/cosign.json",
+				".github/ci-tools/pack.json",
+				".github/ci-tools/syft.json",
+				".github/ci-tools/trivy.json",
+			],
 		],
 		["Track the Zizmor CLI version", [".github/workflows/cicd.yml"]],
-		["Track the pack CLI version", [".github/workflows/reusable-docker-build.yml"]],
 		["Track the buildpacks run image", [".github/workflows/cicd.yml"]],
 		[
 			"Track the builder and buildpack images in the project descriptor",
