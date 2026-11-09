@@ -86,6 +86,14 @@ overrides:
   "shell-quote@<1.11.0": 1.11.0
   "undici@>=8.0.0 <8.12.2": 8.12.2
   "uuid@<11.1.1": 11.1.1
+  # CVE-2026-118773 (GHSA-3g3m-2fjr-6pw4). No consumer releases a range that reaches 14.0.2.
+  "glob@>=9.0.0 <14.0.2": 14.0.4
+  # CVE-2026-118764 (GHSA-g3hv-75wg-m249). ESLint and ts-morph still require ^10.
+  "minimatch@>=10.0.0 <11.0.1": 11.0.5
+  # CVE-2026-104844 (GHSA-rj75-hqrm-r3gf). @tailwindcss/typography pins 6.0.10 exactly.
+  "postcss-selector-parser@<6.1.5": 6.1.5
+  # CVE-2026-103923 (GHSA-238p-pmpm-9mq7). micromark-extension-math requires ^0.16.
+  "katex@<0.18.2": 0.18.11
 patchedDependencies:
   "@earendil-works/pi-ai@1.4.0": docker/agents/pi/patches/@earendil-works__pi-ai@1.4.0.patch
   "@hey-api/openapi-ts@0.99.0": patches/@hey-api__openapi-ts@0.99.0.patch
