@@ -58,6 +58,15 @@ export interface DriverOptions {
 
 const RENEW_EVERY_MS = 25_000;
 const IDLE_WAIT_MS = 2000;
+/** The longest wait for one gateway call: a gateway that answers later has failed the call. */
+const CALL_TIMEOUT_MS = 30_000;
+/** The longest wait after `next` failed again and again, as after the sandbox's token expired. */
+const MAX_RETRY_WAIT_MS = 30_000;
+/**
+ * A lease counts as lost this long before its end on the gateway's clock: the `Date` header that maps that clock to
+ * this one has whole seconds.
+ */
+const LEASE_MARGIN_MS = 2000;
 
 /** Runs the sandbox's runs one after another until `signal` aborts. */
 export async function drive(options: DriverOptions): Promise<void> {
@@ -65,25 +74,36 @@ export async function drive(options: DriverOptions): Promise<void> {
 	const fetch = options.fetch ?? globalThis.fetch;
 	const log = options.log ?? ((line: string) => process.stderr.write(`${line}\n`));
 	const auth = { authorization: `Bearer ${options.token}` };
+	const idle = options.idleWaitMs ?? IDLE_WAIT_MS;
 	// A function: the loop condition would narrow the property, and the signal aborts during an await.
 	const stopped = () => signal.aborted;
+	let failures = 0;
 	while (!stopped()) {
-		let assignment: Assignment | null;
+		let offered: Offered | null;
 		try {
-			assignment = await next(fetch, options.gatewayUrl, auth, signal);
+			offered = await next(fetch, options.gatewayUrl, auth, signal);
+			failures = 0;
 		} catch (error) {
 			if (stopped()) {
 				return;
 			}
+			failures += 1;
 			log(`driver: the gateway did not answer next: ${errorName(error)}`);
-			assignment = null;
+			offered = null;
 		}
-		if (assignment === null) {
-			await sleep(options.idleWaitMs ?? IDLE_WAIT_MS, undefined, { signal }).catch(() => undefined);
+		if (offered === null) {
+			const wait = Math.min(MAX_RETRY_WAIT_MS, idle * 2 ** Math.min(failures, 10));
+			await sleep(wait, undefined, { signal }).catch(() => undefined);
 			continue;
 		}
-		await runOne(assignment, { ...options, fetch, log, auth });
+		await runOne(offered, { ...options, fetch, log, auth });
 	}
+}
+
+/** A run that the gateway leased to this sandbox, with how far this clock runs ahead of the gateway's. */
+export interface Offered {
+	assignment: Assignment;
+	clockOffsetMs: number;
 }
 
 /** The subject's next run, or null when none is due. */
@@ -92,19 +112,31 @@ export async function next(
 	gatewayUrl: string,
 	auth: Readonly<Record<string, string>>,
 	signal: AbortSignal,
-): Promise<Assignment | null> {
+): Promise<Offered | null> {
 	const response = await fetch(`${gatewayUrl}/internal/agent/next`, {
 		method: "POST",
 		headers: auth,
-		signal,
+		signal: bounded(signal, CALL_TIMEOUT_MS),
 	});
 	if (response.status === 204) {
 		return null;
 	}
 	if (!response.ok) {
+		await response.body?.cancel();
 		throw new Error(`next answered ${String(response.status)}`);
 	}
-	return parseAssignment(await response.json());
+	return {
+		assignment: parseAssignment(await response.json()),
+		clockOffsetMs: clockOffset(response),
+	};
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u;
+
+/** An ISO-8601 instant as the server writes one, in epoch milliseconds; NaN for anything else. */
+function instant(value: unknown): number {
+	return typeof value === "string" && INSTANT.test(value) ? Date.parse(value) : Number.NaN;
 }
 
 /** The gateway's answer, checked: a run that the driver cannot read is no run to start. */
@@ -113,26 +145,40 @@ export function parseAssignment(value: unknown): Assignment {
 		throw new Error("the assignment is not an object");
 	}
 	const { runId, epoch, kind, leasedUntil, deadline } = value;
-	const until = typeof leasedUntil === "string" ? Date.parse(leasedUntil) : Number.NaN;
-	const end = typeof deadline === "string" ? Date.parse(deadline) : null;
+	const until = instant(leasedUntil);
+	const end = deadline === null || deadline === undefined ? null : instant(deadline);
 	if (
 		typeof runId !== "string" ||
-		!/^[0-9a-f-]{36}$/u.test(runId) ||
+		!UUID.test(runId) ||
 		typeof epoch !== "number" ||
 		!Number.isInteger(epoch) ||
 		epoch < 1 ||
 		typeof kind !== "string" ||
 		kind === "" ||
 		Number.isNaN(until) ||
-		(deadline !== null && deadline !== undefined && (end === null || Number.isNaN(end)))
+		(end !== null && Number.isNaN(end))
 	) {
 		throw new Error("the assignment does not name a run, its epoch, its kind and its lease");
 	}
 	return { runId, epoch, kind, leasedUntil: until, deadline: end };
 }
 
+/**
+ * How far this clock runs ahead of the gateway's, from the response's `Date` header: the lease and the deadline are
+ * on the database clock. Zero when the response names no time.
+ */
+function clockOffset(response: Response): number {
+	const sent = Date.parse(response.headers.get("date") ?? "");
+	return Number.isNaN(sent) ? 0 : Date.now() - sent;
+}
+
+/** `signal`, and also aborted after `ms`. */
+function bounded(signal: AbortSignal, ms: number): AbortSignal {
+	return AbortSignal.any([signal, AbortSignal.timeout(Math.max(1, ms))]);
+}
+
 async function runOne(
-	assignment: Assignment,
+	{ assignment, clockOffsetMs }: Offered,
 	options: DriverOptions & {
 		fetch: typeof globalThis.fetch;
 		log: (line: string) => void;
@@ -147,11 +193,28 @@ async function runOne(
 	};
 	const runUrl = `${gatewayUrl}/internal/agent/runs/${assignment.runId}`;
 	const lost = new AbortController();
-	const signal = AbortSignal.any([options.signal, lost.signal]);
-	const renewal = keepLease(fetch, runUrl, headers, assignment.leasedUntil, signal, lost, {
-		everyMs: options.renewEveryMs ?? RENEW_EVERY_MS,
-		log,
-	});
+	// Past its deadline the server ends the run itself, so the driver stops it then and ends nothing.
+	const deadline =
+		assignment.deadline === null
+			? null
+			: AbortSignal.timeout(Math.max(0, assignment.deadline + clockOffsetMs - Date.now()));
+	const signal = AbortSignal.any([
+		options.signal,
+		lost.signal,
+		...(deadline === null ? [] : [deadline]),
+	]);
+	const renewal = keepLease(
+		fetch,
+		runUrl,
+		headers,
+		assignment.leasedUntil + clockOffsetMs,
+		signal,
+		lost,
+		{
+			everyMs: options.renewEveryMs ?? RENEW_EVERY_MS,
+			log,
+		},
+	);
 	const runner = options.kinds[assignment.kind];
 	let outcome: RunOutcome;
 	if (runner === undefined) {
@@ -165,21 +228,25 @@ async function runOne(
 			outcome = await runner({ assignment, gateway: { url: gatewayUrl, headers }, signal });
 		} catch (error) {
 			log(`driver: run ${assignment.runId} failed: ${errorName(error)}`);
-			outcome = signal.aborted ? { leaseLost: true } : { leaseLost: false, outcome: "handed_on" };
+			outcome = { leaseLost: false, outcome: "handed_on" };
 		}
 	}
+	// Read before the renewal stops: a lost lease or a passed deadline leaves the run to the server.
+	const overtaken = lost.signal.aborted || deadline?.aborted === true;
 	lost.abort();
 	await renewal;
-	if (outcome.leaseLost || options.signal.aborted) {
+	if (outcome.leaseLost || overtaken) {
 		return;
 	}
+	// Its own bound, not the stop signal: a run that finished as the sandbox stops is still ended, not redone.
 	try {
 		const ended = await fetch(`${runUrl}/end`, {
 			method: "POST",
 			headers: { ...headers, "content-type": "application/json" },
 			body: JSON.stringify({ outcome: outcome.outcome }),
-			signal: options.signal,
+			signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
 		});
+		await ended.body?.cancel();
 		if (!ended.ok) {
 			log(
 				`driver: run ${assignment.runId} ended with ${String(ended.status)}; the server takes it back`,
@@ -192,9 +259,13 @@ async function runOne(
 	}
 }
 
+/** The answers of a renewal after which the claim cannot recover: the lease, the run or the sandbox is gone. */
+const GONE = new Set([401, 404, 409]);
+
 /**
- * Renews the lease until `signal` aborts. A renewal that the gateway refuses (409) ends the lease at once; one that
- * fails is tried again until the lease's own end, after which the claim is lost too.
+ * Renews the lease until `signal` aborts. A renewal that the gateway refuses ends the lease at once; one that fails is
+ * tried again until the lease's own end on this clock, after which the claim is lost too. Each call ends at the
+ * lease's end at the latest, so a gateway that hangs cannot keep a runner working after its lease.
  */
 async function keepLease(
 	fetch: typeof globalThis.fetch,
@@ -205,7 +276,7 @@ async function keepLease(
 	lost: AbortController,
 	{ everyMs, log }: { everyMs: number; log: (line: string) => void },
 ): Promise<void> {
-	let until = initialUntil;
+	let until = initialUntil - LEASE_MARGIN_MS;
 	const stopped = () => signal.aborted;
 	while (!stopped()) {
 		const wait = await sleep(Math.min(everyMs, Math.max(0, until - Date.now())), true, {
@@ -215,21 +286,28 @@ async function keepLease(
 			return;
 		}
 		try {
-			const response = await fetch(`${runUrl}/lease`, { method: "POST", headers, signal });
-			if (response.status === 409) {
-				log(`driver: the lease of ${runUrl} is gone`);
+			const response = await fetch(`${runUrl}/lease`, {
+				method: "POST",
+				headers,
+				signal: bounded(signal, Math.min(CALL_TIMEOUT_MS, until - Date.now())),
+			});
+			if (GONE.has(response.status)) {
+				await response.body?.cancel();
+				log(
+					`driver: the gateway answered ${String(response.status)} to a renewal of ${runUrl}; the lease is gone`,
+				);
 				lost.abort();
 				return;
 			}
 			if (response.ok) {
 				const body: unknown = await response.json();
-				const renewed =
-					isJsonObject(body) && typeof body.leasedUntil === "string"
-						? Date.parse(body.leasedUntil)
-						: Number.NaN;
+				const renewed = isJsonObject(body) ? instant(body.leasedUntil) : Number.NaN;
 				if (!Number.isNaN(renewed)) {
-					until = renewed;
+					until = renewed + clockOffset(response) - LEASE_MARGIN_MS;
 				}
+			} else {
+				await response.body?.cancel();
+				log(`driver: a lease renewal answered ${String(response.status)}`);
 			}
 		} catch (error) {
 			if (stopped()) {
@@ -238,6 +316,7 @@ async function keepLease(
 			log(`driver: a lease renewal failed: ${errorName(error)}`);
 		}
 		if (Date.now() >= until) {
+			log(`driver: the lease of ${runUrl} ran out without a renewal`);
 			lost.abort();
 			return;
 		}
@@ -261,6 +340,8 @@ async function main(): Promise<void> {
 	const stop = new AbortController();
 	process.once("SIGTERM", () => stop.abort());
 	await drive({ gatewayUrl, token, kinds: KINDS, signal: stop.signal });
+	// Open keep-alive sockets would hold the first process of the container after its last run.
+	process.exit(0);
 }
 
 if (import.meta.main) {

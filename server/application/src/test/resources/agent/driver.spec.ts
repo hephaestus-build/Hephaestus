@@ -3,7 +3,6 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import test from "node:test";
-import { setTimeout as sleep } from "node:timers/promises";
 
 import { drive, parseAssignment, type KindRunner } from "../../../main/resources/agent/driver.ts";
 
@@ -26,10 +25,25 @@ interface Call {
 	body: string | undefined;
 }
 
-/** A gateway that offers `assignments` one after another, then no run, and answers each lease with `lease`. */
-function gateway(assignments: object[], lease: (count: number) => number = () => 200) {
+/** How the fake gateway answers the n-th renewal: a status, a network failure, or no answer until the call aborts. */
+type Renewal = number | "fail" | "hang";
+
+interface Gateway {
+	/** The runs that `next` offers, one after another; then no run. */
+	runs: object[];
+	renewal?: (count: number) => Renewal;
+	/** How many `next` calls fail with 503 before the first answers. */
+	failingNexts?: number;
+	/** The lease's end that each answer names, from now. */
+	leaseMs?: number;
+}
+
+/** A gateway that serves one sandbox, and records every call it gets. */
+function gateway({ runs, renewal = () => 200, failingNexts = 0, leaseMs = 60_000 }: Gateway) {
 	const calls: Call[] = [];
 	let renewals = 0;
+	let nexts = 0;
+	const renewed = new EventTarget();
 	const fetch: typeof globalThis.fetch = async (input, init) => {
 		const path = url(input).slice(GATEWAY.length);
 		calls.push({
@@ -38,39 +52,48 @@ function gateway(assignments: object[], lease: (count: number) => number = () =>
 			body: typeof init?.body === "string" ? init.body : undefined,
 		});
 		if (path === "/internal/agent/next") {
-			const assignment = assignments.shift();
-			return assignment === undefined
-				? new Response(null, { status: 204 })
-				: Response.json(assignment);
+			nexts += 1;
+			if (nexts <= failingNexts) {
+				return new Response(null, { status: 503 });
+			}
+			const run = runs.shift();
+			return run === undefined ? new Response(null, { status: 204 }) : Response.json(run);
 		}
 		if (path.endsWith("/lease")) {
 			renewals += 1;
-			const status = lease(renewals);
-			return status === 200
-				? Response.json({ leasedUntil: new Date(Date.now() + 60_000).toISOString() })
-				: new Response(null, { status });
+			renewed.dispatchEvent(new Event("renewed"));
+			const answer = renewal(renewals);
+			if (answer === "fail") {
+				throw new TypeError("fetch failed");
+			}
+			if (answer === "hang") {
+				const signal = init?.signal ?? new AbortController().signal;
+				await once(signal, "abort");
+				throw new DOMException("aborted", "AbortError");
+			}
+			return answer === 200
+				? Response.json({ leasedUntil: new Date(Date.now() + leaseMs).toISOString() })
+				: new Response(null, { status: answer });
 		}
 		return new Response(null, { status: 204 });
 	};
-	return { calls, fetch };
+	return { calls, fetch, renewed };
 }
 
-const assignment = (kind: string) => ({
+const assignment = (kind: string, { leaseMs = 60_000, deadline = null as string | null } = {}) => ({
 	runId: RUN,
 	epoch: 3,
 	kind,
-	leasedUntil: new Date(Date.now() + 60_000).toISOString(),
-	deadline: null,
+	leasedUntil: new Date(Date.now() + leaseMs).toISOString(),
+	deadline,
 });
 
 /** Drives until the gateway has offered every run once and answered one idle `next`. */
 async function driveOnce(
 	kinds: Record<string, KindRunner>,
-	pending: object[],
-	lease?: (count: number) => number,
+	fake: ReturnType<typeof gateway>,
 	renewEveryMs = 5,
 ) {
-	const fake = gateway(pending, lease);
 	const stop = new AbortController();
 	const idle: typeof globalThis.fetch = async (input, init) => {
 		const response = await fake.fetch(input, init);
@@ -92,6 +115,15 @@ async function driveOnce(
 	return fake.calls;
 }
 
+const ends = (calls: Call[]) =>
+	calls.filter((call) => call.path.endsWith("/end")).map((call) => call.body);
+
+/** A kind that waits for its signal and reports that its lease was lost. */
+const untilAborted: KindRunner = async ({ signal }) => {
+	await once(signal, "abort");
+	return { leaseLost: true };
+};
+
 void test("a run is handed to its kind with its claim's headers, and the driver ends it", async () => {
 	let seen: Parameters<KindRunner>[0] | undefined;
 	const calls = await driveOnce(
@@ -101,7 +133,7 @@ void test("a run is handed to its kind with its claim's headers, and the driver 
 				return { leaseLost: false, outcome: "completed" };
 			},
 		},
-		[assignment("REVIEW_COMPOSE")],
+		gateway({ runs: [assignment("REVIEW_COMPOSE")] }),
 	);
 
 	assert.ok(seen !== undefined);
@@ -118,38 +150,69 @@ void test("a run is handed to its kind with its claim's headers, and the driver 
 });
 
 void test("the driver keeps the lease while the kind works", async () => {
-	const calls = await driveOnce(
+	const fake = gateway({ runs: [assignment("REVIEW_COMPOSE")] });
+	await driveOnce(
 		{
 			REVIEW_COMPOSE: async () => {
-				await sleep(40);
+				// The kind works until the lease was renewed twice.
+				await once(fake.renewed, "renewed");
+				await once(fake.renewed, "renewed");
 				return { leaseLost: false, outcome: "completed" };
 			},
 		},
-		[assignment("REVIEW_COMPOSE")],
+		fake,
 	);
 
-	assert.ok(calls.filter((call) => call.path.endsWith("/lease")).length >= 2);
+	assert.ok(fake.calls.filter((call) => call.path.endsWith("/lease")).length >= 2);
+	assert.deepEqual(ends(fake.calls), [JSON.stringify({ outcome: "completed" })]);
 });
 
-void test("a refused renewal aborts the kind, and the driver sends no end", async () => {
+for (const status of [409, 404, 401]) {
+	void test(`a renewal answered ${String(status)} aborts the kind, and the driver sends no end`, async () => {
+		const calls = await driveOnce(
+			{ REVIEW_COMPOSE: untilAborted },
+			gateway({ runs: [assignment("REVIEW_COMPOSE")], renewal: () => status }),
+		);
+
+		assert.deepEqual(ends(calls), []);
+	});
+}
+
+for (const failure of ["fail", "hang"] as const) {
+	void test(`renewals that ${failure} lose the lease at its end, and the driver sends no end`, async () => {
+		const started = Date.now();
+		const calls = await driveOnce(
+			{ REVIEW_COMPOSE: untilAborted },
+			// The driver counts the lease as lost two seconds before its end on the gateway's clock.
+			gateway({
+				runs: [assignment("REVIEW_COMPOSE", { leaseMs: 2300 })],
+				renewal: () => failure,
+			}),
+			50,
+		);
+
+		assert.deepEqual(ends(calls), []);
+		assert.ok(Date.now() - started < 5000);
+	});
+}
+
+void test("the run's deadline stops the kind, and the driver leaves the run to the server", async () => {
+	const deadline = new Date(Date.now() + 100).toISOString();
 	let aborted = false;
 	const calls = await driveOnce(
 		{
 			REVIEW_COMPOSE: async ({ signal }) => {
 				await once(signal, "abort");
-				aborted = signal.aborted;
-				return { leaseLost: true };
+				aborted = true;
+				return { leaseLost: false, outcome: "completed" };
 			},
 		},
-		[assignment("REVIEW_COMPOSE")],
-		() => 409,
+		gateway({ runs: [assignment("REVIEW_COMPOSE", { deadline })] }),
+		1000,
 	);
 
 	assert.equal(aborted, true);
-	assert.equal(
-		calls.some((call) => call.path.endsWith("/end")),
-		false,
-	);
+	assert.deepEqual(ends(calls), []);
 });
 
 void test("a run of a kind that this sandbox does not run, or whose kind fails, is handed on", async () => {
@@ -159,25 +222,26 @@ void test("a run of a kind that this sandbox does not run, or whose kind fails, 
 				throw new Error("the model broke");
 			},
 		},
-		[assignment("REVIEW_COMPOSE"), assignment("TURN")],
+		gateway({ runs: [assignment("REVIEW_COMPOSE"), assignment("TURN")] }),
 	);
 
-	assert.deepEqual(
-		calls.filter((call) => call.path.endsWith("/end")).map((call) => call.body),
-		[JSON.stringify({ outcome: "handed_on" }), JSON.stringify({ outcome: "handed_on" })],
-	);
+	assert.deepEqual(ends(calls), [
+		JSON.stringify({ outcome: "handed_on" }),
+		JSON.stringify({ outcome: "handed_on" }),
+	]);
 });
 
-void test("a stop during a run aborts the kind and ends nothing", async () => {
-	const fake = gateway([assignment("REVIEW_COMPOSE")]);
+void test("a run that finishes as the sandbox stops is still ended, and the driver pulls no more", async () => {
+	const fake = gateway({ runs: [assignment("REVIEW_COMPOSE"), assignment("REVIEW_COMPOSE")] });
 	const stop = new AbortController();
+	let aborted = false;
 	await drive({
 		gatewayUrl: GATEWAY,
 		token: "sandbox-token",
 		kinds: {
 			REVIEW_COMPOSE: async ({ signal }) => {
 				stop.abort();
-				assert.equal(signal.aborted, true);
+				aborted = signal.aborted;
 				return { leaseLost: false, outcome: "completed" };
 			},
 		},
@@ -187,10 +251,18 @@ void test("a stop during a run aborts the kind and ends nothing", async () => {
 		log: quiet,
 	});
 
-	assert.equal(
-		fake.calls.some((call) => call.path.endsWith("/end")),
-		false,
+	assert.equal(aborted, true);
+	assert.deepEqual(ends(fake.calls), [JSON.stringify({ outcome: "completed" })]);
+	assert.equal(fake.calls.filter((call) => call.path.endsWith("/next")).length, 1);
+});
+
+void test("the driver pulls again after the gateway failed to answer next", async () => {
+	const calls = await driveOnce(
+		{ TURN: async () => ({ leaseLost: false, outcome: "completed" }) },
+		gateway({ runs: [assignment("TURN")], failingNexts: 2 }),
 	);
+
+	assert.deepEqual(ends(calls), [JSON.stringify({ outcome: "completed" })]);
 });
 
 void test("an assignment that does not name a run, its claim and its lease is no run to start", () => {
@@ -198,9 +270,11 @@ void test("an assignment that does not name a run, its claim and its lease is no
 	for (const broken of [
 		null,
 		{ ...assignment("TURN"), runId: "../etc" },
+		{ ...assignment("TURN"), runId: "-".repeat(36) },
 		{ ...assignment("TURN"), epoch: 0 },
 		{ ...assignment("TURN"), kind: "" },
 		{ ...assignment("TURN"), leasedUntil: "soon" },
+		{ ...assignment("TURN"), leasedUntil: "1" },
 		{ ...assignment("TURN"), deadline: "never" },
 	]) {
 		assert.throws(() => parseAssignment(broken), /assignment/u);

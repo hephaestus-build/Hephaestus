@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.List;
@@ -67,7 +68,8 @@ class AgentRunControllerTest extends BaseUnitTest {
         lenient().when(run.getAttempt()).thenReturn(1);
         lenient().when(runs.find(new AgentRunRef(RUN, WORKSPACE))).thenReturn(Optional.of(run));
         mvc = MockMvcBuilders.standaloneSetup(new AgentRunController(runs, transactions, List.of(review)))
-                .setControllerAdvice(new AgentGatewayErrors())
+                // The global advice too, whose handler of every exception must not answer a stale claim first.
+                .setControllerAdvice(new GlobalControllerAdvice(), new AgentGatewayErrors())
                 .setCustomArgumentResolvers(new SandboxRunArgumentResolver(runs))
                 .build();
         SecurityContextHolder.getContext()

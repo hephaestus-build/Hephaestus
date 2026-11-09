@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 import de.tum.cit.aet.hephaestus.agent.proxy.JobTokenAuthenticationFilter;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -10,9 +12,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
  * A sandbox's call whose claim no longer holds its run answers {@code 409}, with the text that the proxy answers a
- * model call of such a claim: the loop reads both the same way and stops the run.
+ * model call of such a claim: the loop reads both the same way and stops the run. It covers every route of the gateway
+ * package, and it comes before the global advice, whose handler of every exception would answer {@code 500}.
  */
-@RestControllerAdvice(assignableTypes = {AgentNextController.class, AgentRunController.class})
+@RestControllerAdvice(basePackageClasses = AgentRunController.class)
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @ConditionalOnWorkerRole
 class AgentGatewayErrors {
 

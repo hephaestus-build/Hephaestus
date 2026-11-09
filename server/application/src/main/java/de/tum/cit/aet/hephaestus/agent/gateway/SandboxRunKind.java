@@ -14,13 +14,15 @@ public interface SandboxRunKind {
 
     /**
      * The run's context, as the kind's loop reads it from {@code GET …/runs/{runId}/context}. Called only while the
-     * claim holds the run; it reads and writes nothing of the lease.
+     * claim holds the run, outside any transaction: a kind that reads lazily opens its own read transaction. It reads
+     * and writes nothing of the lease.
      */
     JsonNode context(SandboxRun run);
 
     /**
-     * Ends the run and its domain row in the caller's transaction, or puts both back in the queue. Whether the claim
-     * still held the run: false answers the sandbox that its lease is gone.
+     * Ends the run and its domain row in the caller's transaction, or puts both back in the queue. True when the
+     * claim still held the run, and also when this claim already ended it, as a turn's own end route does; false
+     * answers the sandbox that its lease is gone.
      */
     boolean end(SandboxRun run, Outcome outcome);
 
