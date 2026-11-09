@@ -122,7 +122,8 @@ A write that already passed its fence still reaches the provider, as it would ha
 | `action.attempts` | `kind`, `result`, `recorded` |
 | `action.ended` | `kind`, `state`, `reason` |
 
-An action that ends `UNCERTAIN` also writes one warning log line with its kind and reason.
+The executor's log events, such as `action.ended.uncertain`, are in the [observability contract](/admin/observability#agent-run-and-outbox-events).
+Each names `action.id` and `action.kind`, never the payload.
 
 ## Add a kind
 

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.run;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -308,8 +309,19 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         AgentRunLease live = claim().orElseThrow();
         expire(lost.runId());
 
-        reaper.reap();
+        try (var logs = new LogCapture(AgentRunReaper.class)) {
+            reaper.reap();
 
+            assertThat(logs.events("agent.run.requeued"))
+                    .as("the event names the run as the records of its holder do")
+                    .singleElement()
+                    .satisfies(fields -> assertThat(fields)
+                            .containsEntry("run.id", lost.runId().toString())
+                            .containsEntry("run.epoch", Integer.toString(lost.epoch()))
+                            .containsEntry("subject.key", "review:lost")
+                            .containsEntry("workspace.id", Long.toString(workspace))
+                            .containsEntry("run.kind", "REVIEW"));
+        }
         assertThat(handler.requeued).containsExactly(lost.fence());
         assertThat(handler.ended).isEmpty();
         assertThat(state(lost.runId())).isEqualTo("QUEUED");
@@ -400,8 +412,16 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
             }
         };
 
-        reaper(handler).reap();
+        try (var logs = new LogCapture(AgentRunReaper.class)) {
+            reaper(handler).reap();
 
+            assertThat(logs.events("agent.run.reaper.failed"))
+                    .singleElement()
+                    .satisfies(fields -> assertThat(fields)
+                            .containsEntry("run.id", failing.runId().toString())
+                            .containsEntry("subject.key", "review:failing")
+                            .containsEntry("error.type", IllegalStateException.class.getName()));
+        }
         assertThat(state(failing.runId())).as("tried again next tick").isEqualTo("LEASED");
         assertThat(state(behind.runId())).isEqualTo("QUEUED");
         assertThat(handler.requeued).contains(behind.fence()).doesNotContain(failing.fence());
@@ -418,8 +438,16 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
                 "conversation:late",
                 Instant.now().minusSeconds(1))));
 
-        reaper.reap();
+        try (var logs = new LogCapture(AgentRunReaper.class)) {
+            reaper.reap();
 
+            assertThat(logs.events("agent.run.ended"))
+                    .singleElement()
+                    .satisfies(fields -> assertThat(fields)
+                            .containsEntry("run.id", run.id().toString())
+                            .containsEntry("subject.key", "conversation:late")
+                            .containsEntry("run.stop_reason", "DEADLINE"));
+        }
         assertThat(state(run.id())).isEqualTo("ENDED");
         assertThat(stopReason(run.id())).isEqualTo("DEADLINE");
         assertThat(handler.ended).containsExactly(run.id() + ":0:DEADLINE");

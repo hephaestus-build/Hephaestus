@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
@@ -40,13 +41,44 @@ class ActionExecutorTest extends BaseUnitTest {
 
     @Test
     void shouldRetryWhenTheAdapterThrowsBeforeAnyWrite() {
-        ActionResult result = executor(attempt -> {
-                    throw new IllegalStateException("contact lookup failed");
-                })
-                .run(claim(false));
+        try (var logs = new LogCapture(ActionExecutor.class)) {
+            ActionResult result = executor(attempt -> {
+                        throw new IllegalStateException("contact lookup failed for someone@example.com");
+                    })
+                    .run(claim(false));
 
-        assertThat(result).isEqualTo(new ActionResult.Retry(ActionExecutor.backoff(1)));
-        verify(store).settle(ID, 7L, result);
+            assertThat(result).isEqualTo(new ActionResult.Retry(ActionExecutor.backoff(1)));
+            verify(store).settle(ID, 7L, result);
+            assertThat(logs.events("action.attempt.failed"))
+                    .as("the event names the action and the failure class, never the provider's message")
+                    .singleElement()
+                    .satisfies(fields -> assertThat(fields)
+                            .containsEntry("action.id", ID.toString())
+                            .containsEntry("action.kind", "EMAIL")
+                            .containsEntry("action.attempt", "1")
+                            .containsEntry("error.type", IllegalStateException.class.getName())
+                            .doesNotContainKey("workspace.id")
+                            .doesNotContainValue("contact lookup failed for someone@example.com"));
+        }
+    }
+
+    @Test
+    void shouldNameTheActionAndItsWorkspaceWhenItEndsUncertain() {
+        var executor = executor(attempt -> new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED));
+        when(store.settle(any(), anyLong(), any()))
+                .thenReturn(Optional.of(new ActionStore.Settled(
+                        ID, 42L, ActionKind.EMAIL, ActionState.UNCERTAIN, ActionStopReason.WRITE_UNCONFIRMED)));
+
+        try (var logs = new LogCapture(ActionExecutor.class)) {
+            executor.run(claim(true));
+
+            assertThat(logs.events("action.ended.uncertain"))
+                    .singleElement()
+                    .satisfies(fields -> assertThat(fields)
+                            .containsEntry("action.id", ID.toString())
+                            .containsEntry("workspace.id", "42")
+                            .containsEntry("action.reason", "WRITE_UNCONFIRMED"));
+        }
     }
 
     @Test

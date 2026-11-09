@@ -11,12 +11,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.spi.LoggingEventBuilder;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -89,7 +92,10 @@ public class ActionExecutor {
         batch.shutdown();
         try {
             if (!batch.awaitTermination(wait.toMillis(), TimeUnit.MILLISECONDS))
-                log.warn("Outbox attempts outlived their lease and keep running: claims={}", claims.size());
+                log.atWarn()
+                        .addKeyValue("event.name", "action.batch.outlived")
+                        .addKeyValue("action.claims", claims.size())
+                        .log("Outbox attempts outlived their lease and keep running");
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         }
@@ -125,12 +131,11 @@ public class ActionExecutor {
         try {
             result = adapter.execute(attempt);
         } catch (RuntimeException failure) {
-            log.warn(
-                    "Action attempt failed: id={}, kind={}, attempt={}, error={}",
-                    claim.id(),
-                    claim.kind(),
-                    claim.attempts(),
-                    failure.getClass().getSimpleName());
+            // The class only: a provider's exception message can carry the payload it refused.
+            event(log.atWarn(), "action.attempt.failed", claim.id(), claim.workspaceId(), claim.kind())
+                    .addKeyValue("action.attempt", claim.attempts())
+                    .addKeyValue("error.type", failure.getClass().getName())
+                    .log("Action attempt failed");
             // An exception after the fence leaves the provider's state unknown.
             result = fenced.get() || claim.writeStarted()
                     ? new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED)
@@ -138,7 +143,9 @@ public class ActionExecutor {
         }
         var settled = store.settle(claim.id(), claim.epoch(), result);
         if (settled.isEmpty() && !(result instanceof ActionResult.Abandoned))
-            log.info("Action result arrived after its lease moved on: id={}, kind={}", claim.id(), claim.kind());
+            event(log.atInfo(), "action.result.late", claim.id(), claim.workspaceId(), claim.kind())
+                    .addKeyValue("action.attempt", claim.attempts())
+                    .log("Action result arrived after its lease moved on");
         Counter.builder(CoreMetrics.ACTION_ATTEMPTS)
                 .description("Outbox attempts by kind and result")
                 .tag("kind", claim.kind().name())
@@ -161,7 +168,21 @@ public class ActionExecutor {
                 .register(meters)
                 .increment();
         if (settled.state() == ActionState.UNCERTAIN)
-            log.warn("Action ended uncertain: kind={}, reason={}", settled.kind(), reason);
+            event(log.atWarn(), "action.ended.uncertain", settled.id(), settled.workspaceId(), settled.kind())
+                    .addKeyValue("action.reason", reason.name())
+                    .log("Action ended uncertain");
+    }
+
+    /**
+     * An outbox event names its action; an instance-level action has no workspace. The keys are the observability
+     * contract's names, written here because {@code core} cannot depend on the observability module.
+     */
+    private static LoggingEventBuilder event(
+            LoggingEventBuilder builder, String name, UUID id, @Nullable Long workspaceId, ActionKind kind) {
+        LoggingEventBuilder named = builder.addKeyValue("event.name", name)
+                .addKeyValue("action.id", id)
+                .addKeyValue("action.kind", kind.name());
+        return workspaceId == null ? named : named.addKeyValue("workspace.id", workspaceId);
     }
 
     /** 30 s, then doubling per attempt, at most an hour. */

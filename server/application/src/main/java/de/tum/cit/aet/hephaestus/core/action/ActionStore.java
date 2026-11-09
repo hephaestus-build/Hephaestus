@@ -34,7 +34,11 @@ class ActionStore {
 
     /** The state an action moved to, with its reason once it ended. */
     record Settled(
-            ActionKind kind, ActionState state, @Nullable ActionStopReason reason) {}
+            UUID id,
+            @Nullable Long workspaceId,
+            ActionKind kind,
+            ActionState state,
+            @Nullable ActionStopReason reason) {}
 
     private static final List<String> AT_MOST_ONCE = Arrays.stream(ActionKind.values())
             .filter(ActionKind::atMostOnce)
@@ -133,6 +137,8 @@ class ActionStore {
     private static Settled settled(AgentActionRepository.SettledRow row) {
         String reason = row.getStopReason();
         return new Settled(
+                row.getId(),
+                row.getWorkspaceId(),
                 ActionKind.valueOf(row.getKind()),
                 ActionState.valueOf(row.getState()),
                 reason == null ? null : ActionStopReason.valueOf(reason));

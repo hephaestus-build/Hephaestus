@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.observability.ShippedLogEncoder;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -28,6 +29,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,8 @@ import tools.jackson.databind.ObjectMapper;
 
 @Tag("unit")
 class ReviewJobTelemetryTest {
+
+    private static final AgentRunFence RUN = new AgentRunFence(UUID.randomUUID(), 42L, 3);
 
     @Test
     void shouldLogTheExceptionClassAndCauseChainOnceWithoutPrivateMessages() {
@@ -179,7 +183,7 @@ class ReviewJobTelemetryTest {
             RuntimeJobTestData.initialize(job, workspace(42L).getId());
             job.setTraceId("a".repeat(32));
             job.setTraceId("a".repeat(32));
-            var span = telemetry.startExecution(job);
+            var span = telemetry.startExecution(job, RUN);
             try (var scope = telemetry.executionScope(span)) {
                 assertThat(tracer.currentSpan()).isNotNull();
                 assertThat(span.context().traceId()).matches("[a-f0-9]{32}").isNotEqualTo(job.getTraceId());
@@ -194,7 +198,14 @@ class ReviewJobTelemetryTest {
                         && data.getEndEpochNanos() >= data.getStartEpochNanos()
                         && job.getId()
                                 .toString()
-                                .equals(data.getAttributes().get(AttributeKey.stringKey("hephaestus.job.id")));
+                                .equals(data.getAttributes().get(AttributeKey.stringKey("hephaestus.job.id")))
+                        && RUN.runId()
+                                .toString()
+                                .equals(data.getAttributes().get(AttributeKey.stringKey("hephaestus.run.id")))
+                        && Long.valueOf(RUN.epoch())
+                                .equals(data.getAttributes().get(AttributeKey.longKey("hephaestus.run.epoch")))
+                        && ReviewRunKind.subject(job.getReviewId())
+                                .equals(data.getAttributes().get(AttributeKey.stringKey("hephaestus.subject.key")));
             }));
         }
     }
@@ -218,7 +229,7 @@ class ReviewJobTelemetryTest {
             var failure = PreparationFailure.of(
                     PreparationFailure.Stage.PROVENANCE,
                     new IllegalStateException("jdbc:postgresql://db/hephaestus password=secret"));
-            var span = telemetry.startExecution(job);
+            var span = telemetry.startExecution(job, RUN);
             try (var scope = telemetry.executionScope(span)) {
                 telemetry.preparationFailed(job, failure, "FAILED");
             } finally {

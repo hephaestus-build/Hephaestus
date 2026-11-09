@@ -92,9 +92,9 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 .isEmpty();
         assertThat(store.beginWrite(id, current.epoch(), MARGIN)).isTrue();
         assertThat(store.settle(id, current.epoch(), new ActionResult.Done("current")))
-                .get()
-                .extracting(ActionStore.Settled::state)
-                .isEqualTo(ActionState.DONE);
+                .as("the settled action names itself, so its events can")
+                .contains(new ActionStore.Settled(
+                        id, null, ActionKind.EMAIL, ActionState.DONE, ActionStopReason.COMPLETED));
         assertThat(row(id))
                 .containsEntry("readback_ref", "current")
                 .containsEntry("stop_reason", "COMPLETED")
@@ -114,7 +114,9 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                         id))
                 .hasMessageContaining("never taken again");
 
-        store.endStale();
+        assertThat(store.endStale())
+                .contains(new ActionStore.Settled(
+                        id, null, ActionKind.EMAIL, ActionState.UNCERTAIN, ActionStopReason.LEASE_LOST_AFTER_WRITE));
 
         assertThat(row(id))
                 .containsEntry("state", "UNCERTAIN")
@@ -243,7 +245,8 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 Instant.now().minusSeconds(1)));
 
         assertThat(store.endStale())
-                .contains(new ActionStore.Settled(ActionKind.EMAIL, ActionState.CANCELLED, ActionStopReason.EXPIRED));
+                .contains(new ActionStore.Settled(
+                        id, null, ActionKind.EMAIL, ActionState.CANCELLED, ActionStopReason.EXPIRED));
         assertThat(claimOwn(List.of(id))).isEmpty();
         assertThat(row(id)).containsEntry("state", "CANCELLED").containsEntry("payload", null);
     }
