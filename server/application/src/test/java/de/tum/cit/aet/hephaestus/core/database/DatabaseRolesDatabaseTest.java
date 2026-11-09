@@ -156,11 +156,11 @@ class DatabaseRolesDatabaseTest {
         }
 
         PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_roles_installed");
-        var monitor = PostgreSQLTestContainer.runChartSqlAs(
+        var monitor = PostgreSQLTestContainer.runChartScriptAs(
+                "database-monitor.sh",
                 "hephaestus_roles_installed",
                 PostgreSQLTestContainer.administrator().username(),
-                Map.of("DATABASE_MONITOR_PASSWORD", monitorPassword),
-                List.of("database-quiet.sql", "database-monitor.sql"));
+                Map.of("DATABASE_MONITOR_PASSWORD", monitorPassword));
         assertThat(monitor.getExitCode()).as(monitor.getStderr()).isZero();
 
         TestDatabase asMonitorRole = new TestDatabase(INSTALLED.jdbcUrl(), "roles_monitor", canary);
@@ -271,11 +271,11 @@ class DatabaseRolesDatabaseTest {
             before = verifierOf(jdbc(connection), "hephaestus_owner");
         }
         PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_roles_installed");
-        var monitor = PostgreSQLTestContainer.runChartSqlAs(
+        var monitor = PostgreSQLTestContainer.runChartScriptAs(
+                "database-monitor.sh",
                 "hephaestus_roles_installed",
                 PostgreSQLTestContainer.administrator().username(),
-                Map.of("DATABASE_MONITOR_PASSWORD", monitorPassword),
-                List.of("database-quiet.sql", "database-monitor.sql"));
+                Map.of("DATABASE_MONITOR_PASSWORD", monitorPassword));
         assertThat(monitor.getExitCode()).as(monitor.getStderr()).isZero();
 
         try (Connection connection = connect(INSTALLED)) {
@@ -366,11 +366,8 @@ class DatabaseRolesDatabaseTest {
                 "hephaestus_roles_managed", administrator, monitorEnvironment, List.of("database-monitor.sql"));
         assertThat(alone.getExitCode()).isNotZero();
         assertThat(alone.getStderr()).contains("run database-quiet.sql first");
-        var quietMonitor = PostgreSQLTestContainer.runChartSqlAs(
-                "hephaestus_roles_managed",
-                administrator,
-                monitorEnvironment,
-                List.of("database-quiet.sql", "database-monitor.sql"));
+        var quietMonitor = PostgreSQLTestContainer.runChartScriptAs(
+                "database-monitor.sh", "hephaestus_roles_managed", administrator, monitorEnvironment);
         assertThat(quietMonitor.getExitCode()).isNotZero();
         assertThat(quietMonitor.getStderr()).contains("pg_stat_statements.track_utility is on");
         try (Connection connection = connect(INSTALLED)) {

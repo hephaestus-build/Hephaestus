@@ -9,6 +9,7 @@ import java.sql.Statement;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import liquibase.Contexts;
@@ -55,8 +56,15 @@ public final class PostgreSQLTestContainer {
     private static final List<String> CHART_SQL =
             List.of("database-quiet.sql", "database-roles.sql", "database-monitor.sql");
 
-    private static final List<String> CHART_FILE_NAMES =
-            List.of("database-quiet.sql", "database-roles.sql", "database-monitor.sql", "scram-sha-256.pl");
+    private static final List<String> CHART_SCRIPTS = List.of("database-roles.sh", "database-monitor.sh");
+
+    private static final List<String> CHART_FILE_NAMES = List.of(
+            "database-quiet.sql",
+            "database-roles.sql",
+            "database-monitor.sql",
+            "database-roles.sh",
+            "database-monitor.sh",
+            "scram-sha-256.pl");
 
     private static final String MIGRATED_TEMPLATE_DATABASE = "hephaestus_template_dev";
     private static final Pattern DATABASE_NAME = Pattern.compile("[a-z][a-z0-9_]*");
@@ -89,11 +97,17 @@ public final class PostgreSQLTestContainer {
 
     /**
      * The default database's schema owner, for a fixture that changes the schema: the application role that every
-     * shared context uses cannot. Each call opens a connection per statement.
+     * shared context uses cannot. Each call opens a connection per statement. Its DDL waits at most 30 seconds for a
+     * lock: a test transaction that holds one would otherwise wait for this connection, unseen by PostgreSQL's
+     * deadlock check, until the task's timeout.
      */
     public static JdbcTemplate ownerJdbc() {
         TestDatabase owner = owner();
-        return new JdbcTemplate(new DriverManagerDataSource(owner.jdbcUrl(), owner.username(), owner.password()));
+        var dataSource = new DriverManagerDataSource(owner.jdbcUrl(), owner.username(), owner.password());
+        var properties = new Properties();
+        properties.setProperty("options", "-c lock_timeout=30s");
+        dataSource.setConnectionProperties(properties);
+        return new JdbcTemplate(dataSource);
     }
 
     /** The default database as the container's superuser. */
@@ -213,14 +227,30 @@ public final class PostgreSQLTestContainer {
                 .get();
     }
 
-    /** The quiet settings, then the roles, as the chart's init container runs them. */
+    /** The chart's {@code database-roles.sh}, the script that its migration Job runs from a ConfigMap. */
     private static ExecResult runDatabaseRoles(PostgreSQLContainer postgres, String database, String administrator) {
-        return runChartSql(
+        return execShell(
                 postgres,
-                database,
-                administrator,
-                Map.of("DATABASE_OWNER_PASSWORD", OWNER_PASSWORD, "DATABASE_APP_PASSWORD", APP_PASSWORD),
-                List.of("database-quiet.sql", "database-roles.sql"));
+                chartScriptCommand("database-roles.sh", database, administrator),
+                Map.of("DATABASE_OWNER_PASSWORD", OWNER_PASSWORD, "DATABASE_APP_PASSWORD", APP_PASSWORD));
+    }
+
+    /**
+     * Runs one of the chart's scripts, {@code database-roles.sh} or {@code database-monitor.sh}, as the chart's Jobs
+     * run it, with the passwords in the environment, and returns how it ended.
+     */
+    public static synchronized ExecResult runChartScriptAs(
+            String script, String database, String administrator, Map<String, String> environment) {
+        return execShell(getInstance(), chartScriptCommand(script, database, administrator), environment);
+    }
+
+    private static String chartScriptCommand(String script, String database, String administrator) {
+        if (!CHART_SCRIPTS.contains(script)) {
+            throw new IllegalArgumentException("Not a chart script: " + script);
+        }
+        validateDatabaseName(database);
+        validateDatabaseName(administrator);
+        return "sh " + CHART_FILES + script + " --username=" + administrator + " --dbname=" + database;
     }
 
     /**

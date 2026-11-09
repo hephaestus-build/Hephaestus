@@ -53,8 +53,9 @@ class OrganizationMembershipStoredIdsMigrationIntegrationTest extends BaseIntegr
                         + " (999, 10, 'MEMBER'), (2, 99, 'MEMBER')");
 
                 ResourceDatabasePopulator script = new ResourceDatabasePopulator(new ClassPathResource(SCRIPT));
-                // The populator takes the fixture's connection, so it sees the fixture search path.
-                script.execute(dataSource);
+                // On the fixture's connection, inside its transaction: execute(DataSource) would commit, which ends
+                // the fixture's search path and keeps the fixture schema.
+                script.populate(connection);
 
                 assertThat(jdbc.queryForList("SELECT organization_id, user_id, role FROM organization_membership"
                                 + " ORDER BY organization_id, user_id"))

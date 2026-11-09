@@ -642,21 +642,28 @@ async function chartFile(file: string): Promise<string> {
 async function externalDatabaseRoles(data: Readonly<Record<string, string>>): Promise<void> {
 	const owner = data.DATABASE_OWNER_PASSWORD ?? "";
 	const app = data.DATABASE_APP_PASSWORD ?? "";
-	// As the operator runs them: the passwords stay in the shell's environment, and psql sends only their verifiers.
-	const shell = [
+	// As the operator runs it: database-roles.sh with the chart's files beside it, and the passwords in its
+	// environment, so that psql sends only their verifiers.
+	const directory = "/tmp/hephaestus-database";
+	const lines = [`mkdir -p ${directory}`];
+	for (const file of [
+		"database-quiet.sql",
+		"database-roles.sql",
+		"scram-sha-256.pl",
+		"database-roles.sh",
+	]) {
+		lines.push(
+			`cat > ${directory}/${file} <<'HEPHAESTUS_FILE'`,
+			await chartFile(file),
+			"HEPHAESTUS_FILE",
+		);
+	}
+	lines.push(
 		`export DATABASE_OWNER_PASSWORD='${owner}' DATABASE_APP_PASSWORD='${app}'`,
-		"cat > /tmp/scram-sha-256.pl <<'PERL'",
-		await chartFile("scram-sha-256.pl"),
-		"PERL",
-		'DATABASE_OWNER_VERIFIER="$(perl /tmp/scram-sha-256.pl DATABASE_OWNER_PASSWORD)"',
-		'DATABASE_APP_VERIFIER="$(perl /tmp/scram-sha-256.pl DATABASE_APP_PASSWORD)"',
-		"export DATABASE_OWNER_VERIFIER DATABASE_APP_VERIFIER",
-		"psql --no-psqlrc --quiet -U hephaestus -d hephaestus <<'SQL'",
-		await chartFile("database-quiet.sql"),
-		await chartFile("database-roles.sql"),
-		"SQL",
+		`sh ${directory}/database-roles.sh -U hephaestus -d hephaestus`,
 		"",
-	].join("\n");
+	);
+	const shell = lines.join("\n");
 	await kubectl(
 		[
 			"-n",

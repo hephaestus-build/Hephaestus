@@ -29,7 +29,7 @@ The steps use the namespace `hephaestus` and the Secret `hephaestus-app`.
      Then run `hephaestus-keys.sh` of the new release, as [Create the Secret](https://docs.hephaestus.build/admin/kubernetes#create-the-secret) describes.
      It adds `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD`.
      The migration Job of the next revision creates both roles with these passwords.
-   - With an external PostgreSQL, run `files/database-quiet.sql` and `files/database-roles.sql` of the new release as your administrator, as [Database roles on an external PostgreSQL](https://docs.hephaestus.build/admin/kubernetes#database-roles-on-an-external-postgresql) describes.
+   - With an external PostgreSQL, run `files/database-roles.sh` of the new release as your administrator, as [Database roles on an external PostgreSQL](https://docs.hephaestus.build/admin/kubernetes#database-roles-on-an-external-postgresql) describes.
      Then put `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD` in the Secret, and remove `DATABASE_USERNAME` and `DATABASE_PASSWORD`.
 4. Do phases 3 and 4 with the new release.
    The migration Job sets up the roles, moves the schema objects and migrates as `hephaestus_owner`.
@@ -46,7 +46,7 @@ The steps use the namespace `hephaestus` and the Secret `hephaestus-app`.
 7. With an external PostgreSQL, remove the old login when nothing else uses it.
 
 If you start the application image outside the chart, give the migrate run mode the login of `hephaestus_owner`, and the server and worker the login of `hephaestus_app`.
-Before each migration that changes a password, compute the verifiers with `files/scram-sha-256.pl`. Then run `files/database-quiet.sql` and `files/database-roles.sql` in one `psql` session, as the administrator.
+Before each migration that changes a password, run `files/database-roles.sh` as the administrator.
 
 To go back to the previous release, put `DATABASE_USERNAME` and `DATABASE_PASSWORD` back with the administrator's values.
 The previous release logs in as the administrator again, so the moved objects need no change.

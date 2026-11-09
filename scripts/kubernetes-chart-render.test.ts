@@ -3310,6 +3310,96 @@ await test("PostgreSQL has a lower kubelet OOM adjustment than review and conver
 	}
 });
 
+const databaseSetupDirectory = "/etc/hephaestus/database";
+const databaseSetupFiles = [
+	"database-quiet.sql",
+	"database-roles.sql",
+	"database-monitor.sql",
+	"database-roles.sh",
+	"database-monitor.sh",
+	"scram-sha-256.pl",
+];
+
+/** The pod's container runs the chart's files from the ConfigMap, which holds each of them unchanged. */
+function assertDatabaseSetup(resources: Resource[], pod: unknown, entry: unknown): void {
+	const setup = resources.find(
+		(resource) => kindOf(resource) === "ConfigMap" && componentOf(resource) === "database-setup",
+	);
+	assert.ok(setup, "the database-setup ConfigMap");
+	const data = asRecord(get(setup, "data"), "database-setup data");
+	assert.deepEqual(
+		Object.keys(data).toSorted(byCodePoint),
+		databaseSetupFiles.toSorted(byCodePoint),
+	);
+	for (const file of databaseSetupFiles) {
+		const content = readFileSync(path.join(chart, "files", file), "utf8").replace(/\n$/u, "");
+		assert.equal(data[file], content, `the ConfigMap holds files/${file} unchanged`);
+	}
+	assert.deepEqual(
+		list(get(entry, "volumeMounts")).find((mount) => get(mount, "name") === "database-setup"),
+		{ name: "database-setup", mountPath: databaseSetupDirectory, readOnly: true },
+	);
+	assert.deepEqual(
+		get(
+			list(get(podSpec(pod), "volumes")).find((volume) => get(volume, "name") === "database-setup"),
+			"configMap",
+		),
+		{ name: nameOf(setup) },
+	);
+}
+
+/** Every container of every Pod template: Deployments, StatefulSets, Jobs and the Jobs of CronJobs. */
+const podTemplates = (resources: Resource[]) =>
+	resources.flatMap((resource) => {
+		const kind = String(kindOf(resource));
+		if (kind === "CronJob") {
+			return [get(resource, "spec", "jobTemplate", "spec", "template", "spec")];
+		}
+		return ["Deployment", "StatefulSet", "DaemonSet", "Job"].includes(kind)
+			? [get(resource, "spec", "template", "spec")]
+			: [];
+	});
+
+await test("no container command holds text that Kubernetes rewrites", () => {
+	// Kubernetes replaces $(NAME) with the container's variable NAME and $$ with $ in a command and its arguments.
+	// A script inlined there, such as SQL with $$ quotes, then runs changed: the chart ships scripts as files.
+	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
+	const everything = {
+		postgresql: {
+			metrics: { enabled: true },
+			backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
+		},
+	};
+	const renders = [
+		...profiles.map((name) => rendered([...layersFor(name), workerLayer])),
+		rendered([...layersFor("small"), workerLayer, everything]),
+	];
+	const entries = renders
+		.flatMap(podTemplates)
+		.flatMap((spec) => [...list(get(spec, "initContainers")), ...list(get(spec, "containers"))]);
+	const texts = entries.flatMap((entry) => {
+		const defined = new Set(
+			list(get(entry, "env")).map((variable) => String(get(variable, "name"))),
+		);
+		return [...list(get(entry, "command")), ...list(get(entry, "args"))].map((text) => ({
+			name: String(get(entry, "name")),
+			text: String(text),
+			defined,
+		}));
+	});
+	const checked = texts.length;
+	// A reference to the container's own variable is the feature, used on purpose.
+	const rewritten = texts.flatMap(({ name, text, defined }) =>
+		[...text.matchAll(/\$\$|\$\((?<variable>[A-Za-z_][A-Za-z0-9_]*)\)/gu)]
+			.filter(
+				(match) => match.groups?.variable === undefined || !defined.has(match.groups.variable),
+			)
+			.map((match) => `${name}: ${match[0]}`),
+	);
+	assert.ok(checked > 0, "the renders hold commands");
+	assert.deepEqual(rewritten, []);
+});
+
 /** The Secret keys that one container reads. */
 const secretKeysOf = (entry: unknown): string[] =>
 	list(get(entry, "env")).flatMap((variable) => {
@@ -3364,29 +3454,10 @@ await test("each database purpose logs in with its own role, and no Hephaestus p
 		"DATABASE_OWNER_PASSWORD",
 		"DATABASE_APP_PASSWORD",
 	]);
-	const script = String(list(get(roles, "command")).at(-1));
-	const file = readFileSync(path.join(chart, "files", "database-roles.sql"), "utf8").trimEnd();
-	const quietFile = readFileSync(path.join(chart, "files", "database-quiet.sql"), "utf8").trimEnd();
-	assert.ok(script.includes(file), "the init container runs files/database-roles.sql");
-	assert.ok(
-		script.includes(quietFile) && script.indexOf(quietFile) < script.indexOf(file),
-		"the quiet settings come first, in the same session",
-	);
-	assert.doesNotMatch(script, /-v (?:owner|app)_/u);
-	// psql sends only the SCRAM verifiers that the chart's script computes from the environment.
-	const scramFile = readFileSync(path.join(chart, "files", "scram-sha-256.pl"), "utf8").trimEnd();
-	assert.ok(
-		script.includes(scramFile),
-		"the init container computes the verifiers with files/scram-sha-256.pl",
-	);
-	for (const role of ["OWNER", "APP"]) {
-		assert.ok(
-			script.includes(
-				`DATABASE_${role}_VERIFIER="$(perl /tmp/scram-sha-256.pl DATABASE_${role}_PASSWORD)"`,
-			),
-			role,
-		);
-	}
+	// It runs the chart's script from the ConfigMap, the same script that the integration tests run: its command
+	// holds no SQL, which Kubernetes would rewrite.
+	assert.deepEqual(get(roles, "command"), ["sh", `${databaseSetupDirectory}/database-roles.sh`]);
+	assertDatabaseSetup(bundledRelease, migration, roles);
 	const postgresql = workload(bundledRelease, "postgresql");
 	assert.ok(postgresql, "postgresql");
 	assert.deepEqual(secretKeysOf(container(postgresql)), [
@@ -4404,43 +4475,18 @@ await test("the PostgreSQL exporter runs apart from the database, and its role J
 	const script = String(
 		list(get(job, "spec", "template", "spec", "containers", 0, "command")).at(-1),
 	);
-	// The chart's monitor file, after the quiet settings in the same session: the password stays off the command
-	// line, out of the statement statistics and out of the server log. The password is set on every revision, so a
-	// rotated key takes effect.
-	const quietFile = readFileSync(path.join(chart, "files", "database-quiet.sql"), "utf8").trimEnd();
-	const monitorFile = readFileSync(
-		path.join(chart, "files", "database-monitor.sql"),
-		"utf8",
-	).trimEnd();
-	assert.ok(script.includes(quietFile), "the monitor Job runs files/database-quiet.sql");
-	assert.ok(script.includes(monitorFile), "the monitor Job runs files/database-monitor.sql");
-	assert.ok(
-		script.indexOf(quietFile) < script.indexOf(monitorFile),
-		"the quiet settings come first",
-	);
-	assert.doesNotMatch(script, /-v (?:monitor_)?password/u);
-	assert.match(
-		monitorFile,
-		/^ALTER ROLE hephaestus_monitor WITH LOGIN .* PASSWORD :'monitor_verifier';$/mu,
-	);
-	// psql sends only the SCRAM verifier that the chart's script computes from the environment.
-	const scramFile = readFileSync(path.join(chart, "files", "scram-sha-256.pl"), "utf8").trimEnd();
-	assert.ok(
-		script.includes(scramFile),
-		"the monitor Job computes the verifier with files/scram-sha-256.pl",
-	);
+	// The chart's monitor script, from the ConfigMap: PostgreSQL gets only the SCRAM verifier of the password, and the
+	// password is set on every revision, so a rotated key takes effect.
 	assert.match(
 		script,
-		/^DATABASE_MONITOR_VERIFIER="\$\(perl \/tmp\/scram-sha-256\.pl DATABASE_MONITOR_PASSWORD\)"$/mu,
+		new RegExp(`^exec sh ${databaseSetupDirectory}/database-monitor\\.sh$`, "mu"),
 	);
-	assert.ok(
-		script.indexOf("DATABASE_MONITOR_VERIFIER=") < script.indexOf("psql "),
-		"the verifier comes first",
+	assert.doesNotMatch(
+		script,
+		/psql/u,
+		"the Job's command holds no SQL, which Kubernetes would rewrite",
 	);
-	assert.match(
-		monitorFile,
-		/CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring;/u,
-	);
+	assertDatabaseSetup(on, job, list(get(job, "spec", "template", "spec", "containers"))[0]);
 	assert.deepEqual(postgresqlPeers(on).slice(-2), ["postgresql-exporter", "postgresql-monitor"]);
 
 	// An external PostgreSQL is the operator's to prepare: the exporter reads it, and no Job runs.

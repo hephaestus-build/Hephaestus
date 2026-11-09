@@ -878,7 +878,7 @@ It turns off each setting that would record a verifier:
 
 `database-roles.sql` does not run without it.
 Both files need `psql` 15 or later and PostgreSQL 16 or later, and they stop with a message on an older version.
-The script needs Perl 5.10 or later with the module `Digest::SHA`.
+`scram-sha-256.pl` needs Perl 5.10 or later with the module `Digest::SHA`.
 Most distributions include that module with Perl. On RHEL and its minimal images, install the package `perl-Digest-SHA`.
 Hephaestus itself needs PostgreSQL 18 ([Compatibility policy](./compatibility-policy#database-baseline-prerequisites)).
 
@@ -893,7 +893,9 @@ Hephaestus itself needs PostgreSQL 18 ([Compatibility policy](./compatibility-po
 - It updates the extensions `pg_partman`, `citext` and `btree_gist` to the versions that the PostgreSQL server has. The migrations never update an extension.
 - It grants `hephaestus_app` the rows of each table, and each table that `hephaestus_owner` creates later.
 
-With the bundled PostgreSQL, the migration Job runs the file before each migration, as the administrator.
+The chart script `files/database-roles.sh` runs these files in the right order: it computes the verifiers, then runs `database-quiet.sql` and `database-roles.sql` in one `psql` session.
+With the bundled PostgreSQL, the migration Job runs the script before each migration, as the administrator.
+The chart gives the Job the files in a ConfigMap, not in its command, because Kubernetes rewrites `$$` and `$(NAME)` in a command.
 Only that init container of the Job gets the administrator's password.
 Thus, a changed `DATABASE_OWNER_PASSWORD` or `DATABASE_APP_PASSWORD` takes effect with the next upgrade.
 A new PostgreSQL image with a new extension version also takes effect with that step.
@@ -911,7 +913,7 @@ The chart never gets the administrator login of your PostgreSQL.
 Thus, you set up the roles yourself.
 Do this before the first install, after each change of their passwords, and after each update of the server's extensions.
 
-1. Get `files/scram-sha-256.pl`, `files/database-quiet.sql` and `files/database-roles.sql` from the verified chart of the release, as [Verify the release chart](#verify-the-release-chart) describes.
+1. Get the folder `files/` from the verified chart of the release, as [Verify the release chart](#verify-the-release-chart) describes.
 2. Generate a password for each role:
 
    ```bash
@@ -919,23 +921,15 @@ Do this before the first install, after each change of their passwords, and afte
    export DATABASE_APP_PASSWORD="$(openssl rand -hex 24)"
    ```
 
-3. Compute the verifier of each password.
-   The script reads the password from the variable that you name, and it prints only the verifier:
+3. Run the script as an administrator of your PostgreSQL, with the Hephaestus database.
+   It reads the two exported passwords and sends PostgreSQL only their verifiers:
 
    ```bash
-   export DATABASE_OWNER_VERIFIER="$(perl "chart-$VERSION/hephaestus/files/scram-sha-256.pl" DATABASE_OWNER_PASSWORD)"
-   export DATABASE_APP_VERIFIER="$(perl "chart-$VERSION/hephaestus/files/scram-sha-256.pl" DATABASE_APP_PASSWORD)"
+   sh "chart-$VERSION/hephaestus/files/database-roles.sh" \
+     "host=<host> dbname=hephaestus user=<administrator> sslmode=verify-full"
    ```
 
-4. Run both files as an administrator of your PostgreSQL, connected to the Hephaestus database:
-
-   ```bash
-   psql "host=<host> dbname=hephaestus user=<administrator> sslmode=verify-full" \
-     -f "chart-$VERSION/hephaestus/files/database-quiet.sql" \
-     -f "chart-$VERSION/hephaestus/files/database-roles.sql"
-   ```
-
-5. Put both passwords in the Secret, as [Create the Secret](#create-the-secret) describes with `--external-database`.
+4. Put both passwords in the Secret, as [Create the Secret](#create-the-secret) describes with `--external-database`.
 
 The administrator can be a superuser or a role with `CREATEROLE` and `CREATEDB`, as a managed PostgreSQL service gives:
 
@@ -963,7 +957,7 @@ Before you run the files, set these values for the administrator at the service:
 - `log_transaction_sample_rate = 0`
 - `log_min_error_statement = panic`
 
-Run the files of the chart as the steps above show, and do not copy their statements.
+Run the script of the chart as the steps above show, and do not copy the statements of its files.
 The comments of `database-roles.sql` tell what each step does and why.
 
 Do not give either role more privileges.

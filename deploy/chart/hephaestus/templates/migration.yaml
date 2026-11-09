@@ -50,30 +50,14 @@ spec:
           securityContext:
             {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
         {{- if .Values.postgresql.bundled }}
-        # The roles of files/database-roles.sql, after files/database-quiet.sql in the same session, as the
-        # administrator, before each migration: a changed
-        # password takes effect with the upgrade. Only this container has the administrator's password.
-        # An external PostgreSQL gets no such container: its operator runs the file
+        # files/database-roles.sh, as the administrator, before each migration: a changed password takes
+        # effect with the upgrade. Only this container has the administrator's password, and PostgreSQL gets
+        # only the SCRAM verifiers. An external PostgreSQL gets no such container: its operator runs the script
         # (docs/admin/kubernetes.mdx § Database roles).
         - name: database-roles
           image: {{ include "hephaestus.image" (dict "root" . "name" "postgres") | quote }}
           imagePullPolicy: IfNotPresent
-          command:
-            - sh
-            - -ec
-            # No password reaches the server or a command line: scram-sha-256.pl reads each one from the
-            # environment and prints its SCRAM verifier, which is all that psql sends.
-            - |
-              cat > /tmp/scram-sha-256.pl <<'PERL'
-              {{- .Files.Get "files/scram-sha-256.pl" | nindent 14 }}
-              PERL
-              DATABASE_OWNER_VERIFIER="$(perl /tmp/scram-sha-256.pl DATABASE_OWNER_PASSWORD)"
-              DATABASE_APP_VERIFIER="$(perl /tmp/scram-sha-256.pl DATABASE_APP_PASSWORD)"
-              export DATABASE_OWNER_VERIFIER DATABASE_APP_VERIFIER
-              psql --no-psqlrc <<'SQL'
-              {{- .Files.Get "files/database-quiet.sql" | nindent 14 }}
-              {{- .Files.Get "files/database-roles.sql" | nindent 14 }}
-              SQL
+          command: ["sh", "{{ include "hephaestus.databaseSetupDirectory" . }}/database-roles.sh"]
           env:
             - name: PGHOST
               value: {{ include "hephaestus.databaseHost" . | quote }}
@@ -98,6 +82,7 @@ spec:
             - name: tmp
               mountPath: /tmp
             {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
+            {{- include "hephaestus.databaseSetupMount" . | nindent 12 }}
         {{- end }}
       containers:
         - name: migration
@@ -129,4 +114,7 @@ spec:
           emptyDir:
             sizeLimit: 256Mi
         {{- include "hephaestus.postgresqlCaVolume" . | nindent 8 }}
+        {{- if .Values.postgresql.bundled }}
+        {{- include "hephaestus.databaseSetupVolume" . | nindent 8 }}
+        {{- end }}
 {{- end }}

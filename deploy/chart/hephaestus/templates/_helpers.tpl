@@ -875,3 +875,18 @@ qualified model-only replay, not provider capacity.
 {{- end -}}
 {{- end -}}
 {{- end -}}
+
+{{/* The ConfigMap of files/database-*: the migration Job and the monitor Job run them from this directory. */}}
+{{- define "hephaestus.databaseSetupDirectory" -}}/etc/hephaestus/database{{- end -}}
+
+{{- define "hephaestus.databaseSetupMount" -}}
+- name: database-setup
+  mountPath: {{ include "hephaestus.databaseSetupDirectory" . }}
+  readOnly: true
+{{- end -}}
+
+{{- define "hephaestus.databaseSetupVolume" -}}
+- name: database-setup
+  configMap:
+    name: {{ include "hephaestus.name" (dict "root" . "component" "database-setup") }}
+{{- end -}}
