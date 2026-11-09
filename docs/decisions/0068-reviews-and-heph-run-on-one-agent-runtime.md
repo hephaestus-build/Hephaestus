@@ -809,4 +809,6 @@ Cancellation and lease loss stop the wait.
 - **Option W.** Its first reason, a token beside untrusted code, no longer decides. W stays rejected for its relay and its broker in the gateway.
 - **Option [kubernetes-sigs/agent-sandbox](#kubernetes-sigsagent-sandbox-rejected), rejected on 2026-10-28, is the chosen path from 2026-11-09.** ADR 0079 gives what changed and how it bounds the risks that this ADR named.
 
-**Stays:** decisions C, D, I and K. Decision E stays: the templates use the gVisor RuntimeClass where the node has it. Decision F stays without the worker: a refused call at the proxy is the one form of control. Decision H stays. The isolation probe becomes one egress and isolation gate for the sandbox.
+- **[Decision C](#c-user-namespaces-are-required) and [decision E](#e-gvisor-is-optional-hardening).** gVisor is the default runtime where the node has it, and runc is the fallback. gVisor cannot run with `hostUsers: false` yet (google/gvisor#13303). Thus, a gVisor sandbox omits `hostUsers`, and gVisor's Sentry is the kernel boundary. A runc sandbox keeps `hostUsers: false`, and decision C stays for it.
+
+**Stays:** decisions D, I and K, and decision C for runc. Decision F stays without the worker: a refused call at the proxy is the one form of control. Decision H stays. The isolation probe becomes one egress and isolation gate for the sandbox.

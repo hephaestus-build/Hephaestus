@@ -310,11 +310,13 @@ There are no sidecars, no Unix-socket tool protocol and no `setpriv` filter.
 
 **Pod settings:**
 
-- The gVisor RuntimeClass where the node has it.
-- `hostUsers: false` (ADR 0068 decision C).
-- `automountServiceAccountToken: false`.
-- The seccomp profile `RuntimeDefault`.
+- **Runtime.** The gVisor RuntimeClass is the default where the node has it. runc is the fallback.
+- **User namespaces.** A runc template sets `hostUsers: false` (ADR 0068 decision C). A gVisor template omits `hostUsers`, because gVisor cannot run in a user namespace yet ([google/gvisor#13303](https://github.com/google/gvisor/issues/13303), open). On gVisor, the Sentry is the kernel boundary.
+- `automountServiceAccountToken: false` and `enableServiceLinks: false`.
+- The seccomp profile `RuntimeDefault`, `allowPrivilegeEscalation: false` and all capabilities dropped.
 - A non-root user ID.
+- No volumes. The workspace is the writable container layer, bounded by an `ephemeral-storage` limit. Two `emptyDir` volumes cost about 280 ms of the Pod start, measured.
+- **A pre-pulled image.** The agent image is on every sandbox node before a claim. A claim never pulls it.
 
 **Network:**
 The template sets `networkPolicyManagement: Unmanaged`.
@@ -507,6 +509,15 @@ Capture stays a server step. The gateway serves only captured bytes and archives
   - The text reaches the developer through the outbox, as a reply does. The note goes as a `slack_post` or an `email` action.
   - The Java digest goes. ADR 0057's rejection of a model-written digest is superseded: admission now covers the claim that the rejection named.
 - **Cold start.** The cold start is a measured product number. The target is the first text at most 6 s from a cold sandbox. A follow-up turn in a warm sandbox starts at once.
+  The spike measured the time from a claim to the first model token on k3s v1.37 (n = 40).
+  The image was pre-pulled, and a stub provider sent its first token after 300 ms:
+
+  | Runtime | p50 | p95 |
+  |---|---|---|
+  | runc, `hostUsers: false` | 0.87 s | 1.00 s |
+  | gVisor | 2.20 s | 2.83 s |
+
+  A real provider adds its own first-token time minus 0.3 s. That is not measured yet. A cold pull of the agent image costs 6.6–7.0 s alone, so the image must be on the node before the claim.
 - **Reviews.** The `review_measure` run measures and stages each practice (ADR 0063). The server admits and seals. The `review_compose` run then composes in the same sandbox, and the outbox delivers.
 
 ## Consequences
@@ -537,14 +548,16 @@ Capture stays a server step. The gateway serves only captured bytes and archives
 - **The token shares one container with untrusted code.** A command that the model chose can read the sandbox token. We bound it and accept it:
   - The token names one subject and ends at `shutdownTime`.
   - It works only at the gateway, the only egress.
-  - The sandbox has no Kubernetes token. gVisor runs where the node has it.
+  - The sandbox has no Kubernetes token. gVisor is the default runtime where the node has it.
   - The server admits every proposal.
   - The run's budget and the permit pool bound model spend.
 
   The egress and isolation gate tests these bounds on each upgrade.
 - **The server runs as several replicas.** That needs provider events in order for each item across replicas. Until then the server cannot leave `Recreate`.
 - **A server restart cuts streams.** The loop retries a model call whose connection broke, under the replay bound of ADR 0068's update of 2026-11-08.
-- **Cold start is a product number.** It must be measured for each stage, on runc and on gVisor, and optimized. A regression shows directly in a conversation.
+- **Cold start is a product number.** The spike meets the target with margin on both runtimes, but only with a pre-pulled image. A regression shows directly in a conversation.
+- **The image must be on every sandbox node.** A cold pull alone breaks the target. A new release must reach each sandbox node before its first claim, and the kubelet must not remove the image.
+- **gVisor runs without a user namespace.** A gVisor sandbox's root maps to a host user ID, behind the Sentry. A runc sandbox keeps the user namespace. gVisor adds about 0.4–1.3 s to the cold start. CPU contention on the node slows it more.
 - **The server holds Kubernetes authority beside user sessions.** ADR 0068 kept that authority in the worker. The Role is narrow: it can only create and delete claims from the fixed templates in one namespace.
   Code execution in the server already reaches every row and every key. The Role adds little to what such an attacker holds.
 - **A platform prerequisite.** An install needs cluster-admin once, to apply the platform manifest with the controller. The admin guide states it.
@@ -565,7 +578,8 @@ These items have an owner in the implementation program. Each must close before 
   If no clone can supply a pinned commit, the step ends with a named capture failure. It is never a claim about the work.
   The layer that runs the server as several replicas decides it and updates ADR 0039.
 - **The stream of turn deltas** from the sandbox through the gateway to the live hub, with no loop Deployment.
-- **The cold start, measured** for each stage, on runc and on gVisor.
+- **The first-token time of a real provider,** through the gateway proxy on staging.
+- **How the image reaches each sandbox node** before a claim, and stays there.
 - **Run id and epoch on logs, metrics and traces** ([ADR 0071](0071-every-user-visible-failure-is-observable.md)).
 
 ## Revisit trigger
@@ -578,6 +592,7 @@ These items have an owner in the implementation program. Each must close before 
   Then split the loop and the tools again (option 2).
 - **Upstream breaks.** If two agent-sandbox upgrades in a row fail the CI gate, or the project stops releasing, replace the backend behind `agent_sandbox`.
 - **Namespace mode ships.** When #484 or #1440 ships, move the controller install from the platform manifest into the chart.
+- **gVisor supports user namespaces.** When google/gvisor#13303 ships, gVisor templates also set `hostUsers: false`.
 - **Checkpoint and restore become stable.** Pod-level checkpoint and restore ([KEP-5823](https://www.kubernetes.dev/resources/keps/5823/)) can replace a cold start of a conversation.
 - **A self-hoster cannot install a cluster-scoped controller.** Then consider a fallback backend with plain Pods behind the same `agent_sandbox` owner.
 
@@ -585,6 +600,7 @@ These items have an owner in the implementation program. Each must close before 
 
 Fetched 2026-11-09.
 
+- [google/gvisor#13303](https://github.com/google/gvisor/issues/13303): gVisor with user namespaces, open.
 - [kubernetes-sigs/agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox): release v1.0.10, `v1beta1`, `networkPolicyManagement`, `envVarsInjectionPolicy`, `spec.lifecycle.shutdownTime`. Issues [#484](https://github.com/kubernetes-sigs/agent-sandbox/issues/484) and [#1440](https://github.com/kubernetes-sigs/agent-sandbox/issues/1440).
 - [Agent Sandbox on GKE is now available for everyone](https://cloud.google.com/blog/products/containers-kubernetes/bringing-you-agent-sandbox-on-gke-and-agent-substrate), May 2026.
 - [Kueue](https://github.com/kubernetes-sigs/kueue): v0.20.5, `v1beta2`, a controller request of 512 MiB and 500m CPU.
