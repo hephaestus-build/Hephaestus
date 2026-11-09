@@ -867,6 +867,7 @@ The chart script `files/scram-sha-256.pl` computes the SCRAM-SHA-256 verifier of
 `database-roles.sql` accepts only these verifiers.
 
 A verifier still allows an offline guess of its password.
+While a statement of the file runs, the members of `pg_monitor` can see its verifier in `pg_stat_activity`, but never a password.
 Thus, the chart file `files/database-quiet.sql` runs first, in the same `psql` session.
 It turns off each setting that would record a verifier:
 
@@ -877,7 +878,8 @@ It turns off each setting that would record a verifier:
 
 `database-roles.sql` does not run without it.
 Both files need `psql` 15 or later and PostgreSQL 16 or later, and they stop with a message on an older version.
-The script needs Perl 5.10 or later.
+The script needs Perl 5.10 or later with the module `Digest::SHA`.
+Most distributions include that module with Perl. On RHEL and its minimal images, install the package `perl-Digest-SHA`.
 Hephaestus itself needs PostgreSQL 18 ([Compatibility policy](./compatibility-policy#database-baseline-prerequisites)).
 
 `database-roles.sql` is idempotent:
@@ -961,26 +963,8 @@ Before you run the files, set these values for the administrator at the service:
 - `log_transaction_sample_rate = 0`
 - `log_min_error_statement = panic`
 
-These are the roles and grants of the file:
-
-```sql
-CREATE ROLE hephaestus_owner;
-CREATE ROLE hephaestus_app;
-ALTER ROLE hephaestus_owner WITH LOGIN PASSWORD 'SCRAM-SHA-256$4096:<owner verifier>';
-ALTER ROLE hephaestus_app WITH LOGIN PASSWORD 'SCRAM-SHA-256$4096:<application verifier>';
-ALTER DATABASE hephaestus OWNER TO hephaestus_owner;
-REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-GRANT USAGE, CREATE ON SCHEMA public TO hephaestus_owner;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO hephaestus_app;
-GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO hephaestus_app;
-GRANT EXECUTE ON ALL ROUTINES IN SCHEMA public TO hephaestus_app;
-ALTER DEFAULT PRIVILEGES FOR ROLE hephaestus_owner IN SCHEMA public
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO hephaestus_app;
-ALTER DEFAULT PRIVILEGES FOR ROLE hephaestus_owner IN SCHEMA public
-    GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO hephaestus_app;
-ALTER DEFAULT PRIVILEGES FOR ROLE hephaestus_owner IN SCHEMA public
-    GRANT EXECUTE ON ROUTINES TO hephaestus_app;
-```
+Run the files of the chart as the steps above show, and do not copy their statements.
+The comments of `database-roles.sql` tell what each step does and why.
 
 Do not give either role more privileges.
 The migrations need no superuser: `citext` and `btree_gist` are trusted extensions, and `pg_partman` needs only the owner of the database.
