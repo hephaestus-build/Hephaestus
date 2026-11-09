@@ -22,9 +22,8 @@ SANDBOXES=hephaestus-sandboxes
 SECRET=hephaestus-app
 # The namespace of Traefik and its Gateway, as k3s-platform.yaml and k3s-certificates.yaml name it.
 GATEWAY_NAMESPACE=traefik
-# The hosts of the small profiles, 32 GiB and 16 GiB, less what the kernel keeps; and 4 vCPU.
-SMALL_MEMORY_KIB=31457280
-SMALL_16GIB_MEMORY_KIB=15728640
+# The small profile needs a 16 GiB host, less what the kernel keeps, and 4 vCPU.
+SMALL_MEMORY_KIB=15728640
 MIN_CPUS=4
 
 say() { printf '==> %s\n' "$*"; }
@@ -424,15 +423,11 @@ esac
 os=$(. /etc/os-release && printf '%s %s' "$NAME" "$VERSION_ID")
 check_host_profile "$os" "$(uname -r)"
 memory=$(awk '/^MemTotal:/ { print $2 }' /proc/meminfo)
-PROFILE_16GIB=false
-if [ "$memory" -lt "$SMALL_MEMORY_KIB" ]; then PROFILE_16GIB=true; fi
 if skipped size; then
 	warn "the size check is skipped"
 else
-	[ "$memory" -ge "$SMALL_16GIB_MEMORY_KIB" ] ||
-		die "this host has $((memory / 1048576)) GiB of memory; the smallest profile needs a host of 16 GiB"
-	[ "$PROFILE_16GIB" = false ] ||
-		warn "this host has less than 32 GiB of memory: the install adds the small-16gib profile, and each upgrade stops reviews and conversations for a while"
+	[ "$memory" -ge "$SMALL_MEMORY_KIB" ] ||
+		die "this host has $((memory / 1048576)) GiB of memory; the small profile needs a host of 16 GiB"
 	[ "$(nproc)" -ge "$MIN_CPUS" ] || die "this host has $(nproc) CPUs; the small profile needs 4"
 	free=$(df -Pk /var | awk 'NR == 2 { print $4 }')
 	[ "$free" -ge 104857600 ] || warn "/var has $((free / 1048576)) GiB free; the small profile counts on 100 GiB for volumes, images and caches"
@@ -638,7 +633,6 @@ mv "$TEMP/chart/hephaestus" "$HERE/chart-$VERSION/hephaestus"
 say "Installing the release"
 profiles="$HERE/chart-$VERSION/hephaestus/profiles"
 set -- -f "$profiles/small.yaml"
-if [ "$PROFILE_16GIB" = true ]; then set -- "$@" -f "$profiles/small-16gib.yaml"; fi
 # The guard permits only a first install or the same immutable release. Rollback cannot start an older release.
 helm upgrade --install hephaestus "$HERE/chart-$VERSION/hephaestus" -n "$NAMESPACE" \
 	"$@" -f "$HERE/k3s-values.yaml" -f "$HERE/site.yaml" \

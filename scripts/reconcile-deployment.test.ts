@@ -279,10 +279,10 @@ await test("a chart host installs the release tree's chart with its profiles, th
 		profiles: ["small"],
 		helm: "helm",
 	});
-	const settings = chartSettings({ HEPHAESTUS_CHART_PROFILE: "small small-16gib" });
-	assert.deepEqual(settings.profiles, ["small", "small-16gib"]);
+	const settings = chartSettings({ HEPHAESTUS_CHART_PROFILE: "small site-overlay" });
+	assert.deepEqual(settings.profiles, ["small", "site-overlay"]);
 	assert.deepEqual(
-		chartSettings({ HEPHAESTUS_CHART_PROFILE: "small,small-16gib" }).profiles,
+		chartSettings({ HEPHAESTUS_CHART_PROFILE: "small,site-overlay" }).profiles,
 		settings.profiles,
 	);
 	assert.throws(() => chartSettings({ HEPHAESTUS_CHART_PROFILE: "small ../dev" }), /PROFILE/u);
@@ -293,12 +293,14 @@ await test("a chart host installs the release tree's chart with its profiles, th
 		const profiles = path.join(tree, "deploy/chart/hephaestus/profiles");
 		await mkdir(profiles, { recursive: true });
 		await writeFile(path.join(profiles, "small.yaml"), "{}\n");
-		await assert.rejects(profileFiles(settings, tree), /no chart profile small-16gib/u);
-		await writeFile(path.join(profiles, "small-16gib.yaml"), "{}\n");
+		await assert.rejects(profileFiles(settings, tree), /no chart profile site-overlay/u);
+		// A path the filesystem refuses outright is not a missing profile, on every platform.
+		await assert.rejects(profileFiles(settings, `${tree}\0`), { code: "ERR_INVALID_ARG_VALUE" });
+		await writeFile(path.join(profiles, "site-overlay.yaml"), "{}\n");
 		const files = await profileFiles(settings, tree);
 		assert.deepEqual(files, [
 			path.join(profiles, "small.yaml"),
-			path.join(profiles, "small-16gib.yaml"),
+			path.join(profiles, "site-overlay.yaml"),
 		]);
 		const argv = helmArguments(
 			settings,
@@ -315,7 +317,7 @@ await test("a chart host installs the release tree's chart with its profiles, th
 		// values, and last the lock's images, so that no site value runs an image the lock omits.
 		assert.deepEqual(values, [
 			path.join(profiles, "small.yaml"),
-			path.join(profiles, "small-16gib.yaml"),
+			path.join(profiles, "site-overlay.yaml"),
 			"/etc/hephaestus/chart.yaml",
 			"/var/lib/hephaestus/chart/abc.images.yaml",
 		]);
@@ -1188,6 +1190,39 @@ process.exit(args[0] === "upgrade" && process.env.FAIL_HELM === "1" ? 1 : 0);
 		},
 	};
 }
+
+await test(
+	"an unknown chart profile gives the operator a corrective action before Helm runs",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-unknown-profile-"));
+		try {
+			const fixture = await reconcilerFixture(directory, "v1.0.1");
+			const appliedFile = path.join(directory, "applied.json");
+			const before = JSON.stringify({ ...fixture.record, release: "v1.0.0" });
+			await writeFile(appliedFile, before);
+			const { helm, log } = await fakeHelm(directory);
+			const result = fixture.run({
+				cli: true,
+				environment: {
+					HEPHAESTUS_HELM: helm,
+					HEPHAESTUS_CHART_PROFILE: "small small-16gib",
+				},
+			});
+
+			assert.equal(result.status, 1, result.stderr);
+			assert.match(result.stderr, /the release has no chart profile small-16gib/u);
+			assert.match(result.stderr, /Remove or replace it in HEPHAESTUS_CHART_PROFILE/u);
+			assert.doesNotMatch(result.stderr, /^\s+at /mu);
+			assert.deepEqual(await log(), []);
+			assert.equal(await readFile(appliedFile, "utf8"), before);
+			assert.equal(await readlink(path.join(directory, "tooling")), fixture.bootstrap);
+			assert.match(await readFile(fixture.metricsFile, "utf8"), /reconcile_success[^\n]* 0/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
 
 await test(
 	"a commit channel applies its verified image pins with one Helm upgrade",

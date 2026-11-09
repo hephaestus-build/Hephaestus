@@ -343,22 +343,17 @@ function assertReferencesResolve(
 }
 
 /** The three profiles, and the small one with an operator's external PostgreSQL and NATS. */
-const profiles = ["dev", "preview", "small", "small-16gib", "external"] as const;
+const profiles = ["dev", "preview", "small", "external"] as const;
 const maxFileBytes = {
 	dev: 4_294_967_296,
 	preview: 2_147_483_648,
 	small: 8_589_934_592,
-	"small-16gib": 8_589_934_592,
 	external: 8_589_934_592,
 };
 const layersFor = (name: (typeof profiles)[number]) => {
 	switch (name) {
 		case "external": {
 			return [profile("small"), prepared, operator, reviews, external];
-		}
-		// The 16 GiB profile goes on top of the single-node one.
-		case "small-16gib": {
-			return [profile("small"), profile("small-16gib"), prepared, operator, reviews];
 		}
 		case "small": {
 			return [profile("small"), prepared, operator, reviews];
@@ -370,8 +365,7 @@ const layersFor = (name: (typeof profiles)[number]) => {
 	}
 };
 const bundled = (name: (typeof profiles)[number]) => name !== "external";
-const runsReviews = (name: (typeof profiles)[number]) =>
-	name === "small" || name === "small-16gib" || name === "external";
+const runsReviews = (name: (typeof profiles)[number]) => name === "small" || name === "external";
 /** A profile as an operator installs it with reviews: CI turns on the worker of the dev profile this way. */
 const withWorker = (name: (typeof profiles)[number]) =>
 	runsReviews(name) ? layersFor(name) : [...layersFor(name), workerLayer];
@@ -616,24 +610,21 @@ await test("a release package refuses a later quoted images key, which Helm woul
 	);
 });
 
-for (const name of ["small", "small-16gib"] as const) {
-	await test(`${name}: a Recreate worker stops and starts within the upgrade's Helm timeout`, () => {
-		const worker = workload(rendered([...layersFor(name), workerLayer]), "worker");
-		assert.equal(get(worker, "spec", "strategy", "type"), "Recreate");
-		// Past the timeout, Helm rolls the release back, also after its migration ran.
-		const installer = readFileSync(
-			new URL("../deploy/platform/k3s-install.sh", import.meta.url),
-			"utf8",
-		);
-		const timeout = /--wait-for-jobs --timeout (?<minutes>\d+)m\b/u.exec(installer)?.groups
-			?.minutes;
-		const stop = Number(get(podSpec(worker), "terminationGracePeriodSeconds"));
-		const probe = get(container(worker), "startupProbe");
-		const start = Number(get(probe, "periodSeconds")) * Number(get(probe, "failureThreshold"));
-		assert.ok(stop + start <= Number(timeout) * 60, `${stop} s to stop, ${start} s to start`);
-		assert.ok(Number(get(worker, "spec", "progressDeadlineSeconds")) >= stop + start);
-	});
-}
+await test("small: a Recreate worker stops and starts within the upgrade's Helm timeout", () => {
+	const worker = workload(rendered([...layersFor("small"), workerLayer]), "worker");
+	assert.equal(get(worker, "spec", "strategy", "type"), "Recreate");
+	// Past the timeout, Helm rolls the release back, also after its migration ran.
+	const installer = readFileSync(
+		new URL("../deploy/platform/k3s-install.sh", import.meta.url),
+		"utf8",
+	);
+	const timeout = /--wait-for-jobs --timeout (?<minutes>\d+)m\b/u.exec(installer)?.groups?.minutes;
+	const stop = Number(get(podSpec(worker), "terminationGracePeriodSeconds"));
+	const probe = get(container(worker), "startupProbe");
+	const start = Number(get(probe, "periodSeconds")) * Number(get(probe, "failureThreshold"));
+	assert.ok(stop + start <= Number(timeout) * 60, `${stop} s to stop, ${start} s to start`);
+	assert.ok(Number(get(worker, "spec", "progressDeadlineSeconds")) >= stop + start);
+});
 
 const alertRules = readFileSync(path.join(chart, "files", "hephaestus-alerts.yml"), "utf8");
 const alertRulesOn = {
@@ -1176,7 +1167,7 @@ const grants = (role: unknown) =>
 		})
 		.toSorted(byCodePoint);
 
-for (const name of ["small", "small-16gib", "external"] as const) {
+for (const name of ["small", "external"] as const) {
 	await test(`${name}: stream bounds and thirty-day durable expiry reach their runtime roles`, () => {
 		const resources = rendered(layersFor(name));
 		const receiver = workload(resources, "webhook");
@@ -2669,16 +2660,13 @@ await test("workers use the profile strategy, and the webhook keeps reception du
 		type: "RollingUpdate",
 		rollingUpdate: { maxSurge: "100%", maxUnavailable: 0 },
 	});
-	// Both single-node profiles drain before the replacement so the declared budget holds.
+	// The single-node profile drains before the replacement so the declared budget holds.
 	assert.deepEqual(strategy("small", "worker"), { type: "Recreate" });
-	assert.deepEqual(strategy("small-16gib", "worker"), { type: "Recreate" });
 	// Push events are not redeliverable: the new receiver starts before the old one stops.
-	for (const name of ["small", "small-16gib"] as const) {
-		assert.deepEqual(strategy(name, "webhook"), {
-			type: "RollingUpdate",
-			rollingUpdate: { maxUnavailable: 0, maxSurge: 1 },
-		});
-	}
+	assert.deepEqual(strategy("small", "webhook"), {
+		type: "RollingUpdate",
+		rollingUpdate: { maxUnavailable: 0, maxSurge: 1 },
+	});
 });
 
 interface Budget {
@@ -2709,12 +2697,12 @@ const sum = (...parts: Budget[]): Budget => {
 	return budget;
 };
 
-await test("the 16 GiB profile runs its reviews and Heph turns, and an upgrade, within one node of 16 GiB", () => {
+await test("the small profile on 16 GiB runs its reviews and Heph turns, and an upgrade, within one node of 16 GiB", () => {
 	// The recorded Node capacity, less the current kubelet reservations and hard eviction floor.
 	const node = nodeRoom(16_372_036 * 1024);
 	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
 	const resources = rendered([
-		...layersFor("small-16gib"),
+		...layersFor("small"),
 		{
 			postgresql: {
 				backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
@@ -3046,7 +3034,7 @@ await test("the JVM roles request the memory that they may use", () => {
 });
 
 await test("PostgreSQL containers reserve their full memory limits in bundled profiles", () => {
-	for (const name of ["small", "small-16gib", "preview", "dev"] as const) {
+	for (const name of ["small", "preview", "dev"] as const) {
 		const backup = {
 			enabled: true,
 			clientTlsSecret: "backup-tls",
@@ -3095,19 +3083,17 @@ await test("PostgreSQL has a lower kubelet OOM adjustment than review and conver
 	const nodeBytes = 16 * 2 ** 30;
 	const adjustment = (requestBytes: number) =>
 		Math.min(999, Math.max(2, 1000 - Math.floor((1000 * requestBytes) / nodeBytes)));
-	for (const name of ["small", "small-16gib"] as const) {
-		const resources = rendered(layersFor(name));
-		const postgres = workload(resources, "postgresql");
-		const limits = get(container(postgres), "resources", "limits");
-		const requests = get(container(postgres), "resources", "requests");
-		assert.ok(amount(get(requests, "cpu")) < amount(get(limits, "cpu")), "CPU remains burstable");
-		const score = adjustment(amount(get(requests, "memory")));
-		for (const sandbox of [sandboxPods.review, sandboxPods.hephHost, sandboxPods.turn]) {
-			assert.ok(
-				score < adjustment(sandbox.gib * 2 ** 30),
-				`${name}: database precedes sandbox in OOM protection`,
-			);
-		}
+	const resources = rendered(layersFor("small"));
+	const postgres = workload(resources, "postgresql");
+	const limits = get(container(postgres), "resources", "limits");
+	const requests = get(container(postgres), "resources", "requests");
+	assert.ok(amount(get(requests, "cpu")) < amount(get(limits, "cpu")), "CPU remains burstable");
+	const score = adjustment(amount(get(requests, "memory")));
+	for (const sandbox of [sandboxPods.review, sandboxPods.hephHost, sandboxPods.turn]) {
+		assert.ok(
+			score < adjustment(sandbox.gib * 2 ** 30),
+			"database precedes sandbox in OOM protection",
+		);
 	}
 });
 

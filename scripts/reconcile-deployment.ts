@@ -33,10 +33,8 @@ const UNIT_FILES = ["hephaestus-reconcile.service", "hephaestus-reconcile.timer"
 const SYSTEMD_UNITS = "/etc/systemd/system";
 
 /**
- * A condition an operator resolves rather than a defect to diagnose — a host waiting for its first
- * promotion is the one that reaches production. The entry point prints the message and exits
- * non-zero; a stack trace would say a failure happened here, when what happened is that nothing has
- * been promoted yet.
+ * A condition an operator resolves, such as a missing promotion or a removed chart profile.
+ * The entry point prints the corrective action and exits non-zero without a defect's stack trace.
  */
 export class OperatorActionRequiredError extends Error {
 	constructor(message: string) {
@@ -443,9 +441,13 @@ export async function profileFiles(
 	for (const [index, file] of files.entries()) {
 		try {
 			await stat(file);
-		} catch {
-			throw new Error(
-				`the release has no chart profile ${settings.profiles[index] ?? ""} (${file})`,
+		} catch (error) {
+			// Only an absent file is the operator's profile choice; any other error is the host's.
+			if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+				throw error;
+			}
+			throw new OperatorActionRequiredError(
+				`the release has no chart profile ${settings.profiles[index] ?? ""}. Remove or replace it in HEPHAESTUS_CHART_PROFILE before retrying reconciliation (${file}).`,
 			);
 		}
 	}
