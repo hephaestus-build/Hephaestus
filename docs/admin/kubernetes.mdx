@@ -1034,6 +1034,9 @@ The installer stops before it changes the host when one of these checks fails. E
 | Swap | No swap device or file is active. The kubelet also refuses swap. |
 | Ports | No other program listens on port 80 or 443. The installer checks this before k3s runs. |
 | Host firewall | If `ufw` is active, it allows `80/tcp` and `443/tcp` by a port rule or by the `Nginx`, `Apache`, or `WWW` profile. If `firewalld` is active, the zone of the default route allows `http` and `https`, or ports 80 and 443. Otherwise the installer stops and gives the command to run. |
+| k3s release | The running k3s is not newer than the pin. k3s supports no downgrade. |
+| Node name | If k3s is installed, it runs with exactly one node, and the run keeps the node name. A new name registers a second node, and the local volumes stay with the old one. A stopped k3s stops the run, because the installer cannot read its node. |
+| Environment | `INSTALL_K3S_EXEC`, `K3S_NODE_NAME` and `K3S_CONFIG_FILE` are not set. The k3s install script writes them into the k3s service, where they override the platform files. |
 | DNS | The host name resolves to this host. Before k3s runs, the installer serves a random token on port 80 for a moment, and it fetches the token through the host name. |
 
 The DNS check proves only that the host name leads to this host.
@@ -1135,6 +1138,7 @@ On a repeat run, select certificates explicitly:
 
 - For standard apex certificates, pass `--standard-certificates`. Omit `--staging` to use the production issuer.
 - For standard workspace certificates, repeat `--workspace-subdomains --dns01-issuer NAME`.
+  `NAME` is a ClusterIssuer that you own and install first, with your DNS provider and its credential. [Workspace subdomains](./workspace-subdomains#helm-chart-and-k3s) describes it.
 - For custom certificates, including workspace hosts, pass the intended manifest with `--certificates FILE`.
   Keep its issuer and every required apex and wildcard name.
 
@@ -1194,6 +1198,58 @@ After applying an updated server certificate, restart PostgreSQL as [TLS certifi
    The installer waits until k3s has applied the file and the new controller is ready.
    Automatic rollback in that installer can return only to the same release.
    Do not run it while recovering a failed migration.
+
+### Install only the platform
+
+`k3s-install.sh --platform-only` installs the pinned k3s and the platform files, and no release.
+Use it on a host where another tool applies the chart, for example [pull-based deployment](./pull-based-deployment#follow-a-channel-with-the-chart).
+It does not read or change the release Secret, `site.yaml`, or the Helm release.
+It does the host checks of [What the installer checks](#what-the-installer-checks).
+It creates the namespaces `hephaestus` and `hephaestus-sandboxes` with the `restricted` Pod security level, as a full install does.
+It waits until the agent-sandbox controller is ready and cert-manager has issued the certificates.
+
+`k3s-install.sh --check-platform` changes nothing.
+It compares each installed platform file byte for byte with its source, and the installed k3s with the pin.
+It names each file that differs or is missing, and each flag of the k3s service, because a flag overrides `config.yaml`.
+It stops with an error when one item differs, and when it cannot read the `ExecStart` of the k3s service.
+It renders the certificates file with your options, as the installer does.
+Other files, such as your own manifests in the k3s manifests directory, are yours, and the check does not read them.
+
+The source of the platform files is the directory that holds `k3s-install.sh`.
+The installer puts these files on the host as root, so run it only from a verified source that no other user can write.
+Use the source of the channel that the host follows:
+
+- A release channel: the verified bundle of the release, as [Get the release files](#1-get-the-release-files) describes.
+- The commit channel: the `deploy/platform` directory of the commit that the host applies, in `/var/lib/hephaestus/releases/<commit>/`.
+
+1. Pause deployment automation, as [Operating it](./pull-based-deployment#operating-it) describes.
+2. Compare the host with the source. Use the options that the host needs, and select the certificates explicitly:
+
+   ```bash
+   sh k3s-install.sh --check-platform --host hephaestus.example.com --email ops@example.com --standard-certificates
+   ```
+
+3. If the check names a difference, install the platform with the same options:
+
+   ```bash
+   sh k3s-install.sh --platform-only --host hephaestus.example.com --email ops@example.com --standard-certificates
+   ```
+
+4. Run the check again. It must report that every platform file and the k3s release match.
+5. Run `sh k3s-install.sh --verify-kubelet` to check the effective kubelet policy.
+6. Resume deployment automation.
+
+A host that the installer did not set up converges with the same steps.
+Before step 3, examine these points:
+
+- Flags of the k3s service override `/etc/rancher/k3s/config.yaml`.
+  To remove them, run the pinned k3s install script again with an empty `INSTALL_K3S_EXEC`.
+  The installer stops when the effective kubelet policy differs from `k3s-kubelet.yaml`.
+- k3s takes over a `HelmChart` with the name `kube-system/traefik` or `kube-system/cert-manager`.
+  The Helm controller then upgrades that release with the shipped values.
+  On one host, the Traefik restart drops connections for some seconds.
+- cert-manager issues the certificates of the installed certificates file into Secrets with the same names.
+  A new PostgreSQL CA or server certificate needs the restarts that [TLS certificates](./secret-custody#tls-certificates) describes.
 
 ### Known limits of the one-host platform
 

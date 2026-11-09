@@ -10,6 +10,9 @@
 # verifies the release chart and installs it. A second run with the same release changes nothing
 # that the first one made: it generates only the keys that the Secret lacks and keeps site.yaml.
 # It never prints a secret value. Release changes use the stopped schema-upgrade procedure.
+#
+# --platform-only installs the k3s pin and the platform files of this folder alone, for a host whose
+# chart another tool applies. --check-platform compares the installed platform files with this folder.
 set -eu
 
 RELEASE_REPOSITORY=hephaestus-build/Hephaestus
@@ -17,6 +20,10 @@ CHART_REPOSITORY=ghcr.io/hephaestus-build/charts/hephaestus
 SIGNER="https://github.com/$RELEASE_REPOSITORY/.github/workflows/release.yml@refs/heads/main"
 ISSUER=https://token.actions.githubusercontent.com
 MANIFESTS=/var/lib/rancher/k3s/server/manifests
+# The containerd configuration template of k3s, with the gVisor runtime.
+CONTAINERD_TEMPLATE=/var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl
+# k3s reads each *.yaml and *.yml file of this directory after config.yaml.
+DROP_INS=/etc/rancher/k3s/config.yaml.d
 NAMESPACE=hephaestus
 SANDBOXES=hephaestus-sandboxes
 SECRET=hephaestus-app
@@ -36,6 +43,7 @@ die() {
 usage() {
 	cat >&2 <<'EOF'
 usage: sh k3s-install.sh --version X.Y.Z --host NAME --email ADDRESS [options]
+       sh k3s-install.sh --platform-only | --check-platform --host NAME --email ADDRESS [options]
 
   --version X.Y.Z            the release of these files, without the leading "v"
   --host NAME                the public host name, which resolves to this host
@@ -52,6 +60,8 @@ usage: sh k3s-install.sh --version X.Y.Z --host NAME --email ADDRESS [options]
   --render-certificates      print the certificates file that this run would install, and stop
   --render-site              print the site.yaml that this run would write, and stop
   --verify-kubelet           check the running kubelet policy and allocatable, and stop
+  --platform-only            install only k3s and the platform files of this folder: no release
+  --check-platform           compare the installed platform files with this folder, and stop
   --allow-unqualified-host   explicitly permit a host outside the Ubuntu 24.04/kernel 6.8 baseline
 
 The environment variable GITHUB_OAUTH_CLIENT_SECRET, when set, goes into the release Secret.
@@ -84,6 +94,8 @@ SKIPPED=
 RENDER=false
 RENDER_SITE=false
 VERIFY=false
+PLATFORM_ONLY=false
+CHECK=false
 ALLOW_UNQUALIFIED_HOST=false
 while [ $# -gt 0 ]; do
 	case $1 in
@@ -121,6 +133,14 @@ while [ $# -gt 0 ]; do
 		VERIFY=true
 		shift
 		;;
+	--platform-only)
+		PLATFORM_ONLY=true
+		shift
+		;;
+	--check-platform)
+		CHECK=true
+		shift
+		;;
 	--allow-unqualified-host)
 		ALLOW_UNQUALIFIED_HOST=true
 		shift
@@ -137,6 +157,9 @@ while [ $# -gt 0 ]; do
 	esac
 done
 skipped() { case " $SKIPPED " in *" $1 "*) return 0 ;; *) return 1 ;; esac }
+# Only a full install handles a release: its Secret, its site.yaml and its chart.
+RELEASE=true
+if [ "$PLATFORM_ONLY" = true ] || [ "$CHECK" = true ]; then RELEASE=false; fi
 
 # On a terminal, ask for what a first install lacks. A run without a terminal, such as a script or
 # the release smoke, gets no question and stops below with the flag that it lacks.
@@ -144,7 +167,7 @@ ask() {
 	printf '%s' "$1" >&2
 	IFS= read -r answer || die "no answer: give the value as a flag instead"
 }
-if [ -t 0 ] && [ -t 2 ] && [ "$VERIFY" = false ] && [ "$RENDER" = false ]; then
+if [ -t 0 ] && [ -t 2 ] && [ "$VERIFY" = false ] && [ "$RENDER" = false ] && [ "$RELEASE" = true ]; then
 	[ -n "$VERSION" ] || { ask "Release of these files, without the leading v (for example 1.0.0): " && VERSION=$answer; }
 	[ -n "$HOST" ] || { ask "Host name of this instance (its DNS A record points to this host): " && HOST=$answer; }
 	[ -n "$EMAIL" ] || [ -n "$CERTIFICATES" ] || { ask "E-mail address for the expiry notices of Let's Encrypt: " && EMAIL=$answer; }
@@ -187,7 +210,13 @@ fi
 
 if [ "$VERIFY" = false ]; then
 	LABEL='[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?'
-	matches "$VERSION" '(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?' || die "--version takes a release such as 0.95.0 or 1.0.0-rc.1"
+	if [ "$RELEASE" = true ]; then
+		matches "$VERSION" '(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?' || die "--version takes a release such as 0.95.0 or 1.0.0-rc.1"
+	else
+		[ "$PLATFORM_ONLY" = false ] || [ "$CHECK" = false ] || die "--platform-only and --check-platform exclude each other"
+		[ -z "$VERSION$LOCK$GITHUB_CLIENT_ID$BOOTSTRAP_ADMINS" ] ||
+			die "--platform-only and --check-platform handle no release: drop --version, --lock, --github-client-id and --bootstrap-admins"
+	fi
 	matches "$HOST" "($LABEL\\.)+[a-z]$LABEL" || die "--host takes a lowercase DNS name, such as hephaestus.example.com"
 	if [ -z "$CERTIFICATES" ]; then
 		matches "$EMAIL" "[A-Za-z0-9._%+-]+@($LABEL\\.)+[a-z]$LABEL" || die "--email takes an address, such as ops@example.com"
@@ -214,9 +243,18 @@ for file in hephaestus-keys.sh k3s-wait-condition.sh k3s-platform.yaml k3s-agent
 done
 # Existing values can enable wildcard routing. Require an explicit certificate choice on reruns
 # instead of parsing YAML in shell or replacing that certificate with an implicit apex-only one.
-if [ "$VERIFY" = false ] && [ "$RENDER" = false ] && [ "$RENDER_SITE" = false ] && [ -f "$HERE/site.yaml" ] && [ "$STANDARD_CERTIFICATES" = false ] && [ "$WORKSPACE_SUBDOMAINS" = false ] && [ -z "$CERTIFICATES" ]; then
-	die "site.yaml exists: choose --standard-certificates, --workspace-subdomains --dns01-issuer NAME, or --certificates FILE"
+# --platform-only replaces the installed certificates of a host that it did not set up, so it
+# always requires the choice.
+if [ "$VERIFY" = false ] && [ "$RENDER" = false ] && [ "$RENDER_SITE" = false ] && [ "$CHECK" = false ] && [ "$STANDARD_CERTIFICATES" = false ] && [ "$WORKSPACE_SUBDOMAINS" = false ] && [ -z "$CERTIFICATES" ]; then
+	[ ! -f "$HERE/site.yaml" ] || die "site.yaml exists: choose --standard-certificates, --workspace-subdomains --dns01-issuer NAME, or --certificates FILE"
+	[ "$PLATFORM_ONLY" = false ] || die "--platform-only replaces the installed certificates: choose --standard-certificates, --workspace-subdomains --dns01-issuer NAME, or --certificates FILE"
 fi
+# shellcheck disable=SC2046 # The pin line splits into its words on purpose.
+set -- $(grep '^# pin: k3s ' "$HERE/k3s-platform.yaml")
+K3S_VERSION=${4:-}
+K3S_INSTALL_SHA256=${5:-}
+matches "$K3S_VERSION" 'v[0-9]+\.[0-9]+\.[0-9]+\+k3s[0-9]+' || die "k3s-platform.yaml has no k3s pin"
+matches "$K3S_INSTALL_SHA256" '[a-f0-9]{64}' || die "k3s-platform.yaml has no SHA-256 for the k3s installer"
 # An instance without a login provider starts, but nobody can sign in to it. So a first install needs
 # the GitHub OAuth app, and a kept site.yaml must name a GitHub login provider or an enabled GitLab one.
 # Slack and Outline only link accounts. Helm reads site.yaml for the install, so Helm also reads it
@@ -241,7 +279,7 @@ TEMPLATE
 	rm -rf "$probe"
 	case $provider in *"loginProvider: found"*) return 0 ;; *) return 1 ;; esac
 }
-if [ "$VERIFY" = false ] && [ "$RENDER" = false ]; then
+if [ "$VERIFY" = false ] && [ "$RENDER" = false ] && [ "$RELEASE" = true ]; then
 	if [ -f "$HERE/site.yaml" ] && [ "$RENDER_SITE" = false ]; then
 		login_provider "$HERE/site.yaml" ||
 			die "site.yaml names no login provider, so nobody could sign in: set config.github.oauthClientId, or enable GitLab with config.gitlab.oauthClientId, in site.yaml (admin docs, First steps § 1), and run this again"
@@ -308,6 +346,69 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
+
+# Every platform file: its source, its installed path and its mode. $1 handles each file.
+platform_files() {
+	render_certificates >"$TEMP/certificates.yaml"
+	"$1" "$HERE/k3s-logind.conf" /etc/systemd/logind.conf.d/zz-hephaestus.conf 0644
+	"$1" "$HERE/k3s-journald.conf" /etc/systemd/journald.conf.d/zz-hephaestus.conf 0644
+	"$1" "$HERE/k3s-config.yaml" /etc/rancher/k3s/config.yaml 0600
+	"$1" "$HERE/k3s-kubelet.yaml" /etc/rancher/k3s/kubelet.yaml 0600
+	"$1" "$HERE/k3s-containerd.toml.tmpl" "$CONTAINERD_TEMPLATE" 0644
+	"$1" "$HERE/k3s-runtimeclass.yaml" "$MANIFESTS/k3s-runtimeclass.yaml" 0600
+	"$1" "$HERE/k3s-platform.yaml" "$MANIFESTS/k3s-platform.yaml" 0600
+	"$1" "$HERE/k3s-agent-sandbox.yaml" "$MANIFESTS/k3s-agent-sandbox.yaml" 0600
+	"$1" "$TEMP/certificates.yaml" "$MANIFESTS/hephaestus-certificates.yaml" 0600
+}
+
+if [ "$CHECK" = true ]; then
+	for tool in cmp sudo; do
+		command -v "$tool" >/dev/null 2>&1 || die "$tool is not on PATH: install it first"
+	done
+	sudo -v || die "this check needs sudo rights to read the root-only platform files"
+	say "Comparing the installed platform with $HERE"
+	DIFFERENCES=0
+	# shellcheck disable=SC2329 # platform_files calls it.
+	compare() {
+		if ! sudo test -f "$2"; then
+			warn "$2 is missing: --platform-only installs it"
+		elif ! sudo cmp -s "$1" "$2"; then
+			warn "$2 differs from its source: --platform-only replaces it"
+		else
+			return 0
+		fi
+		DIFFERENCES=$((DIFFERENCES + 1))
+	}
+	platform_files compare
+	installed=$(k3s --version 2>/dev/null | head -n 1 || true)
+	case $installed in
+	*" $K3S_VERSION "*) ;;
+	*)
+		warn "k3s is not the pinned $K3S_VERSION: ${installed:-no k3s}. --platform-only installs the pin"
+		DIFFERENCES=$((DIFFERENCES + 1))
+		;;
+	esac
+	# Flags of the k3s service override config.yaml. Name only the flags: a value can be a token.
+	# A service that systemctl cannot show, or an ExecStart of another shape, stops the check.
+	exec_start=$(systemctl show --property=ExecStart --value k3s) ||
+		die "systemctl cannot show the k3s service, so this check cannot read its flags"
+	arguments=$(printf '%s\n' "$exec_start" | sed -n 's/^{ path=[^ ;]* ; argv\[\]=[^ ;]* \{0,1\}\([^;]*\); .*}$/argv:\1/p')
+	if [ -z "$exec_start" ]; then
+		warn "the k3s service has no ExecStart: --platform-only installs k3s"
+		DIFFERENCES=$((DIFFERENCES + 1))
+	elif [ "$(printf '%s\n' "$arguments" | grep -c '^argv:')" != 1 ] || [ "$(printf '%s\n' "$exec_start" | wc -l)" -ne 1 ]; then
+		die "the k3s service has an ExecStart that this check cannot read: systemctl cat k3s shows it"
+	fi
+	arguments=$(printf '%s\n' "${arguments#argv:}" | sed 's/ *$//')
+	if [ -n "$exec_start" ] && [ "$arguments" != server ]; then
+		flags=$(printf '%s\n' "$arguments" | tr ' ' '\n' | sed -n 's/^\(--[A-Za-z0-9-]*\).*/\1/p' | tr '\n' ' ')
+		warn "the k3s service starts with the flags ${flags:-that are not --flags}, which override config.yaml: run the pinned k3s install script again with an empty INSTALL_K3S_EXEC"
+		DIFFERENCES=$((DIFFERENCES + 1))
+	fi
+	[ "$DIFFERENCES" = 0 ] || die "the installed platform differs from $HERE, as the warnings above say"
+	say "Every platform file and the k3s release match $HERE"
+	exit 0
+fi
 
 # Ubuntu 24.04 with its GA kernel is the declared baseline. Other families require an
 # explicit rehearsal override; this gate does not substitute for the loaded host acceptance.
@@ -386,19 +487,25 @@ if [ "$VERIFY" = true ]; then
 	verify_kubelet
 	exit 0
 fi
-for tool in curl jq openssl cosign helm sha256sum sha512sum bzip2 getent ss sudo; do
+# Helm parses the kubelet policy; only the release install needs Cosign and Helm 4.
+tools="curl jq openssl helm sha256sum sha512sum bzip2 getent ss sudo"
+[ "$RELEASE" = false ] || tools="$tools cosign"
+for tool in $tools; do
 	command -v "$tool" >/dev/null 2>&1 || die "$tool is not on PATH: install it first"
 done
-case $(helm version --template '{{.Version}}' 2>/dev/null) in
-v4.*) ;;
-*) die "Helm 4 is required for --rollback-on-failure and --wait=watcher; this is $(helm version --short 2>/dev/null)" ;;
-esac
+if [ "$RELEASE" = true ]; then
+	case $(helm version --template '{{.Version}}' 2>/dev/null) in
+	v4.*) ;;
+	*) die "Helm 4 is required for --rollback-on-failure and --wait=watcher; this is $(helm version --short 2>/dev/null)" ;;
+	esac
+fi
 # Ask for the sudo password now, in the foreground: a later sudo runs beside the port 80 check.
 sudo -v || die "this script needs sudo rights"
 
 # An immutable release can be reapplied, but a different release can run one-way migrations.
 # Stop, restore-point verification and migration are separate operator phases, not a rollout.
-if command -v k3s >/dev/null 2>&1 || [ -f "$HERE/kubeconfig" ] || sudo test -f /etc/rancher/k3s/k3s.yaml; then
+# --platform-only leaves the release alone, so it needs no such guard.
+if [ "$RELEASE" = true ] && { command -v k3s >/dev/null 2>&1 || [ -f "$HERE/kubeconfig" ] || sudo test -f /etc/rancher/k3s/k3s.yaml; }; then
 	releases=$(sudo "$(command -v helm)" --kubeconfig /etc/rancher/k3s/k3s.yaml \
 		list --namespace "$NAMESPACE" --filter '^hephaestus$' --output json) ||
 		die "cannot read the installed release; restore cluster access before retrying; do not run an older release against a changed database"
@@ -411,6 +518,42 @@ fi
 
 K3S_INSTALLED=false
 if command -v k3s >/dev/null 2>&1 && systemctl is-active --quiet k3s; then K3S_INSTALLED=true; fi
+
+# The node name of k3s after this run: the last node-name of the drop-ins, or else the host name.
+# k3s reads the drop-ins in byte order, so the sort uses the C locale. config.yaml becomes the
+# shipped file, which names no node.
+next_node_name() {
+	next_name=$(sudo find "$DROP_INS" -maxdepth 1 \( -iname '*.yaml' -o -iname '*.yml' \) 2>/dev/null | LC_ALL=C sort | while IFS= read -r drop_in; do
+		sudo sed -En "s/^node-name:[[:space:]]*[\"']?([a-z0-9.-]+)[\"']?[[:space:]]*$/\\1/p" "$drop_in"
+	done | tail -n 1)
+	[ -n "$next_name" ] || next_name=$(hostname | tr '[:upper:]' '[:lower:]')
+	printf '%s\n' "$next_name"
+}
+# A new name registers a second node, and the local volumes stay bound to the old one. A stopped
+# k3s would start again under the new name, so its node must run for this check.
+if [ "$K3S_INSTALLED" = false ] && { command -v k3s >/dev/null 2>&1 || sudo test -f /etc/rancher/k3s/k3s.yaml; }; then
+	die "k3s is installed but does not run, so this run cannot read its node. sudo journalctl -u k3s shows why. Start it with sudo systemctl start k3s, and run this again"
+fi
+# The k3s install script writes these into the k3s service, where they override the platform files.
+for variable in INSTALL_K3S_EXEC K3S_NODE_NAME K3S_CONFIG_FILE; do
+	eval "value=\${$variable:-}"
+	[ -z "$value" ] || die "unset $variable: the platform files configure k3s"
+done
+if [ "$K3S_INSTALLED" = true ]; then
+	# k3s supports no downgrade.
+	running=$(k3s --version | sed -n '1s/^k3s version \([^ ]*\).*/\1/p')
+	[ "$running" = "$K3S_VERSION" ] || [ "$(printf '%s\n%s\n' "$running" "$K3S_VERSION" | sort -V | tail -n 1)" = "$K3S_VERSION" ] ||
+		die "k3s $running runs, which is newer than the pin $K3S_VERSION of $HERE: k3s supports no downgrade. Use the files of a release that pins $running or later"
+	nodes=$(sudo k3s kubectl get nodes -o jsonpath='{.items[*].metadata.name}') ||
+		die "cannot read the node of the running k3s: sudo journalctl -u k3s shows why"
+	# shellcheck disable=SC2086 # The node names split into their words on purpose.
+	set -- $nodes
+	[ "$#" = 1 ] || die "the one-host platform runs exactly one node, and k3s has $#: $nodes"
+	node=$1
+	next=$(next_node_name)
+	[ "$node" = "$next" ] ||
+		die "k3s runs the node $node, and this run would rename it to $next. A new name registers a second node, and the volumes stay with $node. Keep the name: put node-name: $node in $DROP_INS/50-node.yaml"
+fi
 
 say "Checking the host"
 [ "$(awk 'NR > 1 { count++ } END { print count + 0 }' /proc/swaps)" = 0 ] ||
@@ -511,13 +654,6 @@ else
 	fi
 fi
 
-# shellcheck disable=SC2046 # The pin line splits into its words on purpose.
-set -- $(grep '^# pin: k3s ' "$HERE/k3s-platform.yaml")
-K3S_VERSION=${4:-}
-K3S_INSTALL_SHA256=${5:-}
-matches "$K3S_VERSION" 'v[0-9]+\.[0-9]+\.[0-9]+\+k3s[0-9]+' || die "k3s-platform.yaml has no k3s pin"
-matches "$K3S_INSTALL_SHA256" '[a-f0-9]{64}' || die "k3s-platform.yaml has no SHA-256 for the k3s installer"
-
 # gVisor from the pinned release archive, for this host's architecture. A host whose runsc reports
 # the pinned release, beside its required sidecars, keeps it. runsc goes last, so an interrupted
 # install leaves no runsc of the new release.
@@ -552,28 +688,22 @@ install_gvisor() {
 	sudo install -m 0755 "$TEMP/gvisor/runsc" /usr/local/bin/
 }
 
-say "Placing the host and platform files"
-sudo install -D -m 0644 "$HERE/k3s-logind.conf" /etc/systemd/logind.conf.d/zz-hephaestus.conf
-sudo systemctl kill --signal=SIGHUP systemd-logind
-if ! sudo cmp -s "$HERE/k3s-journald.conf" /etc/systemd/journald.conf.d/zz-hephaestus.conf; then
-	sudo install -D -m 0644 "$HERE/k3s-journald.conf" /etc/systemd/journald.conf.d/zz-hephaestus.conf
-	sudo systemctl restart systemd-journald
-fi
-# k3s reads these two files only when it starts.
-K3S_CONFIG_CHANGED=false
-sudo cmp -s "$HERE/k3s-config.yaml" /etc/rancher/k3s/config.yaml || K3S_CONFIG_CHANGED=true
-sudo cmp -s "$HERE/k3s-kubelet.yaml" /etc/rancher/k3s/kubelet.yaml || K3S_CONFIG_CHANGED=true
-sudo install -D -m 0600 "$HERE/k3s-config.yaml" /etc/rancher/k3s/config.yaml
-sudo install -D -m 0600 "$HERE/k3s-kubelet.yaml" /etc/rancher/k3s/kubelet.yaml
+
 install_gvisor
-CONTAINERD_TEMPLATE=/var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl
-sudo cmp -s "$HERE/k3s-containerd.toml.tmpl" "$CONTAINERD_TEMPLATE" || K3S_CONFIG_CHANGED=true
-sudo install -D -m 0644 "$HERE/k3s-containerd.toml.tmpl" "$CONTAINERD_TEMPLATE"
-sudo install -D -m 0600 "$HERE/k3s-runtimeclass.yaml" "$MANIFESTS/k3s-runtimeclass.yaml"
-sudo install -D -m 0600 "$HERE/k3s-platform.yaml" "$MANIFESTS/k3s-platform.yaml"
-sudo install -D -m 0600 "$HERE/k3s-agent-sandbox.yaml" "$MANIFESTS/k3s-agent-sandbox.yaml"
-render_certificates >"$TEMP/certificates.yaml"
-sudo install -D -m 0600 "$TEMP/certificates.yaml" "$MANIFESTS/hephaestus-certificates.yaml"
+say "Placing the host and platform files"
+CHANGED=
+place() {
+	sudo cmp -s "$1" "$2" || CHANGED="$CHANGED $2"
+	sudo install -D -m "$3" "$1" "$2"
+}
+changed() { case "$CHANGED " in *" $1 "*) return 0 ;; *) return 1 ;; esac }
+platform_files place
+# logind reads its drop-ins at each SIGHUP. Send it on each run, so a failed signal is sent again.
+sudo systemctl kill --signal=SIGHUP systemd-logind
+if changed /etc/systemd/journald.conf.d/zz-hephaestus.conf; then sudo systemctl restart systemd-journald; fi
+# k3s reads these files only when it starts. It applies a changed manifest by itself.
+K3S_CONFIG_CHANGED=false
+if changed /etc/rancher/k3s/config.yaml || changed /etc/rancher/k3s/kubelet.yaml || changed "$CONTAINERD_TEMPLATE"; then K3S_CONFIG_CHANGED=true; fi
 
 if [ "$K3S_INSTALLED" = true ] && k3s --version | head -n 1 | grep -qF " $K3S_VERSION "; then
 	if [ "$K3S_CONFIG_CHANGED" = true ]; then
@@ -590,7 +720,9 @@ else
 		die "the k3s installer does not match the pinned SHA-256"
 	INSTALL_K3S_VERSION=$K3S_VERSION sh "$TEMP/install-k3s.sh"
 fi
+# --platform-only keeps nothing in the source folder.
 KUBECONFIG="$HERE/kubeconfig"
+[ "$RELEASE" = true ] || KUBECONFIG="$TEMP/kubeconfig"
 export KUBECONFIG
 sudo install -m 0600 -o "$(id -un)" /etc/rancher/k3s/k3s.yaml "$KUBECONFIG"
 tries=0
@@ -608,14 +740,16 @@ for namespace in "$NAMESPACE" "$SANDBOXES"; do
 	kubectl label namespace "$namespace" pod-security.kubernetes.io/enforce=restricted --overwrite >/dev/null
 done
 
-say "Keeping the release Secret"
-# hephaestus-keys.sh adds only the keys that the Secret lacks, and stops when the PostgreSQL volume
-# exists without its login or an encryption key. It prints key names, never a value.
-keys=$(sh "$HERE/hephaestus-keys.sh" --namespace "$NAMESPACE" --secret "$SECRET") ||
-	die "the release Secret was not kept: see the message above"
-printf '%s\n' "$keys" | sed 's/^/    /'
 oauth_changed=false
-if printf '%s\n' "$keys" | grep -qx 'Changed GITHUB_OAUTH_CLIENT_SECRET'; then oauth_changed=true; fi
+if [ "$RELEASE" = true ]; then
+	say "Keeping the release Secret"
+	# hephaestus-keys.sh adds only the keys that the Secret lacks, and stops when the PostgreSQL volume
+	# exists without its login or an encryption key. It prints key names, never a value.
+	keys=$(sh "$HERE/hephaestus-keys.sh" --namespace "$NAMESPACE" --secret "$SECRET") ||
+		die "the release Secret was not kept: see the message above"
+	printf '%s\n' "$keys" | sed 's/^/    /'
+	if printf '%s\n' "$keys" | grep -qx 'Changed GITHUB_OAUTH_CLIENT_SECRET'; then oauth_changed=true; fi
+fi
 
 say "Waiting for the agent-sandbox controller"
 # k3s records a manifest's SHA-256 on its Addon once it has applied that content, so a rerun with a
@@ -655,6 +789,11 @@ fi
 kubectl -n "$GATEWAY_NAMESPACE" wait --for=create certificate/hephaestus-tls --timeout=10m >/dev/null
 sh "$HERE/k3s-wait-condition.sh" "$GATEWAY_NAMESPACE" certificate/hephaestus-tls Ready 600 ||
 	die "cert-manager issued no certificate for $HOST in 10 minutes: kubectl describe challenges --all-namespaces shows why"
+
+if [ "$RELEASE" = false ]; then
+	say "The platform of $HERE runs. The chart is not installed by this run."
+	exit 0
+fi
 
 if [ -f "$HERE/site.yaml" ]; then
 	say "Keeping site.yaml"

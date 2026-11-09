@@ -166,6 +166,7 @@ If that step stops, the next tick completes it before reading another channel.
 ### Requirements for the chart
 
 1. A cluster and the platform items that [Kubernetes](./kubernetes#supported-clusters) lists.
+   On one k3s host, install and check them with [Install only the platform](./kubernetes#install-only-the-platform).
 2. The namespaces, the Secrets and the values that [Kubernetes § Install](./kubernetes#install) describes.
 3. `kubectl` on `PATH`, with access to read Pods and Jobs in the release and sandbox namespaces.
 4. Helm 4.3.1.
