@@ -3,8 +3,8 @@ package de.tum.cit.aet.hephaestus.notification.email;
 import org.jspecify.annotations.Nullable;
 
 /**
- * What became of one {@link EmailMessage}. Every outcome is a value, not an exception: the caller
- * records it and decides whether to retry, and a withheld email is never mistaken for a sent one.
+ * What became of one {@link EmailMessage}. Every outcome is a value, not an exception, and a withheld email is never
+ * mistaken for a sent one.
  *
  * @param outcome the bounded outcome
  * @param messageId the RFC 5322 {@code Message-ID} the relay accepted; only present for {@link Outcome#SENT}
@@ -31,12 +31,9 @@ public record EmailDeliveryResult(Outcome outcome, @Nullable String messageId) {
         /** The relay could not be reached or refused the credentials; a later attempt may succeed. */
         UNAVAILABLE,
         /** Shared relay attempt budget exhausted or unavailable; retry later. */
-        RATE_LIMITED;
-
-        /** Only a transport that may recover is worth another attempt. */
-        public boolean retryable() {
-            return this == UNAVAILABLE || this == RATE_LIMITED;
-        }
+        RATE_LIMITED,
+        /** The relay may have accepted the message, and it did not say. It is never sent again. */
+        UNCONFIRMED
     }
 
     public static EmailDeliveryResult sent(String messageId) {

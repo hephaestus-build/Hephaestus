@@ -82,3 +82,7 @@ export const NarrowResult: Story = {
 export const RateLimited: Story = {
 	args: { result: { outcome: "RATE_LIMITED" } },
 };
+
+export const Unconfirmed: Story = {
+	args: { result: { outcome: "UNCONFIRMED", to: "ops@example.org" } },
+};

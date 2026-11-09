@@ -87,9 +87,12 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             // Server-only so the worker and webhook pods never acquire an outbound dependency on
             // ecb.europa.eu — this fetcher is the only egress the display-currency feature has.
             Map.entry("de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateFetchScheduler", RuntimeRole.SERVER_PROPERTY),
-            // Email leaves the instance from the server role only: the gateway, the listeners that feed it,
+            // Email leaves the instance from the server role only: the adapter, the listeners that feed the outbox,
             // the redelivery sweep and the admin verification surface all boot with it.
-            Map.entry("de.tum.cit.aet.hephaestus.notification.email.EmailGateway", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.email.EmailAdapter", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.notification.email.Emails", RuntimeRole.SERVER_PROPERTY),
+            // The outbox executor runs on every server replica and nowhere else.
+            Map.entry("de.tum.cit.aet.hephaestus.core.action.ActionExecutor", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.notification.email.EmailAdminController", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.notification.AccountDeletionEmailListener", RuntimeRole.SERVER_PROPERTY),

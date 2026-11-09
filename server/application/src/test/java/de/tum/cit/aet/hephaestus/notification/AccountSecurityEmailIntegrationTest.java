@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.notification;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.AccountService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -23,6 +25,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -45,6 +48,12 @@ class AccountSecurityEmailIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private PlatformTransactionManager transactions;
 
+    @Autowired
+    private ActionExecutor executor;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
     @BeforeEach
     void releaseSilentMode() {
         var current = settings.get();
@@ -60,6 +69,7 @@ class AccountSecurityEmailIntegrationTest extends BaseIntegrationTest {
         long id = Objects.requireNonNull(account.getId());
         accounts.adminSetRole(id, "APP_ADMIN", id);
         accounts.adminSetRole(id, "APP_ADMIN", id);
+        ActionTestSupport.drain(executor, jdbc);
         var messages = sender.sent().stream()
                 .filter(m -> recipient(m).equals(account.getPrimaryEmail()))
                 .toList();
@@ -76,6 +86,7 @@ class AccountSecurityEmailIntegrationTest extends BaseIntegrationTest {
             accounts.adminSetRole(id, "APP_ADMIN", id);
             tx.setRollbackOnly();
         });
+        ActionTestSupport.drain(executor, jdbc);
         assertThat(sender.sent()).noneMatch(m -> recipient(m).equals(account.getPrimaryEmail()));
         assertThat(repository.findById(id))
                 .get()
@@ -91,6 +102,7 @@ class AccountSecurityEmailIntegrationTest extends BaseIntegrationTest {
         Account account = account(status);
         long id = Objects.requireNonNull(account.getId());
         accounts.adminSetRole(id, "APP_ADMIN", id);
+        ActionTestSupport.drain(executor, jdbc);
         assertThat(sender.sent()).noneMatch(m -> recipient(m).equals(account.getPrimaryEmail()));
     }
 

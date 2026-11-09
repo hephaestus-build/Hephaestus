@@ -83,6 +83,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("notification.AccountDeletionEmailIntegrationTest", "email-capture"),
             assignment("notification.AccountSecurityEmailIntegrationTest", "email-capture"),
             assignment("notification.email.EmailAdminControllerIntegrationTest", "email-capture"),
+            assignment("notification.NotificationPublicationFairnessIntegrationTest", "registry-fairness"),
             assignment("practices.acrossworkspace.PracticesAcrossWorkspaceIntegrationTest", "review-standing"),
             assignment("practices.feedback.AbstractFeedbackDeliveryIntegrationTest", "review-feedbackdelivery"),
             assignment("agent.adapter.EvidenceDeliveryAuthorizationIntegrationTest", "review-delivery-authorization"),
@@ -144,6 +145,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "email-capture",
                     "shared configured sender identity and captured SMTP boundary for"
                             + " durable delivery and HTTP authorization"),
+            Map.entry(
+                    "registry-fairness",
+                    "real event publication registry and redelivery order with a test listener that fails on demand"),
             Map.entry("github-live", "explicitly selected live GitHub profile and credentials"),
             Map.entry(
                     "product-feedback-github",

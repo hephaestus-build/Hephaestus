@@ -795,30 +795,30 @@ It must include these facts:
 `SENT` means relay acceptance, not inbox delivery.
 SMTP health must not be a liveness or readiness dependency.
 A broken email path cannot reliably report its own failure by email.
-Sustained `unavailable`, `rate_limited`, `rejected`, or `expired` outcomes require investigation.
+Sustained `unavailable`, `rate_limited`, `rejected`, `unconfirmed` or `expired` outcomes require investigation.
 
 1. Use **Instance settings → Email → Send test email** to distinguish missing configuration, silent mode, exhausted capacity, and relay failures.
 2. For application, database, NATS, scheduler, or SMTP outages, page the operator through an **external** monitoring channel.
 3. Monitor the `notification.email.delivery` counter by bounded `kind` and `outcome`.
-4. Inspect the publication backlog without selecting `serialized_event`:
+   Monitor `action.ended` by `kind`, `state` and `reason` for every outbox action, email included.
+4. Inspect the outbox backlog without selecting `payload`:
 
    ```sql
-   SELECT status, count(*) AS publications, min(publication_date) AS oldest_publication
-   FROM event_publication
-   GROUP BY status;
+   SELECT kind, state, count(*) AS actions, min(next_attempt_at) AS oldest_due
+   FROM agent_action
+   WHERE ended_at IS NULL
+   GROUP BY kind, state;
    ```
 
-   Retry batches prioritize publications least recently retried.
-   One failed batch therefore does not indefinitely block later work.
-   This fairness does not promise delivery within five minutes.
+   Actions with different keys do not wait for each other.
+   One failing email therefore does not block later email.
    Capacity limits and backlog size still apply.
-   Each listener rechecks current eligibility.
-   silent mode completes withheld mail rather than retaining a flood for later.
+   Each attempt rechecks current eligibility.
 
-5. Alert when pending/failed publications age beyond the expected five-minute retry interval.
+5. Alert when admitted email ages beyond one hour, the longest wait between two attempts.
 6. Investigate before notification expiry.
 7. Use a separate database-monitoring identity with least privilege.
-8. Do not replay a backlog blindly.
+8. Do not resend an `UNCERTAIN` email by hand without asking the recipient: the relay may already have delivered it.
 
 Hephaestus records synchronous SMTP rejection.
 It does **not** claim to ingest asynchronous delivery-status notifications or provider complaints.

@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
@@ -24,6 +26,7 @@ import jakarta.mail.internet.MimeMultipart;
 import java.net.ConnectException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -37,8 +40,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.MailSendException;
-import org.springframework.modulith.events.FailedEventPublications;
-import org.springframework.modulith.events.ResubmissionOptions;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -68,7 +69,7 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
     private PlatformTransactionManager transactionManager;
 
     @Autowired
-    private FailedEventPublications failed;
+    private ActionExecutor executor;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -189,9 +190,10 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
     void shouldRecheckReporterAndSubscriptionWhenRetrying(String change) {
         Account reporter = reporter();
         UUID id = report(reporter);
-        mail.failWith(new MailSendException("relay down", new ConnectException("refused")));
+        var refused = new MessagingException("connect", new ConnectException("refused"));
+        mail.failWith(new MailSendException("Mail server connection failed", refused, Map.of("message", refused)));
         publish(id, reporter, Kind.COMMENTED, true);
-        assertThat(publications(id)).hasSize(1);
+        assertThat(sentTo(reporter)).as("the relay is down").isEmpty();
         switch (change) {
             case "retry" -> {}
             case "unsubscribed", "resubscribed" -> {
@@ -218,10 +220,6 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
             default -> throw new IllegalArgumentException(change);
         }
         mail.failWith(null);
-
-        failed.resubmit(ResubmissionOptions.defaults()
-                .withFilter(publication -> publication.getEvent() instanceof ProductFeedbackUpdateEmailRequested request
-                        && request.feedbackId().equals(id)));
 
         assertThat(sentTo(reporter)).hasSize(change.equals("retry") ? 1 : 0);
         assertThat(publications(id)).isEmpty();
@@ -271,7 +269,9 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
                 id, accountId(reporter), kind, ISSUE, publicIssue, detail, Instant.now());
     }
 
+    /** The messages sent to the reporter once the outbox has carried out every due email. */
     private List<MimeMessage> sentTo(Account reporter) {
+        ActionTestSupport.drain(executor, jdbc);
         return mail.sent().stream()
                 .filter(message -> {
                     try {

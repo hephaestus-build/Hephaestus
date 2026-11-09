@@ -5,7 +5,7 @@ import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.notification.email.EmailGateway;
+import de.tum.cit.aet.hephaestus.notification.email.Emails;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -28,7 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class NotificationSubscriptionService {
     private final NotificationSubscriptionRepository subscriptions;
     private final AccountContactQuery contacts;
-    private final EmailGateway gateway;
+    private final Emails emails;
     private final WeeklyDigestAvailability weeklyDigests;
     private final Clock clock;
 
@@ -123,7 +123,7 @@ public class NotificationSubscriptionService {
         return new NotificationPreferencesDTO(
                 enabled(rows, NotificationSubscriptionKind.PRODUCT_FEEDBACK),
                 contacts.activeVerifiedPrimaryEmail(accountId).isPresent(),
-                gateway.configured(),
+                emails.configured(),
                 enabled(rows, NotificationSubscriptionKind.WORKSPACE_ALERTS),
                 enabled(rows, NotificationSubscriptionKind.MENTOR_DIGEST),
                 weeklyDigests.availableFor(accountId),

@@ -60,6 +60,7 @@ const sidebars: SidebarsConfig = {
 				"system-design",
 				"ingest-durability",
 				"transactions",
+				"outbox",
 				"lifecycles",
 				"workspace-context",
 				"sync-lifecycle",

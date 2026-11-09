@@ -6,13 +6,13 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery.Role;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
-import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryMetrics;
-import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult;
-import de.tum.cit.aet.hephaestus.notification.email.EmailGateway;
+import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult.Outcome;
 import de.tum.cit.aet.hephaestus.notification.email.EmailKind;
 import de.tum.cit.aet.hephaestus.notification.email.EmailMessage;
+import de.tum.cit.aet.hephaestus.notification.email.EmailNotice;
 import de.tum.cit.aet.hephaestus.notification.email.EmailRenderer;
 import de.tum.cit.aet.hephaestus.notification.email.EmailUnsubscribeLinks;
+import de.tum.cit.aet.hephaestus.notification.email.Emails;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionKind;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import java.time.Clock;
@@ -27,29 +27,53 @@ import org.springframework.transaction.annotation.Propagation;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 @WorkspaceAgnostic("Delivery rechecks native account identity and current administration of the incident's workspace")
-public class WorkspaceAlertEmailListener {
+public class WorkspaceAlertEmailListener implements EmailNotice<WorkspaceAlertEmailRequested> {
+    static final Duration EXPIRES_AFTER = Duration.ofHours(24);
+
     private final IntegrationAttentionService attention;
     private final AccountMembershipQuery memberships;
     private final AccountContactQuery contacts;
     private final NotificationSubscriptionService subscriptions;
     private final EmailRenderer renderer;
-    private final EmailGateway gateway;
+    private final Emails emails;
     private final EmailUnsubscribeLinks unsubscribeLinks;
-    private final EmailDeliveryMetrics metrics;
     private final Clock clock;
 
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(WorkspaceAlertEmailRequested event) {
+        emails.enqueue(this, event);
+    }
+
+    @Override
+    public EmailKind kind() {
+        return EmailKind.WORKSPACE_ALERT;
+    }
+
+    @Override
+    public Class<WorkspaceAlertEmailRequested> eventType() {
+        return WorkspaceAlertEmailRequested.class;
+    }
+
+    @Override
+    public Address address(WorkspaceAlertEmailRequested event) {
         var change = event.change();
-        if (!clock.instant().isBefore(change.occurredAt().plus(Duration.ofHours(24))) || !attention.isCurrent(change)) {
-            metrics.record(EmailKind.WORKSPACE_ALERT, EmailDeliveryResult.Outcome.EXPIRED);
-            return;
+        return new Address(
+                change.connectionId() + ":" + change.revision() + ":" + event.accountId(),
+                event.accountId(),
+                change.workspaceId(),
+                change.occurredAt().plus(EXPIRES_AFTER));
+    }
+
+    @Override
+    public Prepared prepare(WorkspaceAlertEmailRequested event) {
+        var change = event.change();
+        if (!clock.instant().isBefore(change.occurredAt().plus(EXPIRES_AFTER)) || !attention.isCurrent(change)) {
+            return Prepared.withhold(Outcome.EXPIRED);
         }
         var token = subscriptions.unsubscribeToken(
                 event.accountId(), NotificationSubscriptionKind.WORKSPACE_ALERTS, change.occurredAt());
         if (token.isEmpty()) {
-            metrics.record(EmailKind.WORKSPACE_ALERT, EmailDeliveryResult.Outcome.UNSUBSCRIBED);
-            return;
+            return Prepared.withhold(Outcome.UNSUBSCRIBED);
         }
         var recipient = contacts.activeVerifiedPrimaryEmail(event.accountId());
         var workspace = memberships.membershipsForAccount(event.accountId()).stream()
@@ -57,8 +81,7 @@ public class WorkspaceAlertEmailListener {
                 .filter(membership -> membership.role() == Role.ADMIN || membership.role() == Role.OWNER)
                 .findFirst();
         if (recipient.isEmpty() || workspace.isEmpty()) {
-            metrics.record(EmailKind.WORKSPACE_ALERT, EmailDeliveryResult.Outcome.NO_RECIPIENT);
-            return;
+            return Prepared.withhold(Outcome.NO_RECIPIENT);
         }
         String description = change.recovered()
                 ? "The integration is connected again."
@@ -81,9 +104,8 @@ public class WorkspaceAlertEmailListener {
                                 "We could not confirm that Outline removed the webhook of the disconnected workspace. Delete the Hephaestus webhook in Outline’s settings, and revoke the API key you gave Hephaestus.";
                         };
                 };
-        if (!gateway.configured()) {
-            metrics.record(EmailKind.WORKSPACE_ALERT, EmailDeliveryResult.Outcome.NOT_CONFIGURED);
-            return;
+        if (!emails.configured()) {
+            return Prepared.withhold(Outcome.NOT_CONFIGURED);
         }
         var rendered = renderer.render(
                 EmailKind.WORKSPACE_ALERT,
@@ -103,15 +125,12 @@ public class WorkspaceAlertEmailListener {
                         workspace.get().workspaceName(),
                         "unsubscribeUrl",
                         unsubscribeLinks.confirmationUrl(token.get())));
-        var result = gateway.send(new EmailMessage(
+        return Prepared.send(new EmailMessage(
                 EmailKind.WORKSPACE_ALERT,
                 recipient.get(),
                 rendered.subject(),
                 rendered.text(),
                 rendered.html(),
                 unsubscribeLinks.url(token.get())));
-        if (result.outcome().retryable()) {
-            throw new NotificationDeliveryUnavailableException(EmailKind.WORKSPACE_ALERT, event.accountId());
-        }
     }
 }

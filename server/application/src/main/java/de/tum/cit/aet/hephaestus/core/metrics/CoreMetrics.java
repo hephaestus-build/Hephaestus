@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.core.metrics;
 
 public final class CoreMetrics {
 
+    public static final String ACTION_ATTEMPTS = "action.attempts";
+    public static final String ACTION_ENDED = "action.ended";
     public static final String APPLICATION_BUILD_INFO = "application.build.info";
     public static final String AUTH_AUDIT_WRITE_FAILED = "auth.audit.write_failed";
     public static final String AUTH_ISSUED_JWT_PRUNED = "auth.issued_jwt.pruned";

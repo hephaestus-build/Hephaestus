@@ -8,6 +8,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.lang.ArchRule;
+import de.tum.cit.aet.hephaestus.core.action.ActionAdapter;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.integration.core.egress.EgressExempt;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGateway;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
@@ -19,7 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ScmCommentReactionSink;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScmCommentReplySink;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
-import de.tum.cit.aet.hephaestus.notification.email.EmailGateway;
+import de.tum.cit.aet.hephaestus.notification.email.EmailAdapter;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.springframework.graphql.client.GraphQlClientInterceptor;
@@ -88,10 +90,22 @@ class OutboundEgressArchitectureTest extends HephaestusArchitectureTest {
                 .orShould()
                 .haveFullyQualifiedName(SlackMessageService.class.getName())
                 .orShould()
-                .haveFullyQualifiedName(EmailGateway.class.getName())
+                .haveFullyQualifiedName(EmailAdapter.class.getName())
                 .because("gateway status is limited to the reviewed SPI, Slack and email client surfaces");
 
         rule.check(classes);
+    }
+
+    @Test
+    void shouldCarryOutEveryActionThroughTheOneExecutor() {
+        noClasses()
+                .that()
+                .doNotHaveFullyQualifiedName(ActionExecutor.class.getName())
+                .should()
+                .callMethodWhere(
+                        target(owner(assignableTo(ActionAdapter.class))).and(target(name("execute"))))
+                .because("an action carried out outside the executor has no lease, no fence and no recorded outcome")
+                .check(classes);
     }
 
     @Test

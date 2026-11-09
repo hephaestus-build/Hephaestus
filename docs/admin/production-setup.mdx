@@ -611,6 +611,7 @@ The outcomes are:
 - `REJECTED`: refused mailbox.
 - `UNAVAILABLE`: unreachable relay or refused credentials.
 - `RATE_LIMITED`: shared attempt budget exhausted or its store unavailable.
+- `UNCONFIRMED`: the relay may have accepted the message but did not confirm it. Hephaestus does not send it again.
 
 The [configuration readiness](./configuration-readiness#email) fact `notification.email` reports the same setting pair.
 `/actuator/health` gains a `mail` indicator that connects to the relay on each check.
@@ -620,22 +621,25 @@ A relay outage must not take the application offline.
 
 **Delivery.**
 The transaction that changes state also writes a notification to `event_publication`.
-Delivery follows immediately after commit.
-If the relay is unreachable, the row remains `FAILED`.
-A job retries every five minutes, in batches of 50.
+Right after the commit, the notification becomes one email in the outbox, the `agent_action` table.
+The outbox executor runs on every server replica and sends the email.
+Before each attempt, it checks again that the email is still wanted.
+An email to a person who unsubscribed, lost the role or the verified address, or whose source is gone, is not sent.
+Silent mode, absent or unverified addresses, and refused mailboxes are final outcomes.
+`notification.email.delivery` counts each outcome by `kind` and `outcome`.
+
+If the relay refuses the connection or the login, or answers with a temporary SMTP code, the email waits and tries again.
+The wait starts at 30 seconds and doubles up to one hour.
+An email that is not sent within 24 hours expires.
 An account-deletion confirmation expires at its purge deadline.
 
-Its next attempt completes without delivery, records `EXPIRED`, and deletes the registry row.
-The listener handles expiration, not a batch filter.
-Silent mode, absent or unverified addresses, and refused mailboxes are final outcomes.
-The row completes, and `notification.email.delivery` counts the outcome by `kind` and `outcome`.
-Logs contain the message id, never the address.
-Delivery is at-least-once.
-
-A crash after SMTP acceptance but before registry completion can produce duplicates.
+Delivery is at most once.
+Each email has one stable `Message-ID`.
+If the relay connection breaks after the message was handed over, or a server stops during the send, Hephaestus cannot know whether the relay accepted it.
+That email ends `UNCERTAIN` and is never sent again.
 `SENT` means relay acceptance, not inbox arrival.
-Opt-out and eligibility checks apply to later attempts.
 An SMTP attempt already in progress cannot be recalled.
+Logs contain the message id, never the address.
 
 **Capacity.**
 The existing PostgreSQL-backed Bucket4j store shares limits across server replicas.
@@ -643,8 +647,8 @@ An SMTP attempt uses capacity even if the relay rejects it or disconnects.
 A refund after an uncertain failure could exceed the relay limit.
 Withheld mail uses no capacity.
 
-Durable notifications wait for capacity on a later retry.
-A synchronous test reports the outcome and does not queue itself.
+A notification that meets the limit waits one minute and does not use an attempt.
+A test email goes through the same outbox on the request thread and reports its outcome at once.
 The 24-hour interval starts at first bucket use, not midnight or the relay's billing day.
 Match limits conservatively to relay policy, with allowance for other applications on the account.
 After limit changes, restart.

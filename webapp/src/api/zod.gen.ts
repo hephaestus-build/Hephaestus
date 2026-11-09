@@ -1067,7 +1067,8 @@ export const zEmailTestResponse = z.object({
         'INVALID_ADDRESS',
         'REJECTED',
         'UNAVAILABLE',
-        'RATE_LIMITED'
+        'RATE_LIMITED',
+        'UNCONFIRMED'
     ]),
     to: z.string().optional()
 });
