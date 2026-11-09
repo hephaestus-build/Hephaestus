@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+	apiEndpoints,
 	gateTemplate,
 	HOLD,
 	type Inside,
 	insideFailures,
+	namedTarget,
 	parseAddress,
 	specFailures,
 	type Target,
@@ -15,6 +17,7 @@ const pod = (spec: Record<string, unknown>) => ({
 	spec: {
 		hostUsers: false,
 		automountServiceAccountToken: false,
+		enableServiceLinks: false,
 		securityContext: { runAsNonRoot: true, seccompProfile: { type: "RuntimeDefault" } },
 		containers: [
 			{
@@ -48,6 +51,8 @@ const inside: Inside = {
 	uid: 1000,
 	gid: 1000,
 	token: false,
+	serviceAccount: false,
+	serviceHosts: ["KUBERNETES_SERVICE_HOST"],
 	uidMap: "0 621871104 65536",
 	noNewPrivs: true,
 	capEff: "0000000000000000",
@@ -142,4 +147,87 @@ void test("a target is a host and a port", () => {
 	assert.deepEqual(parseAddress("10.43.0.10:8081"), { host: "10.43.0.10", port: 8081 });
 	assert.throws(() => parseAddress("10.43.0.10"), /not a host:port/u);
 	assert.throws(() => parseAddress("host:99999"), /not a host:port/u);
+});
+
+void test("the gate tries every address behind the API Service, and refuses to run without one", () => {
+	assert.deepEqual(
+		apiEndpoints({
+			items: [
+				{
+					ports: [{ name: "https", port: 6443 }],
+					endpoints: [{ addresses: ["192.168.5.15"] }, { addresses: ["192.168.5.16"] }],
+				},
+			],
+		}),
+		[
+			{ host: "192.168.5.15", port: 6443 },
+			{ host: "192.168.5.16", port: 6443 },
+		],
+	);
+	assert.throws(() => apiEndpoints({ items: [] }), /no endpoint address/u);
+	assert.throws(
+		() => apiEndpoints({ items: [{ ports: [{ port: 6443 }], endpoints: [] }] }),
+		/no endpoint/u,
+	);
+});
+
+void test("a named target names what a sandbox must or must not reach", () => {
+	assert.deepEqual(namedTarget("the server's application port=10.43.0.9:8080", false), {
+		name: "the server's application port",
+		host: "10.43.0.9",
+		port: 8080,
+		reachable: false,
+	});
+	assert.equal(namedTarget("a gateway=10.42.0.7:8081", true).reachable, true);
+	assert.throws(() => namedTarget("10.43.0.9:8080", false), /<name>=<host>:<port>/u);
+});
+
+void test("no credential reaches a sandbox: no token, no Secret, and no Service variables but the API's", () => {
+	assert.deepEqual(specFailures(pod({ enableServiceLinks: undefined })), [
+		"enableServiceLinks is not false",
+	]);
+	assert.deepEqual(
+		specFailures(
+			pod({
+				volumes: [
+					{ name: "kube-api-access", projected: { sources: [] } },
+					{ name: "keys", secret: { secretName: "keys" } },
+					{ name: "scratch", emptyDir: {} },
+				],
+			}),
+		),
+		[
+			"volume kube-api-access projects a token or a Secret",
+			"volume keys projects a token or a Secret",
+		],
+	);
+	assert.deepEqual(
+		specFailures(
+			pod({
+				containers: [
+					{
+						name: "agent",
+						securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } },
+						env: [{ name: "KEY", valueFrom: { secretKeyRef: { name: "keys", key: "k" } } }],
+					},
+				],
+			}),
+		),
+		["a variable comes from a Secret"],
+	);
+	assert.deepEqual(
+		insideFailures(
+			{
+				...inside,
+				serviceAccount: true,
+				serviceHosts: ["KUBERNETES_SERVICE_HOST", "HEPH_SERVER_SERVICE_HOST"],
+			},
+			targets,
+			false,
+		),
+		[
+			"the service account directory exists",
+			"Service variables beside the API's: HEPH_SERVER_SERVICE_HOST",
+		],
+	);
 });
