@@ -114,6 +114,10 @@ jobs:
       # The lowest minor on amd64 installs the profile of a 16 GiB host, which a runner is, so a
       # shipped profile that cannot start fails here. The other legs install the dev profile.
       PROFILES: ${{ inputs.minor == '1.35' && inputs.arch == 'amd64' && '--profile small' || '--profile dev' }}
+      # The latest minor on amd64, the pull request's leg, runs the sandbox templates on gVisor, as
+      # the one-host platform does. The other legs, in the merge queue, prove the default runtime
+      # with hostUsers: false.
+      GVISOR: ${{ inputs.minor == '1.37' && inputs.arch == 'amd64' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -143,8 +147,18 @@ jobs:
         run: |
           set -euo pipefail
           echo "Node image: \`$NODE_IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
+          runtime=()
+          if [ "$GVISOR" = true ]; then
+            # The one-host platform's runsc and containerd template, on every node.
+            gvisor="$RUNNER_TEMP/gvisor"
+            node scripts/kubernetes-cluster.ts gvisor --work "$gvisor"
+            for file in runsc containerd-shim-runsc-v1 gvisor-bin; do
+              runtime+=(--volume "$gvisor/$file:/usr/local/bin/$file@all")
+            done
+            runtime+=(--volume "$PWD/deploy/platform/k3s-containerd.toml.tmpl:/var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl@all")
+          fi
           k3d cluster create hephaestus --agents 1 --image "$NODE_IMAGE" --wait \
-            --k3s-arg "--kubelet-arg=pod-max-pids=4096@all" --port "127.0.0.1:443:443@loadbalancer"
+            --k3s-arg "--kubelet-arg=pod-max-pids=4096@all" --port "127.0.0.1:443:443@loadbalancer" "${runtime[@]}"
       - name: Install, upgrade and verify
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -155,6 +169,7 @@ jobs:
           # The release serves through the Gateway of k3s's Traefik, as in `vp run dev:kubernetes`.
           node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT" --gateway
           node scripts/kubernetes-cluster.ts gateway --work "$work"
+          if [ "$GVISOR" = true ]; then PROFILES="$PROFILES --set worker.sandbox.templates.runtimeClassName=gvisor"; fi
           # shellcheck disable=SC2086 # PROFILES is a list of flags.
           node scripts/kubernetes-cluster.ts install --work "$work" $PROFILES
           node scripts/kubernetes-cluster.ts verify
@@ -205,6 +220,12 @@ jobs:
           kubectl -n hephaestus-sandboxes get sandboxtemplates,sandboxwarmpools,sandboxclaims,sandboxes -o wide || true
           kubectl -n hephaestus-sandboxes describe pods || true
           kubectl -n agent-sandbox-system logs deployment/agent-sandbox-controller --tail=200 || true
+          # A runsc failure reaches the Pod events only as a failed task; containerd logs the cause.
+          if [ "$GVISOR" = true ]; then
+            for node in k3d-hephaestus-server-0 k3d-hephaestus-agent-0; do
+              docker exec "$node" sh -c 'grep -i runsc /var/lib/rancher/k3s/agent/containerd/containerd.log | tail -n 100' || true
+            done
+          fi
           kubectl describe nodes | grep -A 12 "Allocated resources" || true
 
   calico:

@@ -16,6 +16,7 @@
  *   turn-roll  a conversation turn that runs `bash` in its tools Pod through a rollout restart of
  *            the workers and then of the conversation loop, with the capacity bench's fake model
  *            provider. --pod-cidr opens the provider to the release
+ *   gvisor   the pinned gVisor of k3s-containerd.toml.tmpl, unpacked into --work, for k3s nodes to mount
  *   render   the manifests of those values for synthetic images, with backups on and with an external
  *            PostgreSQL, for a schema check without a cluster
  *   release-smoke  the one-host install of docs/admin/kubernetes.mdx § Install on one host (k3s) on
@@ -60,6 +61,7 @@ import { bindReplayModel, syntheticApi, syntheticSession } from "./lib/capacity-
 import { ciToolPin } from "./lib/ci-tool-catalog.ts";
 import { resolveCiTool } from "./lib/ci-tool-resolver.ts";
 import { claimDevNamespace, DEV_OWNER, ownsDevNamespace } from "./lib/dev-namespace.ts";
+import { gvisorPin } from "./lib/gvisor-pin.ts";
 import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
 import { exitStatus, output, run, succeeds } from "./lib/process.ts";
 import { parseResolvedImages } from "./resolve-release-images.ts";
@@ -68,6 +70,8 @@ import { isolationGate } from "./sandbox-isolation.ts";
 const ROOT = path.join(import.meta.dirname, "..");
 const CHART = path.join(ROOT, "deploy", "chart", "hephaestus");
 const AGENT_SANDBOX = path.join(ROOT, "deploy", "platform", "k3s-agent-sandbox.yaml");
+const CONTAINERD_TEMPLATE = path.join(ROOT, "deploy", "platform", "k3s-containerd.toml.tmpl");
+const RUNTIME_CLASS = path.join(ROOT, "deploy", "platform", "k3s-runtimeclass.yaml");
 
 export const RELEASE = "heph";
 export const NAMESPACE = "hephaestus";
@@ -455,11 +459,43 @@ async function gatewayApi(work: string): Promise<void> {
 }
 
 /**
+ * The pinned gVisor for this machine's architecture, unpacked into `directory` as the one-host
+ * installer unpacks it into /usr/local/bin: `runsc`, its containerd shim and `gvisor-bin/`. A CI
+ * cluster mounts them into its k3s nodes.
+ */
+async function gvisor(directory: string): Promise<void> {
+	const { release, sha512 } = gvisorPin(await readFile(CONTAINERD_TEMPLATE, "utf8"));
+	if (process.arch !== "x64" && process.arch !== "arm64") {
+		throw new Error(`gVisor has no release for ${process.arch}`);
+	}
+	const expected = sha512[process.arch];
+	const arch = process.arch === "x64" ? "x86_64" : "aarch64";
+	const response = await fetch(
+		`https://storage.googleapis.com/gvisor/releases/release/${release}/${arch}/gvisor.tar.bz2`,
+		{ signal: AbortSignal.timeout(300_000) },
+	);
+	if (!response.ok) {
+		throw new Error(`the gVisor download failed: HTTP ${response.status}`);
+	}
+	const archive = Buffer.from(await response.arrayBuffer());
+	if (createHash("sha512").update(archive).digest("hex") !== expected) {
+		throw new Error("the gVisor archive does not match the pinned SHA-512");
+	}
+	await mkdir(directory, { recursive: true });
+	const file = path.join(directory, "gvisor.tar.bz2");
+	await writeFile(file, archive);
+	await run("tar", ["-xjf", file, "-C", directory]);
+	await rm(file);
+}
+
+/**
  * The agent-sandbox controller of the platform manifest, as the one-host installer gives k3s, and its
  * resource definitions ready. A second run applies the same file again.
  */
 async function agentSandbox(): Promise<void> {
 	await kubectl(["apply", "--server-side", "-f", AGENT_SANDBOX]);
+	// The one-host platform's RuntimeClass. Only a cluster whose nodes have runsc can run its Pods.
+	await kubectl(["apply", "--server-side", "-f", RUNTIME_CLASS]);
 	await kubectl([
 		"wait",
 		"--for=condition=Established",
@@ -3422,6 +3458,10 @@ if (import.meta.main) {
 			process.stdout.write(await render());
 			break;
 		}
+		case "gvisor": {
+			await gvisor(work);
+			break;
+		}
 		case "release-smoke": {
 			const { assets, lock, release, architecture } = values;
 			if (
@@ -3446,7 +3486,7 @@ if (import.meta.main) {
 		}
 		default: {
 			throw new Error(
-				"usage: kubernetes-cluster <prepare|gateway|install|upgrade|verify|request|backup-drill|turn-roll|render|live|dev|down|reset|release-smoke> [--work dir]",
+				"usage: kubernetes-cluster <prepare|gateway|install|upgrade|verify|request|backup-drill|turn-roll|render|gvisor|live|dev|down|reset|release-smoke> [--work dir]",
 			);
 		}
 	}

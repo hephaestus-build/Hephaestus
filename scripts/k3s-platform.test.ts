@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { parse, parseAllDocuments } from "yaml";
 
 import { durationSeconds, gatewayCertificate } from "./kubernetes-cluster.ts";
+import { gvisorPin } from "./lib/gvisor-pin.ts";
 import { isRecord } from "./lib/json.ts";
 
 const PLATFORM = fileURLToPath(new URL("../deploy/platform/", import.meta.url));
@@ -563,6 +564,8 @@ esac
 				"jq",
 				"openssl",
 				"sha256sum",
+				"sha512sum",
+				"bzip2",
 				"grep",
 				"dirname",
 				"mktemp",
@@ -1127,4 +1130,22 @@ await test("the installer waits for every cert-manager condition through the wai
 	const installer = read("k3s-install.sh");
 	assert.doesNotMatch(installer, /wait --for=condition=\S+ "?(?:crd|certificate|clusterissuer)\//u);
 	assert.match(installer, /for file in [^\n]*k3s-wait-condition\.sh/u);
+});
+
+await test("the one-host sandboxes run on gVisor from one pinned release, which containerd and the RuntimeClass name alike", () => {
+	const template = read("k3s-containerd.toml.tmpl");
+	gvisorPin(template);
+	// k3s renders its own configuration first; the file only adds a runtime.
+	assert.match(template, /^\{\{ template "base" \. \}\}$/mu);
+	const handler =
+		/containerd\.runtimes\.(?<name>[a-z]+)\]\n\s+runtime_type = "io\.containerd\.runsc\.v1"/u.exec(
+			template,
+		)?.groups?.name;
+	const [runtimeClass] = documents(read("k3s-runtimeclass.yaml"));
+	assert.ok(runtimeClass && isRecord(runtimeClass.metadata));
+	assert.equal(runtimeClass.handler, handler);
+	const values: unknown = parse(read("k3s-values.yaml"));
+	assert.ok(isRecord(values) && isRecord(values.worker) && isRecord(values.worker.sandbox));
+	assert.ok(isRecord(values.worker.sandbox.templates));
+	assert.equal(values.worker.sandbox.templates.runtimeClassName, runtimeClass.metadata.name);
 });

@@ -904,6 +904,8 @@ The bundle holds these files:
 | `k3s-wait-condition.sh` | Waits until a cert-manager resource reports a condition as true, also while the resource has no status yet. The installer runs it. |
 | `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. |
 | `k3s-agent-sandbox.yaml` | The agent-sandbox controller and its resource definitions, with its pin. It goes to the k3s manifests directory. |
+| `k3s-containerd.toml.tmpl` | The containerd configuration of k3s with gVisor as the `runsc` runtime, and the pin of the gVisor release. |
+| `k3s-runtimeclass.yaml` | The RuntimeClass `gvisor` of the sandbox templates. It goes to the k3s manifests directory. |
 | `k3s-certificates.yaml` | The `Let's Encrypt` issuer, the Gateway certificate, and the PostgreSQL CA and server certificate. The installer writes your host name and address into it. |
 | `k3s-config.yaml` | The k3s configuration: the kubelet configuration file, no bundled Traefik, no ServiceLB, and no metrics server. |
 | `k3s-kubelet.yaml` | A limit of 4096 processes for each Pod, and the shutdown grace period. Also the memory and CPU reserved for k3s and the host, and the eviction thresholds. |
@@ -928,6 +930,13 @@ The controller creates sandbox Pods from `SandboxTemplate` and `SandboxClaim` ob
 It runs in the namespace `agent-sandbox-system`, at the priority `system-cluster-critical`, as Traefik and cert-manager do.
 Its `pin: agent-sandbox` line sets the release, and the file pins the controller image by digest.
 The installer waits until the controller is ready.
+
+The sandbox templates of the one-host platform use [gVisor](https://gvisor.dev), which gives each sandbox its own kernel ([Sandbox templates](#sandbox-templates)).
+The `pin: gvisor` line of `k3s-containerd.toml.tmpl` sets the gVisor release and the SHA-512 of its archive for each architecture.
+The installer downloads that archive from `storage.googleapis.com` and checks it, so the host must reach that address.
+It installs `runsc`, its containerd shim and the `gvisor-bin` directory in `/usr/local/bin`.
+It restarts k3s when `k3s-containerd.toml.tmpl` changes: at the first install with gVisor, and at each new gVisor pin.
+`k3s-values.yaml` sets `worker.sandbox.templates.runtimeClassName: gvisor`.
 
 The installer does not run the application itself as a k3s `HelmChart`.
 The k3s Helm controller does not wait for the migration Job, and it does not roll back a failed upgrade.
@@ -2066,6 +2075,7 @@ Verify a recovery set first if you must keep the data.
 2. Disable the reconciler timer, if installed, as [Operating it](./pull-based-deployment#operating-it) describes.
 3. Complete [Uninstall](#uninstall) above.
 4. On the dedicated k3s server, run `sudo /usr/local/bin/k3s-uninstall.sh`.
+   Then remove gVisor: `sudo rm -rf /usr/local/bin/runsc /usr/local/bin/containerd-shim-runsc-v1 /usr/local/bin/gvisor-bin`.
 5. Remove the reconciler's systemd units and `/var/lib/hephaestus` state if the host will be reused.
 6. Remove any separately configured storage only when its retention requirements permit deletion.
 

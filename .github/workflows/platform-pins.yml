@@ -5,6 +5,7 @@ on:
     paths:
       - "deploy/platform/k3s-platform.yaml"
       - "deploy/platform/k3s-agent-sandbox.yaml"
+      - "deploy/platform/k3s-containerd.toml.tmpl"
       - "scripts/scan-platform-images.ts"
       - "scripts/scan-upstream-images.ts"
       - "scripts/lib/image-scan.ts"
