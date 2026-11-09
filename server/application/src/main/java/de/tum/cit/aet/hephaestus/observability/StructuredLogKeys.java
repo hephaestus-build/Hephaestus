@@ -13,6 +13,8 @@ public final class StructuredLogKeys {
     public static final String RUN_EPOCH = "run.epoch";
     /** The subject of the run, such as {@code review:<id>}. */
     public static final String SUBJECT_KEY = "subject.key";
+    /** The agent sandbox that the record is about: its claim's name, which is also its Pod's. */
+    public static final String SANDBOX_NAME = "sandbox.name";
 
     private StructuredLogKeys() {}
 }

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.HashSet;
 import java.util.List;
@@ -59,10 +60,11 @@ public class AgentSandboxReaper {
             deleteOrphans();
         } catch (RuntimeException e) {
             meters.counter(AgentMetrics.AGENT_SANDBOX_REAPER_FAILURE).increment();
-            log.warn(
-                    "Sandbox reaper failed; trying again next tick: error={}",
-                    e.getClass().getSimpleName(),
-                    e);
+            log.atWarn()
+                    .addKeyValue("event.name", "agent.sandbox.reaper.failed")
+                    .addKeyValue("error.type", e.getClass().getName())
+                    .setCause(e)
+                    .log("Sandbox reaper failed; it tries again next tick");
         }
     }
 
@@ -75,11 +77,9 @@ public class AgentSandboxReaper {
         for (var row : retired) {
             meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", row.getReason())
                     .increment();
-            log.info(
-                    "Sandbox taken back: sandboxId={}, kind={}, reason={}",
-                    row.getId(),
-                    row.getKind(),
-                    row.getReason());
+            SandboxEvents.event(log.atInfo(), "agent.sandbox.taken_back", row)
+                    .addKeyValue("sandbox.reason", row.getReason())
+                    .log("Sandbox taken back; its claim is deleted next");
         }
     }
 
@@ -90,10 +90,9 @@ public class AgentSandboxReaper {
                 owner.deleteClaim(row);
             } catch (RuntimeException e) {
                 meters.counter(AgentMetrics.AGENT_SANDBOX_REAPER_FAILURE).increment();
-                log.warn(
-                        "Could not delete a sandbox's claim; trying again next tick: sandboxId={}, error={}",
-                        row.getId(),
-                        e.getClass().getSimpleName());
+                SandboxEvents.event(log.atWarn(), "agent.sandbox.claim_delete_failed", row)
+                        .addKeyValue("error.type", e.getClass().getName())
+                        .log("Could not delete a sandbox's claim; the reaper tries again next tick");
             }
         }
     }
@@ -112,15 +111,19 @@ public class AgentSandboxReaper {
                 claims.delete(name);
             } catch (RuntimeException e) {
                 meters.counter(AgentMetrics.AGENT_SANDBOX_REAPER_FAILURE).increment();
-                log.warn(
-                        "Could not delete a sandbox claim without a row; trying again next tick: claim={}, error={}",
-                        name,
-                        e.getClass().getSimpleName());
+                log.atWarn()
+                        .addKeyValue("event.name", "agent.sandbox.claim_delete_failed")
+                        .addKeyValue(StructuredLogKeys.SANDBOX_NAME, name)
+                        .addKeyValue("error.type", e.getClass().getName())
+                        .log("Could not delete a sandbox claim without a row; the reaper tries again next tick");
                 continue;
             }
             meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", "orphan")
                     .increment();
-            log.info("Sandbox claim without a sandbox row deleted: claim={}", name);
+            log.atInfo()
+                    .addKeyValue("event.name", "agent.sandbox.orphan_deleted")
+                    .addKeyValue(StructuredLogKeys.SANDBOX_NAME, name)
+                    .log("Sandbox claim without a sandbox row deleted");
         }
     }
 }

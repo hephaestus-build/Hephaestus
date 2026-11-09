@@ -106,7 +106,7 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
     }
 
     private String claimName(AgentSandboxes.LiveSandbox sandbox) {
-        return "agent-" + sandbox.id();
+        return AgentSandboxes.claimName(sandbox.id());
     }
 
     private void queueRun(String subject) {
