@@ -50,10 +50,14 @@ public abstract class BaseIntegrationTest {
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        var postgres = PostgreSQLTestContainer.getInstance();
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
+        // The roles as the chart runs them: the owner migrates, the application role reads and writes rows.
+        var application = PostgreSQLTestContainer.application();
+        var owner = PostgreSQLTestContainer.owner();
+        registry.add("spring.datasource.url", application::jdbcUrl);
+        registry.add("spring.datasource.username", application::username);
+        registry.add("spring.datasource.password", application::password);
+        registry.add("spring.liquibase.user", owner::username);
+        registry.add("spring.liquibase.password", owner::password);
 
         // Nested REQUIRES_NEW transactions need a second connection while the outer transaction remains open.
         registry.add("spring.datasource.hikari.maximum-pool-size", () -> "10");

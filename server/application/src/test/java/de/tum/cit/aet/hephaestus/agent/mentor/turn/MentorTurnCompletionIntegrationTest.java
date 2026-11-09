@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.testconfig.ConversationReceipts;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -80,6 +81,9 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    /** A fixture changes the schema as its owner: the application role cannot. */
+    private final JdbcTemplate schemaOwner = PostgreSQLTestContainer.ownerJdbc();
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -145,8 +149,8 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
      * {@link #databaseBack} ends the outage.
      */
     private void databaseAway(UUID feedbackId) {
-        jdbc.execute("CREATE TABLE IF NOT EXISTS test_receipt_outage(feedback_id uuid PRIMARY KEY)");
-        jdbc.execute("""
+        schemaOwner.execute("CREATE TABLE IF NOT EXISTS test_receipt_outage(feedback_id uuid PRIMARY KEY)");
+        schemaOwner.execute("""
                 CREATE OR REPLACE FUNCTION test_receipt_outage() RETURNS trigger LANGUAGE plpgsql AS $$
                 BEGIN
                  IF EXISTS(SELECT 1 FROM test_receipt_outage WHERE feedback_id=NEW.feedback_id) THEN
@@ -154,7 +158,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                  END IF;
                  RETURN NEW;
                 END $$""");
-        jdbc.execute("CREATE OR REPLACE TRIGGER test_receipt_outage BEFORE UPDATE ON feedback_copy"
+        schemaOwner.execute("CREATE OR REPLACE TRIGGER test_receipt_outage BEFORE UPDATE ON feedback_copy"
                 + " FOR EACH ROW EXECUTE FUNCTION test_receipt_outage()");
         jdbc.update("INSERT INTO test_receipt_outage(feedback_id) VALUES (?)", feedbackId);
     }
@@ -166,9 +170,9 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
     /** The outage is schema; schema left behind leaks into every later class that reads the catalog. */
     @AfterEach
     void removeOutage() {
-        jdbc.execute("DROP TRIGGER IF EXISTS test_receipt_outage ON feedback_copy");
-        jdbc.execute("DROP FUNCTION IF EXISTS test_receipt_outage()");
-        jdbc.execute("DROP TABLE IF EXISTS test_receipt_outage");
+        schemaOwner.execute("DROP TRIGGER IF EXISTS test_receipt_outage ON feedback_copy");
+        schemaOwner.execute("DROP FUNCTION IF EXISTS test_receipt_outage()");
+        schemaOwner.execute("DROP TABLE IF EXISTS test_receipt_outage");
     }
 
     @Test

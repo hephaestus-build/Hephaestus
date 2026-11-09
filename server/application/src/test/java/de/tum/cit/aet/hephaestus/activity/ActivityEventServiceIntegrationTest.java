@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
@@ -92,6 +93,9 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    /** A fixture changes the schema as its owner: the application role cannot. */
+    private final JdbcTemplate schemaOwner = PostgreSQLTestContainer.ownerJdbc();
 
     @Autowired
     private PullRequestRepository pullRequests;
@@ -196,14 +200,14 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
         void shouldRetainAFailedPublicationAndRecordItOnceAfterRecovery() {
             var event = event();
             long targetId = event.pullRequest().id();
-            jdbc.execute("ALTER TABLE activity_event ADD CONSTRAINT " + FAILURE_CONSTRAINT + " CHECK (target_id <> "
-                    + targetId + ")");
+            schemaOwner.execute("ALTER TABLE activity_event ADD CONSTRAINT " + FAILURE_CONSTRAINT
+                    + " CHECK (target_id <> " + targetId + ")");
             try {
                 publish(event);
 
                 assertThat(rows(targetId)).isZero();
                 assertThat(pending(event)).isEqualTo(1L);
-                jdbc.execute("ALTER TABLE activity_event DROP CONSTRAINT " + FAILURE_CONSTRAINT);
+                schemaOwner.execute("ALTER TABLE activity_event DROP CONSTRAINT " + FAILURE_CONSTRAINT);
 
                 resubmit(event);
 
@@ -212,7 +216,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                 publish(event);
                 assertThat(rows(targetId)).isEqualTo(1L);
             } finally {
-                jdbc.execute("ALTER TABLE activity_event DROP CONSTRAINT IF EXISTS " + FAILURE_CONSTRAINT);
+                schemaOwner.execute("ALTER TABLE activity_event DROP CONSTRAINT IF EXISTS " + FAILURE_CONSTRAINT);
             }
         }
 
@@ -220,12 +224,12 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
         void shouldEndAPendingPublicationWhenItsWorkspaceIsPurged() {
             var event = event();
             long targetId = event.pullRequest().id();
-            jdbc.execute("ALTER TABLE activity_event ADD CONSTRAINT " + FAILURE_CONSTRAINT + " CHECK (target_id <> "
-                    + targetId + ")");
+            schemaOwner.execute("ALTER TABLE activity_event ADD CONSTRAINT " + FAILURE_CONSTRAINT
+                    + " CHECK (target_id <> " + targetId + ")");
             try {
                 publish(event);
                 assertThat(pending(event)).isEqualTo(1L);
-                jdbc.execute("ALTER TABLE activity_event DROP CONSTRAINT " + FAILURE_CONSTRAINT);
+                schemaOwner.execute("ALTER TABLE activity_event DROP CONSTRAINT " + FAILURE_CONSTRAINT);
                 workspaceLifecycle.purgeWorkspace(testWorkspace.getWorkspaceSlug());
 
                 resubmit(event);
@@ -233,7 +237,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                 assertThat(rows(targetId)).isZero();
                 assertThat(pending(event)).isZero();
             } finally {
-                jdbc.execute("ALTER TABLE activity_event DROP CONSTRAINT IF EXISTS " + FAILURE_CONSTRAINT);
+                schemaOwner.execute("ALTER TABLE activity_event DROP CONSTRAINT IF EXISTS " + FAILURE_CONSTRAINT);
             }
         }
 
@@ -254,8 +258,8 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
         void shouldEraseThePendingFactWithoutStoringWorkText() {
             var event = event();
             long targetId = event.pullRequest().id();
-            jdbc.execute("ALTER TABLE activity_event ADD CONSTRAINT " + FAILURE_CONSTRAINT + " CHECK (target_id <> "
-                    + targetId + ")");
+            schemaOwner.execute("ALTER TABLE activity_event ADD CONSTRAINT " + FAILURE_CONSTRAINT
+                    + " CHECK (target_id <> " + targetId + ")");
             try {
                 publish(event);
                 assertThat(pending(event)).isEqualTo(1L);
@@ -275,25 +279,25 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                 assertThat(store.erase(selected, scope)).isEqualTo(1L);
                 assertThat(pending(event)).isZero();
             } finally {
-                jdbc.execute("ALTER TABLE activity_event DROP CONSTRAINT IF EXISTS " + FAILURE_CONSTRAINT);
+                schemaOwner.execute("ALTER TABLE activity_event DROP CONSTRAINT IF EXISTS " + FAILURE_CONSTRAINT);
             }
         }
 
         private void assertEndsWhenSourceIsGone(Runnable remove) {
             var event = event();
             long targetId = event.pullRequest().id();
-            jdbc.execute("ALTER TABLE activity_event ADD CONSTRAINT " + FAILURE_CONSTRAINT + " CHECK (target_id <> "
-                    + targetId + ")");
+            schemaOwner.execute("ALTER TABLE activity_event ADD CONSTRAINT " + FAILURE_CONSTRAINT
+                    + " CHECK (target_id <> " + targetId + ")");
             try {
                 publish(event);
                 assertThat(pending(event)).isEqualTo(1L);
-                jdbc.execute("ALTER TABLE activity_event DROP CONSTRAINT " + FAILURE_CONSTRAINT);
+                schemaOwner.execute("ALTER TABLE activity_event DROP CONSTRAINT " + FAILURE_CONSTRAINT);
                 remove.run();
                 resubmit(event);
                 assertThat(rows(targetId)).isZero();
                 assertThat(pending(event)).isZero();
             } finally {
-                jdbc.execute("ALTER TABLE activity_event DROP CONSTRAINT IF EXISTS " + FAILURE_CONSTRAINT);
+                schemaOwner.execute("ALTER TABLE activity_event DROP CONSTRAINT IF EXISTS " + FAILURE_CONSTRAINT);
             }
         }
 

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794230375495-1" author="hephaestus">
+        <comment>The application role keeps the partitions of auth_event without owning a table: partition maintenance creates and drops tables, so it runs as this function's owner, for auth_event alone.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE FUNCTION public.maintain_auth_event_partitions() RETURNS void
+    LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$ SELECT partman.run_maintenance(p_parent_table := 'public.auth_event') $$
+        ]]></sql>
+        <sql>REVOKE ALL ON FUNCTION public.maintain_auth_event_partitions() FROM PUBLIC</sql>
+        <rollback>
+            <sql>DROP FUNCTION public.maintain_auth_event_partitions()</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

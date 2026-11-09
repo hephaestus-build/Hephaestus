@@ -18,8 +18,10 @@ import { asRecord, isRecord, parseJson } from "./lib/json.ts";
 
 const SCRIPT = fileURLToPath(new URL("../deploy/platform/hephaestus-keys.sh", import.meta.url));
 const GENERATED = [
-	"DATABASE_PASSWORD",
-	"DATABASE_USERNAME",
+	"DATABASE_ADMIN_PASSWORD",
+	"DATABASE_ADMIN_USERNAME",
+	"DATABASE_APP_PASSWORD",
+	"DATABASE_OWNER_PASSWORD",
 	"HEPHAESTUS_AUTH_STATE_COOKIE_KEY",
 	"HEPHAESTUS_CONVERSATION_LOOP_SECRET",
 	"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
@@ -159,13 +161,14 @@ await test(
 			Object.keys(result.secret).toSorted(byName),
 			[...GENERATED, "GITHUB_OAUTH_CLIENT_SECRET"].toSorted(byName),
 		);
-		const values = GENERATED.filter((key) => key !== "DATABASE_USERNAME").map(
+		const values = GENERATED.filter((key) => key !== "DATABASE_ADMIN_USERNAME").map(
 			(key) => result.secret[key],
 		);
 		assert.equal(new Set(values).size, values.length, "no two keys share a value");
 		assert.match(result.secret.HEPHAESTUS_SECURITY_ENCRYPTION_KEY ?? "", /^[0-9a-f]{32}$/u);
 		assert.match(result.secret.WEBHOOK_SECRET ?? "", /^[0-9a-f]{64}$/u);
-		for (const stored of Object.values(result.secret).filter((value) => value !== "hephaestus")) {
+		assert.equal(result.secret.DATABASE_ADMIN_USERNAME, "postgres");
+		for (const stored of Object.values(result.secret).filter((value) => value !== "postgres")) {
 			assert.ok(!result.output.includes(stored), "the output holds no value");
 			assert.ok(!result.argv.includes(stored), "no kubectl argument holds a value");
 		}
@@ -299,6 +302,26 @@ await test("--backups adds the backup passphrase only", { skip }, () => {
 	assert.match(result.secret.BACKUP_CIPHER_PASS ?? "", /^[A-Za-z0-9+/=]{64}$/u);
 });
 
+await test(
+	"a Secret with the single database login before 1.0 is refused, and nothing is generated",
+	{ skip },
+	() => {
+		const first = run();
+		const {
+			DATABASE_ADMIN_USERNAME: username = "",
+			DATABASE_ADMIN_PASSWORD: password = "",
+			DATABASE_OWNER_PASSWORD: _owner,
+			DATABASE_APP_PASSWORD: _app,
+			...rest
+		} = first.secret;
+		const before = { ...rest, DATABASE_USERNAME: username, DATABASE_PASSWORD: password };
+		const result = run({ cluster: { secret: encoded(before), volume: true } });
+		assert.notEqual(result.status, 0);
+		assert.match(result.output, /Follow the 1\.0 upgrade guide/u);
+		assert.deepEqual(result.secret, before);
+	},
+);
+
 await test("--metrics adds the monitor password only", { skip }, () => {
 	const first = run();
 	const result = run({ cluster: { secret: encoded(first.secret) }, args: ["--metrics"] });
@@ -312,14 +335,14 @@ await test(
 	{ skip },
 	() => {
 		const login = {
-			DATABASE_USERNAME: "app",
-			DATABASE_PASSWORD: "database-password",
+			DATABASE_OWNER_PASSWORD: "owner-password",
+			DATABASE_APP_PASSWORD: "database-password",
 			NATS_USERNAME: "broker",
 			NATS_PASSWORD: "broker-password",
 		};
 		const withoutLogin = run({ args: ["--external-database", "--new-keys"] });
 		assert.notEqual(withoutLogin.status, 0);
-		assert.match(withoutLogin.output, /set DATABASE_USERNAME/u);
+		assert.match(withoutLogin.output, /set DATABASE_OWNER_PASSWORD/u);
 		assert.deepEqual(withoutLogin.secret, {});
 
 		const withoutChoice = run({ args: ["--external-database", "--external-nats"], env: login });
@@ -332,7 +355,13 @@ await test(
 			env: login,
 		});
 		assert.equal(result.status, 0, result.output);
-		assert.equal(result.secret.DATABASE_PASSWORD, "database-password");
+		assert.equal(result.secret.DATABASE_OWNER_PASSWORD, "owner-password");
+		assert.equal(result.secret.DATABASE_APP_PASSWORD, "database-password");
+		assert.equal(
+			result.secret.DATABASE_ADMIN_PASSWORD,
+			undefined,
+			"the chart never holds its administrator",
+		);
 		assert.equal(result.secret.NATS_PASSWORD, "broker-password");
 		assert.match(result.secret.HEPHAESTUS_SECURITY_ENCRYPTION_KEY ?? "", /^[0-9a-f]{32}$/u);
 		assert.ok(!result.output.includes("password"));
@@ -399,14 +428,14 @@ await test(
 			);
 			assert.deepEqual(Object.keys(written).toSorted(byName), [
 				"BACKUP_CIPHER_PASS",
-				"DATABASE_USERNAME",
+				"DATABASE_ADMIN_USERNAME",
 				"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
 				"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
 			]);
 			for (const [key, value] of Object.entries(written)) {
 				assert.equal(value, first.secret[key]);
 			}
-			for (const stored of Object.values(written).filter((value) => value !== "hephaestus")) {
+			for (const stored of Object.values(written).filter((value) => value !== "postgres")) {
 				assert.ok(!result.output.includes(stored), "the output holds no value");
 			}
 			assert.deepEqual(result.secret, first.secret, "an export changes nothing");
@@ -439,7 +468,7 @@ await test(
 			assert.match(lacking.output, /lacks an encryption key/u);
 			assert.ok(!existsSync(folder.file("a.env")));
 
-			for (const key of ["HEPHAESTUS_SECURITY_ENCRYPTION_KEY", "DATABASE_USERNAME"]) {
+			for (const key of ["HEPHAESTUS_SECURITY_ENCRYPTION_KEY", "DATABASE_ADMIN_USERNAME"]) {
 				const empty = run({
 					cluster: { secret: encoded({ ...first.secret, [key]: "" }) },
 					args: ["--export-keys", folder.file("c.env")],
@@ -735,7 +764,11 @@ await test(
 
 await test("--rotate refuses every other key, a missing Secret, and a mixed run", { skip }, () => {
 	const first = run();
-	for (const key of ["HEPHAESTUS_SECURITY_ENCRYPTION_KEY", "DATABASE_PASSWORD", "WEBHOOK_SECRET"]) {
+	for (const key of [
+		"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
+		"DATABASE_APP_PASSWORD",
+		"WEBHOOK_SECRET",
+	]) {
 		const refused = run({ cluster: { secret: encoded(first.secret) }, args: ["--rotate", key] });
 		assert.notEqual(refused.status, 0);
 		assert.match(refused.output, /Rotate a value section of Secret custody/u);

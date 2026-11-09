@@ -22,7 +22,7 @@
  *       data by the exact key.
  *   <li><b>{@link de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent AuthEvent}</b> — append-only
  *       authentication and privileged-access event. Monthly RANGE-partitioned on {@code
- *       occurred_at}, managed by pg_partman (run_maintenance_proc via
+ *       occurred_at}, managed by pg_partman (maintain_auth_event_partitions via
  *       AuthEventPartitionMaintenance) with create-ahead and 12-month retention.
  * </ul>
  *

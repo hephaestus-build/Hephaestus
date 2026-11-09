@@ -42,12 +42,54 @@ spec:
               value: {{ include "hephaestus.databasePort" . | quote }}
             # Without a user name, libpq asks the system for the name of the Pod's user, which the image
             # does not know, and pg_isready never dials the server.
-            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGUSER" "key" "DATABASE_USERNAME") | nindent 12 }}
+            - name: PGUSER
+              value: hephaestus_owner
           resources:
             requests: { cpu: 50m, memory: 32Mi, ephemeral-storage: 16Mi }
             limits: { cpu: 200m, memory: 64Mi, ephemeral-storage: 64Mi }
           securityContext:
             {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+        {{- if .Values.postgresql.bundled }}
+        # The roles of files/database-roles.sql, as the administrator, before each migration: a changed
+        # password takes effect with the upgrade. Only this container has the administrator's password.
+        # An external PostgreSQL gets no such container: its operator runs the file
+        # (docs/admin/kubernetes.mdx § Database roles).
+        - name: database-roles
+          image: {{ include "hephaestus.image" (dict "root" . "name" "postgres") | quote }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -ec
+            # psql substitutes :'owner_password' as a quoted literal only in a script, not in -c.
+            - |
+              psql --no-psqlrc -v owner_password="$DATABASE_OWNER_PASSWORD" -v app_password="$DATABASE_APP_PASSWORD" <<'SQL'
+              {{- .Files.Get "files/database-roles.sql" | nindent 14 }}
+              SQL
+          env:
+            - name: PGHOST
+              value: {{ include "hephaestus.databaseHost" . | quote }}
+            - name: PGPORT
+              value: {{ include "hephaestus.databasePort" . | quote }}
+            - name: PGDATABASE
+              value: {{ .Values.postgresql.database | quote }}
+            - name: PGSSLMODE
+              value: verify-full
+            - name: PGSSLROOTCERT
+              value: {{ printf "%s/ca.crt" (include "hephaestus.postgresqlCaDirectory" .) | quote }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGUSER" "key" "DATABASE_ADMIN_USERNAME") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGPASSWORD" "key" "DATABASE_ADMIN_PASSWORD") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_OWNER_PASSWORD") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_APP_PASSWORD") | nindent 12 }}
+          resources:
+            requests: { cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi }
+            limits: { cpu: 200m, memory: 64Mi, ephemeral-storage: 64Mi }
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
+        {{- end }}
       containers:
         - name: migration
           image: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}
@@ -61,8 +103,10 @@ spec:
               value: prod,migrate
             - name: DATABASE_URL
               value: {{ include "hephaestus.databaseUrl" . | quote }}
-            {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_USERNAME") | nindent 12 }}
-            {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_PASSWORD") | nindent 12 }}
+            # The owner of the schema, which only this Job uses (docs/admin/kubernetes.mdx § Database roles).
+            - name: DATABASE_USERNAME
+              value: hephaestus_owner
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_PASSWORD" "key" "DATABASE_OWNER_PASSWORD") | nindent 12 }}
           resources:
             {{- toYaml .Values.migration.resources | nindent 12 }}
           securityContext:

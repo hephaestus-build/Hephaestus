@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.mentor.adapter.MentorPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -70,6 +71,9 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    /** A fixture changes the schema as its owner: the application role cannot. */
+    private final JdbcTemplate schemaOwner = PostgreSQLTestContainer.ownerJdbc();
 
     @Autowired
     private MentorPersonDataCatalog personDataCatalog;
@@ -448,7 +452,7 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 new MapSqlParameterSource()
                         .addValue("workspaceId", workspace.getId())
                         .addValue("conversationId", main.getId()));
-        jdbcTemplate.execute("ANALYZE mentor_entry");
+        schemaOwner.execute("ANALYZE mentor_entry");
         String search = MentorEntryRepository.class
                 .getMethod(
                         "searchByWorkspaceId",

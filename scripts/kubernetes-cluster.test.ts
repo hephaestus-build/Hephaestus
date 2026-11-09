@@ -91,8 +91,10 @@ await test("the API endpoint is the address and port of the kubernetes Service's
 await test("the generated Secret holds every key that the chart reads", () => {
 	const first = applicationSecret();
 	for (const key of [
-		"DATABASE_USERNAME",
-		"DATABASE_PASSWORD",
+		"DATABASE_ADMIN_USERNAME",
+		"DATABASE_ADMIN_PASSWORD",
+		"DATABASE_OWNER_PASSWORD",
+		"DATABASE_APP_PASSWORD",
 		"NATS_USERNAME",
 		"NATS_PASSWORD",
 		"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
@@ -115,7 +117,7 @@ await test("a second run keeps every value of the Secret and adds only the keys 
 	const { WEBHOOK_ROUTING_SECRET: _missing, ...older } = first.data;
 	const third = mergeSecret({ ...older, GITHUB_OAUTH_CLIENT_SECRET: "kept" }, applicationSecret());
 	assert.deepEqual(third.added, ["WEBHOOK_ROUTING_SECRET"]);
-	assert.equal(third.data.DATABASE_PASSWORD, first.data.DATABASE_PASSWORD);
+	assert.equal(third.data.DATABASE_APP_PASSWORD, first.data.DATABASE_APP_PASSWORD);
 	assert.equal(third.data.GITHUB_OAUTH_CLIENT_SECRET, "kept");
 	assert.ok((third.data.WEBHOOK_ROUTING_SECRET ?? "").length > 0);
 });

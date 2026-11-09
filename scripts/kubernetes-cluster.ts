@@ -235,8 +235,10 @@ const secretValue = (bytes: number) => randomBytes(bytes).toString("hex");
 export function applicationSecret(): Record<string, string> {
 	const key = secretValue(16);
 	return {
-		DATABASE_USERNAME: "hephaestus",
-		DATABASE_PASSWORD: secretValue(16),
+		DATABASE_ADMIN_USERNAME: "postgres",
+		DATABASE_ADMIN_PASSWORD: secretValue(16),
+		DATABASE_OWNER_PASSWORD: secretValue(16),
+		DATABASE_APP_PASSWORD: secretValue(16),
 		NATS_USERNAME: `heph${secretValue(16)}`,
 		NATS_PASSWORD: `heph${secretValue(16)}`,
 		HEPHAESTUS_SECURITY_ENCRYPTION_KEY: key,
@@ -628,6 +630,36 @@ async function externalPostgresql(
 	]);
 }
 
+/**
+ * The operator's step for an external PostgreSQL: the chart's roles, as docs/admin/kubernetes.mdx § Database roles
+ * runs them. The passwords travel on standard input, never in an argument list.
+ */
+async function externalDatabaseRoles(data: Readonly<Record<string, string>>): Promise<void> {
+	const owner = data.DATABASE_OWNER_PASSWORD ?? "";
+	const app = data.DATABASE_APP_PASSWORD ?? "";
+	const script = await readFile(path.join(CHART, "files", "database-roles.sql"), "utf8");
+	await kubectl(
+		[
+			"-n",
+			EXTERNAL_POSTGRESQL,
+			"exec",
+			"-i",
+			"postgresql-0",
+			"-c",
+			"postgresql",
+			"--",
+			"psql",
+			"--no-psqlrc",
+			"--quiet",
+			"-U",
+			"hephaestus",
+			"-d",
+			"hephaestus",
+		],
+		`\\set owner_password '${owner}'\n\\set app_password '${app}'\n${script}`,
+	);
+}
+
 interface PrepareOptions {
 	work: string;
 	images: ChartImages;
@@ -699,7 +731,8 @@ export async function prepare(options: PrepareOptions): Promise<{ rotated: boole
 	}
 	await secret(`${RELEASE}-app`, NAMESPACE, data);
 	if (options.externalCidr !== undefined) {
-		await externalPostgresql(options.images.postgres, tls, data.DATABASE_PASSWORD ?? "");
+		await externalPostgresql(options.images.postgres, tls, data.DATABASE_ADMIN_PASSWORD ?? "");
+		await externalDatabaseRoles(data);
 	}
 	if (options.gateway !== undefined) {
 		const { host } = options.gateway;
@@ -1378,7 +1411,7 @@ async function psql(sql: string): Promise<string> {
 		"--",
 		"psql",
 		"-U",
-		"hephaestus",
+		"postgres",
 		"-d",
 		"hephaestus",
 		"-v",

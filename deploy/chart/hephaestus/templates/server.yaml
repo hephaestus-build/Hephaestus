@@ -1,3 +1,4 @@
+{{- include "hephaestus.databaseSecretCheck" . }}
 {{- $name := include "hephaestus.name" (dict "root" . "component" "server") }}
 {{- $config := .Values.config }}
 apiVersion: v1

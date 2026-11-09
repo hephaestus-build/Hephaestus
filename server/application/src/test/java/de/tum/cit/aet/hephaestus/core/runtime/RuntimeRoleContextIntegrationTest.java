@@ -160,7 +160,6 @@ class RuntimeRoleContextIntegrationTest {
                         "spring.config.import=classpath:application-test.yml",
                         "spring.main.allow-bean-definition-overriding=false",
                         "spring.main.lazy-initialization=false",
-                        "spring.sql.init.mode=never",
                         "spring.datasource.url=" + database.jdbcUrl(),
                         "spring.datasource.username=" + database.username(),
                         "spring.datasource.password=" + database.password(),

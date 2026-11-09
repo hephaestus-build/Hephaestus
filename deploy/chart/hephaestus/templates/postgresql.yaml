@@ -81,8 +81,8 @@ spec:
             - {{ printf "max_connections=%d" (max 100 (int (include "hephaestus.databaseConnectionsRequired" .))) | quote }}
             {{- end }}
           env:
-            {{- include "hephaestus.secretEnv" (dict "root" . "env" "POSTGRES_USER" "key" "DATABASE_USERNAME") | nindent 12 }}
-            {{- include "hephaestus.secretEnv" (dict "root" . "env" "POSTGRES_PASSWORD" "key" "DATABASE_PASSWORD") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "POSTGRES_USER" "key" "DATABASE_ADMIN_USERNAME") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "POSTGRES_PASSWORD" "key" "DATABASE_ADMIN_PASSWORD") | nindent 12 }}
             - name: POSTGRES_DB
               value: {{ .Values.postgresql.database | quote }}
             {{- if $backup }}
@@ -142,7 +142,7 @@ spec:
           imagePullPolicy: IfNotPresent
           command: ["pgbackrest", "server"]
           env:
-            {{- include "hephaestus.secretEnv" (dict "root" . "env" "POSTGRES_USER" "key" "DATABASE_USERNAME") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "POSTGRES_USER" "key" "DATABASE_ADMIN_USERNAME") | nindent 12 }}
             {{- include "hephaestus.backup.serverEnv" . | nindent 12 }}
           ports:
             - name: pgbackrest

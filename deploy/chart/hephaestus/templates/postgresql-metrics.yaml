@@ -121,8 +121,8 @@ spec:
               value: verify-full
             - name: PGSSLROOTCERT
               value: {{ printf "%s/ca.crt" (include "hephaestus.postgresqlCaDirectory" .) | quote }}
-            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGUSER" "key" "DATABASE_USERNAME") | nindent 12 }}
-            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGPASSWORD" "key" "DATABASE_PASSWORD") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGUSER" "key" "DATABASE_ADMIN_USERNAME") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGPASSWORD" "key" "DATABASE_ADMIN_PASSWORD") | nindent 12 }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_MONITOR_PASSWORD") | nindent 12 }}
           resources:
             requests: { cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi }

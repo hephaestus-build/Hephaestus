@@ -3200,10 +3200,7 @@ await test("every revision migrates the database once, in a Job that only reache
 	assert.equal(get(waitEnv("DATABASE_HOST"), "value"), "heph-postgresql.hephaestus.svc");
 	assert.equal(get(waitEnv("DATABASE_PORT"), "value"), "5432");
 	// pg_isready runs as a user that the image's passwd does not name: without PGUSER it never dials.
-	assert.deepEqual(get(waitEnv("PGUSER"), "valueFrom", "secretKeyRef"), {
-		name: secretName,
-		key: "DATABASE_USERNAME",
-	});
+	assert.equal(get(waitEnv("PGUSER"), "value"), "hephaestus_owner");
 	assert.match(String(list(get(wait, "command")).at(-1)), /pg_isready/u);
 	// No Helm hook: the Job is part of the release, so `--wait-for-jobs` waits for it.
 	assert.equal(get(migration, "metadata", "annotations", "helm.sh/hook"), undefined);
@@ -3311,6 +3308,82 @@ await test("PostgreSQL has a lower kubelet OOM adjustment than review and conver
 			"database precedes sandbox in OOM protection",
 		);
 	}
+});
+
+/** The Secret keys that one container reads. */
+const secretKeysOf = (entry: unknown): string[] =>
+	list(get(entry, "env")).flatMap((variable) => {
+		const key = get(variable, "valueFrom", "secretKeyRef", "key");
+		return typeof key === "string" ? [key] : [];
+	});
+
+const databaseUserOf = (entry: unknown) =>
+	get(
+		list(get(entry, "env")).find((variable) => get(variable, "name") === "DATABASE_USERNAME"),
+		"value",
+	);
+
+const migrationJobOf = (resources: Resource[]) => {
+	const job = resources.find(
+		(resource) => kindOf(resource) === "Job" && componentOf(resource) === "migration",
+	);
+	assert.ok(job, "one migration Job");
+	return job;
+};
+
+await test("each database purpose logs in with its own role, and no Hephaestus process as the administrator", () => {
+	const bundledRelease = rendered([...layersFor("small"), workerLayer]);
+	for (const component of ["server", "worker"]) {
+		const role = workload(bundledRelease, component);
+		assert.ok(role, component);
+		assert.equal(databaseUserOf(container(role)), "hephaestus_app", component);
+		assert.deepEqual(
+			get(env(role, "DATABASE_PASSWORD"), "valueFrom", "secretKeyRef", "key"),
+			"DATABASE_APP_PASSWORD",
+			component,
+		);
+		assert.ok(
+			!secretKeysOf(container(role)).some((key) => key.startsWith("DATABASE_ADMIN_")),
+			component,
+		);
+	}
+	const migration = migrationJobOf(bundledRelease);
+	assert.equal(databaseUserOf(container(migration)), "hephaestus_owner");
+	assert.deepEqual(
+		secretKeysOf(container(migration)).filter((key) => key.startsWith("DATABASE_")),
+		["DATABASE_OWNER_PASSWORD"],
+	);
+	// Only the init container that sets up the roles holds the administrator's login.
+	const roles = list(get(podSpec(migration), "initContainers")).find(
+		(entry) => get(entry, "name") === "database-roles",
+	);
+	assert.notEqual(roles, undefined, "the database-roles init container");
+	assert.deepEqual(secretKeysOf(roles), [
+		"DATABASE_ADMIN_USERNAME",
+		"DATABASE_ADMIN_PASSWORD",
+		"DATABASE_OWNER_PASSWORD",
+		"DATABASE_APP_PASSWORD",
+	]);
+	const script = String(list(get(roles, "command")).at(-1));
+	const file = readFileSync(path.join(chart, "files", "database-roles.sql"), "utf8").trimEnd();
+	assert.ok(script.includes(file), "the init container runs files/database-roles.sql");
+	const postgresql = workload(bundledRelease, "postgresql");
+	assert.ok(postgresql, "postgresql");
+	assert.deepEqual(secretKeysOf(container(postgresql)), [
+		"DATABASE_ADMIN_USERNAME",
+		"DATABASE_ADMIN_PASSWORD",
+	]);
+	// An operator's PostgreSQL: the chart never holds its administrator's login.
+	const externalMigration = migrationJobOf(rendered(layersFor("external")));
+	assert.equal(
+		list(get(podSpec(externalMigration), "initContainers")).some(
+			(entry) => get(entry, "name") === "database-roles",
+		),
+		false,
+	);
+	assert.ok(
+		!secretKeysOf(container(externalMigration)).some((key) => key.startsWith("DATABASE_ADMIN_")),
+	);
 });
 
 await test("every role verifies an external PostgreSQL with the CA alone", () => {

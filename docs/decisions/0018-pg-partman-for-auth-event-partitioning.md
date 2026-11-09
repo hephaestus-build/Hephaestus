@@ -74,3 +74,11 @@ server role, and `docker/postgres/Dockerfile` sets no `shared_preload_libraries`
 The image now sets `shared_preload_libraries=pg_stat_statements` in its entrypoint
 (`docker/postgres/size-from-memory.sh`), for statement statistics. The decision above stands: the
 pg_partman background worker is still not preloaded, and maintenance stays in the app scheduler.
+
+## Update — 2026-11-09
+
+The server connects as `hephaestus_app`, which owns no table, and partition maintenance creates and drops tables.
+`AuthEventPartitionMaintenance` therefore calls `public.maintain_auth_event_partitions()`.
+This `SECURITY DEFINER` function belongs to `hephaestus_owner` and runs `partman.run_maintenance` for `public.auth_event` only.
+Only `hephaestus_app` can execute it.
+The scheduling decision above stands. [Database roles](../admin/kubernetes.mdx#database-roles) describes the roles.

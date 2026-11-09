@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.practices.ReviewOn;
 import de.tum.cit.aet.hephaestus.practices.ReviewedBy;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -295,7 +296,9 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @ParameterizedTest(name = "selection confirmation: {0}")
     @ValueSource(booleans = {true, false})
     void shouldDiscloseNothingWhenTheAuditInsertFails(boolean selection) {
-        jdbc.execute("ALTER TABLE auth_event ADD CONSTRAINT reject_user_view_test "
+        // The owner changes the table: the application role cannot.
+        JdbcTemplate owner = PostgreSQLTestContainer.ownerJdbc();
+        owner.execute("ALTER TABLE auth_event ADD CONSTRAINT reject_user_view_test "
                 + "CHECK (event_type <> 'USER_VIEW' OR viewed_account_id <> "
                 + accountId(viewed)
                 + ") NOT VALID");
@@ -311,7 +314,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .isEqualTo(503);
             assertThat(userViewRowsFor(viewed)).isZero();
         } finally {
-            jdbc.execute("ALTER TABLE auth_event DROP CONSTRAINT reject_user_view_test");
+            owner.execute("ALTER TABLE auth_event DROP CONSTRAINT reject_user_view_test");
         }
     }
 

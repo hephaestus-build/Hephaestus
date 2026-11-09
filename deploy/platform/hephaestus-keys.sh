@@ -21,8 +21,10 @@
 #
 # Values that it cannot generate come from the environment, and only when they are set:
 #   GITHUB_OAUTH_CLIENT_SECRET          stored when it differs; seeds only a missing login provider.
-#   DATABASE_USERNAME, DATABASE_PASSWORD the login of your PostgreSQL, with --external-database.
-#                                       New encryption keys for that database need --new-keys.
+#   DATABASE_OWNER_PASSWORD, DATABASE_APP_PASSWORD
+#                                       the passwords of hephaestus_owner and hephaestus_app on your
+#                                       PostgreSQL, with --external-database. New encryption keys for
+#                                       that database need --new-keys.
 #   NATS_USERNAME, NATS_PASSWORD        the login of your NATS broker, with --external-nats.
 set -eu
 
@@ -82,7 +84,7 @@ secret_json=$(kubectl -n "$NAMESPACE" get secret "$SECRET" -o json --ignore-not-
 existing=$(printf '%s' "$secret_json" | jq -r '.data // {} | keys[]' | tr -d '\r')
 has() { printf '%s\n' "$existing" | grep -qx "$1"; }
 # The keys that a restore needs: docs/admin/secret-custody.mdx § Keep the required keys outside the cluster.
-RESTORE_KEYS='^(HEPHAESTUS_SECURITY_(CREDENTIAL_|PRIOR_CREDENTIAL_)?ENCRYPTION_KEY|DATABASE_USERNAME|BACKUP_CIPHER_PASS)$'
+RESTORE_KEYS='^(HEPHAESTUS_SECURITY_(CREDENTIAL_|PRIOR_CREDENTIAL_)?ENCRYPTION_KEY|DATABASE_ADMIN_USERNAME|BACKUP_CIPHER_PASS)$'
 value_of() { printf '%s' "$secret_json" | jq -r --arg key "$1" '.data[$key] // empty | @base64d' | tr -d '\r'; }
 
 if [ -n "$EXPORT" ]; then
@@ -221,17 +223,25 @@ if [ -n "$ROTATE" ]; then
 	exit 0
 fi
 
+# Before 1.0, one superuser login served every purpose. A value moved under its new name must not be generated anew.
+if has DATABASE_USERNAME || has DATABASE_PASSWORD; then
+	die "the Secret $SECRET holds DATABASE_USERNAME or DATABASE_PASSWORD, the single database login before 1.0. Follow the 1.0 upgrade guide (Database roles in MIGRATION.md), and run this again"
+fi
 if [ "$EXTERNAL_DATABASE" = false ]; then
 	database=$(kubectl -n "$NAMESPACE" get pvc -l app.kubernetes.io/component=postgresql -o name)
-	if [ -n "$database" ] && ! { has DATABASE_USERNAME && has DATABASE_PASSWORD &&
+	if [ -n "$database" ] && ! { has DATABASE_ADMIN_USERNAME && has DATABASE_ADMIN_PASSWORD &&
 		has HEPHAESTUS_SECURITY_ENCRYPTION_KEY && has HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY; }; then
-		die "the PostgreSQL volume exists, but the Secret $SECRET lacks its database login or an encryption key. A new value would lock the database or lose what it encrypts. Restore the Secret from your backup, and run this again"
+		die "the PostgreSQL volume exists, but the Secret $SECRET lacks its administrator login or an encryption key. A new value would lock the database or lose what it encrypts. Restore the Secret from your backup, and run this again"
 	fi
-	has DATABASE_USERNAME || add DATABASE_USERNAME hephaestus
-	has DATABASE_PASSWORD || add DATABASE_PASSWORD "$(random -hex 16)"
+	# The administrator of the bundled PostgreSQL. No Hephaestus process logs in with it.
+	has DATABASE_ADMIN_USERNAME || add DATABASE_ADMIN_USERNAME postgres
+	has DATABASE_ADMIN_PASSWORD || add DATABASE_ADMIN_PASSWORD "$(random -hex 24)"
+	# The migration Job sets these passwords on the roles before each migration.
+	has DATABASE_OWNER_PASSWORD || add DATABASE_OWNER_PASSWORD "$(random -hex 24)"
+	has DATABASE_APP_PASSWORD || add DATABASE_APP_PASSWORD "$(random -hex 24)"
 else
-	has DATABASE_USERNAME || supply DATABASE_USERNAME "--external-database: set DATABASE_USERNAME to the login of your PostgreSQL"
-	has DATABASE_PASSWORD || supply DATABASE_PASSWORD "--external-database: set DATABASE_PASSWORD to the password of that login"
+	has DATABASE_OWNER_PASSWORD || supply DATABASE_OWNER_PASSWORD "--external-database: set DATABASE_OWNER_PASSWORD to the password of hephaestus_owner on your PostgreSQL"
+	has DATABASE_APP_PASSWORD || supply DATABASE_APP_PASSWORD "--external-database: set DATABASE_APP_PASSWORD to the password of hephaestus_app on your PostgreSQL"
 	# This script cannot see whether your PostgreSQL holds data, so new keys need an explicit choice.
 	if [ "$NEW_KEYS" = false ] && { ! has HEPHAESTUS_SECURITY_ENCRYPTION_KEY || ! has HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY; }; then
 		die "the Secret $SECRET lacks an encryption key. If your PostgreSQL holds Hephaestus data, restore both keys from your backup: new keys cannot read that data. For a database without Hephaestus data, run this again with --new-keys"

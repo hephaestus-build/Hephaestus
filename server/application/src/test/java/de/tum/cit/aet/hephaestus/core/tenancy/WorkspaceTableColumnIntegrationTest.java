@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.tenancy;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -122,17 +123,19 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldReportATableWithoutWorkspaceIdOrWithANullableOne() {
-        // A schema of its own, so the fixture never shows up in the check of the real schema.
+        // A schema of its own, so the fixture never shows up in the check of the real schema. The owner creates it:
+        // the application role cannot.
+        JdbcTemplate owner = PostgreSQLTestContainer.ownerJdbc();
         try {
-            jdbc.execute("CREATE SCHEMA workspace_rule_fixture");
-            jdbc.execute("CREATE TABLE workspace_rule_fixture.missing (id bigint PRIMARY KEY)");
-            jdbc.execute("CREATE TABLE workspace_rule_fixture.nullable (id bigint PRIMARY KEY, workspace_id bigint)");
-            jdbc.execute(
+            owner.execute("CREATE SCHEMA workspace_rule_fixture");
+            owner.execute("CREATE TABLE workspace_rule_fixture.missing (id bigint PRIMARY KEY)");
+            owner.execute("CREATE TABLE workspace_rule_fixture.nullable (id bigint PRIMARY KEY, workspace_id bigint)");
+            owner.execute(
                     "CREATE TABLE workspace_rule_fixture.scoped (id bigint PRIMARY KEY, workspace_id bigint NOT NULL)");
 
             assertThat(tablesWithoutWorkspaceId("workspace_rule_fixture")).containsExactly("missing", "nullable");
         } finally {
-            jdbc.execute("DROP SCHEMA IF EXISTS workspace_rule_fixture CASCADE");
+            owner.execute("DROP SCHEMA IF EXISTS workspace_rule_fixture CASCADE");
         }
     }
 

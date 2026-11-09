@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -56,13 +57,16 @@ class SyncJobActiveIndexIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    /** A fixture changes the schema as its owner: the application role cannot. */
+    private final JdbcTemplate schemaOwner = PostgreSQLTestContainer.ownerJdbc();
+
     private Workspace workspace;
     private Connection connection;
 
     @BeforeEach
     void setUp() {
         // Recreate the Liquibase-only partial index against the real Postgres container.
-        jdbcTemplate.execute(CREATE_PARTIAL_INDEX);
+        schemaOwner.execute(CREATE_PARTIAL_INDEX);
 
         User owner = persistUser("sync-index-owner-" + System.nanoTime());
         workspace = createWorkspace(
@@ -83,7 +87,7 @@ class SyncJobActiveIndexIntegrationTest extends AbstractWorkspaceIntegrationTest
     @AfterEach
     void dropIndex() {
         // This test owns the index; drop it so it can't leak into a context-sharing sibling.
-        jdbcTemplate.execute("DROP INDEX IF EXISTS ux_sync_job_active");
+        schemaOwner.execute("DROP INDEX IF EXISTS ux_sync_job_active");
     }
 
     @Test
