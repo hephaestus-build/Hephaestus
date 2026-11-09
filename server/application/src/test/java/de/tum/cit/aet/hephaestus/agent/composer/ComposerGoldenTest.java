@@ -48,16 +48,16 @@ class ComposerGoldenTest {
         var state = Admission.of(response, Map.of("PRACTICE_PAGE", decided, "CONVERSATION", decided));
         byte[] requestBytes = Objects.requireNonNull(inputs.get(SandboxLayout.FEEDBACK_COMPOSITION_PATH));
         var request = PrivateFeedback.Request.of(mapper.readTree(requestBytes)).orElseThrow();
-        var files = WorkerFeedbackComposer.workspace(inputs, requestBytes, state);
+        var files = CompositionSessions.workspace(inputs, requestBytes, state);
         JsonNode folderIndex = files.json(SandboxLayout.MANIFEST_PATH, mapper).orElseThrow();
         JsonNode practiceIndex =
                 files.json(ComposerFiles.PRACTICE_INDEX, mapper).orElseThrow();
-        var notReached = WorkerFeedbackComposer.notReached(practiceIndex, state);
+        var notReached = CompositionSessions.notReached(practiceIndex, state);
         var captured = new CapturedWork(files, mapper);
 
         var reviewable = ReviewOnWork.publicResults(state.results());
         if (request.open("ON_WORK") && !state.publicReviewed() && !reviewable.isEmpty()) {
-            var turn = WorkerFeedbackComposer.reviewTurn(
+            var turn = CompositionSessions.reviewTurn(
                     files,
                     captured,
                     folderIndex,
@@ -88,7 +88,7 @@ class ComposerGoldenTest {
                 "feedback-tool.json",
                 JsonText.stringify(
                                 PrivateFeedback.toolParameters(
-                                        WorkerFeedbackComposer.practiceSlugs(practiceIndex), request),
+                                        CompositionSessions.practiceSlugs(practiceIndex), request),
                                 2)
                         + "\n");
     }
@@ -115,8 +115,8 @@ class ComposerGoldenTest {
                         mapper.readTree(Objects.requireNonNull(inputs.get(SandboxLayout.FEEDBACK_COMPOSITION_PATH))))
                 .orElseThrow();
         var routes = PrivateFeedback.closeUnrouted(request, state, new ArrayList<>());
-        String privateInput = WorkerFeedbackComposer.sharedStyle() + "\n\n"
-                + WorkerFeedbackComposer.privateTurn(
+        String privateInput = CompositionSessions.sharedStyle() + "\n\n"
+                + CompositionSessions.privateTurn(
                         new ComposerFiles(inputs), captured, request, state, null, routes, List.of());
         assertThat(privateInput)
                 .contains(

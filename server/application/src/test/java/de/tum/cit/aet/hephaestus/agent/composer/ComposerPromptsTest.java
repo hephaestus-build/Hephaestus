@@ -18,18 +18,18 @@ class ComposerPromptsTest {
 
     @Test
     void shouldComposeWithTheVoicePlacementContractAndToolGuidanceOfTheGolden() throws IOException {
-        String shared = WorkerFeedbackComposer.prompt("feedback-style.md");
+        String shared = CompositionSessions.prompt("feedback-style.md");
         String actual = String.join(
                         "\n\n",
                         "# Shared feedback voice",
                         Js.trim(shared),
                         "# Public placement guidance",
-                        section(WorkerFeedbackComposer.prompt("review-composer.md"), "Where each point goes"),
+                        section(CompositionSessions.prompt("review-composer.md"), "Where each point goes"),
                         "# Public writing contract",
                         ReviewOnWork.WRITE_CONTRACT,
                         "# Private wording guidance",
                         section(
-                                WorkerFeedbackComposer.prompt("feedback-composer.md"),
+                                CompositionSessions.prompt("feedback-composer.md"),
                                 "Wording rules for these destinations"),
                         "# Public tool description",
                         ReviewOnWork.TOOL_DESCRIPTION)
@@ -49,7 +49,7 @@ class ComposerPromptsTest {
 
     @Test
     void sharedStyleIncludesTheWritingGuide() {
-        assertThat(WorkerFeedbackComposer.sharedStyle()).endsWith(FeedbackWritingGuide.text());
+        assertThat(CompositionSessions.sharedStyle()).endsWith(FeedbackWritingGuide.text());
     }
 
     private static String section(String text, String heading) {

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionCapacity;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.WorkerFeedbackComposer;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
@@ -144,6 +145,7 @@ import java.nio.file.Path;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -173,6 +175,7 @@ import org.springframework.test.context.BootstrapUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -1657,19 +1660,25 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             // Every retry was lost before this attempt, which resumes the composition as the last one.
             for (int lost = 0; lost < agentRuns.capacity().reviewRetries(); lost++) RuntimeJobTestData.retry(jdbc, job);
             // The final composition window has expired, so it withholds without a model call.
-            var composer = new WorkerFeedbackComposer(
+            var sessions = new CompositionSessions(
                     admission,
                     continuation,
-                    mock(ReviewModelGateway.class),
                     assignments,
                     descriptors,
                     reviewProperties,
                     agentRuns.capacity(),
                     meters,
                     mapper,
-                    new CompositionCapacity(4),
                     mock(FeedbackRepair.class),
                     mock(CompositionToolTrace.class));
+            var composer = new WorkerFeedbackComposer(
+                    sessions,
+                    continuation,
+                    mock(ReviewModelGateway.class),
+                    agentRuns.capacity(),
+                    meters,
+                    mapper,
+                    new CompositionCapacity(4));
             composer.composeResumed(job, job.getRunId(), Instant.now());
 
             assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
@@ -2007,7 +2016,13 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             review.workspaceId(), review.identity().jobId())
                     .orElseThrow();
             var arguments = mapper.createObjectNode().put("summary", "Keep the failure cause.");
-            toolTrace.record(review.identity(), "checked-1", "check_package", arguments, "Placement accepted.");
+            toolTrace.record(
+                    review.identity(),
+                    "checked-1",
+                    "check_package",
+                    arguments,
+                    "Placement accepted.",
+                    CompositionToolTrace.Decision.none(FeedbackDestination.ON_WORK));
             RuntimeJobTestData.updateJobs(
                     jdbc,
                     "UPDATE review_job SET status='COMPLETED',completed_at=now() WHERE workspace_id=? AND id=?",
@@ -2037,7 +2052,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             admitStaged(review.identity(), request(review));
             toolTrace.record(
-                    review.identity(), "checked-1", "check_package", mapper.createObjectNode(), "Placement accepted.");
+                    review.identity(),
+                    "checked-1",
+                    "check_package",
+                    mapper.createObjectNode(),
+                    "Placement accepted.",
+                    CompositionToolTrace.Decision.none(FeedbackDestination.ON_WORK));
             var original = compositionBases
                     .findByWorkspaceIdAndJobId(
                             review.workspaceId(), review.identity().jobId())
@@ -2047,7 +2067,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     review.workspaceId(),
                     original.getCopyId());
             assertThatThrownBy(() -> toolTrace.record(
-                            review.identity(), "checked-2", "check_package", mapper.createObjectNode(), "New text."))
+                            review.identity(),
+                            "checked-2",
+                            "check_package",
+                            mapper.createObjectNode(),
+                            "New text.",
+                            CompositionToolTrace.Decision.none(FeedbackDestination.ON_WORK)))
                     .isInstanceOfSatisfying(
                             ReviewCompositionContinuation.InputsUnavailableException.class,
                             refused -> assertThat(refused.erased()).isTrue());
@@ -2146,6 +2171,99 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(copies.findById(receipt.getId()).orElseThrow().getThreadRef())
                     .isEqualTo(threadRef);
         }
+    }
+
+    @Test
+    void shouldPublishOnlyADraftThatTheServerCheckedWhenTheComposerNamesItsDraftId() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            var sessions = sessions();
+            var deadline = Instant.now().plusSeconds(2);
+
+            var session = (CompositionSessions.Session)
+                    sessions.next(job, review.identity(), Set.of()).orElseThrow();
+            assertThat(session.destination()).isEqualTo(FeedbackDestination.ON_WORK);
+            assertThat(session.tools())
+                    .extracting(CompositionSessions.Tool::name)
+                    .containsExactly("check_package", "publish_package", "edit_own");
+            assertThat(session.input()).contains(QUOTE);
+
+            var result = response.admitted().getFirst().resultId();
+            var arguments = mapper.readTree("""
+                    {"decisions":[{"resultId":"%1$s","disposition":"RAISE"}],
+                     "summary":{"basedOn":["%1$s"],"body":"%2$s"}}
+                    """.formatted(result, SUMMARY));
+            var checked =
+                    sessions.tool(job, review.identity(), toolCall(session, "check_package", arguments, deadline));
+            String draftId = mapper.readTree(checked.text()).path("draftId").asString();
+
+            // An ID that no check of this attempt returned publishes nothing.
+            var unchecked = sessions.tool(
+                    job, review.identity(), toolCall(session, "publish_package", draft("0".repeat(64)), deadline));
+            assertThat(unchecked.published()).isFalse();
+            assertThat(unchecked.text()).startsWith("Unknown draftId");
+            assertThat(assignments.publicReviewed(job)).isFalse();
+
+            var published = sessions.tool(
+                    job, review.identity(), toolCall(session, "publish_package", draft(draftId), deadline));
+            assertThat(published.published()).as(published.text()).isTrue();
+            assertThat(admission.preparedReview(job))
+                    .hasValueSatisfying(
+                            prepared -> assertThat(prepared.summary()).isEqualTo(SUMMARY));
+
+            // The same draft again is refused: the review on the work is already accepted.
+            var again = sessions.tool(
+                    job, review.identity(), toolCall(session, "publish_package", draft(draftId), deadline));
+            assertThat(again.published()).isFalse();
+            assertThat(again.text()).contains("already published");
+
+            var traced = new ArrayList<String>();
+            compositionBases
+                    .findByWorkspaceIdAndJobId(review.workspaceId(), job.getId())
+                    .orElseThrow()
+                    .getPayload()
+                    .path("tools")
+                    .forEach(entry -> traced.add(entry.path("tool").asString() + ":"
+                            + entry.path("published").asBoolean(false)));
+            assertThat(traced)
+                    .containsExactly(
+                            "check_package:false",
+                            "publish_package:false",
+                            "publish_package:true",
+                            "publish_package:false");
+            // The review on the work is decided, so closing records nothing for it and hands nothing on.
+            assertThat(sessions.close(job, review.identity(), Map.of())).isNull();
+        }
+    }
+
+    private ObjectNode draft(String draftId) {
+        return mapper.createObjectNode().put("draftId", draftId);
+    }
+
+    private CompositionSessions sessions() {
+        return new CompositionSessions(
+                admission,
+                continuation,
+                assignments,
+                descriptors,
+                reviewProperties,
+                agentRuns.capacity(),
+                meters,
+                mapper,
+                repairs,
+                toolTrace);
+    }
+
+    private static CompositionSessions.ToolCall toolCall(
+            CompositionSessions.Session session, String name, JsonNode arguments, Instant deadline) {
+        return new CompositionSessions.ToolCall(
+                session.destination(),
+                "call-" + UUID.randomUUID(),
+                name,
+                arguments,
+                session.publicationContext(),
+                deadline);
     }
 
     private ClaimedReview claimedReview(FeedbackMode mode) {

@@ -5,11 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,7 +27,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
-import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
@@ -196,27 +196,30 @@ class WorkerFeedbackComposerTest {
     }
 
     private WorkerFeedbackComposer composer(CompositionCapacity capacity) {
-        return new WorkerFeedbackComposer(
+        var properties =
+                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200_000, 1000, Duration.ofMinutes(10));
+        var agentCapacity = new AgentCapacityProperties(
+                Duration.ofMinutes(5),
+                Duration.ofSeconds(25),
+                MAX_RETRIES,
+                Duration.ofMinutes(10),
+                Duration.ofMinutes(2),
+                Duration.ofMinutes(1),
+                Duration.ofMinutes(15));
+        var sessions = new CompositionSessions(
                 admission,
                 continuation,
-                gateway,
                 assignments,
                 items,
-                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200_000, 1000, Duration.ofMinutes(10)),
-                new AgentCapacityProperties(
-                        Duration.ofMinutes(5),
-                        Duration.ofSeconds(25),
-                        MAX_RETRIES,
-                        Duration.ofMinutes(10),
-                        Duration.ofMinutes(2),
-                        Duration.ofMinutes(1),
-                        Duration.ofMinutes(15)),
+                properties,
+                agentCapacity,
                 meters,
                 mapper,
-                Duration.ZERO,
-                capacity,
                 repairs,
-                mock(CompositionToolTrace.class));
+                CompositionTraces.inMemory(),
+                Duration.ZERO);
+        return new WorkerFeedbackComposer(
+                sessions, continuation, gateway, agentCapacity, meters, mapper, Duration.ZERO, capacity);
     }
 
     @Test
@@ -332,7 +335,8 @@ class WorkerFeedbackComposerTest {
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
-        verify(admission, times(2)).publicFeedbackHistory(any());
+        // Each session renders from its own read, and each tool call checks against the history it reads.
+        verify(admission, atLeast(2)).publicFeedbackHistory(any());
         assertThat(requests.get(1).path("messages").size())
                 .as("a fresh session, not a correction")
                 .isEqualTo(2);
@@ -682,6 +686,109 @@ class WorkerFeedbackComposerTest {
         assertThat(prepared)
                 .extracting(request -> request.composition().getFirst().destination())
                 .doesNotContain(FeedbackDestination.ON_WORK);
+    }
+
+    @Test
+    void shouldGiveThePrivateCompositionTheReviewThisAttemptPublished() {
+        // The server reads the review back from what preparation accepted, as its prepared rows hold it.
+        when(admission.preparedReview(job))
+                .thenAnswer(invocation -> accepted.stream()
+                        .filter(FeedbackPackage::publicComposition)
+                        .findFirst()
+                        .map(review -> new ResultAdmissionService.PreparedReview(
+                                review.composition().getFirst().summary(),
+                                List.of(new FeedbackCompositionTrace.Support(UUID.fromString(DESCRIBE), null)),
+                                List.of(),
+                                List.of())));
+        replies.add(call("check_package", validReview()));
+        replies.add(call("check_package", pagePieces()));
+        replies.add(text("Done."));
+
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
+
+        var privateSession = requests.stream()
+                .filter(request -> !tools(request).contains("edit_own"))
+                .findFirst()
+                .orElseThrow()
+                .path("messages");
+        assertThat(privateSession.get(privateSession.size() - 1).path("content").asString())
+                .contains("### The review composed for this work")
+                .contains("\"body\": \"The description should say why fetches now retry.\"");
+    }
+
+    @Test
+    void shouldPublishAPrivateDestinationOnceWhenTheModelPublishesItsDraftTwice() {
+        replies.add(call("check_package", validReview()));
+        replies.add(call("check_package", pagePieces()));
+        // After the page's check the model publishes its draft twice in one reply.
+        var twice = new AtomicReference<String>("");
+        doAnswer(invocation -> {
+                    requests.add(mapper.readTree((byte[]) invocation.getArgument(1)));
+                    var messages = requests.getLast().path("messages");
+                    var last = messages.get(messages.size() - 1);
+                    String content = last.path("content").asString("");
+                    if ("tool".equals(last.path("role").asString()) && content.contains("\"checked\":true")) {
+                        String draftId =
+                                mapper.readTree(content).path("draftId").asString();
+                        boolean page = !tools(requests.getLast()).contains("edit_own")
+                                && requests.getLast().toString().contains("PRACTICE_PAGE")
+                                && twice.compareAndSet("", draftId);
+                        if (page)
+                            return twoCalls(
+                                    "publish_package", mapper.createObjectNode().put("draftId", draftId));
+                        return call("publish_package", mapper.createObjectNode().put("draftId", draftId));
+                    }
+                    return replies.isEmpty() ? text("Nothing more.") : replies.removeFirst();
+                })
+                .when(gateway)
+                .call(any(), any());
+
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
+
+        assertThat(twice.get()).isNotEmpty();
+        assertThat(prepared.stream()
+                        .flatMap(request -> request.composition().stream())
+                        .filter(piece -> piece.destination() == FeedbackDestination.PRACTICE_PAGE
+                                && piece.withheldReason() == null))
+                .hasSize(1);
+    }
+
+    @Test
+    void shouldComposeTheReviewAgainWhenItsHistoryChangedBetweenTheSessionAndItsCheck() throws Exception {
+        var first = mapper.readValue(
+                Files.readAllBytes(scenario.resolve("public-history.json")), PublicFeedbackSnapshot.class);
+        var changed = new PublicFeedbackSnapshot(first.readAt(), "v1:8:" + "e".repeat(64), first.history());
+        var reads = new AtomicInteger();
+        when(admission.publicFeedbackHistory(any()))
+                .thenAnswer(invocation -> reads.getAndIncrement() == 0 ? first : changed);
+        replies.add(call("check_package", validReview()));
+        replies.add(call("check_package", validReview()));
+
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
+
+        assertThat(requests.get(1).path("messages").size())
+                .as("a fresh session, not a correction")
+                .isEqualTo(2);
+        verify(admission, never())
+                .checkPackage(
+                        any(),
+                        argThat(proposal -> Objects.equals(proposal.publicationContext(), first.publicationContext())));
+        assertThat(prepared.getFirst().publicationContext()).isEqualTo(changed.publicationContext());
+    }
+
+    private ReviewModelGateway.Answer twoCalls(String tool, JsonNode arguments) {
+        var body = mapper.createObjectNode();
+        var message = body.putArray("choices").addObject().putObject("message");
+        message.put("role", "assistant");
+        message.putNull("content");
+        var calls = message.putArray("tool_calls");
+        for (int index = 0; index < 2; index++) {
+            var call = calls.addObject();
+            call.put("id", "call-" + index + "-" + UUID.randomUUID());
+            call.put("type", "function");
+            call.putObject("function").put("name", tool).put("arguments", arguments.toString());
+        }
+        return new ReviewModelGateway.Answer(200, body.toString().getBytes(StandardCharsets.UTF_8), true, null);
     }
 
     private void answerEveryCall(ReviewModelGateway.Answer answer) {

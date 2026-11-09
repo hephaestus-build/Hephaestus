@@ -506,11 +506,17 @@ The destinations remain independently eligible.
 ### Checked publication per destination
 
 Each session is one conversation with the attempt's frozen model through the proxy, with the attempt's AI choice, budget and usage rules.
+The server renders each session from the retained inputs and runs every tool.
+The composer loop keeps only its calls, its retries and the cause that stopped each destination.
+What a tool call decided is kept in the composition's tool trace, never only in the loop's memory.
+
 Each destination has `check_package` and `publish_package`.
 `check_package` checks the complete proposed package and returns its draft ID.
 It creates no feedback, copies or send request.
 
 `publish_package` takes only that ID, checks the same package again and returns its durable acceptance receipt.
+The server publishes the package that its own check of this attempt stored under that ID, never a package that the loop sends.
+A refused publication keeps its reason in the trace, and the withholding of the review records that reason.
 The receipt means accepted, not delivered: approval and send-time checks still apply.
 A changed attempt fence, permission, source or public history can refuse publication after a successful check.
 A private destination accepts all its pieces in one transaction.
