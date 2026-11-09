@@ -6,7 +6,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
@@ -14,9 +16,16 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Content fingerprints shared by capture and reads of the current source. */
+/**
+ * Content fingerprints shared by capture and reads of the current source. A fingerprint names what the work holds,
+ * never how much of it the mirror had read: a sync that finishes between a capture and a later read changes the
+ * mirror's completeness and its {@code truncated} flags, not the work, so neither is fingerprinted. New content that
+ * such a sync brings changes the records themselves.
+ */
 public final class SourceFingerprint {
-    private static final String RENDERER_VERSION = "1";
+    private static final String RENDERER_VERSION = "2";
+    /** What a rendered record says about the mirror's read of the work rather than about the work. */
+    private static final Set<String> OBSERVATIONS = Set.of("basis", "truncated");
 
     private SourceFingerprint() {}
 
@@ -31,7 +40,7 @@ public final class SourceFingerprint {
         if (identity != null && kind.value().equals("scm.pull-request.core"))
             content.put("immutableIdentity", identity);
         ObjectNode capture = mapper.valueToTree(state);
-        capture.remove("facts");
+        capture.remove(List.of("facts", "completeness", "limitations"));
         content.set("state", capture);
         var records = content.putObject("files");
         new TreeMap<>(files).forEach((path, bytes) -> {
@@ -81,8 +90,8 @@ public final class SourceFingerprint {
             var fields = new TreeMap<String, JsonNode>();
             node.properties().forEach(entry -> fields.put(entry.getKey(), entry.getValue()));
             fields.forEach((key, value) -> {
-                // Only the renderer's basis is observational. A person's timestamps remain part of the work.
-                if (!record || !key.equals("basis")) result.set(key, canonical(value, false));
+                // Only the renderer's observations of the mirror are dropped. A person's timestamps remain the work.
+                if (!record || !OBSERVATIONS.contains(key)) result.set(key, canonical(value, false));
             });
             return result;
         }

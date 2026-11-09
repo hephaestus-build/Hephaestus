@@ -20,6 +20,8 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -70,9 +72,59 @@ class SourceFingerprintTest {
                     .isNull();
         var empty = available(SourceCompleteness.COMPLETE);
         assertThat(SourceFingerprint.of(mapper, kind, empty, Map.of()))
-                .isNotEqualTo(SourceFingerprint.of(mapper, kind, available(SourceCompleteness.PARTIAL), Map.of()))
                 .isNotEqualTo(SourceFingerprint.of(
                         mapper, kind, new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND), Map.of()));
+    }
+
+    /**
+     * A review can capture while the discussion sync still runs, and start its practices after the sync finished
+     * without finding anything new. The mirror read more of the same work, so the work's fingerprint stays.
+     */
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {
+                "scm.general-review-comments|context/general_comments.json|{\"comments\":[{\"author\":\"reviewer\",\"body\":\"A remark\",\"createdAt\":\"2026-10-01T11:00:00Z\"}],\"truncated\":%s}",
+                "scm.review-threads|context/review_threads.json|{\"decisionHistoryComplete\":false,\"reviewDecisions\":[],\"threads\":[{\"comments\":[{\"body\":\"A thread remark\"}],\"id\":7,\"path\":\"src/Main.java\",\"state\":\"UNRESOLVED\"}],\"truncated\":%s}",
+                "scm.linked-work-items|context/linked_work_items.json|{\"unresolvedReferences\":[],\"workItems\":[{\"number\":31,\"title\":\"A linked issue\"}],\"truncated\":%s}",
+                "scm.pull-request.comments|context/comments.json|[{\"author\":\"reviewer\",\"body\":\"An inline remark\",\"path\":\"src/Main.java\",\"truncated\":%s}]"
+            })
+    void shouldFingerprintTheWorkAndNotHowMuchOfItTheMirrorHadRead(String source, String path, String record) {
+        var recordKind = new SourceKind(source);
+        var whileSyncing = new SourceCaptureState.Available(
+                SourceContentState.NON_EMPTY,
+                SourceCompleteness.PARTIAL,
+                new SourceCaptureFacts(Instant.parse("2026-10-01T12:00:00Z"), null, null, null));
+        var afterSync = new SourceCaptureState.Available(
+                SourceContentState.NON_EMPTY,
+                SourceCompleteness.COMPLETE,
+                new SourceCaptureFacts(Instant.parse("2026-10-01T12:00:05Z"), null, null, null));
+        String captured = SourceFingerprint.of(
+                mapper,
+                recordKind,
+                whileSyncing,
+                Map.of(path, record.formatted("true").getBytes(StandardCharsets.UTF_8)));
+
+        assertThat(captured).isNotNull();
+        assertThat(SourceFingerprint.of(
+                        mapper,
+                        recordKind,
+                        afterSync,
+                        Map.of(path, record.formatted("false").getBytes(StandardCharsets.UTF_8))))
+                .as("the same work, read whole")
+                .isEqualTo(captured);
+        assertThat(SourceFingerprint.of(
+                        mapper,
+                        recordKind,
+                        afterSync,
+                        Map.of(
+                                path,
+                                record.replace("A ", "Another ")
+                                        .replace("An ", "Another ")
+                                        .formatted("false")
+                                        .getBytes(StandardCharsets.UTF_8))))
+                .as("changed work")
+                .isNotEqualTo(captured);
     }
 
     @Test

@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -145,12 +146,31 @@ public class ResultFreshness {
     }
 
     public Currentness capture(long workspaceId, long itemId, @Nullable JsonNode facts) {
+        return check(workspaceId, itemId, facts).currentness();
+    }
+
+    /**
+     * Whether the sources that a capture fingerprinted still hold what it read, and which of them do not.
+     *
+     * @param changed the sources whose current fingerprint differs from the captured one
+     * @param unread the captured sources that cannot be fingerprinted now
+     */
+    public record Check(Currentness currentness, Set<String> changed, Set<String> unread) {}
+
+    public Check check(long workspaceId, long itemId, @Nullable JsonNode facts) {
         var captured = fingerprints(facts);
         var item = items.find(workspaceId, itemId);
-        if (item.isEmpty()) return Currentness.STALE;
-        return captured.isEmpty()
-                ? Currentness.UNVERIFIABLE
-                : compare(captured, items.fingerprints(item.orElseThrow(), captured.keySet()));
+        if (item.isEmpty()) return new Check(Currentness.STALE, Set.of(), Set.of());
+        if (captured.isEmpty()) return new Check(Currentness.UNVERIFIABLE, Set.of(), Set.of());
+        var current = items.fingerprints(item.orElseThrow(), captured.keySet());
+        var changed = new TreeSet<String>();
+        var unread = new TreeSet<String>();
+        captured.forEach((kind, fingerprint) -> {
+            String now = current.get(kind);
+            if (now == null) unread.add(kind.value());
+            else if (!now.equals(fingerprint)) changed.add(kind.value());
+        });
+        return new Check(compare(captured, current), Set.copyOf(changed), Set.copyOf(unread));
     }
 
     private static Map<SourceKind, String> fingerprints(@Nullable JsonNode facts) {
