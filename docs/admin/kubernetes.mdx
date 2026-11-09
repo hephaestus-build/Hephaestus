@@ -862,11 +862,16 @@ As the owner of each table, `hephaestus_owner` is not held to the row-level secu
 No table has a policy yet.
 
 The chart file `files/database-roles.sql` sets up the owner and the application role.
-It is idempotent:
+The chart file `files/database-quiet.sql` runs first, in the same `psql` session.
+It turns off the settings that would record a password: `pg_stat_statements.track_utility`, `log_statement`, `log_min_duration_statement`, `log_min_duration_sample` and `log_min_error_statement`.
+`database-roles.sql` does not run without it.
+Both files need `psql` 15 or later and PostgreSQL 16 or later, and they stop with a message on an older version.
+Hephaestus itself needs PostgreSQL 18 ([Compatibility policy](./compatibility-policy#database-baseline-prerequisites)).
+
+`database-roles.sql` is idempotent:
 
 - It creates each role that does not exist and sets its password.
   It reads both passwords from the environment of `psql`, never from its command line.
-  It keeps them out of the statement statistics and out of the server log.
 - It stops if either role is a superuser, bypasses row-level security, creates roles or replicates.
 - It makes `hephaestus_owner` the owner of the database.
 - It removes the right of every other role to create objects in the schema `public`. A database from before PostgreSQL 15 gives that right to all roles.
@@ -892,7 +897,7 @@ The chart never gets the administrator login of your PostgreSQL.
 Thus, you set up the roles yourself.
 Do this before the first install, after each change of their passwords, and after each update of the server's extensions.
 
-1. Get `files/database-roles.sql` from the verified chart of the release, as [Verify the release chart](#verify-the-release-chart) describes.
+1. Get `files/database-quiet.sql` and `files/database-roles.sql` from the verified chart of the release, as [Verify the release chart](#verify-the-release-chart) describes.
 2. Generate a password for each role:
 
    ```bash
@@ -905,6 +910,7 @@ Do this before the first install, after each change of their passwords, and afte
 
    ```bash
    psql "host=<host> dbname=hephaestus user=<administrator> sslmode=verify-full" \
+     -f "chart-$VERSION/hephaestus/files/database-quiet.sql" \
      -f "chart-$VERSION/hephaestus/files/database-roles.sql"
    ```
 
@@ -914,12 +920,25 @@ The administrator can be a superuser or a role with `CREATEROLE` and `CREATEDB`,
 
 - It must own the Hephaestus database, or be a member of its owner.
 - If the roles exist, it must have created them, or have the `ADMIN` option on them.
-- The file makes it a member of `hephaestus_owner`, so that it can give the database and the objects to that role.
+- The file makes it a member of `hephaestus_owner`, with `INHERIT` and `SET`.
+  Thus, it can give the database and the objects to that role.
+  The administrator can then act as `hephaestus_owner`, and the row-level security of its tables does not apply to it.
+  This gives it nothing new: with the `ADMIN` option on the role, it could already grant itself that membership.
 
-The file stops if it cannot keep the passwords out of the statement statistics.
-This occurs when the server preloads `pg_stat_statements` with `pg_stat_statements.track_utility = on`, and the administrator may not change that setting.
-The same applies to `log_statement` other than `none`.
-Then set `pg_stat_statements.track_utility = off` and `log_statement = none` for the administrator at the service, and run the file again.
+Only a superuser may change the settings that `database-quiet.sql` turns off.
+For each setting that the administrator may not change, the file checks the value that applies:
+
+- If `pg_stat_statements.track_utility` is `on`, or `log_statement` is not `none`, the file stops.
+- If `log_min_duration_statement` or `log_min_duration_sample` is not `-1`, the file stops.
+- If `log_min_error_statement` is not `panic`, the file continues with a warning.
+  Then a statement of the run that fails writes its password to the server log.
+
+Before you run the files, set these values for the administrator at the service:
+
+- `pg_stat_statements.track_utility = off`
+- `log_statement = none`
+- `log_min_duration_statement = -1` and `log_min_duration_sample = -1`
+- `log_min_error_statement = panic`
 
 These are the roles and grants of the file:
 

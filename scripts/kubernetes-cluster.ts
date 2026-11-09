@@ -630,6 +630,11 @@ async function externalPostgresql(
 	]);
 }
 
+/** A file of the chart's `files/` folder. */
+async function chartFile(file: string): Promise<string> {
+	return readFile(path.join(CHART, "files", file), "utf8");
+}
+
 /**
  * The operator's step for an external PostgreSQL: the chart's roles, as docs/admin/kubernetes.mdx § Database roles
  * runs them. The passwords travel on standard input into the environment of psql, which the file reads, never in an
@@ -638,7 +643,7 @@ async function externalPostgresql(
 async function externalDatabaseRoles(data: Readonly<Record<string, string>>): Promise<void> {
 	const owner = data.DATABASE_OWNER_PASSWORD ?? "";
 	const app = data.DATABASE_APP_PASSWORD ?? "";
-	const script = await readFile(path.join(CHART, "files", "database-roles.sql"), "utf8");
+	const script = `${await chartFile("database-quiet.sql")}\n${await chartFile("database-roles.sql")}`;
 	await kubectl(
 		[
 			"-n",

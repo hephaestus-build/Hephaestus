@@ -50,7 +50,8 @@ spec:
           securityContext:
             {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
         {{- if .Values.postgresql.bundled }}
-        # The roles of files/database-roles.sql, as the administrator, before each migration: a changed
+        # The roles of files/database-roles.sql, after files/database-quiet.sql in the same session, as the
+        # administrator, before each migration: a changed
         # password takes effect with the upgrade. Only this container has the administrator's password.
         # An external PostgreSQL gets no such container: its operator runs the file
         # (docs/admin/kubernetes.mdx § Database roles).
@@ -63,6 +64,7 @@ spec:
             # The file reads both passwords from the environment, never from the command line.
             - |
               psql --no-psqlrc <<'SQL'
+              {{- .Files.Get "files/database-quiet.sql" | nindent 14 }}
               {{- .Files.Get "files/database-roles.sql" | nindent 14 }}
               SQL
           env:

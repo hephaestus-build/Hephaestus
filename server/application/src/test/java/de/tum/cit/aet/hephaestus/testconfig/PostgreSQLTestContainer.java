@@ -6,6 +6,8 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -47,7 +49,11 @@ public final class PostgreSQLTestContainer {
      * The roles of the chart, as its migration Job sets them up (docs/admin/kubernetes.mdx § Database roles): the
      * default database is migrated by the owner and used by the application role.
      */
-    private static final String DATABASE_ROLES = "/tmp/database-roles.sql";
+    private static final String CHART_FILES = "/tmp/chart-files/";
+
+    /** The chart's SQL files, as the migration Job and the monitor Job run them. */
+    private static final List<String> CHART_SQL =
+            List.of("database-quiet.sql", "database-roles.sql", "database-monitor.sql");
 
     private static final String MIGRATED_TEMPLATE_DATABASE = "hephaestus_template_dev";
     private static final Pattern DATABASE_NAME = Pattern.compile("[a-z][a-z0-9_]*");
@@ -204,25 +210,51 @@ public final class PostgreSQLTestContainer {
                 .get();
     }
 
-    /** psql reads both passwords from its environment, as the chart's init container gives them. */
+    /** The quiet settings, then the roles, as the chart's init container runs them. */
     private static ExecResult runDatabaseRoles(PostgreSQLContainer postgres, String database, String administrator) {
+        return runChartSql(
+                postgres,
+                database,
+                administrator,
+                Map.of("DATABASE_OWNER_PASSWORD", OWNER_PASSWORD, "DATABASE_APP_PASSWORD", APP_PASSWORD),
+                List.of("database-quiet.sql", "database-roles.sql"));
+    }
+
+    /**
+     * Runs files of the chart's {@code files/} in one psql session, with the given environment, and returns how psql
+     * ended. psql reads each password from its environment, as the chart's Jobs give them.
+     */
+    public static synchronized ExecResult runChartSqlAs(
+            String database, String administrator, Map<String, String> environment, List<String> files) {
+        validateDatabaseName(database);
+        validateDatabaseName(administrator);
+        return runChartSql(getInstance(), database, administrator, environment, files);
+    }
+
+    private static ExecResult runChartSql(
+            PostgreSQLContainer postgres,
+            String database,
+            String administrator,
+            Map<String, String> environment,
+            List<String> files) {
+        var command = new ArrayList<>(
+                List.of("psql", "--no-psqlrc", "--quiet", "--username=" + administrator, "--dbname=" + database));
+        for (String file : files) {
+            if (!CHART_SQL.contains(file)) {
+                throw new IllegalArgumentException("Not a chart SQL file: " + file);
+            }
+            command.add("--file=" + CHART_FILES + file);
+        }
         try {
             return postgres.execInContainer(ExecConfig.builder()
-                    .command(new String[] {
-                        "psql",
-                        "--no-psqlrc",
-                        "--quiet",
-                        "--username=" + administrator,
-                        "--dbname=" + database,
-                        "--file=" + DATABASE_ROLES
-                    })
-                    .envVars(Map.of("DATABASE_OWNER_PASSWORD", OWNER_PASSWORD, "DATABASE_APP_PASSWORD", APP_PASSWORD))
+                    .command(command.toArray(String[]::new))
+                    .envVars(environment)
                     .build());
         } catch (IOException exception) {
-            throw new IllegalStateException("database-roles.sql could not run", exception);
+            throw new IllegalStateException("psql could not run " + files, exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("database-roles.sql was interrupted", exception);
+            throw new IllegalStateException("psql was interrupted running " + files, exception);
         }
     }
 
@@ -258,10 +290,12 @@ public final class PostgreSQLTestContainer {
                 .withTmpFs(Map.of("/var/lib/postgresql", "rw"));
 
         newContainer.start();
-        newContainer.copyFileToContainer(
-                MountableFile.forHostPath(Path.of(
-                        System.getProperty("basedir", "."), "../../deploy/chart/hephaestus/files/database-roles.sql")),
-                DATABASE_ROLES);
+        for (String file : CHART_SQL) {
+            newContainer.copyFileToContainer(
+                    MountableFile.forHostPath(
+                            Path.of(System.getProperty("basedir", "."), "../../deploy/chart/hephaestus/files", file)),
+                    CHART_FILES + file);
+        }
         ExecResult roles = runDatabaseRoles(newContainer, DEFAULT_TEST_DB, newContainer.getUsername());
         if (roles.getExitCode() != 0) {
             throw new IllegalStateException("database-roles.sql failed: " + roles.getStderr());

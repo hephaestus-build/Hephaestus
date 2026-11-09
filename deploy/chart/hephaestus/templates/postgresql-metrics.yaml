@@ -70,7 +70,7 @@ spec:
 # for the server, not a Helm hook. Each statement is idempotent, and the password is set every time, so
 # a changed DATABASE_MONITOR_PASSWORD takes effect with the next upgrade. The extension goes in a schema
 # of its own, so the application's schema stays unchanged. An external PostgreSQL gets no Job: its
-# operator runs the statements of docs/admin/observability.mdx § Database metrics.
+# operator runs the same two files (docs/admin/observability.mdx § Database metrics).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -98,23 +98,13 @@ spec:
           command:
             - sh
             - -ec
-            # psql reads the password from the environment, never from the command line, and substitutes
-            # :'password' as a quoted literal only in a script, not in -c. The settings keep it out of the
-            # statement statistics and the server log.
+            # files/database-monitor.sql, after files/database-quiet.sql in the same session: psql reads the
+            # password from the environment, and it reaches neither the statement statistics nor the server log.
             - |
               until pg_isready --quiet; do sleep 2; done
-              psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
-              SET pg_stat_statements.track_utility = off;
-              SET log_statement = 'none';
-              SET log_min_error_statement = 'panic';
-              \getenv password DATABASE_MONITOR_PASSWORD
-              SELECT 'CREATE ROLE hephaestus_monitor' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hephaestus_monitor') \gexec
-              ALTER ROLE hephaestus_monitor WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION CONNECTION LIMIT 2 PASSWORD :'password';
-              GRANT pg_monitor TO hephaestus_monitor;
-              CREATE SCHEMA IF NOT EXISTS monitoring;
-              GRANT USAGE ON SCHEMA monitoring TO hephaestus_monitor;
-              CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring;
-              ALTER ROLE hephaestus_monitor SET search_path = monitoring, public;
+              psql --no-psqlrc <<'SQL'
+              {{- .Files.Get "files/database-quiet.sql" | nindent 14 }}
+              {{- .Files.Get "files/database-monitor.sql" | nindent 14 }}
               SQL
           env:
             - name: PGHOST

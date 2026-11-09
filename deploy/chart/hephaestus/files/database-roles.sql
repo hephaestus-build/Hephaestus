@@ -1,44 +1,20 @@
 -- The database roles of Hephaestus (docs/admin/kubernetes.mdx § Database roles). Run it as the PostgreSQL
--- administrator, connected to the Hephaestus database, before each migration, with both passwords in the
--- environment of psql, never on its command line:
+-- administrator, connected to the Hephaestus database, before each migration, after database-quiet.sql in the same
+-- session, with both passwords in the environment of psql, never on its command line:
 --
---   DATABASE_OWNER_PASSWORD=… DATABASE_APP_PASSWORD=… psql -f database-roles.sql
+--   DATABASE_OWNER_PASSWORD=… DATABASE_APP_PASSWORD=… psql -f database-quiet.sql -f database-roles.sql
 --
 -- hephaestus_owner owns the database, the schema objects and runs the migration. hephaestus_app reads and writes
 -- the rows of the server and the worker, and owns nothing. Neither is a superuser, creates roles, replicates or has
--- BYPASSRLS; as the owner of its tables, hephaestus_owner is still not held to their policies unless a table forces them. The administrator may be a superuser, or a role with CREATEROLE and CREATEDB, as
--- a managed PostgreSQL service gives. Each statement is idempotent, and the passwords are set each time, so a
--- changed password takes effect with the next run.
+-- BYPASSRLS. As the owner of its tables, hephaestus_owner is still not held to their policies unless a table forces
+-- them. The administrator may be a superuser, or a role with CREATEROLE and CREATEDB, as a managed PostgreSQL service
+-- gives. Each statement is idempotent, and the passwords are set each time, so a changed password takes effect with
+-- the next run.
 \set ON_ERROR_STOP on
-
--- The passwords must reach neither the statement statistics nor the server log. A role that may not change a
--- setting stops here when the setting would record them, and names it.
-DO $$
-DECLARE
-    setting record;
-BEGIN
-    FOR setting IN
-        SELECT * FROM (VALUES ('pg_stat_statements.track_utility', 'off'), ('log_statement', 'none'),
-                              ('log_min_error_statement', 'panic')) AS quiet (name, value)
-    LOOP
-        BEGIN
-            PERFORM set_config(setting.name, setting.value, false);
-        EXCEPTION WHEN insufficient_privilege THEN
-            IF current_setting(setting.name, true) IS NOT DISTINCT FROM setting.value THEN
-                NULL;
-            ELSIF setting.name = 'log_min_error_statement' THEN
-                RAISE WARNING 'database-roles.sql: % stays %: a failed statement of this run writes its password to the server log',
-                    setting.name, current_setting(setting.name);
-            ELSE
-                RAISE EXCEPTION 'database-roles.sql: % is % and % may not change it, so the passwords would be recorded',
-                    setting.name, current_setting(setting.name), current_user
-                    USING HINT = format('Set %s = %s for this role at the server, or grant it SET on the parameter, and run this file again.',
-                                        setting.name, setting.value);
-            END IF;
-        END;
-    END LOOP;
-END
-$$;
+\if :{?hephaestus_quiet}
+\else
+DO $$ BEGIN RAISE EXCEPTION 'database-roles.sql sets passwords: run database-quiet.sql first, in the same psql session'; END $$;
+\endif
 
 \getenv owner_password DATABASE_OWNER_PASSWORD
 \getenv app_password DATABASE_APP_PASSWORD
@@ -74,11 +50,13 @@ BEGIN;
 SELECT 'GRANT hephaestus_owner TO CURRENT_USER WITH INHERIT TRUE, SET TRUE'
 WHERE NOT (pg_has_role('hephaestus_owner', 'SET') AND pg_has_role('hephaestus_owner', 'USAGE')) \gexec
 
--- The database owner owns the schema public (pg_database_owner) and may create the schema partman.
+-- The database owner may create the schema partman. From PostgreSQL 15 on, it also owns the schema public, through
+-- pg_database_owner.
 SELECT format('ALTER DATABASE %I OWNER TO hephaestus_owner', current_database()) \gexec
 
--- A database created before PostgreSQL 15 lets every role create objects in public. The application role must not:
--- an object that it plants there would resolve in a later migration of the owner.
+-- A database created before PostgreSQL 15 keeps public with its old owner, and lets every role create objects there.
+-- The application role must not: an object that it plants there would resolve in a later migration of the owner.
+-- The owner keeps CREATE through the grant, whoever owns public.
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE, CREATE ON SCHEMA public TO hephaestus_owner;
 
@@ -129,7 +107,12 @@ WHERE EXISTS (SELECT FROM pg_namespace WHERE nspname = 'partman') \gexec
 -- EXECUTE unless the migration revokes it, as it does for the partition maintenance of auth_event.
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO hephaestus_app;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO hephaestus_app;
-GRANT EXECUTE ON ALL ROUTINES IN SCHEMA public TO hephaestus_app;
+-- The routines of the schema only: those of an extension keep PUBLIC's EXECUTE, and a grant on them by an
+-- administrator that does not own them only warns.
+SELECT format('GRANT EXECUTE ON ROUTINE %s TO hephaestus_app', p.oid::regprocedure)
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proowner = 'hephaestus_owner'::regrole
+  AND NOT EXISTS (SELECT FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e') \gexec
 ALTER DEFAULT PRIVILEGES FOR ROLE hephaestus_owner IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO hephaestus_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE hephaestus_owner IN SCHEMA public

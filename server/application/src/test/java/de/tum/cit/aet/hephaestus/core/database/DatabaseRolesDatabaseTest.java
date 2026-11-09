@@ -9,6 +9,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
@@ -135,12 +136,12 @@ class DatabaseRolesDatabaseTest {
 
     /** The bundled image preloads pg_stat_statements, which records each utility statement for pg_monitor. */
     @Test
-    void shouldKeepThePasswordsOutOfTheStatementStatisticsAndTheLogWhenTheRolesAreSetUp() throws SQLException {
+    void shouldKeepThePasswordsOutOfTheStatementStatisticsWhenTheRolesAndTheMonitorAreSetUp() throws SQLException {
         String canary = "canary-" + UUID.randomUUID();
+        String monitorPassword = "monitor-" + UUID.randomUUID();
         try (Connection connection = connect(INSTALLED)) {
             var asAdministrator = jdbc(connection);
-            asAdministrator.execute("CREATE SCHEMA IF NOT EXISTS monitoring");
-            asAdministrator.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring");
+            recordStatements(asAdministrator);
             asAdministrator.execute("""
                     DO $$ BEGIN
                         IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'roles_monitor') THEN
@@ -148,33 +149,77 @@ class DatabaseRolesDatabaseTest {
                         END IF;
                     END $$""");
             asAdministrator.execute("GRANT USAGE ON SCHEMA monitoring TO roles_monitor");
-            // Without the file's settings, the statistics keep a password in plain text.
+            // Without the settings of database-quiet.sql, the statistics keep a password in plain text.
             asAdministrator.execute("ALTER ROLE roles_monitor PASSWORD '" + canary + "'");
         }
 
         PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_roles_installed");
+        var monitor = PostgreSQLTestContainer.runChartSqlAs(
+                "hephaestus_roles_installed",
+                PostgreSQLTestContainer.administrator().username(),
+                Map.of("DATABASE_MONITOR_PASSWORD", monitorPassword),
+                List.of("database-quiet.sql", "database-monitor.sql"));
+        assertThat(monitor.getExitCode()).as(monitor.getStderr()).isZero();
 
-        TestDatabase monitor = new TestDatabase(INSTALLED.jdbcUrl(), "roles_monitor", canary);
-        try (Connection connection = connect(monitor)) {
+        TestDatabase asMonitorRole = new TestDatabase(INSTALLED.jdbcUrl(), "roles_monitor", canary);
+        try (Connection connection = connect(asMonitorRole)) {
             var asMonitor = jdbc(connection);
-            String recorded = "SELECT count(*) FROM monitoring.pg_stat_statements WHERE strpos(query, ?) > 0";
-            assertThat(asMonitor.queryForObject(recorded, Long.class, canary)).isPositive();
+            assertThat(recorded(asMonitor, canary)).isPositive();
             for (String password : List.of(
                     PostgreSQLTestContainer.asOwner(INSTALLED).password(),
-                    PostgreSQLTestContainer.asApplication(INSTALLED).password())) {
-                assertThat(asMonitor.queryForObject(recorded, Long.class, password))
-                        .isZero();
+                    PostgreSQLTestContainer.asApplication(INSTALLED).password(),
+                    monitorPassword)) {
+                assertThat(recorded(asMonitor, password)).isZero();
                 assertThat(PostgreSQLTestContainer.getLogs()).doesNotContain(password);
             }
         }
+        // The exporter logs in with the password that the file set.
+        try (Connection connection =
+                connect(new TestDatabase(INSTALLED.jdbcUrl(), "hephaestus_monitor", monitorPassword))) {
+            assertThat(jdbc(connection).queryForObject("SELECT pg_has_role('pg_monitor', 'USAGE')", Boolean.class))
+                    .isTrue();
+        }
+    }
+
+    /** pgBadger and similar tools read a log of every statement, with its duration. */
+    @Test
+    void shouldKeepThePasswordsOutOfALogOfEveryStatementWhenTheRolesAreSetUp() throws SQLException {
+        String canary = "canary-" + UUID.randomUUID();
+        String administrator = PostgreSQLTestContainer.administrator().username();
+        try (Connection connection = connect(INSTALLED)) {
+            var asAdministrator = jdbc(connection);
+            asAdministrator.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'roles_log_canary') THEN
+                            CREATE ROLE roles_log_canary;
+                        END IF;
+                    END $$""");
+            asAdministrator.execute("ALTER ROLE " + administrator + " SET log_min_duration_statement = 0");
+            try {
+                // A session of the administrator now logs each statement it runs, with a password in plain text.
+                try (Connection logged = connect(INSTALLED)) {
+                    jdbc(logged).execute("ALTER ROLE roles_log_canary PASSWORD '" + canary + "'");
+                }
+                assertThat(PostgreSQLTestContainer.getLogs()).contains(canary);
+
+                PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_roles_installed");
+            } finally {
+                asAdministrator.execute("ALTER ROLE " + administrator + " RESET log_min_duration_statement");
+            }
+        }
+        assertThat(PostgreSQLTestContainer.getLogs())
+                .doesNotContain(PostgreSQLTestContainer.asOwner(INSTALLED).password())
+                .doesNotContain(PostgreSQLTestContainer.asApplication(INSTALLED).password());
     }
 
     /** A managed PostgreSQL service gives an administrator with CREATEROLE and CREATEDB, no superuser. */
     @Test
     void shouldSetUpTheRolesWhenTheAdministratorIsNoSuperuser() throws SQLException {
         String administrator = "roles_managed_admin";
+        String monitorPassword = "monitor-" + UUID.randomUUID();
         try (Connection connection = connect(INSTALLED)) {
             var asSuperuser = jdbc(connection);
+            recordStatements(asSuperuser);
             asSuperuser.execute("""
                     DO $$ BEGIN
                         IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'roles_managed_admin') THEN
@@ -194,7 +239,24 @@ class DatabaseRolesDatabaseTest {
             jdbc(connection).execute("CREATE DATABASE hephaestus_roles_managed");
         }
 
-        // It may not turn off the statement statistics, which would then keep the passwords: the file stops.
+        // The monitor's file does not run without the quiet settings, and the quiet settings stop this
+        // administrator, which may not turn off the statement statistics: no password reaches them.
+        Map<String, String> monitorEnvironment = Map.of("DATABASE_MONITOR_PASSWORD", monitorPassword);
+        var alone = PostgreSQLTestContainer.runChartSqlAs(
+                "hephaestus_roles_managed", administrator, monitorEnvironment, List.of("database-monitor.sql"));
+        assertThat(alone.getExitCode()).isNotZero();
+        assertThat(alone.getStderr()).contains("run database-quiet.sql first");
+        var quietMonitor = PostgreSQLTestContainer.runChartSqlAs(
+                "hephaestus_roles_managed",
+                administrator,
+                monitorEnvironment,
+                List.of("database-quiet.sql", "database-monitor.sql"));
+        assertThat(quietMonitor.getExitCode()).isNotZero();
+        assertThat(quietMonitor.getStderr()).contains("pg_stat_statements.track_utility is on");
+        try (Connection connection = connect(INSTALLED)) {
+            assertThat(recorded(jdbc(connection), monitorPassword)).isZero();
+        }
+
         var refused = PostgreSQLTestContainer.runDatabaseRolesAs("hephaestus_roles_managed", administrator);
         assertThat(refused.getExitCode()).isNotZero();
         assertThat(refused.getStderr()).contains("pg_stat_statements.track_utility is on");
@@ -204,6 +266,19 @@ class DatabaseRolesDatabaseTest {
                     .execute("GRANT SET ON PARAMETER pg_stat_statements.track_utility, log_statement"
                             + " TO roles_managed_admin");
         }
+        // A log of every statement, which it may not turn off, stops it too.
+        try (Connection connection = connect(INSTALLED)) {
+            var asSuperuser = jdbc(connection);
+            asSuperuser.execute("ALTER ROLE roles_managed_admin SET log_min_duration_statement = 0");
+            try {
+                var logged = PostgreSQLTestContainer.runDatabaseRolesAs("hephaestus_roles_managed", administrator);
+                assertThat(logged.getExitCode()).isNotZero();
+                assertThat(logged.getStderr()).contains("log_min_duration_statement is 0");
+            } finally {
+                asSuperuser.execute("ALTER ROLE roles_managed_admin RESET log_min_duration_statement");
+            }
+        }
+
         var result = PostgreSQLTestContainer.runDatabaseRolesAs("hephaestus_roles_managed", administrator);
         assertThat(result.getExitCode()).as(result.getStderr()).isZero();
 
@@ -212,6 +287,10 @@ class DatabaseRolesDatabaseTest {
                 administrator,
                 "managed");
         PostgreSQLTestContainer.migrateDatabase(PostgreSQLTestContainer.asOwner(database), "dev,prod");
+        // A run on the migrated schema grants nothing that this administrator may not grant.
+        var again = PostgreSQLTestContainer.runDatabaseRolesAs("hephaestus_roles_managed", administrator);
+        assertThat(again.getExitCode()).as(again.getStderr()).isZero();
+        assertThat(again.getStderr()).doesNotContain("no privileges were granted");
         try (Connection connection = connect(database)) {
             assertThat(jdbc(connection)
                             .queryForObject(
@@ -220,6 +299,18 @@ class DatabaseRolesDatabaseTest {
                     .isEqualTo(PostgreSQLTestContainer.OWNER_USER);
         }
         assertApplicationWorks(database);
+    }
+
+    /** The statement statistics of the whole server, readable in the installed database. */
+    private static void recordStatements(JdbcTemplate asSuperuser) {
+        asSuperuser.execute("CREATE SCHEMA IF NOT EXISTS monitoring");
+        asSuperuser.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring");
+    }
+
+    private static long recorded(JdbcTemplate jdbc, String text) {
+        Long count = jdbc.queryForObject(
+                "SELECT count(*) FROM monitoring.pg_stat_statements WHERE strpos(query, ?) > 0", Long.class, text);
+        return count == null ? 0 : count;
     }
 
     @Test

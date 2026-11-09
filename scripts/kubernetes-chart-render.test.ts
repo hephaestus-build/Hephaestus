@@ -3366,7 +3366,12 @@ await test("each database purpose logs in with its own role, and no Hephaestus p
 	]);
 	const script = String(list(get(roles, "command")).at(-1));
 	const file = readFileSync(path.join(chart, "files", "database-roles.sql"), "utf8").trimEnd();
+	const quietFile = readFileSync(path.join(chart, "files", "database-quiet.sql"), "utf8").trimEnd();
 	assert.ok(script.includes(file), "the init container runs files/database-roles.sql");
+	assert.ok(
+		script.includes(quietFile) && script.indexOf(quietFile) < script.indexOf(file),
+		"the quiet settings come first, in the same session",
+	);
 	// The file reads the passwords from the environment: neither reaches the command line.
 	assert.doesNotMatch(script, /-v (?:owner|app)_password/u);
 	const postgresql = workload(bundledRelease, "postgresql");
@@ -4386,26 +4391,29 @@ await test("the PostgreSQL exporter runs apart from the database, and its role J
 	const script = String(
 		list(get(job, "spec", "template", "spec", "containers", 0, "command")).at(-1),
 	);
-	// Idempotent, and the password is set on every revision, so a rotated key takes effect.
-	assert.match(
-		script,
-		/WHERE NOT EXISTS \(SELECT FROM pg_roles WHERE rolname = 'hephaestus_monitor'\) \\gexec/u,
-	);
-	assert.match(
-		script,
-		/ALTER ROLE hephaestus_monitor WITH LOGIN NOSUPERUSER .* PASSWORD :'password';/u,
-	);
-	assert.match(script, /CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring;/u);
-	// The password stays off the command line, out of the statement statistics and out of the server log.
-	assert.doesNotMatch(script, /-v password/u);
-	assert.match(script, /^\\getenv password DATABASE_MONITOR_PASSWORD$/mu);
-	const quiet = script.indexOf("SET pg_stat_statements.track_utility = off;");
+	// The chart's monitor file, after the quiet settings in the same session: the password stays off the command
+	// line, out of the statement statistics and out of the server log. The password is set on every revision, so a
+	// rotated key takes effect.
+	const quietFile = readFileSync(path.join(chart, "files", "database-quiet.sql"), "utf8").trimEnd();
+	const monitorFile = readFileSync(
+		path.join(chart, "files", "database-monitor.sql"),
+		"utf8",
+	).trimEnd();
+	assert.ok(script.includes(quietFile), "the monitor Job runs files/database-quiet.sql");
+	assert.ok(script.includes(monitorFile), "the monitor Job runs files/database-monitor.sql");
 	assert.ok(
-		quiet !== -1 && quiet < script.indexOf("PASSWORD :'password'"),
-		"the settings come first",
+		script.indexOf(quietFile) < script.indexOf(monitorFile),
+		"the quiet settings come first",
 	);
-	assert.match(script, /^SET log_statement = 'none';$/mu);
-	assert.match(script, /^SET log_min_error_statement = 'panic';$/mu);
+	assert.doesNotMatch(script, /-v (?:monitor_)?password/u);
+	assert.match(
+		monitorFile,
+		/^ALTER ROLE hephaestus_monitor WITH LOGIN .* PASSWORD :'monitor_password';$/mu,
+	);
+	assert.match(
+		monitorFile,
+		/CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring;/u,
+	);
 	assert.deepEqual(postgresqlPeers(on).slice(-2), ["postgresql-exporter", "postgresql-monitor"]);
 
 	// An external PostgreSQL is the operator's to prepare: the exporter reads it, and no Job runs.
