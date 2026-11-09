@@ -998,8 +998,8 @@ Right after a merge, that run is still building, so the pull request builds ever
   Trivy copies each image layer to a temporary file after the builds have filled the root volume.
   Thus, `scripts/prepare-image-scan-runner.ts` gives the scans' temporary files the volume with the most free space.
 - A pull request that matches the `kubernetes` filter runs `Chart` and the latest k3s on amd64.
-  The merge queue also runs the lowest supported minor on amd64 and arm64, `kind 1.37 Calico` and
-  the backup drill. The kind leg removes kind's bind mounts over `/sys/devices/virtual/dmi/id` on each
+  The merge queue also runs the lowest supported minor on amd64 and arm64 and `kind 1.37 Calico`.
+  The kind leg removes kind's bind mounts over `/sys/devices/virtual/dmi/id` on each
   node, because with them no sandbox Pod with `hostUsers: false` can start. It tests the commit that `main` receives, so a pull request does not repeat
   them. A dispatch runs the same legs as the queue.
   arm64 runs only the lowest minor, the minor of the arm64 host.
@@ -1102,6 +1102,23 @@ Right after a merge, that run is still building, so the pull request builds ever
   thus finish out of order. Two rules keep that safe. A staging promotion for an older build promotes
   the newest successful build that descends from it. A replaced promotion thus strands no build. The
   image build moves the `main` tags only forward, and never leaves them behind a published commit.
+
+## Recovery tests
+
+The latest-minor `amd64` leg runs the replacement-storage recovery drill nightly and on pull requests that change its inputs.
+The `kubernetes-recovery` path filter owns those inputs: the chart, PostgreSQL image, drill script and qualification workflows.
+Merge groups skip this destructive drill. The JetStream restore test stays in the provider integration shard.
+
+The drill backs PostgreSQL up to a disposable S3-compatible server and archives a later WAL-only row.
+It removes the disposable source claim, provisions a fresh claim and volume on a replacement k3d node, and restores through the chart.
+The drill requires removal of the old volume, checks the replacement node and requires both rows after replay.
+It applies clone lockdown before application roles restart.
+It preserves the cluster configuration and Secrets. It does not rehearse recovery of those files or an off-node host failure.
+
+`JetStreamRestoreIntegrationTest` checks consumer checkpoints after a graceful stop and cold copy of the released broker's store.
+Two durable consumers resume from different acknowledged positions on a new broker container.
+The test requires redelivery of unacknowledged work, no repeated application of acknowledged events, and successful publication after restore.
+It does not qualify snapshot replay with PostgreSQL rollback, external delivery, or recovery after an abrupt broker failure.
 
 ## Workflow validation
 

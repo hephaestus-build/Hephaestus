@@ -11,7 +11,7 @@
  *   upgrade  install, and check that PostgreSQL and NATS kept their Pods
  *   verify   every workload ready, and each worker's isolation probe passed
  *   request  one HTTPS request to the webapp and the API through that Gateway
- *   backup-drill  pgBackRest to a throwaway S3 server, then a point-in-time restore
+ *   backup-drill  pgBackRest to a throwaway S3 server, then a point-in-time restore on a fresh node
  *   render   the manifests of those values for synthetic images, with backups on and with an external
  *            PostgreSQL, for a schema check without a cluster
  *   release-smoke  the one-host install of docs/admin/kubernetes.mdx § Install on one host (k3s) on
@@ -1229,9 +1229,14 @@ async function s3Storage(work: string): Promise<{ key: string; secret: string }>
 /**
  * The backup and restore drill of docs/admin/kubernetes.mdx § Backup and restore, on the bundled
  * PostgreSQL: a full backup, a row that only the WAL archive holds, a dropped table, and then a
- * point-in-time restore through the chart's restore setting that brings both rows back.
+ * point-in-time restore on a replacement node and volume that brings both rows back.
  */
 export async function backupDrill(work: string, podCidr: string): Promise<void> {
+	const context =
+		process.env.CI === "true" ? await output("kubectl", ["config", "current-context"]) : "";
+	if (context.trim() !== `k3d-${DEV_CLUSTER}`) {
+		throw new Error("the destructive replacement-node drill requires the disposable CI cluster");
+	}
 	const credentials = await s3Storage(work);
 	// Other field managers than `prepare`'s, so that these keys join the Secrets' existing ones.
 	const join = async (name: string, data: Record<string, string>) => {
@@ -1253,11 +1258,27 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 	await join(`${RELEASE}-postgresql-tls`, {
 		"s3-ca.crt": await readFile(path.join(work, "ca.crt"), "utf8"),
 	});
+	// Manual backup Jobs exercise recovery. Future schedules keep CronJobs idle while Helm owns suspend.
+	const scheduled = new Date(Date.now() + 24 * 60 * 60 * 1000);
+	const schedule = [
+		scheduled.getUTCMinutes(),
+		scheduled.getUTCHours(),
+		scheduled.getUTCDate(),
+		scheduled.getUTCMonth() + 1,
+		"*",
+	].join(" ");
+	// Pausing application replicas lowers the automatic budget, but WAL replay needs the source setting.
+	const maxConnections = Number(await psql("SHOW max_connections"));
+	if (!Number.isSafeInteger(maxConnections)) {
+		throw new Error("the source database returned an invalid max_connections setting");
+	}
 	const backup = (restore: { enabled: boolean; time: string }) => ({
 		postgresql: {
+			parameters: { max_connections: maxConnections },
 			backup: {
 				clientTlsSecret: "hephaestus-postgresql-backup-tls",
 				enabled: true,
+				schedule: { full: schedule, differential: schedule },
 				s3: {
 					bucket: BUCKET,
 					endpoint: `s3.${STORAGE_NAMESPACE}.svc`,
@@ -1334,16 +1355,183 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 		"check",
 	]);
 
-	await install(work, await layer("restore", backup({ enabled: true, time: target })));
-	await waitForJob(`${RELEASE}-postgresql-backup-restore-${await revision()}`, "20m");
-	process.stdout.write(`backup drill: restored to ${target}\n`);
-	await install(work, backupOn);
+	const paused = [
+		"--set",
+		"migration.enabled=false,server.replicas=0,webhook.replicas=0,worker.replicas=0",
+	];
+	await install(work, [...backupOn, ...paused]);
+	await kubectl(["-n", NAMESPACE, "scale", `statefulset/${RELEASE}-postgresql`, "--replicas=0"]);
+	await kubectl([
+		"-n",
+		NAMESPACE,
+		"wait",
+		"--for=delete",
+		"pod",
+		"-l",
+		"app.kubernetes.io/component in (postgresql,server,webhook,worker)",
+		"--timeout=5m",
+	]);
+	const claim = `data-${RELEASE}-postgresql-0`;
+	const before = asRecord(
+		parseJson(await kubectl(["-n", NAMESPACE, "get", "pvc", claim, "-o", "json"])),
+		"source claim",
+	);
+	const originalVolume = asString(asRecord(before.spec, "claim spec").volumeName, "source volume");
+	const template = asRecord(
+		parseJson(
+			await kubectl(["-n", NAMESPACE, "get", "statefulset", `${RELEASE}-postgresql`, "-o", "json"]),
+		),
+		"StatefulSet",
+	);
+	const claimTemplate = asRecord(
+		asArray(asRecord(template.spec, "StatefulSet spec").volumeClaimTemplates, "claims")[0],
+		"claim template",
+	);
+	const nodes = asArray(
+		asRecord(parseJson(await kubectl(["get", "nodes", "-o", "json"])), "nodes").items,
+		"nodes.items",
+	)
+		.filter((node) => asRecord(asRecord(node, "node").spec, "node spec").unschedulable !== true)
+		.map((node) =>
+			asString(asRecord(asRecord(node, "node").metadata, "node metadata").name, "node name"),
+		);
+	const nodeName = `${DEV_CLUSTER}-restore-${process.pid}`;
+	await run("k3d", [
+		"node",
+		"create",
+		nodeName,
+		"--cluster",
+		DEV_CLUSTER,
+		"--role",
+		"agent",
+		"--k3s-arg",
+		"--kubelet-arg=pod-max-pids=4096",
+		"--k3s-node-label",
+		`hephaestus.build/restore-drill=${process.pid}`,
+		"--wait",
+		"--timeout",
+		"120s",
+	]);
+	const replacement = asArray(
+		asRecord(
+			parseJson(
+				await kubectl([
+					"get",
+					"nodes",
+					"-l",
+					`hephaestus.build/restore-drill=${process.pid}`,
+					"-o",
+					"json",
+				]),
+			),
+			"replacement nodes",
+		).items,
+		"replacement nodes.items",
+	);
+	if (replacement.length !== 1) {
+		throw new Error("the drill needs exactly one replacement node");
+	}
+	const replacementName = asString(
+		asRecord(asRecord(replacement[0], "node").metadata, "node metadata").name,
+		"replacement node name",
+	);
+	const cordoned: string[] = [];
+	let failure: Error | undefined;
+	try {
+		await kubectl(["-n", NAMESPACE, "delete", "pvc", claim, "--wait=true", "--timeout=5m"]);
+		await kubectl(["wait", "--for=delete", `pv/${originalVolume}`, "--timeout=5m"]);
+		// Existing Pods, including the S3 repository, keep running; only fresh storage must land elsewhere.
+		for (const node of nodes) {
+			await kubectl(["cordon", node]);
+			cordoned.push(node);
+		}
+		await kubectl(
+			["apply", "-f", "-"],
+			JSON.stringify({
+				apiVersion: "v1",
+				kind: "PersistentVolumeClaim",
+				metadata: { name: claim, namespace: NAMESPACE },
+				spec: claimTemplate.spec,
+			}),
+		);
+		await install(work, [
+			...(await layer("restore", backup({ enabled: true, time: target }))),
+			...paused,
+		]);
+		const job = `${RELEASE}-postgresql-backup-restore-${await revision()}`;
+		await waitForJob(job, "20m");
+		const pods = asArray(
+			asRecord(
+				parseJson(
+					await kubectl(["-n", NAMESPACE, "get", "pods", "-l", `job-name=${job}`, "-o", "json"]),
+				),
+				"restore Pods",
+			).items,
+			"restore Pods.items",
+		);
+		if (
+			pods.length === 0 ||
+			pods.some(
+				(pod) =>
+					asRecord(asRecord(pod, "restore Pod").spec, "Pod spec").nodeName !== replacementName,
+			)
+		) {
+			throw new Error("the restore did not run exclusively on the replacement node");
+		}
+		process.stdout.write(`backup drill: restored to ${target} on a new node, claim and volume\n`);
+	} catch (error) {
+		failure =
+			error instanceof Error ? error : new Error("the restore drill failed", { cause: error });
+	} finally {
+		const cleanup = await Promise.allSettled(
+			cordoned.map(async (node) => kubectl(["uncordon", node])),
+		);
+		for (const result of cleanup) {
+			if (result.status === "rejected") {
+				failure ??= new Error("could not uncordon a source node", { cause: result.reason });
+			}
+		}
+	}
+	if (failure !== undefined) {
+		throw failure;
+	}
+	await install(work, [...backupOn, ...paused]);
+	let recovered = false;
+	let recoveryFailure: unknown;
+	for (let attempt = 0; attempt < 150; attempt += 1) {
+		try {
+			const recovery = await psql("SELECT pg_is_in_recovery()");
+			if (recovery.trim() === "f") {
+				recovered = true;
+				break;
+			}
+		} catch (error) {
+			recoveryFailure = error;
+		}
+		await sleep(2000);
+	}
+	if (!recovered) {
+		throw new Error("PostgreSQL did not finish recovery before clone lockdown", {
+			cause: recoveryFailure,
+		});
+	}
+	const restoredPod = asRecord(
+		parseJson(
+			await kubectl(["-n", NAMESPACE, "get", "pod", `${RELEASE}-postgresql-0`, "-o", "json"]),
+		),
+		"restored PostgreSQL Pod",
+	);
+	if (asRecord(restoredPod.spec, "Pod spec").nodeName !== replacementName) {
+		throw new Error("PostgreSQL did not start on the replacement node");
+	}
 	const rows = await psql("SELECT note FROM drill_marker ORDER BY note");
 	const notes = rows.trim().split("\n");
 	if (notes.join("|") !== "in the full backup|only in the WAL archive") {
 		throw new Error(`the restored table holds ${JSON.stringify(notes)}, not both rows`);
 	}
 	process.stdout.write("backup drill: both rows are back, and the dropped table is restored\n");
+	await psql(await readFile(path.join(CHART, "files", "restore-clone-lockdown.sql"), "utf8"));
+	await install(work, backupOn);
 	await verify();
 }
 
