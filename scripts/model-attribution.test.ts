@@ -5,13 +5,6 @@ import { findModelAttribution, MODEL_ATTRIBUTION_PATTERNS } from "./lib/model-at
 
 void test("catches every attribution pattern", () => {
 	assert.deepEqual(
-		findModelAttribution("Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"),
-		["a Co-Authored-By trailer naming a model or tool"],
-	);
-	assert.deepEqual(findModelAttribution("Co-authored-by: gpt-5 <bot@example.com>"), [
-		"a Co-Authored-By trailer naming a model or tool",
-	]);
-	assert.deepEqual(
 		findModelAttribution("Claude-Session: https://claude.ai/code/session_01GZzUtPvAhEnBHsxqWTaRHn"),
 		["a Claude-Session trailer", "a claude.ai/code or session link"],
 	);
@@ -25,12 +18,17 @@ void test("catches every attribution pattern", () => {
 	);
 });
 
-void test("leaves a human Co-authored-by trailer alone", () => {
+void test("allows a Co-authored-by trailer, whether it names a person or a model", () => {
 	assert.deepEqual(findModelAttribution("Co-authored-by: Jane Doe <jane@example.com>"), []);
 	assert.deepEqual(
 		findModelAttribution("Fixes the flaky test.\n\nCo-authored-by: Jane Doe <jane@example.com>"),
 		[],
 	);
+	assert.deepEqual(
+		findModelAttribution("Fixes it.\n\nCo-authored-by: Claude Opus 5.5 <noreply@anthropic.com>"),
+		[],
+	);
+	assert.deepEqual(findModelAttribution("Co-Authored-By: gpt-5 <bot@example.com>"), []);
 });
 
 void test("every pattern has a name unique enough to report on its own", () => {

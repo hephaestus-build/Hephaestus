@@ -290,7 +290,8 @@ void test("attribution checks current metadata and the complete commit list beyo
 	const directory = await mkdtemp(path.join(tmpdir(), "pr-attribution-"));
 	t.after(async () => rm(directory, { recursive: true, force: true }));
 	const clean = "fix(ci): check pull requests";
-	const toolTrailer = "Co-Authored-By: Codex <tool@example.com>";
+	const toolTrailer = "Claude-Session: https://claude.ai/code/session_abc";
+	const modelCoauthor = "Co-Authored-By: Codex <tool@example.com>";
 	for (const [title, body, messages, valid] of [
 		[clean, "A clear description", [clean], true],
 		[clean, null, [clean], true],
@@ -299,6 +300,9 @@ void test("attribution checks current metadata and the complete commit list beyo
 		["Generated with a tool", null, [clean], false],
 		[clean, null, [`${clean}\n\n${toolTrailer}`], false],
 		[clean, null, [`${clean}\n\nCo-authored-by: Contributor <human@example.com>`], true],
+		[clean, null, [`${clean}\n\n${modelCoauthor}`], true],
+		[clean, modelCoauthor, [clean], true],
+		[modelCoauthor, null, [clean], true],
 		[clean, null, [...Array.from({ length: 300 }, () => clean), toolTrailer], false],
 	] as const) {
 		await writeFile(

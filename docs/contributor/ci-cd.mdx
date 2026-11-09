@@ -86,7 +86,7 @@ The job's own limit cancels the run and can lose its log, so the list is the evi
 | Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze, [public contract](#public-contract-gate)                                                                                                                     | `vp run gate:changesets`, `gate:public-contract`                                                 |
 | Docker → Images, Tag unchanged images                                   | One build job per platform builds every image of the run and scans it. The Dockerfile images use `docker buildx bake`. The App Server image uses `pack build` from the packaged JAR. One manifest job merges, attests and signs them. Aliases for unchanged images           | —                                                                        |
 | Actionlint, Zizmor                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
-| PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The title, body, and every commit message follow attribution policy | —                                                                        |
+| PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The title, body, and every commit message contain no `Claude-Session:` trailer, "Generated with" line, or session link (a `Co-authored-by:` trailer is allowed) | —                                                                        |
 
 `Build → App Server: Database`, the PostgreSQL drills, both E2E rows and the integration shards are
 the queue tier ([Two verification tiers](#two-verification-tiers)).
@@ -1132,7 +1132,7 @@ Thus, this check needs network access. Nothing it reads is stored in the reposit
 Pull request policy runs cancel earlier runs only when a new commit arrives.
 An edit therefore cannot replace a successful policy check on the same head with a cancelled check.
 Each run reads the current title, body, and commits from the API.
-The identity check walks every GraphQL commit page. The attribution check reads that same complete list.
+The identity check walks every GraphQL commit page. The attribution check reads that same complete list. It refuses harness and tool markers only: a `Co-authored-by:` trailer that names a model is allowed.
 
 ## Monitoring CI
 

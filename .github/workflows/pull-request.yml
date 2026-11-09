@@ -245,8 +245,8 @@ jobs:
               [
                 "## Attribution check failed",
                 "",
-                "Remove model, agent, harness, or tool attribution from the title, body, and commit messages.",
-                "Human co-author trailers are welcome. AGENTS.md § Pull requests defines this policy.",
+                "Remove harness and tool markers from the title, body, and commit messages.",
+                "A `Co-authored-by:` trailer that names a model is allowed. AGENTS.md § Pull requests defines this policy.",
                 "",
                 ...violations.map((violation) => `- ${violation}`),
                 "",

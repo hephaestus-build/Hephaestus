@@ -96,9 +96,8 @@ export const verifyChangesets = (
 					: `${file}: a release changeset needs a user- or operator-facing summary`,
 			);
 		}
-		// A changeset summary is a release note: it carries no trailer at all, not even a human
-		// co-author's, so `Co-authored-by:` is refused outright rather than only the model-named
-		// shape `scripts/lib/model-attribution.ts` matches.
+		// A changeset summary is a release note: it carries no trailer at all, not even a
+		// `Co-authored-by:` trailer that commit messages may carry.
 		if (/^co-authored-by:/imu.test(summary) || CLAUDE_SESSION_PATTERN.test(summary)) {
 			throw new Error(
 				`${file}: release notes must not contain Co-authored-by or Claude-Session metadata`,
