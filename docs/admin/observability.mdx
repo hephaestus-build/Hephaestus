@@ -352,7 +352,7 @@ For the volume rules, change their name patterns.
 | `HephaestusFeedbackReadbackUnknown` | `practice_feedback_readback_total{outcome="unknown"}`, over one day | Hephaestus could not tell whether a copy reached the work, so the feedback stays Unconfirmed. The copy may be missing, and a retry could post it twice. Readback runs only when a write was in doubt, so one count already needs a look. A proved absence does not fire: there a resend is safe. The alert stays up for one day after the last count |
 | `HephaestusReviewStageSlow` | `agent_job_stage_duration_seconds`, by `stage` | Three samples in six hours above 30 minutes for `sandbox`, or above 10 minutes for another stage. A stage that never ends has no sample: the attempt's deadline ends it, and `HephaestusAgentJobsFailing` reports that |
 | `HephaestusReviewWorkerLost` | `agent_run_reaped_total{kind="review",outcome="attempts_exhausted"}` | Each count is a review that failed because the holder of each of its attempts stopped renewing its lease. Workers that stop that often are evicted, out of memory, or on lost nodes. The alert stays up for one hour after the count |
-| `HephaestusAgentRunReaperFailing` | `agent_run_reaper_failure_total` | The reaper failed at least ten times in ten minutes, for ten minutes. It skips a run that it cannot take back until its next pass, so one broken run does not hold back the others. A run that fails on every pass stays leased and its review waits. The server log names the run |
+| `HephaestusAgentRunReaperFailing` | `agent_run_reaper_failure_total` | The reaper failed at least ten times in ten minutes, for ten minutes. It skips a run that it cannot take back until its next pass, so one broken run does not hold back the others. A run that fails on every pass stays leased and its review waits. The `agent.run.reaper.failed` event names the run |
 | `HephaestusAgentSandboxReaperFailing` | `agent_sandbox_reaper_failure_total` | The sandbox reaper failed at least ten times in ten minutes, for ten minutes. A sandbox that it cannot delete keeps its Pod and its share of the sandbox quota, but its token no longer works. The worker log names the sandbox |
 | `HephaestusReviewFeedbackUnconfirmed` | `agent_job_composition_stopped_total` with outcome `unrecorded` | Each count is a review that closed as Partial because every attempt ended before it confirmed where its feedback went. The results stay. |
 | `HephaestusAgentQueueStalled` | `agent_queue_oldest_age_seconds` | A practice review usually runs for 10 to 16 minutes. A wait of several review durations shows that no worker claims work |
@@ -585,6 +585,7 @@ The log collector of the chart does not read the PostgreSQL container.
 | `context.event.name`                              | Stable name on structured application events. Do not parse the message to identify these events  |
 | `context.traceId`, `context.spanId`               | The active trace scope, when there is one                                                         |
 | `context.job.id`, `context.workspace.id`          | Thread-scoped context, when available                                                            |
+| `context.run.id`, `context.run.epoch`, `context.subject.key` | The [agent run](#agent-run-and-outbox-events) whose holder writes the record, the epoch of its claim, and its subject, such as `review:<id>`. Two records of one run with different epochs come from different claims |
 | `context.installation_id`                         | The GitHub App installation of a sync run, when it has one                                      |
 | `context.integration.route`, `context.integration.delivery` | On `integration.message.failed`: provider and event (`github.push`), and the delivery count |
 | `context.*`                                       | Every other event field and thread-scoped value                                                  |
@@ -717,6 +718,26 @@ Each record has an `event.name` and `workspace.id`.
 | `mentor.turn.ended` | An attempt of a conversation turn ends | `turn.id`, `turn.attempt`, `turn.outcome` |
 
 `practice_review.stage.ended` has no `review.id`. It takes `workspace.id`, `job.id` and the trace ID from the log context of its attempt, so join it by `job.id`.
+
+## Agent run and outbox events
+
+A review attempt runs under an agent run.
+Each record that the attempt writes carries `run.id`, `run.epoch` and `subject.key` in its thread-scoped context, next to `job.id`.
+Join the records of one run by `run.id`, and the records of one claim by `run.id` and `run.epoch`.
+These are fields, not metric labels.
+
+| `event.name` | Emitted when | Fields |
+| --- | --- | --- |
+| `agent.run.requeued` | The reaper takes back an expired lease, and the run has retries left | `run.id`, `run.epoch`, `subject.key`, `workspace.id`, `run.kind` |
+| `agent.run.ended` | The reaper ends a run: its lease expired at its retry limit, or it passed its deadline | The same, and `run.stop_reason` |
+| `agent.run.reaper.failed` | The reaper cannot take back one run. It tries the run again on the next pass | The same, and `error.type` |
+| `action.attempt.failed` | An outbox adapter threw | `action.id`, `action.kind`, `action.attempt`, `error.type`, and `workspace.id` when the action has a workspace |
+| `action.result.late` | An attempt ended after another claim took its action, or after an erasure deleted it. Its result changes nothing | `action.id`, `action.kind`, `action.attempt`, and `workspace.id` when the action has a workspace |
+| `action.ended.uncertain` | An action ended `UNCERTAIN`: its write may have reached the provider, and nothing confirms it | `action.id`, `action.kind`, `action.reason`, and `workspace.id` when the action has a workspace |
+| `action.batch.outlived` | Outbox attempts of one replica ran longer than their lease. They keep running, and their late results change nothing | `action.claims` |
+
+An outbox event names no person and no payload.
+An account email has no workspace, so its events have no `workspace.id`.
 
 ## Feedback trust
 
@@ -1483,8 +1504,10 @@ are available through the private listener described in [Scrape metrics](#scrape
 
 Each practice-review attempt starts a `practice_review.execute` span. Its trace ID can differ from
 the job's submission correlation ID, which is carried as the `hephaestus.job.submission_trace_id`
-attribute rather than as a parent span. Sandbox proxy requests propagate the
-execution trace's sampling decision. A `gen_ai.chat`, `gen_ai.decision`, `gen_ai.embeddings` or
+attribute rather than as a parent span. The span names its agent run as `hephaestus.run.id`,
+`hephaestus.run.epoch` and `hephaestus.subject.key`.
+
+Sandbox proxy requests propagate the execution trace's sampling decision. A `gen_ai.chat`, `gen_ai.decision`, `gen_ai.embeddings` or
 `gen_ai.rerank` span covers each authenticated model request, streamed or not. It records the model,
 the HTTP outcome and the token usage that the provider reported, as `gen_ai.usage.input_tokens` and
 `gen_ai.usage.output_tokens`. A reranking call that a provider billed in search units records

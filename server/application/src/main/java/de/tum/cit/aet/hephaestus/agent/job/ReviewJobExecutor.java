@@ -830,7 +830,7 @@ public class ReviewJobExecutor {
 
     private void runClaimedJob(UUID jobId, ReviewJobClaimService.ClaimResult claim) {
         ReviewJob job = claim.job();
-        var executionSpan = jobTelemetry.startExecution(job);
+        var executionSpan = jobTelemetry.startExecution(job, claim.fence());
         var executionScope = jobTelemetry.executionScope(executionSpan);
         MDC.put(StructuredLogKeys.TRACE_ID, executionSpan.context().traceId());
         MDC.put(StructuredLogKeys.SPAN_ID, executionSpan.context().spanId());
@@ -840,6 +840,9 @@ public class ReviewJobExecutor {
         MDC.put(MDC_JOB_ID, jobId.toString());
         MDC.put(StructuredLogKeys.WORKSPACE_ID, Long.toString(job.getWorkspaceId()));
         MDC.put(MDC_JOB_TYPE, claim.itemKind());
+        MDC.put(StructuredLogKeys.RUN_ID, claim.fence().runId().toString());
+        MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(claim.fence().epoch()));
+        MDC.put(StructuredLogKeys.SUBJECT_KEY, ReviewRunKind.subject(job.getReviewId()));
         Instant startTime = Instant.now();
         String metricOutcome = "unknown";
         ReviewJobStatus recordedTerminal = null;
@@ -962,6 +965,9 @@ public class ReviewJobExecutor {
                 MDC.remove(MDC_JOB_ID);
                 MDC.remove(StructuredLogKeys.WORKSPACE_ID);
                 MDC.remove(MDC_JOB_TYPE);
+                MDC.remove(StructuredLogKeys.RUN_ID);
+                MDC.remove(StructuredLogKeys.RUN_EPOCH);
+                MDC.remove(StructuredLogKeys.SUBJECT_KEY);
                 MDC.remove(StructuredLogKeys.TRACE_ID);
                 MDC.remove(StructuredLogKeys.SPAN_ID);
                 MDC.remove(StructuredLogKeys.TRACE_FLAGS);

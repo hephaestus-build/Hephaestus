@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.run;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.EnumMap;
 import java.util.HashSet;
@@ -16,6 +17,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.spi.LoggingEventBuilder;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.TransactionStatus;
@@ -87,11 +89,10 @@ public class AgentRunReaper {
             } catch (RuntimeException e) {
                 failed.add(row.get().getId());
                 meters.counter(AgentMetrics.AGENT_RUN_REAPER_FAILURE).increment();
-                log.warn(
-                        "Run reaper failed on one run; trying it again next tick: runId={}, error={}",
-                        row.get().getId(),
-                        e.getClass().getSimpleName(),
-                        e);
+                event(log.atWarn(), "agent.run.reaper.failed", row.get())
+                        .addKeyValue("error.type", e.getClass().getName())
+                        .setCause(e)
+                        .log("Run reaper failed on one run; it tries the run again next tick");
             }
         }
     }
@@ -112,11 +113,7 @@ public class AgentRunReaper {
                         return;
                     runs.notifyQueued(AgentRunNotifications.CHANNEL, kind.name());
                     count(kind, "requeued");
-                    log.info(
-                            "Run lease expired, requeued: runId={}, kind={}, epoch={}",
-                            lost.runId(),
-                            kind,
-                            lost.epoch());
+                    event(log.atInfo(), "agent.run.requeued", row).log("Run lease expired; the run is queued again");
                     return;
                 }
                 reason = AgentRunStopReason.ATTEMPTS_EXHAUSTED;
@@ -125,7 +122,9 @@ public class AgentRunReaper {
             }
             if (!taken(status, runs.endExpired(lost.runId(), lost.workspaceId(), lost.epoch(), reason.name()))) return;
             count(kind, reason.name().toLowerCase(Locale.ROOT));
-            log.info("Run lease expired, ended: runId={}, kind={}, reason={}", lost.runId(), kind, reason);
+            event(log.atInfo(), "agent.run.ended", row)
+                    .addKeyValue("run.stop_reason", reason.name())
+                    .log("Run lease expired; the run ended");
         });
     }
 
@@ -138,7 +137,21 @@ public class AgentRunReaper {
             if (!taken(status, runs.endExpired(row.getId(), row.getWorkspaceId(), row.getLeaseEpoch(), "DEADLINE")))
                 return;
             count(kind, AgentRunStopReason.DEADLINE.name().toLowerCase(Locale.ROOT));
+            event(log.atInfo(), "agent.run.ended", row)
+                    .addKeyValue("run.stop_reason", AgentRunStopReason.DEADLINE.name())
+                    .log("Queued run passed its deadline; the run ended");
         });
+    }
+
+    /** A reaper event names the run as every record of its holder does. */
+    private static LoggingEventBuilder event(
+            LoggingEventBuilder builder, String name, AgentRunRepository.ExpiredRow row) {
+        return builder.addKeyValue("event.name", name)
+                .addKeyValue(StructuredLogKeys.RUN_ID, row.getId())
+                .addKeyValue(StructuredLogKeys.RUN_EPOCH, row.getLeaseEpoch())
+                .addKeyValue(StructuredLogKeys.SUBJECT_KEY, row.getConcurrencyKey())
+                .addKeyValue(StructuredLogKeys.WORKSPACE_ID, row.getWorkspaceId())
+                .addKeyValue("run.kind", row.getKind());
     }
 
     /**

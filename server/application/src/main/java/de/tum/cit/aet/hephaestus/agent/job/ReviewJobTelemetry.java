@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.metrics.ReviewStageTelemetry;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -137,7 +138,7 @@ final class ReviewJobTelemetry {
         registry.counter(AgentMetrics.AGENT_JOB_MODEL_REFUSED).increment();
     }
 
-    Span startExecution(ReviewJob job) {
+    Span startExecution(ReviewJob job, AgentRunFence run) {
         // A persisted job can run long after its submitting request, or on another worker. Start
         // a real execution trace and retain the submission correlation separately, not a fake parent.
         return tracer.spanBuilder()
@@ -147,6 +148,9 @@ final class ReviewJobTelemetry {
                 .tag("hephaestus.workspace.id", Long.toString(job.getWorkspaceId()))
                 .tag("hephaestus.job.attempt", job.getAttempt())
                 .tag("hephaestus.job.submission_trace_id", job.getTraceId())
+                .tag("hephaestus.run.id", run.runId().toString())
+                .tag("hephaestus.run.epoch", run.epoch())
+                .tag("hephaestus.subject.key", ReviewRunKind.subject(job.getReviewId()))
                 .start();
     }
 

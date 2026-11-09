@@ -201,6 +201,8 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
         String getKind();
 
+        String getConcurrencyKey();
+
         int getAttempt();
 
         int getLeaseEpoch();
@@ -210,7 +212,8 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     @WorkspaceAgnostic("The reaper takes back expired leases in every workspace; each row carries its workspace")
     @Query(value = """
-            SELECT id, workspace_id AS "workspaceId", kind, attempt, lease_epoch AS "leaseEpoch",
+            SELECT id, workspace_id AS "workspaceId", kind, concurrency_key AS "concurrencyKey", attempt,
+                   lease_epoch AS "leaseEpoch",
                    (deadline IS NOT NULL AND deadline <= clock_timestamp()) AS "pastDeadline"
               FROM agent_run WHERE kind = :kind AND state = 'LEASED' AND leased_until < clock_timestamp()
                AND (:#{#skipped.isEmpty()} OR id NOT IN (:skipped))
@@ -220,7 +223,8 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     @WorkspaceAgnostic("The reaper ends queued runs past their deadline in every workspace")
     @Query(value = """
-            SELECT id, workspace_id AS "workspaceId", kind, attempt, lease_epoch AS "leaseEpoch",
+            SELECT id, workspace_id AS "workspaceId", kind, concurrency_key AS "concurrencyKey", attempt,
+                   lease_epoch AS "leaseEpoch",
                    true AS "pastDeadline"
               FROM agent_run WHERE kind = :kind AND state = 'QUEUED' AND deadline IS NOT NULL AND deadline <= clock_timestamp()
                AND (:#{#skipped.isEmpty()} OR id NOT IN (:skipped))
