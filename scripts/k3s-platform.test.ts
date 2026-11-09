@@ -241,18 +241,18 @@ function renderedAt(platform: string, ...args: string[]) {
 }
 
 function installerAt(platform: string, ...args: string[]) {
-	const result = spawnSync(
-		"sh",
-		[path.join(platform, "k3s-install.sh"), "--version", "0.95.0", ...args],
-		{
-			encoding: "utf8",
-			timeout: 30_000,
-			env: {
-				...process.env,
-				PATH: `${path.join(platform, "bin")}${path.delimiter}${process.env.PATH ?? ""}`,
-			},
+	return runInstaller(platform, "--version", "0.95.0", ...args);
+}
+
+function runInstaller(platform: string, ...args: string[]) {
+	const result = spawnSync("sh", [path.join(platform, "k3s-install.sh"), ...args], {
+		encoding: "utf8",
+		timeout: 30_000,
+		env: {
+			...process.env,
+			PATH: `${path.join(platform, "bin")}${path.delimiter}${process.env.PATH ?? ""}`,
 		},
-	);
+	});
 	return { status: result.status, stderr: result.stderr, resources: documents(result.stdout) };
 }
 
@@ -524,12 +524,16 @@ function installerProbe(helm: string) {
 case "$1" in
 -v) exit 0 ;;
 test) exit 1 ;;
+find) exit 0 ;;
+k3s) printf 'probe-host' ;;
 *helm) shift; exec "$(dirname "$0")/helm" "$@" ;;
 *) echo "unexpected host mutation" >&2; exit 97 ;;
 esac
 `,
 		helm,
 		k3s: "#!/bin/sh\nexit 0\n",
+		systemctl: "#!/bin/sh\nexit 0\n",
+		hostname: "#!/bin/sh\nprintf 'probe-host\\n'\n",
 		// A permitted release stops at the first host check, before any host mutation.
 		awk: "#!/bin/sh\nprintf '1'\n",
 		cosign: "#!/bin/sh\nexit 97\n",
@@ -713,6 +717,365 @@ esac
 			} finally {
 				fixture.done();
 			}
+		}
+	},
+);
+
+await test(
+	"--platform-only reads no release, needs no release value, and keeps the host checks",
+	{ skip: process.platform === "win32" },
+	() => {
+		const fixture = installerProbe(`#!/bin/sh
+case "$1" in
+--kubeconfig) echo 'unexpected release read' >&2; exit 97 ;;
+*) echo 'unexpected Helm call' >&2; exit 97 ;;
+esac
+`);
+		try {
+			// A main commit's platform folder has no site.yaml, and the run needs no login provider.
+			rmSync(path.join(fixture.directory, "site.yaml"));
+			const args = ["--platform-only", "--host", "heph.example.org", "--email", "ops@example.org"];
+			const result = runInstaller(fixture.directory, ...args, "--standard-certificates");
+			assert.equal(result.status, 1, result.stderr);
+			assert.match(result.stderr, /swap is active/u);
+			assert.doesNotMatch(result.stderr, /unexpected/u);
+			const refusals = [
+				[[...args], /--platform-only replaces the installed certificates: choose/u],
+				[[...args, "--standard-certificates", "--version", "0.95.0"], /handle no release/u],
+				[[...args, "--standard-certificates", "--check-platform"], /exclude each other/u],
+			] as const;
+			for (const [refused, message] of refusals) {
+				const outcome = runInstaller(fixture.directory, ...refused);
+				assert.equal(outcome.status, 1, outcome.stderr);
+				assert.match(outcome.stderr, message);
+			}
+		} finally {
+			fixture.done();
+		}
+	},
+);
+
+interface RunningNode {
+	/** The node names that the running k3s reports. */
+	nodes: string;
+	args?: string[];
+	version?: string;
+	active?: boolean;
+	/** Files of /etc/rancher/k3s/config.yaml.d, by name. */
+	dropIns?: Record<string, string>;
+	env?: Record<string, string>;
+}
+
+/**
+ * Runs --platform-only on a host with the host name Host-1, where k3s runs `nodes`, through a sudo
+ * that permits only reads and maps the host paths into a folder. The run stops at the swap check.
+ */
+function onRunningNode({
+	nodes,
+	args = [],
+	version = "v1.0.0+k3s1",
+	active = true,
+	dropIns = {},
+	env = {},
+}: RunningNode) {
+	const root = mkdtempSync(path.join(tmpdir(), "hephaestus-node-"));
+	const directory = path.join(root, "etc/rancher/k3s/config.yaml.d");
+	mkdirSync(directory, { recursive: true });
+	for (const [name, contents] of Object.entries(dropIns)) {
+		writeFileSync(path.join(directory, name), contents);
+	}
+	const fixture = platformWith({
+		sudo: `#!/bin/sh
+case "$1" in
+-v) exit 0 ;;
+k3s) shift; exec "$(dirname "$0")/k3s" "$@" ;;
+find | cat | sed | test) ;;
+*) echo "unexpected host mutation: $*" >&2; exit 97 ;;
+esac
+command=$1
+shift
+for argument; do
+	case $argument in /etc/*) argument=$HOST_ROOT$argument ;; esac
+	set -- "$@" "$argument"
+	shift
+done
+if [ "$command" = find ]; then find "$@" | sed "s|^$HOST_ROOT||"; else exec "$command" "$@"; fi
+`,
+		k3s: `#!/bin/sh
+case "$*" in
+--version) printf 'k3s version ${version} (0123abcd)\\n' ;;
+"kubectl get nodes -o jsonpath={.items[*].metadata.name}") printf '${nodes}' ;;
+esac
+`,
+		systemctl: `#!/bin/sh\nexit ${active ? 0 : 3}\n`,
+		hostname: "#!/bin/sh\nprintf 'Host-1\\n'\n",
+		helm: "#!/bin/sh\nexit 97\n",
+		awk: "#!/bin/sh\nprintf '1'\n",
+		getent: "#!/bin/sh\nexit 97\n",
+		ss: "#!/bin/sh\nexit 97\n",
+	});
+	try {
+		const result = spawnSync(
+			"sh",
+			[
+				path.join(fixture.directory, "k3s-install.sh"),
+				"--platform-only",
+				"--host",
+				"heph.example.org",
+				"--email",
+				"ops@example.org",
+				"--standard-certificates",
+				...args,
+			],
+			{
+				encoding: "utf8",
+				timeout: 30_000,
+				env: {
+					...process.env,
+					...env,
+					HOST_ROOT: root,
+					PATH: `${path.join(fixture.directory, "bin")}${path.delimiter}${process.env.PATH ?? ""}`,
+				},
+			},
+		);
+		return { status: result.status, stderr: result.stderr };
+	} finally {
+		fixture.done();
+		rmSync(root, { recursive: true, force: true });
+	}
+}
+
+const SWAP = /swap is active/u;
+const renamed = (from: string, to: string) =>
+	new RegExp(`k3s runs the node ${from}, and this run would rename it to ${to}\\.`, "u");
+
+await test(
+	"a run keeps the name of the running k3s node",
+	{ skip: process.platform === "win32" },
+	() => {
+		assert.match(onRunningNode({ nodes: "host-1" }).stderr, SWAP);
+		const rename = onRunningNode({ nodes: "node-1" });
+		assert.equal(rename.status, 1);
+		assert.match(rename.stderr, renamed("node-1", "host-1"));
+		assert.doesNotMatch(rename.stderr, /swap is active|unexpected/u);
+		// The last node-name of the drop-ins in byte order, as k3s reads them, also from a .yml file.
+		assert.match(
+			onRunningNode({ nodes: "node-1", dropIns: { "99-name.yml": "node-name: node-1\n" } }).stderr,
+			SWAP,
+		);
+		const byteOrder = { "50-Z.yaml": "node-name: node-z\n", "50-a.yaml": 'node-name: "node-a"\n' };
+		for (const LC_ALL of ["C", "en_US.UTF-8"]) {
+			assert.match(
+				onRunningNode({ nodes: "node-a", dropIns: byteOrder, env: { LC_ALL } }).stderr,
+				SWAP,
+			);
+			assert.match(
+				onRunningNode({ nodes: "node-z", dropIns: byteOrder, env: { LC_ALL } }).stderr,
+				renamed("node-z", "node-a"),
+			);
+		}
+		const twoNodes = onRunningNode({ nodes: "host-1 agent-1" });
+		assert.match(twoNodes.stderr, /runs exactly one node, and k3s has 2: host-1 agent-1/u);
+		const stopped = onRunningNode({ nodes: "host-1", active: false });
+		assert.equal(stopped.status, 1);
+		assert.match(stopped.stderr, /k3s is installed but does not run.*journalctl -u k3s/u);
+		assert.doesNotMatch(stopped.stderr, /remove/u);
+		const newer = onRunningNode({ nodes: "host-1", version: "v9.0.0+k3s1" });
+		assert.equal(newer.status, 1);
+		assert.match(newer.stderr, /k3s v9\.0\.0\+k3s1 runs, which is newer than the pin/u);
+		for (const variable of ["INSTALL_K3S_EXEC", "K3S_NODE_NAME", "K3S_CONFIG_FILE"]) {
+			const inherited = onRunningNode({
+				nodes: "host-1",
+				env: { [variable]: "--node-name other" },
+			});
+			assert.equal(inherited.status, 1);
+			assert.match(
+				inherited.stderr,
+				new RegExp(`unset ${variable}: the platform files configure k3s`, "u"),
+			);
+		}
+	},
+);
+
+const K3S_PIN =
+	/^# pin: k3s (?<version>\S+) /mu.exec(read("k3s-platform.yaml"))?.groups?.version ?? "";
+
+/**
+ * Runs --check-platform against a host folder under `root`, through a sudo that permits only
+ * reads and maps the host paths into that folder.
+ */
+/** What `systemctl show --property=ExecStart --value k3s` prints for a unit that runs these arguments. */
+const execStart = (serviceArguments: string) =>
+	`printf '{ path=/usr/local/bin/k3s ; argv[]=/usr/local/bin/k3s ${serviceArguments} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }\\n'`;
+
+function checkPlatform(
+	root: string,
+	k3sVersion: string,
+	args: string[],
+	/** The body of the systemctl stub: by default, a service that starts `k3s server`. */
+	systemctl = execStart("server"),
+) {
+	const fixture = platformWith({
+		sudo: `#!/bin/sh
+case "$1" in
+-v) exit 0 ;;
+test | cmp) ;;
+*) echo "unexpected host mutation: $*" >&2; exit 97 ;;
+esac
+command=$1
+shift
+for argument; do
+	case $argument in /etc/* | /var/lib/*) argument=$HOST_ROOT$argument ;; esac
+	set -- "$@" "$argument"
+	shift
+done
+exec "$command" "$@"
+`,
+		k3s: `#!/bin/sh\nprintf 'k3s version ${k3sVersion} (0123abcd)\\ngo version go1.25\\n'\n`,
+		systemctl: `#!/bin/sh\n${systemctl}\n`,
+	});
+	try {
+		const result = spawnSync(
+			"sh",
+			[path.join(fixture.directory, "k3s-install.sh"), "--check-platform", ...args],
+			{
+				encoding: "utf8",
+				timeout: 30_000,
+				env: {
+					...process.env,
+					HOST_ROOT: root,
+					PATH: `${path.join(fixture.directory, "bin")}${path.delimiter}${process.env.PATH ?? ""}`,
+				},
+			},
+		);
+		return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+	} finally {
+		fixture.done();
+	}
+}
+
+await test(
+	"--check-platform names each installed platform file that differs from the source",
+	{ skip: process.platform === "win32" },
+	() => {
+		const root = mkdtempSync(path.join(tmpdir(), "hephaestus-host-"));
+		try {
+			const args = ["--host", "heph.example.org", "--email", "ops@example.org"];
+			const certificates = spawnSync(
+				"sh",
+				[
+					path.join(PLATFORM, "k3s-install.sh"),
+					"--version",
+					"0.95.0",
+					...args,
+					"--render-certificates",
+				],
+				{ encoding: "utf8" },
+			);
+			assert.equal(certificates.status, 0, certificates.stderr);
+			const manifests = "var/lib/rancher/k3s/server/manifests";
+			const installed: Record<string, string> = {
+				"etc/systemd/logind.conf.d/zz-hephaestus.conf": read("k3s-logind.conf"),
+				"etc/systemd/journald.conf.d/zz-hephaestus.conf": read("k3s-journald.conf"),
+				"etc/rancher/k3s/config.yaml": read("k3s-config.yaml"),
+				"etc/rancher/k3s/kubelet.yaml": read("k3s-kubelet.yaml"),
+				"var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl": read(
+					"k3s-containerd.toml.tmpl",
+				),
+				[`${manifests}/k3s-runtimeclass.yaml`]: read("k3s-runtimeclass.yaml"),
+				[`${manifests}/k3s-platform.yaml`]: read("k3s-platform.yaml"),
+				[`${manifests}/k3s-agent-sandbox.yaml`]: read("k3s-agent-sandbox.yaml"),
+				[`${manifests}/hephaestus-certificates.yaml`]: certificates.stdout,
+			};
+			for (const [file, contents] of Object.entries(installed)) {
+				mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+				writeFileSync(path.join(root, file), contents);
+			}
+			const equal = checkPlatform(root, K3S_PIN, args);
+			assert.equal(equal.status, 0, equal.stderr);
+			assert.match(equal.stdout, /Every platform file and the k3s release match/u);
+
+			// The same host with other options renders other certificates.
+			const otherHost = checkPlatform(root, K3S_PIN, [
+				"--host",
+				"other.example.org",
+				"--email",
+				"ops@example.org",
+			]);
+			assert.equal(otherHost.status, 1);
+			assert.match(otherHost.stderr, /manifests\/hephaestus-certificates\.yaml differs/u);
+			assert.equal(otherHost.stderr.match(/warning:/gu)?.length, 1, otherHost.stderr);
+
+			writeFileSync(
+				path.join(root, "etc/rancher/k3s/config.yaml"),
+				`${read("k3s-config.yaml")}node-name: edited\n`,
+			);
+			rmSync(path.join(root, manifests, "k3s-agent-sandbox.yaml"));
+			const edited = checkPlatform(root, "v1.0.0+k3s1", args);
+			assert.equal(edited.status, 1);
+			assert.match(edited.stderr, /\/etc\/rancher\/k3s\/config\.yaml differs from its source/u);
+			assert.match(edited.stderr, /manifests\/k3s-agent-sandbox\.yaml is missing/u);
+			assert.match(edited.stderr, /k3s is not the pinned v\S+: k3s version v1\.0\.0\+k3s1/u);
+			assert.equal(edited.stderr.match(/warning:/gu)?.length, 3, edited.stderr);
+			assert.match(edited.stderr, /the installed platform differs from /u);
+			assert.doesNotMatch(
+				edited.stderr,
+				/kubelet\.yaml|logind|journald|k3s-platform\.yaml|unexpected/u,
+			);
+
+			// The gVisor runtime: its containerd template and its RuntimeClass are platform files too.
+			const template = path.join(
+				root,
+				"var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl",
+			);
+			writeFileSync(template, `${read("k3s-containerd.toml.tmpl")}# edited\n`);
+			rmSync(path.join(root, manifests, "k3s-runtimeclass.yaml"));
+			const gvisor = checkPlatform(root, K3S_PIN, args);
+			assert.equal(gvisor.status, 1);
+			assert.match(gvisor.stderr, /containerd\/config-v3\.toml\.tmpl differs from its source/u);
+			assert.match(gvisor.stderr, /manifests\/k3s-runtimeclass\.yaml is missing/u);
+			writeFileSync(template, read("k3s-containerd.toml.tmpl"));
+			writeFileSync(
+				path.join(root, manifests, "k3s-runtimeclass.yaml"),
+				read("k3s-runtimeclass.yaml"),
+			);
+
+			// A service flag overrides config.yaml. The check names the flag and never its value.
+			writeFileSync(path.join(root, "etc/rancher/k3s/config.yaml"), read("k3s-config.yaml"));
+			writeFileSync(
+				path.join(root, manifests, "k3s-agent-sandbox.yaml"),
+				read("k3s-agent-sandbox.yaml"),
+			);
+			const flagged = checkPlatform(
+				root,
+				K3S_PIN,
+				args,
+				execStart("server --token=s3cret --node-ip 192.0.2.10"),
+			);
+			assert.equal(flagged.status, 1);
+			assert.match(flagged.stderr, /the k3s service starts with the flags --token --node-ip /u);
+			assert.doesNotMatch(flagged.stderr, /s3cret|192\.0\.2\.10/u);
+			// A service that the check cannot read stops it, and never counts as a service without flags.
+			const unreadable = checkPlatform(root, K3S_PIN, args, "exit 1");
+			assert.equal(unreadable.status, 1);
+			assert.match(unreadable.stderr, /systemctl cannot show the k3s service/u);
+			assert.doesNotMatch(unreadable.stdout, /match/u);
+			for (const shape of [
+				String.raw`printf 'ExecStart=/usr/local/bin/k3s server\n'`,
+				`${execStart("server")}; ${execStart("agent")}`,
+			]) {
+				const unknown = checkPlatform(root, K3S_PIN, args, shape);
+				assert.equal(unknown.status, 1, shape);
+				assert.match(
+					unknown.stderr,
+					/the k3s service has an ExecStart that this check cannot read/u,
+				);
+			}
+			const noService = checkPlatform(root, K3S_PIN, args, "exit 0");
+			assert.equal(noService.status, 1);
+			assert.match(noService.stderr, /the k3s service has no ExecStart/u);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
 		}
 	},
 );
