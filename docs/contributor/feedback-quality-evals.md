@@ -248,6 +248,46 @@ The labels file holds one label for each composed review, with the rubric codes.
 The good rate needs a label for every composed review. With fewer labels, the report lists the unlabelled cases and gives no rate.
 Without a labels file, the report gives only the raise decisions, main's acceptance and the mechanical codes.
 
+## Composition replay cases
+
+A replay case fixes what the composer loop admits for one sealed review and one sequence of model answers.
+It proves that a changed loop composes as the current one does.
+`server/application/src/test/resources/agent/composition-replay/` holds the cases. Each case names a golden scenario as its sealed basis.
+A case file holds no Java, so a loop in another language can replay it against the same harness.
+
+A case lists the model's answers in order:
+
+- A scripted answer is a tool call, a text or a provider status. In tool arguments, `${draftId}` stands for the draft ID that the last check returned.
+- A recorded answer is a live model's message: its role, text and tool calls. A failed call is recorded by its status.
+  The recorder keeps none of the endpoint's own fields, and it numbers the tool call IDs in order.
+
+The expected outcome is what the server admitted:
+
+- Every package that reached preparation.
+- The stops that the review on the work recorded.
+- The cause that handed the attempt on.
+- What each model call added to its conversation. A long turn is recorded by its SHA-256 and length, because the golden scenarios hold the text.
+
+`ComposerReplayTest` replays every case and compares the outcome exactly. It runs in the unit tier.
+The harness runs the real composer sessions over an in-memory result admission.
+Thus, a case proves the loop and the sessions, but not how admission stores what it prepares.
+With `UPDATE_COMPOSITION_REPLAYS=1`, it rewrites each expected outcome. Review the diff before you commit it.
+
+`ComposerReplayLiveTest` measures the noise floor of a live model and records cases from it.
+It composes each basis `COMPOSITION_REPLAY_RUNS` times (default 3, at least 2), and it writes `COMPOSITION_REPLAY_REPORT`.
+The report gives two shares of run pairs that decided alike:
+
+- A run pair agrees when both runs decide every destination alike and hand the attempt on with the same cause.
+- A destination pair agrees when both runs prepare or withhold the same pieces there.
+  The pieces must have the same reasons, results, notes and summary presence.
+  A pair in which neither run produced the destination does not count.
+
+The report does not compare words.
+
+The first run of each basis must replay exactly from its answers. The test writes the report before it asserts this.
+With `COMPOSITION_REPLAY_RECORD=1`, it writes that run as the case `<scenario>-recorded`.
+`COMPOSITION_REPLAY_BASES` selects the scripted cases whose bases run, separated by commas.
+
 ## Practice outcome cases
 
 `server/application/src/test/resources/practices/criteria-cases.json` holds 20 labelled outcome cases for each of ten practices.

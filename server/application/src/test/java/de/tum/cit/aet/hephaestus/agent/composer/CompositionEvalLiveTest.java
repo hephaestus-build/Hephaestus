@@ -8,11 +8,6 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmCredentials;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmTest;
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,7 +20,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -57,7 +51,7 @@ class CompositionEvalLiveTest {
                 Objects.requireNonNullElse(System.getenv("COMPOSITION_EVAL_MAX_OUTPUT_TOKENS"), "32768"));
         var settings = new ModelSession.Settings(
                 LlmApiProtocol.OPENAI_COMPLETIONS, creds.model(), ReasoningEffort.valueOf(effort), maxTokens, null);
-        var transport = new Transport(creds);
+        var transport = new LiveChatTransport(creds);
         var sourceScenarios = CompositionEvalCases.load();
         var scenarios = new ArrayList<LiveCase>();
         for (var scenario : sourceScenarios)
@@ -136,7 +130,7 @@ class CompositionEvalLiveTest {
         for (var scenario : scenarios) {
             if (only != null && !List.of(only.split(",", -1)).contains(scenario.id())) continue;
             if (done.contains(scenario.id())) continue;
-            transport.servedModels.clear();
+            transport.servedModels().clear();
             (scenario.id().contains("/") ? privateCases : cases).add(compose(scenario, transport, settings));
             CompositionEvalCases.write(checkedFile, file);
         }
@@ -247,11 +241,11 @@ class CompositionEvalLiveTest {
         entry.set("errors", CompositionEvalCases.strings(checked == null ? List.of() : checked.errors()));
         if (last != null) entry.set("review", scenario.output().apply(ReviewOnWork.unwrapArguments(last)));
         else entry.putNull("review");
-        if (transport instanceof Transport live)
+        if (transport instanceof LiveChatTransport live)
             entry.set(
                     "servedModels",
                     CompositionEvalCases.strings(
-                            live.servedModels.stream().sorted().toList()));
+                            live.servedModels().stream().sorted().toList()));
         return entry;
     }
 
@@ -268,56 +262,5 @@ class CompositionEvalLiveTest {
             digest.update(request.toString().getBytes(StandardCharsets.UTF_8));
         }
         return HexFormat.of().formatHex(digest.digest());
-    }
-
-    /** Sends main's request bytes to the endpoint, without the proxy that fences and bills them in production. */
-    private static final class Transport implements ModelSession.Transport {
-        private final HttpClient client =
-                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
-        private final LiveLlmCredentials creds;
-        private @Nullable String path;
-        private final HashSet<String> servedModels = new HashSet<>();
-
-        Transport(LiveLlmCredentials creds) {
-            this.creds = creds;
-        }
-
-        @Override
-        public ModelSession.Answer call(byte[] body) {
-            String base = creds.baseUrl().replaceAll("/+$", "");
-            // Endpoints differ in whether their base URL already ends with the API version.
-            for (String candidate :
-                    path == null ? List.of("/chat/completions", "/v1/chat/completions") : List.of(path)) {
-                var answer = send(base + candidate, body);
-                if (answer.status() != 404) {
-                    path = candidate;
-                    return answer;
-                }
-            }
-            return new ModelSession.Answer(404, new byte[0], true, null);
-        }
-
-        private ModelSession.Answer send(String url, byte[] body) {
-            var request = HttpRequest.newBuilder(URI.create(url))
-                    .timeout(Duration.ofMinutes(10))
-                    .header("authorization", "Bearer " + creds.apiKey())
-                    .header("content-type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(body))
-                    .build();
-            try {
-                var response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
-                if (response.statusCode() == 200) {
-                    String served =
-                            MAPPER.readTree(response.body()).path("model").asString("");
-                    if (!served.isBlank()) servedModels.add(served);
-                }
-                return new ModelSession.Answer(response.statusCode(), response.body(), true, null);
-            } catch (IOException failed) {
-                return new ModelSession.Answer(503, new byte[0], true, null);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                return new ModelSession.Answer(503, new byte[0], true, null);
-            }
-        }
     }
 }

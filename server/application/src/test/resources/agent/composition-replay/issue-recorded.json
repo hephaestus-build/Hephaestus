@@ -1,0 +1,295 @@
+{
+  "description": "The live model's answers to issue-published's basis, recorded.",
+  "scenario": "issue",
+  "copyCapabilities": [
+    "SUMMARY",
+    "PRACTICE_PAGE",
+    "CONVERSATION"
+  ],
+  "responses": [
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "check_package",
+                    "arguments": "{\"decisions\": [{\"resultId\": \"30000000-0000-4000-8000-000000000001\", \"disposition\": \"RAISE\"}, {\"resultId\": \"30000000-0000-4000-8000-000000000002\", \"disposition\": \"ALREADY_SAID\", \"witnessIds\": [\"comment:context/comments.json:801\"]}], \"summary\": {\"basedOn\": [\"30000000-0000-4000-8000-000000000001\", \"40000000-0000-4000-8000-000000000001\"], \"body\": \"The new catch returns null and records nothing, so the `IOException` that caused the fetch to fail is dropped. Record or rethrow it, so the failure is visible instead of silent.\"}}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call-2",
+                  "type": "function",
+                  "function": {
+                    "name": "publish_package",
+                    "arguments": "{\"draftId\": \"ca08c88d8ba1af6a7e541f35b73ec931f6494331729e0d382d1761a8cb3717b4\"}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": "The composition request opens only CONVERSATION this turn, and it may carry only `describes-changes`. The other NOT_MET result, `handles-errors`, is not eligible there, so it cannot be written \u2014 and the work review already made that point, so nothing here would add to it.\n\nFor `describes-changes`: the captured issue #3 has a null body and no description was captured, yet a NOT_MET result is recorded with an empty criteria file, so the standard itself is unknown. The prepared entry on this same practice and destination is already STALE, and the recorded delivered feedback and earlier-review history are not staged. Against that, the only concrete thing a conversation could add is asking for the missing reason \u2014 but the point the current result rests on (no reason given) was already prepared, and the prior maintainer request for steps already sits in the conversation. A fresh note would restate what was said rather than add a current fact, and I cannot ground it in anything verified. The bar for a new or superseding conversation piece is not met.\n\nI am withholding `describes-changes` on CONVERSATION.",
+              "tool_calls": [
+                {
+                  "id": "call-3",
+                  "type": "function",
+                  "function": {
+                    "name": "check_package",
+                    "arguments": "{\"feedback\": [{\"destination\": \"CONVERSATION\", \"practiceSlug\": \"describes-changes\", \"basedOn\": [\"30000000-0000-4000-8000-000000000002\"], \"action\": \"WITHHOLD\", \"withholdReason\": \"BELOW_BAR\", \"witnessIds\": []}]}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "body": {
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call-4",
+                  "type": "function",
+                  "function": {
+                    "name": "publish_package",
+                    "arguments": "{\"draftId\": \"88da0a6891988ca1688828539621acbdafa3518a82836503325eac89e43a9103\"}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expected": {
+    "packages": [
+      {
+        "basisResultIds": [
+          "30000000-0000-4000-8000-000000000001",
+          "30000000-0000-4000-8000-000000000002"
+        ],
+        "composition": [
+          {
+            "destination": "ON_WORK",
+            "resultIds": [
+              "30000000-0000-4000-8000-000000000001",
+              "30000000-0000-4000-8000-000000000002"
+            ],
+            "summary": "The new catch returns null and records nothing, so the `IOException` that caused the fetch to fail is dropped. Record or rethrow it, so the failure is visible instead of silent.",
+            "notes": [],
+            "withheldReason": null,
+            "trace": {
+              "copies": [
+                {
+                  "kind": "SUMMARY",
+                  "position": 0,
+                  "basedOn": [
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000001",
+                      "problemId": null
+                    },
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000001",
+                      "problemId": "40000000-0000-4000-8000-000000000001"
+                    }
+                  ]
+                }
+              ],
+              "withheld": [
+                {
+                  "basedOn": [
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000002",
+                      "problemId": null
+                    }
+                  ],
+                  "reason": "ALREADY_SAID",
+                  "witnessIds": [
+                    "comment:context/comments.json:801"
+                  ]
+                }
+              ],
+              "replacesId": null,
+              "primaryResultId": null
+            },
+            "page": null
+          }
+        ],
+        "publicComposition": true,
+        "publicationContext": null,
+        "editOf": null
+      },
+      {
+        "basisResultIds": [
+          "30000000-0000-4000-8000-000000000002"
+        ],
+        "composition": [
+          {
+            "destination": "CONVERSATION",
+            "resultIds": [
+              "30000000-0000-4000-8000-000000000002"
+            ],
+            "summary": null,
+            "notes": [],
+            "withheldReason": "COMPOSER_WITHHELD",
+            "trace": {
+              "copies": [],
+              "withheld": [
+                {
+                  "basedOn": [
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000002",
+                      "problemId": null
+                    }
+                  ],
+                  "reason": "BELOW_BAR",
+                  "witnessIds": []
+                }
+              ],
+              "replacesId": null,
+              "primaryResultId": "30000000-0000-4000-8000-000000000002"
+            },
+            "page": null
+          }
+        ],
+        "publicComposition": false,
+        "publicationContext": null,
+        "editOf": null
+      }
+    ],
+    "reviewStops": [],
+    "handedOn": "ROUTING_UNAVAILABLE",
+    "calls": [
+      {
+        "system": "589e8428aef21d6493632f86116fe7c9ba11d8fe634c0174fab192f5b73a2830",
+        "tools": "0d8ba4c113fc7fee06a8a68556b191fc81b4a559517db93410ba4d0f06cf8b7a",
+        "messages": [
+          {
+            "role": "user",
+            "text": {
+              "sha256": "32aad91aae4e47a9bea9103d13cffb41d8784f775ba5e3ed29ff5c37aecd0b56",
+              "length": 9834
+            }
+          }
+        ]
+      },
+      {
+        "messages": [
+          {
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "name": "check_package",
+                "arguments": {
+                  "decisions": [
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000001",
+                      "disposition": "RAISE"
+                    },
+                    {
+                      "resultId": "30000000-0000-4000-8000-000000000002",
+                      "disposition": "ALREADY_SAID",
+                      "witnessIds": [
+                        "comment:context/comments.json:801"
+                      ]
+                    }
+                  ],
+                  "summary": {
+                    "basedOn": [
+                      "30000000-0000-4000-8000-000000000001",
+                      "40000000-0000-4000-8000-000000000001"
+                    ],
+                    "body": "The new catch returns null and records nothing, so the `IOException` that caused the fetch to fail is dropped. Record or rethrow it, so the failure is visible instead of silent."
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "text": "{\"draftId\":\"ca08c88d8ba1af6a7e541f35b73ec931f6494331729e0d382d1761a8cb3717b4\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+          }
+        ]
+      },
+      {
+        "system": "2e492307d096e11dbaaccda468a2a6404386cebef916942f63d7ad4e61464ac1",
+        "tools": "5865ccc8a378eb2faffec36f1d411aa9ecfbe632bbe80321478ea9acc5f7183d",
+        "messages": [
+          {
+            "role": "user",
+            "text": {
+              "sha256": "e0569d0702d3fdb961b313a8c4e39c21e29c2bd39a3a9e933f40f3ad9a82ed78",
+              "length": 8875
+            }
+          }
+        ]
+      },
+      {
+        "messages": [
+          {
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "name": "check_package",
+                "arguments": {
+                  "feedback": [
+                    {
+                      "destination": "CONVERSATION",
+                      "practiceSlug": "describes-changes",
+                      "basedOn": [
+                        "30000000-0000-4000-8000-000000000002"
+                      ],
+                      "action": "WITHHOLD",
+                      "withholdReason": "BELOW_BAR",
+                      "witnessIds": []
+                    }
+                  ]
+                }
+              }
+            ],
+            "text": "The composition request opens only CONVERSATION this turn, and it may carry only `describes-changes`. The other NOT_MET result, `handles-errors`, is not eligible there, so it cannot be written \u2014 and the work review already made that point, so nothing here would add to it.\n\nFor `describes-changes`: the captured issue #3 has a null body and no description was captured, yet a NOT_MET result is recorded with an empty criteria file, so the standard itself is unknown. The prepared entry on this same practice and destination is already STALE, and the recorded delivered feedback and earlier-review history are not staged. Against that, the only concrete thing a conversation could add is asking for the missing reason \u2014 but the point the current result rests on (no reason given) was already prepared, and the prior maintainer request for steps already sits in the conversation. A fresh note would restate what was said rather than add a current fact, and I cannot ground it in anything verified. The bar for a new or superseding conversation piece is not met.\n\nI am withholding `describes-changes` on CONVERSATION."
+          },
+          {
+            "role": "tool",
+            "text": "{\"draftId\":\"88da0a6891988ca1688828539621acbdafa3518a82836503325eac89e43a9103\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+          }
+        ]
+      }
+    ]
+  }
+}

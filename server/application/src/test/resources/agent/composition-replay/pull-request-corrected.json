@@ -1,0 +1,280 @@
+{
+  "description" : "A refused review is corrected and published; the private sessions decide nothing and are withheld.",
+  "scenario" : "pull-request",
+  "copyCapabilities" : [ "SUMMARY", "LINE_NOTE", "PRACTICE_PAGE", "CONVERSATION" ],
+  "responses" : [ {
+    "tool" : "check_package",
+    "arguments" : {
+      "decisions" : [ {
+        "resultId" : "30000000-0000-4000-8000-000000000001",
+        "disposition" : "RAISE"
+      } ],
+      "inline" : [ {
+        "basedOn" : [ "40000000-0000-4000-8000-000000000001" ],
+        "body" : "This catch returns null and hides the IOException; record or rethrow it.",
+        "anchor" : {
+          "problemId" : "40000000-0000-4000-8000-000000000001",
+          "citationIndex" : 0
+        }
+      } ],
+      "summary" : {
+        "basedOn" : [ "30000000-0000-4000-8000-000000000002" ],
+        "body" : "The description should say why fetches now retry."
+      }
+    }
+  }, {
+    "tool" : "check_package",
+    "arguments" : {
+      "decisions" : [ {
+        "resultId" : "30000000-0000-4000-8000-000000000001",
+        "disposition" : "RAISE"
+      }, {
+        "resultId" : "30000000-0000-4000-8000-000000000002",
+        "disposition" : "RAISE"
+      } ],
+      "inline" : [ {
+        "basedOn" : [ "40000000-0000-4000-8000-000000000001" ],
+        "body" : "This catch returns null and hides the IOException; record or rethrow it.",
+        "anchor" : {
+          "problemId" : "40000000-0000-4000-8000-000000000001",
+          "citationIndex" : 0
+        }
+      } ],
+      "summary" : {
+        "basedOn" : [ "30000000-0000-4000-8000-000000000002" ],
+        "body" : "The description should say why fetches now retry."
+      }
+    }
+  }, {
+    "tool" : "publish_package",
+    "arguments" : {
+      "draftId" : "${draftId}"
+    }
+  } ],
+  "expected" : {
+    "packages" : [ {
+      "basisResultIds" : [ "30000000-0000-4000-8000-000000000002", "30000000-0000-4000-8000-000000000001" ],
+      "composition" : [ {
+        "destination" : "ON_WORK",
+        "resultIds" : [ "30000000-0000-4000-8000-000000000002", "30000000-0000-4000-8000-000000000001" ],
+        "summary" : "The description should say why fetches now retry.",
+        "notes" : [ {
+          "problemId" : "40000000-0000-4000-8000-000000000001",
+          "citationIndex" : 0,
+          "body" : "This catch returns null and hides the IOException; record or rethrow it."
+        } ],
+        "withheldReason" : null,
+        "trace" : {
+          "copies" : [ {
+            "kind" : "SUMMARY",
+            "position" : 0,
+            "basedOn" : [ {
+              "resultId" : "30000000-0000-4000-8000-000000000002",
+              "problemId" : null
+            } ]
+          }, {
+            "kind" : "LINE_NOTE",
+            "position" : 1,
+            "basedOn" : [ {
+              "resultId" : "30000000-0000-4000-8000-000000000001",
+              "problemId" : "40000000-0000-4000-8000-000000000001"
+            } ]
+          } ],
+          "withheld" : [ ],
+          "replacesId" : null,
+          "primaryResultId" : null
+        },
+        "page" : null
+      } ],
+      "publicComposition" : true,
+      "publicationContext" : "v1:7:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "editOf" : null
+    }, {
+      "basisResultIds" : [ "30000000-0000-4000-8000-000000000002" ],
+      "composition" : [ {
+        "destination" : "CONVERSATION",
+        "resultIds" : [ "30000000-0000-4000-8000-000000000002" ],
+        "summary" : null,
+        "notes" : [ ],
+        "withheldReason" : "NOT_COMPOSED",
+        "trace" : {
+          "copies" : [ ],
+          "withheld" : [ {
+            "basedOn" : [ {
+              "resultId" : "30000000-0000-4000-8000-000000000002",
+              "problemId" : null
+            } ],
+            "reason" : "NOT_COMPOSED",
+            "witnessIds" : [ ]
+          } ],
+          "replacesId" : null,
+          "primaryResultId" : "30000000-0000-4000-8000-000000000002"
+        },
+        "page" : null
+      } ],
+      "publicComposition" : false,
+      "publicationContext" : null,
+      "editOf" : null
+    }, {
+      "basisResultIds" : [ "30000000-0000-4000-8000-000000000001" ],
+      "composition" : [ {
+        "destination" : "PRACTICE_PAGE",
+        "resultIds" : [ "30000000-0000-4000-8000-000000000001" ],
+        "summary" : null,
+        "notes" : [ ],
+        "withheldReason" : "NOT_COMPOSED",
+        "trace" : {
+          "copies" : [ ],
+          "withheld" : [ {
+            "basedOn" : [ {
+              "resultId" : "30000000-0000-4000-8000-000000000001",
+              "problemId" : null
+            } ],
+            "reason" : "NOT_COMPOSED",
+            "witnessIds" : [ ]
+          } ],
+          "replacesId" : null,
+          "primaryResultId" : "30000000-0000-4000-8000-000000000001"
+        },
+        "page" : null
+      } ],
+      "publicComposition" : false,
+      "publicationContext" : null,
+      "editOf" : null
+    }, {
+      "basisResultIds" : [ "30000000-0000-4000-8000-000000000001" ],
+      "composition" : [ {
+        "destination" : "CONVERSATION",
+        "resultIds" : [ "30000000-0000-4000-8000-000000000001" ],
+        "summary" : null,
+        "notes" : [ ],
+        "withheldReason" : "NOT_COMPOSED",
+        "trace" : {
+          "copies" : [ ],
+          "withheld" : [ {
+            "basedOn" : [ {
+              "resultId" : "30000000-0000-4000-8000-000000000001",
+              "problemId" : null
+            } ],
+            "reason" : "NOT_COMPOSED",
+            "witnessIds" : [ ]
+          } ],
+          "replacesId" : null,
+          "primaryResultId" : "30000000-0000-4000-8000-000000000001"
+        },
+        "page" : null
+      } ],
+      "publicComposition" : false,
+      "publicationContext" : null,
+      "editOf" : null
+    } ],
+    "reviewStops" : [ ],
+    "handedOn" : null,
+    "calls" : [ {
+      "system" : "589e8428aef21d6493632f86116fe7c9ba11d8fe634c0174fab192f5b73a2830",
+      "tools" : "9274edada8ad6668294d6de24a0f4c331676413fc3ed4e83b1027887e72a080e",
+      "messages" : [ {
+        "role" : "user",
+        "text" : {
+          "sha256" : "3e595903d3fdc2e24186d86d2dc931728a1cb23fb910e287e9e421b88aaaeb59",
+          "length" : 20354
+        }
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "decisions" : [ {
+              "resultId" : "30000000-0000-4000-8000-000000000001",
+              "disposition" : "RAISE"
+            } ],
+            "inline" : [ {
+              "basedOn" : [ "40000000-0000-4000-8000-000000000001" ],
+              "body" : "This catch returns null and hides the IOException; record or rethrow it.",
+              "anchor" : {
+                "problemId" : "40000000-0000-4000-8000-000000000001",
+                "citationIndex" : 0
+              }
+            } ],
+            "summary" : {
+              "basedOn" : [ "30000000-0000-4000-8000-000000000002" ],
+              "body" : "The description should say why fetches now retry."
+            }
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "review refused, nothing was stored:\n- 30000000-0000-4000-8000-000000000002 has no decision; decide each NOT_MET result: RAISE it, or withhold it with its reason"
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "toolCalls" : [ {
+          "name" : "check_package",
+          "arguments" : {
+            "decisions" : [ {
+              "resultId" : "30000000-0000-4000-8000-000000000001",
+              "disposition" : "RAISE"
+            }, {
+              "resultId" : "30000000-0000-4000-8000-000000000002",
+              "disposition" : "RAISE"
+            } ],
+            "inline" : [ {
+              "basedOn" : [ "40000000-0000-4000-8000-000000000001" ],
+              "body" : "This catch returns null and hides the IOException; record or rethrow it.",
+              "anchor" : {
+                "problemId" : "40000000-0000-4000-8000-000000000001",
+                "citationIndex" : 0
+              }
+            } ],
+            "summary" : {
+              "basedOn" : [ "30000000-0000-4000-8000-000000000002" ],
+              "body" : "The description should say why fetches now retry."
+            }
+          }
+        } ]
+      }, {
+        "role" : "tool",
+        "text" : "{\"draftId\":\"3b6397c3b0a175936ffdc9fe305492d61c609d267db67c64ee919eb127e6b13a\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+      } ]
+    }, {
+      "system" : "2e492307d096e11dbaaccda468a2a6404386cebef916942f63d7ad4e61464ac1",
+      "tools" : "61d3ebe7e6e2dfd9d500a28f233ee909bc1caac5acbda6dd0e1a1e37e93add5a",
+      "messages" : [ {
+        "role" : "user",
+        "text" : {
+          "sha256" : "7329c163d5ec2eaa16f75a117a3ac18e059538db8607a3f0f950174b9957f0a7",
+          "length" : 17237
+        }
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "text" : "Done."
+      }, {
+        "role" : "user",
+        "text" : "## Undecided\nThe turn ended with no piece and no WITHHOLD for these practices, each with a NOT_MET result: handles-errors on PRACTICE_PAGE. For each, persist the piece you decided on, or a WITHHOLD with its reason (NO_MATERIAL_CHANGE, ALREADY_SAID, BELOW_BAR), in check_package before publish_package call. Room left for new items: PRACTICE_PAGE 1 of 1; a destination with none left takes only a WITHHOLD. The admitted results and their problems are in the turn above. Use tools only from this point onward; no prose."
+      } ]
+    }, {
+      "system" : "2e492307d096e11dbaaccda468a2a6404386cebef916942f63d7ad4e61464ac1",
+      "tools" : "5865ccc8a378eb2faffec36f1d411aa9ecfbe632bbe80321478ea9acc5f7183d",
+      "messages" : [ {
+        "role" : "user",
+        "text" : {
+          "sha256" : "c96f79e830ac2640fae69b2a92d2d8d5b884de8ccffe68d22adefa8c76b1ef8c",
+          "length" : 15140
+        }
+      } ]
+    }, {
+      "messages" : [ {
+        "role" : "assistant",
+        "text" : "Done."
+      }, {
+        "role" : "user",
+        "text" : "## Undecided\nThe turn ended with no piece and no WITHHOLD for these practices, each with a NOT_MET result: describes-changes on CONVERSATION, handles-errors on CONVERSATION. For each, persist the piece you decided on, or a WITHHOLD with its reason (NO_MATERIAL_CHANGE, ALREADY_SAID, BELOW_BAR), in check_package before publish_package call. Room left for new items: CONVERSATION 1 of 1; a destination with none left takes only a WITHHOLD. The admitted results and their problems are in the turn above. Use tools only from this point onward; no prose."
+      } ]
+    } ]
+  }
+}
