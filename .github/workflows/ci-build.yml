@@ -115,8 +115,11 @@ jobs:
         continue-on-error: true
         if: always()
         run: |
+          POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::${POSTGRES_PASSWORD}"
+          export POSTGRES_PASSWORD
           docker run -d --name postgres-db \
-            -e POSTGRES_DB=hephaestus -e POSTGRES_PASSWORD=root -e POSTGRES_USER=root \
+            -e POSTGRES_DB=hephaestus -e POSTGRES_PASSWORD -e POSTGRES_USER=root \
             -p 5432:5432 hephaestus-postgres:ci
           trap 'docker stop postgres-db 2>/dev/null; docker rm postgres-db 2>/dev/null' EXIT
           until docker exec postgres-db pg_isready -U root -d hephaestus; do sleep 2; done
@@ -186,15 +189,18 @@ jobs:
           tag: hephaestus-postgres:ci
       - name: Run database contract tests
         run: |
+          POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::${POSTGRES_PASSWORD}"
+          export POSTGRES_PASSWORD
           docker run -d --name postgres-db \
-            -e POSTGRES_DB=hephaestus -e POSTGRES_PASSWORD=root -e POSTGRES_USER=root \
+            -e POSTGRES_DB=hephaestus -e POSTGRES_PASSWORD -e POSTGRES_USER=root \
             -p 5432:5432 hephaestus-postgres:ci
           trap 'docker stop postgres-db 2>/dev/null; docker rm postgres-db 2>/dev/null' EXIT
           until docker exec postgres-db pg_isready -U root -d hephaestus; do sleep 2; done
 
           export SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/hephaestus"
           export SPRING_DATASOURCE_USERNAME="root"
-          export SPRING_DATASOURCE_PASSWORD="root"
+          export SPRING_DATASOURCE_PASSWORD="${POSTGRES_PASSWORD}"
           (cd server && ./gradlew :application:databaseTest -PpackagedServer=true)
 
       - name: Upload test results
@@ -295,6 +301,9 @@ jobs:
           tag: ghcr.io/hephaestus-build/postgres:dev
       - name: Run end-to-end tests against the built server
         run: |
+          POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::${POSTGRES_PASSWORD}"
+          export POSTGRES_PASSWORD
           docker compose -f server/compose.yaml up -d --wait --no-build postgres
           cleanup() {
             if [[ -n "${SERVER_PID:-}" ]]; then
@@ -382,6 +391,9 @@ jobs:
           E2E_SERVER_URL: http://127.0.0.1:8080
           E2E_WEB_APP_URL: http://localhost:4200
         run: |
+          POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::${POSTGRES_PASSWORD}"
+          export POSTGRES_PASSWORD
           docker compose -f server/compose.yaml up -d --wait --no-build postgres
           cleanup() {
             if [[ -n "${SERVER_PID:-}" ]]; then

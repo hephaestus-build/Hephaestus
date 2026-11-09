@@ -218,7 +218,7 @@ await test("a commit lock names the chart images by digest, its upstream images 
 		HEPHAESTUS_IMAGE_POSTGRES: `ghcr.io/hephaestus-build/postgres@${digest("4")}`,
 		HEPHAESTUS_IMAGE_POSTGRES_EXPORTER: pin("postgres-exporter"),
 		HEPHAESTUS_IMAGE_WEBAPP: `ghcr.io/hephaestus-build/webapp@${digest("5")}`,
-		// The Compose edge, which the chart does not run.
+		// An image the chart does not run.
 		HEPHAESTUS_IMAGE_TRAEFIK: `docker.io/library/traefik@${digest("6")}`,
 	};
 	const values = commitChartValues(images, inventory, commit);

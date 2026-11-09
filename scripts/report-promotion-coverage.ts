@@ -16,7 +16,7 @@ export function promotionCoverage(outcome: string) {
 		"**Not verified by this workflow:** server, worker, webhook, database, NATS, and integration runtime health or version convergence.",
 		"The signed channel authorizes hosts to apply the deployment; a matching public webapp version is not a full-stack health verdict.",
 		"",
-		"Use host reconciliation metrics and logs to confirm the Compose apply and each supported service's readiness. Keep management endpoints private.",
+		"Use host reconciliation metrics and logs to confirm the apply and each supported service's readiness. Keep management endpoints private.",
 		"[Host verification runbook](https://docs.hephaestus.build/admin/pull-based-deployment#watching-it)",
 		"",
 	].join("\n");

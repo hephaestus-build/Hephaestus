@@ -157,6 +157,20 @@ Never commit `application-local.yml`. It may contain secrets and machine-specifi
 
 To wipe the local database (e.g. after a bad migration or sync), run `vp run dev:reset`. The Postgres data is a bind-mounted folder (`server/postgres-data`), so `docker compose down -v` alone does not clear it — `dev:reset` removes the folder and recreates the stack.
 
+### Database password
+
+Each checkout has its own PostgreSQL password.
+The first `vp run dev`, `dev:compose` or `db:*` command writes a random `POSTGRES_PASSWORD` to `server/.env`.
+Compose creates the database with it.
+Spring Boot and the database scripts read it from the same file.
+A `POSTGRES_PASSWORD` in your shell overrides the file.
+
+PostgreSQL reads the password only when it creates a database.
+A checkout whose `server/postgres-data` already exists was created with the old fixed password.
+The first command writes that password to `server/.env` and prints a warning, so your data keeps working.
+Run `vp run dev:reset` to replace it with a random password.
+This deletes the local data.
+
 ### Port overrides
 
 Every host-side port is configurable so multiple Hephaestus instances (or other services) can coexist on the same machine. Container-internal ports never change – only the `localhost` binding moves.
@@ -191,7 +205,7 @@ hold the two parts of one message, and `messages.properties` holds the subjects.
 
 #### How it works
 
-The `.env` file in `server/` is read by **both** Docker Compose (for container port mappings) and Spring Boot (through `spring.config.import`). The webapp port is a separate shell setting, as listed above.
+The `.env` file in `server/` is read by **both** Docker Compose (for container port mappings and the database password) and Spring Boot (through `spring.config.import`). The webapp port is a separate shell setting, as listed above.
 
 Ports flow through the system like this:
 

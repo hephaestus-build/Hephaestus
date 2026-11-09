@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 import { Client } from "pg";
 
 import {
@@ -9,7 +11,7 @@ import {
 	readLlmRoute,
 	required,
 } from "./lib/e2e-llm.ts";
-import { isLoopbackHost, isSet } from "./lib/env.ts";
+import { isLoopbackHost, isSet, readEnvFile } from "./lib/env.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { completeTransparencyNotice } from "./lib/research-consent.ts";
 
@@ -117,8 +119,15 @@ export function loadConfig(env: Record<string, string | undefined>, args: string
 		["http:"],
 		"E2E_APP_URL must be a loopback URL",
 	);
+	const databasePassword = env.POSTGRES_PASSWORD;
+	if (!isSet(env.E2E_DB_URL) && !isSet(databasePassword)) {
+		throw new Error(
+			"Set E2E_DB_URL, or POSTGRES_PASSWORD in server/.env, to name the local database.",
+		);
+	}
 	const databaseUrl = loopbackUrl(
-		env.E2E_DB_URL ?? "postgresql://root:root@localhost:5432/hephaestus",
+		env.E2E_DB_URL ??
+			`postgresql://${encodeURIComponent(env.POSTGRES_USER ?? "root")}:${encodeURIComponent(databasePassword ?? "")}@localhost:${env.POSTGRES_PORT ?? "5432"}/${env.POSTGRES_DB ?? "hephaestus"}`,
 		["postgres:", "postgresql:"],
 		"E2E_DB_URL must be a loopback PostgreSQL URL",
 	);
@@ -532,7 +541,9 @@ async function selectPullRequest(
 }
 
 async function main(): Promise<void> {
-	const config = loadConfig(process.env, process.argv.slice(2));
+	// The local stack's database settings live in `server/.env`; the shell overrides them.
+	const databaseEnv = await readEnvFile(fileURLToPath(new URL("../server/.env", import.meta.url)));
+	const config = loadConfig({ ...databaseEnv, ...process.env }, process.argv.slice(2));
 	await assertModelListed(config);
 	let jwt = await login(config);
 	const api: Api = async (method, path, body, headers) =>

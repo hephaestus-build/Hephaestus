@@ -2742,39 +2742,6 @@ void describe("CI contract", () => {
 		},
 	);
 
-	void test("every job that boots the supported installation authenticates to the registry", async () => {
-		// `packages: read` is inert without a login, and the boot's first pull is where that shows.
-		// Only a boot the runner performs itself needs one: a deploy hands its script to a host that
-		// authenticates on its own.
-		for (const [file, source] of await workflowSources()) {
-			const jobs = parseDocument(source).get("jobs");
-			if (!isMap(jobs)) {
-				continue;
-			}
-			for (const entry of jobs.items) {
-				const steps = isMap(entry.value) ? entry.value.get("steps") : undefined;
-				if (!isSeq(steps)) {
-					continue;
-				}
-				const boots = steps.items.some(
-					(item) =>
-						isMap(item) &&
-						typeof item.get("run") === "string" &&
-						/docker compose .*--env-file[\s\S]*?\bup -d\b/u.test(String(item.get("run"))),
-				);
-				const name = isScalar(entry.key) ? String(entry.key.value) : "";
-				if (!boots) {
-					continue;
-				}
-				assert.match(
-					job(source, name),
-					/uses: \.\/\.github\/actions\/ghcr-login/u,
-					`${file} ${name} boots first-party images and must log in to the registry`,
-				);
-			}
-		}
-	});
-
 	void test("a pull request qualifies the Kubernetes installation from its own images", async () => {
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 		const workflow = parseDocument(source);

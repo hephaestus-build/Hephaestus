@@ -49,7 +49,7 @@ body:
     attributes:
       label: Environment
       description: Include relevant details such as browser, operating system, and deployment method.
-      placeholder: Firefox 142 on Ubuntu 24.04. Self-hosted with Docker Compose.
+      placeholder: Firefox 142 on Ubuntu 24.04. Self-hosted on Kubernetes.
 
   - type: textarea
     id: logs

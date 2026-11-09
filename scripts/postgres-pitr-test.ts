@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,6 +10,8 @@ import { hephBindingsEnabled, seedRestoreProbe } from "./lib/restore-probe.ts";
 
 const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
 const migrate = databaseMigration(6 * 60 * 1000);
+// The throwaway database lives for this run only.
+const password = randomBytes(16).toString("hex");
 const id = `pgbackrest-pitr-${randomUUID().slice(0, 8)}`;
 const image = values["target-image"] ?? `${id}:18`;
 const container = `${id}-db`;
@@ -254,7 +256,7 @@ function start(restored = false): number {
 		"-e",
 		"POSTGRES_USER=root",
 		"-e",
-		"POSTGRES_PASSWORD=root",
+		`POSTGRES_PASSWORD=${password}`,
 		...repositoryEnvironment(restored),
 		"-v",
 		`${data}:/var/lib/postgresql`,
@@ -318,7 +320,7 @@ try {
 	}
 	startObjectStore();
 	const sourcePort = start();
-	migrate(sourcePort);
+	migrate(sourcePort, password);
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "stanza-create");
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "check");
 	sql("UPDATE instance_settings SET silent_mode_engaged = FALSE WHERE id = 1");

@@ -595,7 +595,7 @@ val databasePort =
         .orElse("5432")
 val databaseName = providers.environmentVariable("POSTGRES_DB").orElse("hephaestus")
 val databaseUser = providers.environmentVariable("POSTGRES_USER").orElse("root")
-val databasePassword = providers.environmentVariable("POSTGRES_PASSWORD").orElse("root")
+val databasePassword = providers.environmentVariable("POSTGRES_PASSWORD")
 
 for ((taskName, command) in
     mapOf("liquibaseUpdate" to "update", "liquibaseDiff" to "diff-changelog")) {
@@ -611,7 +611,18 @@ for ((taskName, command) in
             classpath =
                 files(sourceSets.main.get().output, configurations.runtimeClasspath, liquibaseTools)
         }
-        environment("LIQUIBASE_COMMAND_PASSWORD", databasePassword.get())
+        // A local variable: the action may not capture the script, which the configuration cache
+        // cannot store.
+        val password = databasePassword
+        doFirst {
+            environment(
+                "LIQUIBASE_COMMAND_PASSWORD",
+                password.orNull
+                    ?: throw GradleException(
+                        "POSTGRES_PASSWORD is not set. Start the local stack with `vp run dev:compose`, or export it."
+                    ),
+            )
+        }
         args(
             "--search-path=${file("src/main/resources")}",
             command,
