@@ -23,7 +23,7 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
      * The body of the {@code 409} for an attempt that no longer runs. No provider sends it, so a runner that reads it
      * knows its attempt ended rather than that a provider refused a call; {@code pi-model-failure.ts} holds the same.
      */
-    static final String ATTEMPT_ENDED = "This attempt no longer holds its lease.";
+    public static final String ATTEMPT_ENDED = "This attempt no longer holds its lease.";
 
     private static final String RUNTIME_PATH = "/internal/llm/runtime/";
     private static final String TURN_PATH = "/internal/llm/turn/";

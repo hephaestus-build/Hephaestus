@@ -126,6 +126,12 @@ public class AgentRuns {
                 .map(AgentRuns::lease);
     }
 
+    /** The run of a workspace, in whatever state; locks nothing. */
+    @Transactional(readOnly = true)
+    public Optional<AgentRun> find(AgentRunRef run) {
+        return runs.findByRef(run.id(), run.workspaceId());
+    }
+
     /** Extends the lease; empty when the holder no longer holds it, after which it must not write. */
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Instant> renew(AgentRunFence fence) {

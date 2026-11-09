@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.SandboxJwt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import java.net.URI;
 import java.time.Instant;
 import java.util.Map;
@@ -77,7 +78,7 @@ public class AgentSandboxes {
         if (shutdownAt.isAfter(Instant.now().plus(tokens.longestSandboxToken())))
             throw new IllegalArgumentException("shutdownAt must not be later than the longest sandbox token");
         UUID id = UUID.randomUUID();
-        String claimName = "agent-" + id;
+        String claimName = claimName(id);
         var requested = Objects.requireNonNull(transactions.execute(status -> sandboxes
                 .findLive(workspaceId, subjectKey)
                 .map(live -> new Requested(live, false))
@@ -111,7 +112,7 @@ public class AgentSandboxes {
                 }
                 throw e;
             }
-            log.info("Sandbox requested: sandboxId={}, kind={}, claim={}", row.getId(), kind, row.getClaimName());
+            SandboxEvents.event(log.atInfo(), "agent.sandbox.requested", row).log("Sandbox requested");
         }
         return live(row);
     }
@@ -142,7 +143,17 @@ public class AgentSandboxes {
                     .lockLive(sandbox.id(), sandbox.workspaceId(), sandbox.subjectKey())
                     .isEmpty()) return Optional.<AgentRunLease>empty();
             var lease = runs.claimSubject(sandbox.workspaceId(), sandbox.subjectKey(), kinds);
-            if (lease.isPresent()) sandboxes.used(sandbox.id(), sandbox.workspaceId());
+            lease.ifPresent(leased -> {
+                sandboxes.used(sandbox.id(), sandbox.workspaceId());
+                log.atInfo()
+                        .addKeyValue("event.name", "agent.sandbox.leased")
+                        .addKeyValue(StructuredLogKeys.SANDBOX_NAME, claimName(sandbox.id()))
+                        .addKeyValue(StructuredLogKeys.SUBJECT_KEY, sandbox.subjectKey())
+                        .addKeyValue(StructuredLogKeys.WORKSPACE_ID, sandbox.workspaceId())
+                        .addKeyValue(StructuredLogKeys.RUN_ID, leased.runId())
+                        .addKeyValue(StructuredLogKeys.RUN_EPOCH, leased.epoch())
+                        .log("Sandbox leased its subject's next run");
+            });
             return lease;
         }));
     }
@@ -162,6 +173,11 @@ public class AgentSandboxes {
     void deleteClaim(AgentSandboxRepository.SandboxRow row) {
         claims.delete(row.getClaimName());
         transactions.executeWithoutResult(status -> sandboxes.deleteGone(row.getId(), row.getWorkspaceId()));
+    }
+
+    /** A sandbox's claim name, which is also its Sandbox's and its Pod's. */
+    static String claimName(UUID sandboxId) {
+        return "agent-" + sandboxId;
     }
 
     /** The gateway URL with its host as an address: the sandbox network policy allows no DNS. */
