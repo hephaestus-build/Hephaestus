@@ -78,8 +78,7 @@ class CompositionEvalLiveTest {
                     scenario.turn(),
                     scenario.toolParameters(),
                     PrivateFeedback.TOOL_DESCRIPTION,
-                    WorkerFeedbackComposer.sharedStyle() + "\n\n"
-                            + WorkerFeedbackComposer.prompt("feedback-composer.md"),
+                    CompositionSessions.sharedStyle() + "\n\n" + CompositionSessions.prompt("feedback-composer.md"),
                     scenario::check,
                     UnaryOperator.identity(),
                     "Decide every eligible practice with check_package.",

@@ -35,7 +35,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The labelled composition cases of {@code scripts/feedback-eval/compositions.json}, each rendered by main's review
- * composer: the opening turn and the check_package tool that {@link WorkerFeedbackComposer#reviewTurn} renders, and
+ * composer: the opening turn and the check_package tool that {@link CompositionSessions#reviewTurn} renders, and
  * the acceptance check of {@link ReviewOnWork#read}. Each case becomes a scenario in the layout of the golden
  * pull-request scenario. {@code docs/contributor/feedback-quality-evals.md} owns the use.
  */
@@ -64,7 +64,7 @@ final class CompositionEvalCases {
 
     /** The composer's system prompt for the review on the work. */
     static String system() {
-        return WorkerFeedbackComposer.sharedStyle() + "\n\n" + WorkerFeedbackComposer.prompt("review-composer.md");
+        return CompositionSessions.sharedStyle() + "\n\n" + CompositionSessions.prompt("review-composer.md");
     }
 
     /** One model request: the case's opening turn and its check_package tool. */
@@ -144,7 +144,7 @@ final class CompositionEvalCases {
             texts.put("notes[" + index + "]", composed.inline().get(index).body());
         var refused = FeedbackTextCheck.refusal(texts);
         if (refused == null) return new Checked(true, List.of(), null);
-        String reason = WorkerFeedbackComposer.textRefusal(refused);
+        String reason = CompositionSessions.textRefusal(refused);
         return new Checked(
                 false,
                 List.of("text: " + reason),
@@ -533,7 +533,7 @@ final class CompositionEvalCases {
                 texts.put("feedback[" + i + "]", draft.feedback.get(i).feedbackBody());
             var refused = FeedbackTextCheck.refusal(texts);
             if (refused == null) return new Checked(true, List.of(), null);
-            String why = WorkerFeedbackComposer.textRefusal(refused);
+            String why = CompositionSessions.textRefusal(refused);
             return new Checked(false, List.of(why), why);
         }
     }
@@ -580,11 +580,11 @@ final class CompositionEvalCases {
         var envelope = JSON.objectNode().put("contractVersion", 3).put("minDistinctItems", 2);
         envelope.putObject("destinations").putObject(destination).put("maxPieces", 3);
         envelope.putArray("onWorkCopyForms");
-        var files = WorkerFeedbackComposer.workspace(scenario.inputs(), json(envelope), state);
+        var files = CompositionSessions.workspace(scenario.inputs(), json(envelope), state);
         PrivateFeedback.stageHistory(state.privateHistory(), files);
         var routes = PrivateFeedback.closeUnrouted(request, state, new ArrayList<>());
         var captured = new CapturedWork(files, MAPPER);
-        var turn = WorkerFeedbackComposer.privateTurn(files, captured, request, state, null, routes, List.of());
+        var turn = CompositionSessions.privateTurn(files, captured, request, state, null, routes, List.of());
         var slugs = Evidence.notMetPractices(state.results());
         return new PrivateScenario(
                 scenario.id() + "/" + destination + "/" + supportCount,
@@ -628,13 +628,13 @@ final class CompositionEvalCases {
         var state = Admission.of(response, Map.of("PRACTICE_PAGE", decided, "CONVERSATION", decided));
         byte[] requestBytes = Objects.requireNonNull(inputs.get(SandboxLayout.FEEDBACK_COMPOSITION_PATH));
         var request = PrivateFeedback.Request.of(MAPPER.readTree(requestBytes)).orElseThrow();
-        var files = WorkerFeedbackComposer.workspace(inputs, requestBytes, state);
+        var files = CompositionSessions.workspace(inputs, requestBytes, state);
         JsonNode folderIndex = files.json(SandboxLayout.MANIFEST_PATH, MAPPER).orElseThrow();
         JsonNode practiceIndex =
                 files.json(ComposerFiles.PRACTICE_INDEX, MAPPER).orElseThrow();
-        var notReached = WorkerFeedbackComposer.notReached(practiceIndex, state);
+        var notReached = CompositionSessions.notReached(practiceIndex, state);
         var captured = new CapturedWork(files, MAPPER);
-        return WorkerFeedbackComposer.reviewTurn(
+        return CompositionSessions.reviewTurn(
                 files,
                 captured,
                 folderIndex,

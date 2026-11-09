@@ -9,15 +9,10 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace.Support;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
-import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 
@@ -149,52 +144,6 @@ final class CompositionPackages {
         pieces.forEach(piece ->
                 composition.addAll(piece(piece, targets, primary.apply(piece)).composition()));
         return request(composition, false, null);
-    }
-
-    /** The checked drafts of one destination. Only the exact checked draft may be published, once. */
-    static final class Drafts {
-        private final UUID reviewId;
-        private final Consumer<FeedbackPackage> check;
-        private final Function<FeedbackPackage, PreparedPackage> publish;
-        private final Map<String, FeedbackPackage> checked = new LinkedHashMap<>();
-        private @Nullable String publishedId;
-        private @Nullable PreparedPackage receipt;
-
-        Drafts(UUID reviewId, Consumer<FeedbackPackage> check, Function<FeedbackPackage, PreparedPackage> publish) {
-            this.reviewId = reviewId;
-            this.check = check;
-            this.publish = publish;
-        }
-
-        String check(FeedbackPackage proposal) {
-            check.accept(proposal);
-            String id = proposal.draftId(reviewId);
-            checked.put(id, proposal);
-            return id;
-        }
-
-        FeedbackPackage checked(String id) {
-            var proposal = checked.get(id);
-            if (proposal == null) throw new IllegalArgumentException("Unknown draftId; check the package first.");
-            return proposal;
-        }
-
-        PreparedPackage publish(String id) {
-            if (publishedId != null) {
-                if (!publishedId.equals(id))
-                    throw new IllegalArgumentException(
-                            "This destination already accepted its package; do not publish another.");
-                return Objects.requireNonNull(receipt);
-            }
-            var proposal = checked.get(id);
-            if (proposal == null)
-                throw new IllegalArgumentException(
-                        "Unknown draft id; check the package first and use its returned draftId.");
-            var accepted = publish.apply(proposal);
-            publishedId = id;
-            receipt = accepted;
-            return accepted;
-        }
     }
 
     private static List<UUID> distinct(List<Evidence.Ref> refs) {
