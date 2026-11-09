@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { evictionOrder } from "./kubernetes-memory-drill.ts";
+import { evictionOrder, unsampled, workingSets } from "./kubernetes-memory-drill.ts";
 
 const event = (name: string, time: string, reason = "Evicted") => ({
 	reason,
@@ -30,4 +30,40 @@ await test("eviction evidence uses event time, excludes other Pods and does not 
 		/establish an order/u,
 	);
 	assert.throws(() => evictionOrder({ items: [event("reviews", "invalid")] }), /ISO timestamp/u);
+});
+
+const mib = (value: number) => value * 1024 * 1024;
+const pod = (name: string, workingSetBytes?: number) => ({
+	podRef: { name },
+	memory: workingSetBytes === undefined ? {} : { workingSetBytes },
+});
+
+await test("the drill waits until each fixture's sample shows touched memory below its request, and names what it read", () => {
+	const settled = workingSets({
+		pods: [
+			pod("reviews", mib(43)),
+			pod("conversations", mib(75)),
+			pod("roles", mib(107)),
+			pod("other"),
+		],
+	});
+	assert.deepEqual(unsampled(settled), []);
+	// A container that the kubelet has not sampled yet has no working set, or one from before its allocation.
+	assert.deepEqual(
+		unsampled(
+			workingSets({ pods: [pod("reviews", mib(43)), pod("conversations"), pod("roles", mib(20))] }),
+		),
+		[
+			"conversations: no sample; it needs more than 64 MiB and less than 192 MiB",
+			"roles: 20.0 MiB; it needs more than 96 MiB and less than 192 MiB",
+		],
+	);
+	assert.deepEqual(
+		unsampled(
+			workingSets({
+				pods: [pod("reviews", mib(43)), pod("conversations", mib(75)), pod("roles", mib(192))],
+			}),
+		),
+		["roles: 192.0 MiB; it needs more than 96 MiB and less than 192 MiB"],
+	);
 });

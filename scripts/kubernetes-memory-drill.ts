@@ -16,6 +16,14 @@ const allocations = new Map([
 	["conversations", 64],
 	["roles", 96],
 ]);
+/** Each fixture's memory request and limit, in MiB. */
+const REQUEST_MI = 192;
+/**
+ * How long the drill waits for the kubelet's summary to show every fixture's touched memory. A new
+ * container's sample can lag on a loaded runner. The wait stays inside the soft eviction grace
+ * period below, which the kubelet counts from the node's start.
+ */
+const SAMPLE_WAIT_MS = 120_000;
 const kubectl = async (args: string[], input?: string) => output("kubectl", args, { input });
 const apply = async (manifest: object) => {
 	await kubectl(["apply", "-f", "-"], JSON.stringify(manifest));
@@ -48,6 +56,42 @@ export function evictionOrder(events: unknown): string[] {
 		);
 	}
 	return ordered.map((event) => event.name);
+}
+
+/** Each fixture's working set in the kubelet's stats summary, or undefined while it has none. */
+export function workingSets(stats: unknown): Map<string, number | undefined> {
+	const pods = asArray(asRecord(stats, "stats").pods, "stats.pods");
+	return new Map(
+		tiers.map((tier) => {
+			const pod = pods.find((entry) => at(entry, ["podRef", "name"], "stats Pod") === tier);
+			const workingSet =
+				pod === undefined ? undefined : at(pod, ["memory", "workingSetBytes"], "stats Pod");
+			return [tier, typeof workingSet === "number" ? workingSet : undefined];
+		}),
+	);
+}
+
+/**
+ * The fixtures whose sample does not yet show touched memory below the request, so in one eviction
+ * group. Each line names the sample that the drill read.
+ */
+export function unsampled(samples: Map<string, number | undefined>): string[] {
+	return tiers.flatMap((tier) => {
+		const workingSet = samples.get(tier);
+		const allocated = Number(allocations.get(tier));
+		if (
+			workingSet !== undefined &&
+			workingSet > allocated * 1024 * 1024 &&
+			workingSet < REQUEST_MI * 1024 * 1024
+		) {
+			return [];
+		}
+		const read =
+			workingSet === undefined ? "no sample" : `${(workingSet / 1024 / 1024).toFixed(1)} MiB`;
+		return [
+			`${tier}: ${read}; it needs more than ${allocated} MiB and less than ${REQUEST_MI} MiB`,
+		];
+	});
 }
 
 export async function memoryDrill(imagesFile: string, cluster = "hephaestus"): Promise<void> {
@@ -149,7 +193,10 @@ export async function memoryDrill(imagesFile: string, cluster = "hephaestus"): P
 								"-e",
 								`globalThis.pages=Buffer.alloc(${Number(allocations.get(tier))}*1024*1024,1); setInterval(()=>{},1000)`,
 							],
-							resources: { requests: { cpu: "10m", memory: "192Mi" }, limits: { memory: "192Mi" } },
+							resources: {
+								requests: { cpu: "10m", memory: `${REQUEST_MI}Mi` },
+								limits: { memory: `${REQUEST_MI}Mi` },
+							},
 							securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } },
 						},
 					],
@@ -165,40 +212,22 @@ export async function memoryDrill(imagesFile: string, cluster = "hephaestus"): P
 			"--for=condition=Ready",
 			"--timeout=240s",
 		]);
-		let samples: readonly unknown[] = [];
-		for (let attempt = 0; attempt < 20; attempt += 1) {
+		const deadline = Date.now() + SAMPLE_WAIT_MS;
+		let missing: string[] = [];
+		do {
 			const stats = parseJson(
 				await kubectl(["get", "--raw", `/api/v1/nodes/${node}/proxy/stats/summary`]),
 			);
-			const currentSamples = asArray(asRecord(stats, "stats").pods, "stats.pods");
-			samples = currentSamples;
-			if (
-				tiers.every((tier) =>
-					currentSamples.some(
-						(entry) =>
-							at(entry, ["podRef", "name"], "stats Pod") === tier &&
-							Number(at(entry, ["memory", "workingSetBytes"], "stats Pod")) >
-								Number(allocations.get(tier)) * 1024 * 1024,
-					),
-				)
-			) {
-				break;
+			missing = unsampled(workingSets(stats));
+			if (missing.length > 0) {
+				await sleep(2000);
 			}
-			await sleep(1000);
-		}
-		for (const tier of tiers) {
-			const pod = samples.find((entry) => at(entry, ["podRef", "name"], "stats Pod") === tier);
-			if (pod === undefined) {
-				throw new Error(`${tier} has no live memory sample`);
-			}
-			const workingSet = at(pod, ["memory", "workingSetBytes"], "stats Pod");
-			assert.ok(
-				typeof workingSet === "number" &&
-					workingSet > Number(allocations.get(tier)) * 1024 * 1024 &&
-					workingSet < 192 * 1024 * 1024,
-				`${tier} must consume touched memory below its request, in the same eviction group`,
-			);
-		}
+		} while (missing.length > 0 && Date.now() < deadline);
+		assert.deepEqual(
+			missing,
+			[],
+			"each fixture must consume touched memory below its request, in the same eviction group",
+		);
 		for (const tier of tiers) {
 			await kubectl([
 				"-n",
