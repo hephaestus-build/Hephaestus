@@ -6,6 +6,8 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxClaims;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import io.fabric8.kubernetes.client.Config;
@@ -35,7 +37,8 @@ import org.springframework.context.annotation.Profile;
 @Configuration(proxyBeanMethods = false)
 @Profile("!specs & !cds-training")
 @ConditionalOnWorkerRole
-@EnableConfigurationProperties({SandboxProperties.class, KubernetesSandboxProperties.class})
+@EnableConfigurationProperties({SandboxProperties.class, KubernetesSandboxProperties.class, AgentSandboxProperties.class
+})
 public class KubernetesSandboxConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(KubernetesSandboxConfiguration.class);
@@ -76,6 +79,15 @@ public class KubernetesSandboxConfiguration {
                     "The Kubernetes sandbox runtime needs a fixed sandbox gateway port (SANDBOX_API_PORT)");
         }
         return new KubernetesWorker(properties, workerProperties.resolvedWorkerId(), gatewayProperties.port());
+    }
+
+    /** The claims of agent-sandbox sandboxes, which their owner in {@code agent.sandbox.claim} writes through. */
+    @Bean
+    public SandboxClaims sandboxClaims(
+            KubernetesClient sandboxKubernetesClient,
+            KubernetesSandboxProperties properties,
+            AgentSandboxProperties sandboxes) {
+        return new KubernetesSandboxClaims(sandboxKubernetesClient, properties.namespace(), sandboxes.warmPools());
     }
 
     @Bean

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenInvalidException;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
+import de.tum.cit.aet.hephaestus.agent.attempt.SandboxJwt;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
@@ -22,6 +23,8 @@ import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
@@ -55,6 +58,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -106,6 +110,9 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     @Mock
     private SandboxGatewaySessions gatewaySessions;
 
+    @Mock
+    private AgentSandboxes agentSandboxes;
+
     private final Map<String, Bucket> buckets = new HashMap<>();
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private long bodyBudgetBytes = 1L << 20;
@@ -134,7 +141,17 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 ignored -> Bucket.builder()
                         .addLimit(configuration.getBandwidths()[0])
                         .build());
+        var owners = new StaticListableBeanFactory();
+        owners.addBean("agentSandboxes", agentSandboxes);
         return new FilterChainProxy(List.of(
+                config.agentGatewayFilterChain(
+                        httpSecurity(context),
+                        gateway,
+                        new SandboxGatewayConnector(GATEWAY_PORT, gateway.maxConnections()),
+                        jwtVerifier,
+                        owners.getBeanProvider(AgentSandboxes.class),
+                        accounting,
+                        OBJECT_MAPPER),
                 config.llmProxyFilterChain(
                         httpSecurity(context),
                         gateway,
@@ -153,6 +170,38 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         new SandboxGatewayConnector(GATEWAY_PORT, gateway.maxConnections()),
                         accounting),
                 config.blockLlmProxyOnOtherConnectors(httpSecurity(context))));
+    }
+
+    @Test
+    void shouldServeASandboxItsAgentRoutesOnlyOnTheGatewayAndOnlyWhileItsSandboxIsLive() throws Exception {
+        var token = new SandboxJwt(
+                UUID.randomUUID(), 7L, "review:9", "jti", Instant.now().plusSeconds(60));
+        var live = new AgentSandboxes.LiveSandbox(token.sandboxId(), 7L, "review:9", AgentSandboxKind.REVIEW);
+        when(jwtVerifier.verifySandbox("sandbox-token")).thenReturn(token);
+        when(agentSandboxes.authenticate(token)).thenReturn(Optional.of(live));
+
+        assertThat(answerTo(withToken(request("POST", "/internal/agent/next", GATEWAY_PORT), "sandbox-token")))
+                .isEqualTo(200);
+        assertThat(servedAs.get()).extracting(Authentication::getPrincipal).isEqualTo(live);
+        assertThat(answerTo(withToken(request("POST", "/internal/agent/next", APPLICATION_PORT), "sandbox-token")))
+                .as("the application connector has no agent route")
+                .isEqualTo(404);
+
+        when(agentSandboxes.authenticate(token)).thenReturn(Optional.empty());
+        assertThat(answerTo(withToken(request("POST", "/internal/agent/next", GATEWAY_PORT), "sandbox-token")))
+                .as("a sandbox that was taken back")
+                .isEqualTo(401);
+    }
+
+    @Test
+    void shouldRefuseAnAttemptTokenAndAMissingTokenOnTheAgentRoutes() throws Exception {
+        when(jwtVerifier.verifySandbox("turn-token"))
+                .thenThrow(new AttemptTokenInvalidException("token type not allowed", "typ"));
+
+        assertThat(answerTo(withToken(request("POST", "/internal/agent/next", GATEWAY_PORT), "turn-token")))
+                .isEqualTo(401);
+        assertThat(answerTo("POST", "/internal/agent/next", GATEWAY_PORT)).isEqualTo(401);
+        assertThat(refused("unauthenticated")).isEqualTo(2);
     }
 
     @Test

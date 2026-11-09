@@ -65,6 +65,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             // A run's queue state: its kind, band, subject key, epoch and times, no content or person; an erasure
             // deletes the runs of the jobs it deletes.
             "agent_run",
+            // A sandbox's subject key, claim name and times: a pointer to its subject, like a run's, and no content.
+            "agent_sandbox",
             "commit_pull_request",
             "connection",
             "connection_activity",

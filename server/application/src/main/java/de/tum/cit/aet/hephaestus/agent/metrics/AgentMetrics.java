@@ -17,6 +17,11 @@ public final class AgentMetrics {
     public static final String AGENT_JOB_TOTAL = "agent.job.total";
     public static final String AGENT_RUN_REAPED = "agent.run.reaped";
     public static final String AGENT_RUN_REAPER_FAILURE = "agent.run.reaper.failure";
+    /** Sandboxes taken back, by reason: {@code expired}, {@code start_limit}, {@code idle} or {@code orphan}. */
+    public static final String AGENT_SANDBOX_REAPED = "agent.sandbox.reaped";
+    /** Ticks or claim deletes of the sandbox reaper that failed; each is tried again on the next tick. */
+    public static final String AGENT_SANDBOX_REAPER_FAILURE = "agent.sandbox.reaper.failure";
+
     public static final String AGENT_PI_ENVELOPE_MISMATCH = "agent.pi.envelope.mismatch";
     public static final String AGENT_PI_RESULT_PARSE_FAILURE = "agent.pi.result.parse.failure";
     public static final String AGENT_QUEUE_DEPTH = "agent.queue.depth";

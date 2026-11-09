@@ -353,6 +353,7 @@ For the volume rules, change their name patterns.
 | `HephaestusReviewStageSlow` | `agent_job_stage_duration_seconds`, by `stage` | Three samples in six hours above 30 minutes for `sandbox`, or above 10 minutes for another stage. A stage that never ends has no sample: the attempt's deadline ends it, and `HephaestusAgentJobsFailing` reports that |
 | `HephaestusReviewWorkerLost` | `agent_run_reaped_total{kind="review",outcome="attempts_exhausted"}` | Each count is a review that failed because the holder of each of its attempts stopped renewing its lease. Workers that stop that often are evicted, out of memory, or on lost nodes. The alert stays up for one hour after the count |
 | `HephaestusAgentRunReaperFailing` | `agent_run_reaper_failure_total` | The reaper failed at least ten times in ten minutes, for ten minutes. It skips a run that it cannot take back until its next pass, so one broken run does not hold back the others. A run that fails on every pass stays leased and its review waits. The server log names the run |
+| `HephaestusAgentSandboxReaperFailing` | `agent_sandbox_reaper_failure_total` | The sandbox reaper failed at least ten times in ten minutes, for ten minutes. A sandbox that it cannot delete keeps its Pod and its share of the sandbox quota, but its token no longer works. The worker log names the sandbox |
 | `HephaestusReviewFeedbackUnconfirmed` | `agent_job_composition_stopped_total` with outcome `unrecorded` | Each count is a review that closed as Partial because every attempt ended before it confirmed where its feedback went. The results stay. |
 | `HephaestusAgentQueueStalled` | `agent_queue_oldest_age_seconds` | A practice review usually runs for 10 to 16 minutes. A wait of several review durations shows that no worker claims work |
 | `HephaestusSandboxIsolationFailed` | `sandbox_isolation_passed` of a worker | A later probe failed, and the worker starts no sandbox until a probe passes. The wait covers the first probe at the start |
@@ -929,6 +930,8 @@ A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime
 | `mentor_turn_lease_reaper_failure_total`   | Counter   | none      | Expired leases that the lease reaper could not take back on one pass    |
 | `agent_run_reaped_total`                   | Counter   | `kind`, `outcome` | Expired run leases taken back, by kind, and whether the run was `requeued` or ended (`attempts_exhausted`, `deadline`) |
 | `agent_run_reaper_failure_total`           | Counter   | none      | Runs that the reaper failed to take back. It tries each again next pass  |
+| `agent_sandbox_reaped_total`             | Counter   | `reason`  | Sandboxes that the reaper took back: `expired`, `start_limit`, `idle`, or `orphan` for a claim that no sandbox row names |
+| `agent_sandbox_reaper_failure_total`       | Counter   | none      | Sandbox reaper passes or claim deletes that failed. It tries each again next pass |
 | `mentor_turn_duration_seconds`             | Histogram | none      | An attempt, from its claim to its end                                   |
 | `mentor_turn_first_token_seconds`          | Histogram | none      | From the start of an attempt to the first part of Hephaestus's answer         |
 | `mentor_turn_cost_usd`                     | Summary   | none      | The cost of one billed attempt in US dollars                            |
