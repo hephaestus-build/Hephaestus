@@ -494,11 +494,19 @@ export default defineConfig({
 
 			// Local development
 			dev: run("mprocs"),
-			"dev:compose": run("docker compose up -d --wait", { cwd: "server" }),
-			"dev:compose:e2e": run("docker compose up -d --wait postgres nats", { cwd: "server" }),
-			"dev:compose:down": run("docker compose down", { cwd: "server" }),
+			// `dev-env.ts` gives the checkout's database its password before Compose reads `server/.env`.
+			"dev:compose": run("node ../scripts/dev-env.ts && docker compose up -d --wait", {
+				cwd: "server",
+			}),
+			"dev:compose:e2e": run(
+				"node ../scripts/dev-env.ts && docker compose up -d --wait postgres nats",
+				{ cwd: "server" },
+			),
+			"dev:compose:down": run("node ../scripts/dev-env.ts && docker compose down", {
+				cwd: "server",
+			}),
 			"dev:reset": run(
-				"docker compose down -v && node ../scripts/rm.ts postgres-data && docker compose up -d --wait",
+				"node ../scripts/dev-env.ts && docker compose down -v && node ../scripts/rm.ts postgres-data && node ../scripts/dev-env.ts && docker compose up -d --wait",
 				{ cwd: "server" },
 			),
 			"dev:server": run("node scripts/dev-kubernetes.ts run", {

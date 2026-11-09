@@ -108,7 +108,7 @@ export function releaseValuesFile(source: string, values: ChartValues): string {
 /**
  * The values of a commit channel, from the digests its verified commit lock names under the keys
  * that commit-image-lock writes. An upstream image must be the inventory's pin, as in a release
- * lock. A commit's version is the commit, as on a Compose host and as a promotion verifies it
+ * lock. A commit's version is the commit, as a promotion verifies it
  * (scripts/resolve-promotion.ts).
  */
 export function commitChartValues(

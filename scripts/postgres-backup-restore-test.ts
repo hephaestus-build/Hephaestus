@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -13,6 +13,8 @@ if (targetImage !== undefined && targetImage.trim() === "") {
 	throw new Error("--target-image must name an existing local PostgreSQL image");
 }
 const migrate = databaseMigration();
+// The throwaway database lives for this run only.
+const password = randomBytes(16).toString("hex");
 
 const id = `postgres-restore-${randomUUID().slice(0, 8)}`;
 const source = `${id}-source`;
@@ -86,7 +88,7 @@ function start(container: string, dataVolume: string, mount: string, image: stri
 		"-e",
 		"POSTGRES_USER=root",
 		"-e",
-		"POSTGRES_PASSWORD=root",
+		`POSTGRES_PASSWORD=${password}`,
 		image,
 	);
 	wait(container);
@@ -121,7 +123,7 @@ try {
 		throw new Error(`source is not sized from its 2 GiB limit: ${sized}`);
 	}
 
-	migrate(sourcePort);
+	migrate(sourcePort, password);
 	if (sql(source, "SELECT extversion FROM pg_extension WHERE extname='pg_partman'") !== "5.5.0") {
 		throw new Error("source pg_partman is not 5.5.0");
 	}

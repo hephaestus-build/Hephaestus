@@ -138,6 +138,7 @@ await describe("E2E setup trust boundaries", async () => {
 		E2E_MODEL: "model",
 		E2E_LLM_PRICING_MODE: "NO_CHARGE",
 		E2E_LLM_PRICE_NOTE: "internal test credits",
+		POSTGRES_PASSWORD: "fixture-only",
 	};
 
 	await test("accepts credentials only from the environment", () => {
@@ -156,6 +157,16 @@ await describe("E2E setup trust boundaries", async () => {
 			() => loadConfig({ ...valid, E2E_DB_URL: "postgresql://secret@db.example/app" }, []),
 			/loopback/u,
 		);
+	});
+
+	await test("names the local database from server/.env and has no default password", () => {
+		const { POSTGRES_PASSWORD: _unused, ...withoutPassword } = valid;
+		assert.throws(() => loadConfig(withoutPassword, []), /POSTGRES_PASSWORD/u);
+		const config = loadConfig(
+			{ ...valid, POSTGRES_PORT: "15432", POSTGRES_PASSWORD: "p@ss/word" },
+			[],
+		);
+		assert.equal(config.databaseUrl, "postgresql://root:p%40ss%2Fword@localhost:15432/hephaestus");
 	});
 
 	await test("diagnostics never contain credential values", () => {

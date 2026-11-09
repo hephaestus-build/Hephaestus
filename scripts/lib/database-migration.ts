@@ -33,13 +33,13 @@ function migrate(
 // Loader and Liquibase properties, JVM option variables and ambient files could change the
 // packaged migration source. Launch in an owned empty directory with only PATH inherited.
 
-export function databaseMigration(localTimeout?: number): (port: number) => void {
+export function databaseMigration(localTimeout?: number): (port: number, password: string) => void {
 	const jar = process.env.HEPHAESTUS_APPLICATION_JAR;
 	if (jar === undefined) {
 		if (process.env.CI === "true") {
 			throw new Error("HEPHAESTUS_APPLICATION_JAR must name the packaged server in CI");
 		}
-		return (port) => {
+		return (port, password) => {
 			migrate(
 				"node",
 				[
@@ -48,7 +48,7 @@ export function databaseMigration(localTimeout?: number): (port: number) => void
 					`-PpostgresPort=${port}`,
 					"--quiet",
 				],
-				{ timeout: localTimeout },
+				{ env: { ...process.env, POSTGRES_PASSWORD: password }, timeout: localTimeout },
 			);
 		};
 	}
@@ -60,7 +60,7 @@ export function databaseMigration(localTimeout?: number): (port: number) => void
 	}
 	const javaHome = process.env.JAVA_HOME;
 	const java = isSet(javaHome) ? path.join(javaHome, "bin", "java") : "java";
-	return (port) => {
+	return (port, password) => {
 		const home = mkdtempSync(path.join(tmpdir(), "hephaestus-migration-"));
 		try {
 			migrate(
@@ -76,7 +76,7 @@ export function databaseMigration(localTimeout?: number): (port: number) => void
 					"--changeLogFile=db/master.xml",
 					`--url=jdbc:postgresql://127.0.0.1:${port}/hephaestus`,
 					"--username=root",
-					"--password=root",
+					`--password=${password}`,
 					"update",
 				],
 				{ cwd: home, env: { PATH: process.env.PATH }, timeout: MIGRATION_DEADLINE_MS },

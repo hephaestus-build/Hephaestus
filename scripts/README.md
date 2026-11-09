@@ -33,7 +33,7 @@ The database commands require Docker with the Compose plugin.
 | `POSTGRES_PORT`     | `5432`       | PostgreSQL port     |
 | `POSTGRES_DB`       | `hephaestus` | PostgreSQL database |
 | `POSTGRES_USER`     | `root`       | PostgreSQL user     |
-| `POSTGRES_PASSWORD` | `root`       | PostgreSQL password |
+| `POSTGRES_PASSWORD` | none         | PostgreSQL password |
 
 ### NATS Webhook Example Extraction
 

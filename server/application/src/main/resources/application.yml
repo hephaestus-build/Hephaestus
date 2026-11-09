@@ -75,7 +75,7 @@ spring:
     datasource:
         url: jdbc:postgresql://localhost:${POSTGRES_PORT:5432}/hephaestus
         username: ${DB_USERNAME:root}
-        password: ${DB_PASSWORD:root}
+        password: ${POSTGRES_PASSWORD}
         hikari:
             # pgJDBC then leaves PostgreSQL's DETAIL line, which quotes the rejected row values, out of every
             # exception message. The primary message, the SQLState and the constraint name stay.
@@ -91,7 +91,7 @@ spring:
         hibernate:
             # Liquibase owns DDL across every profile. `validate` makes drift fail-fast at boot;
             # prod overrides to `none` in application-prod.yml. Fresh local DB after schema change:
-            # `docker compose down -v && docker compose up -d`.
+            # `vp run dev:reset`.
             ddl-auto: validate
         # Repository queries complete in the service layer; no lazy loading during view rendering.
         open-in-view: false
