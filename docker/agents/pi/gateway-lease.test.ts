@@ -55,8 +55,10 @@ await test("the loop stops at the last confirmed lease when the gateway does not
 	const server = createServer((_request, response) => {
 		requests += 1;
 		if (requests === 1) {
+			// The loop subtracts the whole exchange from the lease, and a loaded runner's first local fetch can take
+			// longer than 100 ms. A one-second lease keeps the first renewal valid there too.
 			response.setHeader("Content-Type", "application/json");
-			response.end(JSON.stringify({ remainingMillis: 100, renewAfterMillis: 10 }));
+			response.end(JSON.stringify({ remainingMillis: 1000, renewAfterMillis: 10 }));
 		} else {
 			response.writeHead(503).end();
 		}
