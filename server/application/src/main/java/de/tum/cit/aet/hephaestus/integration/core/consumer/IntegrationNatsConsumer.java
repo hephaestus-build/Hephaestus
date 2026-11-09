@@ -907,14 +907,14 @@ public class IntegrationNatsConsumer {
      * message to the poison handling (ADR 0013). One that does not stop could keep writing beside the next event of
      * its scope, so this replica breaks its liveness and keeps the message while the thread lives: Kubernetes restarts
      * the Pod, the stuck thread dies with it, and the message returns once its ack wait passes. A thread that ends
-     * before the restart hands the message to the poison handling then. A consumer that stops waits the same grace,
-     * so it never returns while its handler still writes.
+     * before the restart hands the message to the poison handling then. A consumer that stops interrupts its handler
+     * the same way and waits for its thread to end, so the consumer never reports a clean stop while its handler still
+     * writes.
      */
     void handleMessage(@Nullable Long scopeId, Message msg) {
         messageMeters.received(msg);
         AtomicBoolean settled = new AtomicBoolean();
         @Nullable ScheduledFuture<?> holding = holdWhileHandling(msg);
-        boolean keepHolding = false;
         long start = System.nanoTime();
         BoundedRun run;
         try {
@@ -929,19 +929,18 @@ public class IntegrationNatsConsumer {
         } catch (TimeoutException timedOut) {
             if (settled.compareAndSet(false, true)) {
                 boolean stopped = run.stop();
-                timedOut(scopeId, msg, System.nanoTime() - start, stopped);
+                timedOut(scopeId, msg, System.nanoTime() - start, stopped, false);
                 // A handler that would not stop keeps its message, so no replica handles it beside the stuck thread.
-                keepHolding = !stopped && !run.awaitEnd();
-                if (!keepHolding) {
-                    poisonHandler.handleFailure(
-                            scopeId, msg, new HandlerTimeoutException(consumerProperties.handlerTimeout()));
-                }
+                if (!stopped) run.awaitEnd();
+                poisonHandler.handleFailure(
+                        scopeId, msg, new HandlerTimeoutException(consumerProperties.handlerTimeout()));
             }
         } catch (InterruptedException stopping) {
-            // The consumer stops, and the handler with it. One that would not stop keeps its message.
-            if (!run.stop() && settled.compareAndSet(false, true)) {
-                keepHolding = true;
+            // The consumer stops, and the handler with it. The handler settles its own message; one that would not
+            // stop keeps it, and this thread stays until it ends, so the consumer never reports a clean stop meanwhile.
+            if (!run.stop()) {
                 breakLiveness();
+                run.awaitEnd();
             }
             Thread.currentThread().interrupt();
         } catch (ExecutionException failure) {
@@ -949,7 +948,7 @@ public class IntegrationNatsConsumer {
             if (failure.getCause() instanceof Error error) throw error;
             throw new IllegalStateException("Handler dispatch failed", failure.getCause());
         } finally {
-            if (holding != null && !keepHolding) holding.cancel(false);
+            if (holding != null) holding.cancel(false);
         }
     }
 
@@ -964,23 +963,26 @@ public class IntegrationNatsConsumer {
     IntegrationMessageHandler dispatchBounded(@Nullable Long scopeId, Message msg) {
         AtomicReference<@Nullable IntegrationMessageHandler> handler = new AtomicReference<>();
         AtomicReference<@Nullable RuntimeException> failure = new AtomicReference<>();
-        BoundedRun run = new BoundedRun(() -> {
+        BoundedRun run = new BoundedRun(() -> traceContext.process(msg, () -> {
             try {
                 handler.set(dispatch(scopeId, msg));
             } catch (RuntimeException dispatchFailure) {
                 failure.set(dispatchFailure);
             }
-        });
+        }));
         Duration timeout = consumerProperties.handlerTimeout();
         try {
             run.await(timeout);
         } catch (TimeoutException timedOut) {
             boolean stopped = run.stop();
-            timedOut(scopeId, msg, timeout.toNanos(), stopped);
+            timedOut(scopeId, msg, timeout.toNanos(), stopped, true);
             if (!stopped) run.awaitEnd();
             throw new HandlerTimeoutException(timeout);
         } catch (InterruptedException interrupted) {
-            if (!run.stop()) breakLiveness();
+            if (!run.stop()) {
+                breakLiveness();
+                run.awaitEnd();
+            }
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while replaying an event", interrupted);
         } catch (ExecutionException fatal) {
@@ -1042,14 +1044,23 @@ public class IntegrationNatsConsumer {
             }
         }
 
-        /** Waits until the handler's thread ends; false when the caller is interrupted first. */
-        boolean awaitEnd() {
+        /**
+         * Waits until the handler's thread ends, through every interrupt, and keeps the caller's interrupt. A thread
+         * that never ends ends with the process, which the broken liveness restarts.
+         */
+        void awaitEnd() {
+            boolean interrupted = Thread.interrupted();
             try {
-                ended.await();
-                return true;
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                return false;
+                while (true) {
+                    try {
+                        ended.await();
+                        return;
+                    } catch (InterruptedException again) {
+                        interrupted = true;
+                    }
+                }
+            } finally {
+                if (interrupted) Thread.currentThread().interrupt();
             }
         }
     }
@@ -1069,22 +1080,27 @@ public class IntegrationNatsConsumer {
     }
 
     /** Reports a handler that outlived the handler timeout; one that would not stop also breaks this replica's liveness. */
-    private void timedOut(@Nullable Long scopeId, Message msg, long nanos, boolean stopped) {
+    private void timedOut(@Nullable Long scopeId, Message msg, long nanos, boolean stopped, boolean replay) {
         Duration timeout = consumerProperties.handlerTimeout();
         var timedOut = log.atError()
                 .addKeyValue("event.name", "integration.message.timed_out")
                 .addKeyValue("integration.route", ConsumerSubjectMath.routeLabel(msg.getSubject()))
                 .addKeyValue("integration.delivery", IntegrationPoisonHandler.readDeliveredCount(msg))
                 .addKeyValue("integration.handler_timeout", timeout.toString())
-                .addKeyValue("integration.handler_stopped", stopped);
+                .addKeyValue("integration.handler_stopped", stopped)
+                .addKeyValue("integration.replay", replay);
         if (scopeId != null) timedOut = timedOut.addKeyValue("integration.scope.id", scopeId);
         messageMeters.handled(msg, IntegrationMessageMeters.Outcome.TIMED_OUT, nanos);
-        stats.recordNak(Instant.now());
+        // A replay has no delivery of its own: its record stays pending, and nothing returns to the stream.
+        if (!replay) stats.recordNak(Instant.now());
         if (stopped) {
-            timedOut.log("Handler timed out; its event returns to the stream");
+            timedOut.log(replay ? "Replay handler timed out" : "Handler timed out; its event returns to the stream");
             return;
         }
-        timedOut.log("Handler timed out and did not stop; this replica restarts and keeps the event until then");
+        timedOut.log(
+                replay
+                        ? "Replay handler timed out and did not stop; this replica restarts"
+                        : "Handler timed out and did not stop; this replica restarts and keeps the event until then");
         breakLiveness();
     }
 
