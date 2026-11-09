@@ -945,8 +945,7 @@ public class IntegrationNatsConsumer {
             Thread.currentThread().interrupt();
         } catch (ExecutionException failure) {
             // dispatchMessage lets only a fatal JVM error out; the consumer's loop stops on it.
-            if (failure.getCause() instanceof Error error) throw error;
-            throw new IllegalStateException("Handler dispatch failed", failure.getCause());
+            throw fatal(failure, "Handler dispatch failed");
         } finally {
             if (holding != null) holding.cancel(false);
         }
@@ -977,7 +976,7 @@ public class IntegrationNatsConsumer {
             boolean stopped = run.stop();
             timedOut(scopeId, msg, timeout.toNanos(), stopped, true);
             if (!stopped) run.awaitEnd();
-            throw new HandlerTimeoutException(timeout);
+            throw new HandlerTimeoutException(timeout, timedOut);
         } catch (InterruptedException interrupted) {
             if (!run.stop()) {
                 breakLiveness();
@@ -985,13 +984,18 @@ public class IntegrationNatsConsumer {
             }
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while replaying an event", interrupted);
-        } catch (ExecutionException fatal) {
-            if (fatal.getCause() instanceof Error error) throw error;
-            throw new IllegalStateException("Replay dispatch failed", fatal.getCause());
+        } catch (ExecutionException crashed) {
+            throw fatal(crashed, "Replay dispatch failed");
         }
         RuntimeException thrown = failure.get();
         if (thrown != null) throw thrown;
         return handler.get();
+    }
+
+    /** Rethrows the fatal JVM error that a handler thread let out, so the caller's loop stops on it as before. */
+    private static RuntimeException fatal(ExecutionException failure, String message) {
+        if (failure.getCause() instanceof Error error) throw error;
+        return new IllegalStateException(message, failure);
     }
 
     /**

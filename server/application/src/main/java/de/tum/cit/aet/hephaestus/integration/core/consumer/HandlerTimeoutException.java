@@ -12,7 +12,13 @@ public final class HandlerTimeoutException extends RuntimeException {
     @Serial
     private static final long serialVersionUID = 1L;
 
+    /** Carries no cause: the dead-letter record names its deepest cause, which must be this class. */
     HandlerTimeoutException(Duration timeout) {
         super("The handler did not finish within " + timeout);
+    }
+
+    /** For a replay, which answers its caller and stores no dead-letter record. */
+    HandlerTimeoutException(Duration timeout, Throwable cause) {
+        super("The handler did not finish within " + timeout, cause);
     }
 }
