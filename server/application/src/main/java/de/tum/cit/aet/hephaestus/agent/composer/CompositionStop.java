@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.composer;
 
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
+import java.util.Arrays;
 import java.util.Locale;
 
 /**
@@ -63,6 +64,17 @@ public enum CompositionStop {
     /** Whether another attempt may compose what this cause left open. */
     public boolean passing() {
         return passing;
+    }
+
+    /**
+     * Whether a composer loop may report this cause. The others only the server observes: the attempts it counts, the
+     * routing it reads and the model it resolves.
+     */
+    public static boolean loopReported(String name) {
+        return switch (name) {
+            case "RETRIES_EXHAUSTED", "ROUTING_UNAVAILABLE", "MODEL_UNAVAILABLE" -> false;
+            default -> Arrays.stream(values()).anyMatch(stop -> stop.name().equals(name));
+        };
     }
 
     /** The metric tag value. */

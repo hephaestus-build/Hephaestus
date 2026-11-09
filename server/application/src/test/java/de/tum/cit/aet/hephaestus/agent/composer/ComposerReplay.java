@@ -58,6 +58,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -166,6 +167,47 @@ final class ComposerReplay {
         var stops = JSON.arrayNode();
         state.reviewStops.forEach(stops::add);
         return new Outcome(packages, stops, handedOn, calls);
+    }
+
+    /** The Node composer driver that replays a case against a loopback gateway, run from the module directory. */
+    private static final Path NODE_DRIVER = Path.of("src/test/resources/agent/review-composer-replay.ts");
+
+    /**
+     * Runs the Node composer loop of a {@code review_compose} run on the case, in its own process, against the same
+     * server side over a loopback gateway, with each model call answered by {@code model}.
+     */
+    static Outcome node(JsonNode replay, Function<byte[], ReviewModelGateway.Answer> model)
+            throws IOException, InterruptedException {
+        var state = new Server(replay);
+        var sessions = state.sessions();
+        var calls = JSON.arrayNode();
+        var previous = new ArrayList<JsonNode>();
+        Function<byte[], ReviewModelGateway.Answer> recorded = body -> {
+            calls.add(delta(MAPPER.readTree(body), previous));
+            return model.apply(body);
+        };
+        var identity = new ResultAdmissionService.AdmissionIdentity(
+                state.job.getId(), state.job.getWorkspaceId(), state.job.getAttempt(), RUN);
+        try (var gateway = new ComposerReplayGateway(
+                MAPPER,
+                sessions,
+                state.job,
+                identity,
+                sessions.deadline(Instant.now().plus(Duration.ofHours(1))),
+                recorded)) {
+            var process = new ProcessBuilder("node", NODE_DRIVER.toString(), gateway.url())
+                    .redirectError(ProcessBuilder.Redirect.INHERIT)
+                    .start();
+            byte[] printed = process.getInputStream().readAllBytes();
+            if (!process.waitFor(2, TimeUnit.MINUTES) || process.exitValue() != 0)
+                throw new IllegalStateException("The Node composer did not finish: exit " + process.exitValue());
+            JsonNode outcome = MAPPER.readTree(printed);
+            var packages = JSON.arrayNode();
+            state.accepted.forEach(accepted -> packages.add(MAPPER.valueToTree(accepted)));
+            var stops = JSON.arrayNode();
+            state.reviewStops.forEach(stops::add);
+            return new Outcome(packages, stops, outcome.path("handedOn").asString(null), calls);
+        }
     }
 
     /** Answers each call with the case's next answer. */

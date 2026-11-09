@@ -557,8 +557,10 @@ class WorkerFeedbackComposerTest {
     @Test
     void shouldWithholdErasedInputsWithoutStagingThem() {
         RuntimeJobTestData.spent(RuntimeJobTestData.attempt(job, 1), 1);
-        when(continuation.restore(job))
-                .thenThrow(new ReviewCompositionContinuation.InputsUnavailableException("erased", true));
+        // Restoring reads the retained inputs, so an erasure refuses both.
+        var erased = new ReviewCompositionContinuation.InputsUnavailableException("erased", true);
+        when(continuation.restore(job)).thenThrow(erased);
+        when(continuation.retainedInputs(job)).thenThrow(erased);
         when(continuation.stageWithoutInputs(job)).thenReturn(emptyFolder());
 
         composer().composeResumed(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
