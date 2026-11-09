@@ -110,7 +110,7 @@ jobs:
       # One node image per minor, pinned by digest.
       K3S_IMAGES: >-
         {"1.35": "docker.io/rancher/k3s:v1.35.9-k3s1@sha256:ec9868c6a38d4e8c1869832fb5fd1eb8473c39794a0b44d2b952e7ba911951bc",
-        "1.37": "docker.io/rancher/k3s:v1.37.1-k3s1@sha256:ca7f37d993d82ef0dcdcfecb2e0e2618ea541dbaffc620c8cedebe01a82acd0d"}
+        "1.37": "docker.io/rancher/k3s:v1.37.2-k3s1@sha256:21ea6e0fac4e3930c2ce8aa40ddd41a8b18cb3e9a0222c030dc005e7e88c4332"}
       # The lowest minor on amd64 installs the profile of a 16 GiB host, which a runner is, so a
       # shipped profile that cannot start fails here. The other legs install the dev profile.
       PROFILES: ${{ inputs.minor == '1.35' && inputs.arch == 'amd64' && '--profile small' || '--profile dev' }}

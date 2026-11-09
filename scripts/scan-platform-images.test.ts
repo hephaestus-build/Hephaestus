@@ -10,6 +10,7 @@ import {
 	bundledSubjects,
 	platformPins,
 	renderedSubjects,
+	runningBundledSubjects,
 	sarifForCategory,
 	verifyAgentSandbox,
 	verifyIndexDigest,
@@ -82,6 +83,24 @@ void test("k3s runtime images come from its release inventory, with validated re
 		() => bundledSubjects("untrusted.example/image:latest"),
 		/Invalid k3s image reference/u,
 	);
+});
+
+void test("the rescan leaves out the bundled images of the add-ons that the host disables", () => {
+	const bundled = bundledSubjects(
+		[
+			"docker.io/rancher/klipper-helm:v1",
+			"docker.io/rancher/klipper-lb:v1",
+			"docker.io/rancher/mirrored-coredns-coredns:1",
+			"docker.io/rancher/mirrored-library-traefik:3",
+		].join("\n"),
+	);
+	assert.deepEqual(
+		runningBundledSubjects(bundled, "disable:\n  - traefik\n  - servicelb\n").map(
+			(subject) => subject.image,
+		),
+		["k3s-klipper-helm", "k3s-mirrored-coredns-coredns"],
+	);
+	assert.throws(() => runningBundledSubjects(bundled, "disable:\n  - unknown\n"), /does not know/u);
 });
 
 void test("an added Pod image without a digest cannot escape the chart-to-scan check", () => {

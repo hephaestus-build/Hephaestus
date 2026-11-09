@@ -905,7 +905,7 @@ The bundle holds these files:
 | `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. |
 | `k3s-agent-sandbox.yaml` | The agent-sandbox controller and its resource definitions, with its pin. It goes to the k3s manifests directory. |
 | `k3s-certificates.yaml` | The `Let's Encrypt` issuer, the Gateway certificate, and the PostgreSQL CA and server certificate. The installer writes your host name and address into it. |
-| `k3s-config.yaml` | The k3s configuration: the kubelet configuration file, and no bundled Traefik. |
+| `k3s-config.yaml` | The k3s configuration: the kubelet configuration file, no bundled Traefik, no ServiceLB, and no metrics server. |
 | `k3s-kubelet.yaml` | A limit of 4096 processes for each Pod, and the shutdown grace period. Also the memory and CPU reserved for k3s and the host, and the eviction thresholds. |
 | `k3s-logind.conf` | How long logind lets the kubelet hold a shutdown. |
 | `k3s-journald.conf` | Host journal limits: 512 MiB on disk, 128 MiB in memory, and seven days. |

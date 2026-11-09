@@ -2,6 +2,10 @@
 # docs/admin/kubernetes.mdx § Install on one host (k3s).
 kubelet-arg:
   - config=/etc/rancher/k3s/kubelet.yaml
-# k3s-platform.yaml installs a pinned Traefik in place of the bundled one.
+# k3s-platform.yaml installs a pinned Traefik in place of the bundled one. Traefik takes the host's
+# ports 80 and 443 itself, and no Service of the platform is a LoadBalancer, so ServiceLB has no
+# work. Nothing reads the resource metrics API: the kubelet evicts by its own statistics.
 disable:
   - traefik
+  - servicelb
+  - metrics-server
