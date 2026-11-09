@@ -47,6 +47,29 @@ erDiagram
         TIMESTAMPTZ enabled_at "NOT NULL"
     }
 
+    AgentAction {
+        UUID id PK
+        INTEGER attempts "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ ended_at
+        TIMESTAMPTZ expires_at
+        VARCHAR(255) idempotency_key UK "NOT NULL"
+        VARCHAR(32) kind "NOT NULL"
+        VARCHAR(255) lane_key "NOT NULL"
+        BIGINT lease_epoch "NOT NULL"
+        TIMESTAMPTZ leased_until
+        INTEGER max_attempts "NOT NULL"
+        TIMESTAMPTZ next_attempt_at "NOT NULL"
+        JSONB payload
+        VARCHAR(998) readback_ref
+        VARCHAR(16) state "NOT NULL"
+        VARCHAR(32) stop_reason
+        BIGINT subject_account_id FK
+        TIMESTAMPTZ updated_at "NOT NULL"
+        BIGINT workspace_id FK
+        TIMESTAMPTZ write_started_at
+    }
+
     AuthEvent {
         BIGINT id PK
         TIMESTAMPTZ occurred_at PK
@@ -243,6 +266,8 @@ erDiagram
     %% One-to-Many relationships
     Account ||--o{ AccountExport : has
     Account ||--o{ AccountFeature : has
+    Account ||--o{ AgentAction : has
+    Workspace ||--o{ AgentAction : has
     Account ||--o{ AuthEvent : account_id
     Account ||--o{ AuthEvent : acting_account_id
     IdentityProvider ||--o{ AuthEvent : references

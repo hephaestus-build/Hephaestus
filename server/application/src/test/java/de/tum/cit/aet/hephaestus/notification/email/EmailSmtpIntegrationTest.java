@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.notification.email;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
+import de.tum.cit.aet.hephaestus.core.action.ActionKind;
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import io.github.bucket4j.Bucket;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -10,9 +13,11 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestReporter;
@@ -29,6 +34,7 @@ class EmailSmtpIntegrationTest {
     @Test
     void shouldDeliverThroughBootsSenderToAnSmtpInbox(TestReporter reporter) {
         var registry = new SimpleMeterRegistry();
+        var mapper = JsonMapper.builder().build();
         try (var mailpit = new GenericContainer<>(
                         "axllent/mailpit:v1.31.1@sha256:98b916bd3c8d61f7633a52d3ea2f58d00620cb01ca57ab59edde68c347a95365")
                 .withExposedPorts(1025, 8025)
@@ -43,7 +49,7 @@ class EmailSmtpIntegrationTest {
                             "spring.mail.properties[mail.smtp.timeout]=10000",
                             "spring.mail.properties[mail.smtp.writetimeout]=10000")
                     .run(context -> {
-                        var gateway = new EmailGateway(
+                        var gateway = new EmailAdapter(
                                 Optional.of(context.getBean(JavaMailSender.class)),
                                 new EmailProperties("noreply@hephaestus.test", "Hephaestus", null),
                                 new OutboundEgressGuard(() -> false),
@@ -52,12 +58,29 @@ class EmailSmtpIntegrationTest {
                                         (key, config) -> Bucket.builder()
                                                 .addLimit(config.getBandwidths()[0])
                                                 .build(),
-                                        new EmailRateLimitProperties(250, 200)));
-                        var result = gateway.send(EmailMessage.of(
+                                        new EmailRateLimitProperties(250, 200)),
+                                mapper,
+                                List.of(new DirectEmailNotice()));
+                        var email = EmailMessage.of(
                                 EmailKind.TEST_MESSAGE,
                                 "developer@hephaestus.test",
-                                EmailTestSupport.renderer().render(EmailKind.TEST_MESSAGE, Map.of())));
-                        assertThat(result.outcome()).isEqualTo(EmailDeliveryResult.Outcome.SENT);
+                                EmailTestSupport.renderer().render(EmailKind.TEST_MESSAGE, Map.of()));
+                        var result = gateway.execute(new ActionAttempt(
+                                UUID.randomUUID(),
+                                null,
+                                ActionKind.EMAIL,
+                                "email:test:smtp",
+                                mapper.createObjectNode()
+                                        .put(EmailAdapter.PAYLOAD_KIND, EmailKind.TEST_MESSAGE.name())
+                                        .set(
+                                                EmailAdapter.PAYLOAD_EVENT,
+                                                mapper.valueToTree(new DirectEmailNotice.Direct(email))),
+                                1,
+                                1,
+                                false,
+                                null,
+                                () -> true));
+                        assertThat(result).isInstanceOf(ActionResult.Done.class);
 
                         String inboxUrl = "http://" + mailpit.getHost() + ":" + mailpit.getMappedPort(8025);
                         reporter.publishEntry("Mailpit inbox", inboxUrl);
@@ -82,7 +105,7 @@ class EmailSmtpIntegrationTest {
                                             .asString())
                                     .isEqualTo("developer@hephaestus.test");
                             assertThat(message.path("MessageID").asString())
-                                    .isEqualTo(Objects.requireNonNull(result.messageId())
+                                    .isEqualTo(Objects.requireNonNull(((ActionResult.Done) result).readbackRef())
                                             .replace("<", "")
                                             .replace(">", ""));
                         }

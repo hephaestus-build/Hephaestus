@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -12,13 +11,14 @@ import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestPointer;
 import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestWritten;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
-import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryMetrics;
-import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult;
-import de.tum.cit.aet.hephaestus.notification.email.EmailGateway;
+import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult.Outcome;
 import de.tum.cit.aet.hephaestus.notification.email.EmailKind;
 import de.tum.cit.aet.hephaestus.notification.email.EmailMessage;
+import de.tum.cit.aet.hephaestus.notification.email.EmailNotice.Address;
+import de.tum.cit.aet.hephaestus.notification.email.EmailNotice.Prepared;
 import de.tum.cit.aet.hephaestus.notification.email.EmailTestSupport;
 import de.tum.cit.aet.hephaestus.notification.email.EmailUnsubscribeLinks;
+import de.tum.cit.aet.hephaestus.notification.email.Emails;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionKind;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -31,7 +31,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 class WeeklyDigestEmailListenerTest extends BaseUnitTest {
 
@@ -42,17 +41,15 @@ class WeeklyDigestEmailListenerTest extends BaseUnitTest {
     private final NotificationSubscriptionService subscriptions = mock(NotificationSubscriptionService.class);
     private final AccountContactQuery contacts = mock(AccountContactQuery.class);
     private final AccountMembershipQuery memberships = mock(AccountMembershipQuery.class);
-    private final EmailGateway gateway = mock(EmailGateway.class);
+    private final Emails emails = mock(Emails.class);
     private final EmailUnsubscribeLinks links = mock(EmailUnsubscribeLinks.class);
-    private final EmailDeliveryMetrics metrics = mock(EmailDeliveryMetrics.class);
     private final WeeklyDigestEmailListener listener = new WeeklyDigestEmailListener(
             subscriptions,
             contacts,
             memberships,
             EmailTestSupport.renderer(),
-            gateway,
+            emails,
             links,
-            metrics,
             Clock.fixed(NOW, ZoneOffset.UTC));
 
     @BeforeEach
@@ -65,18 +62,12 @@ class WeeklyDigestEmailListenerTest extends BaseUnitTest {
                         7L, "delivery-team", "Delivery team", AccountMembershipQuery.Role.MEMBER)));
         when(links.url("token")).thenReturn("https://hephaestus.example/notifications/unsubscribe/token");
         when(links.confirmationUrl("token")).thenReturn("https://hephaestus.example/unsubscribe?token=token");
-        when(gateway.configured()).thenReturn(true);
+        when(emails.configured()).thenReturn(true);
     }
 
     @Test
     void shouldSendOneNoteWithoutContentsAndWithOneClickUnsubscribeWhenTheDigestPointsToEmail() {
-        when(gateway.send(any())).thenReturn(EmailDeliveryResult.sent("id"));
-
-        listener.on(written(WeeklyDigestPointer.EMAIL, NOW));
-
-        var sent = ArgumentCaptor.forClass(EmailMessage.class);
-        verify(gateway).send(sent.capture());
-        EmailMessage message = sent.getValue();
+        EmailMessage message = sent(listener.prepare(written(WeeklyDigestPointer.EMAIL, NOW)));
         assertThat(message.kind()).isEqualTo(EmailKind.MENTOR_DIGEST);
         assertThat(message.to()).isEqualTo("dev@example.org");
         assertThat(message.subject()).isEqualTo("Your weekly digest is ready");
@@ -94,42 +85,42 @@ class WeeklyDigestEmailListenerTest extends BaseUnitTest {
         when(subscriptions.unsubscribeToken(ACCOUNT_ID, NotificationSubscriptionKind.MENTOR_DIGEST, NOW))
                 .thenReturn(Optional.empty());
 
-        listener.on(written(WeeklyDigestPointer.EMAIL, NOW));
+        assertThat(listener.prepare(written(WeeklyDigestPointer.EMAIL, NOW)))
+                .isEqualTo(Prepared.withhold(Outcome.UNSUBSCRIBED));
         listener.on(written(WeeklyDigestPointer.SLACK, NOW));
-
-        verify(metrics).record(EmailKind.MENTOR_DIGEST, EmailDeliveryResult.Outcome.UNSUBSCRIBED);
-        verify(gateway, never()).send(any());
+        verify(emails, never()).enqueue(any(), any());
     }
 
     @Test
     void shouldSendNothingWhenTheNoteIsADayOld() {
-        listener.on(written(WeeklyDigestPointer.EMAIL, NOW.minus(Duration.ofHours(24))));
-
-        verify(metrics).record(EmailKind.MENTOR_DIGEST, EmailDeliveryResult.Outcome.EXPIRED);
-        verify(gateway, never()).send(any());
+        assertThat(listener.prepare(written(WeeklyDigestPointer.EMAIL, NOW.minus(Duration.ofHours(24)))))
+                .isEqualTo(Prepared.withhold(Outcome.EXPIRED));
     }
 
     @Test
-    void shouldAskForRedeliveryWhenTheRelayIsUnavailable() {
-        when(gateway.send(any())).thenReturn(EmailDeliveryResult.of(EmailDeliveryResult.Outcome.UNAVAILABLE));
-
-        assertThatThrownBy(() -> listener.on(written(WeeklyDigestPointer.EMAIL, NOW)))
-                .isInstanceOf(NotificationDeliveryUnavailableException.class);
+    void shouldAddressOneNotePerDigestInItsWorkspaceThatExpiresAfterADay() {
+        assertThat(listener.address(written(WeeklyDigestPointer.EMAIL, NOW)))
+                .isEqualTo(new Address(ENTRY_ID + ":" + ACCOUNT_ID, ACCOUNT_ID, 7L, NOW.plus(Duration.ofHours(24))));
     }
 
     @Test
     void shouldReachTheDeveloperOnlyWhenTheyHaveAVerifiedAddressAndTheRelayIsConfigured() {
         assertThat(listener.reaches(7L, ACCOUNT_ID)).isTrue();
 
-        when(gateway.configured()).thenReturn(false);
+        when(emails.configured()).thenReturn(false);
         assertThat(listener.reaches(7L, ACCOUNT_ID)).as("relay not configured").isFalse();
 
-        when(gateway.configured()).thenReturn(true);
+        when(emails.configured()).thenReturn(true);
         when(contacts.activeVerifiedPrimaryEmail(ACCOUNT_ID)).thenReturn(Optional.empty());
         assertThat(listener.reaches(7L, ACCOUNT_ID)).as("no verified address").isFalse();
     }
 
     private static WeeklyDigestWritten written(WeeklyDigestPointer pointer, Instant at) {
         return new WeeklyDigestWritten(ENTRY_ID, 7L, ACCOUNT_ID, "5–11 October", pointer, at);
+    }
+
+    private static EmailMessage sent(Prepared prepared) {
+        assertThat(prepared).isInstanceOf(Prepared.Send.class);
+        return ((Prepared.Send) prepared).message();
     }
 }

@@ -3979,7 +3979,8 @@ export const EmailTestResponseSchema = {
                 'INVALID_ADDRESS',
                 'REJECTED',
                 'UNAVAILABLE',
-                'RATE_LIMITED'
+                'RATE_LIMITED',
+                'UNCONFIRMED'
             ]
         },
         to: {

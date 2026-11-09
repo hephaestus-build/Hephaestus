@@ -11,6 +11,7 @@
             "core::current-account",
             "core::runtime",
             "core::web",
+            "core::action",
             "core::auth-spi",
             "core::auth-ratelimit",
             "core::event",

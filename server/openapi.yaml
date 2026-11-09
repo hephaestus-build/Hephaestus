@@ -14814,6 +14814,7 @@ components:
           - REJECTED
           - UNAVAILABLE
           - RATE_LIMITED
+          - UNCONFIRMED
         to:
           type: string
           description: "the address it went to, or <code>null</code> when there was\

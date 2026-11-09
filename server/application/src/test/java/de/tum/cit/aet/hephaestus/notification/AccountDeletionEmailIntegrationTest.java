@@ -3,11 +3,11 @@ package de.tum.cit.aet.hephaestus.notification;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.auth.AccountService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
-import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettings;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingJavaMailSender;
@@ -19,11 +19,9 @@ import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
+import java.io.IOException;
 import java.net.ConnectException;
-import java.sql.Timestamp;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,27 +34,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.MailSendException;
-import org.springframework.modulith.events.FailedEventPublications;
-import org.springframework.modulith.events.ResubmissionOptions;
-import org.springframework.modulith.events.core.EventPublicationRepository;
-import org.springframework.modulith.events.core.EventPublicationRepository.FailedCriteria;
-import org.springframework.modulith.events.core.TargetEventPublication;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import tools.jackson.databind.ObjectMapper;
 
 /**
- * The whole spine, end to end: a committed {@code softDelete} → a registry row → the listener → the
- * gateway → a captured message, and on a transport failure a {@code FAILED} row that a resubmission
- * completes. Listeners run inline here ({@code TestAsyncConfiguration}), so what a real deployment
- * does on the async executor happens before {@code softDelete} returns.
+ * The whole spine, end to end: a committed {@code softDelete} → a registry row → the listener → one
+ * {@code agent_action} → the outbox executor → a captured message. A relay that refused the message is retried
+ * by the outbox; one that left the outcome unclear is never sent again. Listeners run inline here
+ * ({@code TestAsyncConfiguration}), so what a real deployment does on the async executor happens before
+ * {@code softDelete} returns; the test runs the executor itself.
  */
 @Import(CapturingMailTestConfiguration.class)
 @TestPropertySource(properties = "hephaestus.email.from=noreply@hephaestus.test")
 class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
-
-    private static final String LISTENER = AccountDeletionEmailListener.class.getName() + ".on(";
 
     @Autowired
     private BucketResolver buckets;
@@ -71,19 +62,13 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
     private CapturingJavaMailSender mailSender;
 
     @Autowired
-    private EventPublicationRepository publicationRepository;
-
-    @Autowired
-    private FailedEventPublications failedPublications;
+    private ActionExecutor executor;
 
     @Autowired
     private JdbcTemplate jdbc;
 
     @Autowired
     private InstanceSettingsService instanceSettingsService;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -100,168 +85,11 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
 
         assertThat(mailSender.sent()).noneMatch(message -> recipient(message).equals(address));
         assertThat(publications(accountId)).isEmpty();
+        assertThat(actions(accountId)).isEmpty();
         assertThat(accountRepository.findById(accountId))
                 .get()
                 .extracting(Account::getStatus)
                 .isEqualTo(Account.Status.ACTIVE);
-    }
-
-    @Test
-    void shouldDrainAnExpiredBatchBeforeDeliveringTheNextNotification() {
-        String address = "backlog-" + UUID.randomUUID() + "@hephaestus.test";
-        long accountId = persistAccount(address, Instant.now());
-        mailSender.failWith(new MailSendException("relay down", new ConnectException("refused")));
-        accountService.softDelete(accountId);
-        List<UUID> expiredIds = new ArrayList<>();
-        try {
-            for (int i = 0; i < NotificationRedeliveryJob.BATCH_SIZE; i++) {
-                UUID id = UUID.randomUUID();
-                expiredIds.add(id);
-                var event = new AccountDeletionScheduledEvent(-i - 1L, Instant.parse("2000-01-01T00:00:00Z"));
-                assertThat(jdbc.update(
-                                """
-                        INSERT INTO event_publication
-                            (id, listener_id, event_type, serialized_event, publication_date, status, completion_attempts)
-                        SELECT ?, listener_id, event_type, ?, ?, 'FAILED', 1
-                        FROM event_publication WHERE serialized_event LIKE ?
-                        """,
-                                id,
-                                objectMapper.writeValueAsString(event),
-                                Timestamp.from(Instant.now().minus(Duration.ofDays(8))),
-                                "%\"accountId\":" + accountId + ",%"))
-                        .as("the expired publication must exist before testing backlog drainage")
-                        .isEqualTo(1);
-            }
-            jdbc.update(
-                    "UPDATE event_publication SET publication_date = ? WHERE serialized_event LIKE ?",
-                    Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
-                    "%\"accountId\":" + accountId + ",%");
-            mailSender.failWith(null);
-
-            new NotificationRedeliveryJob(failedPublications).resubmitFailed();
-            assertThat(mailSender.sent())
-                    .noneMatch(message -> recipient(message).equals(address));
-            new NotificationRedeliveryJob(failedPublications).resubmitFailed();
-
-            assertThat(mailSender.sent())
-                    .filteredOn(message -> recipient(message).equals(address))
-                    .hasSize(1);
-            assertThat(publications(accountId)).isEmpty();
-            for (UUID id : expiredIds) {
-                assertThat(jdbc.queryForList("SELECT id FROM event_publication WHERE id = ?", id))
-                        .isEmpty();
-            }
-        } finally {
-            for (UUID id : expiredIds) {
-                jdbc.update("DELETE FROM event_publication WHERE id = ?", id);
-            }
-        }
-    }
-
-    @Test
-    void shouldAdvancePastAStillFailingBatchOnTheNextRetry() {
-        long accountId = persistAccount("fair-retry-" + UUID.randomUUID() + "@hephaestus.test", Instant.now());
-        mailSender.failWith(new MailSendException("relay down", new ConnectException("refused")));
-        accountService.softDelete(accountId);
-        UUID newest =
-                (UUID) Objects.requireNonNull(publications(accountId).getFirst().get("id"));
-        List<UUID> older = new ArrayList<>();
-        try {
-            jdbc.update(
-                    "UPDATE event_publication SET publication_date = ? WHERE id = ?",
-                    Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
-                    newest);
-            for (int i = 0; i < NotificationRedeliveryJob.BATCH_SIZE; i++) {
-                UUID id = UUID.randomUUID();
-                older.add(id);
-                var event = new AccountDeletionScheduledEvent(
-                        accountId, Instant.now().plus(Duration.ofDays(1)).plusSeconds(i));
-                assertThat(jdbc.update(
-                                """
-                        INSERT INTO event_publication
-                            (id, listener_id, event_type, serialized_event, publication_date, status, completion_attempts)
-                        SELECT ?, listener_id, event_type, ?, ?, 'FAILED', 1
-                          FROM event_publication WHERE id = ?
-                        """,
-                                id,
-                                objectMapper.writeValueAsString(event),
-                                Timestamp.from(
-                                        Instant.now().minus(Duration.ofHours(1)).plusSeconds(i)),
-                                newest))
-                        .isEqualTo(1);
-            }
-            new NotificationRedeliveryJob(failedPublications).resubmitFailed();
-            for (UUID id : older) {
-                assertThat(jdbc.queryForMap(
-                                "SELECT status, last_resubmission_date FROM event_publication WHERE id = ?", id))
-                        .containsEntry("status", "FAILED")
-                        .hasEntrySatisfying(
-                                "last_resubmission_date",
-                                value -> assertThat(value).isNotNull());
-            }
-            assertThat(publicationRepository.findFailedPublications(FailedCriteria.ALL))
-                    .extracting(TargetEventPublication::getIdentifier)
-                    .containsAll(older)
-                    .contains(newest);
-            var criteria = FailedCriteria.ALL
-                    .withPublicationsPublishedBefore(Instant.now().minus(Duration.ofMinutes(5)))
-                    .withItemsToRead(1);
-            assertThat(publicationRepository.findFailedPublications(criteria))
-                    .extracting(TargetEventPublication::getIdentifier)
-                    .containsExactly(newest);
-
-            mailSender.failWith(null);
-            failedPublications.resubmit(
-                    ResubmissionOptions.defaults().withBatchSize(1).withMaxInFlight(1));
-
-            assertThat(mailSender.sent()).hasSize(1);
-            assertThat(publications(accountId))
-                    .extracting(row -> row.get("id"))
-                    .containsExactlyInAnyOrderElementsOf(older);
-        } finally {
-            for (UUID id : older) jdbc.update("DELETE FROM event_publication WHERE id = ?", id);
-            jdbc.update("DELETE FROM event_publication WHERE id = ?", newest);
-        }
-    }
-
-    @Test
-    void shouldApplyFailedStatusAndMinimumAgeBeforeTheFairBatchLimit() {
-        long accountId = persistAccount("retry-filter-" + UUID.randomUUID() + "@hephaestus.test", Instant.now());
-        mailSender.failWith(new MailSendException("relay down", new ConnectException("refused")));
-        accountService.softDelete(accountId);
-        UUID source =
-                (UUID) Objects.requireNonNull(publications(accountId).getFirst().get("id"));
-        List<UUID> other = new ArrayList<>();
-        try {
-            jdbc.update(
-                    "UPDATE event_publication SET publication_date = ? WHERE id = ?",
-                    Timestamp.from(Instant.parse("2001-01-01T00:00:00Z")),
-                    source);
-            for (String status : List.of("PUBLISHED", "PROCESSING", "RESUBMITTED", "COMPLETED", "FAILED")) {
-                UUID id = UUID.randomUUID();
-                other.add(id);
-                Instant date = status.equals("FAILED")
-                        ? Instant.now().plus(Duration.ofDays(1))
-                        : Instant.parse("2000-01-01T00:00:00Z");
-                jdbc.update("""
-                        INSERT INTO event_publication
-                            (id, listener_id, event_type, serialized_event, publication_date, status, completion_attempts)
-                        SELECT ?, listener_id, event_type, serialized_event, ?, ?, 1
-                          FROM event_publication WHERE id = ?
-                        """, id, Timestamp.from(date), status, source);
-            }
-            assertThat(publicationRepository.findFailedPublications(FailedCriteria.ALL
-                            .withPublicationsPublishedBefore(Instant.now().minus(Duration.ofMinutes(5)))
-                            .withItemsToRead(1)))
-                    .extracting(TargetEventPublication::getIdentifier)
-                    .containsExactly(source);
-            assertThat(publicationRepository.findFailedPublications(FailedCriteria.ALL))
-                    .extracting(TargetEventPublication::getIdentifier)
-                    .contains(source, other.getLast());
-        } finally {
-            for (UUID id : other) jdbc.update("DELETE FROM event_publication WHERE id = ?", id);
-            jdbc.update("DELETE FROM event_publication WHERE id = ?", source);
-        }
     }
 
     @Test
@@ -271,11 +99,11 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         var first = new EmailRateLimiter(scoped, new EmailRateLimitProperties(3, 2));
         var second = new EmailRateLimiter(scoped, new EmailRateLimitProperties(3, 2));
         try {
-            assertThat(first.acquire(true)).isTrue();
-            assertThat(second.acquire(true)).isTrue();
-            assertThat(first.acquire(true)).isFalse();
-            assertThat(second.acquire(false)).isTrue();
-            assertThat(first.acquire(false)).isFalse();
+            assertThat(first.acquire(true)).isEmpty();
+            assertThat(second.acquire(true)).isEmpty();
+            assertThat(first.acquire(true)).isPresent();
+            assertThat(second.acquire(false)).isEmpty();
+            assertThat(first.acquire(false)).isPresent();
             assertThat(jdbc.queryForObject(
                             "SELECT COUNT(*) FROM auth_rate_limit_bucket WHERE id IN (?, ?) AND state IS NOT NULL AND expires_at IS NOT NULL",
                             Long.class,
@@ -308,6 +136,8 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         long accountId = persistAccount(address, Instant.now());
 
         accountService.softDelete(accountId);
+        executor.runDue();
+        executor.runDue();
 
         List<MimeMessage> toAddress = mailSender.sent().stream()
                 .filter(message -> recipient(message).equals(address))
@@ -320,6 +150,10 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         assertThat(publications(accountId))
                 .as("a delivered notification leaves no registry row behind (completion-mode=delete)")
                 .isEmpty();
+        assertThat(actions(accountId)).singleElement().satisfies(action -> {
+            assertThat(action).containsEntry("state", "DONE").containsEntry("payload", null);
+            assertThat(action.get("readback_ref")).isEqualTo(message.getHeader("Message-ID")[0]);
+        });
     }
 
     @Test
@@ -331,29 +165,63 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
 
         assertThat(mailSender.sent()).noneMatch(message -> recipient(message).equals(address));
         assertThat(publications(accountId)).isEmpty();
+        assertThat(actions(accountId)).isEmpty();
     }
 
     @Test
-    void shouldKeepAFailedPublicationAndDeliverItOnResubmission() {
+    void shouldRetryAnEmailTheRelayNeverAcceptedAndSendItOnce() {
         String address = "retry-" + UUID.randomUUID() + "@hephaestus.test";
         long accountId = persistAccount(address, Instant.now());
-        mailSender.failWith(new MailSendException("relay down", new ConnectException("refused")));
+        // JavaMailSenderImpl's connection failure: the cause, and every message's failure.
+        var refused = new MessagingException("connect", new ConnectException("refused"));
+        mailSender.failWith(
+                new MailSendException("Mail server connection failed", refused, Map.of("message", refused)));
 
         accountService.softDelete(accountId);
+        executor.runDue();
 
         assertThat(mailSender.sent()).noneMatch(message -> recipient(message).equals(address));
-        assertThat(publications(accountId)).singleElement().satisfies(row -> {
-            assertThat(row.get("status")).isEqualTo("FAILED");
-            assertThat(row.get("listener_id")).asString().startsWith(LISTENER);
-        });
+        assertThat(publications(accountId))
+                .as("the listener completed: the outbox owns the retry")
+                .isEmpty();
+        assertThat(actions(accountId))
+                .singleElement()
+                .satisfies(action ->
+                        assertThat(action).containsEntry("state", "ADMITTED").containsEntry("attempts", 1));
 
         mailSender.failWith(null);
-        failedPublications.resubmit(ResubmissionOptions.defaults());
+        jdbc.update(
+                "UPDATE agent_action SET next_attempt_at = now() WHERE subject_account_id = ? AND state = 'ADMITTED'",
+                accountId);
+        executor.runDue();
+        executor.runDue();
 
         assertThat(mailSender.sent())
                 .filteredOn(message -> recipient(message).equals(address))
                 .hasSize(1);
-        assertThat(publications(accountId)).isEmpty();
+        assertThat(actions(accountId))
+                .singleElement()
+                .satisfies(action -> assertThat(action).containsEntry("state", "DONE"));
+    }
+
+    @Test
+    void shouldNeverSendAgainAnEmailWhoseAcceptanceTheRelayLeftUnclear() {
+        String address = "unclear-" + UUID.randomUUID() + "@hephaestus.test";
+        long accountId = persistAccount(address, Instant.now());
+        mailSender.failWith(new MailSendException(
+                Map.of("message", new MessagingException("data", new IOException("read timed out")))));
+
+        accountService.softDelete(accountId);
+        executor.runDue();
+        mailSender.failWith(null);
+        executor.runDue();
+
+        assertThat(mailSender.sent()).noneMatch(message -> recipient(message).equals(address));
+        assertThat(actions(accountId))
+                .singleElement()
+                .satisfies(action -> assertThat(action)
+                        .containsEntry("state", "UNCERTAIN")
+                        .containsEntry("stop_reason", "WRITE_UNCONFIRMED"));
     }
 
     @Test
@@ -363,6 +231,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         setSilentMode(true);
         try {
             accountService.softDelete(accountId);
+            executor.runDue();
         } finally {
             setSilentMode(false);
         }
@@ -371,6 +240,11 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         assertThat(publications(accountId))
                 .as("Silent Mode is a decision, not an outage: the publication completes as withheld")
                 .isEmpty();
+        assertThat(actions(accountId))
+                .singleElement()
+                .satisfies(action -> assertThat(action)
+                        .containsEntry("state", "CANCELLED")
+                        .containsEntry("stop_reason", "SILENCED"));
     }
 
     private void setSilentMode(boolean engaged) {
@@ -389,6 +263,13 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         account.setPrimaryEmail(email);
         account.setPrimaryEmailVerifiedAt(verifiedAt);
         return Objects.requireNonNull(accountRepository.save(account).getId());
+    }
+
+    private List<Map<String, @Nullable Object>> actions(long accountId) {
+        return jdbc.queryForList(
+                "SELECT state, stop_reason, attempts, readback_ref, payload::text AS payload FROM agent_action"
+                        + " WHERE subject_account_id = ?",
+                accountId);
     }
 
     /** Registry rows for this account's event: the serialized event carries the account id. */

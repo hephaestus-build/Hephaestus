@@ -1,6 +1,6 @@
 # ADR 0079: One agent system: one sandbox per subject on agent-sandbox, PostgreSQL as the only brain
 
-**Status:** Accepted (2026-11-09)
+**Status:** Accepted (2026-11-09, amended 2026-11-09 — [erasure of outbox actions](#update--2026-11-09-erasure-deletes-the-actions-of-an-account))
 **Date:** 2026-11-09
 **Authors:** Felix T.J. Dietrich
 
@@ -425,7 +425,7 @@ erDiagram
 - One executor runs on every server replica, with no leader. It claims only the head of each lane, so the actions of a lane run in order.
 - The executor records the start of a write before the provider call. No provider call runs inside a transaction (ADR 0075). Each adapter reads back by the marker of the action.
 - Email is at most once. An `UNCERTAIN` email is never sent again.
-- An erasure cancels each pending action that holds the person's data, and removes its payload.
+- An erasure deletes the person's actions. [Update — 2026-11-09](#update--2026-11-09-erasure-deletes-the-actions-of-an-account) states the rule.
 
 **Permits.** The call pool (`llm_call_permit`) gets a band and a fair share for each workspace.
 The grant order is the band, then the workspace with the fewest granted permits in the pool, then age.
@@ -599,6 +599,21 @@ These items have an owner in the implementation program. Each must close before 
 - **gVisor supports user namespaces.** When google/gvisor#13303 ships, gVisor templates also set `hostUsers: false`.
 - **Checkpoint and restore become stable.** Pod-level checkpoint and restore ([KEP-5823](https://www.kubernetes.dev/resources/keps/5823/)) can replace a cold start of a conversation.
 - **A self-hoster cannot install a cluster-scoped controller.** Then consider a fallback backend with plain Pods behind the same `agent_sandbox` owner.
+
+## Update — 2026-11-09: erasure deletes the actions of an account
+
+The first outbox kind (`email`, #3994) showed that a cancelled row is not needed. Erasure deletes the row.
+
+- Account purge and the instance-admin person job delete the `agent_action` rows of the erased account.
+  They delete each row in every state, and `subject_account_id` names the account.
+- A pending action is then never carried out. An attempt in flight finds no row, so its result changes nothing.
+- An action that already passed its write fence still reaches the provider, as it would a moment earlier.
+- A `DONE` action goes too, with its outcome and its provider reference, such as an email's Message-ID.
+  The content that it delivered stays at the provider. An email cannot be recalled.
+  Some provider copies can be removed, such as a comment or a Slack post.
+  The domain row records such a copy, and the domain's erasure removes it.
+  The outbox never holds the only reference to a provider copy.
+- Without an erasure, an action clears its payload when it ends, and the ended row goes 30 days later.
 
 ## Sources
 

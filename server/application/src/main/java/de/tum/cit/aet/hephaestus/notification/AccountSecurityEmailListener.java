@@ -4,12 +4,12 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryMetrics;
-import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult;
-import de.tum.cit.aet.hephaestus.notification.email.EmailGateway;
+import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult.Outcome;
 import de.tum.cit.aet.hephaestus.notification.email.EmailKind;
 import de.tum.cit.aet.hephaestus.notification.email.EmailMessage;
+import de.tum.cit.aet.hephaestus.notification.email.EmailNotice;
 import de.tum.cit.aet.hephaestus.notification.email.EmailRenderer;
+import de.tum.cit.aet.hephaestus.notification.email.Emails;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Map;
@@ -22,23 +22,47 @@ import org.springframework.transaction.annotation.Propagation;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 @WorkspaceAgnostic("Security notices are addressed only to the affected native account")
-public class AccountSecurityEmailListener {
+public class AccountSecurityEmailListener implements EmailNotice<AccountSecurityChangedEvent> {
+    static final Duration EXPIRES_AFTER = Duration.ofHours(24);
+
     private final AccountContactQuery contacts;
     private final EmailRenderer renderer;
-    private final EmailGateway gateway;
-    private final EmailDeliveryMetrics metrics;
+    private final Emails emails;
     private final Clock clock;
 
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(AccountSecurityChangedEvent event) {
-        if (!clock.instant().isBefore(event.occurredAt().plus(Duration.ofHours(24)))) {
-            metrics.record(EmailKind.ACCOUNT_SECURITY_CHANGED, EmailDeliveryResult.Outcome.EXPIRED);
-            return;
+        emails.enqueue(this, event);
+    }
+
+    @Override
+    public EmailKind kind() {
+        return EmailKind.ACCOUNT_SECURITY_CHANGED;
+    }
+
+    @Override
+    public Class<AccountSecurityChangedEvent> eventType() {
+        return AccountSecurityChangedEvent.class;
+    }
+
+    @Override
+    public Address address(AccountSecurityChangedEvent event) {
+        return new Address(
+                event.accountId() + ":" + event.kind() + ":"
+                        + event.occurredAt().toEpochMilli(),
+                event.accountId(),
+                null,
+                event.occurredAt().plus(EXPIRES_AFTER));
+    }
+
+    @Override
+    public Prepared prepare(AccountSecurityChangedEvent event) {
+        if (!clock.instant().isBefore(event.occurredAt().plus(EXPIRES_AFTER))) {
+            return Prepared.withhold(Outcome.EXPIRED);
         }
         var recipient = contacts.activeVerifiedPrimaryEmail(event.accountId());
         if (recipient.isEmpty()) {
-            metrics.record(EmailKind.ACCOUNT_SECURITY_CHANGED, EmailDeliveryResult.Outcome.NO_RECIPIENT);
-            return;
+            return Prepared.withhold(Outcome.NO_RECIPIENT);
         }
         String change = switch (event.kind()) {
             case IDENTITY_LINKED -> "A sign-in identity is now linked to your account.";
@@ -48,9 +72,6 @@ public class AccountSecurityEmailListener {
                 "Your passkeys or passkey protection changed. If you did not make this change, contact your instance operator.";
         };
         var rendered = renderer.render(EmailKind.ACCOUNT_SECURITY_CHANGED, Map.of("change", change));
-        var result = gateway.send(EmailMessage.of(EmailKind.ACCOUNT_SECURITY_CHANGED, recipient.get(), rendered));
-        if (result.outcome().retryable()) {
-            throw new NotificationDeliveryUnavailableException(EmailKind.ACCOUNT_SECURITY_CHANGED, event.accountId());
-        }
+        return Prepared.send(EmailMessage.of(EmailKind.ACCOUNT_SECURITY_CHANGED, recipient.get(), rendered));
     }
 }

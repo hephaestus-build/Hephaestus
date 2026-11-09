@@ -33,6 +33,8 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
 
     /** These nullable-workspace tables still require SQL tenancy enforcement. */
     private static final Map<String, String> MIXED_SCOPE_TABLES = Map.of(
+            "agent_action",
+            "workspace_id is NULL only for an instance-level action, such as an email to an account",
             "consumer_dead_letter",
             "Installation lifecycle failures can arrive before a workspace exists",
             "config_audit_event",

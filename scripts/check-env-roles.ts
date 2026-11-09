@@ -89,12 +89,12 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 	{
 		path: "spring.mail",
 		role: "server",
-		why: "EmailGateway and every notification listener are @ConditionalOnServerRole; the worker and webhook roles never open the relay",
+		why: "EmailAdapter, the outbox executor and every notification listener are @ConditionalOnServerRole; the worker and webhook roles never open the relay",
 	},
 	{
 		path: "hephaestus.email",
 		role: "server",
-		why: "the sender identity is read by EmailGateway, which is @ConditionalOnServerRole",
+		why: "the sender identity is read by EmailAdapter, which is @ConditionalOnServerRole",
 	},
 ];
 

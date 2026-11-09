@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794181444678-1" author="hephaestus">
+        <createTable tableName="agent_action">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="agent_actionPK"/>
+            </column>
+            <column defaultValueNumeric="0" name="attempts" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ended_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="expires_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="idempotency_key" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="kind" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="lane_key" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueNumeric="0" name="lease_epoch" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="leased_until" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="max_attempts" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="next_attempt_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payload" type="JSONB"/>
+            <column name="readback_ref" type="VARCHAR(998)"/>
+            <column name="state" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stop_reason" type="VARCHAR(32)"/>
+            <column name="subject_account_id" type="BIGINT"/>
+            <column name="updated_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT"/>
+            <column name="write_started_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </createTable>
+    </changeSet>
+    <changeSet id="1794181444678-2" author="hephaestus">
+        <addUniqueConstraint columnNames="idempotency_key" constraintName="uk_agent_action_idempotency_key" tableName="agent_action"/>
+    </changeSet>
+    <changeSet id="1794181444678-3" author="hephaestus">
+        <createIndex indexName="idx_agent_action_lane" tableName="agent_action">
+            <column name="lane_key"/>
+            <column name="id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1794181444678-4" author="hephaestus">
+        <createIndex indexName="idx_agent_action_subject_account" tableName="agent_action">
+            <column name="subject_account_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1794181444678-5" author="hephaestus">
+        <createIndex indexName="idx_agent_action_workspace" tableName="agent_action">
+            <column name="workspace_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1794181444678-6" author="hephaestus"><sql splitStatements="false"><![CDATA[
+ALTER TABLE agent_action
+  ADD CONSTRAINT sfk_agent_action_workspace FOREIGN KEY (workspace_id) REFERENCES workspace (id) ON DELETE CASCADE,
+  ADD CONSTRAINT sfk_agent_action_subject_account FOREIGN KEY (subject_account_id) REFERENCES account (id) ON DELETE CASCADE,
+  ADD CONSTRAINT ck_agent_action_kind CHECK (kind IN ('EMAIL')),
+  ADD CONSTRAINT ck_agent_action_state CHECK (state IN ('PROPOSED','ADMITTED','EXECUTING','DONE','UNCERTAIN','FAILED','CANCELLED')),
+  ADD CONSTRAINT ck_agent_action_stop_reason CHECK (stop_reason IS NULL OR stop_reason IN ('COMPLETED','REJECTED','RECIPIENT_UNAVAILABLE','NOT_CONFIGURED','WITHDRAWN','SILENCED','ATTEMPTS_EXHAUSTED','EXPIRED','WRITE_UNCONFIRMED','LEASE_LOST_AFTER_WRITE')),
+  ADD CONSTRAINT ck_agent_action_workspace CHECK (workspace_id IS NOT NULL OR kind IN ('EMAIL')),
+  ADD CONSTRAINT ck_agent_action_attempts CHECK (attempts >= 0 AND max_attempts >= 1 AND attempts <= max_attempts),
+  ADD CONSTRAINT ck_agent_action_lease CHECK ((state = 'EXECUTING') = (leased_until IS NOT NULL)),
+  ADD CONSTRAINT ck_agent_action_end CHECK ((state IN ('DONE','UNCERTAIN','FAILED','CANCELLED')) = (ended_at IS NOT NULL) AND (ended_at IS NULL) = (stop_reason IS NULL)),
+  ADD CONSTRAINT ck_agent_action_payload CHECK ((ended_at IS NULL) = (payload IS NOT NULL)),
+  ADD CONSTRAINT ck_agent_action_write CHECK (write_started_at IS NULL OR state NOT IN ('PROPOSED','ADMITTED')),
+  ADD CONSTRAINT ck_agent_action_done CHECK (state <> 'DONE' OR stop_reason = 'COMPLETED');
+CREATE INDEX idx_agent_action_due ON agent_action (next_attempt_at, id) WHERE state = 'ADMITTED';
+CREATE INDEX idx_agent_action_leased ON agent_action (leased_until) WHERE state = 'EXECUTING';
+CREATE INDEX idx_agent_action_expiring ON agent_action (expires_at) WHERE state IN ('PROPOSED','ADMITTED') AND expires_at IS NOT NULL;
+CREATE INDEX idx_agent_action_ended ON agent_action (ended_at) WHERE ended_at IS NOT NULL;
+CREATE UNIQUE INDEX ux_agent_action_lane_executing ON agent_action (lane_key) WHERE state = 'EXECUTING';
+CREATE FUNCTION guard_agent_action() RETURNS trigger LANGUAGE plpgsql AS $_$
+BEGIN
+ IF ROW(NEW.id,NEW.workspace_id,NEW.kind,NEW.lane_key,NEW.idempotency_key,NEW.subject_account_id,NEW.max_attempts,NEW.created_at)
+    IS DISTINCT FROM ROW(OLD.id,OLD.workspace_id,OLD.kind,OLD.lane_key,OLD.idempotency_key,OLD.subject_account_id,OLD.max_attempts,OLD.created_at) THEN
+  RAISE EXCEPTION 'an action identity is immutable' USING ERRCODE='55000';
+ END IF;
+ IF OLD.state IN ('DONE','UNCERTAIN','FAILED','CANCELLED') THEN
+  RAISE EXCEPTION 'an ended action is immutable' USING ERRCODE='55000';
+ END IF;
+ IF NEW.state <> OLD.state AND NOT (
+    (OLD.state = 'PROPOSED' AND NEW.state IN ('ADMITTED','CANCELLED')) OR
+    (OLD.state = 'ADMITTED' AND NEW.state IN ('EXECUTING','CANCELLED')) OR
+    (OLD.state = 'EXECUTING' AND NEW.state IN ('ADMITTED','DONE','UNCERTAIN','FAILED','CANCELLED'))) THEN
+  RAISE EXCEPTION 'action transition % -> % is not allowed', OLD.state, NEW.state USING ERRCODE='23514';
+ END IF;
+ IF NEW.lease_epoch <> OLD.lease_epoch THEN
+  IF NEW.state <> 'EXECUTING' OR NEW.lease_epoch <> OLD.lease_epoch + 1 OR NEW.attempts <> OLD.attempts + 1 THEN
+   RAISE EXCEPTION 'a claim takes the next epoch and the next attempt' USING ERRCODE='23514';
+  END IF;
+  IF OLD.state = 'EXECUTING' AND OLD.leased_until > clock_timestamp() THEN
+   RAISE EXCEPTION 'a live lease cannot be taken' USING ERRCODE='55000';
+  END IF;
+  IF OLD.state = 'EXECUTING' AND OLD.write_started_at IS NOT NULL AND OLD.kind IN ('EMAIL') THEN
+   RAISE EXCEPTION 'an at-most-once action whose write started is never taken again' USING ERRCODE='55000';
+  END IF;
+ ELSIF NEW.state = 'EXECUTING' AND OLD.state <> 'EXECUTING' THEN
+  RAISE EXCEPTION 'a claim takes the next epoch' USING ERRCODE='23514';
+ END IF;
+ IF NEW.payload IS DISTINCT FROM OLD.payload AND NEW.payload IS NOT NULL THEN
+  RAISE EXCEPTION 'an action payload never changes' USING ERRCODE='55000';
+ END IF;
+ IF NEW.write_started_at IS DISTINCT FROM OLD.write_started_at AND NOT (
+    (OLD.write_started_at IS NULL AND OLD.state = 'EXECUTING' AND NEW.state = 'EXECUTING' AND NEW.lease_epoch = OLD.lease_epoch) OR
+    (NEW.write_started_at IS NULL AND OLD.state = 'EXECUTING' AND NEW.state = 'ADMITTED')) THEN
+  RAISE EXCEPTION 'a write fence is set under the lease and cleared only by a proven retry' USING ERRCODE='55000';
+ END IF;
+ RETURN NEW;
+END $_$;
+CREATE TRIGGER agent_action_lifecycle BEFORE UPDATE ON agent_action FOR EACH ROW EXECUTE FUNCTION guard_agent_action();
+]]></sql></changeSet>
+</databaseChangeLog>

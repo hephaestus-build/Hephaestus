@@ -1002,6 +1002,15 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         MentorTurnAdmission.of(model, Objects.requireNonNull(model.priceSnapshot()))))
                 .isTrue();
 
+        // A pending email to each person: the outbox holds it until it is sent or erased.
+        for (Account addressed : List.of(targetAccount, otherAccount)) {
+            String key = "email:erasure-test:" + UUID.randomUUID();
+            jdbc.update("""
+                    INSERT INTO agent_action (id, kind, lane_key, idempotency_key, state, payload, subject_account_id,
+                      max_attempts, next_attempt_at, created_at, updated_at)
+                    VALUES (?, 'EMAIL', ?, ?, 'ADMITTED', '{}', ?, 1, now() + interval '1 day', now(), now())
+                    """, UUID.randomUUID(), key, key, addressed.getId());
+        }
         PersonScope otherScope = resolver.resolve(Objects.requireNonNull(otherAccount.getId()), List.of());
         // Shared source aggregates change; compare the other person's own rows.
         PersonScope otherPrimaryScope =

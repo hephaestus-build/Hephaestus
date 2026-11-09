@@ -73,7 +73,14 @@ export const EMAIL_TEST_OUTCOME_DEFS: StatusDefs<EmailTestOutcome> = {
 		icon: GaugeIcon,
 		badgeVariant: "warning",
 		description:
-			"Sending is paused. The email attempt limit was reached, or capacity could not be checked. Try again in a moment.",
+			"Sending is paused. The email attempt limit was reached, or capacity could not be checked. The test email may still go out within two minutes.",
+	},
+	UNCONFIRMED: {
+		label: "Not confirmed",
+		icon: MailQuestionIcon,
+		badgeVariant: "warning",
+		description:
+			"The mail server may have accepted the email but did not confirm it. Check its log for the message before you send another test.",
 	},
 	UNAVAILABLE: {
 		label: "Mail server unavailable",

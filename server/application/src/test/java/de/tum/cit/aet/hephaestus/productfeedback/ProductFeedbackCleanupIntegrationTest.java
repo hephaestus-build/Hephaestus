@@ -12,6 +12,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
@@ -103,6 +105,9 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private ActionExecutor executor;
 
     @Autowired
     private DestinationService destinationService;
@@ -453,7 +458,9 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
         return headers -> headers.setBearerAuth(prefix + account.getId());
     }
 
+    /** The messages sent to the account once the outbox has carried out every due email. */
     private List<MimeMessage> sentTo(Account account) {
+        ActionTestSupport.drain(executor, jdbc);
         return mail.sent().stream()
                 .filter(message -> Objects.equals(account.getPrimaryEmail(), recipient(message)))
                 .toList();

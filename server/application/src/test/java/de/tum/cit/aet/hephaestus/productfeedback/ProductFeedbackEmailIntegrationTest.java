@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
@@ -24,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -36,8 +39,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.MailSendException;
-import org.springframework.modulith.events.FailedEventPublications;
-import org.springframework.modulith.events.ResubmissionOptions;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -61,7 +62,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
     private CapturingJavaMailSender mail;
 
     @Autowired
-    private FailedEventPublications failed;
+    private ActionExecutor executor;
 
     @Autowired
     private InstanceSettingsService settings;
@@ -84,6 +85,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void startFromAnEmptyMailbox() {
         mail.failWith(null);
+        ActionTestSupport.drain(executor, jdbc);
         mail.sent().clear();
         setSilentMode(false);
     }
@@ -110,6 +112,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
         account(Account.AppRole.APP_ADMIN, Account.Status.ACTIVE, true, false);
 
         ProductFeedback item = submit(first);
+        ActionTestSupport.drain(executor, jdbc);
 
         assertThat(mail.sent())
                 .extracting(ProductFeedbackEmailIntegrationTest::recipient)
@@ -141,34 +144,27 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
         assertThat(id).isNotNull();
         assertThat(feedback.existsById(id)).isFalse();
         assertThat(publications(id)).isEmpty();
+        ActionTestSupport.drain(executor, jdbc);
         assertThat(mail.sent()).isEmpty();
     }
 
     @Test
-    void shouldRetryRecipientsIndependentlyWithoutResendingSuccessfulRecipients() {
+    void shouldRetryEachRecipientWithoutResendingOneTheRelayAccepted() {
         Account first = account(Account.AppRole.APP_ADMIN, Account.Status.ACTIVE, true, true);
         Account second = account(Account.AppRole.APP_ADMIN, Account.Status.ACTIVE, true, true);
-        mail.failWith(new MailSendException("relay down", new ConnectException("refused")));
+        mail.failWith(relayDown());
         ProductFeedback item = submit(first);
-        assertThat(publications(item.getId())).hasSize(2);
+        ActionTestSupport.drain(executor, jdbc);
+        assertThat(publications(item.getId())).as("the outbox owns the retry").isEmpty();
+        assertThat(mail.sent()).isEmpty();
         mail.failWith(null);
 
-        failed.resubmit(ResubmissionOptions.defaults()
-                .withFilter(publication -> publication.getEvent() instanceof ProductFeedbackEmailRequested event
-                        && event.feedbackId().equals(item.getId())
-                        && event.accountId() == Objects.requireNonNull(first.getId())));
+        ActionTestSupport.drain(executor, jdbc);
+        ActionTestSupport.drain(executor, jdbc);
 
-        assertThat(publications(item.getId())).hasSize(1);
         assertThat(mail.sent())
                 .extracting(ProductFeedbackEmailIntegrationTest::recipient)
-                .containsExactly(first.getPrimaryEmail());
-
-        resubmit(item.getId());
-
-        assertThat(publications(item.getId())).isEmpty();
-        assertThat(mail.sent())
-                .extracting(ProductFeedbackEmailIntegrationTest::recipient)
-                .containsExactly(first.getPrimaryEmail(), second.getPrimaryEmail());
+                .containsExactlyInAnyOrder(first.getPrimaryEmail(), second.getPrimaryEmail());
     }
 
     @ParameterizedTest
@@ -185,9 +181,9 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
             })
     void shouldRecheckEligibilityBeforeRetrying(String change) {
         Account admin = account(Account.AppRole.APP_ADMIN, Account.Status.ACTIVE, true, true);
-        mail.failWith(new MailSendException("relay down", new ConnectException("refused")));
+        mail.failWith(relayDown());
         ProductFeedback item = submit(admin);
-        assertThat(publications(item.getId())).hasSize(1);
+        ActionTestSupport.drain(executor, jdbc);
         switch (change) {
             case "unsubscribed" -> subscribed(admin, false);
             case "resubscribed" -> {
@@ -205,7 +201,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
         accounts.save(admin);
         mail.failWith(null);
 
-        resubmit(item.getId());
+        ActionTestSupport.drain(executor, jdbc);
 
         assertThat(mail.sent()).isEmpty();
         assertThat(publications(item.getId())).isEmpty();
@@ -225,6 +221,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
                         Instant.EPOCH,
                         Kind.BUG,
                         null)));
+        ActionTestSupport.drain(executor, jdbc);
 
         assertThat(mail.sent()).isEmpty();
         assertThat(publications(item.getId())).isEmpty();
@@ -236,6 +233,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
         setSilentMode(true);
 
         ProductFeedback item = submit(admin);
+        ActionTestSupport.drain(executor, jdbc);
 
         assertThat(mail.sent()).isEmpty();
         assertThat(publications(item.getId())).isEmpty();
@@ -288,10 +286,10 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
                 .toList();
     }
 
-    private void resubmit(UUID feedbackId) {
-        failed.resubmit(ResubmissionOptions.defaults()
-                .withFilter(publication -> publication.getEvent() instanceof ProductFeedbackEmailRequested event
-                        && event.feedbackId().equals(feedbackId)));
+    /** JavaMailSenderImpl's connection failure: the cause, and every message's failure. */
+    private static MailSendException relayDown() {
+        var refused = new MessagingException("connect", new ConnectException("refused"));
+        return new MailSendException("Mail server connection failed", refused, Map.of("message", refused));
     }
 
     private void setSilentMode(boolean engaged) {

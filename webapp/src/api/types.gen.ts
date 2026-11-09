@@ -1402,7 +1402,7 @@ export type EmailTestResponse = {
     /**
      * what became of the test email; <code>SENT</code> is the only success
      */
-    outcome: 'SENT' | 'EXPIRED' | 'NOT_CONFIGURED' | 'SILENT_MODE' | 'NO_RECIPIENT' | 'UNSUBSCRIBED' | 'INVALID_ADDRESS' | 'REJECTED' | 'UNAVAILABLE' | 'RATE_LIMITED';
+    outcome: 'SENT' | 'EXPIRED' | 'NOT_CONFIGURED' | 'SILENT_MODE' | 'NO_RECIPIENT' | 'UNSUBSCRIBED' | 'INVALID_ADDRESS' | 'REJECTED' | 'UNAVAILABLE' | 'RATE_LIMITED' | 'UNCONFIRMED';
     /**
      * the address it went to, or <code>null</code> when there was no recipient to resolve
      */

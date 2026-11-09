@@ -17,11 +17,13 @@ class EmailRateLimiterTest extends BaseUnitTest {
                 ignored -> Bucket.builder().addLimit(config.getBandwidths()[0]).build());
         var first = new EmailRateLimiter(buckets, new EmailRateLimitProperties(3, 2));
         var second = new EmailRateLimiter(buckets, new EmailRateLimitProperties(3, 2));
-        assertThat(first.acquire(true)).isTrue();
-        assertThat(second.acquire(true)).isTrue();
-        assertThat(first.acquire(true)).isFalse();
-        assertThat(second.acquire(false)).isTrue();
-        assertThat(first.acquire(false)).isFalse();
+        assertThat(first.acquire(true)).isEmpty();
+        assertThat(second.acquire(true)).isEmpty();
+        assertThat(first.acquire(true))
+                .as("waits until the optional budget refills")
+                .hasValueSatisfying(wait -> assertThat(wait).isPositive());
+        assertThat(second.acquire(false)).isEmpty();
+        assertThat(first.acquire(false)).isPresent();
     }
 
     @Test
@@ -31,7 +33,7 @@ class EmailRateLimiterTest extends BaseUnitTest {
                     throw new IllegalStateException("store offline");
                 },
                 new EmailRateLimitProperties(3, 2));
-        assertThat(limiter.acquire(false)).isFalse();
-        assertThat(limiter.acquire(true)).isFalse();
+        assertThat(limiter.acquire(false)).contains(EmailRateLimiter.UNKNOWN_REFILL);
+        assertThat(limiter.acquire(true)).contains(EmailRateLimiter.UNKNOWN_REFILL);
     }
 }

@@ -52,6 +52,9 @@ A slow call therefore blocks every writer of the same rows, and it holds a poole
 
 ## 4. Side effects after commit use the event publication registry
 
+An email is an action in the outbox, not a listener call.
+A listener may enqueue the action. [The outbox](./outbox.md) has the rules and the kinds that it carries now.
+
 - Publish an application event in the transaction of the use case.
   Consume it with `@ApplicationModuleListener`.
   The registry writes the publication row in the same transaction as the business row.
