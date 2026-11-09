@@ -13,6 +13,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,18 +67,31 @@ public class ActionExecutor {
     }
 
     /**
-     * Ends what can no longer run, then carries out up to {@link #SLOTS} due actions at once and returns when all of
-     * them settled. The next run starts a second after this one ends, so a slow provider delays its batch by at most
-     * a lease.
+     * Ends what can no longer run, then carries out up to {@link #SLOTS} due actions at once. The next run starts a
+     * second after this one ends.
      */
     @Scheduled(fixedDelayString = "PT1S", initialDelayString = "PT10S")
     public void runDue() {
         store.endStale().forEach(this::recordEnd);
         store.deleteEnded(RETENTION);
         var claims = store.claim(SLOTS, LEASE);
-        if (claims.isEmpty()) return;
-        try (ExecutorService batch = Executors.newVirtualThreadPerTaskExecutor()) {
-            for (ActionStore.Claim claim : claims) batch.execute(() -> run(claim));
+        if (!claims.isEmpty()) runBatch(claims, LEASE);
+    }
+
+    /**
+     * Runs the claims and waits for them at most {@code wait}. A provider that holds a call open past the lease cannot
+     * stall this replica's executor: the attempt keeps running, the reaper ends its action, and its late result names
+     * a lease that has moved on, so it records nothing.
+     */
+    void runBatch(List<ActionStore.Claim> claims, Duration wait) {
+        ExecutorService batch = Executors.newVirtualThreadPerTaskExecutor();
+        for (ActionStore.Claim claim : claims) batch.execute(() -> run(claim));
+        batch.shutdown();
+        try {
+            if (!batch.awaitTermination(wait.toMillis(), TimeUnit.MILLISECONDS))
+                log.warn("Outbox attempts outlived their lease and keep running: claims={}", claims.size());
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
         }
     }
 

@@ -4,8 +4,9 @@ description: How the server carries out every effect on the outside world, and h
 page_type: reference
 ---
 
-Every effect on the outside world is one action in the `agent_action` table.
-An email is an action.
+An effect on the outside world is one action in the `agent_action` table.
+Email is the only kind of action in this release.
+Feedback posts, Slack replies and product-feedback issues still use their own delivery code until they move here.
 One executor carries out the actions on every server replica.
 [ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) records why there is one outbox.
 The code is in `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/action/`.
@@ -41,7 +42,7 @@ The trigger `guard_agent_action` refuses every transition that `ActionState` doe
 | `PROPOSED` | `ADMITTED`, `CANCELLED` | The server admits or refuses an agent's proposal. |
 | `ADMITTED` | `EXECUTING` | A claim takes the action. The epoch and the attempt rise by one. |
 | `ADMITTED` | `CANCELLED` | The action expired before it started. |
-| `EXECUTING` | `EXECUTING` | A claim takes the action again after its lease expired. The epoch rises by one. |
+| `EXECUTING` | `EXECUTING` | A claim takes the action again after its lease expired. The epoch and the attempt rise by one. |
 | `EXECUTING` | `ADMITTED` | A proven retry or a deferral. |
 | `EXECUTING` | `DONE`, `UNCERTAIN`, `FAILED`, `CANCELLED` | The attempt ended the action. |
 

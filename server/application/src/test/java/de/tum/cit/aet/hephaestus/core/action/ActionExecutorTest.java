@@ -10,9 +10,11 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -55,6 +57,25 @@ class ActionExecutorTest extends BaseUnitTest {
                 .run(claim(true));
 
         assertThat(result).isEqualTo(new ActionResult.Uncertain(ActionStopReason.WRITE_UNCONFIRMED));
+    }
+
+    @Test
+    void shouldStopWaitingForAProviderThatHoldsTheCallPastTheWait() throws InterruptedException {
+        var release = new CountDownLatch(1);
+        var executor = executor(attempt -> {
+            try {
+                release.await();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            return new ActionResult.Done(null);
+        });
+        long started = System.nanoTime();
+
+        executor.runBatch(List.of(claim(false)), Duration.ofMillis(200));
+
+        assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(5));
+        release.countDown();
     }
 
     private ActionExecutor executor(Function<ActionAttempt, ActionResult> execute) {

@@ -816,7 +816,8 @@ Sustained `unavailable`, `rate_limited`, `rejected`, `unconfirmed` or `expired` 
    Capacity limits and backlog size still apply.
    Each attempt rechecks current eligibility.
 
-5. Alert when `now() - min(next_attempt_at)` of admitted actions grows beyond a minute: the executor has stopped.
+5. Alert on the age of the backlog: `now() - min(next_attempt_at)` of admitted email.
+   Each email waits for no other action, so an age beyond a minute means that no executor takes email.
 6. Investigate before notification expiry.
 7. Use a separate database-monitoring identity with least privilege.
 8. Do not resend an `UNCERTAIN` email by hand without asking the recipient: the relay may already have delivered it.
