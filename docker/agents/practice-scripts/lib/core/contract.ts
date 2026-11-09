@@ -428,7 +428,11 @@ export const readReceiptSchema = z
 		sourcePath: z.string().min(1).max(CANDIDATE_LIMITS.pathChars),
 		path: z.string().min(1).max(CANDIDATE_LIMITS.pathChars),
 		version: z.string().min(1).max(CANDIDATE_LIMITS.versionChars),
-		/** SEARCHED: a search for `pattern` ran over the scope at `path` to the end. It carries no digest or lines. */
+		/**
+		 * SEARCHED: a search for `pattern` ran over the scope at `path` to the end. It carries no lines. Its digest is
+		 * the checkout digest of the bytes it searched (`checkoutDigest` in the agent's search worker), which admission
+		 * compares with the capture.
+		 */
 		status: z.enum(["COMPLETE", "TRUNCATED", "FAILED", "BINARY", "ABSENT", "SEARCHED"]),
 		contentDigest: z
 			.string()

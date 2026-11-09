@@ -2,6 +2,7 @@
 //
 // A pattern comes from a model, and a regular expression can run for ever, so this runs apart from the loop.
 
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parentPort, workerData } from "node:worker_threads";
@@ -18,6 +19,17 @@ export interface SearchJob {
 	root: string;
 	maxBytes: number;
 	claims: readonly SearchClaim[];
+}
+
+/**
+ * For each claim, whether it stands, and the checkout digest of the bytes that the proof searched. A command in the
+ * sandbox can change the checkout, so admission accepts a search only when this digest equals the one that the server
+ * records from its own copy when it captures the checkout (`JobEvidenceFiles.checkoutDigests`). Null when the proof read nothing to
+ * the end.
+ */
+export interface SearchProof {
+	proved: boolean[];
+	checkoutDigest: string | null;
 }
 
 type Matcher = (line: string) => boolean;
@@ -171,8 +183,24 @@ function compare(claim: OpenClaim, file: string, lines: readonly string[]): void
 	}
 }
 
+/**
+ * The checkout digest: the SHA-256 of one line `<path>\0<SHA-256 of the file>\n` for each regular file under the root
+ * outside `.git`, in the byte order of the paths. The server computes the same digest
+ * (`JobEvidenceFiles.checkoutDigests`), and `pi-verified-search.spec.ts` pins both to one value.
+ */
+export function checkoutDigest(files: ReadonlyMap<string, string>): string {
+	const digest = createHash("sha256");
+	const paths = [...files.keys()].toSorted((a, b) =>
+		Buffer.compare(Buffer.from(a), Buffer.from(b)),
+	);
+	for (const file of paths) {
+		digest.update(`${file}\0${files.get(file) ?? ""}\n`);
+	}
+	return digest.digest("hex");
+}
+
 /** For each claim, whether the loop and the tools side found the same matches. Past `maxBytes`, none is proved. */
-export function proved({ root, maxBytes, claims }: SearchJob): boolean[] {
+export function proved({ root, maxBytes, claims }: SearchJob): SearchProof {
 	const open: OpenClaim[] = claims.map((claim) => ({
 		// `rg --hidden` reads `.git`, and a receipt speaks only for the checkout's files.
 		found: new Set(claim.found.filter((location) => !/(?:^|\/)\.git\//u.test(location))),
@@ -181,13 +209,16 @@ export function proved({ root, maxBytes, claims }: SearchJob): boolean[] {
 		confirmed: new Set(),
 	}));
 	let seen = 0;
+	const digests = new Map<string, string>();
 	for (const file of filesOf(root)) {
 		const absolute = path.join(root, file);
 		seen += statSync(absolute).size;
 		if (seen > maxBytes) {
-			return claims.map(() => false);
+			return { proved: claims.map(() => false), checkoutDigest: null };
 		}
-		const text = textOf(readFileSync(absolute));
+		const bytes = readFileSync(absolute);
+		digests.set(file, createHash("sha256").update(bytes).digest("hex"));
+		const text = textOf(bytes);
 		if (text !== null) {
 			const lines = text.split("\n");
 			for (const claim of open) {
@@ -197,9 +228,12 @@ export function proved({ root, maxBytes, claims }: SearchJob): boolean[] {
 	}
 	// A match that only the tools side found means that the two engines read the pattern differently, so the loop's
 	// silence about the rest proves nothing.
-	return open.map(
-		(claim) => claim.matches !== null && claim.holds && claim.found.size === claim.confirmed.size,
-	);
+	return {
+		proved: open.map(
+			(claim) => claim.matches !== null && claim.holds && claim.found.size === claim.confirmed.size,
+		),
+		checkoutDigest: checkoutDigest(digests),
+	};
 }
 
 if (parentPort !== null) {

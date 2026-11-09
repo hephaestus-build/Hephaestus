@@ -60,13 +60,17 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -259,6 +263,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 .thenAnswer(invocation -> invocation.getArgument(1));
         when(verifier.verifyCandidate(eq(job), any(), any(), any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(3));
+        when(files.capturedCheckoutDigest(eq(job), any())).thenReturn(Optional.of(CAPTURED_CHECKOUT));
     }
 
     /**
@@ -295,14 +300,24 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 List.of());
     }
 
+    private static final String CHECKOUT_ROOT = "repos/reviewed/";
+
+    /** The checkout digest that the capture recorded from the server's own copy. */
+    private static final String CAPTURED_CHECKOUT = "5".repeat(64);
+
     private static ReadReceipt searched(String version) {
+        return searched(version, CAPTURED_CHECKOUT);
+    }
+
+    /** A search of the whole checkout whose proof read bytes with this checkout digest. */
+    private static ReadReceipt searched(String version, @Nullable String checkoutDigest) {
         return new ReadReceipt(
                 TREE,
-                "repos/reviewed/.git/HEAD",
+                CHECKOUT_ROOT + ".git/HEAD",
                 ".",
                 version,
                 ReadReceiptStatus.SEARCHED,
-                null,
+                checkoutDigest,
                 null,
                 null,
                 "ControllerAdvice|ExceptionHandler");
@@ -500,6 +515,47 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()));
 
         verify(membership, never()).withhold(anyLong(), any(), any(), any());
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"6666666666666666666666666666666666666666666666666666666666666666"})
+    void shouldWithholdAClaimAboutTheCheckoutWhenItsSearchReadOtherBytesThanTheCapture(
+            @Nullable String checkoutDigest) {
+        // One container: a command can change the sandbox's checkout before the loop searches it.
+        pr50Capture(SourceCompleteness.COMPLETE);
+
+        prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD, checkoutDigest)), UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(
+                CandidateRefusal.COVERAGE_INCONSISTENT,
+                NAMED + ", but its search did not read the checkout as it was captured");
+    }
+
+    @Test
+    void shouldAdmitAClaimAboutTheCheckoutWhenOneOfItsSearchesReadTheCheckoutAsCaptured() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+
+        prepare(
+                job,
+                pr50ErrorHandling(
+                        List.of(searched(PR50_HEAD, "6".repeat(64)), searched(PR50_HEAD)), UnaryOperator.identity()));
+
+        verify(membership, never()).withhold(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void shouldWithholdAClaimAboutTheCheckoutWhenTheCaptureRecordedNoCheckoutDigest() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        when(files.capturedCheckoutDigest(eq(job), any())).thenReturn(Optional.empty());
+
+        prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(
+                CandidateRefusal.COVERAGE_INCONSISTENT,
+                NAMED + ", but its search did not read the checkout as it was captured");
     }
 
     @ParameterizedTest

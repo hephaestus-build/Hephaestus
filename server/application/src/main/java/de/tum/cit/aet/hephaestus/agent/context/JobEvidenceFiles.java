@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadReceipt;
+import de.tum.cit.aet.hephaestus.practices.spi.ReadReceiptStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -50,6 +51,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -85,6 +87,12 @@ public class JobEvidenceFiles implements SandboxResultListener {
     private static final String UNDECODABLE = "\uDC00";
 
     static final Duration RETENTION_GRACE = Duration.ofHours(1);
+
+    /** The most bytes of a checkout that a search proof reads: {@code PROOF_BYTES} in {@code pi-verified-search.ts}. */
+    static final long SEARCH_PROOF_BYTES = 512L * 1024 * 1024;
+
+    /** The capture's checkout digest of each staged directory, by its target ({@link #checkoutDigests}). */
+    public static final String CHECKOUTS = "checkouts";
 
     /** How long an attempt's debug transcript stays for next-day investigation. */
     public static final Duration TRACE_RETENTION = Duration.ofHours(24);
@@ -305,7 +313,10 @@ public class JobEvidenceFiles implements SandboxResultListener {
         return new EvidenceDirectory("inputs/", directory(job));
     }
 
-    /** Adds host reads only when both their source witness and staged content digest still match. */
+    /**
+     * Adds host reads only when both their source witness and staged content digest still match. A search's digest
+     * names the checkout it searched, not a file, so admission checks it against {@link #capturedCheckoutDigest}.
+     */
     public JobFolderIndex registerReadReceipts(
             ReviewJob job,
             JobFolderIndex manifest,
@@ -314,7 +325,8 @@ public class JobEvidenceFiles implements SandboxResultListener {
         var texts = new ArrayList<>(manifest.citableTexts());
         for (var receipt : receipts) {
             String digest = receipt.contentDigest();
-            if (digest == null || !digest.matches("[0-9a-f]{64}")) continue;
+            if (receipt.status() == ReadReceiptStatus.SEARCHED || digest == null || !digest.matches("[0-9a-f]{64}"))
+                continue;
             var witness = manifest.files().stream()
                     .filter(file -> file.kind().equals(receipt.sourceKind())
                             && file.file().path().equals(receipt.sourcePath()))
@@ -336,18 +348,11 @@ public class JobEvidenceFiles implements SandboxResultListener {
             if (existing.size() == 1) stagedPath = existing.getFirst().stagedPath();
             else if (existing.size() > 1) throw new IllegalArgumentException("Ambiguous host read text");
             else if (receipt.path().equals(receipt.sourcePath())) stagedPath = receipt.path();
-            else {
-                JsonNode capture = job.getCapture();
-                var roots = new ArrayList<String>();
-                if (capture != null)
-                    for (JsonNode directory : capture.path("directories")) {
-                        String root = directory.asString();
-                        if (root.endsWith("/") && receipt.sourcePath().startsWith(root)) roots.add(root);
-                    }
-                if (roots.size() != 1)
-                    throw new IllegalArgumentException("The host read has no unique captured directory");
-                stagedPath = roots.getFirst() + receipt.path();
-            }
+            else
+                stagedPath = capturedDirectory(job, receipt.sourcePath())
+                                .orElseThrow(() ->
+                                        new IllegalArgumentException("The host read has no unique captured directory"))
+                        + receipt.path();
             if (!existsWithDigest(job, stagedPath, digest))
                 throw new IllegalArgumentException("The host read content is unavailable");
             if (existing.isEmpty())
@@ -365,6 +370,87 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 manifest.refusals(),
                 manifest.files(),
                 texts);
+    }
+
+    /** The one captured directory that holds a source witness, such as {@code repos/reviewed/} for its Git HEAD. */
+    private static Optional<String> capturedDirectory(ReviewJob job, String sourcePath) {
+        JsonNode capture = job.getCapture();
+        var roots = new ArrayList<String>();
+        if (capture != null)
+            for (JsonNode directory : capture.path("directories")) {
+                String root = directory.asString();
+                if (root.endsWith("/") && sourcePath.startsWith(root)) roots.add(root);
+            }
+        return roots.size() == 1 ? Optional.of(roots.getFirst()) : Optional.empty();
+    }
+
+    /**
+     * The checkout digest that the capture recorded for the checkout a search receipt of the whole checkout searched
+     * ({@link #checkoutDigests}). Empty for any other receipt, and for a checkout past the bound of a search proof.
+     */
+    public Optional<String> capturedCheckoutDigest(ReviewJob job, ReadReceipt search) {
+        JsonNode capture = job.getCapture();
+        if (capture == null || search.status() != ReadReceiptStatus.SEARCHED || !".".equals(search.path()))
+            return Optional.empty();
+        return capturedDirectory(job, search.sourcePath())
+                .map(root -> capture.path(CHECKOUTS).path(root).asString(null));
+    }
+
+    /**
+     * The checkout digest of each staged directory, by its target, for the capture to record before the sandbox
+     * starts. It is the digest that the agent's search worker computes over the bytes it searched ({@code
+     * checkoutDigest} in {@code pi-search-worker.ts}): the SHA-256 of one line {@code <path>\0<SHA-256 of the
+     * file>\n} for each regular file outside {@code .git}, in the byte order of the paths. A command in the sandbox can
+     * change the sandbox's copy, so admission counts a search only where the two agree. A directory with more bytes
+     * than a search proof reads gets none.
+     */
+    public static Map<String, String> checkoutDigests(List<EvidenceDirectory> directories) {
+        var digests = new TreeMap<String, String>();
+        for (EvidenceDirectory directory : directories)
+            checkoutDigest(directory.source(), SEARCH_PROOF_BYTES)
+                    .ifPresent(digest -> digests.put(directory.target(), digest));
+        return digests;
+    }
+
+    static Optional<String> checkoutDigest(Path checkout, long maxBytes) {
+        var digests = new TreeMap<byte[], String>(Arrays::compareUnsigned);
+        var walk = new SimpleFileVisitor<Path>() {
+            long bytes;
+
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+                return !directory.equals(checkout) && ".git".equals(String.valueOf(directory.getFileName()))
+                        ? FileVisitResult.SKIP_SUBTREE
+                        : FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                if (!attributes.isRegularFile()) return FileVisitResult.CONTINUE;
+                bytes += attributes.size();
+                if (bytes > maxBytes) return FileVisitResult.TERMINATE;
+                String path = checkout.relativize(file).toString();
+                try (var input = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
+                    digests.put(path.getBytes(StandardCharsets.UTF_8), ProvenanceDigest.sha256Hex(input));
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        };
+        try {
+            if (!Files.isDirectory(checkout, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
+            Files.walkFileTree(checkout, walk);
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
+        if (walk.bytes > maxBytes) return Optional.empty();
+        MessageDigest digest = ProvenanceDigest.sha256();
+        digests.forEach((path, sha) -> {
+            digest.update(path);
+            digest.update((byte) 0);
+            digest.update(sha.getBytes(StandardCharsets.US_ASCII));
+            digest.update((byte) '\n');
+        });
+        return Optional.of(ProvenanceDigest.hex(digest));
     }
 
     public Optional<String> readText(ReviewJob job, String path, String sha) {

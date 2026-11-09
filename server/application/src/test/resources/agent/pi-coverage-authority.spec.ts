@@ -115,6 +115,9 @@ void test("a true absence stands, from the top of the workspace too", async () =
 void test("a proof fails closed", async () => {
 	const reads = session();
 	answered(reads, "grep", { pattern: "RestControllerAdvice", path: TREE.root }, "No matches found");
-	await reads.proveSearches(async (_root, claims) => claims.map(() => false));
+	await reads.proveSearches(async (_root, claims) => ({
+		proved: claims.map(() => false),
+		checkoutDigest: null,
+	}));
 	assert.deepEqual(searched(reads), []);
 });

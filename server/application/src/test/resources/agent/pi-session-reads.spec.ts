@@ -929,7 +929,11 @@ void test("codemode's whole-checkout searches and complete reads leave receipts 
 		treeTool(reads, "grep", "grep", { pattern: "ControllerAdvice" });
 		treeTool(reads, "rooted", "grep", { pattern: "ExceptionHandler", path: "repos/reviewed" });
 
-		await reads.proveSearches(async (_root, claims) => claims.map(() => true));
+		const checkoutDigest = "c".repeat(64);
+		await reads.proveSearches(async (_root, claims) => ({
+			proved: claims.map(() => true),
+			checkoutDigest,
+		}));
 		const { receipts } = reads.coverage();
 		assert.deepEqual(
 			receipts.map((receipt) => [receipt.status, receipt.path, receipt.pattern]),
@@ -938,6 +942,11 @@ void test("codemode's whole-checkout searches and complete reads leave receipts 
 				["SEARCHED", ".", "ExceptionHandler"],
 				["COMPLETE", "src/UserController.java", undefined],
 			],
+		);
+		// Each search names the checkout it searched, for admission to compare with the capture.
+		assert.deepEqual(
+			receipts.slice(0, 2).map((receipt) => receipt.contentDigest),
+			[checkoutDigest, checkoutDigest],
 		);
 		const fileRead = receipts[2];
 		assert.ok(fileRead !== undefined);
