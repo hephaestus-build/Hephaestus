@@ -1272,7 +1272,9 @@ Renovate tracks the platform chart versions, image tags and digests, and the k3s
 These updates require dashboard approval and human review.
 A k3s update also needs an independently verified installer checksum. The Platform pins check and scheduled rescan check that pair.
 The pull request check renders both upstream charts and compares their image subjects with the scan plan.
+
 The rescan also reads the selected k3s release's complete image list.
+It scans each image of that list except the images of the add-ons that `k3s-config.yaml` disables, because the host never pulls them.
 
 ### Flaky tests
 

@@ -13,7 +13,7 @@
 #   - The agent-sandbox controller: the pin line and the image digest of k3s-agent-sandbox.yaml,
 #     which upstream ships as a manifest and not as a chart.
 #
-# pin: k3s v1.37.1+k3s1 ed01f89fd977bf20ac1516bbebf8370bf3ddbaa55dac8aba610956a4c78cc00b
+# pin: k3s v1.37.2+k3s1 ed01f89fd977bf20ac1516bbebf8370bf3ddbaa55dac8aba610956a4c78cc00b
 ---
 # cert-manager issues the Gateway certificate and the PostgreSQL certificates, and renews them.
 # Its Gateway API support lets an ACME issuer answer HTTP-01 challenges through the Gateway. Until
@@ -79,7 +79,7 @@ metadata:
 spec:
   repo: https://traefik.github.io/charts
   chart: traefik
-  version: 42.1.3
+  version: 42.3.1
   targetNamespace: traefik
   createNamespace: true
   # Until k3s has installed the Gateway API definitions, the install fails, and the Helm controller's
@@ -89,8 +89,8 @@ spec:
     image:
       registry: docker.io
       repository: traefik
-      tag: v3.7.16
-      digest: sha256:c8a121e4bb1347e8fd52657fab12f2cb70b68f8a018895e2068f92c9e519b9c2
+      tag: v3.7.17
+      digest: sha256:f4bb143d1135a579b630ed491e17ec50f6f7c9c6a30585ff3d385471d2a86f5a
     deployment:
       replicas: 1
     # Two Pods cannot hold the same host port: the old Pod stops before the new one starts.

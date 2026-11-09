@@ -199,6 +199,30 @@ export function bundledSubjects(source: string): Subject[] {
 	});
 }
 
+/** The images of each packaged k3s component that `disable` in k3s-config.yaml can turn off. */
+const PACKAGED_COMPONENT_IMAGES: Record<string, readonly string[]> = {
+	coredns: ["mirrored-coredns-coredns"],
+	"local-storage": ["local-path-provisioner", "mirrored-library-busybox"],
+	"metrics-server": ["mirrored-metrics-server"],
+	servicelb: ["klipper-lb"],
+	traefik: ["mirrored-library-traefik"],
+};
+
+/** The bundled images that the host runs: k3s-config.yaml disables the others, so they are never pulled. */
+export function runningBundledSubjects(bundled: Subject[], config: string): Subject[] {
+	const disable = asArray(asRecord(parse(config) as unknown, "k3s config").disable, "disable");
+	const skipped = new Set(
+		disable.flatMap((entry) => {
+			const images = PACKAGED_COMPONENT_IMAGES[asString(entry, "disabled component")];
+			if (images === undefined) {
+				throw new Error("k3s-config.yaml disables a component that the rescan does not know");
+			}
+			return images;
+		}),
+	);
+	return bundled.filter((subject) => !skipped.has(subject.repository.split("/").at(-1) ?? ""));
+}
+
 async function releaseText(url: string): Promise<string> {
 	const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
 	if (!response.ok) {
@@ -335,12 +359,15 @@ if (import.meta.main) {
 		process.exit(0);
 	}
 	const pins = platformPins(source);
-	const bundled = bundledSubjects(
-		await releaseText(
-			`https://github.com/k3s-io/k3s/releases/download/${encodeURIComponent(pins.version)}/k3s-images.txt`,
+	// The complete upstream list less the add-ons that the host disables. A config change that turns one on scans it again.
+	const bundled = runningBundledSubjects(
+		bundledSubjects(
+			await releaseText(
+				`https://github.com/k3s-io/k3s/releases/download/${encodeURIComponent(pins.version)}/k3s-images.txt`,
+			),
 		),
+		await readFile("deploy/platform/k3s-config.yaml", "utf8"),
 	);
-	// Scan the complete upstream list, including add-ons the host can disable, so a config change cannot silently remove coverage.
 	const subjects = [...pins.subjects, agentSandboxPin(agentSandbox).subject, ...bundled];
 	// One SARIF upload has at most 20 runs. Each architecture has its own upload, plus dependencies on amd64.
 	if (subjects.length >= 20) {
