@@ -183,6 +183,10 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
         return lockQueuedIdByRun(runId).flatMap(this::findById);
     }
 
+    /** The job that a run drives, unlocked: a fenced write then takes the job's locks in their order. */
+    @Query("SELECT j.id FROM ReviewJob j WHERE j.runId = :runId AND j.workspaceId = :workspaceId")
+    Optional<UUID> findIdByRun(@Param("runId") UUID runId, @Param("workspaceId") long workspaceId);
+
     /** The job of a run, locked: the run's reaper takes it before it takes the run back. */
     @WorkspaceAgnostic("Run-based lock; the run carries its workspace")
     @Lock(LockModeType.PESSIMISTIC_WRITE)

@@ -23,7 +23,8 @@ COPY --from=agent-runtime tool-protocol.ts tool-client.ts tools-server.ts ./
 COPY --from=agent-runtime heph-host.ts heph-host-protocol.ts heph-tools.ts pi-agent-sandbox.ts pi-diagnostics.ts \
     pi-diagnostics.json pi-error-text.ts pi-provider.ts pi-text.ts ./
 # The entrypoint of a sandbox from a SandboxTemplate: its driver, and the run kinds that it drives.
-COPY --from=agent-runtime driver.ts driver-kinds.ts driver-isolation.ts ./
+COPY --from=agent-runtime driver.ts driver-kinds.ts driver-isolation.ts review-composer.ts review-composer-gateway.ts \
+    review-composer-model.ts ./
 RUN pnpm exec tsc -p tsconfig.build.json && pnpm exec node dist/tools-seccomp.js dist
 
 COPY practice-scripts/package.json practice-scripts/child.ts practice-scripts/build.ts practice-scripts/tsconfig.build.json /opt/practice-scripts/
