@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 import { parseAllDocuments } from "yaml";
 
 import {
+	restoreFailures,
+	soleManager,
 	apiEndpoint,
 	applicationSecret,
 	chartImagesFrom,
@@ -651,4 +653,41 @@ await test("the ended turn passes only DONE on attempt 1, with every bash output
 	assert.deepEqual(failures({ answer: "The commands printed: rolled-1." }), [
 		"the answer lacks rolled-2: The commands printed: rolled-1.",
 	]);
+});
+
+const policy = (...managers: [manager: string, operation: string][]) => ({
+	metadata: {
+		name: "heph-sandbox-deny",
+		managedFields: managers.map(([manager, operation]) => ({ manager, operation })),
+	},
+});
+
+void test("the negative control restores the sandbox policies as the one field manager that owned them", () => {
+	// Helm records an install as an update and an upgrade as a server-side apply, under one manager.
+	assert.equal(soleManager([policy(["helm", "Update"]), policy(["helm", "Apply"])]), "helm");
+	assert.throws(
+		() => soleManager([policy(["helm", "Apply"]), policy(["kubectl-client-side-apply", "Update"])]),
+		/2 field managers/u,
+	);
+	// A client-side apply would own the fields that Helm's next upgrade applies, and that upgrade then conflicts.
+	assert.deepEqual(
+		restoreFailures([policy(["helm", "Apply"], ["kubectl-client-side-apply", "Update"])], "helm"),
+		["kubectl-client-side-apply owns fields beside helm"],
+	);
+	assert.deepEqual(restoreFailures([policy(["helm", "Apply"])], "helm"), []);
+});
+
+void test("a policy that names no field manager fails the control, as a read without managedFields would show it", () => {
+	const stripped = { metadata: { name: "heph-sandbox-gateway" } };
+	// A read without --show-managed-fields shows no owner, which proves nothing: it must not pass as owned.
+	assert.deepEqual(restoreFailures([policy(["helm", "Apply"]), stripped], "helm"), [
+		"heph-sandbox-gateway names no field manager",
+	]);
+	assert.deepEqual(restoreFailures([policy()], "helm"), [
+		"heph-sandbox-deny names no field manager",
+	]);
+	assert.throws(
+		() => soleManager([policy(["helm", "Update"]), stripped]),
+		/heph-sandbox-gateway name no field manager/u,
+	);
 });

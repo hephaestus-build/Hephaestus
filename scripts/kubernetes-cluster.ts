@@ -1194,17 +1194,27 @@ async function runningPods(component: string): Promise<{ name: string; ip: strin
  * The gate's negative control: without the sandbox namespace's NetworkPolicies, the gate must fail,
  * and a sandbox must reach its peer. A gate that passes without the policies proves nothing about
  * them, as on a network plugin that does not enforce NetworkPolicy. The policies come back whatever
- * the gate answers.
+ * the gate answers, applied server-side by the field manager that owned them before, which is Helm's:
+ * a client-side apply would take their fields from Helm, and the next upgrade would conflict.
  */
 async function negativeControl(sandboxGateway: { host: string; port: number }): Promise<void> {
-	const saved = asRecord(
-		parseJson(await kubectl(["-n", SANDBOXES, "get", "networkpolicies", "-o", "json"])),
-		"NetworkPolicy list",
-	).items;
-	const policies = (Array.isArray(saved) ? saved : []).map((item) => restorable(item));
-	if (policies.length === 0) {
+	// kubectl leaves managedFields out of its output unless asked, and both the restore and its check read them.
+	const policiesWithOwners = [
+		"-n",
+		SANDBOXES,
+		"get",
+		"networkpolicies",
+		"--show-managed-fields",
+		"-o",
+		"json",
+	];
+	const saved = asRecord(parseJson(await kubectl(policiesWithOwners)), "NetworkPolicy list").items;
+	const items = Array.isArray(saved) ? saved : [];
+	if (items.length === 0) {
 		throw new Error(`${SANDBOXES} has no NetworkPolicy, so the gate has nothing to control`);
 	}
+	const manager = soleManager(items);
+	const policies = items.map((item) => restorable(item));
 	let answer: unknown;
 	try {
 		// Inside the try: a delete that fails half way still restores every policy.
@@ -1218,8 +1228,18 @@ async function negativeControl(sandboxGateway: { host: string; port: number }): 
 		answer = error;
 	} finally {
 		await kubectl(
-			["apply", "-f", "-"],
+			["apply", "--server-side", `--field-manager=${manager}`, "--force-conflicts", "-f", "-"],
 			JSON.stringify({ apiVersion: "v1", kind: "List", items: policies }),
+		);
+	}
+	const restored = asRecord(
+		parseJson(await kubectl(policiesWithOwners)),
+		"NetworkPolicy list",
+	).items;
+	const failures = restoreFailures(Array.isArray(restored) ? restored : [], manager);
+	if (failures.length > 0) {
+		throw new Error(
+			`the restored NetworkPolicies are not as ${manager} left them: ${failures.join("; ")}`,
 		);
 	}
 	const message = answer instanceof Error ? answer.message : "";
@@ -1232,7 +1252,63 @@ async function negativeControl(sandboxGateway: { host: string; port: number }): 
 	}
 }
 
-/** A listed object without the fields that the API server owns, so that it applies again. */
+/** The managers that own fields of these objects, in the order they appear. */
+function managersOf(items: readonly unknown[]): { manager: string }[] {
+	return items.flatMap((item) =>
+		managedFieldsOf(item).map((field) => ({
+			manager: String(asRecord(field, "managedFields entry").manager),
+		})),
+	);
+}
+
+function managedFieldsOf(item: unknown): unknown[] {
+	const fields = asRecord(asRecord(item, "object").metadata, "metadata").managedFields;
+	return Array.isArray(fields) ? fields : [];
+}
+
+/** The objects that name no field manager at all: a read without `--show-managed-fields` shows them so. */
+function withoutOwners(items: readonly unknown[]): string[] {
+	return items
+		.filter((item) => managedFieldsOf(item).length === 0)
+		.map((item) => String(asRecord(asRecord(item, "object").metadata, "metadata").name));
+}
+
+/**
+ * The one field manager that owns every field of these objects: Helm's, by an update after an install and by a
+ * server-side apply after an upgrade. An object without owners, or another owner beside it, is no state that the
+ * control can copy, so it fails closed.
+ */
+export function soleManager(items: readonly unknown[]): string {
+	const unowned = withoutOwners(items);
+	if (unowned.length > 0) {
+		throw new Error(
+			`the NetworkPolicies ${unowned.join(", ")} name no field manager, so the control cannot restore them as they were`,
+		);
+	}
+	const managers = new Set(managersOf(items).map((entry) => entry.manager));
+	if (managers.size !== 1) {
+		throw new Error(
+			`the NetworkPolicies have ${String(managers.size)} field managers, not one, so the control cannot restore them as they were`,
+		);
+	}
+	return [...managers][0] ?? "";
+}
+
+/**
+ * Why the restored objects are not as `manager` left them: an object that names no owner, which proves nothing,
+ * or another manager that owns a field of one.
+ */
+export function restoreFailures(items: readonly unknown[], manager: string): string[] {
+	const foreign = [...new Set(managersOf(items).map((entry) => entry.manager))].filter(
+		(name) => name !== manager,
+	);
+	return [
+		...withoutOwners(items).map((name) => `${name} names no field manager`),
+		...foreign.map((name) => `${name} owns fields beside ${manager}`),
+	];
+}
+
+/** A listed object as its applier wrote it: without the fields that the API server owns. */
 function restorable(item: unknown): Record<string, unknown> {
 	const { metadata, spec, apiVersion, kind } = asRecord(item, "NetworkPolicy");
 	const owned = asRecord(metadata, "metadata");
