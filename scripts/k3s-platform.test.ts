@@ -271,6 +271,107 @@ await test("the installer accepts RC versions and refuses malformed candidate nu
 	);
 });
 
+/** The Traefik values and the redirect route of the k3s-platform.yaml that the installer would install. */
+function renderedTraefik(...args: string[]) {
+	const result = spawnSync(
+		"sh",
+		[path.join(PLATFORM, "k3s-install.sh"), "--version", "0.95.0", ...args, "--render-platform"],
+		{ encoding: "utf8", timeout: 30_000 },
+	);
+	assert.equal(result.status, 0, result.stderr);
+	const traefik = named(documents(result.stdout), "HelmChart", "traefik");
+	assert.ok(traefik && isRecord(traefik.spec));
+	const values: unknown = parse(String(traefik.spec.valuesContent));
+	assert.ok(isRecord(values) && isRecord(values.gateway) && isRecord(values.gateway.listeners));
+	assert.ok(Array.isArray(values.extraObjects));
+	return {
+		text: result.stdout,
+		listeners: values.gateway.listeners,
+		extraObjects: values.extraObjects,
+	};
+}
+
+await test("each extra host gets an HTTPS listener and an HTTP-01 certificate, and the redirect covers it", () => {
+	const args = ["--host", "heph.example.org", "--email", "ops@example.org"];
+	assert.equal(renderedTraefik(...args).text, read("k3s-platform.yaml"));
+	const extra = ["--extra-host", "old.example.org", "--extra-host", "alias.example.org"];
+	const { listeners, extraObjects } = renderedTraefik(...args, ...extra);
+	const shipped = renderedTraefik(...args).listeners;
+	assert.deepEqual(listeners.websecure, shipped.websecure);
+	assert.deepEqual(listeners.web, shipped.web);
+	for (const host of ["old.example.org", "alias.example.org"]) {
+		assert.deepEqual(listeners[host], {
+			port: 8443,
+			protocol: "HTTPS",
+			hostname: host,
+			namespacePolicy: { from: "All" },
+			certificateRefs: [{ name: `${host}-tls` }],
+		});
+	}
+	// The redirect names no host, so it answers plain HTTP for every listener.
+	const redirect = extraObjects.find(isRecord);
+	assert.ok(redirect && isRecord(redirect.spec));
+	assert.equal(redirect.spec.hostnames, undefined);
+	assert.deepEqual(redirect.spec.parentRefs, [{ name: "traefik-gateway", sectionName: "web" }]);
+
+	for (const certificates of [
+		rendered(...args, ...extra),
+		rendered(...args, ...extra, "--workspace-subdomains", "--dns01-issuer", "zone-dns"),
+	]) {
+		assert.equal(certificates.status, 0, certificates.stderr);
+		for (const host of ["old.example.org", "alias.example.org"]) {
+			const certificate = named(certificates.resources, "Certificate", `${host}-tls`);
+			assert.ok(certificate && isRecord(certificate.metadata) && isRecord(certificate.spec));
+			assert.equal(certificate.metadata.namespace, "traefik");
+			assert.deepEqual(certificate.spec, {
+				secretName: `${host}-tls`,
+				dnsNames: [host],
+				issuerRef: { kind: "ClusterIssuer", name: "gateway" },
+			});
+		}
+	}
+
+	const custom = path.join(
+		mkdtempSync(path.join(tmpdir(), "hephaestus-extra-")),
+		"certificates.yaml",
+	);
+	writeFileSync(custom, read("k3s-certificates.yaml"));
+	try {
+		for (const [refused, message] of [
+			[["--extra-host", "old.example.org", "--extra-host", "old.example.org"], /given twice/u],
+			[["--extra-host", "heph.example.org"], /is the --host/u],
+			[
+				[
+					"--extra-host",
+					"acme.heph.example.org",
+					"--workspace-subdomains",
+					"--dns01-issuer",
+					"zone",
+				],
+				/is a workspace host of heph\.example\.org/u,
+			],
+			[["--extra-host", "Old.example.org"], /lowercase DNS name/u],
+			[["--extra-host", ""], /one lowercase DNS name/u],
+			[["--extra-host", "*"], /one lowercase DNS name/u],
+			[["--extra-host", "a.example.org b.example.org"], /one lowercase DNS name/u],
+			[
+				["--extra-host", `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(58)}`],
+				/at most 249/u,
+			],
+			[
+				["--extra-host", "old.example.org", "--certificates", custom],
+				/put the certificates of extra hosts/u,
+			],
+		] as const) {
+			const result = rendered(...args, ...refused);
+			assert.notEqual(result.status, 0, refused.join(" "));
+			assert.match(result.stderr, message);
+		}
+	} finally {
+		rmSync(path.dirname(custom), { recursive: true, force: true });
+	}
+});
+
 await test("the node options take only an address and a DNS name", () => {
 	const args = ["--host", "heph.example.org", "--email", "ops@example.org"];
 	for (const node of [
@@ -1088,6 +1189,32 @@ await test(
 				/90-flags\.yml is no platform file, and it overrides config\.yaml/u,
 			);
 			rmSync(dropIns, { recursive: true });
+
+			// An extra host renders another platform file and other certificates.
+			const extraHost = checkPlatform(root, K3S_PIN, [...args, "--extra-host", "old.example.org"]);
+			assert.equal(extraHost.status, 1);
+			assert.match(extraHost.stderr, /manifests\/k3s-platform\.yaml differs/u);
+			assert.match(extraHost.stderr, /manifests\/hephaestus-certificates\.yaml differs/u);
+			// A host that holds what the installer renders for the extra host passes the check.
+			const withExtra = [...args, "--extra-host", "old.example.org"];
+			const render = (option: string) =>
+				spawnSync(
+					"sh",
+					[path.join(PLATFORM, "k3s-install.sh"), "--version", "0.95.0", ...withExtra, option],
+					{ encoding: "utf8" },
+				).stdout;
+			writeFileSync(path.join(root, manifests, "k3s-platform.yaml"), render("--render-platform"));
+			writeFileSync(
+				path.join(root, manifests, "hephaestus-certificates.yaml"),
+				render("--render-certificates"),
+			);
+			const extraInstalled = checkPlatform(root, K3S_PIN, withExtra);
+			assert.equal(extraInstalled.status, 0, extraInstalled.stderr);
+			writeFileSync(path.join(root, manifests, "k3s-platform.yaml"), read("k3s-platform.yaml"));
+			writeFileSync(
+				path.join(root, manifests, "hephaestus-certificates.yaml"),
+				certificates.stdout,
+			);
 
 			// The same host with other options renders other certificates.
 			const otherHost = checkPlatform(root, K3S_PIN, [

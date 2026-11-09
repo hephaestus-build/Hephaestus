@@ -53,6 +53,7 @@ usage: sh k3s-install.sh --version X.Y.Z --host NAME --email ADDRESS [options]
   --dns01-issuer NAME         existing ClusterIssuer for a DNS-01 wildcard certificate
   --node-ip ADDRESS          the node address of k3s, in /etc/rancher/k3s/config.yaml.d/50-node.yaml
   --node-name NAME           the node name of k3s, in the same file
+  --extra-host NAME          one more host name on the Gateway, with its own certificate. Repeat it for each.
   --staging                  use the Let's Encrypt staging service: a certificate that no browser trusts
   --github-client-id ID      the client ID of the GitHub OAuth app, for a new site.yaml
   --bootstrap-admins LIST    for example github:1234567, for a new site.yaml
@@ -61,6 +62,7 @@ usage: sh k3s-install.sh --version X.Y.Z --host NAME --email ADDRESS [options]
   --lock FILE                the joint lock of the release, already downloaded (a draft release)
   --skip-check NAME          skip one host check: dns, size or clock. Repeat it for each.
   --render-certificates      print the certificates file that this run would install, and stop
+  --render-platform          print the k3s-platform.yaml that this run would install, and stop
   --render-site              print the site.yaml that this run would write, and stop
   --verify-kubelet           check the running kubelet policy and allocatable, and stop
   --platform-only            install only k3s and the platform files of this folder: no release
@@ -90,6 +92,7 @@ WORKSPACE_SUBDOMAINS=false
 DNS01_ISSUER=
 NODE_IP=
 NODE_NAME=
+EXTRA_HOSTS=
 GITHUB_CLIENT_ID=
 BOOTSTRAP_ADMINS=
 CERTIFICATES=
@@ -104,13 +107,18 @@ CHECK=false
 ALLOW_UNQUALIFIED_HOST=false
 while [ $# -gt 0 ]; do
 	case $1 in
-	--version | --host | --email | --dns01-issuer | --node-ip | --node-name | --github-client-id | --bootstrap-admins | --certificates | --lock | --skip-check)
+	--version | --host | --email | --dns01-issuer | --node-ip | --node-name | --extra-host | --github-client-id | --bootstrap-admins | --certificates | --lock | --skip-check)
 		[ $# -ge 2 ] || usage
 		case $1 in
 		--version) VERSION=$2 ;;
 		--dns01-issuer) DNS01_ISSUER=$2 ;;
 		--node-ip) NODE_IP=$2 ;;
 		--node-name) NODE_NAME=$2 ;;
+		--extra-host)
+			# Checked here, before the list splits into words: no empty value, no space and no glob.
+			matches "$2" '[a-z0-9.-]+' || die "--extra-host takes one lowercase DNS name, such as old.example.com"
+			EXTRA_HOSTS="$EXTRA_HOSTS $2"
+			;;
 		--host) HOST=$2 ;;
 		--email) EMAIL=$2 ;;
 		--github-client-id) GITHUB_CLIENT_ID=$2 ;;
@@ -153,7 +161,11 @@ while [ $# -gt 0 ]; do
 		shift
 		;;
 	--render-certificates)
-		RENDER=true
+		RENDER=certificates
+		shift
+		;;
+	--render-platform)
+		RENDER=platform
 		shift
 		;;
 	--render-site)
@@ -247,6 +259,18 @@ if [ "$VERIFY" = false ]; then
 		die "--node-ip takes an address, or two separated by a comma, such as 192.0.2.10 or 192.0.2.10,2001:db8::10"
 	[ -z "$NODE_NAME" ] || { [ "${#NODE_NAME}" -le 253 ] && matches "$NODE_NAME" "$LABEL(\\.$LABEL)*"; } ||
 		die "--node-name takes a lowercase DNS name, such as node-1"
+	# Each extra host names a Gateway listener and the Secret <host>-tls, which has at most 253 characters.
+	extra_seen=" $HOST "
+	for extra in $EXTRA_HOSTS; do
+		{ [ "${#extra}" -le 249 ] && matches "$extra" "($LABEL\\.)+[a-z]$LABEL"; } ||
+			die "--extra-host takes a lowercase DNS name of at most 249 characters, such as old.example.com"
+		case $extra_seen in *" $extra "*) die "--extra-host $extra is given twice or is the --host" ;; esac
+		# A listener for a workspace host would take it from the wildcard route of the chart.
+		case $WORKSPACE_SUBDOMAINS:$extra in true:*".$HOST") die "--extra-host $extra is a workspace host of $HOST" ;; esac
+		extra_seen="$extra_seen$extra "
+	done
+	[ -z "$EXTRA_HOSTS" ] || [ -z "$CERTIFICATES" ] ||
+		die "--extra-host uses the standard certificates asset; put the certificates of extra hosts in --certificates yourself"
 fi
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -320,11 +344,57 @@ render_certificates() {
 			cat
 		fi
 	}
+	# Each extra host gets its own certificate from the HTTP-01 issuer, also beside a DNS-01 issuer.
+	for extra in $EXTRA_HOSTS; do
+		cat <<EOF
+---
+# The certificate of the Gateway listener $extra (k3s-install.sh --extra-host).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: $extra-tls
+  namespace: $GATEWAY_NAMESPACE
+spec:
+  secretName: $extra-tls
+  dnsNames:
+    - $extra
+  issuerRef:
+    kind: ClusterIssuer
+    name: gateway
+EOF
+	done
 }
-if [ "$RENDER" = true ]; then
+# The platform file: an HTTPS listener for each extra host, after the listener websecure. The
+# redirect route on the listener web has no host name, so it covers every listener.
+render_platform() {
+	if [ -z "$EXTRA_HOSTS" ]; then
+		cat "$HERE/k3s-platform.yaml"
+		return
+	fi
+	awk -v hosts="$EXTRA_HOSTS" '
+		{ print }
+		$0 == "            - name: hephaestus-tls" {
+			found++
+			count = split(hosts, names, " ")
+			for (i = 1; i <= count; i++) {
+				printf "        %s:\n          port: 8443\n          protocol: HTTPS\n", names[i]
+				printf "          hostname: %s\n          namespacePolicy:\n            from: All\n", names[i]
+				printf "          certificateRefs:\n            - name: %s-tls\n", names[i]
+			}
+		}
+		END { if (found != 1) exit 1 }
+	' "$HERE/k3s-platform.yaml" || die "k3s-platform.yaml has no single listener websecure with the certificate hephaestus-tls"
+}
+case $RENDER in
+certificates)
 	render_certificates
 	exit 0
-fi
+	;;
+platform)
+	render_platform
+	exit 0
+	;;
+esac
 # The site values: $1 and $2 are the address and port of the Kubernetes API, which only a running
 # cluster knows. --render-site prints the file without them.
 render_site() {
@@ -362,13 +432,14 @@ trap 'exit 130' INT TERM
 # Every platform file: its source, its installed path and its mode. $1 handles each file.
 platform_files() {
 	render_certificates >"$TEMP/certificates.yaml"
+	render_platform >"$TEMP/platform.yaml"
 	"$1" "$HERE/k3s-logind.conf" /etc/systemd/logind.conf.d/zz-hephaestus.conf 0644
 	"$1" "$HERE/k3s-journald.conf" /etc/systemd/journald.conf.d/zz-hephaestus.conf 0644
 	"$1" "$HERE/k3s-config.yaml" /etc/rancher/k3s/config.yaml 0600
 	"$1" "$HERE/k3s-kubelet.yaml" /etc/rancher/k3s/kubelet.yaml 0600
 	"$1" "$HERE/k3s-containerd.toml.tmpl" "$CONTAINERD_TEMPLATE" 0644
 	"$1" "$HERE/k3s-runtimeclass.yaml" "$MANIFESTS/k3s-runtimeclass.yaml" 0600
-	"$1" "$HERE/k3s-platform.yaml" "$MANIFESTS/k3s-platform.yaml" 0600
+	"$1" "$TEMP/platform.yaml" "$MANIFESTS/k3s-platform.yaml" 0600
 	"$1" "$HERE/k3s-agent-sandbox.yaml" "$MANIFESTS/k3s-agent-sandbox.yaml" 0600
 	"$1" "$TEMP/certificates.yaml" "$MANIFESTS/hephaestus-certificates.yaml" 0600
 	# The node drop-in holds exactly the node options of this run. Without them, it is the site's own.
@@ -687,6 +758,9 @@ if skipped dns; then
 	warn "the DNS and reachability check is skipped"
 else
 	getent ahostsv4 "$HOST" >/dev/null || die "$HOST does not resolve: add a DNS A record for it that points to this host"
+	for extra in $EXTRA_HOSTS; do
+		getent ahostsv4 "$extra" >/dev/null || die "--extra-host $extra does not resolve: add a DNS A record for it that points to this host"
+	done
 	if [ "$K3S_INSTALLED" = false ]; then
 		# Let's Encrypt asks for http://<host>/ from the internet. A short listener on port 80 serves a
 		# random token, and this host asks for it through the host name and the firewall.
@@ -844,6 +918,11 @@ fi
 kubectl -n "$GATEWAY_NAMESPACE" wait --for=create certificate/hephaestus-tls --timeout=10m >/dev/null
 sh "$HERE/k3s-wait-condition.sh" "$GATEWAY_NAMESPACE" certificate/hephaestus-tls Ready 600 ||
 	die "cert-manager issued no certificate for $HOST in 10 minutes: kubectl describe challenges --all-namespaces shows why"
+for extra in $EXTRA_HOSTS; do
+	kubectl -n "$GATEWAY_NAMESPACE" wait --for=create "certificate/$extra-tls" --timeout=10m >/dev/null
+	sh "$HERE/k3s-wait-condition.sh" "$GATEWAY_NAMESPACE" "certificate/$extra-tls" Ready 600 ||
+		die "cert-manager issued no certificate for $extra in 10 minutes: its DNS record must point to this host. kubectl describe challenges --all-namespaces shows why"
+done
 
 if [ "$RELEASE" = false ]; then
 	say "The platform of $HERE runs. The chart is not installed by this run."
