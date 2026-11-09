@@ -1,6 +1,6 @@
 # ADR 0073: Product feedback is worked on in GitHub
 
-**Status:** Accepted (2026-10-31)
+**Status:** Accepted (2026-10-31). Superseded in part on 2026-11-09 by [ADR 0079](0079-one-agent-system.md).
 **Date:** 2026-10-31
 **Authors:** Felix T.J. Dietrich
 **Relates to:** ADR 0025 (job claims and orphan recovery), ADR 0026 (the governed model catalog) and ADR 0068 (the worker runs model calls).
@@ -202,3 +202,12 @@ The operator steps get their home in the Admin Guide when they ship: `docs/admin
 - Maintainers make more than an occasional public issue private for privacy reasons.
 - GitHub gains a way to move an issue from a private repository to a public one. Private first would then cost less.
 - A destination other than GitHub is needed.
+
+## Update — 2026-11-09: superseded in part by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) supersedes the durability mechanism in § Decision, item 9.
+Each GitHub write of a report is a `file_issue` action in the `agent_action` outbox.
+The executor claims it with the one lease of the outbox, and its adapter finds an earlier issue by the marker.
+The filing lease and its sweepers go.
+A product feedback draft is a `report_draft` run in an action sandbox, and its model calls go through the proxy.
+The one state table, the frozen target and payload, the marker and the cleanup records stay.

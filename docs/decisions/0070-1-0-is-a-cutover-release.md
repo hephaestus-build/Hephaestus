@@ -1,6 +1,6 @@
 # ADR 0070: 1.0 is a cutover release
 
-**Status:** Accepted (amended 2026-10-28 — lease recovery requeues the claimed reviews; amended 2026-11-03 — F-2 removes the legacy feedback link resolver)
+**Status:** Accepted (amended 2026-10-28 — lease recovery requeues the claimed reviews; amended 2026-11-03 — F-2 removes the legacy feedback link resolver). Amended on 2026-11-09 by [ADR 0079](0079-one-agent-system.md).
 **Date:** 2026-10-28
 **Authors:** Felix T.J. Dietrich
 **Amends:** ADR 0058 (§ Supported deployment, § Notice and removal, gate 10), ADR 0041, ADR 0042 and ADR 0005.
@@ -166,3 +166,13 @@ The unpublished chart value becomes `worker.conversationTurns` in 0.95.
 Configuration, environment variable, metric, API and storage identifiers change once at the 1.0 cutover.
 `/mentor` links redirect to `/conversation` until the rename of these identifiers.
 The [retired words](../contributor/practice-feedback-language.md#retired-words) state which Slack wire identifiers remain.
+
+## Update — 2026-11-09: amended by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) removes the worker role before 1.0. The cutover rules of this decision stay.
+
+- § Procedure: the 1.0 chart has no `worker.replicas`. Phase 1 sets it on the 0.95 chart. Phase 2 uses the 1.0 chart and omits it. Phase 4 restores the server replicas.
+- § In-flight work: the 1.0 migration creates one `agent_run` for each live review job and turn, and ends the rest. Each requeued review keeps its admitted and staged results, as this decision requires.
+- The drain of the workers in phase 1 stays a step of the 0.95 chart.
+
+The lanes that delete the worker and add `agent_run` update § Procedure and § In-flight work in the same pull requests.

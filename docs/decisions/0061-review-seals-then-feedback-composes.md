@@ -1,6 +1,6 @@
 # ADR 0061: A practice review seals its results, then feedback is composed
 
-**Status:** Accepted
+**Status:** Accepted (superseded in part 2026-11-09 by [ADR 0079](0079-one-agent-system.md))
 **Date:** 2026-10-26
 **Authors:** Felix T.J. Dietrich
 
@@ -92,3 +92,16 @@ This update supersedes the first item of Consequences.
 A composition failure still never changes a result.
 If every attempt of an admitted review ends before it confirms a decision for each destination, the job fails and the review closes as Partial with `COMPOSITION_UNCONFIRMED`.
 Before this update, such a review read as Complete with destinations undecided.
+
+## Update — 2026-11-09: superseded in part by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) supersedes § Decision, item Compose, and the parts of item Retry and § Consequences that depend on it.
+
+- **Considered option 1, "Keep composition in the sandbox", is the chosen path from 2026-11-09, in a changed form.** Composition is a `review_compose` run in the review's sandbox, after the server seals the review. The run answers the three costs of § Context:
+  - A composition timeout ends the `review_compose` run only. The seal is already written, so the review's results do not change.
+  - A lost sandbox needs a new sandbox, as before. The new sandbox starts the `review_compose` run and measures nothing.
+  - Composition has its own run, so its retries do not spend measurement attempts. The attempt budget of each run kind is in the capacity home.
+- The worker step, `WorkerFeedbackComposer` and `ReviewModelGateway` go. Every model call of the composer goes through the proxy with the sandbox's token.
+- Considered option 2 was rejected because a Pod adds start time for proxy calls only. That reason no longer decides: the review's sandbox already exists, and the composer needs tools (ADR 0069).
+
+The three parts, the one direction of dependencies, the seal, the stop reasons on the feedback rows and the skip rule stay.

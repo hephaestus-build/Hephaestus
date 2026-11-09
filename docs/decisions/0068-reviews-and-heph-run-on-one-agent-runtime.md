@@ -1,6 +1,6 @@
 # ADR 0068: Reviews and Heph run on one agent runtime
 
-**Status:** Accepted (2026-10-28)
+**Status:** Accepted (2026-10-28). Superseded in part on 2026-11-09 by [ADR 0079](0079-one-agent-system.md).
 **Date:** 2026-10-27
 **Authors:** Felix T.J. Dietrich
 
@@ -808,3 +808,25 @@ The proxy meters each accepted request, including an abandoned response.
 
 An HTTP error from a provider keeps the existing model retry behavior.
 Cancellation and lease loss stop the wait.
+
+## Update — 2026-11-09: superseded in part by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) supersedes the placement of this decision. One runtime for reviews and conversations stays, and so does PostgreSQL as the only truth.
+
+**Superseded:**
+
+- **Decision driver 2.** Model-chosen commands run in the same container as the sandbox token. The token is bounded: it names one subject, it ends with the sandbox, and it works only at the gateway. The maintainer accepted this on 2026-11-09.
+- **[Decision A](#a-adopt-w) and § Decision.** W′ goes. Each subject (a review, a conversation or an action task) gets one agent-sandbox `Sandbox` with one container. The container holds the one Node loop, the tools and the workspace. The review agent Pod, its sidecars and init containers, the Heph loop Deployment and the tools Pods go.
+- **§ Tool placement, § The tools Pod, § The Heph loop and § Tool protocol v1.** The loop and its tools share one container, so the split, the Unix-socket protocol, the nonce and the `setpriv` filter go.
+- **Coverage authority.** § Tool placement made coverage depend on which process read the bytes. In one container, a command can change a file before the loop reads it. For each read and each proved search, the loop reports the path and digest of each file. Admission compares each digest with the one that the server captured. A read with a changed digest gives no coverage, and a search over it proves no absence. Admission checks each citation against the captured bytes, never against the sandbox's files.
+- **§ The attempt contract.** The lease, the attempt and the epoch move to `agent_run`. The fence is `(run_id, lease_epoch)` with an unexpired lease. The token names the workspace, the subject and the sandbox, and it expires at the sandbox's `shutdownTime`. The signing keys of the attempt token stay.
+- **The 2026-11-08 update, "review loops renew their own leases".** The sandbox is the only writer of its run's lease. The worker's renewals go with the worker.
+- **§ Network and [decision B](#b-hephs-tools-get-no-network-access).** A sandbox can reach only the gateway port of the server. Thus, commands can reach the gateway too, with the token of their own subject. No sandbox has any other route.
+- **§ Capacity, § Fit by measured use and [decision G](#g-review-pod-admission-checks-quota-and-provider-demand).** The claim admits sandboxes by the counts in one capacity home, `hephaestus.agent.capacity.*`. The tier quotas that the chart derives, the resident-turn CPU rule, the 32-turn ceiling and `Recreate` on single-node profiles go.
+- **[Decision J](#j-heph-keeps-one-workspace-for-each-attempt).** A conversation keeps one sandbox while it is in use, and the server deletes it when it is idle. An erasure or a change of access deletes it at once. Its turns share the workspace.
+- **Option W.** Its first reason, a token beside untrusted code, no longer decides. W stays rejected for its relay and its broker in the gateway.
+- **Option [kubernetes-sigs/agent-sandbox](#kubernetes-sigsagent-sandbox-rejected), rejected on 2026-10-28, is the chosen path from 2026-11-09.** ADR 0079 gives what changed and how it bounds the risks that this ADR named.
+
+- **[Decision C](#c-user-namespaces-are-required) and [decision E](#e-gvisor-is-optional-hardening).** gVisor is the default runtime where the node has it, and runc is the fallback. gVisor cannot run with `hostUsers: false` yet (google/gvisor#13303). Thus, a gVisor sandbox omits `hostUsers`, and gVisor's Sentry is the kernel boundary. A runc sandbox keeps `hostUsers: false`, and decision C stays for it.
+
+**Stays:** decisions D, I and K, and decision C for runc. Decision F stays without the worker: a refused call at the proxy is the one form of control. Decision H stays. The isolation probe becomes one egress and isolation gate for the sandbox.

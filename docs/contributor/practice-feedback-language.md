@@ -59,7 +59,7 @@ This table records only their retired names.
 
 | Term | Owning definition | Avoid for this concept |
 | --- | --- | --- |
-| **Item** | [Review glossary](./practice-review-glossary.mdx#review-terms) | artifact, unit, part, target, subject |
+| **Item** | [Review glossary](./practice-review-glossary.mdx#review-terms) | artifact, unit, part, target, subject. A [subject](./practice-review-glossary.mdx#runtime-terms) is what a sandbox serves, never an item. |
 | **Event** | [Review glossary](./practice-review-glossary.mdx#review-terms) | signal, occasion, trigger, moment |
 | **Scan** | [Review glossary](./practice-review-glossary.mdx#review-terms) | population review |
 | **Origin** | [Review glossary](./practice-review-glossary.mdx#review-terms) | door, trigger mode |
@@ -377,7 +377,7 @@ A workspace admin cannot grant another person's research consent.
 | --- | --- | --- |
 | **Runtime role** | Server, worker or webhook: the part of one application JAR that a container starts. |  |
 | **Server** | The service that handles application requests. |  |
-| **Worker** | The runtime role that executes reviews and conversation turns. |  |
+| **Worker** | The runtime role that executes reviews and conversation turns. 1.0 removes it, and the server takes its work ([ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md)). |  |
 | **Webhook** | A provider's HTTP request that reports an event. Also the runtime role that receives it. |  |
 | **API** | An interface for software calls. |  |
 | **UI** | The interface that a person uses. |  |

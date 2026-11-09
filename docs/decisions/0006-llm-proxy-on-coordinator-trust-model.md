@@ -1,6 +1,6 @@
 # ADR 0006: LLM proxy stays on the coordinator (BYO trust model)
 
-**Status:** Accepted (amended 2026-07-20 #1368 — proxy follows the worker gate; 2026-07-28 #1400 — governed provider catalog; 2026-09-03 #1719 — Decision superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-09 — Heph host credential and admission, [ADR 0057](0057-one-heph-conversation-per-developer.md))
+**Status:** Accepted (amended 2026-07-20 #1368 — proxy follows the worker gate; 2026-07-28 #1400 — governed provider catalog; 2026-09-03 #1719 — Decision superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-09 — Heph host credential and admission, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-11-09 — superseded in part by [ADR 0079](0079-one-agent-system.md))
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -249,3 +249,14 @@ is admitted when a worker claims it (`MentorAdmission`), not before a question i
 frozen on `mentor_turn.admission`. The ledger row is written when the turn ends, or by the lease reaper
 for an attempt that lost its lease. The credential-isolation invariant is unchanged: the host receives
 no provider credential.
+
+## Update — 2026-11-09: superseded in part by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) supersedes these parts:
+
+- **The 2026-09-03 update, where the proxy runs.** It put the proxy on the worker's Sandbox Gateway. 1.0 has no worker. The proxy runs in the server, on the gateway port that sandboxes reach (8081). Considered option 2, "hardcode on coordinator", is thus the chosen path from 2026-11-09.
+- **The 2026-10-09 update, the turn credential and admission.** A sandbox token names one subject, not one turn attempt. Each call names its run and epoch, and the proxy checks them against `agent_run`. The claim admits a turn, not a worker. Each model call writes its own usage row, so no reaper bills a lost attempt.
+
+The credential-isolation driver of the Context stays binding.
+Only the server holds provider keys.
+A sandbox holds only a token for one subject, and it can reach only the gateway.

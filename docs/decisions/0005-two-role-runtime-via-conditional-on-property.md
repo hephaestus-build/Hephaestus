@@ -1,6 +1,6 @@
 # ADR 0005: Two-role runtime topology via `@ConditionalOnProperty`
 
-**Status:** Accepted (amended 2026-05-20 #1110 — webhook role wired; 2026-07-20 #1368 — proxy capability flag removed; 2026-07-21 #1368 — agent queue moved to PostgreSQL; 2026-07-22 #1368 — what the worker gate covers; 2026-08-22 — role-scoped settings gate; 2026-09-03 #1719 — role deferral superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-01 #1158 — server-only application server; 2026-10-09 — Heph host on the worker, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-28 — one sandbox runtime for reviews and Heph, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
+**Status:** Accepted (amended 2026-05-20 #1110 — webhook role wired; 2026-07-20 #1368 — proxy capability flag removed; 2026-07-21 #1368 — agent queue moved to PostgreSQL; 2026-07-22 #1368 — what the worker gate covers; 2026-08-22 — role-scoped settings gate; 2026-09-03 #1719 — role deferral superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-01 #1158 — server-only application server; 2026-10-09 — Heph host on the worker, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-28 — one sandbox runtime for reviews and Heph, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md); 2026-11-09 — superseded in part by [ADR 0079](0079-one-agent-system.md))
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -206,3 +206,12 @@ the server role, so no request affinity between server replicas exists.
 
 Reviews and Heph run on one agent runtime. The worker role creates Jobs only, for review agent Pods and for Heph's tools Pods. Heph's loop runs as its own Deployment, not inside the worker.
 The role selection of this decision stays.
+
+## Update — 2026-11-09: superseded in part by ADR 0079
+
+[ADR 0079](0079-one-agent-system.md) supersedes the worker role in § Decision and in the updates of 2026-07-22, 2026-10-01, 2026-10-09 and 2026-10-28.
+1.0 has two runtime roles: server and webhook.
+The server takes every concern of the worker: the Kubernetes client, capture, the sandbox gateway and the LLM proxy.
+The server runs as several replicas with rolling updates.
+`hephaestus.runtime.worker.enabled` and the worker Deployment go.
+The role selection by `@ConditionalOnProperty` stays for the server and webhook roles.
