@@ -98,10 +98,16 @@ spec:
           command:
             - sh
             - -ec
-            # psql substitutes :'password' as a quoted literal only in a script, not in -c.
+            # psql reads the password from the environment, never from the command line, and substitutes
+            # :'password' as a quoted literal only in a script, not in -c. The settings keep it out of the
+            # statement statistics and the server log.
             - |
               until pg_isready --quiet; do sleep 2; done
-              psql --no-psqlrc -v ON_ERROR_STOP=1 -v password="$DATABASE_MONITOR_PASSWORD" <<'SQL'
+              psql --no-psqlrc -v ON_ERROR_STOP=1 <<'SQL'
+              SET pg_stat_statements.track_utility = off;
+              SET log_statement = 'none';
+              SET log_min_error_statement = 'panic';
+              \getenv password DATABASE_MONITOR_PASSWORD
               SELECT 'CREATE ROLE hephaestus_monitor' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hephaestus_monitor') \gexec
               ALTER ROLE hephaestus_monitor WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION CONNECTION LIMIT 2 PASSWORD :'password';
               GRANT pg_monitor TO hephaestus_monitor;

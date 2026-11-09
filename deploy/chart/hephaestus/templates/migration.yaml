@@ -60,9 +60,9 @@ spec:
           command:
             - sh
             - -ec
-            # psql substitutes :'owner_password' as a quoted literal only in a script, not in -c.
+            # The file reads both passwords from the environment, never from the command line.
             - |
-              psql --no-psqlrc -v owner_password="$DATABASE_OWNER_PASSWORD" -v app_password="$DATABASE_APP_PASSWORD" <<'SQL'
+              psql --no-psqlrc <<'SQL'
               {{- .Files.Get "files/database-roles.sql" | nindent 14 }}
               SQL
           env:

@@ -485,10 +485,15 @@ To turn it on:
    When Helm can read the Secret and it lacks the key, the install stops with a message.
    Otherwise the exporter Pod waits, and its events name the missing key.
 2. With an external PostgreSQL, prepare the database as a superuser first.
-   Run these statements in the application's database, with the value of `DATABASE_MONITOR_PASSWORD` in place of `<password>`:
+   Export `DATABASE_MONITOR_PASSWORD` with its value, and run this script with `psql` in the application's database.
+   The script reads the password from the environment. Its settings keep the password out of the statement statistics and the server log:
 
    ```sql
-   CREATE ROLE hephaestus_monitor LOGIN CONNECTION LIMIT 2 PASSWORD '<password>' IN ROLE pg_monitor;
+   SET pg_stat_statements.track_utility = off;
+   SET log_statement = 'none';
+   SET log_min_error_statement = 'panic';
+   \getenv password DATABASE_MONITOR_PASSWORD
+   CREATE ROLE hephaestus_monitor LOGIN CONNECTION LIMIT 2 PASSWORD :'password' IN ROLE pg_monitor;
    CREATE SCHEMA IF NOT EXISTS monitoring;
    GRANT USAGE ON SCHEMA monitoring TO hephaestus_monitor;
    CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring;

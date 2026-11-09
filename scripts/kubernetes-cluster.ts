@@ -632,7 +632,8 @@ async function externalPostgresql(
 
 /**
  * The operator's step for an external PostgreSQL: the chart's roles, as docs/admin/kubernetes.mdx § Database roles
- * runs them. The passwords travel on standard input, never in an argument list.
+ * runs them. The passwords travel on standard input into the environment of psql, which the file reads, never in an
+ * argument list.
  */
 async function externalDatabaseRoles(data: Readonly<Record<string, string>>): Promise<void> {
 	const owner = data.DATABASE_OWNER_PASSWORD ?? "";
@@ -656,7 +657,7 @@ async function externalDatabaseRoles(data: Readonly<Record<string, string>>): Pr
 			"-d",
 			"hephaestus",
 		],
-		`\\set owner_password '${owner}'\n\\set app_password '${app}'\n${script}`,
+		`\\setenv DATABASE_OWNER_PASSWORD '${owner}'\n\\setenv DATABASE_APP_PASSWORD '${app}'\n${script}`,
 	);
 }
 

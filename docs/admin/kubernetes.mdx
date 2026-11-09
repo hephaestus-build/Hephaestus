@@ -852,22 +852,32 @@ No Hephaestus process logs in as a superuser.
 
 | Role | Logs in | Can | Secret key |
 | --- | --- | --- | --- |
-| The administrator | Only you, for administration. The bundled PostgreSQL creates it at its first start. | Everything. | `DATABASE_ADMIN_USERNAME`, `DATABASE_ADMIN_PASSWORD`, with the bundled PostgreSQL only |
-| `hephaestus_owner` | The migration Job | It owns the database and every schema object, and runs the migrations. It is not a superuser, creates no role and does not bypass row-level security. | `DATABASE_OWNER_PASSWORD` |
-| `hephaestus_app` | The server and the worker | It reads and writes the rows of the application tables. It owns nothing, and it cannot change the schema, read the role catalog or bypass row-level security. | `DATABASE_APP_PASSWORD` |
+| The administrator | Only you, for administration, and the step of the migration Job that sets up the roles. The bundled PostgreSQL creates it at its first start. | Everything. | `DATABASE_ADMIN_USERNAME`, `DATABASE_ADMIN_PASSWORD`, with the bundled PostgreSQL only |
+| `hephaestus_owner` | The migration Job | It owns the database and every schema object, and runs the migrations. It is not a superuser, and it cannot create roles or replicate. | `DATABASE_OWNER_PASSWORD` |
+| `hephaestus_app` | The server and the worker | It reads and writes the rows of the application tables. It owns nothing, and it cannot change the schema or read the role catalog. Row-level security applies to it. | `DATABASE_APP_PASSWORD` |
 | `hephaestus_monitor` | The PostgreSQL exporter | It reads statistics only, as a member of `pg_monitor` ([Database metrics](./observability#database-metrics)). | `DATABASE_MONITOR_PASSWORD` |
+
+Neither `hephaestus_owner` nor `hephaestus_app` has the `BYPASSRLS` attribute.
+As the owner of each table, `hephaestus_owner` is not held to the row-level security policies of its tables, unless a table sets `FORCE ROW LEVEL SECURITY`.
+No table has a policy yet.
 
 The chart file `files/database-roles.sql` sets up the owner and the application role.
 It is idempotent:
 
 - It creates each role that does not exist and sets its password.
+  It reads both passwords from the environment of `psql`, never from its command line.
+  It keeps them out of the statement statistics and out of the server log.
+- It stops if either role is a superuser, bypasses row-level security, creates roles or replicates.
 - It makes `hephaestus_owner` the owner of the database.
+- It removes the right of every other role to create objects in the schema `public`. A database from before PostgreSQL 15 gives that right to all roles.
 - It moves each schema object of another role to `hephaestus_owner`. The objects of an extension stay with the role that created the extension.
+- It updates the extensions `pg_partman`, `citext` and `btree_gist` to the versions that the PostgreSQL server has. The migrations never update an extension.
 - It grants `hephaestus_app` the rows of each table, and each table that `hephaestus_owner` creates later.
 
 With the bundled PostgreSQL, the migration Job runs the file before each migration, as the administrator.
 Only that init container of the Job gets the administrator's password.
 Thus, a changed `DATABASE_OWNER_PASSWORD` or `DATABASE_APP_PASSWORD` takes effect with the next upgrade.
+A new PostgreSQL image with a new extension version also takes effect with that step.
 
 The application role keeps the monthly partitions of `auth_event` through the function `maintain_auth_event_partitions()`.
 That function runs as `hephaestus_owner`, for `auth_event` only.
@@ -879,7 +889,8 @@ It also stops if the Secret holds `DATABASE_USERNAME` or `DATABASE_PASSWORD`, th
 ### Database roles on an external PostgreSQL
 
 The chart never gets the administrator login of your PostgreSQL.
-Thus, you set up the roles yourself, before the first install and after each change of their passwords.
+Thus, you set up the roles yourself.
+Do this before the first install, after each change of their passwords, and after each update of the server's extensions.
 
 1. Get `files/database-roles.sql` from the verified chart of the release, as [Verify the release chart](#verify-the-release-chart) describes.
 2. Generate a password for each role:
@@ -889,28 +900,37 @@ Thus, you set up the roles yourself, before the first install and after each cha
    export DATABASE_APP_PASSWORD="$(openssl rand -hex 24)"
    ```
 
-3. Run the file as an administrator of your PostgreSQL, connected to the Hephaestus database:
+3. Run the file as an administrator of your PostgreSQL, connected to the Hephaestus database.
+   The file reads the two exported passwords:
 
    ```bash
    psql "host=<host> dbname=hephaestus user=<administrator> sslmode=verify-full" \
-     -v owner_password="$DATABASE_OWNER_PASSWORD" -v app_password="$DATABASE_APP_PASSWORD" \
      -f "chart-$VERSION/hephaestus/files/database-roles.sql"
    ```
 
-   The administrator must be able to create roles and to change the owner of the database.
-   For a managed PostgreSQL service, use the administrator login that the service gives you.
-
 4. Put both passwords in the Secret, as [Create the Secret](#create-the-secret) describes with `--external-database`.
 
-These are the roles and grants of the file.
-The file also moves the objects of an existing Hephaestus database to `hephaestus_owner`:
+The administrator can be a superuser or a role with `CREATEROLE` and `CREATEDB`, as a managed PostgreSQL service gives:
+
+- It must own the Hephaestus database, or be a member of its owner.
+- If the roles exist, it must have created them, or have the `ADMIN` option on them.
+- The file makes it a member of `hephaestus_owner`, so that it can give the database and the objects to that role.
+
+The file stops if it cannot keep the passwords out of the statement statistics.
+This occurs when the server preloads `pg_stat_statements` with `pg_stat_statements.track_utility = on`, and the administrator may not change that setting.
+The same applies to `log_statement` other than `none`.
+Then set `pg_stat_statements.track_utility = off` and `log_statement = none` for the administrator at the service, and run the file again.
+
+These are the roles and grants of the file:
 
 ```sql
 CREATE ROLE hephaestus_owner;
 CREATE ROLE hephaestus_app;
-ALTER ROLE hephaestus_owner WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '<owner password>';
-ALTER ROLE hephaestus_app WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '<application password>';
+ALTER ROLE hephaestus_owner WITH LOGIN PASSWORD '<owner password>';
+ALTER ROLE hephaestus_app WITH LOGIN PASSWORD '<application password>';
 ALTER DATABASE hephaestus OWNER TO hephaestus_owner;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE, CREATE ON SCHEMA public TO hephaestus_owner;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO hephaestus_app;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO hephaestus_app;
 GRANT EXECUTE ON ALL ROUTINES IN SCHEMA public TO hephaestus_app;

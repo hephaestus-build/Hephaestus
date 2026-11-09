@@ -1,23 +1,86 @@
 -- The database roles of Hephaestus (docs/admin/kubernetes.mdx § Database roles). Run it as the PostgreSQL
--- administrator, connected to the Hephaestus database, before each migration:
+-- administrator, connected to the Hephaestus database, before each migration, with both passwords in the
+-- environment of psql, never on its command line:
 --
---   psql -v ON_ERROR_STOP=1 -v owner_password=… -v app_password=… -f database-roles.sql
+--   DATABASE_OWNER_PASSWORD=… DATABASE_APP_PASSWORD=… psql -f database-roles.sql
 --
 -- hephaestus_owner owns the database, the schema objects and runs the migration. hephaestus_app reads and writes
--- the rows of the server and the worker, and owns nothing. Neither is a superuser, creates roles or bypasses
--- row-level security. Each statement is idempotent, and the passwords are set each time, so a changed password
--- takes effect with the next run.
+-- the rows of the server and the worker, and owns nothing. Neither is a superuser, creates roles, replicates or has
+-- BYPASSRLS; as the owner of its tables, hephaestus_owner is still not held to their policies unless a table forces them. The administrator may be a superuser, or a role with CREATEROLE and CREATEDB, as
+-- a managed PostgreSQL service gives. Each statement is idempotent, and the passwords are set each time, so a
+-- changed password takes effect with the next run.
 \set ON_ERROR_STOP on
 
+-- The passwords must reach neither the statement statistics nor the server log. A role that may not change a
+-- setting stops here when the setting would record them, and names it.
+DO $$
+DECLARE
+    setting record;
+BEGIN
+    FOR setting IN
+        SELECT * FROM (VALUES ('pg_stat_statements.track_utility', 'off'), ('log_statement', 'none'),
+                              ('log_min_error_statement', 'panic')) AS quiet (name, value)
+    LOOP
+        BEGIN
+            PERFORM set_config(setting.name, setting.value, false);
+        EXCEPTION WHEN insufficient_privilege THEN
+            IF current_setting(setting.name, true) IS NOT DISTINCT FROM setting.value THEN
+                NULL;
+            ELSIF setting.name = 'log_min_error_statement' THEN
+                RAISE WARNING 'database-roles.sql: % stays %: a failed statement of this run writes its password to the server log',
+                    setting.name, current_setting(setting.name);
+            ELSE
+                RAISE EXCEPTION 'database-roles.sql: % is % and % may not change it, so the passwords would be recorded',
+                    setting.name, current_setting(setting.name), current_user
+                    USING HINT = format('Set %s = %s for this role at the server, or grant it SET on the parameter, and run this file again.',
+                                        setting.name, setting.value);
+            END IF;
+        END;
+    END LOOP;
+END
+$$;
+
+\getenv owner_password DATABASE_OWNER_PASSWORD
+\getenv app_password DATABASE_APP_PASSWORD
+\if :{?owner_password}
+\else
+DO $$ BEGIN RAISE EXCEPTION 'database-roles.sql needs DATABASE_OWNER_PASSWORD in the environment of psql'; END $$;
+\endif
+\if :{?app_password}
+\else
+DO $$ BEGIN RAISE EXCEPTION 'database-roles.sql needs DATABASE_APP_PASSWORD in the environment of psql'; END $$;
+\endif
+
+-- CREATE ROLE gives neither role an attribute. Only a superuser could take one away, so a role that has one stops
+-- the run instead.
 SELECT 'CREATE ROLE hephaestus_owner' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hephaestus_owner') \gexec
 SELECT 'CREATE ROLE hephaestus_app' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hephaestus_app') \gexec
-ALTER ROLE hephaestus_owner WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD :'owner_password';
-ALTER ROLE hephaestus_app WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD :'app_password';
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM pg_roles WHERE rolname IN ('hephaestus_owner', 'hephaestus_app')
+               AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolreplication)) THEN
+        RAISE EXCEPTION 'hephaestus_owner and hephaestus_app must not be superusers, bypass row-level security, create roles or replicate'
+            USING HINT = 'As a superuser, ALTER ROLE them NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOREPLICATION.';
+    END IF;
+END
+$$;
+ALTER ROLE hephaestus_owner WITH LOGIN PASSWORD :'owner_password';
+ALTER ROLE hephaestus_app WITH LOGIN PASSWORD :'app_password';
 
 BEGIN;
 
+-- An administrator that is no superuser acts as the owner: it gives the database and the objects to that role, and
+-- grants and updates the extensions as that role.
+SELECT 'GRANT hephaestus_owner TO CURRENT_USER WITH INHERIT TRUE, SET TRUE'
+WHERE NOT (pg_has_role('hephaestus_owner', 'SET') AND pg_has_role('hephaestus_owner', 'USAGE')) \gexec
+
 -- The database owner owns the schema public (pg_database_owner) and may create the schema partman.
 SELECT format('ALTER DATABASE %I OWNER TO hephaestus_owner', current_database()) \gexec
+
+-- A database created before PostgreSQL 15 lets every role create objects in public. The application role must not:
+-- an object that it plants there would resolve in a later migration of the owner.
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE, CREATE ON SCHEMA public TO hephaestus_owner;
 
 -- A database that another role migrated, such as the administrator before 1.0, moves to the owner. REASSIGN OWNED
 -- cannot do this: it refuses the bootstrap superuser, which owns the system catalogs. The objects of an extension
@@ -51,6 +114,12 @@ BEGIN
     END LOOP;
 END
 $$;
+
+-- The extensions of the schema follow the PostgreSQL image: the migrations never update one. A database that the
+-- administrator migrated before 1.0 keeps them with the administrator, which may update them here.
+SELECT format('ALTER EXTENSION %I UPDATE', e.extname)
+FROM pg_extension e JOIN pg_available_extensions a ON a.name = e.extname
+WHERE e.extname IN ('pg_partman', 'citext', 'btree_gist') AND e.extversion IS DISTINCT FROM a.default_version \gexec
 
 -- pg_partman keeps its configuration in tables of the extension. A fresh database gets the schema with the migration.
 SELECT 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA partman TO hephaestus_owner'

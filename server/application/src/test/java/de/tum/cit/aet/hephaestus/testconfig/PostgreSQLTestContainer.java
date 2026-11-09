@@ -7,6 +7,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import liquibase.Contexts;
 import liquibase.Liquibase;
@@ -19,6 +20,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.testcontainers.containers.Container.ExecResult;
+import org.testcontainers.containers.ExecConfig;
 import org.testcontainers.images.builder.ImageFromDockerfile;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
@@ -32,12 +35,13 @@ public final class PostgreSQLTestContainer {
     /** The schema owner, as the chart's migration Job logs in (docs/admin/kubernetes.mdx § Database roles). */
     public static final String OWNER_USER = "hephaestus_owner";
 
-    private static final String OWNER_PASSWORD = "owner";
+    // Distinct per run, so that a test can search the statement statistics and the log for them.
+    private static final String OWNER_PASSWORD = "owner-" + UUID.randomUUID();
 
     /** The login of the server and the worker, as the chart's roles log in. */
     public static final String APP_USER = "hephaestus_app";
 
-    private static final String APP_PASSWORD = "app";
+    private static final String APP_PASSWORD = "app-" + UUID.randomUUID();
 
     /**
      * The roles of the chart, as its migration Job sets them up (docs/admin/kubernetes.mdx § Database roles): the
@@ -100,7 +104,21 @@ public final class PostgreSQLTestContainer {
     /** Runs the chart's {@code files/database-roles.sql} in a database, as the chart's migration Job runs it. */
     public static synchronized void applyDatabaseRoles(String database) {
         validateDatabaseName(database);
-        runDatabaseRoles(getInstance(), database);
+        PostgreSQLContainer postgres = getInstance();
+        ExecResult result = runDatabaseRoles(postgres, database, postgres.getUsername());
+        if (result.getExitCode() != 0) {
+            throw new IllegalStateException("database-roles.sql failed: " + result.getStderr());
+        }
+    }
+
+    /**
+     * Runs the chart's {@code files/database-roles.sql} in a database as another administrator, such as a role with
+     * CREATEROLE and CREATEDB that a managed PostgreSQL service gives, and returns how psql ended.
+     */
+    public static synchronized ExecResult runDatabaseRolesAs(String database, String administrator) {
+        validateDatabaseName(database);
+        validateDatabaseName(administrator);
+        return runDatabaseRoles(getInstance(), database, administrator);
     }
 
     public static synchronized TestDatabase createDatabase(String name) {
@@ -186,22 +204,20 @@ public final class PostgreSQLTestContainer {
                 .get();
     }
 
-    private static void runDatabaseRoles(PostgreSQLContainer postgres, String database) {
+    /** psql reads both passwords from its environment, as the chart's init container gives them. */
+    private static ExecResult runDatabaseRoles(PostgreSQLContainer postgres, String database, String administrator) {
         try {
-            var result = postgres.execInContainer(
-                    "psql",
-                    "--no-psqlrc",
-                    "--quiet",
-                    "--username=" + postgres.getUsername(),
-                    "--dbname=" + database,
-                    "-v",
-                    "owner_password=" + OWNER_PASSWORD,
-                    "-v",
-                    "app_password=" + APP_PASSWORD,
-                    "--file=" + DATABASE_ROLES);
-            if (result.getExitCode() != 0) {
-                throw new IllegalStateException("database-roles.sql failed: " + result.getStderr());
-            }
+            return postgres.execInContainer(ExecConfig.builder()
+                    .command(new String[] {
+                        "psql",
+                        "--no-psqlrc",
+                        "--quiet",
+                        "--username=" + administrator,
+                        "--dbname=" + database,
+                        "--file=" + DATABASE_ROLES
+                    })
+                    .envVars(Map.of("DATABASE_OWNER_PASSWORD", OWNER_PASSWORD, "DATABASE_APP_PASSWORD", APP_PASSWORD))
+                    .build());
         } catch (IOException exception) {
             throw new IllegalStateException("database-roles.sql could not run", exception);
         } catch (InterruptedException exception) {
@@ -246,7 +262,10 @@ public final class PostgreSQLTestContainer {
                 MountableFile.forHostPath(Path.of(
                         System.getProperty("basedir", "."), "../../deploy/chart/hephaestus/files/database-roles.sql")),
                 DATABASE_ROLES);
-        runDatabaseRoles(newContainer, DEFAULT_TEST_DB);
+        ExecResult roles = runDatabaseRoles(newContainer, DEFAULT_TEST_DB, newContainer.getUsername());
+        if (roles.getExitCode() != 0) {
+            throw new IllegalStateException("database-roles.sql failed: " + roles.getStderr());
+        }
         grantTestFixtures(newContainer);
         LOGGER.info(
                 "Started PostgreSQL Testcontainer: jdbcUrl={}, username={}, database={}",

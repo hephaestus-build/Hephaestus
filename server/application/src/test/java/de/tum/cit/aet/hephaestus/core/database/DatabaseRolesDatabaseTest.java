@@ -9,6 +9,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -130,6 +131,155 @@ class DatabaseRolesDatabaseTest {
         // The owner migrates it from now on: Liquibase writes its history and lock tables as the owner.
         PostgreSQLTestContainer.migrateDatabase(PostgreSQLTestContainer.asOwner(database), "dev,prod");
         assertApplicationWorks(database);
+    }
+
+    /** The bundled image preloads pg_stat_statements, which records each utility statement for pg_monitor. */
+    @Test
+    void shouldKeepThePasswordsOutOfTheStatementStatisticsAndTheLogWhenTheRolesAreSetUp() throws SQLException {
+        String canary = "canary-" + UUID.randomUUID();
+        try (Connection connection = connect(INSTALLED)) {
+            var asAdministrator = jdbc(connection);
+            asAdministrator.execute("CREATE SCHEMA IF NOT EXISTS monitoring");
+            asAdministrator.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring");
+            asAdministrator.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'roles_monitor') THEN
+                            CREATE ROLE roles_monitor LOGIN IN ROLE pg_monitor;
+                        END IF;
+                    END $$""");
+            asAdministrator.execute("GRANT USAGE ON SCHEMA monitoring TO roles_monitor");
+            // Without the file's settings, the statistics keep a password in plain text.
+            asAdministrator.execute("ALTER ROLE roles_monitor PASSWORD '" + canary + "'");
+        }
+
+        PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_roles_installed");
+
+        TestDatabase monitor = new TestDatabase(INSTALLED.jdbcUrl(), "roles_monitor", canary);
+        try (Connection connection = connect(monitor)) {
+            var asMonitor = jdbc(connection);
+            String recorded = "SELECT count(*) FROM monitoring.pg_stat_statements WHERE strpos(query, ?) > 0";
+            assertThat(asMonitor.queryForObject(recorded, Long.class, canary)).isPositive();
+            for (String password : List.of(
+                    PostgreSQLTestContainer.asOwner(INSTALLED).password(),
+                    PostgreSQLTestContainer.asApplication(INSTALLED).password())) {
+                assertThat(asMonitor.queryForObject(recorded, Long.class, password))
+                        .isZero();
+                assertThat(PostgreSQLTestContainer.getLogs()).doesNotContain(password);
+            }
+        }
+    }
+
+    /** A managed PostgreSQL service gives an administrator with CREATEROLE and CREATEDB, no superuser. */
+    @Test
+    void shouldSetUpTheRolesWhenTheAdministratorIsNoSuperuser() throws SQLException {
+        String administrator = "roles_managed_admin";
+        try (Connection connection = connect(INSTALLED)) {
+            var asSuperuser = jdbc(connection);
+            asSuperuser.execute("""
+                    DO $$ BEGIN
+                        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'roles_managed_admin') THEN
+                            CREATE ROLE roles_managed_admin LOGIN CREATEROLE CREATEDB;
+                        END IF;
+                    END $$""");
+            asSuperuser.execute("ALTER ROLE roles_managed_admin PASSWORD 'managed'");
+            // As if it had created both roles: CREATE ROLE gives its creator the ADMIN option alone.
+            asSuperuser.execute("GRANT hephaestus_owner, hephaestus_app TO roles_managed_admin"
+                    + " WITH ADMIN TRUE, INHERIT FALSE, SET FALSE");
+            asSuperuser.execute("REVOKE SET ON PARAMETER pg_stat_statements.track_utility, log_statement"
+                    + " FROM roles_managed_admin");
+        }
+        TestDatabase postgres = new TestDatabase(
+                INSTALLED.jdbcUrl().replace("hephaestus_roles_installed", "postgres"), administrator, "managed");
+        try (Connection connection = connect(postgres)) {
+            jdbc(connection).execute("CREATE DATABASE hephaestus_roles_managed");
+        }
+
+        // It may not turn off the statement statistics, which would then keep the passwords: the file stops.
+        var refused = PostgreSQLTestContainer.runDatabaseRolesAs("hephaestus_roles_managed", administrator);
+        assertThat(refused.getExitCode()).isNotZero();
+        assertThat(refused.getStderr()).contains("pg_stat_statements.track_utility is on");
+
+        try (Connection connection = connect(INSTALLED)) {
+            jdbc(connection)
+                    .execute("GRANT SET ON PARAMETER pg_stat_statements.track_utility, log_statement"
+                            + " TO roles_managed_admin");
+        }
+        var result = PostgreSQLTestContainer.runDatabaseRolesAs("hephaestus_roles_managed", administrator);
+        assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+
+        TestDatabase database = new TestDatabase(
+                INSTALLED.jdbcUrl().replace("hephaestus_roles_installed", "hephaestus_roles_managed"),
+                administrator,
+                "managed");
+        PostgreSQLTestContainer.migrateDatabase(PostgreSQLTestContainer.asOwner(database), "dev,prod");
+        try (Connection connection = connect(database)) {
+            assertThat(jdbc(connection)
+                            .queryForObject(
+                                    "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = current_database()",
+                                    String.class))
+                    .isEqualTo(PostgreSQLTestContainer.OWNER_USER);
+        }
+        assertApplicationWorks(database);
+    }
+
+    @Test
+    void shouldStopWhenARoleHasAnAttributeThatEscapesAGrant() throws SQLException {
+        try (Connection connection = connect(INSTALLED)) {
+            var asSuperuser = jdbc(connection);
+            asSuperuser.execute("ALTER ROLE hephaestus_app BYPASSRLS");
+            try {
+                assertThatThrownBy(() -> PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_roles_installed"))
+                        .hasMessageContaining("must not be superusers, bypass row-level security");
+            } finally {
+                asSuperuser.execute("ALTER ROLE hephaestus_app NOBYPASSRLS");
+            }
+        }
+    }
+
+    /** A database created before PostgreSQL 15 keeps public owned by the bootstrap superuser, and PUBLIC's CREATE. */
+    @Test
+    void shouldTakeCreateInPublicFromEveryRoleButTheOwnerWhenTheDatabaseIsOlderThanPostgresql15() throws SQLException {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_roles_upgraded");
+        try (Connection connection = connect(database)) {
+            var asSuperuser = jdbc(connection);
+            asSuperuser.execute("ALTER SCHEMA public OWNER TO " + database.username());
+            asSuperuser.execute("GRANT CREATE ON SCHEMA public TO PUBLIC");
+        }
+
+        PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_roles_upgraded");
+
+        try (Connection connection = connect(database)) {
+            assertThat(jdbc(connection).queryForList("""
+                                    SELECT has_schema_privilege('hephaestus_app', 'public', 'CREATE') AS app,
+                                           has_schema_privilege('hephaestus_owner', 'public', 'CREATE') AS owner""").getFirst().values()).containsExactly(false, true);
+        }
+        // The owner migrates into public, and the application role still cannot create there.
+        PostgreSQLTestContainer.migrateDatabase(PostgreSQLTestContainer.asOwner(database), "dev,prod");
+        try (Connection connection = connect(PostgreSQLTestContainer.asApplication(database))) {
+            assertThatThrownBy(() -> jdbc(connection).execute("CREATE TABLE public.role_probe (id bigint)"))
+                    .rootCause()
+                    .isInstanceOfSatisfying(
+                            SQLException.class,
+                            refused -> assertThat(refused.getSQLState()).isEqualTo("42501"));
+        }
+    }
+
+    /** The migrations never update an extension, and the administrator may own one, as before 1.0. */
+    @Test
+    void shouldUpdateAnExtensionToTheVersionOfTheImageWhenTheRolesAreSetUp() throws SQLException {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_roles_extension");
+        try (Connection connection = connect(database)) {
+            jdbc(connection).execute("CREATE EXTENSION citext VERSION '1.6'");
+        }
+
+        PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_roles_extension");
+
+        try (Connection connection = connect(database)) {
+            assertThat(jdbc(connection).queryForObject("""
+                                    SELECT e.extversion = a.default_version
+                                    FROM pg_extension e JOIN pg_available_extensions a ON a.name = e.extname
+                                    WHERE e.extname = 'citext'""", Boolean.class)).isTrue();
+        }
     }
 
     private static void assertApplicationWorks(TestDatabase database) throws SQLException {

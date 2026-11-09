@@ -3367,6 +3367,8 @@ await test("each database purpose logs in with its own role, and no Hephaestus p
 	const script = String(list(get(roles, "command")).at(-1));
 	const file = readFileSync(path.join(chart, "files", "database-roles.sql"), "utf8").trimEnd();
 	assert.ok(script.includes(file), "the init container runs files/database-roles.sql");
+	// The file reads the passwords from the environment: neither reaches the command line.
+	assert.doesNotMatch(script, /-v (?:owner|app)_password/u);
 	const postgresql = workload(bundledRelease, "postgresql");
 	assert.ok(postgresql, "postgresql");
 	assert.deepEqual(secretKeysOf(container(postgresql)), [
@@ -4394,6 +4396,16 @@ await test("the PostgreSQL exporter runs apart from the database, and its role J
 		/ALTER ROLE hephaestus_monitor WITH LOGIN NOSUPERUSER .* PASSWORD :'password';/u,
 	);
 	assert.match(script, /CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring;/u);
+	// The password stays off the command line, out of the statement statistics and out of the server log.
+	assert.doesNotMatch(script, /-v password/u);
+	assert.match(script, /^\\getenv password DATABASE_MONITOR_PASSWORD$/mu);
+	const quiet = script.indexOf("SET pg_stat_statements.track_utility = off;");
+	assert.ok(
+		quiet !== -1 && quiet < script.indexOf("PASSWORD :'password'"),
+		"the settings come first",
+	);
+	assert.match(script, /^SET log_statement = 'none';$/mu);
+	assert.match(script, /^SET log_min_error_statement = 'panic';$/mu);
 	assert.deepEqual(postgresqlPeers(on).slice(-2), ["postgresql-exporter", "postgresql-monitor"]);
 
 	// An external PostgreSQL is the operator's to prepare: the exporter reads it, and no Job runs.
