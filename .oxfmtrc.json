@@ -35,6 +35,7 @@
 		".agents/skills/**",
 		"scripts/feedback-eval/**/*.json",
 		"docker/agents/pi/package.json",
-		"deploy/chart/**/templates/**"
+		"deploy/chart/**/templates/**",
+		"deploy/platform/k3s-agent-sandbox.yaml"
 	]
 }

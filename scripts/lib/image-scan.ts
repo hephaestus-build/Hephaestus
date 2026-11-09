@@ -91,7 +91,7 @@ export function isImageIndex(raw: unknown): boolean {
 }
 
 /** The digest of the manifest `reference` names, which for an index is the index itself. */
-async function manifestDigest(reference: string, signal: AbortSignal): Promise<string> {
+export async function manifestDigest(reference: string, signal: AbortSignal): Promise<string> {
 	const inspected = await output(
 		"docker",
 		["buildx", "imagetools", "inspect", "--format", "{{.Manifest.Digest}}", reference],

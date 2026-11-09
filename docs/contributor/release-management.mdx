@@ -177,9 +177,38 @@ The packer refuses any other name, because the bundle unpacks into the installer
 A dispatch of `release-host-smoke.yml` needs a release that has the bundle.
 Releases before the bundle cannot be smoked again that way.
 
-`deploy/platform/k3s-platform.yaml` holds every platform pin: k3s, Traefik, and cert-manager.
+### Platform pins
+
+`deploy/platform/k3s-platform.yaml` holds the pins of k3s, Traefik, and cert-manager.
 k3s brings the Gateway API definitions with its bundled `gateway-api-crd` chart.
 The clusters of `ci-kubernetes.yml` run no cert-manager: only the k3s smoke tests that pin.
+
+`deploy/platform/k3s-agent-sandbox.yaml` holds the pin of the agent-sandbox controller.
+Upstream publishes the controller as a release manifest, `sandbox-with-extensions.yaml`, and not as a chart.
+The file is that manifest with four changes to the controller's Deployment:
+
+- The image names the digest of its multi-platform index.
+- `priorityClassName: system-cluster-critical`, as Traefik and cert-manager have, so that no role of the release preempts it.
+- Requests and a memory limit, so that it is not the first Pod that the kubelet evicts.
+- A restricted `securityContext`. The image runs as a non-root user, and upstream states no context.
+
+The clusters of `ci-kubernetes.yml` apply the same file in `prepare`, and the one-host installer gives it to k3s.
+Renovate opens a pull request in the one-host platform group when agent-sandbox publishes a release.
+
+To upgrade the controller:
+
+1. Read the release notes of each agent-sandbox release after the pinned one.
+   Do the steps of each "Action Required" item that applies to the controller, the CRDs, or a `SandboxTemplate`.
+2. Download `sandbox-with-extensions.yaml` of the new release, and record its SHA-256.
+3. Resolve the digest of the image index of `registry.k8s.io/agent-sandbox/agent-sandbox-controller:<version>`.
+4. Replace the manifest below the header of `k3s-agent-sandbox.yaml` with the new one.
+   Make the four changes again, and write the new version and SHA-256 on the `pin: agent-sandbox` line.
+5. Run `node scripts/scan-platform-images.ts --check-pins`.
+   It downloads the release manifest and checks its SHA-256, and it refuses any other change to it.
+   It also checks that the digest is the image index of the release tag.
+
+The upgrade issues of agent-sandbox 1.0 ([#2122](https://github.com/kubernetes-sigs/agent-sandbox/issues/2122), [#2123](https://github.com/kubernetes-sigs/agent-sandbox/issues/2123)) apply only to an upgrade from a `v0.x` release.
+Hephaestus started at `v1.0.10`, so no installation has `v1alpha1` objects or a conversion webhook to remove.
 
 A pull request that can change fresh-installation bindings runs the Kubernetes cluster qualification.
 It starts the chart with that run's images, waits for every role and isolation probe, and checks HTTPS through the Gateway.

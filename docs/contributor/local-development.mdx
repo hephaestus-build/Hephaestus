@@ -518,6 +518,11 @@ Give both again to change the app, or `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` alone t
 `vp run dev:kubernetes:reset` removes the app with the cluster.
 Every `kubectl` and `helm` call of the command uses the cluster `k3d-hephaestus`, whatever your current context is.
 
+Each run applies the agent-sandbox controller of its checkout's `deploy/platform/k3s-agent-sandbox.yaml`.
+The controller and its resource definitions are cluster-wide.
+Thus, a checkout with an older pin downgrades them for every worktree.
+They stay downgraded until a checkout with the newer pin runs again.
+
 | Command | Does |
 |---|---|
 | `vp run dev:kubernetes:down` | Drains the qualification workers and removes that release and its sandbox namespace. Keeps the shared cluster, host-loop namespaces, database volumes, Secrets and CA. The next `dev:kubernetes` installs the release again. |

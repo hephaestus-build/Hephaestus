@@ -206,11 +206,14 @@
 		},
 		{
 			"description": "Platform updates keep chart, image, and installer pins consistent under human review",
-			"matchFileNames": ["deploy/platform/k3s-platform.yaml"],
+			"matchFileNames": [
+				"deploy/platform/k3s-platform.yaml",
+				"deploy/platform/k3s-agent-sandbox.yaml"
+			],
 			"dependencyDashboardApproval": true,
 			"groupName": "one-host platform",
 			"prBodyNotes": [
-				"Review chart and image versions together. For a k3s update, independently verify and update the installer SHA-256 on the pin line. Run the Platform pins check and the platform tests on the update branch. Review the rescan before merge."
+				"Review chart and image versions together. For a k3s update, independently verify and update the installer SHA-256 on the pin line. Run the Platform pins check and the platform tests on the update branch. Review the rescan before merge. For an agent-sandbox update, replace the manifest as docs/contributor/release-management.mdx § Platform pins describes."
 			]
 		}
 	],
@@ -360,6 +363,15 @@
 			"datasourceTemplate": "github-releases",
 			"extractVersionTemplate": "^v(?<version>.*)$",
 			"versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\+k3s(?<build>\\d+)$"
+		},
+		{
+			"description": "Track the agent-sandbox controller release",
+			"customType": "regex",
+			"managerFilePatterns": ["/^deploy/platform/k3s-agent-sandbox\\.yaml$/"],
+			"matchStrings": ["# pin: agent-sandbox v(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+) "],
+			"depNameTemplate": "kubernetes-sigs/agent-sandbox",
+			"datasourceTemplate": "github-releases",
+			"extractVersionTemplate": "^v(?<version>.*)$"
 		}
 	],
 	"vulnerabilityAlerts": {

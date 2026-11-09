@@ -6,14 +6,18 @@ import { test } from "node:test";
 import { asRecord } from "./lib/json.ts";
 
 import {
+	agentSandboxPin,
 	bundledSubjects,
 	platformPins,
 	renderedSubjects,
 	sarifForCategory,
+	verifyAgentSandbox,
+	verifyIndexDigest,
 	verifyInstaller,
 } from "./scan-platform-images.ts";
 
 const source = await readFile("deploy/platform/k3s-platform.yaml", "utf8");
+const agentSandbox = await readFile("deploy/platform/k3s-agent-sandbox.yaml", "utf8");
 
 void test("the platform rescan reads every add-on digest and the installed k3s version", () => {
 	const { subjects, version } = platformPins(source);
@@ -104,4 +108,65 @@ void test("an added Pod image without a digest cannot escape the chart-to-scan c
 		() => renderedSubjects(render("registry.example/controller:v1")),
 		/without an immutable digest/u,
 	);
+});
+
+void test("the agent-sandbox pin names its release, its manifest checksum and one immutable image", () => {
+	const { version, manifestSha256, subject } = agentSandboxPin(agentSandbox);
+	assert.match(version, /^v\d+\.\d+\.\d+$/u);
+	assert.match(manifestSha256, /^[a-f0-9]{64}$/u);
+	assert.equal(subject.image, "agent-sandbox-controller");
+	assert.match(
+		subject.reference,
+		/^registry\.k8s\.io\/agent-sandbox\/agent-sandbox-controller@sha256:[a-f0-9]{64}$/u,
+	);
+	assert.throws(
+		() => agentSandboxPin(agentSandbox.replace(/^# pin: agent-sandbox .*$/mu, "")),
+		/pin agent-sandbox/u,
+	);
+	assert.throws(
+		() => agentSandboxPin(agentSandbox.replace(/@sha256:[a-f0-9]{64}/u, "")),
+		/immutable digest/u,
+	);
+});
+
+/** A controller Deployment with extra pod spec lines, for the manifest comparison. */
+const deployment = (extra: string, image: string) =>
+	[
+		"apiVersion: apps/v1",
+		"kind: Deployment",
+		"metadata: { name: agent-sandbox-controller }",
+		"spec:",
+		"  template:",
+		"    spec:",
+		extra,
+		"      containers:",
+		`      - { name: c, image: ${image}, args: [--extensions] }`,
+		"",
+	].join("\n");
+
+void test("the platform's agent-sandbox manifest may differ from its release only in the stated fields", () => {
+	const upstream = Buffer.from(deployment("", "registry.k8s.io/x:v1"));
+	const pin = `# pin: agent-sandbox v1.0.0 ${createHash("sha256").update(upstream).digest("hex")}\n`;
+	const local = (extra: string) =>
+		pin + deployment(extra, `registry.k8s.io/x:v1@sha256:${"a".repeat(64)}`);
+	verifyAgentSandbox(upstream, local("      priorityClassName: system-cluster-critical"));
+	assert.throws(
+		() => verifyAgentSandbox(upstream, local("      hostNetwork: true")),
+		assert.AssertionError,
+	);
+	assert.throws(
+		() => verifyAgentSandbox(Buffer.from(`${upstream.toString()}#`), local("")),
+		/checksum does not match/u,
+	);
+});
+
+void test("the controller digest must be the index that the release tag names", () => {
+	const index = { manifests: [{ platform: { os: "linux", architecture: "arm64" }, digest: "x" }] };
+	const pinned = `sha256:${"a".repeat(64)}`;
+	verifyIndexDigest(index, pinned, pinned);
+	assert.throws(
+		() => verifyIndexDigest(index, `sha256:${"b".repeat(64)}`, pinned),
+		/not the index of its release tag/u,
+	);
+	assert.throws(() => verifyIndexDigest({ layers: [] }, pinned, pinned), /no multi-platform/u);
 });
