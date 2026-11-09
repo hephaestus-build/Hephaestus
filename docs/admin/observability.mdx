@@ -485,18 +485,19 @@ To turn it on:
    When Helm can read the Secret and it lacks the key, the install stops with a message.
    Otherwise the exporter Pod waits, and its events name the missing key.
 2. With an external PostgreSQL, set up the role yourself.
-   Get `files/database-quiet.sql` and `files/database-monitor.sql` from the verified chart of the release, as [Verify the release chart](./kubernetes#verify-the-release-chart) describes.
-   Export `DATABASE_MONITOR_PASSWORD` with its value. Then run both files in one session, as an administrator, in the application's database:
+   Get `files/scram-sha-256.pl`, `files/database-quiet.sql` and `files/database-monitor.sql` from the verified chart of the release, as [Verify the release chart](./kubernetes#verify-the-release-chart) describes.
+   Export `DATABASE_MONITOR_PASSWORD` with its value. Then compute its verifier, and run both files in one session, as an administrator, in the application's database:
 
    ```bash
+   export DATABASE_MONITOR_VERIFIER="$(perl "chart-$VERSION/hephaestus/files/scram-sha-256.pl" DATABASE_MONITOR_PASSWORD)"
    psql "host=<host> dbname=hephaestus user=<administrator> sslmode=verify-full" \
      -f "chart-$VERSION/hephaestus/files/database-quiet.sql" \
      -f "chart-$VERSION/hephaestus/files/database-monitor.sql"
    ```
 
-   `database-monitor.sql` reads the password from the environment.
+   `database-monitor.sql` reads only the verifier, so no password reaches the server.
    It creates `hephaestus_monitor` in `pg_monitor`, the schema `monitoring` and the extension `pg_stat_statements` in it.
-   `database-quiet.sql` keeps the password out of the statement statistics and the server log, and the run stops at the first error.
+   `database-quiet.sql` keeps the verifier out of the statement statistics and the server log, and the run stops at the first error.
 
    An administrator that is not a superuser may not change these settings.
    Set them at the service first, as [Database roles on an external PostgreSQL](./kubernetes#database-roles-on-an-external-postgresql) lists.

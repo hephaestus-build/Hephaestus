@@ -1,22 +1,29 @@
 -- The login of the PostgreSQL exporter (docs/admin/observability.mdx § Database metrics). Run it as the PostgreSQL
--- administrator, connected to the Hephaestus database, after database-quiet.sql in the same session, with the
--- password in the environment of psql, never on its command line:
+-- administrator, connected to the Hephaestus database, after database-quiet.sql in the same session. It takes the
+-- SCRAM-SHA-256 verifier of the password from the environment of psql, never the password:
 --
---   DATABASE_MONITOR_PASSWORD=… psql -f database-quiet.sql -f database-monitor.sql
+--   export DATABASE_MONITOR_VERIFIER="$(perl scram-sha-256.pl DATABASE_MONITOR_PASSWORD)"
+--   psql -f database-quiet.sql -f database-monitor.sql
 --
 -- hephaestus_monitor is a member of pg_monitor only. The server must preload pg_stat_statements. The extension goes
 -- in a schema of its own, so the application's schema stays unchanged. Each statement is idempotent, and the
--- password is set each time.
+-- verifier is set each time.
 \set ON_ERROR_STOP on
 \if :{?hephaestus_quiet}
 \else
-DO $$ BEGIN RAISE EXCEPTION 'database-monitor.sql sets a password: run database-quiet.sql first, in the same psql session'; END $$;
+DO $$ BEGIN RAISE EXCEPTION 'database-monitor.sql sets a verifier: run database-quiet.sql first, in the same psql session'; END $$;
 \endif
 
-\getenv monitor_password DATABASE_MONITOR_PASSWORD
-\if :{?monitor_password}
+\getenv monitor_verifier DATABASE_MONITOR_VERIFIER
+\if :{?monitor_verifier}
 \else
-DO $$ BEGIN RAISE EXCEPTION 'database-monitor.sql needs DATABASE_MONITOR_PASSWORD in the environment of psql'; END $$;
+DO $$ BEGIN RAISE EXCEPTION 'database-monitor.sql needs DATABASE_MONITOR_VERIFIER in the environment of psql, from scram-sha-256.pl'; END $$;
+\endif
+-- PostgreSQL stores any other value as a password, which it then hashes itself: only a verifier may pass.
+SELECT :'monitor_verifier' ~ '^SCRAM-SHA-256\$[0-9]+:[A-Za-z0-9+/]+=*\$[A-Za-z0-9+/]+=*:[A-Za-z0-9+/]+=*$' AS hephaestus_verifier \gset
+\if :hephaestus_verifier
+\else
+DO $$ BEGIN RAISE EXCEPTION 'database-monitor.sql takes a SCRAM-SHA-256 verifier, never a password: compute it with scram-sha-256.pl'; END $$;
 \endif
 
 SELECT 'CREATE ROLE hephaestus_monitor' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hephaestus_monitor') \gexec
@@ -29,7 +36,7 @@ BEGIN
     END IF;
 END
 $$;
-ALTER ROLE hephaestus_monitor WITH LOGIN CONNECTION LIMIT 2 PASSWORD :'monitor_password';
+ALTER ROLE hephaestus_monitor WITH LOGIN CONNECTION LIMIT 2 PASSWORD :'monitor_verifier';
 GRANT pg_monitor TO hephaestus_monitor;
 CREATE SCHEMA IF NOT EXISTS monitoring;
 GRANT USAGE ON SCHEMA monitoring TO hephaestus_monitor;

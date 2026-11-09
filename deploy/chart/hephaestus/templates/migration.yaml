@@ -61,8 +61,15 @@ spec:
           command:
             - sh
             - -ec
-            # The file reads both passwords from the environment, never from the command line.
+            # No password reaches the server or a command line: scram-sha-256.pl reads each one from the
+            # environment and prints its SCRAM verifier, which is all that psql sends.
             - |
+              cat > /tmp/scram-sha-256.pl <<'PERL'
+              {{- .Files.Get "files/scram-sha-256.pl" | nindent 14 }}
+              PERL
+              DATABASE_OWNER_VERIFIER="$(perl /tmp/scram-sha-256.pl DATABASE_OWNER_PASSWORD)"
+              DATABASE_APP_VERIFIER="$(perl /tmp/scram-sha-256.pl DATABASE_APP_PASSWORD)"
+              export DATABASE_OWNER_VERIFIER DATABASE_APP_VERIFIER
               psql --no-psqlrc <<'SQL'
               {{- .Files.Get "files/database-quiet.sql" | nindent 14 }}
               {{- .Files.Get "files/database-roles.sql" | nindent 14 }}

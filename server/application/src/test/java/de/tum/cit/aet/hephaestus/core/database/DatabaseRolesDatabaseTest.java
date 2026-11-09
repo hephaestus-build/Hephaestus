@@ -8,8 +8,10 @@ import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
@@ -181,35 +183,153 @@ class DatabaseRolesDatabaseTest {
         }
     }
 
-    /** pgBadger and similar tools read a log of every statement, with its duration. */
+    /**
+     * The root of the fix: psql sends only SCRAM verifiers. With every setting that records a statement turned on and
+     * without the quiet settings, no plaintext password reaches the log, the statement statistics or a command line.
+     */
     @Test
-    void shouldKeepThePasswordsOutOfALogOfEveryStatementWhenTheRolesAreSetUp() throws SQLException {
+    void shouldSendNoPlaintextPasswordWhenEveryRecordIsOnAndTheQuietSettingsAreSkipped() throws SQLException {
+        String commandLines = "/tmp/command-lines-" + UUID.randomUUID();
         String canary = "canary-" + UUID.randomUUID();
-        String administrator = PostgreSQLTestContainer.administrator().username();
+        Map<String, String> passwords = rolePasswords();
         try (Connection connection = connect(INSTALLED)) {
-            var asAdministrator = jdbc(connection);
-            asAdministrator.execute("""
-                    DO $$ BEGIN
-                        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'roles_log_canary') THEN
-                            CREATE ROLE roles_log_canary;
-                        END IF;
-                    END $$""");
-            asAdministrator.execute("ALTER ROLE " + administrator + " SET log_min_duration_statement = 0");
+            var asSuperuser = jdbc(connection);
+            recordStatements(asSuperuser);
+            recordEverything(asSuperuser, true);
             try {
-                // A session of the administrator now logs each statement it runs, with a password in plain text.
-                try (Connection logged = connect(INSTALLED)) {
-                    jdbc(logged).execute("ALTER ROLE roles_log_canary PASSWORD '" + canary + "'");
-                }
-                assertThat(PostgreSQLTestContainer.getLogs()).contains(canary);
-
-                PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_roles_installed");
+                // Skips database-quiet.sql: its marker comes from the command line instead.
+                String chart = PostgreSQLTestContainer.chartSqlScript(
+                        "hephaestus_roles_installed",
+                        PostgreSQLTestContainer.administrator().username(),
+                        passwords.keySet(),
+                        List.of("database-roles.sql"),
+                        List.of("-v", "hephaestus_quiet=true"));
+                var environment = new HashMap<>(passwords);
+                environment.put("COMMAND_LINE_CANARY", canary);
+                // PostgreSQL is the container's first process and adopts each orphan, and it restarts when one
+                // ends by a signal: the sampler stops by a flag, and the shell waits for it.
+                var result = PostgreSQLTestContainer.execShell(
+                        "( while [ ! -e " + commandLines + ".stop ]; do cat /proc/[0-9]*/cmdline 2>/dev/null"
+                                + " | tr '\\000' ' '; echo; done ) > " + commandLines + " &\n"
+                                + "sampler=$!\ntrap 'touch " + commandLines + ".stop; wait $sampler' EXIT\n"
+                                // A control: a command line that does hold a secret, which the sampler must see.
+                                + "sh -c 'sleep 0.5' \"$COMMAND_LINE_CANARY\"\n"
+                                + chart,
+                        environment);
+                assertThat(result.getExitCode()).as(result.getStderr()).isZero();
             } finally {
-                asAdministrator.execute("ALTER ROLE " + administrator + " RESET log_min_duration_statement");
+                recordEverything(asSuperuser, false);
+            }
+            String sampled = PostgreSQLTestContainer.execShell("cat " + commandLines, Map.of())
+                    .getStdout();
+            assertThat(sampled).as("the sampler saw the control").contains(canary);
+            String logs = PostgreSQLTestContainer.getLogs();
+            // The log and the statistics hold the statements, with the verifiers that the run set.
+            for (String role : List.of("hephaestus_owner", "hephaestus_app")) {
+                String verifier = verifierOf(asSuperuser, role);
+                assertThat(verifier).startsWith("SCRAM-SHA-256$4096:");
+                assertThat(logs).contains(verifier);
+            }
+            for (String password : passwords.values()) {
+                assertThat(logs).doesNotContain(password);
+                assertThat(recorded(asSuperuser, password)).isZero();
+                assertThat(sampled).doesNotContain(password);
             }
         }
-        assertThat(PostgreSQLTestContainer.getLogs())
-                .doesNotContain(PostgreSQLTestContainer.asOwner(INSTALLED).password())
-                .doesNotContain(PostgreSQLTestContainer.asApplication(INSTALLED).password());
+    }
+
+    /** Defense in depth: with the quiet settings, not even a verifier reaches a record. */
+    @Test
+    void shouldRecordNoVerifierWhenEveryRecordIsOnAndTheQuietSettingsRun() throws SQLException {
+        try (Connection connection = connect(INSTALLED)) {
+            var asSuperuser = jdbc(connection);
+            recordStatements(asSuperuser);
+            recordEverything(asSuperuser, true);
+            try {
+                PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_roles_installed");
+            } finally {
+                recordEverything(asSuperuser, false);
+            }
+            String logs = PostgreSQLTestContainer.getLogs();
+            for (String role : List.of("hephaestus_owner", "hephaestus_app")) {
+                String verifier = verifierOf(asSuperuser, role);
+                assertThat(logs).doesNotContain(verifier);
+                assertThat(recorded(asSuperuser, verifier)).isZero();
+            }
+            for (String password : rolePasswords().values()) {
+                assertThat(logs).doesNotContain(password);
+                assertThat(recorded(asSuperuser, password)).isZero();
+            }
+        }
+    }
+
+    @Test
+    void shouldLetEachRoleSignInWithItsPasswordOverScramWhenOnlyItsVerifierWasSent() throws SQLException {
+        String monitorPassword = "monitor-" + UUID.randomUUID();
+        String before;
+        try (Connection connection = connect(INSTALLED)) {
+            before = verifierOf(jdbc(connection), "hephaestus_owner");
+        }
+        PostgreSQLTestContainer.applyDatabaseRoles("hephaestus_roles_installed");
+        var monitor = PostgreSQLTestContainer.runChartSqlAs(
+                "hephaestus_roles_installed",
+                PostgreSQLTestContainer.administrator().username(),
+                Map.of("DATABASE_MONITOR_PASSWORD", monitorPassword),
+                List.of("database-quiet.sql", "database-monitor.sql"));
+        assertThat(monitor.getExitCode()).as(monitor.getStderr()).isZero();
+
+        try (Connection connection = connect(INSTALLED)) {
+            var asSuperuser = jdbc(connection);
+            // Each run draws a new salt, as PostgreSQL itself does.
+            assertThat(verifierOf(asSuperuser, "hephaestus_owner")).isNotEqualTo(before);
+            for (String role : List.of("hephaestus_owner", "hephaestus_app", "hephaestus_monitor")) {
+                assertThat(verifierOf(asSuperuser, role)).startsWith("SCRAM-SHA-256$4096:");
+            }
+        }
+        for (TestDatabase login : List.of(
+                PostgreSQLTestContainer.asOwner(INSTALLED),
+                PostgreSQLTestContainer.asApplication(INSTALLED),
+                new TestDatabase(INSTALLED.jdbcUrl(), "hephaestus_monitor", monitorPassword))) {
+            try (Connection connection = connect(login)) {
+                assertThat(jdbc(connection).queryForObject("SELECT current_user", String.class))
+                        .isEqualTo(login.username());
+            }
+            assertThatThrownBy(() -> connect(new TestDatabase(login.jdbcUrl(), login.username(), "wrong")))
+                    .isInstanceOfSatisfying(
+                            SQLException.class,
+                            refused -> assertThat(refused.getSQLState()).isEqualTo("28P01"));
+        }
+    }
+
+    private static Map<String, String> rolePasswords() {
+        return Map.of(
+                "DATABASE_OWNER_PASSWORD",
+                        PostgreSQLTestContainer.asOwner(INSTALLED).password(),
+                "DATABASE_APP_PASSWORD",
+                        PostgreSQLTestContainer.asApplication(INSTALLED).password());
+    }
+
+    /** Every setting that writes a statement to the log or the statistics, for each new session of the superuser. */
+    private static void recordEverything(JdbcTemplate asSuperuser, boolean on) {
+        String role = PostgreSQLTestContainer.administrator().username();
+        Map<String, String> settings = Map.of(
+                "log_statement", "all",
+                "log_min_duration_statement", "0",
+                "log_transaction_sample_rate", "1",
+                "debug_print_parse", "on",
+                "debug_print_rewritten", "on",
+                "pg_stat_statements.track_utility", "on");
+        for (var setting : settings.entrySet()) {
+            asSuperuser.execute(
+                    on
+                            ? "ALTER ROLE " + role + " SET " + setting.getKey() + " = '" + setting.getValue() + "'"
+                            : "ALTER ROLE " + role + " RESET " + setting.getKey());
+        }
+    }
+
+    private static String verifierOf(JdbcTemplate asSuperuser, String role) {
+        return Objects.requireNonNull(
+                asSuperuser.queryForObject("SELECT rolpassword FROM pg_authid WHERE rolname = ?", String.class, role));
     }
 
     /** A managed PostgreSQL service gives an administrator with CREATEROLE and CREATEDB, no superuser. */

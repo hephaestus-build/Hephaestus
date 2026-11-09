@@ -98,10 +98,16 @@ spec:
           command:
             - sh
             - -ec
-            # files/database-monitor.sql, after files/database-quiet.sql in the same session: psql reads the
-            # password from the environment, and it reaches neither the statement statistics nor the server log.
+            # files/database-monitor.sql, after files/database-quiet.sql in the same session. No password reaches
+            # the server or a command line: scram-sha-256.pl reads it from the environment and prints its SCRAM
+            # verifier, which is all that psql sends.
             - |
               until pg_isready --quiet; do sleep 2; done
+              cat > /tmp/scram-sha-256.pl <<'PERL'
+              {{- .Files.Get "files/scram-sha-256.pl" | nindent 14 }}
+              PERL
+              DATABASE_MONITOR_VERIFIER="$(perl /tmp/scram-sha-256.pl DATABASE_MONITOR_PASSWORD)"
+              export DATABASE_MONITOR_VERIFIER
               psql --no-psqlrc <<'SQL'
               {{- .Files.Get "files/database-quiet.sql" | nindent 14 }}
               {{- .Files.Get "files/database-monitor.sql" | nindent 14 }}

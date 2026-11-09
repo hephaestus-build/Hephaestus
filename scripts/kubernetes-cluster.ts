@@ -637,13 +637,26 @@ async function chartFile(file: string): Promise<string> {
 
 /**
  * The operator's step for an external PostgreSQL: the chart's roles, as docs/admin/kubernetes.mdx § Database roles
- * runs them. The passwords travel on standard input into the environment of psql, which the file reads, never in an
- * argument list.
+ * runs them. The passwords travel on standard input, never in an argument list.
  */
 async function externalDatabaseRoles(data: Readonly<Record<string, string>>): Promise<void> {
 	const owner = data.DATABASE_OWNER_PASSWORD ?? "";
 	const app = data.DATABASE_APP_PASSWORD ?? "";
-	const script = `${await chartFile("database-quiet.sql")}\n${await chartFile("database-roles.sql")}`;
+	// As the operator runs them: the passwords stay in the shell's environment, and psql sends only their verifiers.
+	const shell = [
+		`export DATABASE_OWNER_PASSWORD='${owner}' DATABASE_APP_PASSWORD='${app}'`,
+		"cat > /tmp/scram-sha-256.pl <<'PERL'",
+		await chartFile("scram-sha-256.pl"),
+		"PERL",
+		'DATABASE_OWNER_VERIFIER="$(perl /tmp/scram-sha-256.pl DATABASE_OWNER_PASSWORD)"',
+		'DATABASE_APP_VERIFIER="$(perl /tmp/scram-sha-256.pl DATABASE_APP_PASSWORD)"',
+		"export DATABASE_OWNER_VERIFIER DATABASE_APP_VERIFIER",
+		"psql --no-psqlrc --quiet -U hephaestus -d hephaestus <<'SQL'",
+		await chartFile("database-quiet.sql"),
+		await chartFile("database-roles.sql"),
+		"SQL",
+		"",
+	].join("\n");
 	await kubectl(
 		[
 			"-n",
@@ -654,15 +667,10 @@ async function externalDatabaseRoles(data: Readonly<Record<string, string>>): Pr
 			"-c",
 			"postgresql",
 			"--",
-			"psql",
-			"--no-psqlrc",
-			"--quiet",
-			"-U",
-			"hephaestus",
-			"-d",
-			"hephaestus",
+			"sh",
+			"-es",
 		],
-		`\\setenv DATABASE_OWNER_PASSWORD '${owner}'\n\\setenv DATABASE_APP_PASSWORD '${app}'\n${script}`,
+		shell,
 	);
 }
 

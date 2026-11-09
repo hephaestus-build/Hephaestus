@@ -46,7 +46,7 @@ The steps use the namespace `hephaestus` and the Secret `hephaestus-app`.
 7. With an external PostgreSQL, remove the old login when nothing else uses it.
 
 If you start the application image outside the chart, give the migrate run mode the login of `hephaestus_owner`, and the server and worker the login of `hephaestus_app`.
-Run `files/database-quiet.sql` and then `files/database-roles.sql` in one `psql` session, as the administrator, before each migration that changes a password.
+Before each migration that changes a password, compute the verifiers with `files/scram-sha-256.pl`. Then run `files/database-quiet.sql` and `files/database-roles.sql` in one `psql` session, as the administrator.
 
 To go back to the previous release, put `DATABASE_USERNAME` and `DATABASE_PASSWORD` back with the administrator's values.
 The previous release logs in as the administrator again, so the moved objects need no change.

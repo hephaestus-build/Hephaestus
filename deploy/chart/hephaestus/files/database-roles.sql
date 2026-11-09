@@ -1,30 +1,38 @@
 -- The database roles of Hephaestus (docs/admin/kubernetes.mdx § Database roles). Run it as the PostgreSQL
 -- administrator, connected to the Hephaestus database, before each migration, after database-quiet.sql in the same
--- session, with both passwords in the environment of psql, never on its command line:
+-- session. It takes the SCRAM-SHA-256 verifier of each password from the environment of psql, never a password:
 --
---   DATABASE_OWNER_PASSWORD=… DATABASE_APP_PASSWORD=… psql -f database-quiet.sql -f database-roles.sql
+--   export DATABASE_OWNER_VERIFIER="$(perl scram-sha-256.pl DATABASE_OWNER_PASSWORD)"
+--   export DATABASE_APP_VERIFIER="$(perl scram-sha-256.pl DATABASE_APP_PASSWORD)"
+--   psql -f database-quiet.sql -f database-roles.sql
 --
 -- hephaestus_owner owns the database, the schema objects and runs the migration. hephaestus_app reads and writes
 -- the rows of the server and the worker, and owns nothing. Neither is a superuser, creates roles, replicates or has
 -- BYPASSRLS. As the owner of its tables, hephaestus_owner is still not held to their policies unless a table forces
 -- them. The administrator may be a superuser, or a role with CREATEROLE and CREATEDB, as a managed PostgreSQL service
--- gives. Each statement is idempotent, and the passwords are set each time, so a changed password takes effect with
+-- gives. Each statement is idempotent, and the verifiers are set each time, so a changed password takes effect with
 -- the next run.
 \set ON_ERROR_STOP on
 \if :{?hephaestus_quiet}
 \else
-DO $$ BEGIN RAISE EXCEPTION 'database-roles.sql sets passwords: run database-quiet.sql first, in the same psql session'; END $$;
+DO $$ BEGIN RAISE EXCEPTION 'database-roles.sql sets verifiers: run database-quiet.sql first, in the same psql session'; END $$;
 \endif
 
-\getenv owner_password DATABASE_OWNER_PASSWORD
-\getenv app_password DATABASE_APP_PASSWORD
-\if :{?owner_password}
+\getenv owner_verifier DATABASE_OWNER_VERIFIER
+\getenv app_verifier DATABASE_APP_VERIFIER
+\if :{?owner_verifier}
 \else
-DO $$ BEGIN RAISE EXCEPTION 'database-roles.sql needs DATABASE_OWNER_PASSWORD in the environment of psql'; END $$;
+DO $$ BEGIN RAISE EXCEPTION 'database-roles.sql needs DATABASE_OWNER_VERIFIER in the environment of psql, from scram-sha-256.pl'; END $$;
 \endif
-\if :{?app_password}
+\if :{?app_verifier}
 \else
-DO $$ BEGIN RAISE EXCEPTION 'database-roles.sql needs DATABASE_APP_PASSWORD in the environment of psql'; END $$;
+DO $$ BEGIN RAISE EXCEPTION 'database-roles.sql needs DATABASE_APP_VERIFIER in the environment of psql, from scram-sha-256.pl'; END $$;
+\endif
+-- PostgreSQL stores any other value as a password, which it then hashes itself: only a verifier may pass.
+SELECT :'owner_verifier' ~ '^SCRAM-SHA-256\$[0-9]+:[A-Za-z0-9+/]+=*\$[A-Za-z0-9+/]+=*:[A-Za-z0-9+/]+=*$' AND :'app_verifier' ~ '^SCRAM-SHA-256\$[0-9]+:[A-Za-z0-9+/]+=*\$[A-Za-z0-9+/]+=*:[A-Za-z0-9+/]+=*$' AS hephaestus_verifiers \gset
+\if :hephaestus_verifiers
+\else
+DO $$ BEGIN RAISE EXCEPTION 'database-roles.sql takes SCRAM-SHA-256 verifiers, never a password: compute them with scram-sha-256.pl'; END $$;
 \endif
 
 -- CREATE ROLE gives neither role an attribute. Only a superuser could take one away, so a role that has one stops
@@ -40,8 +48,8 @@ BEGIN
     END IF;
 END
 $$;
-ALTER ROLE hephaestus_owner WITH LOGIN PASSWORD :'owner_password';
-ALTER ROLE hephaestus_app WITH LOGIN PASSWORD :'app_password';
+ALTER ROLE hephaestus_owner WITH LOGIN PASSWORD :'owner_verifier';
+ALTER ROLE hephaestus_app WITH LOGIN PASSWORD :'app_verifier';
 
 BEGIN;
 

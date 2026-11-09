@@ -862,16 +862,28 @@ As the owner of each table, `hephaestus_owner` is not held to the row-level secu
 No table has a policy yet.
 
 The chart file `files/database-roles.sql` sets up the owner and the application role.
-The chart file `files/database-quiet.sql` runs first, in the same `psql` session.
-It turns off the settings that would record a password: `pg_stat_statements.track_utility`, `log_statement`, `log_min_duration_statement`, `log_min_duration_sample` and `log_min_error_statement`.
+No password reaches the PostgreSQL server.
+The chart script `files/scram-sha-256.pl` computes the SCRAM-SHA-256 verifier of each password, with a new salt, as `psql`'s `\password` does.
+`database-roles.sql` accepts only these verifiers.
+
+A verifier still allows an offline guess of its password.
+Thus, the chart file `files/database-quiet.sql` runs first, in the same `psql` session.
+It turns off each setting that would record a verifier:
+
+- `pg_stat_statements.track_utility`
+- `log_statement`, `log_min_duration_statement`, `log_min_duration_sample` and `log_transaction_sample_rate`
+- `debug_print_parse`, `debug_print_rewritten` and `debug_print_plan`
+- `log_min_error_statement`
+
 `database-roles.sql` does not run without it.
 Both files need `psql` 15 or later and PostgreSQL 16 or later, and they stop with a message on an older version.
+The script needs Perl 5.10 or later.
 Hephaestus itself needs PostgreSQL 18 ([Compatibility policy](./compatibility-policy#database-baseline-prerequisites)).
 
 `database-roles.sql` is idempotent:
 
-- It creates each role that does not exist and sets its password.
-  It reads both passwords from the environment of `psql`, never from its command line.
+- It creates each role that does not exist and sets its password verifier.
+  It reads both verifiers from the environment of `psql`, never from its command line.
 - It stops if either role is a superuser, bypasses row-level security, creates roles or replicates.
 - It makes `hephaestus_owner` the owner of the database.
 - It removes the right of every other role to create objects in the schema `public`. A database from before PostgreSQL 15 gives that right to all roles.
@@ -897,7 +909,7 @@ The chart never gets the administrator login of your PostgreSQL.
 Thus, you set up the roles yourself.
 Do this before the first install, after each change of their passwords, and after each update of the server's extensions.
 
-1. Get `files/database-quiet.sql` and `files/database-roles.sql` from the verified chart of the release, as [Verify the release chart](#verify-the-release-chart) describes.
+1. Get `files/scram-sha-256.pl`, `files/database-quiet.sql` and `files/database-roles.sql` from the verified chart of the release, as [Verify the release chart](#verify-the-release-chart) describes.
 2. Generate a password for each role:
 
    ```bash
@@ -905,8 +917,15 @@ Do this before the first install, after each change of their passwords, and afte
    export DATABASE_APP_PASSWORD="$(openssl rand -hex 24)"
    ```
 
-3. Run the file as an administrator of your PostgreSQL, connected to the Hephaestus database.
-   The file reads the two exported passwords:
+3. Compute the verifier of each password.
+   The script reads the password from the variable that you name, and it prints only the verifier:
+
+   ```bash
+   export DATABASE_OWNER_VERIFIER="$(perl "chart-$VERSION/hephaestus/files/scram-sha-256.pl" DATABASE_OWNER_PASSWORD)"
+   export DATABASE_APP_VERIFIER="$(perl "chart-$VERSION/hephaestus/files/scram-sha-256.pl" DATABASE_APP_PASSWORD)"
+   ```
+
+4. Run both files as an administrator of your PostgreSQL, connected to the Hephaestus database:
 
    ```bash
    psql "host=<host> dbname=hephaestus user=<administrator> sslmode=verify-full" \
@@ -914,7 +933,7 @@ Do this before the first install, after each change of their passwords, and afte
      -f "chart-$VERSION/hephaestus/files/database-roles.sql"
    ```
 
-4. Put both passwords in the Secret, as [Create the Secret](#create-the-secret) describes with `--external-database`.
+5. Put both passwords in the Secret, as [Create the Secret](#create-the-secret) describes with `--external-database`.
 
 The administrator can be a superuser or a role with `CREATEROLE` and `CREATEDB`, as a managed PostgreSQL service gives:
 
@@ -930,14 +949,16 @@ For each setting that the administrator may not change, the file checks the valu
 
 - If `pg_stat_statements.track_utility` is `on`, or `log_statement` is not `none`, the file stops.
 - If `log_min_duration_statement` or `log_min_duration_sample` is not `-1`, the file stops.
+- If `log_transaction_sample_rate` is not `0`, the file stops.
 - If `log_min_error_statement` is not `panic`, the file continues with a warning.
-  Then a statement of the run that fails writes its password to the server log.
+  Then a statement of the run that fails writes its verifier to the server log.
 
 Before you run the files, set these values for the administrator at the service:
 
 - `pg_stat_statements.track_utility = off`
 - `log_statement = none`
 - `log_min_duration_statement = -1` and `log_min_duration_sample = -1`
+- `log_transaction_sample_rate = 0`
 - `log_min_error_statement = panic`
 
 These are the roles and grants of the file:
@@ -945,8 +966,8 @@ These are the roles and grants of the file:
 ```sql
 CREATE ROLE hephaestus_owner;
 CREATE ROLE hephaestus_app;
-ALTER ROLE hephaestus_owner WITH LOGIN PASSWORD '<owner password>';
-ALTER ROLE hephaestus_app WITH LOGIN PASSWORD '<application password>';
+ALTER ROLE hephaestus_owner WITH LOGIN PASSWORD 'SCRAM-SHA-256$4096:<owner verifier>';
+ALTER ROLE hephaestus_app WITH LOGIN PASSWORD 'SCRAM-SHA-256$4096:<application verifier>';
 ALTER DATABASE hephaestus OWNER TO hephaestus_owner;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE, CREATE ON SCHEMA public TO hephaestus_owner;

@@ -1,10 +1,12 @@
--- Keeps the passwords that the next file of the same psql session sets out of the statement statistics and the
+-- Keeps the SCRAM verifiers that the next file of the same psql session sets out of the statement statistics and the
 -- server log (docs/admin/kubernetes.mdx § Database roles). Run it first, in that session:
 --
 --   psql -f database-quiet.sql -f database-roles.sql
 --
+-- No plaintext password reaches the server: scram-sha-256.pl computes each verifier before psql starts. A verifier
+-- still allows an offline guess of its password, so this file keeps it out of every record as defense in depth.
 -- database-roles.sql and database-monitor.sql refuse to run without it. A role that may not change a setting stops
--- here when the setting would record a password, and names it. It needs psql 15, for \getenv, and PostgreSQL 16, for
+-- here when the setting would record a verifier, and names it. It needs psql 15, for \getenv, and PostgreSQL 16, for
 -- the role memberships of database-roles.sql.
 \set ON_ERROR_STOP on
 
@@ -26,6 +28,8 @@ BEGIN
     FOR setting IN
         SELECT * FROM (VALUES ('pg_stat_statements.track_utility', 'off'), ('log_statement', 'none'),
                               ('log_min_duration_statement', '-1'), ('log_min_duration_sample', '-1'),
+                              ('log_transaction_sample_rate', '0'), ('debug_print_parse', 'off'),
+                              ('debug_print_rewritten', 'off'), ('debug_print_plan', 'off'),
                               ('log_min_error_statement', 'panic')) AS quiet (name, value)
     LOOP
         BEGIN
@@ -34,11 +38,11 @@ BEGIN
             IF current_setting(setting.name, true) IS NOT DISTINCT FROM setting.value THEN
                 NULL;
             ELSIF setting.name = 'log_min_error_statement' THEN
-                RAISE WARNING 'database-quiet.sql: % stays %: a failed statement of this session writes its password to the server log',
+                RAISE WARNING 'database-quiet.sql: % stays %: a failed statement of this session writes its verifier to the server log',
                     setting.name, current_setting(setting.name)
                     USING HINT = format('Set %s = %s for this role at the server to avoid this.', setting.name, setting.value);
             ELSE
-                RAISE EXCEPTION 'database-quiet.sql: % is % and % may not change it, so a password would be recorded',
+                RAISE EXCEPTION 'database-quiet.sql: % is % and % may not change it, so a verifier would be recorded',
                     setting.name, current_setting(setting.name), current_user
                     USING HINT = format('Set %s = %s for this role at the server, or grant it SET on the parameter, and run again.',
                                         setting.name, setting.value);

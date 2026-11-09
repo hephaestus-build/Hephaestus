@@ -3372,8 +3372,21 @@ await test("each database purpose logs in with its own role, and no Hephaestus p
 		script.includes(quietFile) && script.indexOf(quietFile) < script.indexOf(file),
 		"the quiet settings come first, in the same session",
 	);
-	// The file reads the passwords from the environment: neither reaches the command line.
-	assert.doesNotMatch(script, /-v (?:owner|app)_password/u);
+	assert.doesNotMatch(script, /-v (?:owner|app)_/u);
+	// psql sends only the SCRAM verifiers that the chart's script computes from the environment.
+	const scramFile = readFileSync(path.join(chart, "files", "scram-sha-256.pl"), "utf8").trimEnd();
+	assert.ok(
+		script.includes(scramFile),
+		"the init container computes the verifiers with files/scram-sha-256.pl",
+	);
+	for (const role of ["OWNER", "APP"]) {
+		assert.ok(
+			script.includes(
+				`DATABASE_${role}_VERIFIER="$(perl /tmp/scram-sha-256.pl DATABASE_${role}_PASSWORD)"`,
+			),
+			role,
+		);
+	}
 	const postgresql = workload(bundledRelease, "postgresql");
 	assert.ok(postgresql, "postgresql");
 	assert.deepEqual(secretKeysOf(container(postgresql)), [
@@ -4408,7 +4421,21 @@ await test("the PostgreSQL exporter runs apart from the database, and its role J
 	assert.doesNotMatch(script, /-v (?:monitor_)?password/u);
 	assert.match(
 		monitorFile,
-		/^ALTER ROLE hephaestus_monitor WITH LOGIN .* PASSWORD :'monitor_password';$/mu,
+		/^ALTER ROLE hephaestus_monitor WITH LOGIN .* PASSWORD :'monitor_verifier';$/mu,
+	);
+	// psql sends only the SCRAM verifier that the chart's script computes from the environment.
+	const scramFile = readFileSync(path.join(chart, "files", "scram-sha-256.pl"), "utf8").trimEnd();
+	assert.ok(
+		script.includes(scramFile),
+		"the monitor Job computes the verifier with files/scram-sha-256.pl",
+	);
+	assert.match(
+		script,
+		/^DATABASE_MONITOR_VERIFIER="\$\(perl \/tmp\/scram-sha-256\.pl DATABASE_MONITOR_PASSWORD\)"$/mu,
+	);
+	assert.ok(
+		script.indexOf("DATABASE_MONITOR_VERIFIER=") < script.indexOf("psql "),
+		"the verifier comes first",
 	);
 	assert.match(
 		monitorFile,

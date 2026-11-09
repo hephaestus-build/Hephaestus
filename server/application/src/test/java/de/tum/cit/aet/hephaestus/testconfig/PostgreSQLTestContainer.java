@@ -6,7 +6,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -54,6 +54,9 @@ public final class PostgreSQLTestContainer {
     /** The chart's SQL files, as the migration Job and the monitor Job run them. */
     private static final List<String> CHART_SQL =
             List.of("database-quiet.sql", "database-roles.sql", "database-monitor.sql");
+
+    private static final List<String> CHART_FILE_NAMES =
+            List.of("database-quiet.sql", "database-roles.sql", "database-monitor.sql", "scram-sha-256.pl");
 
     private static final String MIGRATED_TEMPLATE_DATABASE = "hephaestus_template_dev";
     private static final Pattern DATABASE_NAME = Pattern.compile("[a-z][a-z0-9_]*");
@@ -237,24 +240,65 @@ public final class PostgreSQLTestContainer {
             String administrator,
             Map<String, String> environment,
             List<String> files) {
-        var command = new ArrayList<>(
-                List.of("psql", "--no-psqlrc", "--quiet", "--username=" + administrator, "--dbname=" + database));
+        return execShell(
+                postgres, chartSqlScript(database, administrator, environment.keySet(), files, List.of()), environment);
+    }
+
+    /**
+     * The shell script that runs files of the chart's {@code files/} in one psql session, as the chart's Jobs do. It
+     * turns each {@code *_PASSWORD} variable of the environment into its {@code *_VERIFIER} with the chart's
+     * {@code scram-sha-256.pl}: psql sends only verifiers, and no command line holds a password.
+     */
+    public static String chartSqlScript(
+            String database,
+            String administrator,
+            Collection<String> environment,
+            List<String> files,
+            List<String> psqlOptions) {
+        validateDatabaseName(database);
+        validateDatabaseName(administrator);
+        var script = new StringBuilder("set -e\n");
+        for (String variable : environment.stream().sorted().toList()) {
+            if (variable.matches("DATABASE_[A-Z]+_PASSWORD")) {
+                script.append("export ")
+                        .append(variable.replace("_PASSWORD", "_VERIFIER"))
+                        .append("=\"$(perl " + CHART_FILES + "scram-sha-256.pl ")
+                        .append(variable)
+                        .append(")\"\n");
+            }
+        }
+        script.append("psql --no-psqlrc --quiet --username=")
+                .append(administrator)
+                .append(" --dbname=")
+                .append(database);
+        for (String option : psqlOptions) {
+            script.append(' ').append(option);
+        }
         for (String file : files) {
             if (!CHART_SQL.contains(file)) {
                 throw new IllegalArgumentException("Not a chart SQL file: " + file);
             }
-            command.add("--file=" + CHART_FILES + file);
+            script.append(" --file=").append(CHART_FILES).append(file);
         }
+        return script.append('\n').toString();
+    }
+
+    /** Runs a shell script in the container, with the given environment, and returns how it ended. */
+    public static synchronized ExecResult execShell(String script, Map<String, String> environment) {
+        return execShell(getInstance(), script, environment);
+    }
+
+    private static ExecResult execShell(PostgreSQLContainer postgres, String script, Map<String, String> environment) {
         try {
             return postgres.execInContainer(ExecConfig.builder()
-                    .command(command.toArray(String[]::new))
+                    .command(new String[] {"sh", "-c", script})
                     .envVars(environment)
                     .build());
         } catch (IOException exception) {
-            throw new IllegalStateException("psql could not run " + files, exception);
+            throw new IllegalStateException("The shell could not run", exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("psql was interrupted running " + files, exception);
+            throw new IllegalStateException("The shell was interrupted", exception);
         }
     }
 
@@ -290,7 +334,7 @@ public final class PostgreSQLTestContainer {
                 .withTmpFs(Map.of("/var/lib/postgresql", "rw"));
 
         newContainer.start();
-        for (String file : CHART_SQL) {
+        for (String file : CHART_FILE_NAMES) {
             newContainer.copyFileToContainer(
                     MountableFile.forHostPath(
                             Path.of(System.getProperty("basedir", "."), "../../deploy/chart/hephaestus/files", file)),
