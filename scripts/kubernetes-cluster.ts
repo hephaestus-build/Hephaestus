@@ -63,7 +63,7 @@ import { claimDevNamespace, DEV_OWNER, ownsDevNamespace } from "./lib/dev-namesp
 import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
 import { exitStatus, output, run, succeeds } from "./lib/process.ts";
 import { parseResolvedImages } from "./resolve-release-images.ts";
-import { isolationGate } from "./sandbox-isolation.ts";
+import { isolationGate, type Target } from "./sandbox-isolation.ts";
 
 const ROOT = path.join(import.meta.dirname, "..");
 const CHART = path.join(ROOT, "deploy", "chart", "hephaestus");
@@ -74,6 +74,8 @@ export const NAMESPACE = "hephaestus";
 export const SANDBOXES = "hephaestus-sandboxes";
 /** The kinds of the chart's SandboxTemplates (templates/sandbox-templates.yaml). */
 const SANDBOX_KINDS = ["review", "conversation", "action"] as const;
+/** The port of the application API on the server's and the workers' Pods. */
+const APPLICATION_PORT = 8080;
 const GATEWAY_NAMESPACE = "gateway";
 const EXTERNAL_POSTGRESQL = "external-postgresql";
 const HOST = "hephaestus.cluster.test";
@@ -1095,11 +1097,47 @@ export async function verify(): Promise<number> {
 		.map((port) => asRecord(port, "port"))
 		.find((port) => port.name === "management")?.containerPort;
 	const workerIp = asString(asRecord(worker.status, "status").podIP, "worker address");
+	// The gateway port is the only port of the server's Pods that a sandbox reaches: never the
+	// application port, by its Service or by any Pod.
+	const server = asRecord(
+		parseJson(
+			await kubectl(["-n", NAMESPACE, "get", "service", `${RELEASE}-server`, "-o", "json"]),
+		),
+		"server Service",
+	);
+	const applicationPorts: Target[] = [
+		{
+			name: "the server Service's application port",
+			host: asString(asRecord(server.spec, "spec").clusterIP, "server address"),
+			port: APPLICATION_PORT,
+			reachable: false,
+		},
+	];
+	const gatewayPorts: Target[] = [];
+	for (const component of ["server", "worker"]) {
+		for (const pod of await runningPods(component)) {
+			applicationPorts.push({
+				name: `the application port of ${component} ${pod.name}`,
+				host: pod.ip,
+				port: APPLICATION_PORT,
+				reachable: false,
+			});
+			if (component === "worker") {
+				gatewayPorts.push({
+					name: `the gateway port of worker ${pod.name}`,
+					host: pod.ip,
+					port: sandboxGateway.port,
+					reachable: true,
+				});
+			}
+		}
+	}
 	for (const kind of SANDBOX_KINDS) {
 		await isolationGate({
 			namespace: SANDBOXES,
 			template: `${RELEASE}-sandbox-${kind}`,
 			gateway: sandboxGateway,
+			reach: gatewayPorts,
 			forbid: [
 				{
 					name: "the worker's management port",
@@ -1107,13 +1145,108 @@ export async function verify(): Promise<number> {
 					port: Number(management),
 					reachable: false,
 				},
+				...applicationPorts,
 			],
 		});
 	}
+	// It opens the boundary for a minute, so only the disposable CI cluster runs it.
+	const controlled = process.env.CI === "true";
+	if (controlled) {
+		await negativeControl(sandboxGateway);
+	}
 	process.stdout.write(
-		`${workers.length} workers passed the isolation probe; the ${SANDBOX_KINDS.join(", ")} templates passed the sandbox isolation gate; every workload is ready\n`,
+		`${workers.length} workers passed the isolation probe; the ${SANDBOX_KINDS.join(", ")} templates passed the sandbox isolation gate${controlled ? ", and failed it without the sandbox namespace's policies" : ""}; every workload is ready\n`,
 	);
 	return workers.length;
+}
+
+/** The name and address of each running, not terminating Pod of one component of the release. */
+async function runningPods(component: string): Promise<{ name: string; ip: string }[]> {
+	const { items } = asRecord(
+		parseJson(
+			await kubectl([
+				"-n",
+				NAMESPACE,
+				"get",
+				"pods",
+				"-l",
+				`app.kubernetes.io/instance=${RELEASE},app.kubernetes.io/component=${component}`,
+				"-o",
+				"json",
+			]),
+		),
+		"Pod list",
+	);
+	return (Array.isArray(items) ? items : [])
+		.map((item) => asRecord(item, "Pod"))
+		.filter(
+			(pod) =>
+				asRecord(pod.metadata, "Pod metadata").deletionTimestamp === undefined &&
+				asRecord(pod.status, "Pod status").phase === "Running",
+		)
+		.map((pod) => ({
+			name: asString(asRecord(pod.metadata, "Pod metadata").name, "Pod name"),
+			ip: asString(asRecord(pod.status, "Pod status").podIP, "Pod address"),
+		}));
+}
+
+/**
+ * The gate's negative control: without the sandbox namespace's NetworkPolicies, the gate must fail,
+ * and a sandbox must reach its peer. A gate that passes without the policies proves nothing about
+ * them, as on a network plugin that does not enforce NetworkPolicy. The policies come back whatever
+ * the gate answers.
+ */
+async function negativeControl(sandboxGateway: { host: string; port: number }): Promise<void> {
+	const saved = asRecord(
+		parseJson(await kubectl(["-n", SANDBOXES, "get", "networkpolicies", "-o", "json"])),
+		"NetworkPolicy list",
+	).items;
+	const policies = (Array.isArray(saved) ? saved : []).map((item) => restorable(item));
+	if (policies.length === 0) {
+		throw new Error(`${SANDBOXES} has no NetworkPolicy, so the gate has nothing to control`);
+	}
+	let answer: unknown;
+	try {
+		// Inside the try: a delete that fails half way still restores every policy.
+		await kubectl(["-n", SANDBOXES, "delete", "networkpolicies", "--all", "--wait=true"]);
+		await isolationGate({
+			namespace: SANDBOXES,
+			template: `${RELEASE}-sandbox-${SANDBOX_KINDS[0]}`,
+			gateway: sandboxGateway,
+		});
+	} catch (error) {
+		answer = error;
+	} finally {
+		await kubectl(
+			["apply", "-f", "-"],
+			JSON.stringify({ apiVersion: "v1", kind: "List", items: policies }),
+		);
+	}
+	const message = answer instanceof Error ? answer.message : "";
+	if (!message.includes("reaches another sandbox")) {
+		throw new Error(
+			answer === undefined
+				? "the sandbox isolation gate passed without the sandbox namespace's NetworkPolicies, so it cannot show that they hold"
+				: `the sandbox isolation gate failed without the policies, but not by reaching the peer sandbox: ${message}`,
+		);
+	}
+}
+
+/** A listed object without the fields that the API server owns, so that it applies again. */
+function restorable(item: unknown): Record<string, unknown> {
+	const { metadata, spec, apiVersion, kind } = asRecord(item, "NetworkPolicy");
+	const owned = asRecord(metadata, "metadata");
+	return {
+		apiVersion,
+		kind,
+		metadata: {
+			name: owned.name,
+			namespace: owned.namespace,
+			labels: owned.labels,
+			annotations: owned.annotations,
+		},
+		spec,
+	};
 }
 
 const STORAGE_NAMESPACE = "backup-storage";
@@ -2352,7 +2485,11 @@ async function reviewsOn(): Promise<void> {
 		"Pods",
 	)
 		.map((pod) => asRecord(pod, "Pod"))
-		.filter((pod) => asRecord(pod.metadata, "Pod metadata").deletionTimestamp === undefined);
+		.filter(
+			(pod) =>
+				asRecord(pod.metadata, "Pod metadata").deletionTimestamp === undefined &&
+				asRecord(pod.status, "Pod status").phase === "Running",
+		);
 	for (const pod of pods) {
 		const name = asString(asRecord(pod.metadata, "Pod metadata").name, "Pod name");
 		const ready = asArray(asRecord(pod.status, "Pod status").conditions, "conditions")

@@ -1595,9 +1595,12 @@ The kubelet does not remove the image while the DaemonSet runs.
 It makes a copy of a template that only waits, starts two sandboxes from the copy, and checks from inside one of them:
 
 - The Pod settings above. The Pod has a user namespace of its own, or the gVisor kernel.
-- No Kubernetes token, a non-root user, and no effective capabilities.
+- No API credential: no service account directory, no projected token, and no Secret as a volume or a variable.
+- No Service variables but the API's `KUBERNETES_*`, which the kubelet always sets. The checks below prove that the API cannot be reached.
+- A non-root user, and no effective capabilities.
 - It reaches the gateway.
-- It does not reach the Kubernetes API, the cluster DNS server, the node's kubelet, or the other sandbox.
+- It does not reach the Kubernetes API, by the address of its Service or by any address behind that Service.
+- It does not reach the cluster DNS server, the node's kubelet, or the other sandbox.
 - It does not reach the cloud metadata address, the internet, or a public DNS server.
 - Its container stops reaching the Kubernetes API within 10 seconds of its start.
 
@@ -1606,10 +1609,18 @@ On k3s, a new sandbox reaches the Kubernetes API for about the first 0.2 seconds
 The gate's sandbox records when its connections to the API stop.
 
 CI runs the gate for each template on every cluster that it installs the chart on.
+There, a sandbox must also reach each worker Pod on the gateway port.
+It must not reach any server or worker Pod on the application port 8080.
+Then CI deletes the NetworkPolicies of the sandbox namespace, and the gate must fail because a sandbox reaches the other sandbox.
+CI restores the policies afterward. A gate that passes without the policies cannot show that they hold, for example on a network plugin that does not enforce NetworkPolicy.
+
+Add an address that a sandbox must reach with `--reach <name>=<host>:<port>`, and one that it must not reach with `--forbid <name>=<host>:<port>`.
+The gate names each address in its output.
 
 ```bash
 node scripts/sandbox-isolation.ts --namespace hephaestus-sandboxes --template hephaestus-sandbox-review \
-  --gateway "$(kubectl -n hephaestus get service hephaestus-sandbox-gateway -o jsonpath='{.spec.clusterIP}'):8081"
+  --gateway "$(kubectl -n hephaestus get service hephaestus-sandbox-gateway -o jsonpath='{.spec.clusterIP}'):8081" \
+  --forbid "the server's application port=$(kubectl -n hephaestus get service hephaestus-server -o jsonpath='{.spec.clusterIP}'):8080"
 ```
 
 #### Sandbox sizes

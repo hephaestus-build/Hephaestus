@@ -10,8 +10,12 @@
  * `kubectl exec`, with the container's network, user and security context. Sandbox B listens; A must
  * not reach it.
  *
+ * The Kubernetes API counts twice: by its Service address, and by each address that the Service sends to,
+ * because a network plugin can match a policy before or after it translates the Service address.
+ *
  *   node scripts/sandbox-isolation.ts --namespace <sandboxes> --template <name> \
- *     --gateway <host>:<port> [--forbid <name>=<host>:<port> ...] [--context <kubectl context>]
+ *     --gateway <host>:<port> [--reach <name>=<host>:<port> ...] [--forbid <name>=<host>:<port> ...] \
+ *     [--context <kubectl context>]
  */
 import { parseArgs } from "node:util";
 
@@ -31,6 +35,10 @@ export interface Inside {
 	uid: number;
 	gid: number;
 	token: boolean;
+	/** Whether the service account directory exists, with or without a token in it. */
+	serviceAccount: boolean;
+	/** The `*_SERVICE_HOST` variables of the container's environment. */
+	serviceHosts: string[];
 	uidMap: string | null;
 	noNewPrivs: boolean;
 	capEff: string | null;
@@ -81,6 +89,8 @@ const status = (key) => {
 (async () => {
   const out = { uid: process.getuid(), gid: process.getgid(), reached: {} };
   out.token = fs.existsSync("/var/run/secrets/kubernetes.io/serviceaccount/token");
+  out.serviceAccount = fs.existsSync("/var/run/secrets/kubernetes.io/serviceaccount");
+  out.serviceHosts = Object.keys(process.env).filter((name) => name.endsWith("_SERVICE_HOST")).sort();
   try { out.uidMap = fs.readFileSync("/proc/self/uid_map", "utf8").trim().split(/\s+/).join(" "); } catch { out.uidMap = null; }
   out.noNewPrivs = status("NoNewPrivs") === "1";
   out.capEff = status("CapEff");
@@ -171,6 +181,10 @@ export function parseInside(value: unknown): Inside {
 		uid: Number(report.uid),
 		gid: Number(report.gid),
 		token: report.token === true,
+		serviceAccount: report.serviceAccount === true,
+		serviceHosts: Array.isArray(report.serviceHosts)
+			? report.serviceHosts.filter((name): name is string => typeof name === "string")
+			: [],
 		uidMap: text(report.uidMap),
 		noNewPrivs: report.noNewPrivs === true,
 		capEff: text(report.capEff),
@@ -187,6 +201,55 @@ export function parseInside(value: unknown): Inside {
 	};
 }
 
+/**
+ * G3: no API credential reaches the sandbox. Service links are off, so the only Service variables are
+ * the kubelet's for the API; no volume projects a token or a Secret; no variable comes from a Secret.
+ */
+function credentialFailures(spec: Record<string, unknown>): string[] {
+	const failures: string[] = [];
+	if (spec.enableServiceLinks !== false) {
+		failures.push("enableServiceLinks is not false");
+	}
+	// No credential of any kind reaches the sandbox: no projected token, and no Secret as a volume or a variable.
+	for (const volume of Array.isArray(spec.volumes) ? spec.volumes : []) {
+		const listed = asRecord(volume, "volume");
+		if (listed.projected !== undefined || listed.secret !== undefined) {
+			failures.push(`volume ${String(listed.name)} projects a token or a Secret`);
+		}
+	}
+	for (const container of Array.isArray(spec.containers) ? spec.containers : []) {
+		const { env, envFrom } = asRecord(container, "container");
+		const variables: unknown[] = Array.isArray(env) ? env : [];
+		const sources: unknown[] = Array.isArray(envFrom) ? envFrom : [];
+		const fromSecret =
+			variables.some(
+				(variable) =>
+					asRecord(asRecord(variable, "env").valueFrom ?? {}, "valueFrom").secretKeyRef !==
+					undefined,
+			) || sources.some((source) => asRecord(source, "envFrom").secretRef !== undefined);
+		if (fromSecret) {
+			failures.push("a variable comes from a Secret");
+		}
+	}
+	return failures;
+}
+
+/** G3 from inside: no service account directory, and no Service variable but the API's. */
+function credentialFailuresInside(inside: Inside): string[] {
+	const failures: string[] = [];
+	if (inside.serviceAccount) {
+		failures.push("the service account directory exists");
+	}
+	// The kubelet always gives a container the API Service's KUBERNETES_* variables, whatever the Pod
+	// spec says. The address is no secret, and the API endpoint checks prove that the sandbox cannot
+	// reach it. Any other Service variable means that service links are on.
+	const others = inside.serviceHosts.filter((name) => name !== "KUBERNETES_SERVICE_HOST");
+	if (others.length > 0) {
+		failures.push(`Service variables beside the API's: ${others.join(", ")}`);
+	}
+	return failures;
+}
+
 /** The failures of one sandbox's Pod spec: what the template must state. */
 export function specFailures(pod: unknown): string[] {
 	const failures: string[] = [];
@@ -199,6 +262,7 @@ export function specFailures(pod: unknown): string[] {
 	if (spec.automountServiceAccountToken !== false) {
 		failures.push("the service account token is mounted");
 	}
+	failures.push(...credentialFailures(spec));
 	const security = asRecord(spec.securityContext ?? {}, "pod securityContext");
 	if (security.runAsNonRoot !== true) {
 		failures.push("runAsNonRoot is not set");
@@ -242,6 +306,7 @@ export function insideFailures(inside: Inside, targets: Target[], gvisor: boolea
 	if (inside.token) {
 		failures.push("a Kubernetes token is mounted");
 	}
+	failures.push(...credentialFailuresInside(inside));
 	if (!inside.noNewPrivs) {
 		failures.push("no_new_privs is not set");
 	}
@@ -281,6 +346,33 @@ export function insideFailures(inside: Inside, targets: Target[], gvisor: boolea
 	return failures;
 }
 
+/**
+ * The addresses behind the `kubernetes` Service, from its EndpointSlices: where the API server
+ * listens, such as port 6443 on a node. None is a failure, because a gate that tries none proves nothing.
+ */
+export function apiEndpoints(slices: unknown): { host: string; port: number }[] {
+	const { items } = asRecord(slices, "EndpointSlice list");
+	const endpoints = (Array.isArray(items) ? items : []).flatMap((item) => {
+		const slice = asRecord(item, "EndpointSlice");
+		const ports = (Array.isArray(slice.ports) ? slice.ports : [])
+			.map((port) => asRecord(port, "port").port)
+			.filter((port): port is number => typeof port === "number");
+		const addresses = (Array.isArray(slice.endpoints) ? slice.endpoints : []).flatMap(
+			(endpoint) => {
+				const listed = asRecord(endpoint, "endpoint").addresses;
+				return (Array.isArray(listed) ? listed : []).filter(
+					(address): address is string => typeof address === "string",
+				);
+			},
+		);
+		return addresses.flatMap((host) => ports.map((port) => ({ host, port })));
+	});
+	if (endpoints.length === 0) {
+		throw new Error("the kubernetes Service has no endpoint address, so the gate cannot try one");
+	}
+	return endpoints;
+}
+
 export function parseAddress(value: string): { host: string; port: number } {
 	const at = value.lastIndexOf(":");
 	const port = Number(value.slice(at + 1));
@@ -294,6 +386,9 @@ export interface GateOptions {
 	namespace: string;
 	template: string;
 	gateway: { host: string; port: number };
+	/** Further addresses that a sandbox must reach. */
+	reach?: Target[];
+	/** Further addresses that a sandbox must not reach. */
 	forbid?: Target[];
 	context?: string;
 }
@@ -307,6 +402,16 @@ export async function isolationGate(options: GateOptions): Promise<Inside> {
 	const json = async (args: string[]) => parseJson(await kubectl([...args, "-o", "json"]));
 	const api = asRecord(await json(["-n", "default", "get", "service", "kubernetes"]), "service");
 	const apiIp = asString(asRecord(api.spec, "spec").clusterIP, "API address");
+	const apiBackends = apiEndpoints(
+		await json([
+			"-n",
+			"default",
+			"get",
+			"endpointslices",
+			"-l",
+			"kubernetes.io/service-name=kubernetes",
+		]),
+	);
 	const dnsService = asRecord(
 		await json(["-n", "kube-system", "get", "service", "kube-dns"]),
 		"service",
@@ -376,11 +481,17 @@ export async function isolationGate(options: GateOptions): Promise<Inside> {
 		const targets: Target[] = [
 			{ name: "the gateway", ...options.gateway, reachable: true },
 			{ name: "the Kubernetes API", host: apiIp, port: 443, reachable: false },
+			...apiBackends.map((endpoint) => ({
+				name: `the Kubernetes API endpoint ${endpoint.host}:${String(endpoint.port)}`,
+				...endpoint,
+				reachable: false,
+			})),
 			{ name: "the cluster DNS over TCP", host: dns, port: 53, reachable: false },
 			{ name: "the node's kubelet", host: nodeIp, port: 10_250, reachable: false },
 			{ name: "another sandbox", host: peerIp, port: PEER_PORT, reachable: false },
 			{ name: "the cloud metadata address", host: "169.254.169.254", port: 80, reachable: false },
 			{ name: "the internet", host: "1.1.1.1", port: 443, reachable: false },
+			...(options.reach ?? []),
 			...(options.forbid ?? []),
 		];
 		const gvisor = asRecord(asRecord(pods[0], "pod").spec, "spec").runtimeClassName === "gvisor";
@@ -427,12 +538,22 @@ export async function isolationGate(options: GateOptions): Promise<Inside> {
 	}
 }
 
+/** A `<name>=<host>:<port>` argument as a target. */
+export function namedTarget(entry: string, reachable: boolean): Target {
+	const at = entry.indexOf("=");
+	if (at <= 0) {
+		throw new Error(`not a <name>=<host>:<port>: ${entry}`);
+	}
+	return { name: entry.slice(0, at), ...parseAddress(entry.slice(at + 1)), reachable };
+}
+
 async function main() {
 	const { values } = parseArgs({
 		options: {
 			namespace: { type: "string" },
 			template: { type: "string" },
 			gateway: { type: "string" },
+			reach: { type: "string", multiple: true, default: [] },
 			forbid: { type: "string", multiple: true, default: [] },
 			context: { type: "string" },
 		},
@@ -448,10 +569,8 @@ async function main() {
 		namespace: values.namespace,
 		template: values.template,
 		gateway: parseAddress(values.gateway),
-		forbid: values.forbid.map((entry) => {
-			const at = entry.indexOf("=");
-			return { name: entry.slice(0, at), ...parseAddress(entry.slice(at + 1)), reachable: false };
-		}),
+		reach: values.reach.map((entry) => namedTarget(entry, true)),
+		forbid: values.forbid.map((entry) => namedTarget(entry, false)),
 		...(values.context === undefined ? {} : { context: values.context }),
 	});
 	process.stdout.write(
