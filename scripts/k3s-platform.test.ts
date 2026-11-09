@@ -1172,7 +1172,7 @@ await test("the installer ends with the command that backs up the keys a restore
 		[...keys].filter((key) => copied.test(key)).toSorted((a, b) => a.localeCompare(b)),
 		[
 			"BACKUP_CIPHER_PASS",
-			"DATABASE_USERNAME",
+			"DATABASE_ADMIN_USERNAME",
 			"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
 			"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
 			"HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY",

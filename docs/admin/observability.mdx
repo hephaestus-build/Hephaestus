@@ -484,19 +484,23 @@ To turn it on:
 1. Add `DATABASE_MONITOR_PASSWORD` to the release Secret: `sh hephaestus-keys.sh --metrics`.
    When Helm can read the Secret and it lacks the key, the install stops with a message.
    Otherwise the exporter Pod waits, and its events name the missing key.
-2. With an external PostgreSQL, prepare the database as a superuser first.
-   Run these statements in the application's database, with the value of `DATABASE_MONITOR_PASSWORD` in place of `<password>`:
+2. With an external PostgreSQL, set up the role yourself.
+   Get the folder `files/` from the verified chart of the release, as [Verify the release chart](./kubernetes#verify-the-release-chart) describes.
+   Export `DATABASE_MONITOR_PASSWORD` with its value. Then run the script as an administrator, with the application's database:
 
-   ```sql
-   CREATE ROLE hephaestus_monitor LOGIN CONNECTION LIMIT 2 PASSWORD '<password>' IN ROLE pg_monitor;
-   CREATE SCHEMA IF NOT EXISTS monitoring;
-   GRANT USAGE ON SCHEMA monitoring TO hephaestus_monitor;
-   CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring;
-   ALTER ROLE hephaestus_monitor SET search_path = monitoring, public;
+   ```bash
+   sh "chart-$VERSION/hephaestus/files/database-monitor.sh" \
+     "host=<host> dbname=hephaestus user=<administrator> sslmode=verify-full"
    ```
 
+   The script sends PostgreSQL only the verifier of the password.
+   It creates `hephaestus_monitor` in `pg_monitor`, the schema `monitoring` and the extension `pg_stat_statements` in it.
+   Its quiet settings keep the verifier out of the statement statistics and the server log, and the run stops at the first error.
+
+   An administrator that is not a superuser may not change these settings.
+   Set them at the service first, as [Database roles on an external PostgreSQL](./kubernetes#database-roles-on-an-external-postgresql) lists.
    The server must preload `pg_stat_statements` (`shared_preload_libraries`).
-   With the bundled PostgreSQL, a Job of each release runs these statements and sets the password again.
+   With the bundled PostgreSQL, a Job of each release runs the script and sets the password again.
 3. Set `postgresql.metrics.enabled=true` and upgrade.
 4. Scrape the exporter's port `metrics` (9187) on the path `/metrics`.
    The [monitoring stack](#monitoring-stack) does this as the job `postgresql`.

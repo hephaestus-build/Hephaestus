@@ -70,7 +70,7 @@ spec:
 # for the server, not a Helm hook. Each statement is idempotent, and the password is set every time, so
 # a changed DATABASE_MONITOR_PASSWORD takes effect with the next upgrade. The extension goes in a schema
 # of its own, so the application's schema stays unchanged. An external PostgreSQL gets no Job: its
-# operator runs the statements of docs/admin/observability.mdx § Database metrics.
+# operator runs the same two files (docs/admin/observability.mdx § Database metrics).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -98,18 +98,10 @@ spec:
           command:
             - sh
             - -ec
-            # psql substitutes :'password' as a quoted literal only in a script, not in -c.
+            # files/database-monitor.sh, from the ConfigMap: PostgreSQL gets only the SCRAM verifier.
             - |
               until pg_isready --quiet; do sleep 2; done
-              psql --no-psqlrc -v ON_ERROR_STOP=1 -v password="$DATABASE_MONITOR_PASSWORD" <<'SQL'
-              SELECT 'CREATE ROLE hephaestus_monitor' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hephaestus_monitor') \gexec
-              ALTER ROLE hephaestus_monitor WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION CONNECTION LIMIT 2 PASSWORD :'password';
-              GRANT pg_monitor TO hephaestus_monitor;
-              CREATE SCHEMA IF NOT EXISTS monitoring;
-              GRANT USAGE ON SCHEMA monitoring TO hephaestus_monitor;
-              CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring;
-              ALTER ROLE hephaestus_monitor SET search_path = monitoring, public;
-              SQL
+              exec sh {{ include "hephaestus.databaseSetupDirectory" . }}/database-monitor.sh
           env:
             - name: PGHOST
               value: {{ include "hephaestus.databaseHost" . | quote }}
@@ -121,8 +113,8 @@ spec:
               value: verify-full
             - name: PGSSLROOTCERT
               value: {{ printf "%s/ca.crt" (include "hephaestus.postgresqlCaDirectory" .) | quote }}
-            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGUSER" "key" "DATABASE_USERNAME") | nindent 12 }}
-            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGPASSWORD" "key" "DATABASE_PASSWORD") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGUSER" "key" "DATABASE_ADMIN_USERNAME") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGPASSWORD" "key" "DATABASE_ADMIN_PASSWORD") | nindent 12 }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_MONITOR_PASSWORD") | nindent 12 }}
           resources:
             requests: { cpu: 10m, memory: 32Mi, ephemeral-storage: 16Mi }
@@ -133,10 +125,12 @@ spec:
             - name: tmp
               mountPath: /tmp
             {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
+            {{- include "hephaestus.databaseSetupMount" . | nindent 12 }}
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 16Mi
         {{- include "hephaestus.postgresqlCaVolume" . | nindent 8 }}
+        {{- include "hephaestus.databaseSetupVolume" . | nindent 8 }}
 {{- end }}
 {{- end }}

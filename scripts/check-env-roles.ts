@@ -131,6 +131,14 @@ const PER_CONTAINER = new Map<string, string>([
 		"only the migrate run mode migrates; a role that sets it says it does not",
 	],
 	[
+		"DATABASE_USERNAME",
+		"the migrate run mode logs in as the schema owner, the server and the worker as the application role",
+	],
+	[
+		"DATABASE_PASSWORD",
+		"the migrate run mode logs in as the schema owner, the server and the worker as the application role",
+	],
+	[
 		"SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE",
 		"each role sizes its own pool against the chart PostgreSQL connection budget",
 	],

@@ -201,6 +201,32 @@ name in the release namespace, so its certificate must name exactly that host.
 {{- if .Values.postgresql.bundled -}}5432{{- else -}}{{ int .Values.postgresql.external.port }}{{- end -}}
 {{- end -}}
 
+{{/*
+Each database purpose has its own login (docs/admin/kubernetes.mdx § Database roles). When the release Secret
+exists, a missing key fails the render, and so do the keys of the single superuser login before 1.0, which no
+Pod reads. Without a cluster, as in `helm template`, the kubelet refuses a Pod whose key is missing.
+*/}}
+{{- define "hephaestus.databaseSecretCheck" -}}
+{{- $secret := lookup "v1" "Secret" .Release.Namespace .Values.secret.name -}}
+{{- if $secret -}}
+{{- $data := $secret.data | default dict -}}
+{{- $required := list "DATABASE_OWNER_PASSWORD" "DATABASE_APP_PASSWORD" -}}
+{{- if .Values.postgresql.bundled -}}
+{{- $required = concat (list "DATABASE_ADMIN_USERNAME" "DATABASE_ADMIN_PASSWORD") $required -}}
+{{- end -}}
+{{- range $required -}}
+{{- if not (hasKey $data .) -}}
+{{- fail (printf "the Secret %s needs the key %s: see docs/admin/kubernetes.mdx § Database roles" $.Values.secret.name .) -}}
+{{- end -}}
+{{- end -}}
+{{- range list "DATABASE_USERNAME" "DATABASE_PASSWORD" -}}
+{{- if hasKey $data . -}}
+{{- fail (printf "the Secret %s still has the key %s: the administrator's login is DATABASE_ADMIN_USERNAME and DATABASE_ADMIN_PASSWORD, and no Hephaestus Pod uses it. Follow the 1.0 upgrade guide, then remove the key" $.Values.secret.name .) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "hephaestus.databaseUrl" -}}
 {{- printf "postgresql://%s:%s/%s?sslmode=verify-full&sslrootcert=%s/ca.crt" (include "hephaestus.databaseHost" .) (include "hephaestus.databasePort" .) .Values.postgresql.database (include "hephaestus.postgresqlCaDirectory" .) -}}
 {{- end -}}
@@ -289,8 +315,9 @@ fails every pod, so each role is owed the lock's digest. */}}
 {{- define "hephaestus.env.storedData" -}}
 - name: DATABASE_URL
   value: {{ include "hephaestus.databaseUrl" . | quote }}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_USERNAME") }}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_PASSWORD") }}
+- name: DATABASE_USERNAME
+  value: hephaestus_app
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_PASSWORD" "key" "DATABASE_APP_PASSWORD") }}
 {{ include "hephaestus.env.encryptionKeys" . }}
 - name: HEPHAESTUS_SECURITY_CREDENTIAL_ROTATION_ENABLED
   value: {{ .Values.config.credentialKey.rotationEnabled | quote }}
@@ -810,7 +837,7 @@ qualified model-only replay, not provider capacity.
   valueFrom:
     secretKeyRef:
       name: {{ .Values.secret.name }}
-      key: DATABASE_USERNAME
+      key: DATABASE_ADMIN_USERNAME
 {{ include "hephaestus.backup.env" . }}
 {{- end -}}
 
@@ -847,4 +874,19 @@ qualified model-only replay, not provider capacity.
 {{- fail (printf "PostgreSQL max_connections needs at least %d for role pools, one worker surge, listeners and maintenance/admin reserves" $required) -}}
 {{- end -}}
 {{- end -}}
+{{- end -}}
+
+{{/* The ConfigMap of files/database-*: the migration Job and the monitor Job run them from this directory. */}}
+{{- define "hephaestus.databaseSetupDirectory" -}}/etc/hephaestus/database{{- end -}}
+
+{{- define "hephaestus.databaseSetupMount" -}}
+- name: database-setup
+  mountPath: {{ include "hephaestus.databaseSetupDirectory" . }}
+  readOnly: true
+{{- end -}}
+
+{{- define "hephaestus.databaseSetupVolume" -}}
+- name: database-setup
+  configMap:
+    name: {{ include "hephaestus.name" (dict "root" . "component" "database-setup") }}
 {{- end -}}

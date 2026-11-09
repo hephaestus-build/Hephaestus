@@ -1,11 +1,16 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import liquibase.Contexts;
 import liquibase.Liquibase;
@@ -16,15 +21,51 @@ import liquibase.resource.ClassLoaderResourceAccessor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.testcontainers.containers.Container.ExecResult;
+import org.testcontainers.containers.ExecConfig;
 import org.testcontainers.images.builder.ImageFromDockerfile;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
+import org.testcontainers.utility.MountableFile;
 
 public final class PostgreSQLTestContainer {
 
     private static final String DEFAULT_TEST_DB = "hephaestus_test";
     private static final String DEFAULT_TEST_USER = "test";
     private static final String DEFAULT_TEST_PASSWORD = "test";
+    /** The schema owner, as the chart's migration Job logs in (docs/admin/kubernetes.mdx § Database roles). */
+    public static final String OWNER_USER = "hephaestus_owner";
+
+    // Distinct per run, so that a test can search the statement statistics and the log for them.
+    private static final String OWNER_PASSWORD = "owner-" + UUID.randomUUID();
+
+    /** The login of the server and the worker, as the chart's roles log in. */
+    public static final String APP_USER = "hephaestus_app";
+
+    private static final String APP_PASSWORD = "app-" + UUID.randomUUID();
+
+    /**
+     * The roles of the chart, as its migration Job sets them up (docs/admin/kubernetes.mdx § Database roles): the
+     * default database is migrated by the owner and used by the application role.
+     */
+    private static final String CHART_FILES = "/tmp/chart-files/";
+
+    /** The chart's SQL files, as the migration Job and the monitor Job run them. */
+    private static final List<String> CHART_SQL =
+            List.of("database-quiet.sql", "database-roles.sql", "database-monitor.sql");
+
+    private static final List<String> CHART_SCRIPTS = List.of("database-roles.sh", "database-monitor.sh");
+
+    private static final List<String> CHART_FILE_NAMES = List.of(
+            "database-quiet.sql",
+            "database-roles.sql",
+            "database-monitor.sql",
+            "database-roles.sh",
+            "database-monitor.sh",
+            "scram-sha-256.pl");
+
     private static final String MIGRATED_TEMPLATE_DATABASE = "hephaestus_template_dev";
     private static final Pattern DATABASE_NAME = Pattern.compile("[a-z][a-z0-9_]*");
 
@@ -42,6 +83,65 @@ public final class PostgreSQLTestContainer {
             container = current;
         }
         return current;
+    }
+
+    /** The default database as the application role: the login of every shared integration-test context. */
+    public static TestDatabase application() {
+        return asApplication(administrator());
+    }
+
+    /** The default database as the schema owner, which runs its migration. */
+    public static TestDatabase owner() {
+        return asOwner(administrator());
+    }
+
+    /**
+     * The default database's schema owner, for a fixture that changes the schema: the application role that every
+     * shared context uses cannot. Each call opens a connection per statement. Its DDL waits at most 30 seconds for a
+     * lock: a test transaction that holds one would otherwise wait for this connection, unseen by PostgreSQL's
+     * deadlock check, until the task's timeout.
+     */
+    public static JdbcTemplate ownerJdbc() {
+        TestDatabase owner = owner();
+        var dataSource = new DriverManagerDataSource(owner.jdbcUrl(), owner.username(), owner.password());
+        var properties = new Properties();
+        properties.setProperty("options", "-c lock_timeout=30s");
+        dataSource.setConnectionProperties(properties);
+        return new JdbcTemplate(dataSource);
+    }
+
+    /** The default database as the container's superuser. */
+    public static TestDatabase administrator() {
+        PostgreSQLContainer postgres = getInstance();
+        return new TestDatabase(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+    }
+
+    public static TestDatabase asApplication(TestDatabase database) {
+        return new TestDatabase(database.jdbcUrl(), APP_USER, APP_PASSWORD);
+    }
+
+    public static TestDatabase asOwner(TestDatabase database) {
+        return new TestDatabase(database.jdbcUrl(), OWNER_USER, OWNER_PASSWORD);
+    }
+
+    /** Runs the chart's {@code files/database-roles.sql} in a database, as the chart's migration Job runs it. */
+    public static synchronized void applyDatabaseRoles(String database) {
+        validateDatabaseName(database);
+        PostgreSQLContainer postgres = getInstance();
+        ExecResult result = runDatabaseRoles(postgres, database, postgres.getUsername());
+        if (result.getExitCode() != 0) {
+            throw new IllegalStateException("database-roles.sql failed: " + result.getStderr());
+        }
+    }
+
+    /**
+     * Runs the chart's {@code files/database-roles.sql} in a database as another administrator, such as a role with
+     * CREATEROLE and CREATEDB that a managed PostgreSQL service gives, and returns how psql ended.
+     */
+    public static synchronized ExecResult runDatabaseRolesAs(String database, String administrator) {
+        validateDatabaseName(database);
+        validateDatabaseName(administrator);
+        return runDatabaseRoles(getInstance(), database, administrator);
     }
 
     public static synchronized TestDatabase createDatabase(String name) {
@@ -127,6 +227,128 @@ public final class PostgreSQLTestContainer {
                 .get();
     }
 
+    /** The chart's {@code database-roles.sh}, the script that its migration Job runs from a ConfigMap. */
+    private static ExecResult runDatabaseRoles(PostgreSQLContainer postgres, String database, String administrator) {
+        return execShell(
+                postgres,
+                chartScriptCommand("database-roles.sh", database, administrator),
+                Map.of("DATABASE_OWNER_PASSWORD", OWNER_PASSWORD, "DATABASE_APP_PASSWORD", APP_PASSWORD));
+    }
+
+    /**
+     * Runs one of the chart's scripts, {@code database-roles.sh} or {@code database-monitor.sh}, as the chart's Jobs
+     * run it, with the passwords in the environment, and returns how it ended.
+     */
+    public static synchronized ExecResult runChartScriptAs(
+            String script, String database, String administrator, Map<String, String> environment) {
+        return execShell(getInstance(), chartScriptCommand(script, database, administrator), environment);
+    }
+
+    private static String chartScriptCommand(String script, String database, String administrator) {
+        if (!CHART_SCRIPTS.contains(script)) {
+            throw new IllegalArgumentException("Not a chart script: " + script);
+        }
+        validateDatabaseName(database);
+        validateDatabaseName(administrator);
+        return "sh " + CHART_FILES + script + " --username=" + administrator + " --dbname=" + database;
+    }
+
+    /**
+     * Runs files of the chart's {@code files/} in one psql session, with the given environment, and returns how psql
+     * ended. psql reads each password from its environment, as the chart's Jobs give them.
+     */
+    public static synchronized ExecResult runChartSqlAs(
+            String database, String administrator, Map<String, String> environment, List<String> files) {
+        validateDatabaseName(database);
+        validateDatabaseName(administrator);
+        return runChartSql(getInstance(), database, administrator, environment, files);
+    }
+
+    private static ExecResult runChartSql(
+            PostgreSQLContainer postgres,
+            String database,
+            String administrator,
+            Map<String, String> environment,
+            List<String> files) {
+        return execShell(
+                postgres, chartSqlScript(database, administrator, environment.keySet(), files, List.of()), environment);
+    }
+
+    /**
+     * The shell script that runs files of the chart's {@code files/} in one psql session, as the chart's Jobs do. It
+     * turns each {@code *_PASSWORD} variable of the environment into its {@code *_VERIFIER} with the chart's
+     * {@code scram-sha-256.pl}: psql sends only verifiers, and no command line holds a password.
+     */
+    public static String chartSqlScript(
+            String database,
+            String administrator,
+            Collection<String> environment,
+            List<String> files,
+            List<String> psqlOptions) {
+        validateDatabaseName(database);
+        validateDatabaseName(administrator);
+        var script = new StringBuilder("set -e\n");
+        for (String variable : environment.stream().sorted().toList()) {
+            if (variable.matches("DATABASE_[A-Z]+_PASSWORD")) {
+                script.append("export ")
+                        .append(variable.replace("_PASSWORD", "_VERIFIER"))
+                        .append("=\"$(perl " + CHART_FILES + "scram-sha-256.pl ")
+                        .append(variable)
+                        .append(")\"\n");
+            }
+        }
+        script.append("psql --no-psqlrc --quiet --username=")
+                .append(administrator)
+                .append(" --dbname=")
+                .append(database);
+        for (String option : psqlOptions) {
+            script.append(' ').append(option);
+        }
+        for (String file : files) {
+            if (!CHART_SQL.contains(file)) {
+                throw new IllegalArgumentException("Not a chart SQL file: " + file);
+            }
+            script.append(" --file=").append(CHART_FILES).append(file);
+        }
+        return script.append('\n').toString();
+    }
+
+    /** Runs a shell script in the container, with the given environment, and returns how it ended. */
+    public static synchronized ExecResult execShell(String script, Map<String, String> environment) {
+        return execShell(getInstance(), script, environment);
+    }
+
+    private static ExecResult execShell(PostgreSQLContainer postgres, String script, Map<String, String> environment) {
+        try {
+            return postgres.execInContainer(ExecConfig.builder()
+                    .command(new String[] {"sh", "-c", script})
+                    .envVars(environment)
+                    .build());
+        } catch (IOException exception) {
+            throw new IllegalStateException("The shell could not run", exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("The shell was interrupted", exception);
+        }
+    }
+
+    /**
+     * Two privileges that only tests give the application role. The cleanup between tests empties every table of the
+     * default database. A fixture writes rows that the triggers and foreign keys would refuse, in the test's own
+     * transaction, with {@code SET LOCAL session_replication_role = replica}.
+     */
+    private static void grantTestFixtures(PostgreSQLContainer postgres) {
+        try (Connection connection = DriverManager.getConnection(
+                        postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+                Statement statement = connection.createStatement()) {
+            statement.execute("ALTER DEFAULT PRIVILEGES FOR ROLE " + OWNER_USER
+                    + " IN SCHEMA public GRANT TRUNCATE ON TABLES TO " + APP_USER);
+            statement.execute("GRANT SET ON PARAMETER session_replication_role TO " + APP_USER);
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to grant the test fixtures", exception);
+        }
+    }
+
     // Ryuk stops this singleton after JVM exit, keeping it available while Spring closes cached contexts.
     @SuppressWarnings("resource")
     private static PostgreSQLContainer createContainer() {
@@ -142,6 +364,17 @@ public final class PostgreSQLTestContainer {
                 .withTmpFs(Map.of("/var/lib/postgresql", "rw"));
 
         newContainer.start();
+        for (String file : CHART_FILE_NAMES) {
+            newContainer.copyFileToContainer(
+                    MountableFile.forHostPath(
+                            Path.of(System.getProperty("basedir", "."), "../../deploy/chart/hephaestus/files", file)),
+                    CHART_FILES + file);
+        }
+        ExecResult roles = runDatabaseRoles(newContainer, DEFAULT_TEST_DB, newContainer.getUsername());
+        if (roles.getExitCode() != 0) {
+            throw new IllegalStateException("database-roles.sql failed: " + roles.getStderr());
+        }
+        grantTestFixtures(newContainer);
         LOGGER.info(
                 "Started PostgreSQL Testcontainer: jdbcUrl={}, username={}, database={}",
                 newContainer.getJdbcUrl(),

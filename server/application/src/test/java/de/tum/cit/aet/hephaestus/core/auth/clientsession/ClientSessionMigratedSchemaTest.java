@@ -50,8 +50,6 @@ import org.springframework.transaction.support.TransactionTemplate;
             "spring.liquibase.change-log=classpath:db/master.xml",
             "spring.liquibase.contexts=dev,prod",
             "spring.jpa.hibernate.ddl-auto=validate",
-            // Migrations own this schema; do not run the Hibernate-created-schema fixture.
-            "spring.sql.init.mode=never",
             "spring.jpa.defer-datasource-initialization=false",
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)

@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.notification.NotificationRedeliveryJob;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -80,6 +81,9 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    /** A fixture changes the schema as its owner: the application role cannot. */
+    private final JdbcTemplate schemaOwner = PostgreSQLTestContainer.ownerJdbc();
 
     @Autowired
     private ConnectionService connectionService;
@@ -141,16 +145,16 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
 
     @AfterEach
     void dropBlockers() {
-        jdbcTemplate.execute("DROP TRIGGER IF EXISTS " + BLOCK + " ON repository_to_monitor");
-        jdbcTemplate.execute("DROP TRIGGER IF EXISTS " + BLOCK + " ON connection_audit");
-        jdbcTemplate.execute("DROP FUNCTION IF EXISTS " + BLOCK + "()");
+        schemaOwner.execute("DROP TRIGGER IF EXISTS " + BLOCK + " ON repository_to_monitor");
+        schemaOwner.execute("DROP TRIGGER IF EXISTS " + BLOCK + " ON connection_audit");
+        schemaOwner.execute("DROP FUNCTION IF EXISTS " + BLOCK + "()");
     }
 
     @Test
     @WithAdminUser
     void shouldKeepConnectionActiveWithCredentialsWhenLocalEraseFails() {
         createBlockFunction();
-        jdbcTemplate.execute("CREATE TRIGGER "
+        schemaOwner.execute("CREATE TRIGGER "
                 + BLOCK
                 + " BEFORE DELETE ON repository_to_monitor FOR EACH ROW WHEN"
                 + " (OLD.workspace_id = "
@@ -168,7 +172,7 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
     @WithAdminUser
     void shouldLeaveProviderUntouchedWhenDisconnectFailsToCommit() {
         createBlockFunction();
-        jdbcTemplate.execute("CREATE CONSTRAINT TRIGGER "
+        schemaOwner.execute("CREATE CONSTRAINT TRIGGER "
                 + BLOCK
                 + " AFTER INSERT ON connection_audit DEFERRABLE INITIALLY DEFERRED FOR EACH"
                 + " ROW WHEN (NEW.connection_id = "
@@ -319,7 +323,7 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
     }
 
     private void createBlockFunction() {
-        jdbcTemplate.execute("CREATE FUNCTION "
+        schemaOwner.execute("CREATE FUNCTION "
                 + BLOCK
                 + "() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION"
                 + " 'disconnect blocked'; END $$");

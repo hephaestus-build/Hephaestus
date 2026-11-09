@@ -3,35 +3,33 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.organization;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.Map;
-import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The change set that moves memberships stored under GitHub's organization id runs this file. It runs here against a
- * fixture schema, because the migrated schema's foreign keys no longer allow such rows.
+ * fixture schema, because the migrated schema's foreign keys no longer allow such rows. It runs as the schema owner, as
+ * the migration does: the application role cannot create the fixture schema.
  */
 class OrganizationMembershipStoredIdsMigrationIntegrationTest extends BaseIntegrationTest {
 
     private static final String SCRIPT = "db/sql/organization-membership-stored-ids.sql";
 
-    @Autowired
-    private JdbcTemplate jdbc;
-
-    @Autowired
-    private DataSource dataSource;
-
-    @Autowired
-    private TransactionTemplate transactionTemplate;
-
     @Test
-    void shouldMoveWebhookRowsToTheStoredOrganizationAndKeepTheSyncsRole() {
-        var rows = transactionTemplate.execute(status -> {
+    void shouldMoveWebhookRowsToTheStoredOrganizationAndKeepTheSyncsRole() throws SQLException {
+        var owner = PostgreSQLTestContainer.owner();
+        try (Connection connection = DriverManager.getConnection(owner.jdbcUrl(), owner.username(), owner.password())) {
+            connection.setAutoCommit(false);
+            var dataSource = new SingleConnectionDataSource(connection, true);
+            var jdbc = new JdbcTemplate(dataSource);
             try {
                 jdbc.execute("CREATE SCHEMA membership_remap_fixture");
                 jdbc.execute("SET LOCAL search_path TO membership_remap_fixture");
@@ -55,20 +53,19 @@ class OrganizationMembershipStoredIdsMigrationIntegrationTest extends BaseIntegr
                         + " (999, 10, 'MEMBER'), (2, 99, 'MEMBER')");
 
                 ResourceDatabasePopulator script = new ResourceDatabasePopulator(new ClassPathResource(SCRIPT));
-                // The populator takes the transaction's connection, so it sees the fixture search path.
-                script.execute(dataSource);
+                // On the fixture's connection, inside its transaction: execute(DataSource) would commit, which ends
+                // the fixture's search path and keeps the fixture schema.
+                script.populate(connection);
 
-                return jdbc.queryForList("SELECT organization_id, user_id, role FROM organization_membership"
-                        + " ORDER BY organization_id, user_id");
+                assertThat(jdbc.queryForList("SELECT organization_id, user_id, role FROM organization_membership"
+                                + " ORDER BY organization_id, user_id"))
+                        .containsExactly(
+                                Map.of("organization_id", 1L, "user_id", 10L, "role", "ADMIN"),
+                                Map.of("organization_id", 1L, "user_id", 11L, "role", "MEMBER"),
+                                Map.of("organization_id", 2L, "user_id", 12L, "role", "MEMBER"));
             } finally {
-                status.setRollbackOnly();
+                connection.rollback();
             }
-        });
-
-        assertThat(rows)
-                .containsExactly(
-                        Map.of("organization_id", 1L, "user_id", 10L, "role", "ADMIN"),
-                        Map.of("organization_id", 1L, "user_id", 11L, "role", "MEMBER"),
-                        Map.of("organization_id", 2L, "user_id", 12L, "role", "MEMBER"));
+        }
     }
 }

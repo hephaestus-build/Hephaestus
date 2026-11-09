@@ -1,0 +1,15 @@
+{{- if .Values.postgresql.bundled }}
+# The files that set up the database roles, for the migration Job and the monitor Job. A ConfigMap, not a container
+# command: Kubernetes rewrites $$ and $(NAME) in a command and its arguments, which would break the SQL.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "database-setup") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "database-setup") | nindent 4 }}
+data:
+  {{- range list "database-quiet.sql" "database-roles.sql" "database-monitor.sql" "database-roles.sh" "database-monitor.sh" "scram-sha-256.pl" }}
+  {{ . }}: |-
+    {{- $.Files.Get (printf "files/%s" .) | trimSuffix "\n" | nindent 4 }}
+  {{- end }}
+{{- end }}

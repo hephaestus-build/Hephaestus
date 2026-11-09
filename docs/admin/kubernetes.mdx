@@ -149,7 +149,8 @@ A minimal install needs these keys:
 - `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`.
 - `WEBHOOK_SECRET` and `WEBHOOK_ROUTING_SECRET`.
 - `HEPHAESTUS_CONVERSATION_LOOP_SECRET`, when the worker runs.
-- `DATABASE_USERNAME` and `DATABASE_PASSWORD`.
+- `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD`, the passwords of the [database roles](#database-roles).
+- With the bundled PostgreSQL, also `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD`, its administrator.
 - `NATS_USERNAME` and `NATS_PASSWORD`.
 - `GITHUB_OAUTH_CLIENT_SECRET`, for sign-in with GitHub.
 
@@ -179,7 +180,7 @@ It needs `kubectl` with access to the release namespace, `openssl` and `jq`.
 
    Add these options when they apply:
 
-   - `--external-database`: you use your own PostgreSQL. The script takes `DATABASE_USERNAME` and `DATABASE_PASSWORD` from the environment.
+   - `--external-database`: you use your own PostgreSQL. The script takes `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD` from the environment. Use the passwords that you gave the [database roles](#database-roles).
    - `--new-keys`: with `--external-database`, for a database without Hephaestus data only. The script cannot see whether the database holds data. For a database with data, restore both keys from your backup first.
    - `--external-nats`: you use your own NATS broker. The script takes `NATS_USERNAME` and `NATS_PASSWORD` from the environment.
    - `--backups`: you turn on backups with a new, empty backup repository. The script generates `BACKUP_CIPHER_PASS`. For an existing repository, restore its passphrase into the Secret instead.
@@ -190,7 +191,7 @@ It needs `kubectl` with access to the release namespace, `openssl` and `jq`.
 
 Run the script again at any time, for example with `--backups` when you turn on backups.
 It adds only the keys that the Secret lacks.
-The script stops if the bundled PostgreSQL volume exists but the Secret lacks the database login or an encryption key.
+The script stops if the bundled PostgreSQL volume exists but the Secret lacks the administrator login or an encryption key.
 Then restore the Secret from your backup.
 
 If Git holds your release, for example with Argo CD or Flux, create the release namespace first.
@@ -844,9 +845,128 @@ Four consumers read at the same time, while new deliveries arrived:
 | 1 GiB | 820 MiB | 813 MiB | All four caught up, at about 150 MB/s each |
 | 512 MiB | 410 MiB | 402 MiB | All four caught up, at about 165 MB/s each |
 
+## Database roles
+
+Each database purpose has its own PostgreSQL role.
+No Hephaestus process logs in as a superuser.
+
+| Role | Logs in | Can | Secret key |
+| --- | --- | --- | --- |
+| The administrator | Only you, for administration, and the step of the migration Job that sets up the roles. The bundled PostgreSQL creates it at its first start. | Everything. | `DATABASE_ADMIN_USERNAME`, `DATABASE_ADMIN_PASSWORD`, with the bundled PostgreSQL only |
+| `hephaestus_owner` | The migration Job | It owns the database and every schema object, and runs the migrations. It is not a superuser, and it cannot create roles or replicate. | `DATABASE_OWNER_PASSWORD` |
+| `hephaestus_app` | The server and the worker | It reads and writes the rows of the application tables. It owns nothing, and it cannot change the schema or read the role catalog. Row-level security applies to it. | `DATABASE_APP_PASSWORD` |
+| `hephaestus_monitor` | The PostgreSQL exporter | It reads statistics only, as a member of `pg_monitor` ([Database metrics](./observability#database-metrics)). | `DATABASE_MONITOR_PASSWORD` |
+
+Neither `hephaestus_owner` nor `hephaestus_app` has the `BYPASSRLS` attribute.
+As the owner of each table, `hephaestus_owner` is not held to the row-level security policies of its tables, unless a table sets `FORCE ROW LEVEL SECURITY`.
+No table has a policy yet.
+
+The chart file `files/database-roles.sql` sets up the owner and the application role.
+No password reaches the PostgreSQL server.
+The chart script `files/scram-sha-256.pl` computes the SCRAM-SHA-256 verifier of each password, with a new salt, as `psql`'s `\password` does.
+`database-roles.sql` accepts only these verifiers.
+
+A verifier still allows an offline guess of its password.
+While a statement of the file runs, the members of `pg_monitor` can see its verifier in `pg_stat_activity`, but never a password.
+Thus, the chart file `files/database-quiet.sql` runs first, in the same `psql` session.
+It turns off each setting that would record a verifier:
+
+- `pg_stat_statements.track_utility`
+- `log_statement`, `log_min_duration_statement`, `log_min_duration_sample` and `log_transaction_sample_rate`
+- `debug_print_parse`, `debug_print_rewritten` and `debug_print_plan`
+- `log_min_error_statement`
+
+`database-roles.sql` does not run without it.
+Both files need `psql` 15 or later and PostgreSQL 16 or later, and they stop with a message on an older version.
+`scram-sha-256.pl` needs Perl 5.10 or later with the module `Digest::SHA`.
+Most distributions include that module with Perl. On RHEL and its minimal images, install the package `perl-Digest-SHA`.
+Hephaestus itself needs PostgreSQL 18 ([Compatibility policy](./compatibility-policy#database-baseline-prerequisites)).
+
+`database-roles.sql` is idempotent:
+
+- It creates each role that does not exist and sets its password verifier.
+  It reads both verifiers from the environment of `psql`, never from its command line.
+- It stops if either role is a superuser, bypasses row-level security, creates roles or replicates.
+- It makes `hephaestus_owner` the owner of the database.
+- It removes the right of every other role to create objects in the schema `public`. A database from before PostgreSQL 15 gives that right to all roles.
+- It moves each schema object of another role to `hephaestus_owner`. The objects of an extension stay with the role that created the extension.
+- It updates the extensions `pg_partman`, `citext` and `btree_gist` to the versions that the PostgreSQL server has. The migrations never update an extension.
+- It grants `hephaestus_app` the rows of each table, and each table that `hephaestus_owner` creates later.
+
+The chart script `files/database-roles.sh` runs these files in the right order: it computes the verifiers, then runs `database-quiet.sql` and `database-roles.sql` in one `psql` session.
+With the bundled PostgreSQL, the migration Job runs the script before each migration, as the administrator.
+The chart gives the Job the files in a ConfigMap, not in its command, because Kubernetes rewrites `$$` and `$(NAME)` in a command.
+Only that init container of the Job gets the administrator's password.
+Thus, a changed `DATABASE_OWNER_PASSWORD` or `DATABASE_APP_PASSWORD` takes effect with the next upgrade.
+A new PostgreSQL image with a new extension version also takes effect with that step.
+
+The application role keeps the monthly partitions of `auth_event` through the function `maintain_auth_event_partitions()`.
+That function runs as `hephaestus_owner`, for `auth_event` only.
+No other role can run it.
+
+If a key is missing from the Secret, `helm upgrade` stops and names it.
+It also stops if the Secret holds `DATABASE_USERNAME` or `DATABASE_PASSWORD`, the single login before 1.0.
+
+### Database roles on an external PostgreSQL
+
+The chart never gets the administrator login of your PostgreSQL.
+Thus, you set up the roles yourself.
+Do this before the first install, after each change of their passwords, and after each update of the server's extensions.
+
+1. Get the folder `files/` from the verified chart of the release, as [Verify the release chart](#verify-the-release-chart) describes.
+2. Generate a password for each role:
+
+   ```bash
+   export DATABASE_OWNER_PASSWORD="$(openssl rand -hex 24)"
+   export DATABASE_APP_PASSWORD="$(openssl rand -hex 24)"
+   ```
+
+3. Run the script as an administrator of your PostgreSQL, with the Hephaestus database.
+   It reads the two exported passwords and sends PostgreSQL only their verifiers:
+
+   ```bash
+   sh "chart-$VERSION/hephaestus/files/database-roles.sh" \
+     "host=<host> dbname=hephaestus user=<administrator> sslmode=verify-full"
+   ```
+
+4. Put both passwords in the Secret, as [Create the Secret](#create-the-secret) describes with `--external-database`.
+
+The administrator can be a superuser or a role with `CREATEROLE` and `CREATEDB`, as a managed PostgreSQL service gives:
+
+- It must own the Hephaestus database, or be a member of its owner.
+- If the roles exist, it must have created them, or have the `ADMIN` option on them.
+- The file makes it a member of `hephaestus_owner`, with `INHERIT` and `SET`.
+  Thus, it can give the database and the objects to that role.
+  The administrator can then act as `hephaestus_owner`, and the row-level security of its tables does not apply to it.
+  This gives it nothing new: with the `ADMIN` option on the role, it could already grant itself that membership.
+
+Only a superuser may change the settings that `database-quiet.sql` turns off.
+For each setting that the administrator may not change, the file checks the value that applies:
+
+- If `pg_stat_statements.track_utility` is `on`, or `log_statement` is not `none`, the file stops.
+- If `log_min_duration_statement` or `log_min_duration_sample` is not `-1`, the file stops.
+- If `log_transaction_sample_rate` is not `0`, the file stops.
+- If `log_min_error_statement` is not `panic`, the file continues with a warning.
+  Then a statement of the run that fails writes its verifier to the server log.
+
+Before you run the files, set these values for the administrator at the service:
+
+- `pg_stat_statements.track_utility = off`
+- `log_statement = none`
+- `log_min_duration_statement = -1` and `log_min_duration_sample = -1`
+- `log_transaction_sample_rate = 0`
+- `log_min_error_statement = panic`
+
+Run the script of the chart as the steps above show, and do not copy the statements of its files.
+The comments of `database-roles.sql` tell what each step does and why.
+
+Do not give either role more privileges.
+The migrations need no superuser: `citext` and `btree_gist` are trusted extensions, and `pg_partman` needs only the owner of the database.
+
 ## External PostgreSQL and NATS
 
 Set `postgresql.bundled=false` to use your PostgreSQL server.
+Set up its [database roles](#database-roles-on-an-external-postgresql) first.
 That server must have the `pg_partman` extension.
 Also set `wal_compression = lz4` (or `zstd`) on it, as the bundled PostgreSQL does.
 Without it, a streamed answer writes about 1.5 times more write-ahead log, because most of that log is full-page images of index pages.
@@ -1869,15 +1989,17 @@ Use [Recover the live installation](#recover-the-live-installation) for a live r
 9. Restore the other replica counts only after the isolated checks pass.
    Follow [Prove silence](./production-operations-runbook#silent-deployment-checklist) before opening any external destination.
 
-The restored database has the database password that it had at the backup.
-If `DATABASE_PASSWORD` changed since then, put the old value back in the Secret before step 3.
+The restored database has the role passwords that it had at the backup.
+The migration Job of step 8 sets the passwords of `hephaestus_owner` and `hephaestus_app` from the Secret again.
+If `DATABASE_ADMIN_PASSWORD` changed since the backup, put the old value back in the Secret before step 3.
 Rehearse a restore on a copy of the instance before you need one.
 
 #### Recover the live installation
 
 1. Close traffic and provider reception. Stop application roles and sandboxes, and pause reconciliation.
 2. Keep a copy of the failed data and record the chosen recovery point and expected lost writes.
-3. Check whether `DATABASE_PASSWORD` changed after the recovery point. If it changed, restore the matching value in the Secret before startup.
+3. Check whether `DATABASE_ADMIN_PASSWORD` changed after the recovery point. If it changed, restore the matching value in the Secret before startup.
+   The migration Job sets the passwords of `hephaestus_owner` and `hephaestus_app` again.
    Complete steps 1, 2 and 4 of the isolated drill with application replicas at zero.
    Keep provider and model egress denied. Wait for `pg_is_in_recovery()` to return `f`.
 4. Do not apply `restore-clone-lockdown.sql` to the live recovery database.

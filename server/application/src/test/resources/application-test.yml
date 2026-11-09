@@ -22,11 +22,6 @@ spring:
             leak-detection-threshold: 5000 # 5 seconds for leak detection
             connection-test-query: SELECT 1
 
-    sql:
-        init:
-            mode: always
-            schema-locations: classpath:db/auth-event-sequence.sql,classpath:db/rate-limit-buckets.sql
-
     # Liquibase owns the same native constraints and functions in tests and production.
     jpa:
         hibernate:

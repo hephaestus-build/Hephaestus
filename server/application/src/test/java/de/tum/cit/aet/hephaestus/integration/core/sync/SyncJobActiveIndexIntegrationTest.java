@@ -27,7 +27,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,9 +36,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 class SyncJobActiveIndexIntegrationTest extends AbstractWorkspaceIntegrationTest {
-
-    private static final String CREATE_PARTIAL_INDEX = "CREATE UNIQUE INDEX IF NOT EXISTS ux_sync_job_active "
-            + "ON sync_job (connection_id) WHERE status IN ('PENDING', 'RUNNING')";
 
     @Autowired
     private SyncJobService syncJobService;
@@ -61,9 +57,6 @@ class SyncJobActiveIndexIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @BeforeEach
     void setUp() {
-        // Recreate the Liquibase-only partial index against the real Postgres container.
-        jdbcTemplate.execute(CREATE_PARTIAL_INDEX);
-
         User owner = persistUser("sync-index-owner-" + System.nanoTime());
         workspace = createWorkspace(
                 "sync-index-ws-" + System.nanoTime(),
@@ -78,12 +71,6 @@ class SyncJobActiveIndexIntegrationTest extends AbstractWorkspaceIntegrationTest
                 new ConnectionConfig.GitHubAppConfig(200L, "sync-index-org", null, Set.of())));
         connection.setState(IntegrationState.ACTIVE);
         connection = connectionRepository.save(connection);
-    }
-
-    @AfterEach
-    void dropIndex() {
-        // This test owns the index; drop it so it can't leak into a context-sharing sibling.
-        jdbcTemplate.execute("DROP INDEX IF EXISTS ux_sync_job_active");
     }
 
     @Test

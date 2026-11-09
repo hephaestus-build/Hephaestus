@@ -10,11 +10,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Runs partition creation and retention according to {@code partman.part_config}.
+ * Runs partition creation and retention of {@code auth_event} according to {@code partman.part_config}.
  *
- * <p>Raw JDBC rather than a repository method: {@code run_maintenance_proc} commits after each
- * partition set, and PostgreSQL rejects a {@code COMMIT} inside a procedure called within a
- * transaction block, which every Spring Data modifying query runs in.
+ * <p>Through {@code maintain_auth_event_partitions()}, which runs as the schema owner: the application's database
+ * role owns no table, and partition maintenance creates and drops tables.
  */
 @ConditionalOnServerRole
 @Component
@@ -32,7 +31,7 @@ public class AuthEventPartitionMaintenance {
     @Scheduled(cron = "0 10 0 * * *")
     @SchedulerLock(name = "auth-event-partition-maintenance", lockAtMostFor = "PT5M", lockAtLeastFor = "PT30S")
     public void maintain() {
-        jdbcTemplate.execute("CALL partman.run_maintenance_proc()");
-        log.debug("auth.audit: pg_partman run_maintenance_proc executed for auth_event");
+        jdbcTemplate.execute("SELECT maintain_auth_event_partitions()");
+        log.debug("auth.audit: pg_partman maintenance executed for auth_event");
     }
 }

@@ -235,8 +235,10 @@ const secretValue = (bytes: number) => randomBytes(bytes).toString("hex");
 export function applicationSecret(): Record<string, string> {
 	const key = secretValue(16);
 	return {
-		DATABASE_USERNAME: "hephaestus",
-		DATABASE_PASSWORD: secretValue(16),
+		DATABASE_ADMIN_USERNAME: "postgres",
+		DATABASE_ADMIN_PASSWORD: secretValue(16),
+		DATABASE_OWNER_PASSWORD: secretValue(16),
+		DATABASE_APP_PASSWORD: secretValue(16),
 		NATS_USERNAME: `heph${secretValue(16)}`,
 		NATS_PASSWORD: `heph${secretValue(16)}`,
 		HEPHAESTUS_SECURITY_ENCRYPTION_KEY: key,
@@ -628,6 +630,57 @@ async function externalPostgresql(
 	]);
 }
 
+/** A file of the chart's `files/` folder. */
+async function chartFile(file: string): Promise<string> {
+	return readFile(path.join(CHART, "files", file), "utf8");
+}
+
+/**
+ * The operator's step for an external PostgreSQL: the chart's roles, as docs/admin/kubernetes.mdx § Database roles
+ * runs them. The passwords travel on standard input, never in an argument list.
+ */
+async function externalDatabaseRoles(data: Readonly<Record<string, string>>): Promise<void> {
+	const owner = data.DATABASE_OWNER_PASSWORD ?? "";
+	const app = data.DATABASE_APP_PASSWORD ?? "";
+	// As the operator runs it: database-roles.sh with the chart's files beside it, and the passwords in its
+	// environment, so that psql sends only their verifiers.
+	const directory = "/tmp/hephaestus-database";
+	const lines = [`mkdir -p ${directory}`];
+	for (const file of [
+		"database-quiet.sql",
+		"database-roles.sql",
+		"scram-sha-256.pl",
+		"database-roles.sh",
+	]) {
+		lines.push(
+			`cat > ${directory}/${file} <<'HEPHAESTUS_FILE'`,
+			await chartFile(file),
+			"HEPHAESTUS_FILE",
+		);
+	}
+	lines.push(
+		`export DATABASE_OWNER_PASSWORD='${owner}' DATABASE_APP_PASSWORD='${app}'`,
+		`sh ${directory}/database-roles.sh -U hephaestus -d hephaestus`,
+		"",
+	);
+	const shell = lines.join("\n");
+	await kubectl(
+		[
+			"-n",
+			EXTERNAL_POSTGRESQL,
+			"exec",
+			"-i",
+			"postgresql-0",
+			"-c",
+			"postgresql",
+			"--",
+			"sh",
+			"-es",
+		],
+		shell,
+	);
+}
+
 interface PrepareOptions {
 	work: string;
 	images: ChartImages;
@@ -699,7 +752,8 @@ export async function prepare(options: PrepareOptions): Promise<{ rotated: boole
 	}
 	await secret(`${RELEASE}-app`, NAMESPACE, data);
 	if (options.externalCidr !== undefined) {
-		await externalPostgresql(options.images.postgres, tls, data.DATABASE_PASSWORD ?? "");
+		await externalPostgresql(options.images.postgres, tls, data.DATABASE_ADMIN_PASSWORD ?? "");
+		await externalDatabaseRoles(data);
 	}
 	if (options.gateway !== undefined) {
 		const { host } = options.gateway;
@@ -1378,7 +1432,7 @@ async function psql(sql: string): Promise<string> {
 		"--",
 		"psql",
 		"-U",
-		"hephaestus",
+		"postgres",
 		"-d",
 		"hephaestus",
 		"-v",

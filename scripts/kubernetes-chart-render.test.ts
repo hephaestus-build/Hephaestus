@@ -3200,10 +3200,7 @@ await test("every revision migrates the database once, in a Job that only reache
 	assert.equal(get(waitEnv("DATABASE_HOST"), "value"), "heph-postgresql.hephaestus.svc");
 	assert.equal(get(waitEnv("DATABASE_PORT"), "value"), "5432");
 	// pg_isready runs as a user that the image's passwd does not name: without PGUSER it never dials.
-	assert.deepEqual(get(waitEnv("PGUSER"), "valueFrom", "secretKeyRef"), {
-		name: secretName,
-		key: "DATABASE_USERNAME",
-	});
+	assert.equal(get(waitEnv("PGUSER"), "value"), "hephaestus_owner");
 	assert.match(String(list(get(wait, "command")).at(-1)), /pg_isready/u);
 	// No Helm hook: the Job is part of the release, so `--wait-for-jobs` waits for it.
 	assert.equal(get(migration, "metadata", "annotations", "helm.sh/hook"), undefined);
@@ -3311,6 +3308,173 @@ await test("PostgreSQL has a lower kubelet OOM adjustment than review and conver
 			"database precedes sandbox in OOM protection",
 		);
 	}
+});
+
+const databaseSetupDirectory = "/etc/hephaestus/database";
+const databaseSetupFiles = [
+	"database-quiet.sql",
+	"database-roles.sql",
+	"database-monitor.sql",
+	"database-roles.sh",
+	"database-monitor.sh",
+	"scram-sha-256.pl",
+];
+
+/** The pod's container runs the chart's files from the ConfigMap, which holds each of them unchanged. */
+function assertDatabaseSetup(resources: Resource[], pod: unknown, entry: unknown): void {
+	const setup = resources.find(
+		(resource) => kindOf(resource) === "ConfigMap" && componentOf(resource) === "database-setup",
+	);
+	assert.ok(setup, "the database-setup ConfigMap");
+	const data = asRecord(get(setup, "data"), "database-setup data");
+	assert.deepEqual(
+		Object.keys(data).toSorted(byCodePoint),
+		databaseSetupFiles.toSorted(byCodePoint),
+	);
+	for (const file of databaseSetupFiles) {
+		const content = readFileSync(path.join(chart, "files", file), "utf8").replace(/\n$/u, "");
+		assert.equal(data[file], content, `the ConfigMap holds files/${file} unchanged`);
+	}
+	assert.deepEqual(
+		list(get(entry, "volumeMounts")).find((mount) => get(mount, "name") === "database-setup"),
+		{ name: "database-setup", mountPath: databaseSetupDirectory, readOnly: true },
+	);
+	assert.deepEqual(
+		get(
+			list(get(podSpec(pod), "volumes")).find((volume) => get(volume, "name") === "database-setup"),
+			"configMap",
+		),
+		{ name: nameOf(setup) },
+	);
+}
+
+/** Every container of every Pod template: Deployments, StatefulSets, Jobs and the Jobs of CronJobs. */
+const podTemplates = (resources: Resource[]) =>
+	resources.flatMap((resource) => {
+		const kind = String(kindOf(resource));
+		if (kind === "CronJob") {
+			return [get(resource, "spec", "jobTemplate", "spec", "template", "spec")];
+		}
+		return ["Deployment", "StatefulSet", "DaemonSet", "Job"].includes(kind)
+			? [get(resource, "spec", "template", "spec")]
+			: [];
+	});
+
+await test("no container command holds text that Kubernetes rewrites", () => {
+	// Kubernetes replaces $(NAME) with the container's variable NAME and $$ with $ in a command and its arguments.
+	// A script inlined there, such as SQL with $$ quotes, then runs changed: the chart ships scripts as files.
+	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
+	const everything = {
+		postgresql: {
+			metrics: { enabled: true },
+			backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
+		},
+	};
+	const renders = [
+		...profiles.map((name) => rendered([...layersFor(name), workerLayer])),
+		rendered([...layersFor("small"), workerLayer, everything]),
+	];
+	const entries = renders
+		.flatMap(podTemplates)
+		.flatMap((spec) => [...list(get(spec, "initContainers")), ...list(get(spec, "containers"))]);
+	const texts = entries.flatMap((entry) => {
+		const defined = new Set(
+			list(get(entry, "env")).map((variable) => String(get(variable, "name"))),
+		);
+		return [...list(get(entry, "command")), ...list(get(entry, "args"))].map((text) => ({
+			name: String(get(entry, "name")),
+			text: String(text),
+			defined,
+		}));
+	});
+	const checked = texts.length;
+	// A reference to the container's own variable is the feature, used on purpose.
+	const rewritten = texts.flatMap(({ name, text, defined }) =>
+		[...text.matchAll(/\$\$|\$\((?<variable>[A-Za-z_][A-Za-z0-9_]*)\)/gu)]
+			.filter(
+				(match) => match.groups?.variable === undefined || !defined.has(match.groups.variable),
+			)
+			.map((match) => `${name}: ${match[0]}`),
+	);
+	assert.ok(checked > 0, "the renders hold commands");
+	assert.deepEqual(rewritten, []);
+});
+
+/** The Secret keys that one container reads. */
+const secretKeysOf = (entry: unknown): string[] =>
+	list(get(entry, "env")).flatMap((variable) => {
+		const key = get(variable, "valueFrom", "secretKeyRef", "key");
+		return typeof key === "string" ? [key] : [];
+	});
+
+const databaseUserOf = (entry: unknown) =>
+	get(
+		list(get(entry, "env")).find((variable) => get(variable, "name") === "DATABASE_USERNAME"),
+		"value",
+	);
+
+const migrationJobOf = (resources: Resource[]) => {
+	const job = resources.find(
+		(resource) => kindOf(resource) === "Job" && componentOf(resource) === "migration",
+	);
+	assert.ok(job, "one migration Job");
+	return job;
+};
+
+await test("each database purpose logs in with its own role, and no Hephaestus process as the administrator", () => {
+	const bundledRelease = rendered([...layersFor("small"), workerLayer]);
+	for (const component of ["server", "worker"]) {
+		const role = workload(bundledRelease, component);
+		assert.ok(role, component);
+		assert.equal(databaseUserOf(container(role)), "hephaestus_app", component);
+		assert.deepEqual(
+			get(env(role, "DATABASE_PASSWORD"), "valueFrom", "secretKeyRef", "key"),
+			"DATABASE_APP_PASSWORD",
+			component,
+		);
+		assert.ok(
+			!secretKeysOf(container(role)).some((key) => key.startsWith("DATABASE_ADMIN_")),
+			component,
+		);
+	}
+	const migration = migrationJobOf(bundledRelease);
+	assert.equal(databaseUserOf(container(migration)), "hephaestus_owner");
+	assert.deepEqual(
+		secretKeysOf(container(migration)).filter((key) => key.startsWith("DATABASE_")),
+		["DATABASE_OWNER_PASSWORD"],
+	);
+	// Only the init container that sets up the roles holds the administrator's login.
+	const roles = list(get(podSpec(migration), "initContainers")).find(
+		(entry) => get(entry, "name") === "database-roles",
+	);
+	assert.notEqual(roles, undefined, "the database-roles init container");
+	assert.deepEqual(secretKeysOf(roles), [
+		"DATABASE_ADMIN_USERNAME",
+		"DATABASE_ADMIN_PASSWORD",
+		"DATABASE_OWNER_PASSWORD",
+		"DATABASE_APP_PASSWORD",
+	]);
+	// It runs the chart's script from the ConfigMap, the same script that the integration tests run: its command
+	// holds no SQL, which Kubernetes would rewrite.
+	assert.deepEqual(get(roles, "command"), ["sh", `${databaseSetupDirectory}/database-roles.sh`]);
+	assertDatabaseSetup(bundledRelease, migration, roles);
+	const postgresql = workload(bundledRelease, "postgresql");
+	assert.ok(postgresql, "postgresql");
+	assert.deepEqual(secretKeysOf(container(postgresql)), [
+		"DATABASE_ADMIN_USERNAME",
+		"DATABASE_ADMIN_PASSWORD",
+	]);
+	// An operator's PostgreSQL: the chart never holds its administrator's login.
+	const externalMigration = migrationJobOf(rendered(layersFor("external")));
+	assert.equal(
+		list(get(podSpec(externalMigration), "initContainers")).some(
+			(entry) => get(entry, "name") === "database-roles",
+		),
+		false,
+	);
+	assert.ok(
+		!secretKeysOf(container(externalMigration)).some((key) => key.startsWith("DATABASE_ADMIN_")),
+	);
 });
 
 await test("every role verifies an external PostgreSQL with the CA alone", () => {
@@ -4311,16 +4475,18 @@ await test("the PostgreSQL exporter runs apart from the database, and its role J
 	const script = String(
 		list(get(job, "spec", "template", "spec", "containers", 0, "command")).at(-1),
 	);
-	// Idempotent, and the password is set on every revision, so a rotated key takes effect.
+	// The chart's monitor script, from the ConfigMap: PostgreSQL gets only the SCRAM verifier of the password, and the
+	// password is set on every revision, so a rotated key takes effect.
 	assert.match(
 		script,
-		/WHERE NOT EXISTS \(SELECT FROM pg_roles WHERE rolname = 'hephaestus_monitor'\) \\gexec/u,
+		new RegExp(`^exec sh ${databaseSetupDirectory}/database-monitor\\.sh$`, "mu"),
 	);
-	assert.match(
+	assert.doesNotMatch(
 		script,
-		/ALTER ROLE hephaestus_monitor WITH LOGIN NOSUPERUSER .* PASSWORD :'password';/u,
+		/psql/u,
+		"the Job's command holds no SQL, which Kubernetes would rewrite",
 	);
-	assert.match(script, /CREATE EXTENSION IF NOT EXISTS pg_stat_statements SCHEMA monitoring;/u);
+	assertDatabaseSetup(on, job, list(get(job, "spec", "template", "spec", "containers"))[0]);
 	assert.deepEqual(postgresqlPeers(on).slice(-2), ["postgresql-exporter", "postgresql-monitor"]);
 
 	// An external PostgreSQL is the operator's to prepare: the exporter reads it, and no Job runs.

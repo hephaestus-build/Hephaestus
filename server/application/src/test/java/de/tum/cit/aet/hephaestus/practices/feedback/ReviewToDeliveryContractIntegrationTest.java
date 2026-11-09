@@ -1039,7 +1039,6 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             "spring.profiles.active=worker",
                             "spring.config.import=classpath:application-test.yml",
                             "spring.main.lazy-initialization=false",
-                            "spring.sql.init.mode=never",
                             "spring.liquibase.enabled=false",
                             "spring.datasource.url=" + System.getenv("LOST_WORKER_JDBC_URL"),
                             "spring.datasource.username=" + System.getenv("LOST_WORKER_JDBC_USER"),
