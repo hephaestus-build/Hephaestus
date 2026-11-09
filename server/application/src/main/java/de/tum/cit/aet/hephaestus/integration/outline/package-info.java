@@ -25,6 +25,8 @@
             "core::security",
             // Runtime-role gate on the connect strategy.
             "core::runtime",
+            // One subscription registration of a workspace at a time, on every server.
+            "core::lock",
             // A paused or removed collection tells running Heph turns that their context changed.
             "core::event",
             // Admin services throw the shared EntityNotFoundException → 404 via the global advice.

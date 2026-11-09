@@ -91,6 +91,9 @@ This is the [transactional outbox](https://microservices.io/patterns/data/transa
   PostgreSQL: "The best defense against deadlocks is generally to avoid them by being certain that all applications using a database acquire locks on multiple objects in a consistent order."
 - Use `pg_advisory_xact_lock`. It is "automatically released at the end of the transaction".
   Use a session lock only on a dedicated connection that you release in `finally`.
+- Work that calls a network service and must run one at a time takes a `ClusterLock`, not `synchronized`.
+  More than one server runs, and an in-memory lock serializes only one of them.
+  `ClusterLock` holds a session lock on a dedicated connection and has no transaction.
 - A queue claims rows with `FOR UPDATE SKIP LOCKED` and a lease.
   PostgreSQL: `SKIP LOCKED` "is not suitable for general purpose work, but can be used to avoid lock contention with multiple consumers accessing a queue-like table" ([SELECT](https://www.postgresql.org/docs/18/sql-select.html)).
 - Do not catch a constraint violation and then continue in the same transaction.

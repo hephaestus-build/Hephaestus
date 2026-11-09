@@ -8,10 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineWebhookContr
 import io.nats.client.Connection;
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -33,8 +30,8 @@ import org.springframework.stereotype.Component;
  * keeps it for {@link #REGISTRATION_GRACE} until the connection stores it. A rebuild at start and every minute removes
  * routes that left the database, and recreates the bucket when NATS lost it.
  *
- * <p>The grace lives in this process's memory, so exactly one server process may allow and rebuild (ADR 0066): another
- * process's rebuild would remove a route allowed here until its connection stores it.
+ * <p>The grace is the age of the route's key in the bucket, so any server may allow a route and any server may rebuild:
+ * a rebuild keeps a key that a server wrote within the grace, whether the rebuild read the database before or after.
  */
 @Component
 @ConditionalOnServerRole
@@ -52,9 +49,6 @@ public class OutlineRouteProjection {
     private final ConnectionRepository connections;
     private final Clock clock;
 
-    /** Routes allowed but maybe not stored yet, by when they were allowed. Guarded by {@code this}. */
-    private final Map<String, Instant> allowed = new HashMap<>();
-
     public OutlineRouteProjection(Connection nats, ConnectionRepository connections, Clock clock) {
         this.routes = new ProjectedKeys(nats, OutlineWebhookController.ROUTES_BUCKET);
         this.connections = connections;
@@ -62,10 +56,8 @@ public class OutlineRouteProjection {
     }
 
     /** Lets the receiver accept {@code route}; throws {@link ProjectedKeys.UnavailableException} when it cannot. */
-    public synchronized void allow(String route) {
-        String key = OutlineWebhookController.routeKey(route);
-        routes.add(key);
-        allowed.put(key, clock.instant());
+    public void allow(String route) {
+        routes.add(OutlineWebhookController.routeKey(route));
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -73,17 +65,14 @@ public class OutlineRouteProjection {
     @SchedulerLock(name = "outline-route-projection", lockAtMostFor = "PT5M", lockAtLeastFor = "PT30S")
     @WorkspaceAgnostic(
             "Projects the webhook routes of every workspace's Outline connection; a route names no workspace")
-    public synchronized void rebuild() {
+    public void rebuild() {
         Set<String> current = connections.findActiveOutlineRoutes().stream()
                 .map(ConnectionRepository.OutlineRouteRow::getRoute)
                 .filter(Objects::nonNull)
                 .map(OutlineWebhookController::routeKey)
                 .collect(Collectors.toCollection(HashSet::new));
-        Instant cutoff = clock.instant().minus(REGISTRATION_GRACE);
-        allowed.values().removeIf(at -> at.isBefore(cutoff));
-        current.addAll(allowed.keySet());
         try {
-            routes.replaceAll(current);
+            routes.replaceAll(current, clock.instant().minus(REGISTRATION_GRACE));
         } catch (ProjectedKeys.UnavailableException e) {
             log.warn("Outline route projection rebuild failed: bucket={}, cause={}", e.bucket(), e.causeClass());
         }

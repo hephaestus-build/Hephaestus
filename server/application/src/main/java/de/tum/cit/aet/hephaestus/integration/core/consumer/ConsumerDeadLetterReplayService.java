@@ -2,21 +2,18 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.InstallationReplayAudit;
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.nats.client.JetStreamApiException;
 import io.nats.client.api.MessageInfo;
 import io.nats.client.impl.NatsJetStreamMetaData;
 import io.nats.client.impl.NatsMessage;
 import java.io.IOException;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.function.Supplier;
-import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,27 +30,19 @@ public class ConsumerDeadLetterReplayService {
     private final IntegrationNatsConsumer consumer;
     private final TransactionTemplate transactions;
     private final InstallationReplayAudit audit;
-    private final DataSource dataSource;
-
-    /**
-     * One replay of a consumer at a time, on every server: the resume of one replay's fence would end the pause of
-     * another. A session lock ends with its connection, so a replay on a server that dies leaves no lock behind.
-     */
-    private static final String LOCK = "SELECT pg_try_advisory_lock(hashtext('consumer-replay'), hashtext(?))";
-
-    private static final String UNLOCK = "SELECT pg_advisory_unlock(hashtext('consumer-replay'), hashtext(?))";
+    private final ClusterLock locks;
 
     public ConsumerDeadLetterReplayService(
             ConsumerDeadLetterRepository repository,
             IntegrationNatsConsumer consumer,
             TransactionTemplate transactions,
             InstallationReplayAudit audit,
-            DataSource dataSource) {
+            ClusterLock locks) {
         this.repository = repository;
         this.consumer = consumer;
         this.transactions = transactions;
         this.audit = audit;
-        this.dataSource = dataSource;
+        this.locks = locks;
     }
 
     public ConsumerDeadLetterDTO replayWorkspace(Long workspaceId, Long id, Long actorId) {
@@ -124,44 +113,13 @@ public class ConsumerDeadLetterReplayService {
         }
     }
 
+    /** One replay of a consumer at a time, on every server: the resume of one replay's fence would end another's. */
     private <T> T oneReplayAtATime(String consumerName, Supplier<T> replay) {
-        // An autocommit connection with no transaction: the replay's own transactions take other connections.
-        try (Connection connection = dataSource.getConnection()) {
-            if (!holds(connection, LOCK, consumerName)) {
-                throw new ConsumerFenceException("Another replay of the consumer runs", null);
-            }
-            try {
-                return replay.get();
-            } finally {
-                release(connection, consumerName);
-            }
-        } catch (SQLException failure) {
+        try {
+            return locks.call("consumer-replay:" + consumerName, Duration.ZERO, replay)
+                    .orElseThrow(() -> new ConsumerFenceException("Another replay of the consumer runs", null));
+        } catch (ClusterLock.UnavailableException failure) {
             throw new ConsumerFenceException("The replay lock is unavailable", failure);
-        }
-    }
-
-    /** A pooled connection that may still hold the lock must not return to the pool, so a failed unlock aborts it. */
-    private static void release(Connection connection, String consumerName) {
-        try {
-            if (holds(connection, UNLOCK, consumerName)) return;
-        } catch (SQLException failure) {
-            log.warn("Replay unlock failed: error.type={}", failure.getClass().getName());
-        }
-        try {
-            connection.abort(Runnable::run);
-        } catch (SQLException failure) {
-            log.warn(
-                    "Replay connection abort failed: error.type={}",
-                    failure.getClass().getName());
-        }
-    }
-
-    private static boolean holds(Connection connection, String sql, String consumerName) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, consumerName);
-            try (ResultSet result = statement.executeQuery()) {
-                return result.next() && result.getBoolean(1);
-            }
         }
     }
 

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.outline.lifecycle;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineWebhookEvent
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -70,6 +72,11 @@ public class OutlineWebhookRegistrar {
 
     private final ConnectionRepository connections;
 
+    private final ClusterLock locks;
+
+    /** How long a registration waits for another of the same workspace; one that waits longer is left to the heal. */
+    private static final Duration REGISTRATION_WAIT = Duration.ofMinutes(1);
+
     private final Counter failedDeletions;
 
     /** ACTIVE connections whose subscription is missing or not on a current route, as of the last heal. */
@@ -83,6 +90,7 @@ public class OutlineWebhookRegistrar {
             ObjectProvider<IntegrationNatsConsumer> natsConsumer,
             ObjectProvider<OutlineRouteProjection> routes,
             ConnectionRepository connections,
+            ClusterLock locks,
             MeterRegistry meterRegistry) {
         this.connectionService = connectionService;
         this.outlineApiClient = outlineApiClient;
@@ -91,6 +99,7 @@ public class OutlineWebhookRegistrar {
         this.natsConsumer = natsConsumer;
         this.routes = routes;
         this.connections = connections;
+        this.locks = locks;
         this.failedDeletions = Counter.builder(OutlineMetrics.OUTLINE_WEBHOOK_SUBSCRIPTION_DELETION_FAILED)
                 .description("Outline subscriptions that Hephaestus could not delete upstream")
                 .register(meterRegistry);
@@ -153,10 +162,23 @@ public class OutlineWebhookRegistrar {
      * another URL, or on a route of a retired routing key is replaced: a new subscription is registered and
      * stored, then the old one is deleted upstream; an unverifiable upstream (listing failed) changes nothing.
      *
-     * <p>Serialized: the heal, the activation listener and the sync can reach the same route-less workspace at once,
-     * and two registrations would leave the loser's subscription upstream.
+     * <p>Serialized per workspace on every server ({@link ClusterLock}): the heal, the activation listener and the
+     * sync can reach the same route-less workspace at once, on one server or on two, and two registrations would leave
+     * the loser's subscription upstream. A call that cannot take the lock leaves the workspace to the next heal.
      */
-    public synchronized void ensureSubscription(long workspaceId) {
+    public void ensureSubscription(long workspaceId) {
+        boolean ran;
+        try {
+            ran = locks.run("outline-subscription:" + workspaceId, REGISTRATION_WAIT, () -> ensure(workspaceId));
+        } catch (ClusterLock.UnavailableException e) {
+            ran = false;
+        }
+        if (!ran) {
+            log.warn("outline.webhook: subscription check skipped for workspaceId={}: reason=lockBusy", workspaceId);
+        }
+    }
+
+    private void ensure(long workspaceId) {
         if (externalUrl == null || externalUrl.isBlank() || !credential.isConfigured()) {
             return;
         }

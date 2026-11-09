@@ -67,7 +67,8 @@ A replay does not come through the consumer, so it uses a fence (NATS 2.11 or la
 The fence pauses the consumer and waits until no server holds a message of the consumer.
 After the replay, the fence resumes the consumer.
 `ServerReplicasConsumerIntegrationTest` checks the order and the fence with two consumers on one broker.
-Other server state is not yet safe across replicas, so the chart runs one server.
+Work that must run one at a time on every server takes a `ClusterLock` ([Transactions](./transactions.md#6-concurrent-writers)).
+The chart still runs one server.
 
 ## Module boundaries
 

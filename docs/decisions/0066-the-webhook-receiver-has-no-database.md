@@ -74,9 +74,8 @@ It disables a subscription when at least 80 % of at least 10 deliveries in 24 ho
 Thus, an orphaned subscription (one whose connection was disconnected, or whose upstream deletion failed) is disabled, and a `503` is lost and counted, not retried.
 A route is in the set before its subscription is registered, so the first delivery is never refused.
 A rebuild keeps a route that was allowed in the last 5 minutes, until its connection stores it.
-This grace lives in the memory of the one server process; the chart runs one server replica with the `Recreate` strategy.
-With several server processes, one process's rebuild would remove a route that another process allowed, until that process stores it: at most one minute of `410` for a new subscription.
-Before the server runs more than one replica, the allow time must move into the key's value, and a rebuild must keep the keys whose value is younger than the grace.
+The grace is the age of the key: a rebuild keeps a key that the broker stamped in the last 5 minutes.
+Thus, any server process may allow a route, and any server process may rebuild the set.
 The full sync, and a heal at start and every 5 minutes, replace a subscription that is not on a current route: one without a route, on another URL, or on a retired routing key.
 An upgrade or a key rotation therefore needs no operator step.
 This is the same model as the GitLab route credential, and like Svix every subscription has its own secret.

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLocks;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -57,7 +58,7 @@ class SlackChannelConsentProjectionTest extends BaseUnitTest {
         when(nats.keyValue(SlackChannelMessagePublishGate.CONSENT_BUCKET)).thenReturn(bucket);
         when(slack.getInstanceKey()).thenReturn("T1");
         when(connections.findActive(WORKSPACE, IntegrationKind.SLACK)).thenReturn(Optional.of(slack));
-        projection = new SlackChannelConsentProjection(nats, channels, connections);
+        projection = new SlackChannelConsentProjection(nats, channels, connections, ClusterLocks.free());
     }
 
     @Test

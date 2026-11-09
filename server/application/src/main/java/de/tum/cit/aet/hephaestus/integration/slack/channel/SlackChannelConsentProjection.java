@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.channel;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -10,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelConsentSe
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackChannelMessagePublishGate;
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -34,7 +36,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *
  * <p>A consent change through {@link SlackChannelConsentService} updates its key after commit. A rebuild at start and
  * every minute repairs what that cannot see: an erasure, a disconnected or purged workspace, or an update lost to a
- * NATS outage. Updates and rebuilds run one at a time, so a rebuild never restores a key that a later change removed.
+ * NATS outage. Updates and rebuilds run one at a time on every server ({@link ClusterLock}), so a rebuild never
+ * restores a key that a later change removed, and never removes a key that a later change added.
  * The server still checks consent when it stores a message ({@code SlackIngestService}), so a stale key never stores
  * content.
  */
@@ -50,17 +53,34 @@ public class SlackChannelConsentProjection {
     private final ProjectedKeys consent;
     private final SlackMonitoredChannelRepository channels;
     private final ConnectionService connections;
+    private final ClusterLock locks;
+
+    /** The one lock of every update and rebuild. */
+    private static final String LOCK = "slack-channel-consent-projection";
+
+    /** How long an update or a rebuild waits for another; one that waits longer is left to the next rebuild. */
+    private static final Duration LOCK_WAIT = Duration.ofSeconds(30);
 
     public SlackChannelConsentProjection(
-            io.nats.client.Connection nats, SlackMonitoredChannelRepository channels, ConnectionService connections) {
+            io.nats.client.Connection nats,
+            SlackMonitoredChannelRepository channels,
+            ConnectionService connections,
+            ClusterLock locks) {
         this.consent = new ProjectedKeys(nats, SlackChannelMessagePublishGate.CONSENT_BUCKET);
         this.channels = channels;
         this.connections = connections;
+        this.locks = locks;
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
-    public synchronized void onConsentChanged(SlackChannelConsentChangedEvent event) {
+    public void onConsentChanged(SlackChannelConsentChangedEvent event) {
+        if (!serialized(() -> update(event))) {
+            log.warn("Slack consent projection update skipped; the next rebuild repairs it: reason=lockBusy");
+        }
+    }
+
+    private void update(SlackChannelConsentChangedEvent event) {
         Optional<String> team = teamId(event.workspaceId());
         if (team.isEmpty() || !SlackChannelMessagePublishGate.isSlackId(event.slackChannelId())) {
             return;
@@ -87,7 +107,13 @@ public class SlackChannelConsentProjection {
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
     @SchedulerLock(name = "slack-channel-consent-projection", lockAtMostFor = "PT5M", lockAtLeastFor = "PT30S")
     @WorkspaceAgnostic("Projects the ACTIVE Slack channels of every workspace; each key carries its Slack team")
-    public synchronized void rebuild() {
+    public void rebuild() {
+        if (!serialized(this::replaceAll)) {
+            log.warn("Slack consent projection rebuild skipped: reason=lockBusy");
+        }
+    }
+
+    private void replaceAll() {
         Set<String> active = new HashSet<>();
         for (long workspaceId : channels.findDistinctWorkspaceIdsByConsentState(ConsentState.ACTIVE.name())) {
             teamId(workspaceId)
@@ -99,6 +125,15 @@ public class SlackChannelConsentProjection {
             consent.replaceAll(active);
         } catch (ProjectedKeys.UnavailableException e) {
             log.warn("Slack consent projection rebuild failed: bucket={}, cause={}", e.bucket(), e.causeClass());
+        }
+    }
+
+    /** False when the work did not run; a database that cannot lock counts the same, and the next rebuild repairs. */
+    private boolean serialized(Runnable work) {
+        try {
+            return locks.run(LOCK, LOCK_WAIT, work);
+        } catch (ClusterLock.UnavailableException e) {
+            return false;
         }
     }
 

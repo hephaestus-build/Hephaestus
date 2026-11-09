@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -13,21 +12,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.InstallationReplayAudit;
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLocks;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.nats.client.Message;
 import io.nats.client.api.MessageInfo;
 import io.nats.client.impl.Headers;
 import java.nio.charset.StandardCharsets;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.function.Supplier;
-import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
@@ -45,7 +40,7 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
                 consumer,
                 new TransactionTemplate(mock(PlatformTransactionManager.class)),
                 mock(InstallationReplayAudit.class),
-                lockingDataSource());
+                ClusterLocks.free());
         var row = new ConsumerDeadLetter();
         row.setId(17L);
         row.setStreamName("github");
@@ -99,7 +94,7 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
                 consumer,
                 new TransactionTemplate(mock(PlatformTransactionManager.class)),
                 mock(InstallationReplayAudit.class),
-                lockingDataSource());
+                ClusterLocks.free());
         var row = new ConsumerDeadLetter();
         row.setId(18L);
         row.setStreamName("github");
@@ -124,19 +119,5 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
                         failure -> assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
         verify(consumer, never()).dispatch(any(), any());
         assertThat(row.getReplayedAt()).isNull();
-    }
-
-    /** A database that grants every replay lock, so these tests reach the fence. */
-    private static DataSource lockingDataSource() throws SQLException {
-        var result = mock(ResultSet.class);
-        when(result.next()).thenReturn(true);
-        when(result.getBoolean(1)).thenReturn(true);
-        var statement = mock(PreparedStatement.class);
-        when(statement.executeQuery()).thenReturn(result);
-        var connection = mock(Connection.class);
-        when(connection.prepareStatement(anyString())).thenReturn(statement);
-        var dataSource = mock(DataSource.class);
-        when(dataSource.getConnection()).thenReturn(connection);
-        return dataSource;
     }
 }

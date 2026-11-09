@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationCoreConnectionPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
@@ -39,13 +40,13 @@ import io.nats.client.Nats;
 import io.nats.client.api.StreamConfiguration;
 import io.nats.client.impl.Headers;
 import java.nio.charset.StandardCharsets;
-import java.sql.PreparedStatement;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import javax.sql.DataSource;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -117,7 +118,7 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
     private WebTestClient client;
 
     @Autowired
-    private DataSource dataSource;
+    private ClusterLock locks;
 
     private Workspace workspace;
     private Workspace other;
@@ -241,12 +242,23 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 delivery("github.acme.repo.issues", "{\"action\":\"ignored\"}", "scope-lock"),
                 new PayloadParsingException("older parser"));
         var row = service.listWorkspace(workspace.getId(), null, 100).content().getFirst();
-        // Another server's replay holds the consumer's lock in its own database session.
-        try (java.sql.Connection other = dataSource.getConnection();
-                PreparedStatement lock =
-                        other.prepareStatement("SELECT pg_advisory_lock(hashtext('consumer-replay'), hashtext(?))")) {
-            lock.setString(1, consumer.fencedConsumerName(workspace.getId(), stream));
-            lock.execute();
+        // Another server's replay of the same consumer holds its lock.
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread other = Thread.ofVirtual()
+                .start(() -> locks.run(
+                        "consumer-replay:" + consumer.fencedConsumerName(workspace.getId(), stream),
+                        Duration.ZERO,
+                        () -> {
+                            held.countDown();
+                            try {
+                                release.await(30, TimeUnit.SECONDS);
+                            } catch (InterruptedException interrupted) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }));
+        try {
+            assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
             client.post()
                     .uri("/workspaces/deadletters-a/integrations/dead-letters/{id}/replays", row.id())
                     .headers(TestAuthUtils.withCurrentUser())
@@ -254,6 +266,9 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectStatus()
                     .isEqualTo(503)
                     .expectBody(Void.class);
+        } finally {
+            release.countDown();
+            other.join(Duration.ofSeconds(10));
         }
         assertThat(service.listWorkspace(workspace.getId(), null, 100).content())
                 .filteredOn(candidate -> candidate.id().equals(row.id()))

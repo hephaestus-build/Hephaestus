@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -17,6 +18,14 @@ public interface LoginProviderRepository extends JpaRepository<LoginProvider, Lo
     Optional<LoginProvider> findByRegistrationId(String registrationId);
 
     boolean existsByRegistrationId(String registrationId);
+
+    /**
+     * Serializes the seed from the environment across servers that start at once, until the surrounding transaction
+     * ends, so the second server finds the first one's rows instead of failing on their unique registration id. The
+     * two-integer key space of ADR 0017 native auth ({@code classId=17}); {@code objId=2} is this seed.
+     */
+    @Query(value = "SELECT pg_advisory_xact_lock(17, 2)", nativeQuery = true)
+    void acquireSeedLock();
 
     /** One login app per SCM instance (uq on {@code type + base_url}) — guards seeding against duplicates. */
     boolean existsByTypeAndBaseUrl(LoginProvider.ProviderType type, String baseUrl);

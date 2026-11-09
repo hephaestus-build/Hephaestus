@@ -5,9 +5,11 @@ import io.nats.client.JetStreamApiException;
 import io.nats.client.KeyValue;
 import io.nats.client.KeyValueManagement;
 import io.nats.client.api.KeyValueConfiguration;
+import io.nats.client.api.KeyValueEntry;
 import io.nats.client.api.StorageType;
 import java.io.IOException;
 import java.io.Serial;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -60,9 +62,17 @@ public final class ProjectedKeys {
      * fails once; the second try looks the bucket up again and creates it.
      */
     public void replaceAll(Set<String> keys) {
+        replaceAll(keys, null);
+    }
+
+    /**
+     * {@link #replaceAll(Set)}, but keeps a key outside {@code keys} that was written after {@code keepWrittenAfter}.
+     * The broker stamps each write, so every server that rebuilds the set sees the same writes as recent.
+     */
+    public void replaceAll(Set<String> keys, @Nullable Instant keepWrittenAfter) {
         for (int attempt = 1; ; attempt++) {
             try {
-                replaceAll(kv(true), keys);
+                replaceAll(kv(true), keys, keepWrittenAfter);
                 return;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -76,11 +86,11 @@ public final class ProjectedKeys {
         }
     }
 
-    private static void replaceAll(KeyValue kv, Set<String> keys)
+    private static void replaceAll(KeyValue kv, Set<String> keys, @Nullable Instant keepWrittenAfter)
             throws IOException, JetStreamApiException, InterruptedException {
         List<String> stored = kv.keys();
         for (String key : stored) {
-            if (!keys.contains(key)) {
+            if (!keys.contains(key) && !writtenAfter(kv, key, keepWrittenAfter)) {
                 kv.delete(key);
             }
         }
@@ -89,6 +99,13 @@ public final class ProjectedKeys {
                 kv.put(key, new byte[0]);
             }
         }
+    }
+
+    private static boolean writtenAfter(KeyValue kv, String key, @Nullable Instant after)
+            throws IOException, JetStreamApiException {
+        if (after == null) return false;
+        KeyValueEntry entry = kv.get(key);
+        return entry != null && entry.getCreated().toInstant().isAfter(after);
     }
 
     private KeyValue kv(boolean create) throws IOException, JetStreamApiException {
