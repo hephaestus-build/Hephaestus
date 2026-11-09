@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 
+import de.tum.cit.aet.hephaestus.agent.context.CapturedSourceFingerprints;
+import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventRecorded;
@@ -34,10 +37,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewStateValue;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RoleHolder;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SourceReadAudience;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.GeneralReviewCommentContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.IssueContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.LinkedWorkItemContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.RepositoryTreeContentSource;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewThreadContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
@@ -67,12 +72,14 @@ import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResol
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultCurrentness;
+import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
@@ -80,6 +87,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -100,9 +108,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -111,6 +121,7 @@ import org.springframework.modulith.events.FailedEventPublications;
 import org.springframework.modulith.events.ResubmissionOptions;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
@@ -137,6 +148,18 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ScmItemService sources;
+
+    @Autowired
+    private WorkspaceContextBuilder contexts;
+
+    @Autowired
+    private ScmSourceFingerprints fingerprints;
+
+    @Autowired
+    private ObjectMapper mapper;
+
+    @Autowired
+    private ResultFreshness freshness;
 
     @Autowired
     private ItemIndexService writer;
@@ -1653,6 +1676,113 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(unavailable.provider()).isNull();
         assertThat(unavailable.title()).isNull();
         assertThat(unavailable.url()).isNull();
+    }
+
+    /**
+     * Freshness at a practice's start compares what its capture read with what the work holds now. A pull request that
+     * did not change since fingerprints the same for every record source, also when the discussion sync finished in
+     * between, and a remark that arrived since changes only its own source.
+     */
+    @ParameterizedTest
+    @CsvSource({"GITHUB,false", "GITHUB,true", "GITLAB,false", "GITLAB,true"})
+    void shouldFingerprintAnUnchangedPullRequestAtStartAsItsCaptureDid(
+            IdentityProviderType type, boolean syncFinishedAfterCapture) {
+        var fixture = fixture(type);
+        var issue = new Issue();
+        issue.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));
+        issue.setProvider(fixture.provider());
+        issue.setRepository(fixture.repository());
+        issue.setNumber(31);
+        issue.setTitle("A linked issue");
+        issue.setBody("What the change resolves.");
+        issue.setState(Issue.State.OPEN);
+        issue.setAuthor(fixture.author());
+        issue.setHtmlUrl(fixture.repository().getHtmlUrl() + "/issues/31");
+        issue.setCreatedAt(Instant.parse("2026-10-01T09:00:00Z"));
+        issue.setUpdatedAt(Instant.parse("2026-10-01T09:00:00Z"));
+        issue = issues.saveAndFlush(issue);
+        var pull = new PullRequest();
+        pull.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));
+        pull.setProvider(fixture.provider());
+        pull.setRepository(fixture.repository());
+        pull.setNumber(32);
+        pull.setTitle("A quiet change");
+        pull.setBody("Nothing happens on this pull request after its review starts.");
+        pull.setState(Issue.State.OPEN);
+        pull.setAuthor(fixture.author());
+        pull.setHtmlUrl(fixture.repository().getHtmlUrl() + "/pull/32");
+        pull.setCreatedAt(Instant.parse("2026-10-01T10:00:00Z"));
+        pull.setUpdatedAt(Instant.parse("2026-10-01T10:00:00Z"));
+        pull.setHeadRefOid("e".repeat(40));
+        pull.setBaseRefOid("f".repeat(40));
+        pull.setHeadRefName("topic");
+        pull.setBaseRefName("main");
+        pull.replaceClosingIssues(Set.of(issue));
+        pull = pulls.saveAndFlush(pull);
+        jdbc.update(
+                """
+                INSERT INTO issue_comment(native_id,provider_id,issue_id,body,html_url,author_association,created_at,author_id)
+                VALUES (?,?,?,'A general remark','https://example.test/comment/general','MEMBER',?,?)
+                """,
+                ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE),
+                fixture.provider().getId(),
+                pull.getId(),
+                Timestamp.from(Instant.parse("2026-10-01T11:00:00Z")),
+                fixture.author().getId());
+        ItemRef holder = writer.upsert(new ItemRegistration(
+                fixture.workspace().getId(),
+                ScmItemEvents.REPOSITORY,
+                fixture.repository().getId(),
+                null,
+                null));
+        ItemRef pullRef = writer.upsert(new ItemRegistration(
+                holder.workspaceId(), ScmItemEvents.PULL_REQUEST, pull.getId(), holder.itemId(), null));
+        Set<SourceKind> kinds = Set.of(
+                PullRequestContentSource.CORE,
+                PullRequestContentSource.COMMENTS,
+                PullRequestContentSource.CHECKS,
+                GeneralReviewCommentContentSource.KIND,
+                ReviewThreadContentSource.KIND,
+                LinkedWorkItemContentSource.KIND);
+        // A review can start while the discussion sync still runs: the mirror has not read the whole discussion yet.
+        if (syncFinishedAfterCapture)
+            jdbc.update("UPDATE issue SET discussion_read_whole=FALSE WHERE id=?", pull.getId());
+        var snapshot = sources.pin(pullRef, null);
+
+        try (var evidence = contexts.prepare(
+                snapshot,
+                new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 0, kinds, "3.0.0", 3, null, kinds))) {
+            var captured = CapturedSourceFingerprints.of(mapper, evidence);
+            assertThat(captured).isNotEmpty();
+            // The sync then finishes without finding anything new: the work itself did not change.
+            if (syncFinishedAfterCapture)
+                jdbc.update("UPDATE issue SET discussion_read_whole=TRUE WHERE id=?", pull.getId());
+            var current = fingerprints.fingerprints(
+                    pullRef, captured.keySet().stream().map(SourceKind::new).collect(Collectors.toSet()), mapper);
+            assertThat(current.entrySet().stream()
+                            .collect(Collectors.toMap(entry -> entry.getKey().value(), Map.Entry::getValue)))
+                    .isEqualTo(captured);
+            var facts = mapper.createObjectNode();
+            facts.set(ReviewCaptureDecision.SOURCE_FINGERPRINTS, mapper.valueToTree(captured));
+            var unchanged = freshness.check(pullRef.workspaceId(), pullRef.itemId(), facts);
+            assertThat(unchanged.currentness()).isEqualTo(Currentness.CURRENT);
+            assertThat(unchanged.changed()).isEmpty();
+
+            // A remark arrives after the capture: the practice must not start on what it no longer shows.
+            jdbc.update(
+                    """
+                    INSERT INTO issue_comment(native_id,provider_id,issue_id,body,html_url,author_association,created_at,author_id)
+                    VALUES (?,?,?,'A later remark','https://example.test/comment/later','MEMBER',?,?)
+                    """,
+                    ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE),
+                    fixture.provider().getId(),
+                    pull.getId(),
+                    Timestamp.from(Instant.parse("2026-10-01T12:00:00Z")),
+                    fixture.author().getId());
+            var changed = freshness.check(pullRef.workspaceId(), pullRef.itemId(), facts);
+            assertThat(changed.currentness()).isEqualTo(Currentness.STALE);
+            assertThat(changed.changed()).containsExactly(GeneralReviewCommentContentSource.KIND.value());
+        }
     }
 
     private Fixture fixture(IdentityProviderType type) {

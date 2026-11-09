@@ -12,6 +12,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import java.time.Clock;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
@@ -20,6 +22,8 @@ import tools.jackson.databind.json.JsonMapper;
 @ConditionalOnCaptureRole
 @RequiredArgsConstructor
 public class ReviewFreshnessService implements ReviewFreshness {
+    private static final Logger log = LoggerFactory.getLogger(ReviewFreshnessService.class);
+
     private final ReviewRepository reviews;
     private final ReviewItemRepository items;
     private final ReviewPracticeRepository practices;
@@ -63,7 +67,15 @@ public class ReviewFreshnessService implements ReviewFreshness {
             throw new IllegalArgumentException("The invocation does not own this practice");
         if (member.getState() != ReviewItemState.LISTED) return false;
         if (review.getKind() == ReviewKind.SCAN) return true;
-        var state = freshness.capture(workspaceId, id.itemId(), assignment.getCaptureDecision());
+        var check = freshness.check(workspaceId, id.itemId(), assignment.getCaptureDecision());
+        var state = check.currentness();
+        log.info(
+                "Practice start: reviewId={}, practiceId={}, currentness={}, changedSources={}, unreadSources={}",
+                id.reviewId(),
+                id.practiceId(),
+                state,
+                check.changed(),
+                check.unread());
         if (state == Currentness.CURRENT) {
             assignment.setStatus(ReviewPracticeStatus.RUNNING);
             return true;
