@@ -1469,12 +1469,14 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 		[
 			sandboxes,
 			[
-				// No pods/exec: the worker runs no command in any sandbox Pod.
-				...["create", "delete", "get", "list", "patch", "watch"].map((verb) => `/pods:${verb}`),
+				// No pods/exec: the worker runs no command in any sandbox Pod. No Pod patch, which can
+				// change the image of a sandbox that runs, and no Pod delete: a stop deletes the Job.
+				// The create is for the isolation probe's Pod Security dry run.
+				...["create", "get", "list", "watch"].map((verb) => `/pods:${verb}`),
 				"/pods/log:get",
 				...["create", "delete", "get", "list", "watch"].map((verb) => `batch/jobs:${verb}`),
-				// A quota refusal of a review Pod: the Job controller's event.
-				...["get", "list"].map((verb) => `/events:${verb}`),
+				// A quota refusal of a review Pod: the Job controller's event, found in a list.
+				"/events:list",
 				// How many reviews fit, watched as Pods and Jobs are, so a claim poll reads a cache.
 				...["list", "watch"].map((verb) => `/resourcequotas:${verb}`),
 				// A subject's sandbox: its claim, never the Sandbox or its Pod, which the controller owns.

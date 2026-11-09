@@ -128,10 +128,13 @@ metadata:
   labels:
     {{- include "hephaestus.labels" (dict "root" . "component" "sandbox") | nindent 4 }}
 rules:
-  # A kill ends a Pod by a patch of its deadline.
+  # The worker creates Pods only through Jobs. The create verb is for the isolation probe's
+  # Pod Security dry run, which creates nothing; "jobs create" already gives the same authority.
+  # The worker has no Pod patch, because a patch can change the image of a sandbox that runs.
+  # It has no Pod delete: to stop a sandbox, it deletes the Job with Foreground propagation.
   - apiGroups: [""]
     resources: ["pods"]
-    verbs: ["get", "list", "watch", "create", "delete", "patch"]
+    verbs: ["get", "list", "watch", "create"]
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
@@ -139,10 +142,10 @@ rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["get", "list", "watch", "create", "delete"]
-  # The Job controller reports a quota refusal of a review Pod as an event.
+  # The Job controller reports a quota refusal of a review Pod as an event. The worker lists them.
   - apiGroups: [""]
     resources: ["events"]
-    verbs: ["get", "list"]
+    verbs: ["list"]
   # The quota tells how many reviews fit and whether one can ever fit. The worker watches it, as it watches Pods
   # and Jobs, so a claim poll sends the API server nothing.
   - apiGroups: [""]

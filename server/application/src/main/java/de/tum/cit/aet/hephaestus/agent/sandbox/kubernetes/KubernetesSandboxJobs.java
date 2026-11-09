@@ -202,7 +202,7 @@ public class KubernetesSandboxJobs {
         } catch (KubernetesClientException e) {
             if (e.getCode() == 403 && eventsDenied.compareAndSet(false, true)) {
                 log.warn("The worker may not read the events of the sandbox namespace, so a review whose Pod the"
-                        + " sandbox quota refuses waits for its timeout and spends a retry. Grant get and list on"
+                        + " sandbox quota refuses waits for its timeout and spends a retry. Grant list on"
                         + " events there (docs/admin/kubernetes.mdx)");
             }
         } catch (SandboxException e) {
@@ -254,8 +254,9 @@ public class KubernetesSandboxJobs {
     }
 
     /**
-     * Deletes the Job, and its Pod before the Job goes ({@code Foreground}, ADR 0068 § The tools Pod), so that no
-     * replacement Pod starts; a Job that is already gone is no error.
+     * Deletes the Job, and its Pod before the Job goes ({@code Foreground}, ADR 0068 § The Heph loop), so that no
+     * replacement Pod starts; a Job that is already gone is no error. The worker stops a sandbox only this way: its
+     * Role grants no Pod delete or patch.
      */
     public void deleteWithPod(String job) {
         try {
@@ -265,24 +266,6 @@ public class KubernetesSandboxJobs {
                     .inNamespace(worker.namespace())
                     .withName(job)
                     .withPropagationPolicy(DeletionPropagation.FOREGROUND)
-                    .delete();
-        } catch (KubernetesClientException e) {
-            throw KubernetesPods.failure("Could not delete a sandbox Job", e);
-        }
-    }
-
-    /**
-     * Deletes the Job and, in the background, its Pod; a Job that is already gone is no error. The propagation is
-     * explicit: the API's own default for a {@code batch/v1} Job orphans its Pods.
-     */
-    public void delete(String job) {
-        try {
-            client.batch()
-                    .v1()
-                    .jobs()
-                    .inNamespace(worker.namespace())
-                    .withName(job)
-                    .withPropagationPolicy(DeletionPropagation.BACKGROUND)
                     .delete();
         } catch (KubernetesClientException e) {
             throw KubernetesPods.failure("Could not delete a sandbox Job", e);

@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,6 +74,10 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
         private final String name;
         private volatile @Nullable String pod;
         private volatile boolean killed;
+        /** Whether its exit is recorded: once, before the first deletion of its Job. */
+        private final AtomicBoolean recorded = new AtomicBoolean();
+        /** The transcripts read before a stop at a stage's deadline, which deletes the Pod with its logs. */
+        private final Map<Container, String> kept = new ConcurrentHashMap<>();
 
         private Sandbox(String name, @Nullable String pod) {
             this.name = name;
@@ -152,10 +157,8 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
             case INITIALIZED -> {
                 KubernetesPods.Waited waited = pods.waitFor(pod, KubernetesPods::initializationEnded, until(deadline));
                 if (waited.timedOut()) {
-                    Pod stopped = pods.stop(pod);
-                    yield new Observation(
-                            true,
-                            stopped == null ? null : KubernetesPods.exitCode(stopped, KubernetesPods.INITIALIZER));
+                    stop(sandbox, pod, Container.INITIALIZER);
+                    yield new Observation(true, null);
                 }
                 Pod ended = undisrupted(present(waited.pod()));
                 if (KubernetesPods.notIsolated(ended)) {
@@ -185,12 +188,21 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
             case ENDED -> {
                 KubernetesPods.Waited waited = pods.waitFor(pod, KubernetesPods::runtimeEnded, until(deadline));
                 if (waited.timedOut()) {
-                    Pod stopped = pods.stop(pod);
-                    yield new Observation(
-                            true, stopped == null ? null : KubernetesPods.exitCode(stopped, KubernetesPods.LOOP));
+                    stop(sandbox, pod, Container.RUNTIME);
+                    yield new Observation(true, null);
                 }
-                yield new Observation(
-                        false, KubernetesPods.exitCode(undisrupted(present(waited.pod())), KubernetesPods.LOOP));
+                Pod ended = undisrupted(present(waited.pod()));
+                Integer exit = KubernetesPods.exitCode(ended, KubernetesPods.LOOP);
+                if (exit == null && ended.getMetadata().getDeletionTimestamp() != null) {
+                    // A kill deletes the Job with its Pod, which stops the runtime as a deadline does: its exit, and
+                    // the result it uploads in the grace period, come after the deletion starts.
+                    Pod stopped = pods.awaitRuntimeExit(pod);
+                    exit = stopped == null ? null : KubernetesPods.exitCode(stopped, KubernetesPods.LOOP);
+                    if (exit == null) {
+                        exit = SandboxLayout.EXIT_KILLED;
+                    }
+                }
+                yield new Observation(false, exit);
             }
         };
     }
@@ -244,18 +256,21 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
         }
     }
 
+    /** The container's log, or the one kept when a stage's deadline stopped the sandbox. */
     @Override
     public String transcript(Handle handle, Container container) {
-        String pod = sandbox(handle).pod;
-        if (pod == null) {
-            return "";
+        Sandbox sandbox = sandbox(handle);
+        String kept = sandbox.kept.get(container);
+        if (kept != null) {
+            return kept;
         }
-        return pods.logs(pod, container == Container.INITIALIZER ? KubernetesPods.INITIALIZER : KubernetesPods.LOOP);
+        String pod = sandbox.pod;
+        return pod == null ? "" : logs(pod, container);
     }
 
     /**
-     * Ends the sandbox's Pod as the kubelet ends a Pod past its deadline, and keeps its logs. A review whose Job has
-     * created no Pod yet loses its Job instead, so that it creates none.
+     * Records the exit, then deletes the Job with its Pod ({@code Foreground}). The Pod's log goes with it: the runner
+     * reads no transcript after a kill. A review whose Job has created no Pod yet then creates none.
      */
     @Override
     public void kill(Handle handle) {
@@ -267,14 +282,35 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
             sandbox.killed = true;
         }
         String pod = pod(handle, sandbox);
-        if (pod != null) {
-            pods.terminate(pod);
-        } else {
-            reviewJobs.delete(handle.id());
+        if (pod != null && first(sandbox)) {
+            exits.recordStop(SandboxExits.Kind.REVIEW, pod);
         }
+        reviewJobs.deleteWithPod(handle.id());
     }
 
-    /** Removes the Job with its Pod. The Pod goes at once, not after the garbage collector's turn. */
+    /**
+     * Stops the sandbox at a stage's deadline. The worker deletes the Job, never only its Pod, and the Pod goes before
+     * its Job ({@code Foreground}, ADR 0068 § The Heph loop). The worker's Role grants no Pod patch or delete. The
+     * deletion takes the Pod's log and exit code with it, so the stage's transcript and the exit are read first.
+     */
+    private void stop(Sandbox sandbox, String pod, Container container) {
+        sandbox.kept.put(container, logs(pod, container));
+        if (first(sandbox)) {
+            exits.recordStop(SandboxExits.Kind.REVIEW, pod);
+        }
+        reviewJobs.deleteWithPod(sandbox.name);
+    }
+
+    /** Whether this call records the exit: a sandbox of another process, unknown here, records it each time. */
+    private static boolean first(@Nullable Sandbox sandbox) {
+        return sandbox == null || sandbox.recorded.compareAndSet(false, true);
+    }
+
+    private String logs(String pod, Container container) {
+        return pods.logs(pod, container == Container.INITIALIZER ? KubernetesPods.INITIALIZER : KubernetesPods.LOOP);
+    }
+
+    /** Records the exit, then deletes the Job with its Pod ({@code Foreground}), as {@link #kill} does. */
     @Override
     public void remove(Handle handle) {
         if (!handle.id().startsWith(REVIEW_PREFIX)) {
@@ -288,26 +324,15 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
         } catch (SandboxException e) {
             failure = e;
         }
-        // Before any delete: the Pod's exit code and log go with it.
-        if (pod != null) exits.record(SandboxExits.Kind.REVIEW, pod);
+        // Before the delete: the Pod's exit code and log go with it.
+        if (pod != null && first(sandbox)) exits.record(SandboxExits.Kind.REVIEW, pod);
         try {
-            reviewJobs.delete(handle.id());
+            reviewJobs.deleteWithPod(handle.id());
         } catch (SandboxException e) {
             if (failure == null) {
                 failure = e;
             } else {
                 failure.addSuppressed(e);
-            }
-        }
-        if (pod != null) {
-            try {
-                pods.delete(pod, 0);
-            } catch (SandboxException e) {
-                if (failure == null) {
-                    failure = e;
-                } else {
-                    failure.addSuppressed(e);
-                }
             }
         }
         if (failure != null) {
@@ -330,6 +355,10 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
     public List<Listed> list() {
         List<Listed> listed = new ArrayList<>();
         for (Job job : reviewJobs.list()) {
+            // A Job that is being deleted waits for its Pod; it is already removed, and its exit already recorded.
+            if (job.getMetadata().getDeletionTimestamp() != null) {
+                continue;
+            }
             Map<String, String> labels = labels(job);
             Optional<UUID> id = uuid(labels.get(KubernetesWorker.JOB_ID));
             if (id.isEmpty()) {

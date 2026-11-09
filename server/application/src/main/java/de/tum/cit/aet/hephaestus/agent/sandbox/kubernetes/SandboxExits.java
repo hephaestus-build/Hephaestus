@@ -112,9 +112,30 @@ public class SandboxExits {
 
     /** Records how the Pod {@code name} ended. Call it before the Pod is deleted; it never fails the removal. */
     public void record(Kind kind, String name) {
+        record(kind, name, false);
+    }
+
+    /**
+     * Records how the Pod {@code name} ended when its worker stops it, before the stop deletes it. A Pod that did not
+     * end and shows no failure of its own ends by the worker's deadline: {@code deadline_exceeded}, not {@code
+     * completed} or {@code start_failed}.
+     */
+    public void recordStop(Kind kind, String name) {
+        record(kind, name, true);
+    }
+
+    private void record(Kind kind, String name, boolean stop) {
         try {
             Pod pod = pods.get(name);
-            report(kind, name, pod == null ? new Exit(Reason.NOT_FOUND, null, null, null) : exit(kind, pod));
+            Exit exit = pod == null ? new Exit(Reason.NOT_FOUND, null, null, null) : exit(kind, pod);
+            if (stop
+                    && pod != null
+                    && !KubernetesPods.terminal(pod)
+                    && exit.container() == null
+                    && (exit.reason() == Reason.COMPLETED || exit.reason() == Reason.START_FAILED)) {
+                exit = new Exit(Reason.DEADLINE_EXCEEDED, null, null, null);
+            }
+            report(kind, name, exit);
         } catch (RuntimeException e) {
             // The class only: the API's message can quote the request. The removal goes on.
             log.debug(

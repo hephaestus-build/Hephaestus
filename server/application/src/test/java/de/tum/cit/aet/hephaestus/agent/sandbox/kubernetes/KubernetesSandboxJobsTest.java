@@ -190,7 +190,7 @@ class KubernetesSandboxJobsTest {
     }
 
     @Test
-    void shouldDeleteTheJobWithItsPodInTheBackgroundAndTakeAGoneJobAsDoneWhenDeleted() throws InterruptedException {
+    void shouldDeleteTheJobWithItsPodInTheForegroundAndTakeAGoneJobAsDoneWhenDeleted() throws InterruptedException {
         String name = reviewName();
         jobs.create(jobs.job(template(name), 900L));
         KubernetesMockServer api = Objects.requireNonNull(server);
@@ -198,15 +198,15 @@ class KubernetesSandboxJobsTest {
             // Drop the requests of the setup.
         }
 
-        jobs.delete(name);
+        jobs.deleteWithPod(name);
 
         RecordedRequest deletion = Objects.requireNonNull(api.takeRequest(5, TimeUnit.SECONDS));
         assertThat(deletion.getMethod()).isEqualTo("DELETE");
         DeleteOptions options =
                 api().getKubernetesSerialization().unmarshal(deletion.getUtf8Body(), DeleteOptions.class);
         assertThat(options.getPropagationPolicy())
-                .as("the API's default for a Job would orphan its Pod")
-                .isEqualTo("Background");
+                .as("the Job stays until its Pod is gone, so no replacement Pod starts")
+                .isEqualTo("Foreground");
         assertThat(api().batch()
                         .v1()
                         .jobs()
@@ -214,7 +214,7 @@ class KubernetesSandboxJobsTest {
                         .withName(name)
                         .get())
                 .isNull();
-        jobs.delete(name);
+        jobs.deleteWithPod(name);
     }
 
     @Test
