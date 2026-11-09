@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 import type { ExtensionFactory, ModelRuntime } from "@earendil-works/pi-coding-agent";
 
+import type { RunContext } from "./driver.ts";
 import { diagnose, errorKind } from "./pi-diagnostics.ts";
 import { hasText } from "./pi-text.ts";
 
@@ -192,6 +193,27 @@ export function loadProviderConfig(cwd = DEFAULT_WORKSPACE_ROOT): ProviderConfig
 export type RegisteredProviderConfig = ProviderConfig & { apiProtocol: string; modelId: string };
 
 /**
+ * The provider of a run that a sandbox drives: the gateway's model routes, called with the sandbox token and the
+ * run's claim (`X-Agent-Run`, `X-Agent-Epoch`), so the gateway bills the call to the run and refuses it once the claim
+ * is gone.
+ */
+export function registerRunProvider(
+	modelRuntime: Pick<ModelRuntime, "registerProvider" | "getModel">,
+	config: ProviderConfig | null,
+	gateway: RunContext["gateway"],
+): config is RegisteredProviderConfig {
+	const { authorization = "", ...claim } = gateway.headers;
+	const token = authorization.replace(/^Bearer /u, "");
+	return registerHephaestusProvider(
+		modelRuntime,
+		config,
+		{ LLM_PROXY_URL: `${gateway.url}/internal/llm`, LLM_PROXY_TOKEN: token },
+		token,
+		claim,
+	);
+}
+
+/**
  * True once the provider is registered, which needs a complete config and the proxy credentials. A runner that
  * holds one credential for its process names it by its variable; the Heph host passes each turn's credential as
  * `apiKey`, so one turn's calls never carry another's.
@@ -201,6 +223,7 @@ export function registerHephaestusProvider(
 	config: ProviderConfig | null,
 	env: Record<string, string | undefined> = process.env,
 	apiKey = "$LLM_PROXY_TOKEN",
+	claim: Readonly<Record<string, string>> = {},
 ): config is RegisteredProviderConfig {
 	const baseUrl = env.LLM_PROXY_URL;
 	if (
@@ -264,7 +287,10 @@ export function registerHephaestusProvider(
 		baseUrl,
 		apiKey,
 		authHeader: true,
-		headers: hasText(env.TRACEPARENT) ? { traceparent: env.TRACEPARENT } : undefined,
+		headers:
+			hasText(env.TRACEPARENT) || Object.keys(claim).length > 0
+				? { ...(hasText(env.TRACEPARENT) ? { traceparent: env.TRACEPARENT } : {}), ...claim }
+				: undefined,
 		api: config.apiProtocol,
 		models: [model],
 	});

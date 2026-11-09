@@ -515,6 +515,8 @@ jobs:
               - 'server/application/src/main/resources/agent/tool-protocol.ts'
               - 'server/application/src/main/resources/agent/tool-client.ts'
               - 'server/application/src/main/resources/agent/tools-server.ts'
+              # The sandbox driver, the image's entrypoint.
+              - 'server/application/src/main/resources/agent/driver*.ts'
             postgres-image:
               - 'docker/postgres/**'
             # What changes an upgrade from the last release: a migration and the baseline synchronization.

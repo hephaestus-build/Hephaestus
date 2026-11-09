@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import test from "node:test";
 
+import type { Isolation } from "../../../main/resources/agent/driver-isolation.ts";
 import { drive, parseAssignment, type KindRunner } from "../../../main/resources/agent/driver.ts";
 
 const RUN = "0b1d4b71-5f1e-4a52-9a43-7e0c4b0d8a11";
@@ -18,6 +19,8 @@ function url(input: Parameters<typeof globalThis.fetch>[0]): string {
 }
 
 const quiet = (_line: string) => undefined;
+
+const ISOLATED: Promise<Isolation> = Promise.resolve({ isolated: true });
 
 interface Call {
 	path: string;
@@ -93,6 +96,7 @@ async function driveOnce(
 	kinds: Record<string, KindRunner>,
 	fake: ReturnType<typeof gateway>,
 	renewEveryMs = 5,
+	isolation = ISOLATED,
 ) {
 	const stop = new AbortController();
 	const idle: typeof globalThis.fetch = async (input, init) => {
@@ -111,6 +115,7 @@ async function driveOnce(
 		renewEveryMs,
 		idleWaitMs: 1,
 		log: quiet,
+		isolation,
 	});
 	return fake.calls;
 }
@@ -249,6 +254,7 @@ void test("a run that finishes as the sandbox stops is still ended, and the driv
 		fetch: fake.fetch,
 		renewEveryMs: 5,
 		log: quiet,
+		isolation: ISOLATED,
 	});
 
 	assert.equal(aborted, true);
@@ -279,4 +285,53 @@ void test("an assignment that does not name a run, its claim and its lease is no
 	]) {
 		assert.throws(() => parseAssignment(broken), /assignment/u);
 	}
+});
+
+void test("no kind starts before the sandbox's policy holds", async () => {
+	const events: string[] = [];
+	const { promise: isolation, resolve } = Promise.withResolvers<Isolation>();
+	setTimeout(() => {
+		events.push("isolated");
+		resolve({ isolated: true });
+	}, 30);
+	await driveOnce(
+		{
+			REVIEW_COMPOSE: async () => {
+				events.push("kind");
+				return { leaseLost: false, outcome: "completed" };
+			},
+		},
+		gateway({ runs: [assignment("REVIEW_COMPOSE")] }),
+		5,
+		isolation,
+	);
+
+	assert.deepEqual(events, ["isolated", "kind"]);
+});
+
+void test("a sandbox whose policy did not hold runs no kind, ends its run as unisolated, and pulls no more", async () => {
+	let ran = false;
+	const fake = gateway({ runs: [assignment("REVIEW_COMPOSE"), assignment("REVIEW_COMPOSE")] });
+	await drive({
+		gatewayUrl: GATEWAY,
+		token: "sandbox-token",
+		kinds: {
+			REVIEW_COMPOSE: async () => {
+				ran = true;
+				return { leaseLost: false, outcome: "completed" };
+			},
+		},
+		signal: new AbortController().signal,
+		fetch: fake.fetch,
+		renewEveryMs: 5,
+		log: quiet,
+		isolation: Promise.resolve({
+			isolated: false,
+			reason: "the Kubernetes API still answered after the bound",
+		}),
+	});
+
+	assert.equal(ran, false);
+	assert.deepEqual(ends(fake.calls), [JSON.stringify({ outcome: "unisolated" })]);
+	assert.equal(fake.calls.filter((call) => call.path.endsWith("/next")).length, 1);
 });

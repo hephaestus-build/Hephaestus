@@ -31,7 +31,8 @@ public class AgentSandboxConfiguration {
             SandboxClaims claims,
             AttemptTokenIssuer tokens,
             TransactionTemplate transactions,
-            AgentSandboxProperties properties) {
+            AgentSandboxProperties properties,
+            MeterRegistry meters) {
         return new AgentSandboxes(
                 sandboxes,
                 runs,
@@ -39,7 +40,8 @@ public class AgentSandboxConfiguration {
                 tokens,
                 transactions,
                 properties.gatewayUrl(),
-                AgentSandboxConfiguration::address);
+                AgentSandboxConfiguration::address,
+                meters);
     }
 
     @Bean

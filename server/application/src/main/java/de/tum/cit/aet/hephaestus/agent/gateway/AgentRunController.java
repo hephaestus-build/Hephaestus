@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import jakarta.validation.Valid;
@@ -39,12 +40,18 @@ import tools.jackson.databind.JsonNode;
 @WorkspaceAgnostic("The sandbox token and the run's own row name the workspace, and the resolver checks both")
 public class AgentRunController {
 
+    /** The end of a sandbox whose network policy did not hold, as its driver sends it. */
+    static final String UNISOLATED = "unisolated";
+
     private final AgentRuns runs;
+    private final AgentSandboxes sandboxes;
     private final TransactionTemplate transactions;
     private final Map<AgentRunKind, SandboxRunKind> kinds = new EnumMap<>(AgentRunKind.class);
 
-    public AgentRunController(AgentRuns runs, TransactionTemplate transactions, List<SandboxRunKind> kinds) {
+    public AgentRunController(
+            AgentRuns runs, AgentSandboxes sandboxes, TransactionTemplate transactions, List<SandboxRunKind> kinds) {
         this.runs = runs;
+        this.sandboxes = sandboxes;
         this.transactions = transactions;
         for (SandboxRunKind kind : kinds) {
             if (this.kinds.put(kind.kind(), kind) != null)
@@ -68,17 +75,27 @@ public class AgentRunController {
         return new Lease(leasedUntil);
     }
 
-    /** Ends the run, or hands it on. A run that this claim already ended answers as ended. */
+    /**
+     * Ends the run, or hands it on. A run that this claim already ended answers as ended. A sandbox whose network
+     * policy did not hold ends its run as {@code unisolated}: the run is handed on and the sandbox taken back in one
+     * transaction, also when the run had moved on already, because the sandbox is unsafe whatever its run.
+     */
     @PostMapping("/end")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void end(SandboxRun run, @Valid @RequestBody End request) {
         var kind = kind(run);
-        var outcome = Arrays.stream(SandboxRunKind.Outcome.values())
-                .filter(candidate -> candidate.value().equals(request.outcome()))
-                .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown outcome"));
-        if (!Boolean.TRUE.equals(transactions.execute(status -> kind.end(run, outcome))))
-            throw new StaleRunException(run.fence());
+        boolean unisolated = UNISOLATED.equals(request.outcome());
+        var outcome = unisolated
+                ? SandboxRunKind.Outcome.HANDED_ON
+                : Arrays.stream(SandboxRunKind.Outcome.values())
+                        .filter(candidate -> candidate.value().equals(request.outcome()))
+                        .findFirst()
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown outcome"));
+        boolean held = Boolean.TRUE.equals(transactions.execute(status -> {
+            if (unisolated) sandboxes.revoke(run.sandbox(), AgentSandboxes.Revocation.UNISOLATED);
+            return kind.end(run, outcome);
+        }));
+        if (!held) throw new StaleRunException(run.fence());
     }
 
     private SandboxRunKind kind(SandboxRun run) {
@@ -90,6 +107,6 @@ public class AgentRunController {
     /** @param leasedUntil when the lease ends unless the sandbox renews it again */
     public record Lease(Instant leasedUntil) {}
 
-    /** @param outcome {@code completed} or {@code handed_on} */
+    /** @param outcome {@code completed}, {@code handed_on} or {@code unisolated} */
     public record End(@NotBlank String outcome) {}
 }

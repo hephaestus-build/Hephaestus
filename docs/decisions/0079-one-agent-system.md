@@ -1,6 +1,6 @@
 # ADR 0079: One agent system: one sandbox per subject on agent-sandbox, PostgreSQL as the only brain
 
-**Status:** Accepted (2026-11-09, amended 2026-11-09 — [erasure of outbox actions](#update--2026-11-09-erasure-deletes-the-actions-of-an-account))
+**Status:** Accepted (2026-11-09, amended 2026-11-09 — [erasure of outbox actions](#update--2026-11-09-erasure-deletes-the-actions-of-an-account), [a tool may hold the sandbox token](#update--2026-11-09-a-tool-may-hold-the-sandbox-token))
 **Date:** 2026-11-09
 **Authors:** Felix T.J. Dietrich
 
@@ -614,6 +614,33 @@ The first outbox kind (`email`, #3994) showed that a cancelled row is not needed
   The domain row records such a copy, and the domain's erasure removes it.
   The outbox never holds the only reference to a provider copy.
 - Without an erasure, an action clears its payload when it ends, and the ended row goes 30 days later.
+
+## Update — 2026-11-09: a tool may hold the sandbox token
+
+This update changes § Subject and sandbox (Sandbox token). The other sections stay.
+
+The loop and the tools run as one user in one container, and model-chosen code runs there.
+A process of that user can read the loop's environment and its memory. Thus, every tool can hold the sandbox token.
+The design does not hide the token from the tools. Hiding it in one place leaves it in another, and it suggests a boundary that does not exist.
+
+Instead, the token never permits more than the loop itself can do:
+
+1. It names one subject. The gateway serves only that subject's runs.
+2. Its `exp` is the sandbox's `shutdownTime`, and it stops when its `agent_sandbox` row is no longer live.
+3. The sandbox's egress reaches only the gateway port. The token is of no use anywhere else.
+4. The server enforces every guardrail of a gateway write.
+   The guardrails are the fence (an unexpired lease with its epoch), admission, the budget and publish-once.
+   The loop enforces none of them. A check in the loop is a convenience, not a control.
+
+The isolation gate proves item 4 from a tool process in a real sandbox.
+The process uses the sandbox's own token for writes out of turn:
+
+- A write with a stale epoch.
+- A write for another run or another subject.
+- A write after `/end`.
+- A model call over the budget.
+
+The gateway must refuse each of them.
 
 ## Sources
 

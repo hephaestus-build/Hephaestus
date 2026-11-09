@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -50,6 +51,7 @@ class AgentRunControllerTest extends BaseUnitTest {
 
     private final AgentRuns runs = mock(AgentRuns.class);
     private final SandboxRunKind review = mock(SandboxRunKind.class);
+    private final AgentSandboxes sandboxes = mock(AgentSandboxes.class);
     private MockMvc mvc;
 
     @BeforeEach
@@ -67,7 +69,7 @@ class AgentRunControllerTest extends BaseUnitTest {
         lenient().when(run.getKind()).thenReturn(AgentRunKind.REVIEW);
         lenient().when(run.getAttempt()).thenReturn(1);
         lenient().when(runs.find(new AgentRunRef(RUN, WORKSPACE))).thenReturn(Optional.of(run));
-        mvc = MockMvcBuilders.standaloneSetup(new AgentRunController(runs, transactions, List.of(review)))
+        mvc = MockMvcBuilders.standaloneSetup(new AgentRunController(runs, sandboxes, transactions, List.of(review)))
                 // The global advice too, whose handler of every exception must not answer a stale claim first.
                 .setControllerAdvice(new GlobalControllerAdvice(), new AgentGatewayErrors())
                 .setCustomArgumentResolvers(new SandboxRunArgumentResolver(runs))
@@ -145,6 +147,22 @@ class AgentRunControllerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldHandOnTheRunOfAnUnisolatedSandboxAndRevokeTheSandboxEvenWhenTheRunMovedOn() throws Exception {
+        when(review.end(run(), SandboxRunKind.Outcome.HANDED_ON)).thenReturn(true, false);
+
+        mvc.perform(claimed(post("/internal/agent/runs/{runId}/end", RUN))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"outcome\":\"unisolated\"}"))
+                .andExpect(status().isNoContent());
+        mvc.perform(claimed(post("/internal/agent/runs/{runId}/end", RUN))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"outcome\":\"unisolated\"}"))
+                .andExpect(status().isConflict());
+
+        verify(sandboxes, times(2)).revoke(SANDBOX, AgentSandboxes.Revocation.UNISOLATED);
+    }
+
+    @Test
     void shouldAnswerARunOfAnotherSubjectOrClaimAsNoRoute() throws Exception {
         // The headers must name the route's run, and an epoch.
         mvc.perform(get("/internal/agent/runs/{runId}/context", RUN)
@@ -173,7 +191,7 @@ class AgentRunControllerTest extends BaseUnitTest {
     void shouldAnswerARunOfAKindThatNoSandboxDrivesAsNoRoute() throws Exception {
         when(runs.isCurrent(FENCE.run(), 3)).thenReturn(true);
         var unserved = MockMvcBuilders.standaloneSetup(
-                        new AgentRunController(runs, mock(TransactionTemplate.class), List.of()))
+                        new AgentRunController(runs, sandboxes, mock(TransactionTemplate.class), List.of()))
                 .setControllerAdvice(new AgentGatewayErrors())
                 .setCustomArgumentResolvers(new SandboxRunArgumentResolver(runs))
                 .build();

@@ -22,6 +22,8 @@ COPY --from=agent-runtime tool-protocol.ts tool-client.ts tools-server.ts ./
 # The conversation loop: its Deployment runs it from the image, so no worker stages it.
 COPY --from=agent-runtime heph-host.ts heph-host-protocol.ts heph-tools.ts pi-agent-sandbox.ts pi-diagnostics.ts \
     pi-diagnostics.json pi-error-text.ts pi-provider.ts pi-text.ts ./
+# The entrypoint of a sandbox from a SandboxTemplate: its driver, and the run kinds that it drives.
+COPY --from=agent-runtime driver.ts driver-kinds.ts driver-isolation.ts ./
 RUN pnpm exec tsc -p tsconfig.build.json && pnpm exec node dist/tools-seccomp.js dist
 
 COPY practice-scripts/package.json practice-scripts/child.ts practice-scripts/build.ts practice-scripts/tsconfig.build.json /opt/practice-scripts/
@@ -222,6 +224,10 @@ CHECK
 RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     ln -s /opt/pi-sdk/node_modules /workspace/node_modules
+
+# A SandboxTemplate's container runs the image's entrypoint; every other user of the image names its own command.
+RUN node --input-type=module -e 'await import("/opt/pi-sdk/driver.js")'
+ENTRYPOINT ["node", "/opt/pi-sdk/driver.js"]
 
 LABEL hephaestus.agent.runtime-contract=15
 LABEL hephaestus.agent.node-version=${NODE_VERSION}

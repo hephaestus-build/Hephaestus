@@ -2,12 +2,15 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.SandboxJwt;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -42,6 +45,7 @@ public class AgentSandboxes {
     private final TransactionTemplate transactions;
     private final String gatewayUrl;
     private final UnaryOperator<String> resolve;
+    private final MeterRegistry meters;
 
     /** @param resolve the address of a host name, as the server's resolver answers it */
     AgentSandboxes(
@@ -51,7 +55,8 @@ public class AgentSandboxes {
             AttemptTokenIssuer tokens,
             TransactionTemplate transactions,
             String gatewayUrl,
-            UnaryOperator<String> resolve) {
+            UnaryOperator<String> resolve,
+            MeterRegistry meters) {
         this.sandboxes = sandboxes;
         this.runs = runs;
         this.claims = claims;
@@ -59,6 +64,21 @@ public class AgentSandboxes {
         this.transactions = transactions;
         this.gatewayUrl = gatewayUrl;
         this.resolve = resolve;
+        this.meters = meters;
+        // Registered at start, so an alert on a count that is still zero has a series to read.
+        for (Revocation reason : Revocation.values())
+            meters.counter(AgentMetrics.AGENT_SANDBOX_REVOKED, "reason", reason.value());
+    }
+
+    /** Why the server takes a live sandbox back before the reaper would. */
+    public enum Revocation {
+        /** Its network policy did not hold in time, so its driver ran nothing (isolation gate G6). */
+        UNISOLATED;
+
+        /** The reason as the event and the counter name it. */
+        public String value() {
+            return name().toLowerCase(Locale.ROOT);
+        }
     }
 
     /** A live sandbox: the caller of a gateway route, or the sandbox that serves a subject now. */
@@ -167,6 +187,22 @@ public class AgentSandboxes {
             throw new IllegalStateException("A sandbox is released outside a transaction, before its claim is deleted");
         Objects.requireNonNull(transactions.execute(status -> sandboxes.release(workspaceId, subjectKey)))
                 .ifPresent(this::deleteClaim);
+    }
+
+    /**
+     * Takes a sandbox back in the caller's transaction: its token stops when the transaction commits, and the reaper
+     * deletes its claim at its next tick. Nothing here calls the API, so the transaction holds no network call.
+     */
+    public void revoke(LiveSandbox sandbox, Revocation reason) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("A sandbox is revoked in the transaction of the change that revokes it");
+        sandboxes.releaseSandbox(sandbox.id(), sandbox.workspaceId()).ifPresent(row -> {
+            meters.counter(AgentMetrics.AGENT_SANDBOX_REVOKED, "reason", reason.value())
+                    .increment();
+            SandboxEvents.event(log.atWarn(), "agent.sandbox.taken_back", row)
+                    .addKeyValue("sandbox.reason", reason.value())
+                    .log("Sandbox revoked; its claim is deleted next");
+        });
     }
 
     /** Deletes a {@code DELETING} sandbox's claim, then its row. A failure leaves both for the reaper's next tick. */

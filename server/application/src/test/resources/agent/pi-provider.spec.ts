@@ -10,6 +10,7 @@ import {
 	loadProviderConfig,
 	type RegisteredModel,
 	registerHephaestusProvider,
+	registerRunProvider,
 } from "../../../main/resources/agent/pi-provider.ts";
 
 function registered(env: Record<string, string | undefined>): RegisteredModel {
@@ -56,4 +57,35 @@ void test("an unknown reasoning effort in pi-provider.json is refused rather tha
 		JSON.stringify({ apiProtocol: "openai-completions", modelId: "m", reasoningEffort: "XHIGH" }),
 	);
 	assert.equal(loadProviderConfig(dir)?.reasoningEffort, "XHIGH");
+});
+
+void test("a sandbox's run calls the gateway's model routes with the sandbox token and the run's claim", () => {
+	let provider: Parameters<ModelRuntime["registerProvider"]>[1] | undefined;
+	const runtime: Pick<ModelRuntime, "registerProvider" | "getModel"> = {
+		getModel: () => undefined,
+		registerProvider(_name, given) {
+			provider = given;
+		},
+	};
+	const ok = registerRunProvider(
+		runtime,
+		{ apiProtocol: "openai-completions", modelId: "m" },
+		{
+			url: "http://10.43.0.12:8081",
+			headers: {
+				authorization: "Bearer sandbox-token",
+				"x-agent-run": "0b1d4b71-5f1e-4a52-9a43-7e0c4b0d8a11",
+				"x-agent-epoch": "3",
+			},
+		},
+	);
+
+	assert.equal(ok, true);
+	assert.ok(provider !== undefined && "baseUrl" in provider);
+	assert.equal(provider.baseUrl, "http://10.43.0.12:8081/internal/llm");
+	assert.equal(provider.apiKey, "sandbox-token");
+	assert.deepEqual(provider.headers, {
+		"x-agent-run": "0b1d4b71-5f1e-4a52-9a43-7e0c4b0d8a11",
+		"x-agent-epoch": "3",
+	});
 });

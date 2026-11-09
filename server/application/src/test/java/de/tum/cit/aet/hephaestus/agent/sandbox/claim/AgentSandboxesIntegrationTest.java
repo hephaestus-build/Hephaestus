@@ -19,13 +19,8 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,10 +49,11 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
-    private final FakeClaims claims = new FakeClaims();
+    private final FakeSandboxClaims claims = new FakeSandboxClaims();
     private final AttemptSigningKey key = AttemptSigningKey.generate();
     private final AttemptTokenVerifier verifier =
             new AttemptTokenVerifier(AttemptKeyFixtures.keyring(key), new SimpleMeterRegistry());
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private AgentSandboxes sandboxes;
     private long workspace;
 
@@ -70,7 +66,8 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
                 new AttemptTokenIssuer(AttemptKeyFixtures.keyring(key)),
                 transactions,
                 "http://hephaestus-sandbox-gateway.hephaestus.svc:8081",
-                host -> "10.43.0.12");
+                host -> "10.43.0.12",
+                meters);
         workspace = workspaces
                 .save(TestEntities.activeWorkspace("sandboxes-" + UUID.randomUUID()))
                 .getId();
@@ -181,6 +178,25 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         assertThat(repository.findById(sandbox.id())).isEmpty();
         var next = ensure(sandbox.subjectKey(), AgentSandboxKind.CONVERSATION);
         assertThat(next.id()).isNotEqualTo(sandbox.id());
+    }
+
+    @Test
+    void shouldRevokeASandboxInItsCallersTransactionAndLeaveItsClaimToTheReaper() {
+        var sandbox = ensure("review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
+        var token = token(sandbox);
+        assertThat(sandboxes.authenticate(token)).isPresent();
+
+        assertThatThrownBy(() -> sandboxes.revoke(sandbox, AgentSandboxes.Revocation.UNISOLATED))
+                .isInstanceOf(IllegalStateException.class);
+        transactions.executeWithoutResult(status -> sandboxes.revoke(sandbox, AgentSandboxes.Revocation.UNISOLATED));
+
+        assertThat(sandboxes.authenticate(token)).isEmpty();
+        assertThat(claims.created).containsKey(claimName(sandbox));
+        assertThat(meters.counter("agent.sandbox.revoked", "reason", "unisolated")
+                        .count())
+                .isEqualTo(1.0);
+        reaper(Duration.ofMinutes(15)).reap();
+        assertThat(claims.created).doesNotContainKey(claimName(sandbox));
     }
 
     @Test
@@ -367,31 +383,5 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
     private String state(AgentSandboxes.LiveSandbox sandbox) {
         return Objects.requireNonNull(
                 jdbc.queryForObject("SELECT state FROM agent_sandbox WHERE id = ?", String.class, sandbox.id()));
-    }
-
-    /** The claims of one sandbox namespace, in memory. */
-    private static final class FakeClaims implements SandboxClaims {
-        final Map<String, Claim> created = new ConcurrentHashMap<>();
-        final List<String> creates = new CopyOnWriteArrayList<>();
-        volatile boolean failCreates;
-        volatile boolean failDeletes;
-
-        @Override
-        public void create(Claim claim) {
-            if (failCreates) throw new IllegalStateException("the API refused the claim");
-            creates.add(claim.name());
-            created.put(claim.name(), claim);
-        }
-
-        @Override
-        public void delete(String name) {
-            if (failDeletes) throw new IllegalStateException("the API refused the delete");
-            created.remove(name);
-        }
-
-        @Override
-        public List<String> names() {
-            return List.copyOf(Set.copyOf(created.keySet()));
-        }
     }
 }
