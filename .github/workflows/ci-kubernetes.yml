@@ -1,7 +1,8 @@
 name: CI / Kubernetes
 
 # The chart on real clusters, with this run's images: an install, an upgrade that rolls every role
-# but PostgreSQL and NATS, and each worker's isolation probe. docs/admin/kubernetes.mdx § Supported clusters states what these
+# but PostgreSQL and NATS, each worker's isolation probe, and the sandbox isolation gate of each
+# SandboxTemplate. docs/admin/kubernetes.mdx § Supported clusters states what these
 # jobs show. They share scripts/kubernetes-cluster.ts with `vp run dev:kubernetes`.
 
 on:
@@ -74,9 +75,10 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
+      # crd-schemas.ts reads YAML with the repository's parser.
       - uses: ./.github/actions/setup-toolchain
         with:
-          install: "none"
+          install: "frozen"
       - uses: ./.github/actions/setup-helm
       - uses: ./.github/actions/setup-kubernetes-tools
       # The render runs `helm lint --strict` on each set of values before it renders them.
@@ -84,9 +86,13 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/kubernetes-cluster.ts render > manifests.yaml
+          # No public catalog carries the agent-sandbox kinds: their schemas come from the pinned definitions.
+          node scripts/crd-schemas.ts deploy/platform/k3s-agent-sandbox.yaml platform-schemas
           for version in 1.35.0 1.37.0; do
             kubeconform -strict -summary -kubernetes-version "$version" \
-              -schema-location "$KUBERNETES_SCHEMAS" -schema-location "$CRD_SCHEMAS" manifests.yaml
+              -schema-location "$KUBERNETES_SCHEMAS" \
+              -schema-location "platform-schemas/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
+              -schema-location "$CRD_SCHEMAS" manifests.yaml
           done
 
   # A leg's name is its distribution, minor and architecture, so its check history survives an
@@ -186,7 +192,9 @@ jobs:
           kubectl -n hephaestus get jobs,cronjobs -o wide || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=postgresql-backup --tail=200 --prefix || true
           kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true
+          kubectl -n hephaestus-sandboxes get sandboxtemplates,sandboxwarmpools,sandboxclaims,sandboxes -o wide || true
           kubectl -n hephaestus-sandboxes describe pods || true
+          kubectl -n agent-sandbox-system logs deployment/agent-sandbox-controller --tail=200 || true
           kubectl describe nodes | grep -A 12 "Allocated resources" || true
 
   calico:
@@ -277,7 +285,9 @@ jobs:
           kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --tail=300 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=server --tail=300 --prefix || true
           kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true
+          kubectl -n hephaestus-sandboxes get sandboxtemplates,sandboxwarmpools,sandboxclaims,sandboxes -o wide || true
           kubectl -n hephaestus-sandboxes describe pods || true
+          kubectl -n agent-sandbox-system logs deployment/agent-sandbox-controller --tail=200 || true
           kubectl -n hephaestus-sandboxes get events --sort-by=.lastTimestamp || true
           kubectl describe nodes | grep -A 12 "Allocated resources" || true
 

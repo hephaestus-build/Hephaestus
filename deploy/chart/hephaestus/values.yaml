@@ -316,8 +316,8 @@ worker:
   rolloutStrategy: RollingUpdate
   # The sandbox nodes. The chart passes each value to the worker as it is.
   runtime:
-    # Optional. The RuntimeClass of every sandbox Pod. It must support user namespaces.
-    # Empty uses the cluster's default runtime.
+    # Optional. The RuntimeClass of every sandbox Pod that the worker starts. It must support user
+    # namespaces. Empty uses the cluster's default runtime.
     runtimeClassName: ""
     # The RuntimeClass's overhead.podFixed, which the quotas count with each sandbox Pod's requests.
     # Set it for a compatible class with an overhead.
@@ -352,6 +352,26 @@ worker:
     # can never take a review's room.
     quota:
       enabled: true
+    # The Pod of each sandbox kind (docs/admin/kubernetes.mdx § Sandbox templates): the agent loop,
+    # its tools and the workspace in one container. The workspace counts as ephemeral storage, and the
+    # loop starts faster with at least one CPU as its limit.
+    templates:
+      # Optional. The RuntimeClass of the template Pods, and of the Pods that keep the agent image on
+      # their nodes. `gvisor` Pods keep host users (google/gvisor#13303); any other runs with
+      # hostUsers: false. Empty uses the cluster's default runtime.
+      runtimeClassName: ""
+      review:
+        resources:
+          requests: { cpu: 100m, memory: 512Mi, ephemeral-storage: 1Gi }
+          limits: { cpu: "2", memory: 2Gi, ephemeral-storage: 4Gi }
+      conversation:
+        resources:
+          requests: { cpu: 100m, memory: 384Mi, ephemeral-storage: 256Mi }
+          limits: { cpu: "2", memory: 1Gi, ephemeral-storage: 2Gi }
+      action:
+        resources:
+          requests: { cpu: 50m, memory: 256Mi, ephemeral-storage: 128Mi }
+          limits: { cpu: "1", memory: 512Mi, ephemeral-storage: 512Mi }
 
 # Application settings. Each key maps to one setting of docs/admin/production-setup.mdx.
 config:

@@ -1508,7 +1508,11 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 	);
 	const sources = {
 		matchExpressions: [
-			{ key: "hephaestus.build/sandbox-kind", operator: "In", values: ["review", "host"] },
+			{
+				key: "hephaestus.build/sandbox-kind",
+				operator: "In",
+				values: ["review", "host", "conversation", "action"],
+			},
 		],
 	};
 	assert.deepEqual(get(gateway, "spec", "podSelector"), sources);
@@ -4166,4 +4170,80 @@ await test("chart list inputs keep their order in environment bindings for each 
 			);
 		}
 	}
+});
+
+const templatesOf = (resources: Resource[]) =>
+	resources.filter((resource) => kindOf(resource) === "SandboxTemplate");
+
+await test("each sandbox kind has a cold-start template of one container, behind the namespace's own policies", () => {
+	const runc = rendered([...layersFor("small"), workerLayer]);
+	const templates = templatesOf(runc);
+	assert.deepEqual(templates.map(nameOf).toSorted(byCodePoint), [
+		"heph-sandbox-action",
+		"heph-sandbox-conversation",
+		"heph-sandbox-review",
+	]);
+	const pools = runc.filter((resource) => kindOf(resource) === "SandboxWarmPool");
+	for (const template of templates) {
+		assert.equal(get(template, "metadata", "namespace"), sandboxNamespace);
+		// The controller's own policy allows the internet; the namespace's policies apply instead.
+		assert.equal(get(template, "spec", "networkPolicyManagement"), "Unmanaged");
+		// A claim adds the sandbox token and the gateway address and cannot change the template's values.
+		assert.equal(get(template, "spec", "envVarsInjectionPolicy"), "Allowed");
+		const kind = nameOf(template).replace("heph-sandbox-", "");
+		const pod = get(template, "spec", "podTemplate", "spec");
+		assert.equal(
+			get(template, "spec", "podTemplate", "metadata", "labels", "hephaestus.build/sandbox-kind"),
+			kind,
+		);
+		assert.equal(get(pod, "automountServiceAccountToken"), false);
+		// The worker's RuntimeClass is the worker's own; the templates have theirs.
+		assert.equal(get(pod, "runtimeClassName"), undefined);
+		assert.equal(get(pod, "hostUsers"), false);
+		assert.deepEqual(get(pod, "securityContext", "seccompProfile"), {
+			type: "Localhost",
+			localhostProfile: workerRuntime.seccompProfile,
+		});
+		assert.deepEqual(get(pod, "nodeSelector"), workerRuntime.nodeSelector);
+		assert.equal(get(pod, "initContainers"), undefined);
+		// No volume: each mount adds the kubelet's mount wait to a cold start.
+		assert.equal(get(pod, "volumes"), undefined);
+		const [agent, ...others] = list(get(pod, "containers"));
+		assert.equal(others.length, 0);
+		assert.equal(get(agent, "volumeMounts"), undefined);
+		assert.equal(get(agent, "securityContext", "allowPrivilegeEscalation"), false);
+		assert.deepEqual(get(agent, "securityContext", "capabilities", "drop"), ["ALL"]);
+		const tier = kind === "review" ? "reviews" : "conversations";
+		assert.equal(get(pod, "priorityClassName"), `hephaestus-heph-${tier}`);
+		const pool = pools.find((candidate) => nameOf(candidate) === nameOf(template));
+		assert.deepEqual(get(pool, "spec"), {
+			replicas: 0,
+			sandboxTemplateRef: { name: nameOf(template) },
+		});
+	}
+
+	const gvisor = rendered([
+		...layersFor("small"),
+		workerLayer,
+		{ worker: { sandbox: { templates: { runtimeClassName: "gvisor" } } } },
+	]);
+	for (const template of templatesOf(gvisor)) {
+		const pod = get(template, "spec", "podTemplate", "spec");
+		assert.equal(get(pod, "runtimeClassName"), "gvisor");
+		// gVisor does not support user namespaces (google/gvisor#13303).
+		assert.equal(get(pod, "hostUsers"), undefined);
+	}
+
+	// The sandbox nodes hold the agent image before any claim needs it, on the templates' class.
+	const holder = gvisor.find(
+		(resource) => kindOf(resource) === "DaemonSet" && componentOf(resource) === "agent-image",
+	);
+	assert.equal(get(podSpec(holder), "runtimeClassName"), "gvisor");
+	assert.deepEqual(get(podSpec(holder), "nodeSelector"), workerRuntime.nodeSelector);
+	assert.deepEqual(get(podSpec(holder), "tolerations"), workerRuntime.tolerations);
+	assert.equal(
+		get(container(holder), "image"),
+		get(list(get(templates[0], "spec", "podTemplate", "spec", "containers"))[0], "image"),
+	);
+	assert.equal(get(podSpec(holder), "automountServiceAccountToken"), false);
 });
