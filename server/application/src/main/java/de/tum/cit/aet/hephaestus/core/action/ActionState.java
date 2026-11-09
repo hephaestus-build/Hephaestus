@@ -37,9 +37,4 @@ public enum ActionState {
     public boolean canTransitionTo(ActionState next) {
         return Objects.requireNonNull(LEGAL.get(this)).contains(next);
     }
-
-    /** An ended action never changes again, and keeps no payload. */
-    public boolean terminal() {
-        return Objects.requireNonNull(LEGAL.get(this)).isEmpty();
-    }
 }

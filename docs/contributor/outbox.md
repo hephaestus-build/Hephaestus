@@ -20,7 +20,7 @@ Then the action exists exactly when the change commits.
 | --- | --- |
 | `kind` | The `ActionKind`. Each kind has exactly one adapter. |
 | `workspaceId` | The workspace of the effect. It is null only for an instance-level kind, such as an email to an account. |
-| `laneKey` | Actions with the same key run one at a time, in enqueue order. Use one key for every write to one target. |
+| `laneKey` | Actions with the same key never run at the same time, and run in id order. Use one key for every write to one target, and enqueue them under the target's lock when their order matters. |
 | `idempotencyKey` | The natural key of the effect. A second enqueue with the same key returns the first action and changes nothing. |
 | `payload` | What the adapter needs, as JSON. Keep it to identifiers where the adapter can read the rest. |
 | `subjectAccountId` | The account that the effect addresses. The erasure of that account deletes the action. |
@@ -51,7 +51,10 @@ Every ended action has a `stop_reason`.
 ## The lease and the fence
 
 The executor claims due lane heads with `FOR UPDATE SKIP LOCKED`.
-A lane head is an action with no earlier action of its lane that has not ended.
+A lane head is an action with no executing action in its lane.
+An admitted action also waits for an earlier action of its lane that has not started.
+A reclaim does not wait, so a lane whose holder crashed does not stall.
+The unique index `ux_agent_action_lane_executing` allows one executing action per lane, also when two replicas claim at the same moment.
 Every time is the database clock, so replicas with different clocks agree on a lease.
 There is no leader.
 
@@ -61,6 +64,7 @@ A write that names an older epoch changes nothing.
 Just before the provider call, the adapter calls `ActionAttempt.fence().beginWrite()`.
 It sets `write_started_at` in its own short transaction.
 It refuses when another claim took the action, when an erasure deleted it, or when less than 60 seconds of the lease are left.
+The provider call must end within those 60 seconds.
 If it refuses, the adapter must not call the provider and returns `Abandoned`.
 No provider call runs inside a transaction ([Transactions and side effects](./transactions.md)).
 
@@ -100,7 +104,10 @@ Each email has a stable `Message-ID` derived from the idempotency key.
 The adapter retries only what the relay provably did not accept: a failed connection, a failed login, or an SMTP reply code of 4xx.
 Any other failure after the message reached the transport ends `UNCERTAIN`.
 
-## Erasure
+## Retention and erasure
+
+The executor deletes an ended action 30 days after it ended.
+That is longer than any notice's expiry, so a late redelivery of the event still finds the idempotency key.
 
 `ActionPersonDataCatalog` deletes the actions whose `subject_account_id` is the erased account.
 Account purge and the instance-admin person job both reach it.

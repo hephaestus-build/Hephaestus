@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -15,7 +16,10 @@ import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.node.JsonNodeFactory;
 
@@ -116,6 +120,75 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 .containsEntry("state", "UNCERTAIN")
                 .containsEntry("stop_reason", "LEASE_LOST_AFTER_WRITE")
                 .containsEntry("payload", null);
+        assertThat(store.settle(id, claim.epoch(), new ActionResult.Done("late")))
+                .as("a result that arrives after the reaper ended the action changes nothing")
+                .isEmpty();
+    }
+
+    /** The database states each kind's rules again; this keeps them equal to {@link ActionKind}. */
+    @ParameterizedTest
+    @EnumSource(ActionKind.class)
+    void shouldEnforceInDatabaseWhatEachKindDeclares(ActionKind kind) {
+        String key = "kind:" + UUID.randomUUID();
+        UUID id = UUID.randomUUID();
+        // Without a workspace: only an instance-level kind may exist so.
+        boolean inserted;
+        try {
+            inserted = jdbc.update("""
+                INSERT INTO agent_action (id, kind, lane_key, idempotency_key, state, payload, max_attempts, attempts,
+                  lease_epoch, leased_until, write_started_at, next_attempt_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'EXECUTING', '{}', 3, 1, 1, now() - interval '1 second', now(), now(), now(), now())
+                """, id, kind.name(), key, key) == 1;
+        } catch (DataAccessException refused) {
+            assertThat(sqlState(refused)).isEqualTo("23514");
+            inserted = false;
+        }
+        assertThat(inserted).as("%s without a workspace", kind).isEqualTo(kind.instanceLevel());
+        if (!inserted) return;
+        boolean reclaimed;
+        try {
+            reclaimed = jdbc.update(
+                            "UPDATE agent_action SET lease_epoch = lease_epoch + 1, attempts = attempts + 1"
+                                    + " WHERE id = ?",
+                            id)
+                    == 1;
+        } catch (DataAccessException refused) {
+            assertThat(sqlState(refused)).isEqualTo("55000");
+            reclaimed = false;
+        }
+        assertThat(reclaimed).as("%s reclaimed after its write started", kind).isEqualTo(!kind.atMostOnce());
+        jdbc.update("DELETE FROM agent_action WHERE id = ?", id);
+    }
+
+    @Test
+    void shouldNeverRunTwoActionsOfALaneAtOnce() {
+        String lane = "late-lane:" + UUID.randomUUID();
+        UUID later = actions.enqueue(request(lane, lane + ":later", null, 3));
+        claimOwn(List.of(later));
+        // An earlier id that commits after a later one was claimed, as from another process.
+        UUID earlier = new UUID(later.getMostSignificantBits() - 1, later.getLeastSignificantBits());
+        jdbc.update("""
+                INSERT INTO agent_action (id, kind, lane_key, idempotency_key, state, payload, max_attempts,
+                  next_attempt_at, created_at, updated_at)
+                VALUES (?, 'EMAIL', ?, ?, 'ADMITTED', '{}', 3, now(), now(), now())
+                """, earlier, lane, lane + ":earlier");
+
+        assertThat(claimOwn(List.of(earlier))).as("the lane is busy").isEmpty();
+        assertThatThrownBy(() -> jdbc.update(
+                        "UPDATE agent_action SET state = 'EXECUTING', lease_epoch = 1, attempts = 1,"
+                                + " leased_until = now() + interval '1 minute' WHERE id = ?",
+                        earlier))
+                .as("a second claim in the lane")
+                .satisfies(refused ->
+                        assertThat(sqlState((DataAccessException) refused)).isEqualTo("23505"));
+
+        // The holder crashed before any write: its lease expires, and it is taken again before the earlier one.
+        expireLease(later);
+        var reclaimed = claimOwn(List.of(later, earlier));
+        assertThat(reclaimed).extracting(ActionStore.Claim::id).containsExactly(later);
+
+        store.settle(later, reclaimed.getFirst().epoch(), new ActionResult.Done(null));
+        assertThat(claimOwn(List.of(earlier))).extracting(ActionStore.Claim::id).containsExactly(earlier);
     }
 
     @Test
@@ -202,7 +275,8 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 boolean accepted;
                 try {
                     accepted = jdbc.update(transition(to), "ref", id) == 1;
-                } catch (RuntimeException refused) {
+                } catch (DataAccessException refused) {
+                    assertThat(sqlState(refused)).as("%s -> %s", from, to).isIn("23514", "55000");
                     accepted = false;
                 }
                 assertThat(accepted)
@@ -274,6 +348,10 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
             else store.settle(claim.id(), claim.epoch(), new ActionResult.Cancelled(ActionStopReason.SILENCED));
         }
         return claimed;
+    }
+
+    private static @Nullable String sqlState(DataAccessException refused) {
+        return refused.getMostSpecificCause() instanceof SQLException sql ? sql.getSQLState() : null;
     }
 
     private void expireLease(UUID id) {

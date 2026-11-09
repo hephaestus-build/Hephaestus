@@ -801,6 +801,7 @@ Sustained `unavailable`, `rate_limited`, `rejected`, `unconfirmed` or `expired` 
 2. For application, database, NATS, scheduler, or SMTP outages, page the operator through an **external** monitoring channel.
 3. Monitor the `notification.email.delivery` counter by bounded `kind` and `outcome`.
    Monitor `action.ended` by `kind`, `state` and `reason` for every outbox action, email included.
+   An email that expires or loses its lease appears only in `action.ended`.
 4. Inspect the outbox backlog without selecting `payload`:
 
    ```sql
@@ -815,7 +816,7 @@ Sustained `unavailable`, `rate_limited`, `rejected`, `unconfirmed` or `expired` 
    Capacity limits and backlog size still apply.
    Each attempt rechecks current eligibility.
 
-5. Alert when admitted email ages beyond one hour, the longest wait between two attempts.
+5. Alert when `now() - min(next_attempt_at)` of admitted actions grows beyond a minute: the executor has stopped.
 6. Investigate before notification expiry.
 7. Use a separate database-monitoring identity with least privilege.
 8. Do not resend an `UNCERTAIN` email by hand without asking the recipient: the relay may already have delivered it.

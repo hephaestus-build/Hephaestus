@@ -77,6 +77,8 @@ ALTER TABLE agent_action
 CREATE INDEX idx_agent_action_due ON agent_action (next_attempt_at, id) WHERE state = 'ADMITTED';
 CREATE INDEX idx_agent_action_leased ON agent_action (leased_until) WHERE state = 'EXECUTING';
 CREATE INDEX idx_agent_action_expiring ON agent_action (expires_at) WHERE state IN ('PROPOSED','ADMITTED') AND expires_at IS NOT NULL;
+CREATE INDEX idx_agent_action_ended ON agent_action (ended_at) WHERE ended_at IS NOT NULL;
+CREATE UNIQUE INDEX ux_agent_action_lane_executing ON agent_action (lane_key) WHERE state = 'EXECUTING';
 CREATE FUNCTION guard_agent_action() RETURNS trigger LANGUAGE plpgsql AS $_$
 BEGIN
  IF ROW(NEW.id,NEW.workspace_id,NEW.kind,NEW.lane_key,NEW.idempotency_key,NEW.subject_account_id,NEW.max_attempts,NEW.created_at)

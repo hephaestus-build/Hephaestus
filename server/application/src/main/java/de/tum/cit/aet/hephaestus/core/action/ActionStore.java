@@ -124,6 +124,12 @@ class ActionStore {
         return ended;
     }
 
+    /** Deletes what ended more than {@code retention} ago. */
+    @Transactional
+    public int deleteEnded(Duration retention) {
+        return actions.deleteEndedBefore((int) retention.toDays());
+    }
+
     private static Settled settled(AgentActionRepository.SettledRow row) {
         String reason = row.getStopReason();
         return new Settled(

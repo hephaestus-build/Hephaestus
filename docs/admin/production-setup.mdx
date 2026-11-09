@@ -623,21 +623,28 @@ A relay outage must not take the application offline.
 The transaction that changes state also writes a notification to `event_publication`.
 Right after the commit, the notification becomes one email in the outbox, the `agent_action` table.
 The outbox executor runs on every server replica and sends the email.
-Before each attempt, it checks again that the email is still wanted.
-An email to a person who unsubscribed, lost the role or the verified address, or whose source is gone, is not sent.
+
+Before each attempt, the executor checks again that the email is still wanted.
+It does not send an email to a person who unsubscribed or lost the role or the verified address.
+It also does not send an email whose source is gone.
+
 Silent mode, absent or unverified addresses, and refused mailboxes are final outcomes.
 `notification.email.delivery` counts each outcome by `kind` and `outcome`.
 
-If the relay refuses the connection or the login, or answers with a temporary SMTP code, the email waits and tries again.
+Some failures prove that the relay did not take the message: a refused connection, a refused login, or a temporary SMTP code.
+After such a failure, the email waits and tries again.
 The wait starts at 30 seconds and doubles up to one hour.
-An email that is not sent within 24 hours expires.
-An account-deletion confirmation expires at its purge deadline.
+An email expires when it is no longer useful.
+For example, an account-deletion confirmation expires at its purge deadline.
+[Data retention](./data-retention.mdx) gives each period.
 
 Delivery is at most once.
 Each email has one stable `Message-ID`.
-If the relay connection breaks after the message was handed over, or a server stops during the send, Hephaestus cannot know whether the relay accepted it.
+Sometimes Hephaestus cannot know whether the relay accepted the message.
+This happens when the connection breaks after the hand-over, or when a server stops during the send.
 That email ends `UNCERTAIN` and is never sent again.
 `SENT` means relay acceptance, not inbox arrival.
+
 An SMTP attempt already in progress cannot be recalled.
 Logs contain the message id, never the address.
 
@@ -647,7 +654,7 @@ An SMTP attempt uses capacity even if the relay rejects it or disconnects.
 A refund after an uncertain failure could exceed the relay limit.
 Withheld mail uses no capacity.
 
-A notification that meets the limit waits one minute and does not use an attempt.
+A notification that meets the limit waits until the budget refills, and does not use an attempt.
 A test email goes through the same outbox on the request thread and reports its outcome at once.
 The 24-hour interval starts at first bucket use, not midnight or the relay's billing day.
 Match limits conservatively to relay policy, with allowance for other applications on the account.

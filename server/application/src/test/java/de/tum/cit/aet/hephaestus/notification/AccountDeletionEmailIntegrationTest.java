@@ -99,11 +99,11 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
         var first = new EmailRateLimiter(scoped, new EmailRateLimitProperties(3, 2));
         var second = new EmailRateLimiter(scoped, new EmailRateLimitProperties(3, 2));
         try {
-            assertThat(first.acquire(true)).isTrue();
-            assertThat(second.acquire(true)).isTrue();
-            assertThat(first.acquire(true)).isFalse();
-            assertThat(second.acquire(false)).isTrue();
-            assertThat(first.acquire(false)).isFalse();
+            assertThat(first.acquire(true)).isEmpty();
+            assertThat(second.acquire(true)).isEmpty();
+            assertThat(first.acquire(true)).isPresent();
+            assertThat(second.acquire(false)).isEmpty();
+            assertThat(first.acquire(false)).isPresent();
             assertThat(jdbc.queryForObject(
                             "SELECT COUNT(*) FROM auth_rate_limit_bucket WHERE id IN (?, ?) AND state IS NOT NULL AND expires_at IS NOT NULL",
                             Long.class,

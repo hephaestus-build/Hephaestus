@@ -34,8 +34,17 @@ public class ActionExecutor {
     /** Longer than any provider call an adapter makes, with {@link #WRITE_MARGIN} to spare. */
     static final Duration LEASE = Duration.ofMinutes(2);
 
-    /** A write starts only while this much of the lease is left, so no reclaim overlaps a provider call. */
+    /**
+     * A write starts only while this much of the lease is left. An adapter's provider call must end within it, or a
+     * reclaim may overlap the call; an at-most-once kind is never reclaimed after its write started.
+     */
     static final Duration WRITE_MARGIN = Duration.ofSeconds(60);
+
+    /**
+     * How long an ended action stays. Longer than any notice's own expiry, so a late redelivery of the event that
+     * asked for it still finds its idempotency key.
+     */
+    static final Duration RETENTION = Duration.ofDays(30);
 
     /** Actions one replica claims and runs at the same time. */
     static final int SLOTS = 16;
@@ -64,6 +73,7 @@ public class ActionExecutor {
     @Scheduled(fixedDelayString = "PT1S", initialDelayString = "PT10S")
     public void runDue() {
         store.endStale().forEach(this::recordEnd);
+        store.deleteEnded(RETENTION);
         var claims = store.claim(SLOTS, LEASE);
         if (claims.isEmpty()) return;
         try (ExecutorService batch = Executors.newVirtualThreadPerTaskExecutor()) {

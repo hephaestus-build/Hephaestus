@@ -34,8 +34,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.mail.MailAuthenticationException;
 import org.springframework.mail.MailException;
-import org.springframework.mail.MailParseException;
-import org.springframework.mail.MailPreparationException;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -57,9 +55,6 @@ public class EmailAdapter implements ActionAdapter {
     private static final Logger log = LoggerFactory.getLogger(EmailAdapter.class);
 
     static final String EGRESS_OPERATION = "email.send";
-
-    /** A rate-limited email waits this long and does not spend an attempt. */
-    static final Duration RATE_LIMIT_WAIT = Duration.ofMinutes(1);
 
     /** The payload names the notice's {@link EmailKind} and holds its event. */
     static final String PAYLOAD_KIND = "kind";
@@ -178,8 +173,9 @@ public class EmailAdapter implements ActionAdapter {
             return new Delivery(Outcome.SILENT_MODE, new ActionResult.Cancelled(ActionStopReason.SILENCED));
         }
 
-        if (!rateLimiter.acquire(message.kind().optional())) {
-            return new Delivery(Outcome.RATE_LIMITED, new ActionResult.Defer(RATE_LIMIT_WAIT));
+        Optional<Duration> refill = rateLimiter.acquire(message.kind().optional());
+        if (refill.isPresent()) {
+            return new Delivery(Outcome.RATE_LIMITED, new ActionResult.Defer(refill.get()));
         }
 
         String messageId = messageId(attempt.idempotencyKey(), from);
@@ -258,9 +254,6 @@ public class EmailAdapter implements ActionAdapter {
         var rejected = new Delivery(Outcome.REJECTED, new ActionResult.Failed(ActionStopReason.REJECTED));
         if (e instanceof MailAuthenticationException) {
             return retry;
-        }
-        if (e instanceof MailPreparationException || e instanceof MailParseException) {
-            return rejected;
         }
         if (e instanceof MailSendException sendException) {
             Map<Object, Exception> failed = sendException.getFailedMessages();

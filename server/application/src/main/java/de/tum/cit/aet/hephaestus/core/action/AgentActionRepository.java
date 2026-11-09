@@ -7,19 +7,17 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 /**
  * The compare-and-set statements of the outbox. Every time is the database clock, so replicas with drifting clocks
  * agree on a lease. Every write after a claim names the claim's epoch and changes nothing when another claim took the
  * row. The trigger {@code guard_agent_action} refuses what {@link ActionState} does not allow.
  */
-@Repository
-interface AgentActionRepository extends JpaRepository<AgentAction, UUID> {
+interface AgentActionRepository extends Repository<AgentAction, UUID> {
 
     String CLAIMED = """
             SELECT a.id AS "id", a.workspace_id AS "workspaceId", a.kind AS "kind", a.idempotency_key AS "idempotencyKey",
@@ -115,21 +113,26 @@ interface AgentActionRepository extends JpaRepository<AgentAction, UUID> {
 
     /**
      * Takes up to {@code limit} due lane heads: an admitted action whose time has come, or one whose lease expired.
-     * An earlier action of the same lane that has not ended holds the rest of the lane back. An at-most-once kind
-     * whose write may have started is never taken again; {@link #endLost} ends it.
+     * A lane runs one action at a time: an action waits while another of its lane executes, and an admitted one also
+     * waits for an earlier one that has not started. A reclaim never waits, or a lane whose holder crashed would stall.
+     * The unique index {@code ux_agent_action_lane_executing} refuses a second claim that another replica made at
+     * the same moment. An at-most-once kind whose write may have started is never taken again; {@link #endLost}
+     * ends it. An expired action is not taken; {@link #endExpired} ends it.
      */
     @WorkspaceAgnostic("One executor claims the due lane heads of every workspace and of the instance")
     @Query(value = """
             WITH due AS (
               SELECT d.id FROM agent_action d
-               WHERE ((d.state = 'ADMITTED' AND d.next_attempt_at <= clock_timestamp())
+               WHERE ((d.state = 'ADMITTED' AND d.next_attempt_at <= clock_timestamp()
+                       AND (d.expires_at IS NULL OR d.expires_at > clock_timestamp()))
                    OR (d.state = 'EXECUTING' AND d.leased_until <= clock_timestamp()
                        AND d.attempts < d.max_attempts
                        AND (d.write_started_at IS NULL OR d.kind NOT IN (:atMostOnce))))
                  AND NOT EXISTS (
                    SELECT 1 FROM agent_action b
-                    WHERE b.lane_key = d.lane_key AND b.id < d.id
-                      AND b.state IN ('PROPOSED', 'ADMITTED', 'EXECUTING'))
+                    WHERE b.lane_key = d.lane_key AND b.id <> d.id
+                      AND (b.state = 'EXECUTING'
+                        OR (d.state = 'ADMITTED' AND b.id < d.id AND b.state IN ('PROPOSED', 'ADMITTED'))))
                ORDER BY d.next_attempt_at, d.id
                LIMIT :limit
                FOR UPDATE OF d SKIP LOCKED),
@@ -150,7 +153,7 @@ interface AgentActionRepository extends JpaRepository<AgentAction, UUID> {
      * it, or when less than {@code margin} of the lease is left: a reclaim must never overlap a call.
      */
     @WorkspaceAgnostic("Fences one claimed action by its id and epoch")
-    @Modifying(flushAutomatically = true)
+    @Modifying
     @Query(value = """
             UPDATE agent_action SET write_started_at = COALESCE(write_started_at, clock_timestamp()),
                    updated_at = clock_timestamp()
@@ -235,4 +238,12 @@ interface AgentActionRepository extends JpaRepository<AgentAction, UUID> {
               RETURNING kind, state, stop_reason)
             """ + ENDED, nativeQuery = true)
     List<SettledRow> endLost(@Param("atMostOnce") Collection<String> atMostOnceKinds);
+
+    /** Deletes what ended before the cutoff: the ledger of a sent effect is kept only as long as a replay can come. */
+    @WorkspaceAgnostic("The retention sweep deletes ended actions of every workspace")
+    @Modifying
+    @Query(value = """
+            DELETE FROM agent_action WHERE ended_at < clock_timestamp() - make_interval(days => :days)
+            """, nativeQuery = true)
+    int deleteEndedBefore(@Param("days") int retentionDays);
 }
