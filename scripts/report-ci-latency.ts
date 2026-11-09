@@ -48,6 +48,7 @@ const INTEGRATION_LAYOUTS = [
 	["providers-and-startup", "application"],
 	["providers", "runtime-and-startup", "application"],
 	["providers", "runtime-and-startup", "practices-and-agent", "application"],
+	["providers", "runtime-and-startup", "practices-and-agent", "application", "review"],
 ];
 
 export function isFullVerification(jobs: readonly { name: string }[]) {
@@ -78,9 +79,9 @@ export function isLatencySample(jobs: readonly { name: string }[]) {
 }
 
 // The queue tier's job names, past drill names included; ci-contract.test.ts holds them to the
-// jobs that carry the tier guard.
+// jobs that carry the tier guard. The `review` integration shard also runs in the fast tier.
 export const QUEUE_TIER_JOBS = [
-	/^Test(?: \([a-z-]+\))? \/ App Server: Integration \(/u,
+	/^Test(?: \([a-z-]+\))? \/ App Server: Integration \((?!review\))/u,
 	/^Build \/ App Server: Database$/u,
 	/^Build \/ App Server: PostgreSQL drill/u,
 	/^Build \/ Webapp: E2E$/u,

@@ -86,6 +86,7 @@ async function main(): Promise<void> {
 		"integrationRuntimeAndStartupInventory",
 		"integrationPracticesAndAgentInventory",
 		"integrationApplicationInventory",
+		"integrationReviewInventory",
 	];
 	// Dry-run reports are isolated from execution and coverage reports.
 	await rm(reports, { recursive: true, force: true });

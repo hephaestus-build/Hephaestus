@@ -74,6 +74,11 @@ void test("the pull-request cohort is the server fast tier", () => {
 	// Docs-only and duplicate-skipped runs have no server suites; ci:full adds the queue tier.
 	assert.equal(isFastTier([{ name: "Quality / Tooling and Docs / Gates" }]), false);
 	assert.equal(isFastTier([unit, { name: "Test / App Server: Integration (providers)" }]), false);
+	assert.equal(
+		isFastTier([unit, { name: "Test (review) / App Server: Integration (review)" }]),
+		true,
+		"the review shard runs in the fast tier",
+	);
 	const callerUnit = { name: "Test (unit) / App Server: Unit and architecture" };
 	assert.equal(isFastTier([callerUnit]), true);
 	assert.equal(
@@ -142,6 +147,7 @@ function integration(...shards: string[]) {
 
 void test("lightweight runs cannot make full verification's latency budget pass", () => {
 	for (const shards of [
+		["providers", "runtime-and-startup", "practices-and-agent", "application", "review"],
 		["providers", "runtime-and-startup", "practices-and-agent", "application"],
 		["providers", "runtime-and-startup", "application"],
 		["providers-and-startup", "application"],
@@ -151,9 +157,10 @@ void test("lightweight runs cannot make full verification's latency budget pass"
 			const jobs = names.map((name) => ({ name: name === "Quality / Webapp" ? webappName : name }));
 			assert.equal(isFullVerification(jobs), true, shards.join(","));
 			for (const { name } of jobs) {
-				// The four-shard layout without its fourth shard is the historical three-shard layout.
+				// Each layout without its newest shard is the historical layout before it.
 				const historical =
-					shards.length === 4 && name === "Test / App Server: Integration (practices-and-agent)";
+					(shards.length === 5 && name === "Test / App Server: Integration (review)") ||
+					(shards.length === 4 && name === "Test / App Server: Integration (practices-and-agent)");
 				assert.equal(isFullVerification(jobs.filter((job) => job.name !== name)), historical, name);
 			}
 		}
@@ -161,7 +168,13 @@ void test("lightweight runs cannot make full verification's latency budget pass"
 	assert.equal(isFullVerification([{ name: "Quality / Tooling and Docs" }]), false);
 	const current = [
 		...verificationJobs,
-		...integration("providers", "runtime-and-startup", "practices-and-agent", "application"),
+		...integration(
+			"providers",
+			"runtime-and-startup",
+			"practices-and-agent",
+			"application",
+			"review",
+		),
 	].map((name) => ({
 		name:
 			name === "Test / App Server: Unit and architecture"
@@ -181,6 +194,14 @@ void test("only a complete integration shard layout counts as full verification"
 		["providers-and-startup", "application", "runtime-and-startup"],
 		["providers", "runtime-and-startup", "application", "unexpected"],
 		["providers", "runtime-and-startup", "practices-and-agent", "application", "unexpected"],
+		[
+			"providers",
+			"runtime-and-startup",
+			"practices-and-agent",
+			"application",
+			"review",
+			"unexpected",
+		],
 	]) {
 		const jobs = [...verificationJobs, ...integration(...shards)].map((name) => ({ name }));
 		assert.equal(isFullVerification(jobs), false, shards.join(","));

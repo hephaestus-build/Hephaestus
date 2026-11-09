@@ -950,7 +950,7 @@ void describe("CI contract", () => {
 		const caller = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		assert.deepEqual(
 			serverShards(caller, true).filter((shard) => shard !== "unit"),
-			["providers", "runtime-and-startup", "practices-and-agent", "application"],
+			["providers", "runtime-and-startup", "practices-and-agent", "application", "review"],
 		);
 		assert.equal(
 			runScript(workflow, ["jobs", "server-verification"], "Verify test tier and shard discovery"),
@@ -1285,7 +1285,10 @@ void describe("CI contract", () => {
 			for (const name of queue) {
 				assert.match(
 					String(workflow.getIn(["jobs", name, "if"])),
-					/&& inputs\.queue_tier == 'true'$/u,
+					// Of the integration shards, the review shard also runs in the fast tier.
+					name === "server-integration"
+						? /&& \(inputs\.queue_tier == 'true' \|\| inputs\.shard == 'review'\)$/u
+						: /&& inputs\.queue_tier == 'true'$/u,
 					`${name} belongs to the queue tier`,
 				);
 			}
@@ -6354,13 +6357,14 @@ void test("each worker can cancel a merge group without waiting for unrelated wo
 		}
 	}
 	const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-	assert.deepEqual(serverShards(ci, false), ["unit"]);
+	assert.deepEqual(serverShards(ci, false), ["unit", "review"]);
 	assert.deepEqual(serverShards(ci, true), [
 		"unit",
 		"providers",
 		"runtime-and-startup",
 		"practices-and-agent",
 		"application",
+		"review",
 	]);
 });
 
