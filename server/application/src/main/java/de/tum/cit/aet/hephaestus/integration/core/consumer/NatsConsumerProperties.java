@@ -44,7 +44,7 @@ public record NatsConsumerProperties(
         @DurationUnit(ChronoUnit.MINUTES)
         @DefaultValue("30m")
         @NotNull(message = "handler-timeout must not be null")
-        @DurationMin(seconds = 1, message = "handler-timeout must be at least 1s")
+        @DurationMin(minutes = 1, message = "handler-timeout must be at least 1m")
         Duration handlerTimeout,
 
         @DurationUnit(ChronoUnit.SECONDS) @DefaultValue("2s") @NotNull(message = "reconnect-delay must not be null")

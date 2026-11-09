@@ -65,7 +65,7 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
         when(repository.lockWorkspace(42L, 17L)).thenReturn(Optional.of(row));
         when(consumer.isReplayAdmitted(42L, "github", "github.acme.repo.issues"))
                 .thenReturn(true);
-        when(consumer.dispatch(eq(42L), any())).thenReturn(mock(IntegrationMessageHandler.class));
+        when(consumer.dispatchBounded(eq(42L), any())).thenReturn(mock(IntegrationMessageHandler.class));
 
         var first = service.replayWorkspace(42L, 17L, 8L);
         var repeated = service.replayWorkspace(42L, 17L, 8L);
@@ -73,7 +73,7 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
         assertThat(first.replayedBy()).isEqualTo(8L);
         assertThat(first.replayedAt()).isNotNull().isEqualTo(repeated.replayedAt());
         var message = ArgumentCaptor.forClass(Message.class);
-        verify(consumer, times(1)).dispatch(eq(42L), message.capture());
+        verify(consumer, times(1)).dispatchBounded(eq(42L), message.capture());
         var envelope = message.getValue();
         assertThat(envelope.isJetStream()).isTrue();
         assertThat(envelope.metaData().timestamp().toInstant()).isEqualTo(Instant.ofEpochSecond(1700000000));
@@ -117,7 +117,7 @@ class ConsumerDeadLetterReplayServiceTest extends BaseUnitTest {
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         failure -> assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
-        verify(consumer, never()).dispatch(any(), any());
+        verify(consumer, never()).dispatchBounded(any(), any());
         assertThat(row.getReplayedAt()).isNull();
     }
 }

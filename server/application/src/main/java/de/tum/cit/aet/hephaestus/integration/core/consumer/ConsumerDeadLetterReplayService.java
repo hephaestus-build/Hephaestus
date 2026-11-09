@@ -132,7 +132,7 @@ public class ConsumerDeadLetterReplayService {
         }
         var message = new ReplayMessage(row, stored, storedTime);
         try {
-            if (consumer.dispatch(workspaceId, message) == null) {
+            if (consumer.dispatchBounded(workspaceId, message) == null) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "The event route is no longer available.");
             }
         } catch (ResponseStatusException failure) {

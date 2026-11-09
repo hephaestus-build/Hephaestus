@@ -478,22 +478,96 @@ class IntegrationNatsConsumerTest {
                     })
                     .when(handler)
                     .onMessage(message);
+            // A running replica: the availability reports BROKEN until something says CORRECT.
+            availability.onApplicationEvent(new AvailabilityChangeEvent<>(this, LivenessState.CORRECT));
+            assertThat(new LivenessStateHealthIndicator(availability).health().getStatus())
+                    .isEqualTo(Status.UP);
+            Thread scope = Thread.ofVirtual().start(() -> bounded.handleMessage(SCOPE_ID, message));
             try {
-                bounded.handleMessage(SCOPE_ID, message);
-
-                assertThat(availability.getLivenessState()).isEqualTo(LivenessState.BROKEN);
+                await().atMost(Duration.ofSeconds(10))
+                        .until(() -> availability.getLivenessState() == LivenessState.BROKEN);
                 assertThat(new LivenessStateHealthIndicator(availability)
                                 .health()
                                 .getStatus())
                         .isEqualTo(Status.DOWN);
+                // The scope keeps the message while the stuck thread lives, so no replica handles it beside that
+                // thread.
+                assertThat(scope.isAlive()).isTrue();
                 verify(poison, never()).handleFailure(any(), any(), any());
                 verify(message, never()).ack();
                 verify(message, never()).nak();
             } finally {
                 release.countDown();
             }
-            // The handler that finally returns still settles nothing: the restarted replica takes the event.
-            verify(message, after(500).never()).ack();
+            // A thread that ends before the restart hands the message to the poison handling, and nothing acks it.
+            scope.join(Duration.ofSeconds(10));
+            assertThat(scope.isAlive()).isFalse();
+            verify(poison).handleFailure(eq(SCOPE_ID), eq(message), any(HandlerTimeoutException.class));
+            verify(message, never()).ack();
+        }
+
+        @Test
+        void shouldReturnFromAStoppingConsumerOnlyAfterItsHandlerEnded() throws Exception {
+            IntegrationMessageHandler handler = mock(IntegrationMessageHandler.class);
+            when(handler.key()).thenReturn(new EventTypeKey(IntegrationKind.GITHUB, "repository.issues"));
+            when(dispatcher.dispatch("github.acme.repo.issues")).thenReturn(Optional.of(handler));
+            CountDownLatch entered = new CountDownLatch(1);
+            AtomicReference<String> order = new AtomicReference<>("");
+            doAnswer(call -> {
+                        entered.countDown();
+                        try {
+                            new CountDownLatch(1).await();
+                        } catch (InterruptedException stopped) {
+                            // A handler that takes a moment to wind down after its interrupt.
+                            TimeUnit.MILLISECONDS.sleep(200);
+                            order.accumulateAndGet("handler-ended ", String::concat);
+                        }
+                        return null;
+                    })
+                    .when(handler)
+                    .onMessage(message);
+
+            Thread scope = Thread.ofVirtual().start(() -> {
+                consumer.handleMessage(SCOPE_ID, message);
+                order.accumulateAndGet("consumer-returned", String::concat);
+            });
+            assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+            scope.interrupt();
+            scope.join(Duration.ofSeconds(10));
+
+            assertThat(order.get()).isEqualTo("handler-ended consumer-returned");
+        }
+
+        @Test
+        void shouldBoundAReplayedEventLikeALiveOne() {
+            var bounded = new IntegrationNatsConsumer(
+                    new NatsConnectionProperties(
+                            true,
+                            "nats://localhost:4222",
+                            "heph",
+                            new NatsConnectionProperties.Consumer(Duration.ofSeconds(60))),
+                    NatsConsumerPropertiesFixture.withHandlerTimeout(Duration.ofMillis(200)),
+                    scopeId -> Optional.empty(),
+                    dispatcher,
+                    mock(IntegrationPoisonHandler.class),
+                    new IntegrationConsumerStats(),
+                    activityRecorder,
+                    List.of(),
+                    NatsTraceContexts.none(),
+                    NatsTraceContexts.messageMeters(),
+                    DeliveryInboxes.passthrough(),
+                    event -> {});
+            IntegrationMessageHandler handler = mock(IntegrationMessageHandler.class);
+            when(dispatcher.dispatch("github.acme.repo.issues")).thenReturn(Optional.of(handler));
+            doAnswer(call -> {
+                        new CountDownLatch(1).await();
+                        return null;
+                    })
+                    .when(handler)
+                    .onMessage(message);
+
+            assertThatThrownBy(() -> bounded.dispatchBounded(SCOPE_ID, message))
+                    .isInstanceOf(HandlerTimeoutException.class);
         }
 
         @Test
