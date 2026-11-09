@@ -938,6 +938,25 @@ It installs `runsc`, its containerd shim and the `gvisor-bin` directory in `/usr
 It restarts k3s when `k3s-containerd.toml.tmpl` changes: at the first install with gVisor, and at each new gVisor pin.
 `k3s-values.yaml` sets `worker.sandbox.templates.runtimeClassName: gvisor`.
 
+`k3s-config.yaml` becomes `/etc/rancher/k3s/config.yaml`.
+k3s then reads each `*.yaml` and `*.yml` file in `/etc/rancher/k3s/config.yaml.d/`, and such a file overrides `config.yaml`.
+For the node address and the node name of k3s, give `--node-ip ADDRESS` and `--node-name NAME`.
+The installer writes these options only to `config.yaml.d/50-node.yaml`, and it restarts k3s when that file changes.
+Give them on each run. A run without them keeps the file.
+
+The node name is fixed for the life of the cluster.
+A new name registers a second node, and the local volumes stay with the old node.
+Thus, the installer stops when a run would change the name of the running node.
+It also stops when `--node-ip` names an address that the host does not have.
+
+A new node address also moves the Kubernetes API endpoint.
+After you change `--node-ip`, set `networkPolicy.kubernetesApi.cidr` in `site.yaml` or in your chart values to the new address.
+To remove `50-node.yaml`, do these steps:
+
+1. Delete the file.
+2. Run the installer again. It stops if the file named a node other than the host name, because the node name would change.
+3. Restart k3s with `sudo systemctl restart k3s`. k3s keeps the old node address until it restarts.
+
 The installer does not run the application itself as a k3s `HelmChart`.
 The k3s Helm controller does not wait for the migration Job, and it does not roll back a failed upgrade.
 
@@ -1215,6 +1234,10 @@ It stops with an error when one item differs, and when it cannot read the `ExecS
 It renders the certificates file with your options, as the installer does.
 Other files, such as your own manifests in the k3s manifests directory, are yours, and the check does not read them.
 
+The check shows the keys of `/etc/rancher/k3s/config.yaml.d/50-node.yaml`, which is yours. A key other than `node-ip` and `node-name` in it is a difference.
+With `--node-ip` or `--node-name`, it compares that file with these options.
+Each other `*.yaml` or `*.yml` file in `config.yaml.d/` is a difference, because it overrides `config.yaml`.
+
 The source of the platform files is the directory that holds `k3s-install.sh`.
 The installer puts these files on the host as root, so run it only from a verified source that no other user can write.
 Use the source of the channel that the host follows:
@@ -1244,6 +1267,7 @@ Before step 3, examine these points:
 
 - Flags of the k3s service override `/etc/rancher/k3s/config.yaml`.
   To remove them, run the pinned k3s install script again with an empty `INSTALL_K3S_EXEC`.
+  Give a node address or name with `--node-ip` and `--node-name` instead.
   The installer stops when the effective kubelet policy differs from `k3s-kubelet.yaml`.
 - k3s takes over a `HelmChart` with the name `kube-system/traefik` or `kube-system/cert-manager`.
   The Helm controller then upgrades that release with the shipped values.

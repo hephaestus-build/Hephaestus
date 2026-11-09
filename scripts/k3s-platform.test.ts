@@ -271,6 +271,25 @@ await test("the installer accepts RC versions and refuses malformed candidate nu
 	);
 });
 
+await test("the node options take only an address and a DNS name", () => {
+	const args = ["--host", "heph.example.org", "--email", "ops@example.org"];
+	for (const node of [
+		["--node-ip", "192.0.2.10"],
+		["--node-ip", "192.0.2.10,2001:db8::10"],
+		["--node-name", "node-1.example.org"],
+	]) {
+		assert.equal(rendered(...args, ...node).status, 0, node.join(" "));
+	}
+	for (const node of [
+		["--node-ip", "192.0.2.10 --disable=coredns"],
+		["--node-ip", "a,b,c"],
+		["--node-name", "Node_1"],
+		["--node-name", 'node"1'],
+	]) {
+		assert.notEqual(rendered(...args, ...node).status, 0, node.join(" "));
+	}
+});
+
 await test("workspace certificates use DNS-01, and backup Jobs get their own client identity", () => {
 	const result = rendered(
 		"--host",
@@ -811,6 +830,7 @@ esac
 		hostname: "#!/bin/sh\nprintf 'Host-1\\n'\n",
 		helm: "#!/bin/sh\nexit 97\n",
 		awk: "#!/bin/sh\nprintf '1'\n",
+		ip: "#!/bin/sh\nprintf '2: eth0    inet 192.0.2.10/24 brd 192.0.2.255 scope global eth0\\n'\n",
 		getent: "#!/bin/sh\nexit 97\n",
 		ss: "#!/bin/sh\nexit 97\n",
 	});
@@ -894,6 +914,35 @@ await test(
 				new RegExp(`unset ${variable}: the platform files configure k3s`, "u"),
 			);
 		}
+		// The node options decide the name, also when they leave it out.
+		const node = { "50-node.yaml": 'node-ip: "192.0.2.10"\nnode-name: "node-1"\n' };
+		assert.match(onRunningNode({ nodes: "node-1", dropIns: node }).stderr, SWAP);
+		assert.match(
+			onRunningNode({ nodes: "node-1", dropIns: node, args: ["--node-name", "node-1"] }).stderr,
+			SWAP,
+		);
+		assert.match(
+			onRunningNode({ nodes: "node-1", dropIns: node, args: ["--node-ip", "192.0.2.10"] }).stderr,
+			renamed("node-1", "host-1"),
+		);
+		assert.match(
+			onRunningNode({ nodes: "host-1", args: ["--node-ip", "192.0.2.10"] }).stderr,
+			SWAP,
+		);
+		// k3s reads 50-node.yaml after 50-Override.yaml, so --node-name renames the node.
+		for (const LC_ALL of ["C", "en_US.UTF-8"]) {
+			const override = onRunningNode({
+				nodes: "node-1",
+				dropIns: { "50-Override.yaml": "node-name: node-1\n" },
+				args: ["--node-name", "node-2"],
+				env: { LC_ALL },
+			});
+			assert.match(override.stderr, renamed("node-1", "node-2"));
+		}
+		assert.match(
+			onRunningNode({ nodes: "host-1", args: ["--node-ip", "192.0.2.99"] }).stderr,
+			/--node-ip 192\.0\.2\.99 is no address of this host/u,
+		);
 	},
 );
 
@@ -919,7 +968,8 @@ function checkPlatform(
 		sudo: `#!/bin/sh
 case "$1" in
 -v) exit 0 ;;
-test | cmp) ;;
+test | cmp | sed | grep) ;;
+find) shift; find "$HOST_ROOT$1" "$@" | sed "s|^$HOST_ROOT||"; exit ;;
 *) echo "unexpected host mutation: $*" >&2; exit 97 ;;
 esac
 command=$1
@@ -994,6 +1044,50 @@ await test(
 			const equal = checkPlatform(root, K3S_PIN, args);
 			assert.equal(equal.status, 0, equal.stderr);
 			assert.match(equal.stdout, /Every platform file and the k3s release match/u);
+
+			// The node drop-in is the site's own: the check shows its keys. Any other drop-in fails it.
+			const dropIns = path.join(root, "etc/rancher/k3s/config.yaml.d");
+			mkdirSync(dropIns);
+			writeFileSync(
+				path.join(dropIns, "50-node.yaml"),
+				'node-ip: "192.0.2.10"\nnode-name: "node-1"\n',
+			);
+			const siteOwned = checkPlatform(root, K3S_PIN, args);
+			assert.equal(siteOwned.status, 0, siteOwned.stderr);
+			assert.match(
+				siteOwned.stdout,
+				/50-node\.yaml is the site's own, with the keys: node-ip node-name/u,
+			);
+			// Any other key in the node drop-in overrides config.yaml, and the check names only the key.
+			writeFileSync(
+				path.join(dropIns, "50-node.yaml"),
+				'node-name: "node-1"\ndisable: [metrics-server]\n"token": s3cret\n',
+			);
+			const overridden = checkPlatform(root, K3S_PIN, args);
+			assert.equal(overridden.status, 1);
+			assert.match(
+				overridden.stderr,
+				/50-node\.yaml sets more than node-ip and node-name \(disable "token" \)/u,
+			);
+			assert.doesNotMatch(overridden.stderr, /s3cret|metrics-server/u);
+			writeFileSync(
+				path.join(dropIns, "50-node.yaml"),
+				'node-ip: "192.0.2.10"\nnode-name: "node-1"\n',
+			);
+			// With node options, the check compares the drop-in with what the installer would write.
+			const node = ["--node-ip", "192.0.2.10", "--node-name", "node-1"];
+			assert.equal(checkPlatform(root, K3S_PIN, [...args, ...node]).status, 0);
+			const otherNode = checkPlatform(root, K3S_PIN, [...args, "--node-ip", "192.0.2.10"]);
+			assert.equal(otherNode.status, 1);
+			assert.match(otherNode.stderr, /config\.yaml\.d\/50-node\.yaml differs/u);
+			writeFileSync(path.join(dropIns, "90-flags.yml"), "kubelet-arg+:\n  - pod-max-pids=256\n");
+			const override = checkPlatform(root, K3S_PIN, args);
+			assert.equal(override.status, 1);
+			assert.match(
+				override.stderr,
+				/90-flags\.yml is no platform file, and it overrides config\.yaml/u,
+			);
+			rmSync(dropIns, { recursive: true });
 
 			// The same host with other options renders other certificates.
 			const otherHost = checkPlatform(root, K3S_PIN, [
