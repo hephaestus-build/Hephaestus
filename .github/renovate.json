@@ -58,7 +58,10 @@
 		{
 			"matchDepNames": ["paketobuildpacks/**"],
 			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
-			"groupName": "runtime images"
+			"groupName": "runtime images",
+			"prBodyNotes": [
+				"A buildpack update can change the files that the buildpacks download. The App Server image build then fails and names each URI. Pin each file in .github/ci-tools/buildpack-*.json with the SHA-256 from the buildpack's buildpack.toml."
+			]
 		},
 		{
 			"matchManagers": ["npm"],
@@ -228,9 +231,9 @@
 			"versioningTemplate": "{{#if versioning}}{{versioning}}{{else}}semver{{/if}}"
 		},
 		{
-			"description": "Track release security tool versions",
+			"description": "Track the GitHub release versions of pinned CI tools",
 			"customType": "regex",
-			"managerFilePatterns": ["/^\\.github/ci-tools/(cosign|syft|trivy)\\.json$/"],
+			"managerFilePatterns": ["/^\\.github/ci-tools/(cosign|pack|syft|trivy)\\.json$/"],
 			"matchStrings": [
 				"\"version\":\\s*\"(?<currentValue>[^\"]+)\",[\\s\\S]*?\"url\":\\s*\"https://github\\.com/(?<depName>[\\w.-]+/[\\w.-]+)/releases/download/"
 			],
@@ -244,16 +247,6 @@
 			"managerFilePatterns": ["/^\\.github/workflows/cicd\\.yml$/"],
 			"matchStrings": [
 				"# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+version: (?<currentValue>\\S+)"
-			],
-			"extractVersionTemplate": "^v(?<version>.*)$",
-			"versioningTemplate": "semver"
-		},
-		{
-			"description": "Track the pack CLI version",
-			"customType": "regex",
-			"managerFilePatterns": ["/^\\.github/workflows/reusable-docker-build\\.yml$/"],
-			"matchStrings": [
-				"# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+pack-version: (?<currentValue>\\S+)"
 			],
 			"extractVersionTemplate": "^v(?<version>.*)$",
 			"versioningTemplate": "semver"

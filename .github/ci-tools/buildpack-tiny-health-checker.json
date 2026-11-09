@@ -1,0 +1,14 @@
+{
+	"version": "0.39.0",
+	"url": "https://github.com/dmikusa/tiny-health-checker/releases/download/v0.39.0/",
+	"assets": {
+		"linux-x64": {
+			"name": "tiny-health-checker-x86_64-unknown-linux-musl.tar.xz",
+			"sha256": "cb1797948015da46c222764a99ee30c06a6a9a30f5b87f212a28ea3c6d07610d"
+		},
+		"linux-arm64": {
+			"name": "tiny-health-checker-aarch64-unknown-linux-musl.tar.xz",
+			"sha256": "c177033fd474af673bd64788d47e13708844f3946e1eb51cce6a422a23a5e8cc"
+		}
+	}
+}

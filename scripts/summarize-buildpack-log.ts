@@ -1,5 +1,7 @@
 import { appendFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
+import { stripVTControlCharacters } from "node:util";
+
 import { isSet } from "./lib/env.ts";
 
 // These describe archive eligibility, not application execution. Verification failures stay live:
@@ -7,14 +9,23 @@ import { isSet } from "./lib/env.ts";
 const exclusion =
 	/\[warning\]\[cds\] Skipping \S+: (?<reason>Unsupported location|Old class has been linked|Signed JAR|JFR event class)$/u;
 
+// Every buildpack dependency comes from the dependency-mapping binding as a `file:` URI. Another
+// download means that a pin is missing, and the build would depend on that host.
+const download = /Downloading from (?<uri>\S+)/u;
+
 const output = process.argv[2];
 if (!isSet(output)) {
 	throw new Error("Usage: summarize-buildpack-log.ts <raw-log-path>");
 }
 writeFileSync(output, "");
 const counts = new Map<string, number>();
+const downloads: string[] = [];
 for await (const line of createInterface({ input: process.stdin, crlfDelay: Infinity })) {
 	appendFileSync(output, `${line}\n`);
+	const uri = download.exec(stripVTControlCharacters(line))?.groups?.uri;
+	if (uri !== undefined && !uri.startsWith("file:")) {
+		downloads.push(uri);
+	}
 	const reason = exclusion.exec(line)?.groups?.reason;
 	if (reason === undefined) {
 		console.log(line);
@@ -34,4 +45,12 @@ if (counts.size > 0) {
 	for (const [reason, count] of counts) {
 		console.log(`  ${reason}: ${count}`);
 	}
+}
+for (const uri of downloads) {
+	console.log(
+		`::error::A buildpack downloaded ${uri}. Pin it in .github/ci-tools/buildpack-*.json with the buildpack's SHA-256.`,
+	);
+}
+if (downloads.length > 0) {
+	process.exitCode = 1;
 }

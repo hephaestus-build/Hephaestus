@@ -409,6 +409,9 @@ jobs:
               - '!**/AGENTS.md'
               - '!**/CLAUDE.md'
             application-server-image:
+              - '.github/ci-tools/pack.json'
+              - '.github/ci-tools/buildpack-*.json'
+              - 'scripts/buildpack-dependencies.ts'
               - 'tsconfig.agent-runtime.json'
               - 'scripts/compile-agent-runtime.ts'
               - 'scripts/summarize-buildpack-log.ts'

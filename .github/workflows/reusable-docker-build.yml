@@ -219,12 +219,46 @@ jobs:
           set: "*.platform=${{ inputs.platform }}"
 
       # A failed Dockerfile build does not stop the App Server image from building and reporting.
+      - uses: ./.github/actions/setup-toolchain
+        if: ${{ !cancelled() && steps.prep.outcome == 'success' && (contains(fromJSON(steps.prep.outputs.images), 'application-server') || (inputs.publish && inputs.scan-images)) }}
+        with:
+          install: "none"
+
+      - name: Resolve the pinned pack
+        id: pack
+        if: ${{ !cancelled() && steps.prep.outcome == 'success' && contains(fromJSON(steps.prep.outputs.images), 'application-server') }}
+        uses: ./.github/actions/setup-ci-tool
+        with:
+          cache: "false"
+          tool: pack
+
       - name: Set up pack
         if: ${{ !cancelled() && steps.prep.outcome == 'success' && contains(fromJSON(steps.prep.outputs.images), 'application-server') }}
-        uses: buildpacks/github-actions/setup-pack@324e5c43145b68f60bf74a269f5ba7b2969e03db # v6.2.1
-        with:
-          # renovate: datasource=github-releases depName=buildpacks/pack
-          pack-version: 0.40.10
+        env:
+          PACK_VERSION: ${{ steps.pack.outputs.version }}
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/pack-download.XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          CI_TOOL=pack node scripts/ci-tool.ts file "$work/pack.tgz"
+          install_dir="$RUNNER_TEMP/pack-$PACK_VERSION/bin"
+          mkdir -p "$install_dir"
+          # Only the binary leaves the archive that the resolver verified.
+          tar -xzf "$work/pack.tgz" -C "$install_dir" pack
+          installed=$("$install_dir/pack" --version)
+          case "$installed" in
+            "$PACK_VERSION"+*) ;;
+            *) echo "::error::pack reports $installed, not $PACK_VERSION"; exit 1 ;;
+          esac
+          echo "$install_dir" >> "$GITHUB_PATH"
+
+      # The buildpacks read these files through a dependency-mapping binding instead of downloading them.
+      - name: Resolve the buildpack dependencies
+        id: buildpack-dependencies
+        if: ${{ !cancelled() && steps.prep.outcome == 'success' && contains(fromJSON(steps.prep.outputs.images), 'application-server') }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/buildpack-dependencies.ts
 
       - name: Download the executable JAR
         if: ${{ !cancelled() && steps.prep.outcome == 'success' && contains(fromJSON(steps.prep.outputs.images), 'application-server') }}
@@ -233,11 +267,6 @@ jobs:
           name: ${{ inputs.application-artifact }}
           path: ${{ runner.temp }}/application
 
-      - uses: ./.github/actions/setup-toolchain
-        if: ${{ !cancelled() && steps.prep.outcome == 'success' && (contains(fromJSON(steps.prep.outputs.images), 'application-server') || (inputs.publish && inputs.scan-images)) }}
-        with:
-          install: "none"
-
       # --trust-builder lets one creator container run every lifecycle phase; that is only safe
       # because the builder is pinned by digest.
       - name: Build with Buildpacks and CDS
@@ -245,6 +274,7 @@ jobs:
         if: ${{ !cancelled() && steps.prep.outcome == 'success' && contains(fromJSON(steps.prep.outputs.images), 'application-server') }}
         env:
           APPLICATION_DIRECTORY: ${{ runner.temp }}/application
+          BUILDPACK_DEPENDENCIES: ${{ steps.buildpack-dependencies.outputs.directory }}
           INPUT_REGISTRY: ${{ inputs.registry }}
           MATRIX_PLATFORM: ${{ inputs.platform }}
           PLATFORM_PAIR: ${{ steps.prep.outputs.platform_pair }}
@@ -257,14 +287,17 @@ jobs:
           mapfile -t jars < <(find "$APPLICATION_DIRECTORY" -name 'hephaestus-application-*.jar')
           (( ${#jars[@]} == 1 ))
           PER_ARCH_TAG="$INPUT_REGISTRY/hephaestus-build/application-server:ci-$GITHUB_RUN_ID-$PLATFORM_PAIR"
+          # The binding's file: URIs name the host path, so the files mount at that same path.
+          dependencies=(--volume "$BUILDPACK_DEPENDENCIES/bindings:/platform/bindings:ro"
+            --volume "$BUILDPACK_DEPENDENCIES/files:$BUILDPACK_DEPENDENCIES/files:ro")
           if [ "$PUBLISH" != true ]; then
             # Nothing downstream of a build without registry writes reads a digest.
             pack build "$PER_ARCH_TAG" --path "${jars[0]}" --descriptor "$PROJECT_DESCRIPTOR" \
-              --run-image "$RUN_IMAGE" --platform "$MATRIX_PLATFORM" --trust-builder 2>&1 | node scripts/summarize-buildpack-log.ts "$RUNNER_TEMP/buildpacks.log"
+              --run-image "$RUN_IMAGE" --platform "$MATRIX_PLATFORM" "${dependencies[@]}" --trust-builder 2>&1 | node scripts/summarize-buildpack-log.ts "$RUNNER_TEMP/buildpacks.log"
             exit 0
           fi
           pack build "$PER_ARCH_TAG" --path "${jars[0]}" --descriptor "$PROJECT_DESCRIPTOR" \
-            --run-image "$RUN_IMAGE" --platform "$MATRIX_PLATFORM" --publish --trust-builder 2>&1 | node scripts/summarize-buildpack-log.ts "$RUNNER_TEMP/buildpacks.log"
+            --run-image "$RUN_IMAGE" --platform "$MATRIX_PLATFORM" "${dependencies[@]}" --publish --trust-builder 2>&1 | node scripts/summarize-buildpack-log.ts "$RUNNER_TEMP/buildpacks.log"
           # Buildpacks may wrap one platform in an index; capture its manifest, not the wrapper.
           RAW=$(docker buildx imagetools inspect "$PER_ARCH_TAG" --format '{{json .Manifest}}')
           if echo "$RAW" | jq -e '.manifests' >/dev/null 2>&1; then

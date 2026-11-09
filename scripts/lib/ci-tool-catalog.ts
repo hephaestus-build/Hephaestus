@@ -55,10 +55,13 @@ function selectPin(id: string, spec: Record<string, unknown>, platform: string):
 	) {
 		throw new Error(`Invalid pin for ${id}`);
 	}
+	// An OCI tag cannot carry `+`, so a version such as Liberica's `21.0.13.0.3+5` is pinned with
+	// `_`, as Helm writes it in OCI tags.
+	const release = pin.version.replaceAll("_", "+");
 	if (
-		!pin.url.includes(`/v${pin.version}/`) &&
-		!pin.url.includes(`/${pin.version}/`) &&
-		!pin.url.includes(`-v${pin.version}-`)
+		!pin.url.includes(`/v${release}/`) &&
+		!pin.url.includes(`/${release}/`) &&
+		!pin.url.includes(`-v${release}-`)
 	) {
 		throw new Error(`Release URL does not match the ${id} version`);
 	}

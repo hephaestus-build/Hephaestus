@@ -16,8 +16,9 @@ id = "paketo-buildpacks/java"
 [[io.buildpacks.group]]
 uri = "docker://paketobuildpacks/health-checker@sha256:7ef317843d076c93682a2f0f79384dc11ff20227cf779d3b11b9f34e9d8b9246"
 
-# The buildpacks download the JRE and their tools from GitHub releases in one attempt. By default they stop
-# when a response sends no headers within 5 seconds, and GitHub can take longer to answer.
+# CI mounts the buildpack dependencies as a binding (scripts/buildpack-dependencies.ts). A local build
+# downloads them from GitHub releases in one attempt. By default the buildpacks stop when a response
+# sends no headers within 5 seconds, and GitHub can take longer to answer.
 [[io.buildpacks.build.env]]
 name = "BP_RESPONSE_HEADER_TIMEOUT"
 value = "60"
