@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
@@ -123,6 +124,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                         output,
                         mock(PracticeStagingStore.class),
                         members,
+                        mock(ReviewFreshness.class),
                         assignments,
                         files,
                         bases,

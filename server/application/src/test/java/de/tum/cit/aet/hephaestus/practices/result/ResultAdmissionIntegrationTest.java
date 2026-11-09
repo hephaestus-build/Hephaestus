@@ -5,12 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventRecorded;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
@@ -30,10 +32,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.AbstractResultAdmissionIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRequestRejected;
@@ -58,6 +62,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompleted;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompletion;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
@@ -145,6 +151,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
     ResultCurrentness currentness;
 
     @Autowired
+    ReviewFreshness reviewFreshness;
+
+    @Autowired
     PracticeRepository practices;
 
     @Autowired
@@ -158,6 +167,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
 
     @Autowired
     ReviewAssignmentStore assignments;
+
+    @Autowired
+    ReviewItemRepository memberRows;
 
     @Autowired
     ReviewPracticeRepository pinnedPractices;
@@ -225,7 +237,15 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 .current(item);
         new TransactionTemplate(transactions)
                 .executeWithoutResult(ignored -> assertThat(currentness.prepareClaim(
-                                item.workspaceId(), item.itemId(), "frozen-scan", Instant.now()))
+                                item.workspaceId(),
+                                Result.builder()
+                                        .id(UUID.randomUUID())
+                                        .workspaceId(item.workspaceId())
+                                        .itemId(item.itemId())
+                                        .reviewId(UUID.randomUUID())
+                                        .practiceId(scenario.practice().getId())
+                                        .build(),
+                                Instant.now()))
                         .isNull());
     }
 
@@ -236,8 +256,8 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         var other = data.scenario();
         var untouched = data.result(other, ResultOutcome.MET, at);
         assertThatThrownBy(() -> new TransactionTemplate(transactions)
-                        .executeWithoutResult(ignored -> currentness.prepareClaim(
-                                other.workspace().getId(), scenario.item().getId(), "foreign", Instant.now())))
+                        .executeWithoutResult(ignored ->
+                                currentness.prepareClaim(other.workspace().getId(), current, Instant.now())))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(results.findById(current.getId()).orElseThrow().getEndedAt()).isNull();
         assertThat(results.findById(untouched.getId()).orElseThrow().getEndedAt())
@@ -709,6 +729,83 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         assertThat(results.findById(id).orElseThrow().getOutcome()).isEqualTo(ResultOutcome.NOT_MET);
     }
 
+    @Test
+    void shouldStopAChangedPracticeBeforeMeasurementAndPreserveOtherMemberships() {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        running(pending, 0);
+        var ref = productItems.require(
+                pending.review().getWorkspaceId(), scenario.item().getId());
+        var kind = new SourceKind("scm.pull-request.core");
+        var capture = pinnedPractices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        pending.review().getWorkspaceId(),
+                        pending.review().getId(),
+                        scenario.practice().getId())
+                .orElseThrow();
+        var facts = json.createObjectNode();
+        facts.putObject("sourceFingerprints").put(kind.value(), "a".repeat(64));
+        capture.setCaptureDecision(facts);
+        pinnedPractices.saveAndFlush(capture);
+        doReturn(Map.of(kind, "a".repeat(64))).when(productItems).fingerprints(eq(ref), anySet());
+        var id = new ReviewAssignmentId(
+                pending.review().getId(), scenario.practice().getId(), ref.itemId());
+        assertThat(reviewFreshness.start(ref.workspaceId(), id, pending.jobId(), 0))
+                .isTrue();
+        doReturn(Map.of(kind, "b".repeat(64))).when(productItems).fingerprints(eq(ref), anySet());
+        var other = admissions.pending(data.scenario(), Instant.now(), null);
+
+        assertThat(reviewFreshness.start(ref.workspaceId(), id, pending.jobId(), 0))
+                .isFalse();
+        var stopped = memberRows
+                .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                        ref.workspaceId(), id.reviewId(), id.practiceId(), id.itemId())
+                .orElseThrow();
+        assertThat(stopped.getState()).isEqualTo(ReviewItemState.WITHHELD);
+        assertThat(stopped.getReason()).isEqualTo("REPLACED");
+        var unrelated = memberRows
+                .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                        other.review().getWorkspaceId(),
+                        other.review().getId(),
+                        other.scenario().practice().getId(),
+                        other.scenario().item().getId())
+                .orElseThrow();
+        assertThat(unrelated.getState()).isEqualTo(ReviewItemState.LISTED);
+        assertThat(results.findByWorkspaceIdAndReviewIdOrderByRecordedAtAscIdAsc(ref.workspaceId(), id.reviewId()))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldRecordAnUnverifiableStartWithoutCallingTheWorkChanged() {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        running(pending, 0);
+        var ref = productItems.require(
+                pending.review().getWorkspaceId(), scenario.item().getId());
+        var capture = pinnedPractices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        ref.workspaceId(),
+                        pending.review().getId(),
+                        scenario.practice().getId())
+                .orElseThrow();
+        var facts = json.createObjectNode();
+        facts.putObject("sourceFingerprints").put("scm.pull-request.core", "a".repeat(64));
+        capture.setCaptureDecision(facts);
+        pinnedPractices.saveAndFlush(capture);
+        doReturn(Map.of()).when(productItems).fingerprints(eq(ref), anySet());
+        var id = new ReviewAssignmentId(
+                pending.review().getId(), scenario.practice().getId(), ref.itemId());
+
+        assertThat(reviewFreshness.start(ref.workspaceId(), id, pending.jobId(), 0))
+                .isFalse();
+        var stopped = memberRows
+                .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                        ref.workspaceId(), id.reviewId(), id.practiceId(), id.itemId())
+                .orElseThrow();
+        assertThat(stopped.getState()).isEqualTo(ReviewItemState.WITHHELD);
+        assertThat(stopped.getReason()).isEqualTo("READINESS_REFUSED");
+        assertThat(results.findByWorkspaceIdAndReviewIdOrderByRecordedAtAscIdAsc(ref.workspaceId(), id.reviewId()))
+                .isEmpty();
+    }
+
     private ItemEventInput eventInput() {
         var definition = DefinitionTestFixtures.definition();
         scenario = data.scenario(new PracticeDefinition(
@@ -766,11 +863,27 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 null);
     }
 
+    private void captureFingerprint(Result result, String digest) {
+        var row = pinnedPractices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        result.getWorkspaceId(), result.getReviewId(), result.getPracticeId())
+                .orElseThrow();
+        var facts = json.createObjectNode();
+        facts.putObject("sourceFingerprints").put("scm.pull-request.core", digest);
+        row.setCaptureDecision(facts);
+        pinnedPractices.saveAndFlush(row);
+    }
+
     @Test
     void shouldEndCurrentResultsWhenAnScmChangeEventIsRecordedWithoutEndingLaterResultsOnReplay() {
         var input = eventInput();
         var at = input.occurredAt().truncatedTo(ChronoUnit.MICROS);
         var current = data.result(scenario, ResultOutcome.NOT_MET, at.minusSeconds(30));
+        captureFingerprint(current, "a".repeat(64));
+        var source = productItems.require(input.workspaceId(), input.itemId());
+        doReturn(Map.of(new SourceKind("scm.pull-request.core"), "b".repeat(64)))
+                .when(productItems)
+                .fingerprints(eq(source), anySet());
         var other = data.scenario();
         var untouched = data.result(other, ResultOutcome.MET, at.minusSeconds(30));
         var changed = new ItemEventInput(
@@ -795,6 +908,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 at.plusSeconds(1),
                 at.plusSeconds(1),
                 Objects.requireNonNull(input.itemVersion()));
+        captureFingerprint(later, "b".repeat(64));
         new TransactionTemplate(transactions)
                 .executeWithoutResult(ignored -> publishedEvents.publishEvent(
                         new ItemEventRecorded(changed.workspaceId(), eventId, changed.itemId())));

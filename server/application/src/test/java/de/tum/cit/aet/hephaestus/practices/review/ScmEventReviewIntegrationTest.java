@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -758,7 +759,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                             return canonical;
                         })
                         .when(productItems)
-                        .currentWorkVersion(item.workspaceId(), item.itemId());
+                        .fingerprints(eq(item), any());
             }
             Future<?> sourceWrite;
             Future<AdmissionReceipt> admitted;
@@ -879,7 +880,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     @EnumSource(
             value = IdentityProviderType.class,
             names = {"GITHUB", "GITLAB"})
-    void shouldKeepTheSubmittedReviewCurrentWhenOnlyTheAuthorPushes(IdentityProviderType type) {
+    void shouldEndTheSubmittedReviewWhenItsReadableParentContextChanges(IdentityProviderType type) {
         var prepared = prepare(type, true);
         var item = prepared.item();
         var scenario = reviewScenario(prepared);
@@ -894,6 +895,11 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 scenario.account().getId(),
                 prepared.version().value());
         running(pending);
+        recordSources(
+                item,
+                pending.review().getId(),
+                scenario.practice().getId(),
+                Set.of(new SourceKind("scm.pull-request.core")));
         transactions.executeWithoutResult(ignored -> {
             var changed = pulls.findById(pullId).orElseThrow();
             changed.setHeadRefOid("c".repeat(40));
@@ -931,11 +937,11 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
         var result = resultRows.findById(receipt.resultIds().getFirst()).orElseThrow();
         assertThat(result.getItemVersion()).isEqualTo(prepared.version().value());
-        assertThat(result.getEndedAt()).isNull();
+        assertThat(result.getEndReason()).isEqualTo(ResultEndReason.WORK_CHANGED);
         assertThat(resultRows.forDevelopersSince(
                         item.workspaceId(), List.of(scenario.account().getId()), Instant.EPOCH, true))
                 .extracting(row -> row.getId())
-                .contains(result.getId());
+                .doesNotContain(result.getId());
     }
 
     @ParameterizedTest
@@ -949,6 +955,11 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var at = Instant.now().minusSeconds(30);
         var current = resultData.result(
                 scenario, ResultOutcome.MET, at, at, prepared.version().value());
+        recordSources(
+                item,
+                current.getReviewId(),
+                current.getPracticeId(),
+                Set.of(new SourceKind("scm.pull-request.core"), ReviewThreadContentSource.KIND));
         transactions.executeWithoutResult(ignored -> {
             var changed = providerReviews
                     .findById(Objects.requireNonNull(item.sourceId()))
@@ -977,6 +988,21 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         item.workspaceId(),
                         item.itemId()))
                 .isEqualTo(1L);
+    }
+
+    private void recordSources(ItemRef item, UUID reviewId, long practiceId, Set<SourceKind> kinds) {
+        var captured = productItems.fingerprints(item, kinds);
+        assertThat(captured.keySet()).containsAll(kinds);
+        var facts = new JsonMapper().createObjectNode();
+        var fingerprints = facts.putObject("sourceFingerprints");
+        captured.forEach((kind, value) -> fingerprints.put(kind.value(), value));
+        assertThat(jdbc.update(
+                        "UPDATE review_practice SET capture_decision=?::jsonb WHERE workspace_id=? AND review_id=? AND practice_id=?",
+                        facts.toString(),
+                        item.workspaceId(),
+                        reviewId,
+                        practiceId))
+                .isEqualTo(1);
     }
 
     private ReviewIntegrationData.Scenario reviewScenario(Prepared prepared) {
@@ -2922,7 +2948,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(resultRows.forDevelopersSince(
                         item.workspaceId(), List.of(scenario.account().getId()), Instant.EPOCH, true))
                 .extracting(row -> row.getId())
-                .contains(current.getId());
+                .doesNotContain(current.getId());
         var occasions = jdbc.queryForList(
                 "SELECT id FROM item_event WHERE workspace_id=? AND item_id=?",
                 UUID.class,

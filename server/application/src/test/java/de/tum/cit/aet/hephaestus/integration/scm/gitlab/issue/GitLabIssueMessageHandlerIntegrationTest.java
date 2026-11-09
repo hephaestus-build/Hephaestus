@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -32,6 +33,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.dto.GitLabIssueEve
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
+import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -40,9 +43,12 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -66,6 +72,9 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ConnectionService routeConnectionService;
+
+    @Autowired
+    private ProductItemQuery currentItems;
 
     @Autowired
     private GitLabProjectAdmission routeAdmissionReads;
@@ -596,16 +605,33 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 var current = issueRepository
                         .findByIdWithAuthorAndRepository(issue.getId())
                         .orElseThrow();
-                return new ScmReviewFixtures(
+                var at = Instant.now();
+                var recorded = new ScmReviewFixtures(
                                 fixtureJdbc, fixtureItems, fixturePeople, transactionTemplate, objectMapper)
                         .result(
-                                savedWorkspace.getId(),
-                                current,
+                                savedWorkspace.getId(), current,
                                 issueVersions
-                                        .of(ScmEventPayload.IssueData.from(current))
-                                        .value(),
-                                Instant.now())
-                        .resultId();
+                                                .of(ScmEventPayload.IssueData.from(current))
+                                                .value(),
+                                        at);
+                fixtureJdbc.update(
+                        "UPDATE account SET ai_choice='IN_HOUSE_ONLY',ai_choice_at=? WHERE id=?",
+                        Timestamp.from(at),
+                        recorded.developerId());
+                var core = new SourceKind("scm.issue.core");
+                var captured = currentItems.fingerprints(
+                        currentItems.require(savedWorkspace.getId(), recorded.itemId()), Set.of(core));
+                assertThat(captured).containsKey(core);
+                fixtureJdbc.update(
+                        "UPDATE review_practice SET capture_decision=?::jsonb WHERE workspace_id=? AND review_id=?",
+                        objectMapper
+                                .valueToTree(Map.of(
+                                        ReviewCaptureDecision.SOURCE_FINGERPRINTS,
+                                        Map.of(core.value(), captured.get(core))))
+                                .toString(),
+                        savedWorkspace.getId(),
+                        recorded.reviewId());
+                return recorded.resultId();
             }));
         }
     }

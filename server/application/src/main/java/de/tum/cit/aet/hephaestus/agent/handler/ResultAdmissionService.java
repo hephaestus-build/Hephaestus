@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateProgressDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.StageResponseDTO;
@@ -18,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
@@ -97,6 +100,14 @@ public class ResultAdmissionService {
         this.composition = composition;
         this.writeGuard = writeGuard;
         this.staging = staging;
+    }
+
+    public PracticeStartResponseDTO start(AdmissionIdentity identity, PracticeStartRequestDTO request) {
+        return Objects.requireNonNull(transactions.execute(status -> {
+            var job = ownedJob(identity);
+            if (isAdmitted(job)) throw new AdmissionConflictException();
+            return new PracticeStartResponseDTO(request.practiceSlug(), assignments.start(job, request.practiceSlug()));
+        }));
     }
 
     /** Verifies and durably stages one completed practice. A lost acknowledgement can repeat only the same body. */
@@ -185,8 +196,13 @@ public class ResultAdmissionService {
             files.holdCopyAdmission();
             var job = ownedJob(identity);
             if (isAdmitted(job)) return false;
-            if (staging.workChanged(job)) {
-                staging.failOpen(job, ReviewStopReason.REPLACED);
+            var currentness = staging.currentness(job);
+            if (currentness != Currentness.CURRENT) {
+                staging.failOpen(
+                        job,
+                        currentness == Currentness.STALE
+                                ? ReviewStopReason.REPLACED
+                                : ReviewStopReason.READINESS_REFUSED);
             } else if (!assignments.open(job).isEmpty()) return false;
             seal(
                     identity,

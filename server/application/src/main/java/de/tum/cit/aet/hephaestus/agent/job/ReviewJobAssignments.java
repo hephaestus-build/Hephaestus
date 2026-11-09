@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import java.util.HashSet;
@@ -21,6 +22,7 @@ public class ReviewJobAssignments {
     private final ReviewSnapshotQuery reviews;
     private final ReviewAssignmentQuery assignments;
     private final ReviewAssignmentStore membership;
+    private final ReviewFreshness freshness;
 
     public ReviewSnapshot review(ReviewJob job) {
         return reviews.find(job.getWorkspaceId(), job.getReviewId())
@@ -65,6 +67,14 @@ public class ReviewJobAssignments {
                     return assignment;
                 })
                 .toList();
+    }
+
+    public boolean start(ReviewJob job, String practiceSlug) {
+        var assignment = load(job).stream()
+                .filter(row -> row.practiceSlug().equals(practiceSlug))
+                .findFirst()
+                .orElseThrow(() -> invalid("The practice is not assigned to this invocation"));
+        return freshness.start(job.getWorkspaceId(), assignment.id(), job.getId(), job.getAttempt());
     }
 
     public boolean publicReviewed(ReviewJob job) {

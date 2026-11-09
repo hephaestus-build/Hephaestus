@@ -1,0 +1,82 @@
+package de.tum.cit.aet.hephaestus.practices.review;
+
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
+import java.time.Clock;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
+
+@Service
+@ConditionalOnCaptureRole
+@RequiredArgsConstructor
+public class ReviewFreshnessService implements ReviewFreshness {
+    private final ReviewRepository reviews;
+    private final ReviewItemRepository items;
+    private final ReviewPracticeRepository practices;
+    private final ReviewInvocationFence fence;
+    private final Clock clock;
+    private final JsonMapper json;
+    private final ResultFreshness freshness;
+
+    @Override
+    @Transactional(readOnly = true)
+    public Currentness capturedCurrentness(long workspaceId, UUID reviewId) {
+        var review = reviews.findByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
+        if (review.getKind() == ReviewKind.SCAN) return Currentness.CURRENT;
+        var combined = json.createObjectNode();
+        var fingerprints = combined.putObject(ReviewCaptureDecision.SOURCE_FINGERPRINTS);
+        for (var assignment : practices.findByWorkspaceIdAndReviewIdOrderByPracticeIdAsc(workspaceId, reviewId)) {
+            var facts = assignment.getCaptureDecision();
+            if (facts == null) continue;
+            var sources = facts.path(ReviewCaptureDecision.SOURCE_FINGERPRINTS);
+            if (!sources.isObject()) continue;
+            for (var entry : sources.properties()) {
+                var previous = fingerprints.get(entry.getKey());
+                if (previous != null && !previous.equals(entry.getValue())) return Currentness.UNVERIFIABLE;
+                fingerprints.set(entry.getKey(), entry.getValue());
+            }
+        }
+        return freshness.capture(workspaceId, review.getItemId(), combined);
+    }
+
+    @Override
+    @Transactional
+    public boolean start(long workspaceId, ReviewAssignmentId id, UUID jobId, int attempt) {
+        var review = fence.lock(workspaceId, id.reviewId(), jobId, attempt);
+        var assignment = practices.lockAssignments(workspaceId, id.reviewId()).stream()
+                .filter(row -> row.getPracticeId() == id.practiceId())
+                .findFirst()
+                .orElseThrow();
+        var member = items.lockAssignment(workspaceId, id.reviewId(), id.practiceId(), id.itemId())
+                .orElseThrow();
+        if (!jobId.equals(member.getJobId()))
+            throw new IllegalArgumentException("The invocation does not own this practice");
+        if (member.getState() != ReviewItemState.LISTED) return false;
+        if (review.getKind() == ReviewKind.SCAN) return true;
+        var state = freshness.capture(workspaceId, id.itemId(), assignment.getCaptureDecision());
+        if (state == Currentness.CURRENT) {
+            assignment.setStatus(ReviewPracticeStatus.RUNNING);
+            return true;
+        }
+        var reason = state == Currentness.STALE ? "REPLACED" : "READINESS_REFUSED";
+        member.withhold(
+                reason,
+                state == Currentness.STALE
+                        ? "The sources changed before this practice started."
+                        : "The current sources could not be verified before this practice started.",
+                clock.instant());
+        assignment.setStatus(ReviewPracticeStatus.WITHHELD);
+        assignment.setReason(reason);
+        return false;
+    }
+}

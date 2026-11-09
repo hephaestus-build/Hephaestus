@@ -37,7 +37,8 @@ flowchart TD
 
 [ADR 0062](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0062-the-item-is-the-review-scope.md) decides a quiet window and supersede for item reviews.
 [ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) decides readiness per practice, freshness by source fingerprints, and a composer agent that sees its earlier feedback.
-The quiet window and readiness per practice are shipped. Supersede, source fingerprints and the composer agent are not shipped yet.
+The quiet window, readiness per practice, and source fingerprints are shipped.
+The composer correction loop is not shipped yet.
 
 An item event joins its item's quiet window, unless its item kind marks it as immediate.
 These events are immediate: merged, closed, a submitted pull request review, a closed or deleted issue, and an archived document.
@@ -71,9 +72,8 @@ A refusal that can pass, such as an exhausted budget, keeps every event of the w
 
 A person's request selects every practice, with no such removal.
 At capture, each ready practice can keep its result instead of running.
-It keeps a result that a scan could also reuse (`ReuseCandidateQuery`), if the capture of that result read the same content.
-Capture compares a digest of the practice's declared sources and its Applies when sources (`CapturedSourceDigest`).
-The digest leaves out capture and sync times.
+It keeps a result that a scan could also reuse (`ReuseCandidateQuery`), under [ADR 0069's freshness and capture comparison](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md#freshness-by-source-fingerprints).
+A scan also requires the same frozen work version.
 
 The membership becomes `REUSED`. If no practice is left, the review ends with no sandbox and no model call. Feedback composition covers only what the review measured, so a reused result sends nothing new.
 
@@ -145,9 +145,26 @@ It does not use the old occasion time as a freshness cutoff.
 A verified result for a superseded version remains in history and does not replace a matching current claim.
 An unavailable or hidden source does not establish a work change or item removal.
 
-Submitted reviews retain their own event-driven retirement and normal claim ordering.
-A later author push alone does not retire observations about an unchanged submitted review.
+Each capture decision retains the fingerprints of every source the session could read.
+Selection, practice start, admission, delivery, and result presentation compare them with the current source records.
+Record comparisons use the capture renderer and omit the observation basis.
+Git source fingerprints follow [ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md#freshness-by-source-fingerprints).
+
+A missing fingerprint or an unavailable current source makes the result unverifiable.
+It does not establish a change to the work.
+The practice-start gateway records `REPLACED` for changed sources and `READINESS_REFUSED` for sources it cannot verify.
+A submitted review ends only results whose source fingerprints changed.
+
+Submitted reviews use the same source comparison and retain normal claim ordering.
 Repository and file scans keep their frozen source contract.
+
+Git freshness describes the last complete provider-ref observation, not a live provider read.
+A received branch or tag event invalidates that observation until a complete fetch records it again.
+The next capture fetch can restore it. Until then, practice start records `READINESS_REFUSED` and delivery records `UNCORROBORATED`.
+These reasons appear in the review and feedback traces.
+
+[GitHub](https://docs.github.com/en/webhooks/webhook-events-and-payloads#push) and [GitLab](https://docs.gitlab.com/user/project/integrations/webhook_events/#push-events) can omit bulk ref events.
+An omitted event is detected only by a later fetch, as with other source changes that have not synced.
 
 The [sync lifecycle](./sync-lifecycle.md) owns adapter lifecycle details.
 The [operations guide](/admin/practice-review-operations) owns queue timing and deployment controls.

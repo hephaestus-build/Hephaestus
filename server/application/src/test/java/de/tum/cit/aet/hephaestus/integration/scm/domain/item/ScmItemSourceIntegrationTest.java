@@ -1438,8 +1438,8 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                         item.itemId()))
                 .isZero();
 
-        var reason = transactions.execute(
-                ignored -> currentness.prepareClaim(item.workspaceId(), item.itemId(), before.value(), Instant.now()));
+        var reason =
+                transactions.execute(ignored -> currentness.prepareClaim(item.workspaceId(), current, Instant.now()));
 
         assertThat(reason).isEqualTo(ResultEndReason.WORK_CHANGED);
         assertThat(results.findById(current.getId()).orElseThrow().getEndReason())

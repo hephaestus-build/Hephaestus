@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.result;
 
 import de.tum.cit.aet.hephaestus.practices.model.Problem;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultSort;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewListSort;
 import jakarta.persistence.EntityManager;
@@ -14,8 +15,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.hibernate.Session;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -23,8 +26,11 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 @Repository
+@RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ResultQueriesImpl implements ResultQueries {
+    private final ObjectProvider<ResultFreshness> freshness;
+
     @PersistenceContext
     private @Nullable EntityManager entityManager;
 
@@ -106,6 +112,7 @@ public class ResultQueriesImpl implements ResultQueries {
             where.append(
                     " AND r.ended_at IS NULL AND r.outcome='NOT_MET' AND NOT " + INCORRECT + " AND NOT " + ACCEPTED);
         String joined = JOIN + " JOIN problem child ON child.result_id=r.id AND child.workspace_id=r.workspace_id ";
+        if (child.openOnly()) sourceCurrentness(workspaceId, joined, where, params, Currentness.CURRENT);
         long total = session()
                 .createNativeQuery("SELECT count(*)" + joined + where, Long.class)
                 .setProperties(params)
@@ -130,17 +137,20 @@ public class ResultQueriesImpl implements ResultQueries {
     public List<Result> forDevelopersSince(
             long workspaceId, Collection<Long> developers, Instant since, boolean currentOnly) {
         if (developers.isEmpty()) return List.of();
+        var where = new StringBuilder(
+                " WHERE r.workspace_id=:ws AND r.developer_id IN (:developers) AND r.recorded_at>=:since");
+        var params = new LinkedHashMap<String, Object>();
+        params.put("ws", workspaceId);
+        params.put("developers", developers);
+        params.put("since", since);
+        if (currentOnly) {
+            where.append(" AND r.ended_at IS NULL AND NOT ").append(INCORRECT);
+            sourceCurrentness(workspaceId, JOIN, where, params, Currentness.CURRENT);
+        }
         return session()
                 .createNativeQuery(
-                        "SELECT r.*" + JOIN
-                                + " WHERE r.workspace_id=:ws AND r.developer_id IN (:developers) AND"
-                                + " r.recorded_at>=:since"
-                                + (currentOnly ? " AND r.ended_at IS NULL AND NOT " + INCORRECT : "")
-                                + " ORDER BY r.recorded_at DESC,r.id::text DESC",
-                        Result.class)
-                .setParameter("ws", workspaceId)
-                .setParameterList("developers", developers)
-                .setParameter("since", since)
+                        "SELECT r.*" + JOIN + where + " ORDER BY r.recorded_at DESC,r.id::text DESC", Result.class)
+                .setProperties(params)
                 .getResultList();
     }
 
@@ -194,7 +204,41 @@ public class ResultQueriesImpl implements ResultQueries {
         return ids.stream().map(loaded::get).filter(Objects::nonNull).toList();
     }
 
-    private static Selection selection(long ws, ResultQueryFilter f) {
+    /** Freshness is read before LIMIT and count, so a filtered page agrees with every row it renders. */
+    private void sourceCurrentness(
+            long workspaceId, String joined, StringBuilder where, Map<String, Object> params, Currentness wanted) {
+        var candidates = session()
+                .createNativeQuery(
+                        "SELECT DISTINCT r.id,r.workspace_id,r.review_id,r.practice_id,r.item_id,r.ended_at" + joined
+                                + where + " AND (" + CURRENTNESS + ")='CURRENT'",
+                        ResultFreshness.Claim.class)
+                .setProperties(params)
+                .getResultList();
+        var matching = freshness.getObject().statesFor(workspaceId, candidates).entrySet().stream()
+                .filter(entry -> entry.getValue() == wanted)
+                .map(Map.Entry::getKey)
+                .toList();
+        String source = "false";
+        if (!matching.isEmpty()) {
+            // Open-only can add a second predicate beside an explicit currentness filter.
+            String key = "source" + wanted.name();
+            params.put(key, matching.stream().map(UUID::toString).collect(Collectors.joining(",", "{", "}")));
+            source = "r.id = ANY(CAST(:" + key + " AS uuid[]))";
+        }
+        where.append(" AND (((")
+                .append(CURRENTNESS)
+                .append(")='")
+                .append(wanted.name())
+                .append("' AND (")
+                .append(CURRENTNESS)
+                .append(")<>'CURRENT') OR ((")
+                .append(CURRENTNESS)
+                .append(")='CURRENT' AND ")
+                .append(source)
+                .append("))");
+    }
+
+    private Selection selection(long ws, ResultQueryFilter f) {
         var where = new StringBuilder(" WHERE r.workspace_id=:ws");
         var params = new LinkedHashMap<String, Object>();
         params.put("ws", ws);
@@ -204,12 +248,6 @@ public class ResultQueriesImpl implements ResultQueries {
         add(where, params, "p.slug=:practiceSlug", "practiceSlug", f.practiceSlug());
         add(where, params, "g.slug=:groupSlug", "groupSlug", f.groupSlug());
         add(where, params, "r.developer_id=:developerId", "developerId", f.developerId());
-        add(
-                where,
-                params,
-                CURRENTNESS + "=:currentness",
-                "currentness",
-                f.currentness() == null ? null : f.currentness().name());
         add(where, params, "r.recorded_at>=:from", "from", f.from());
         add(where, params, "r.recorded_at<:to", "to", f.to());
         many(
@@ -231,6 +269,7 @@ public class ResultQueriesImpl implements ResultQueries {
         if (f.markedIncorrect() != null) where.append(" AND " + (f.markedIncorrect() ? "" : "NOT ") + INCORRECT);
         if (f.accepted() != null) where.append(" AND " + (f.accepted() ? "" : "NOT ") + ACCEPTED);
         if (f.disagreed() != null) where.append(" AND " + (f.disagreed() ? "" : "NOT ") + DISAGREED);
+        if (f.currentness() != null) sourceCurrentness(ws, JOIN, where, params, f.currentness());
         return new Selection(where.toString(), params);
     }
 

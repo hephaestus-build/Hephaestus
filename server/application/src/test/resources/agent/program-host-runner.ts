@@ -482,6 +482,12 @@ if (scenario !== undefined && scenario !== "") {
 	const realFetch = globalThis.fetch;
 	mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
 		const url = input instanceof Request ? input.url : String(input);
+		if (url.endsWith("/start-practice")) {
+			assert.ok(typeof init?.body === "string");
+			const request = parseJson(init.body);
+			assert.ok(isJsonObject(request));
+			return Response.json({ practiceSlug: request.practiceSlug, current: true });
+		}
 		if (url.endsWith("/stage-result")) {
 			assert.ok(typeof init?.body === "string");
 			const request = parseJson(init.body);

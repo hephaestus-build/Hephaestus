@@ -136,3 +136,9 @@ export async function stagePractice(
 	});
 	receipt.parse(await sendRecorded(request, send));
 }
+
+/** The gateway records a replaced practice before the runner skips its session. */
+export async function startPractice(practiceSlug: string, send: AdmissionFetch): Promise<boolean> {
+	const receipt = z.object({ practiceSlug: z.literal(practiceSlug), current: z.boolean() });
+	return receipt.parse(await sendRecorded({ practiceSlug }, send)).current;
+}

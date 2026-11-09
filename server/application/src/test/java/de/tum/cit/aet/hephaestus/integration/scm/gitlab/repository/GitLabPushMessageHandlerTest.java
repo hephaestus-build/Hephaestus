@@ -153,7 +153,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
     }
 
     @Test
-    void branchDeletion_skipsProcessing() throws IOException {
+    void shouldNotWalkCommitStatisticsForADeletedBranch() throws IOException {
         var projectInfo = new GitLabPushEventDTO.ProjectInfo(
                 1L, "proj", null, "https://gitlab.com/org/proj", null, "org/proj", "main", 0);
         var pushEvent = new GitLabPushEventDTO(
@@ -169,7 +169,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
 
         onRoute(mockMessage("gitlab.?connection.1.push", pushEvent));
 
-        verify(repositoryRepository, never()).findByNameWithOwnerAndProviderId(anyString(), any());
+        verify(gitRepositoryManager, never()).forEachCommitInRange(any(), any(), any(), any(), any());
     }
 
     @Test

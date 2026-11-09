@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoadException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckoutException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.context.MentorContextQueryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.context.ScmMentorWorkQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -143,7 +144,8 @@ class ScmRepositoryCheckoutsIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryProperties(true, 1, 1024 * 1024, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
-                GitTransportFixtures.guarded());
+                GitTransportFixtures.guarded(),
+                mock(RepositoryRefState.class));
         // The provider URL has no Git server behind it: the mirror fetches from the local upstream instead.
         git = mock(GitRepositoryManager.class, AdditionalAnswers.delegatesTo(mirrors));
         doAnswer(invocation -> {

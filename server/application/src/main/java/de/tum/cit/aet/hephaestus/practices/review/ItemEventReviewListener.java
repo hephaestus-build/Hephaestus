@@ -9,8 +9,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.result.ResultCurrentness;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
@@ -35,7 +33,6 @@ public class ItemEventReviewListener {
     private final WorkspaceRepository workspaces;
     private final ReviewService reviews;
     private final ResultCurrentness currentness;
-    private final ResultStore results;
     private final PracticeItemOptions itemOptions;
     private final Clock clock;
 
@@ -50,13 +47,6 @@ public class ItemEventReviewListener {
         var state = event.state();
         if (state.isTerminal()) return;
         var item = items.find(recorded.workspaceId(), recorded.itemId());
-        if (state == ItemEventState.RECORDED && event.name().value().startsWith("scm.pull_request_review.")) {
-            results.endCurrent(
-                    recorded.workspaceId(),
-                    recorded.itemId(),
-                    item.isEmpty() ? ResultEndReason.REMOVED : ResultEndReason.WORK_CHANGED,
-                    event.occurredAt());
-        }
         if (item.isEmpty()) {
             decide(
                     recorded.workspaceId(),

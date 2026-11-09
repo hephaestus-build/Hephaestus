@@ -1257,7 +1257,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(captured.completeness())
                     .containsEntry(CORE, SourceCompleteness.COMPLETE)
                     .doesNotContainKey(DIFF);
-            assertThat(captured.immutableIdentities()).isEmpty();
+            assertThat(captured.immutableIdentities()).containsExactly(Map.entry(CORE, BASE + ":" + HEAD));
             assertThat(captured.stateOverrides())
                     .containsExactly(
                             Map.entry(DIFF, new SourceCaptureState.NotCollected(SourceAbsenceReason.DISABLED)));
@@ -1286,7 +1286,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                 .allSatisfy(text -> assertThat(captured.files()).containsKey(text.stagedPath()));
         assertThat(provider.sourceKindFor(PullRequestContentSource.DESCRIPTION_FILE))
                 .isEqualTo(CORE);
-        assertThat(captured.immutableIdentities()).doesNotContainKey(CORE);
+        assertThat(captured.immutableIdentities()).containsEntry(CORE, BASE + ":" + HEAD);
         assertThat(captured.immutableIdentities().get(DIFF)).isEqualTo(BASE + ":" + HEAD);
     }
 

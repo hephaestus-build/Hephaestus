@@ -12,6 +12,7 @@ import {
 	AdmissionUnreachableError,
 	isAdmissionServerError,
 	stagePractice,
+	startPractice,
 } from "./pi-admitted-results.ts";
 import { DIFF_SOURCE, TREE_SOURCE } from "./work/practice-scripts/kits/scm/sources.ts";
 
@@ -907,6 +908,7 @@ export async function runReviewJob(): Promise<void> {
 	}
 
 	const stagedPractices = new Set<string>();
+	const skippedPractices = new Set<string>();
 	let stagingFailure: { error: unknown } | undefined;
 	let gatewayFailure: GatewayUnavailableError | undefined;
 	const runtimeReasons: Partial<Record<NonNullable<ProgramOutcome["stopReason"]>, string>> = {
@@ -916,7 +918,7 @@ export async function runReviewJob(): Promise<void> {
 		unavailable: "EXECUTION_INCOMPLETE",
 	};
 	async function stageEnded(practiceSlug: string) {
-		if (stagedPractices.has(practiceSlug)) {
+		if (stagedPractices.has(practiceSlug) || skippedPractices.has(practiceSlug)) {
 			return;
 		}
 		const request = admissionRequest();
@@ -2854,12 +2856,35 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		async function runScope(
 			label: string,
 			heading: string,
-			slugs: readonly string[],
+			requestedSlugs: readonly string[],
 		): Promise<StopReason | null> {
 			const safetyMs = measureEnd - Date.now();
 			if (safetyMs <= RETURN_MS) {
 				diagnose("turn.near_ceiling", { ...placeOf(label), skipped: true });
 				return "safety";
+			}
+			const slugs: string[] = [];
+			for (const slug of requestedSlugs) {
+				const current = await startPractice(slug, async (body, signal) =>
+					fetch(`${LLM_PROXY_URL}/start-practice`, {
+						method: "POST",
+						signal,
+						headers: {
+							authorization: `Bearer ${LLM_PROXY_TOKEN}`,
+							"content-type": "application/json",
+							...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
+						},
+						body,
+					}),
+				);
+				if (!current) {
+					skippedPractices.add(slug);
+					continue;
+				}
+				slugs.push(slug);
+			}
+			if (slugs.length === 0) {
+				return null;
 			}
 			const budget = PER_PRACTICE_WORK;
 			diagnose("turn.started", {
@@ -3431,7 +3456,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			});
 		}
 
-		const notReached = missingSlugs(allSlugs, [...reviewState.keys()]);
+		const notReached = missingSlugs(allSlugs, [...reviewState.keys(), ...skippedPractices]);
 		for (const practiceSlug of notReached) {
 			const stop = executions.get(practiceSlug)?.stopReason ?? unreachedReason;
 			const reason = runtimeReasons[stop] ?? "EXECUTION_FAILED";
@@ -3451,7 +3476,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		if (stagingFailure !== undefined) {
 			throw stagingFailure.error;
 		}
-		if (!maybeWriteResultFile()) {
+		if (!maybeWriteResultFile() && skippedPractices.size !== allSlugs.length) {
 			if (lostSides.size > 0) {
 				finalizeOutput();
 				process.exit(SIDE_LOST_EXIT);
@@ -3469,7 +3494,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		for (const practiceSlug of allSlugs) {
 			await stageEnded(practiceSlug);
 		}
-		const withoutResult = allSlugs.filter((slug) => !stagedPractices.has(slug));
+		const withoutResult = allSlugs.filter(
+			(slug) => !stagedPractices.has(slug) && !skippedPractices.has(slug),
+		);
 		if (withoutResult.length > 0) {
 			for (const slug of withoutResult) {
 				diagnose("practice.without_result", {

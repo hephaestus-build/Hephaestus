@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.practices.result;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
-import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewInvocationFence;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewStagedPayloadRepository;
@@ -35,7 +34,6 @@ public class PracticeStagingService implements PracticeStagingStore {
     private final ResultAdmissionPolicy policy;
     private final JsonMapper json;
     private final Clock clock;
-    private final ProductItemQuery source;
 
     @Override
     @Transactional(readOnly = true)
@@ -57,21 +55,6 @@ public class PracticeStagingService implements PracticeStagingStore {
                 .filter(row -> row.getStagedAttempt() != null)
                 .map(this::snapshot)
                 .toList();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean workChanged(long workspaceId, UUID reviewId, UUID jobId) {
-        return items
-                .findByWorkspaceIdAndReviewIdAndJobIdOrderByPracticeIdAscItemIdAsc(workspaceId, reviewId, jobId)
-                .stream()
-                .filter(row -> row.getState() == ReviewItemState.STAGED)
-                .anyMatch(row -> switch (source.currentWorkVersion(workspaceId, row.getItemId())) {
-                    case ProductItemQuery.CurrentWorkVersion.Known known ->
-                        !known.value().equals(row.getItemVersion());
-                    case ProductItemQuery.CurrentWorkVersion.Removed.INSTANCE -> true;
-                    case ProductItemQuery.CurrentWorkVersion.Unknown.INSTANCE -> false;
-                });
     }
 
     @Override

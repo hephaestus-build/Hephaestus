@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
@@ -84,6 +85,6 @@ public final class ReviewTestData {
                 null,
                 null,
                 null);
-        return new ResultView(result, practice, version, review, item);
+        return new ResultView(result, practice, version, review, item, Currentness.CURRENT);
     }
 }

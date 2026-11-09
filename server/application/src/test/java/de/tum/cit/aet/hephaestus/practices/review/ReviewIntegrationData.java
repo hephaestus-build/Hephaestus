@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.SourceContract;
 import de.tum.cit.aet.hephaestus.integration.core.item.Item;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
@@ -49,11 +51,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.test.context.TestComponent;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @TestComponent
@@ -72,6 +76,8 @@ public class ReviewIntegrationData {
     private final ResultMarkRepository marks;
     private final JdbcClient jdbc;
     private final JsonMapper json;
+    private final ProductItemQuery productItems;
+    private final ClasspathSourceCatalogRegistry sourceCatalog;
 
     public record Scenario(Workspace workspace, Account account, Practice practice, Item item) {}
 
@@ -137,6 +143,20 @@ public class ReviewIntegrationData {
         return account;
     }
 
+    public JsonNode capturedSources(Scenario scenario) {
+        var item = productItems.require(
+                scenario.workspace().getId(), scenario.item().getId());
+        var kinds = sourceCatalog.current().sources().stream()
+                .filter(contract -> contract.appliesTo(item.kind().value()))
+                .map(SourceContract::kind)
+                .collect(Collectors.toSet());
+        var sources = productItems.fingerprints(item, kinds);
+        var facts = json.createObjectNode();
+        var fingerprints = facts.putObject("sourceFingerprints");
+        sources.forEach((kind, fingerprint) -> fingerprints.put(kind.value(), fingerprint));
+        return facts;
+    }
+
     @Transactional
     public Result result(Scenario s, ResultOutcome outcome, Instant at) {
         return result(s, outcome, at, at);
@@ -184,7 +204,7 @@ public class ReviewIntegrationData {
                 .status(ReviewPracticeStatus.DONE)
                 .itemsListed(1)
                 .listingComplete(true)
-                .captureDecision(json.createObjectNode())
+                .captureDecision(capturedSources(s))
                 .method(method())
                 .build());
         var baseEvidence = json.convertValue(json.readTree("""

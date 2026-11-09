@@ -14,9 +14,11 @@ import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore.StagedPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import java.time.Instant;
@@ -41,6 +43,7 @@ public class PracticeResultStaging {
     private final ReviewOutputService output;
     private final PracticeStagingStore staging;
     private final ReviewAssignmentStore membership;
+    private final ReviewFreshness freshness;
     private final ReviewJobAssignments assignments;
     private final JobEvidenceFiles files;
     private final ReviewCompositionBasisRepository bases;
@@ -132,8 +135,10 @@ public class PracticeResultStaging {
         staging.refuseCopy(job.getWorkspaceId(), job.getId(), job.getAttempt(), practice.assignment());
     }
 
-    public boolean workChanged(ReviewJob job) {
-        return staging.workChanged(job.getWorkspaceId(), job.getReviewId(), job.getId());
+    public Currentness currentness(ReviewJob job) {
+        return hasStaged(job)
+                ? freshness.capturedCurrentness(job.getWorkspaceId(), job.getReviewId())
+                : Currentness.CURRENT;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

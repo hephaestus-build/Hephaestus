@@ -4,11 +4,11 @@ import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -21,7 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(propagation = Propagation.MANDATORY)
 public class ResultCurrentness {
     private final ItemIndexService itemLocks;
-    private final ProductItemQuery sources;
+    private final ResultFreshness freshness;
+    private final ProductItemQuery items;
     private final ResultRepository results;
     private final Clock clock;
 
@@ -29,32 +30,28 @@ public class ResultCurrentness {
         itemLocks.lock(workspaceId, itemId);
         var current = results.findByWorkspaceIdAndItemIdAndEndedAtIsNull(workspaceId, itemId);
         if (current.isEmpty()) return;
-        reconcile(sources.currentWorkVersion(workspaceId, itemId), current, clock.instant());
+        reconcile(workspaceId, current, clock.instant());
     }
 
-    public @Nullable ResultEndReason prepareClaim(long workspaceId, long itemId, String version, Instant at) {
-        itemLocks.lock(workspaceId, itemId);
-        var source = sources.currentWorkVersion(workspaceId, itemId);
-        reconcile(source, results.findByWorkspaceIdAndItemIdAndEndedAtIsNull(workspaceId, itemId), at);
-        return switch (source) {
-            case ProductItemQuery.CurrentWorkVersion.Known known ->
-                known.value().equals(version) ? null : ResultEndReason.WORK_CHANGED;
-            case ProductItemQuery.CurrentWorkVersion.Removed.INSTANCE -> ResultEndReason.REMOVED;
-            case ProductItemQuery.CurrentWorkVersion.Unknown.INSTANCE -> null;
-        };
+    public @Nullable ResultEndReason prepareClaim(long workspaceId, Result result, Instant at) {
+        itemLocks.lock(workspaceId, result.getItemId());
+        reconcile(workspaceId, results.findByWorkspaceIdAndItemIdAndEndedAtIsNull(workspaceId, result.getItemId()), at);
+        if (items.find(workspaceId, result.getItemId()).isEmpty()) return ResultEndReason.REMOVED;
+        return freshness.states(workspaceId, List.of(result)).get(result.getId()) == Currentness.STALE
+                ? ResultEndReason.WORK_CHANGED
+                : null;
     }
 
-    private void reconcile(ProductItemQuery.CurrentWorkVersion source, List<Result> current, Instant at) {
+    private void reconcile(long workspaceId, List<Result> current, Instant at) {
+        var states = freshness.states(workspaceId, current);
         boolean changed = false;
         for (var result : current) {
-            ResultEndReason reason = switch (source) {
-                case ProductItemQuery.CurrentWorkVersion.Known known ->
-                    Objects.equals(known.value(), result.getItemVersion()) ? null : ResultEndReason.WORK_CHANGED;
-                case ProductItemQuery.CurrentWorkVersion.Removed.INSTANCE -> ResultEndReason.REMOVED;
-                case ProductItemQuery.CurrentWorkVersion.Unknown.INSTANCE -> null;
-            };
-            if (reason != null) {
-                result.end(reason, at.isBefore(result.getRecordedAt()) ? result.getRecordedAt() : at);
+            if (states.get(result.getId()) == Currentness.STALE) {
+                result.end(
+                        items.find(workspaceId, result.getItemId()).isEmpty()
+                                ? ResultEndReason.REMOVED
+                                : ResultEndReason.WORK_CHANGED,
+                        at.isBefore(result.getRecordedAt()) ? result.getRecordedAt() : at);
                 changed = true;
             }
         }

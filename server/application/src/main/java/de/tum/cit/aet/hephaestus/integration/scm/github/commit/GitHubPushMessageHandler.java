@@ -111,23 +111,6 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
         String repoName =
                 event.repository() != null ? sanitizeForLog(event.repository().fullName()) : "unknown";
 
-        if (event.deleted()) {
-            log.debug("Skipped push event: reason=branchDeleted, ref={}, repoName={}", event.ref(), repoName);
-            return;
-        }
-
-        if (event.commits() == null || event.commits().isEmpty()) {
-            log.debug("Skipped push event: reason=noCommits, ref={}, repoName={}", event.ref(), repoName);
-            return;
-        }
-
-        log.debug(
-                "Received push event: branch={}, commitCount={}, forced={}, repoName={}",
-                getBranchName(event.ref()),
-                event.commits().size(),
-                event.forced(),
-                repoName);
-
         Long nativeId = event.repository() != null ? event.repository().id() : null;
         if (nativeId == null) {
             log.warn("Skipped push event: reason=missingRepositoryId, repoName={}", repoName);
@@ -149,6 +132,25 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
             log.debug("Skipped push event: reason=repositoryNotFound, nativeId={}, repoName={}", nativeId, repoName);
             return;
         }
+
+        gitRepositoryManager.invalidateRefs(nativeId, providerId.orElseThrow());
+
+        if (event.deleted()) {
+            log.debug("Skipped push event: reason=branchDeleted, ref={}, repoName={}", event.ref(), repoName);
+            return;
+        }
+
+        if (event.commits() == null || event.commits().isEmpty()) {
+            log.debug("Skipped push event: reason=noCommits, ref={}, repoName={}", event.ref(), repoName);
+            return;
+        }
+
+        log.debug(
+                "Received push event: branch={}, commitCount={}, forced={}, repoName={}",
+                getBranchName(event.ref()),
+                event.commits().size(),
+                event.forced(),
+                repoName);
 
         String defaultBranch = repository.getDefaultBranch();
         if (defaultBranch == null || !isDefaultBranch(event.ref(), defaultBranch)) {

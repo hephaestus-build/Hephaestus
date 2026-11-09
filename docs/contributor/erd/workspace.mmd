@@ -46,6 +46,8 @@ erDiagram
         TIMESTAMPTZ unavailable_since
         INTEGER backfill_repair_provider_count
         TIMESTAMPTZ repository_visibility_confirmed_at
+        VARCHAR(64) git_refs_fingerprint
+        UUID git_refs_read_id
     }
 
     ReviewScopeRepository {

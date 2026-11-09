@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -139,7 +141,11 @@ class GitMirrorRetentionTest extends BaseUnitTest {
 
     private GitRepositoryManager manager() {
         return new GitRepositoryManager(
-                properties(VOLUME), locks, new FabricLayout(fabric.toString()), GitTransportFixtures.guarded());
+                properties(VOLUME),
+                locks,
+                new FabricLayout(fabric.toString()),
+                GitTransportFixtures.guarded(),
+                mock(RepositoryRefState.class));
     }
 
     private static GitRepositoryProperties properties(long volume) {

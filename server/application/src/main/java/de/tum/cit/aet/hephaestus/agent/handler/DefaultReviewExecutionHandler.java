@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.agent.context.AppliesWhenEvaluator;
-import de.tum.cit.aet.hephaestus.agent.context.CapturedSourceDigest;
+import de.tum.cit.aet.hephaestus.agent.context.CapturedSourceFingerprints;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
@@ -21,7 +21,6 @@ import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
-import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessReason;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
@@ -201,6 +200,7 @@ public class DefaultReviewExecutionHandler {
                         now,
                         decisions,
                         checks);
+                var sourceFingerprints = CapturedSourceFingerprints.of(mapper, evidence);
                 var captureDecisions = new ArrayList<>(refused.values());
                 for (var decision : decisions) {
                     var assignment = pinned.stream()
@@ -211,12 +211,7 @@ public class DefaultReviewExecutionHandler {
                             assignment.practice().practiceId(),
                             decision.ready() ? ReviewPracticeStatus.READY : ReviewPracticeStatus.WITHHELD,
                             decision.ready() ? null : "readiness_refused",
-                            captureFacts(
-                                    decision,
-                                    checks.get(decision.practiceSlug()),
-                                    captured.runs(decision) && review.kind() == ReviewKind.ITEM
-                                            ? CapturedSourceDigest.of(mapper, evidence, readSources(assignment))
-                                            : null)));
+                            captureFacts(decision, checks.get(decision.practiceSlug()), sourceFingerprints)));
                 }
                 var reused = capture.capture(
                         job.getWorkspaceId(), review.id(), job.getId(), job.getAttempt(), captureDecisions);
@@ -353,21 +348,11 @@ public class DefaultReviewExecutionHandler {
     private JsonNode captureFacts(
             AutomatedReviewReadinessDecision decision,
             @Nullable AppliesWhenCheck check,
-            @Nullable String sourcesDigest) {
+            Map<String, String> sourceFingerprints) {
         ObjectNode facts = mapper.valueToTree(decision);
         if (check != null) facts.set("applicability", mapper.valueToTree(check));
-        if (sourcesDigest != null) facts.put(ReviewCaptureDecision.SOURCES_DIGEST, sourcesDigest);
+        facts.set(ReviewCaptureDecision.SOURCE_FINGERPRINTS, mapper.valueToTree(sourceFingerprints));
         return facts;
-    }
-
-    /** Every source that could change the practice's result: what it reads, and what decides whether it applies. */
-    private Set<SourceKind> readSources(ReviewAssignmentSnapshot assignment) {
-        var definition = assignment.practice().definition();
-        var kinds = new HashSet<SourceKind>();
-        definition.reads().sources().forEach(read -> kinds.add(read.source()));
-        if (definition.appliesWhen() != null)
-            kinds.addAll(applicability.sources(assignment.item().kind(), definition.appliesWhen()));
-        return kinds;
     }
 
     public boolean hasStaged(ReviewJob job) {

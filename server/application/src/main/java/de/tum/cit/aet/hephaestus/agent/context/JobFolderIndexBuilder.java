@@ -5,10 +5,6 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.CapturedSource;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
-import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
-import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
-import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
-import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
@@ -23,7 +19,6 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
@@ -104,27 +99,7 @@ public class JobFolderIndexBuilder {
             refusals.addAll(contribution.refusals());
             var cleanup = contribution.cleanup();
             if (cleanup != null) cleanups.add(cleanup);
-            SourceCaptureState state = contribution.stateOverrides().get(source);
-            if (state == null) {
-                var completeness = contribution.completeness().getOrDefault(source, SourceCompleteness.UNKNOWN);
-                var content = contribution
-                        .contentStates()
-                        .getOrDefault(
-                                source,
-                                capturedFiles.isEmpty()
-                                                && contribution.citableTexts().isEmpty()
-                                        ? SourceContentState.EMPTY
-                                        : SourceContentState.NON_EMPTY);
-                state = new SourceCaptureState.Available(
-                        content,
-                        completeness,
-                        new SourceCaptureFacts(
-                                now,
-                                contribution.sourceEffectiveAt().get(source),
-                                contribution.observedAt().get(source),
-                                contribution.immutableIdentities().get(source)),
-                        contribution.captureLimitations().getOrDefault(source, List.of()));
-            }
+            var state = contribution.stateFor(source, now);
             sources.add(new SourceCapture(
                     source,
                     state,

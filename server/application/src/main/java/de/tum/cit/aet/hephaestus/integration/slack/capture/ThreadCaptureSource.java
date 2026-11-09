@@ -57,7 +57,7 @@ public class ThreadCaptureSource {
         this.connections = connections;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ItemCaptureException.class)
     public CaptureContribution capture(ItemSnapshot pinned, CaptureRequest request) {
         if (!request.sources().contains(SOURCE)) {
             return contribution(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.evidence.capture;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
@@ -41,6 +42,22 @@ public record CaptureContribution(
         List<EvidenceDirectory> directories,
         List<WorkspaceRefusal> refusals,
         List<CitableText> citableTexts) {
+    /** The same source state for a manifest and a current-source comparison. */
+    public SourceCaptureState stateFor(SourceKind kind, Instant capturedAt) {
+        var override = stateOverrides.get(kind);
+        if (override != null) return override;
+        return new SourceCaptureState.Available(
+                contentStates.getOrDefault(
+                        kind,
+                        files.isEmpty() && filesOnDisk.isEmpty() && citableTexts.isEmpty()
+                                ? SourceContentState.EMPTY
+                                : SourceContentState.NON_EMPTY),
+                completeness.getOrDefault(kind, SourceCompleteness.UNKNOWN),
+                new SourceCaptureFacts(
+                        capturedAt, sourceEffectiveAt.get(kind), observedAt.get(kind), immutableIdentities.get(kind)),
+                captureLimitations.getOrDefault(kind, List.of()));
+    }
+
     public static CaptureContribution empty() {
         return new CaptureContribution(
                 Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), null, Map.of(),

@@ -448,7 +448,7 @@ public class ScmItemService implements ItemSource {
                         holder.integration().kind()));
     }
 
-    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, noRollbackFor = ItemCaptureException.class)
     @Override
     public CaptureContribution capture(ItemSnapshot pinned, CaptureRequest request) {
         var eventId = request.eventId();

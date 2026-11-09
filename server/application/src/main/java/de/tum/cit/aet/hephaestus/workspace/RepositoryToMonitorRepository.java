@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.integration.core.framework.MonitoredRepositoryS
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -15,6 +16,38 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryToMonitor, Long> {
+    @Modifying
+    @Query(
+            value = "UPDATE repository_to_monitor rtm SET git_refs_read_id=:readId,git_refs_fingerprint=NULL "
+                    + "FROM repository r WHERE r.id=:repositoryId AND r.name_with_owner=rtm.name_with_owner "
+                    + "AND rtm.workspace_id=:workspaceId AND " + MonitoredRepositoryScope.NATIVE_RTM_R,
+            nativeQuery = true)
+    int beginGitRefRead(long workspaceId, long repositoryId, UUID readId);
+
+    @Modifying
+    @Query(
+            value = "UPDATE repository_to_monitor rtm SET git_refs_fingerprint=:fingerprint "
+                    + "FROM repository r WHERE r.id=:repositoryId AND r.name_with_owner=rtm.name_with_owner "
+                    + "AND rtm.workspace_id=:workspaceId AND rtm.git_refs_read_id=:readId AND "
+                    + MonitoredRepositoryScope.NATIVE_RTM_R,
+            nativeQuery = true)
+    int recordGitRefs(long workspaceId, long repositoryId, UUID readId, String fingerprint);
+
+    @Query(
+            value = "SELECT rtm.git_refs_fingerprint FROM repository_to_monitor rtm JOIN repository r "
+                    + "ON r.name_with_owner=rtm.name_with_owner WHERE r.id=:repositoryId "
+                    + "AND rtm.workspace_id=:workspaceId AND " + MonitoredRepositoryScope.NATIVE_RTM_R,
+            nativeQuery = true)
+    Optional<String> gitRefs(long workspaceId, long repositoryId);
+
+    @Modifying
+    @WorkspaceAgnostic("An admitted provider ref event invalidates only monitors on that exact source provider")
+    @Query(
+            value = "UPDATE repository_to_monitor rtm SET git_refs_read_id=NULL,git_refs_fingerprint=NULL "
+                    + "WHERE rtm.native_id=:nativeId AND " + MonitoredRepositoryScope.NATIVE_RTM_SOURCE_PROVIDER,
+            nativeQuery = true)
+    int invalidateGitRefs(long nativeId, long providerId);
+
     boolean existsByWorkspaceIdAndNameWithOwner(Long workspaceId, String nameWithOwner);
 
     Optional<RepositoryToMonitor> findByWorkspaceIdAndNameWithOwner(Long workspaceId, String nameWithOwner);

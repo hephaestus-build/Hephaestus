@@ -334,6 +334,17 @@ if (scenario !== undefined && scenario !== "") {
 			: [];
 	};
 	mock.method(globalThis, "fetch", async (input: unknown, init?: RequestInit) => {
+		if (String(input).endsWith("/start-practice")) {
+			assert.ok(typeof init?.body === "string");
+			const request = recordOf(JSON.parse(init.body));
+			if (scenario.startsWith("start-replaced")) {
+				record(`start-check:${String(request.practiceSlug)}`);
+			}
+			return Response.json({
+				practiceSlug: request.practiceSlug,
+				current: !scenario.startsWith("start-replaced"),
+			});
+		}
 		if (String(input).endsWith("/stage-result")) {
 			assert.ok(typeof init?.body === "string");
 			const staged = recordOf(JSON.parse(init.body));
@@ -1981,6 +1992,8 @@ if (scenario !== undefined && scenario !== "") {
 	await runReviewJob();
 } else {
 	for (const stage of [
+		"start-replaced",
+		"start-replaced-paced",
 		"scope-native-problem-drafts",
 		"scope-native-problem-repair",
 		"scope-native-problem-isolation",
@@ -2043,6 +2056,10 @@ if (scenario !== undefined && scenario !== "") {
 	]) {
 		void test(
 			{
+				"start-replaced":
+					"a serial practice replaced before start opens no model session and stages no result",
+				"start-replaced-paced":
+					"a paced practice replaced before start opens no model session and stages no result",
 				"scope-native-problem-drafts":
 					"native keyed problem drafts edit, remove and select ordered problems without admitting late edits",
 				"scope-native-problem-repair":
@@ -2324,7 +2341,10 @@ if (scenario !== undefined && scenario !== "") {
 						}
 					}
 					// Most stages follow one session at a time, as the runner does for a practice with context paths.
-					const oneAtATime = stage !== "scope-native-problem-isolation" && stage !== "request-caps";
+					const oneAtATime =
+						stage !== "scope-native-problem-isolation" &&
+						stage !== "request-caps" &&
+						stage !== "start-replaced-paced";
 					writeFileSync(
 						nodePath.join(cwd, "catalog/practices/index.json"),
 						JSON.stringify(
@@ -2441,6 +2461,17 @@ if (scenario !== undefined && scenario !== "") {
 						.trim()
 						.split("\n")
 						.filter(Boolean);
+					if (stage.startsWith("start-replaced")) {
+						assert.equal(child.status, 0, child.stderr);
+						assert.deepEqual(events, ["start-check:test-practice", "admit"]);
+						assert.equal(existsSync(nodePath.join(cwd, "staging.jsonl")), false);
+						const seal = recordOf(
+							JSON.parse(readFileSync(nodePath.join(cwd, "admission.json"), "utf8")),
+						);
+						assert.equal(seal.results, undefined);
+						assert.equal(seal.nonResults, undefined);
+						return;
+					}
 					assert.ok(existsSync(nodePath.join(cwd, "out/practice-coverage.json")), child.stderr);
 					const coverage: unknown = JSON.parse(
 						readFileSync(nodePath.join(cwd, "out/practice-coverage.json"), "utf8"),

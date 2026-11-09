@@ -26,11 +26,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import tools.jackson.databind.json.JsonMapper;
 
 class ProductItemQueryTest extends BaseUnitTest {
     final ProductItemRepository rows = mock(ProductItemRepository.class);
     final ItemSource source = mock(ItemSource.class);
-    final ProductItemQuery query = new ProductItemQuery(rows, List.of(source), List.of(), List.of());
+    final ProductItemQuery query =
+            new ProductItemQuery(rows, List.of(source), List.of(), List.of(), new JsonMapper(), List.of());
 
     @ParameterizedTest
     @ValueSource(strings = {"scm.issue", "scm.pull_request"})

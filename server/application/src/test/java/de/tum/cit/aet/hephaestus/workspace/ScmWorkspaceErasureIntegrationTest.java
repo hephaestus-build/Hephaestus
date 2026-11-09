@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -12,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJob;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobStatus;
@@ -168,7 +170,8 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
                             properties,
                             new GitRepositoryLockManager(),
                             new FabricLayout(root.toString()),
-                            GitTransportFixtures.guarded()),
+                            GitTransportFixtures.guarded(),
+                            mock(RepositoryRefState.class)),
                     repositoryRepository,
                     properties,
                     new SimpleMeterRegistry());
@@ -204,7 +207,8 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
                         properties,
                         new GitRepositoryLockManager(),
                         new FabricLayout(mirrorRoot.toString()),
-                        GitTransportFixtures.guarded()),
+                        GitTransportFixtures.guarded(),
+                        mock(RepositoryRefState.class)),
                 repositoryRepository,
                 properties,
                 new SimpleMeterRegistry());

@@ -8,9 +8,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.CapturedSourceFingerprints;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -18,7 +22,11 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemService;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
@@ -29,6 +37,8 @@ import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewLookupData;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
@@ -38,9 +48,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultSort;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAttemptGuard;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewListSort;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewModelBindings;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -51,13 +63,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
@@ -622,6 +637,182 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         assertThat(storedOther.getEndReason()).isEqualTo(ResultEndReason.REPLACED);
         assertThat(storedOther.getItemVersion()).isEqualTo(other.getItemVersion());
         assertThat(storedOther.getOutcome()).isEqualTo(other.getOutcome());
+    }
+
+    @Autowired
+    ResultFreshness freshness;
+
+    @Autowired
+    ReviewPracticeRepository captureDecisions;
+
+    @Autowired
+    ResultViewQuery resultViews;
+
+    @Autowired
+    ScmItemService captureSource;
+
+    @Autowired
+    JobFolderIndexBuilder captureIndex;
+
+    @Autowired
+    ResultPresentation presentation;
+
+    @Autowired
+    RepositoryRefState gitRefs;
+
+    @Autowired
+    RepositoryRepository repositoryRows;
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldCompareStoredProviderRefsWithoutUsingTheRenderingRolesMirror(IdentityProviderType provider) {
+        var ref = lookup.work(scenario.workspace(), provider, true);
+        var pull = issues.findById(Objects.requireNonNull(ref.sourceId())).orElseThrow();
+        var repository = repositoryRows
+                .findByIdWithOrganization(
+                        Objects.requireNonNull(pull.getRepository()).getId())
+                .orElseThrow();
+        var key = new RepositoryKey(ref.workspaceId(), repository.getId());
+        var firstRead = gitRefs.begin(key.workspaceId(), key.repositoryId());
+        gitRefs.record(key.workspaceId(), key.repositoryId(), firstRead, "a".repeat(64));
+        var work = new ReviewIntegrationData.Scenario(
+                scenario.workspace(),
+                scenario.account(),
+                scenario.practice(),
+                itemRows.findById(ref.itemId()).orElseThrow());
+        var recorded = data.result(work, ResultOutcome.NOT_MET, Instant.now(), Instant.now(), storedVersion(work));
+        assertThat(presentation.currentness(
+                        resultViews.views(ref.workspaceId(), List.of(recorded)).getFirst()))
+                .isEqualTo(Currentness.CURRENT);
+
+        gitRefs.invalidate(
+                repository.getNativeId(),
+                Objects.requireNonNull(repository.getProvider().getId()));
+        gitRefs.record(key.workspaceId(), key.repositoryId(), firstRead, "a".repeat(64));
+        assertThat(gitRefs.current(key.workspaceId(), key.repositoryId())).isEmpty();
+        assertThat(presentation.currentness(
+                        resultViews.views(ref.workspaceId(), List.of(recorded)).getFirst()))
+                .isEqualTo(Currentness.UNVERIFIABLE);
+        assertThat(read.findById(recorded.getId()).orElseThrow().getEndedAt()).isNull();
+
+        var nextRead = gitRefs.begin(key.workspaceId(), key.repositoryId());
+        gitRefs.record(key.workspaceId(), key.repositoryId(), nextRead, "b".repeat(64));
+        gitRefs.record(key.workspaceId(), key.repositoryId(), firstRead, "a".repeat(64));
+        assertThat(gitRefs.current(key.workspaceId(), key.repositoryId())).contains("b".repeat(64));
+        assertThat(presentation.currentness(
+                        resultViews.views(ref.workspaceId(), List.of(recorded)).getFirst()))
+                .isEqualTo(Currentness.STALE);
+        var other = data.scenario();
+        var foreign = new RepositoryKey(other.workspace().getId(), key.repositoryId());
+        gitRefs.record(foreign.workspaceId(), foreign.repositoryId(), nextRead, "c".repeat(64));
+        assertThat(gitRefs.current(foreign.workspaceId(), foreign.repositoryId()))
+                .isEmpty();
+        assertThat(gitRefs.current(key.workspaceId(), key.repositoryId())).contains("b".repeat(64));
+        assertThat(read.findById(recorded.getId()).orElseThrow().getOutcome()).isEqualTo(ResultOutcome.NOT_MET);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldRenderAChangedRecordAsStaleBeforeItsEventIsReconciled(IdentityProviderType provider) {
+        var ref = lookup.work(scenario.workspace(), provider, true);
+        var work = new ReviewIntegrationData.Scenario(
+                scenario.workspace(),
+                scenario.account(),
+                scenario.practice(),
+                itemRows.findById(ref.itemId()).orElseThrow());
+        var recorded = data.result(work, ResultOutcome.NOT_MET, Instant.now(), Instant.now(), storedVersion(work));
+        var kind = new SourceKind("scm.pull-request.core");
+        var contribution = captureSource.capture(
+                productItems.current(ref).orElseThrow(),
+                new CaptureRequest(recorded.getReviewId(), UUID.randomUUID(), 0, Set.of(kind), "3.0.0", 3));
+        var facts = json.createObjectNode();
+        try (var evidence = captureIndex.build(ref.kind(), Map.of(kind, contribution))) {
+            facts.set("sourceFingerprints", json.valueToTree(CapturedSourceFingerprints.of(json, evidence)));
+        }
+        var assignment = captureDecisions
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        recorded.getWorkspaceId(), recorded.getReviewId(), recorded.getPracticeId())
+                .orElseThrow();
+        assignment.setCaptureDecision(facts);
+        captureDecisions.saveAndFlush(assignment);
+        assertThat(presentation.currentness(resultViews
+                        .views(recorded.getWorkspaceId(), List.of(recorded))
+                        .getFirst()))
+                .isEqualTo(Currentness.CURRENT);
+        assertFilteredClaim(recorded, Currentness.CURRENT, true);
+        assertFilteredClaim(recorded, Currentness.STALE, false);
+        assertOpenProblem(recorded, 1);
+
+        var pull = issues.findById(Objects.requireNonNull(ref.sourceId())).orElseThrow();
+        pull.setBody("The revised description explains the changed work.");
+        issues.saveAndFlush(pull);
+
+        assertThat(presentation.currentness(resultViews
+                        .views(recorded.getWorkspaceId(), List.of(recorded))
+                        .getFirst()))
+                .isEqualTo(Currentness.STALE);
+        assertFilteredClaim(recorded, Currentness.CURRENT, false);
+        assertFilteredClaim(recorded, Currentness.STALE, true);
+        assertOpenProblem(recorded, 0);
+        var unchanged = read.findByIdAndWorkspaceId(recorded.getId(), recorded.getWorkspaceId())
+                .orElseThrow();
+        assertThat(unchanged.getEndedAt()).isNull();
+        assertThat(unchanged.getOutcome()).isEqualTo(ResultOutcome.NOT_MET);
+        assertThat(unchanged.getItemVersion()).isEqualTo(recorded.getItemVersion());
+    }
+
+    private void assertFilteredClaim(Result recorded, Currentness state, boolean included) {
+        var filter = new ResultQueryFilter(
+                null, recorded.getItemId(), null, null, null, null, null, null, state, null, null, null, null, null);
+        var page = read.list(recorded.getWorkspaceId(), filter, ResultSort.NEWEST, false, PageRequest.of(0, 1));
+        assertThat(page.getTotalElements()).isEqualTo(included ? 1 : 0);
+        assertThat(page.getContent())
+                .extracting(Result::getId)
+                .containsExactlyElementsOf(included ? List.of(recorded.getId()) : List.of());
+    }
+
+    private void assertOpenProblem(Result recorded, int count) {
+        var page = read.problems(
+                recorded.getWorkspaceId(),
+                ResultQueryFilter.ALL,
+                new ProblemQueryFilter(recorded.getId(), null, null, true, ReviewListSort.NEWEST),
+                PageRequest.of(0, 1));
+        assertThat(page.getTotalElements()).isEqualTo(count);
+        assertThat(page.getContent())
+                .allSatisfy(problem -> assertThat(problem.getResultId()).isEqualTo(recorded.getId()));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missing", "invalid-kind", "invalid-hash", "scalar", "unsupported"})
+    void shouldNotRenderAResultWithoutUsableCapturedFingerprintsAsCurrent(String fault) {
+        var work = monitoredPullRequest();
+        var recorded = data.result(work, ResultOutcome.NOT_MET, Instant.now(), Instant.now(), storedVersion(work));
+        var assignment = captureDecisions
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        recorded.getWorkspaceId(), recorded.getReviewId(), recorded.getPracticeId())
+                .orElseThrow();
+        var facts = json.createObjectNode();
+        switch (fault) {
+            case "invalid-kind" -> facts.putObject("sourceFingerprints").put("not a source", "a".repeat(64));
+            case "invalid-hash" -> facts.putObject("sourceFingerprints").put("scm.pull-request.core", "invalid");
+            case "scalar" -> facts.put("sourceFingerprints", "invalid");
+            case "unsupported" -> facts.putObject("sourceFingerprints").put("retired.source", "a".repeat(64));
+            default -> {}
+        }
+        assignment.setCaptureDecision(facts);
+        captureDecisions.saveAndFlush(assignment);
+        assertThat(presentation.currentness(resultViews
+                        .views(recorded.getWorkspaceId(), List.of(recorded))
+                        .getFirst()))
+                .isEqualTo(Currentness.UNVERIFIABLE);
+        assertThat(read.findByIdAndWorkspaceId(recorded.getId(), recorded.getWorkspaceId())
+                        .orElseThrow()
+                        .getEndedAt())
+                .isNull();
     }
 
     /** Monitored, mirrored pull request work of the scenario's developer and practice. */

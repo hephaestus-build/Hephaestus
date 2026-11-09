@@ -17,9 +17,11 @@ import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRep
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckFacts;
@@ -63,6 +65,7 @@ public class FeedbackGate {
     private final ResultRepository results;
     private final PracticeRepository practices;
     private final PracticeVersionRepository versions;
+    private final ResultFreshness freshness;
     private final ReviewRepository reviews;
     private final FeedbackModeQuery feedbackModes;
     private final EvidenceAuthorization evidence;
@@ -89,6 +92,7 @@ public class FeedbackGate {
                 edges.stream().map(FeedbackBasis::getResultId).distinct().count(),
                 basis.isIncorrect(workspaceId, feedbackId),
                 copies.hasWriteFence(workspaceId, feedbackId),
+                freshness.states(workspaceId, support),
                 new GateReads(workspaceId));
     }
 
@@ -123,6 +127,7 @@ public class FeedbackGate {
         var fenced = Set.copyOf(copies.writeFencedFeedbackIds(workspaceId, ids));
         var reads = new GateReads(workspaceId);
         reads.prefetch(owned, rowById.values());
+        var sourceStates = freshness.states(workspaceId, rowById.values());
         Map<UUID, FeedbackCheck> checks = new LinkedHashMap<>();
         for (var piece : owned) {
             var distinct = resultIds.getOrDefault(piece.getId(), List.of()).stream()
@@ -140,6 +145,7 @@ public class FeedbackGate {
                             distinct.size(),
                             incorrect.contains(piece.getId()),
                             fenced.contains(piece.getId()),
+                            sourceStates,
                             reads));
         }
         return checks;
@@ -168,6 +174,7 @@ public class FeedbackGate {
                 ids.size(),
                 !ids.isEmpty() && basis.hasIncorrectResults(review.workspaceId(), ids),
                 false,
+                freshness.states(review.workspaceId(), support),
                 new GateReads(review.workspaceId()));
     }
 
@@ -179,6 +186,7 @@ public class FeedbackGate {
             long expectedResults,
             boolean incorrect,
             boolean hasWriteFence,
+            Map<UUID, Currentness> sourceStates,
             GateReads reads) {
         long workspaceId = feedback.getWorkspaceId();
         UUID feedbackId = feedback.getId();
@@ -194,7 +202,8 @@ public class FeedbackGate {
                 && support.stream().map(Result::getId).distinct().count() == expectedResults
                 && reads.deliverable(support);
         var itemSnapshot = reads.snapshot(feedback);
-        boolean current = support.stream().allMatch(reads::current) && currentItem(feedback, support, itemSnapshot);
+        boolean current = support.stream()
+                .allMatch(result -> reads.current(result) && sourceStates.get(result.getId()) == Currentness.CURRENT);
         boolean modelAllowed = policy.isPresent() && policy.get().getAiChoice() != AiChoice.NO_AI;
         boolean deliveryEnabled = policy.isPresent()
                 && policy.get().getDeliveryEnabled()
@@ -239,7 +248,12 @@ public class FeedbackGate {
         else if (!deliveryEnabled) refusal = FeedbackStopReason.DELIVERY_OFF;
         else if (reads.modes(support).contains(FeedbackMode.OFF)) refusal = FeedbackStopReason.FEEDBACK_OFF;
         else if (incorrect) refusal = FeedbackStopReason.RESULT_MARKED_INCORRECT;
-        else if (!current) refusal = FeedbackStopReason.REVIEWED_VERSION_CHANGED;
+        else if (!current)
+            refusal = support.stream()
+                            .anyMatch(result ->
+                                    !reads.current(result) || sourceStates.get(result.getId()) == Currentness.STALE)
+                    ? FeedbackStopReason.REVIEWED_VERSION_CHANGED
+                    : FeedbackStopReason.UNCORROBORATED;
         else if (!eligibleState(feedback, support, itemSnapshot, reads))
             refusal = FeedbackStopReason.ITEM_STATE_INELIGIBLE;
         else if (!authorized) refusal = FeedbackStopReason.EVIDENCE_NOT_PERMITTED;
@@ -302,15 +316,6 @@ public class FeedbackGate {
                 row.getPath());
         var matching = sources.stream().filter(source -> source.supports(ref)).toList();
         return matching.size() == 1 ? matching.getFirst().current(ref) : Optional.empty();
-    }
-
-    private static boolean currentItem(Feedback feedback, List<Result> support, Optional<ItemSnapshot> snapshot) {
-        Long itemId = feedback.getItemId();
-        if (itemId == null) return true;
-        if (snapshot.isEmpty()) return false;
-        return support.stream()
-                .filter(result -> result.getItemId() == itemId)
-                .allMatch(result -> snapshot.get().version().value().equals(result.getItemVersion()));
     }
 
     private static boolean eligibleState(

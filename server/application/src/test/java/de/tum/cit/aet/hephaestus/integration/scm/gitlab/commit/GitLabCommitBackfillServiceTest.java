@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
@@ -227,7 +228,8 @@ class GitLabCommitBackfillServiceTest extends BaseUnitTest {
                 new GitRepositoryProperties(true, 2, 8L * 1024 * 1024 * 1024, 1L << 40),
                 new GitRepositoryLockManager(),
                 new FabricLayout(temporary.resolve("fabric").toString()),
-                GitTransportFixtures.guarded());
+                GitTransportFixtures.guarded(),
+                mock(RepositoryRefState.class));
     }
 
     private GitLabCommitBackfillService localBackfill(GitRepositoryManager git, CommitDetailsPersister persister) {

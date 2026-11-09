@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794090748925-1" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column name="git_refs_fingerprint" type="VARCHAR(64)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794090748925-2" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column name="git_refs_read_id" type="UUID"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794090748925-3" author="hephaestus">
+    <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.check_review_item_scope(p_review uuid, p_practice bigint, p_item bigint) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+DECLARE a review_item%ROWTYPE; v review%ROWTYPE; r result%ROWTYPE; pinned bigint;
+BEGIN
+ SELECT * INTO a FROM review_item WHERE review_id=p_review AND practice_id=p_practice AND item_id=p_item;
+ IF NOT FOUND THEN RETURN; END IF;
+ SELECT * INTO v FROM review WHERE id=a.review_id AND workspace_id=a.workspace_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'assignment review is outside workspace' USING ERRCODE='23503'; END IF;
+ IF (v.kind='ITEM' AND a.item_id<>v.item_id) OR (v.kind='SCAN' AND NOT EXISTS(
+   SELECT 1 FROM item i JOIN review_practice p
+     ON p.review_id=a.review_id AND p.practice_id=a.practice_id AND p.workspace_id=a.workspace_id
+     JOIN practice_version pv ON pv.id=p.practice_version_id AND pv.practice_id=p.practice_id AND pv.workspace_id=p.workspace_id
+     WHERE i.id=a.item_id AND i.workspace_id=a.workspace_id
+       AND i.kind=(pv.definition->'scan'->>'itemKind') AND i.parent_id=v.item_id)) THEN
+  RAISE EXCEPTION 'assignment is outside review scope' USING ERRCODE='23514'; END IF;
+ IF a.job_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM review_job j WHERE j.id=a.job_id
+   AND j.workspace_id=a.workspace_id AND j.review_id=a.review_id) THEN
+  RAISE EXCEPTION 'assignment job belongs to another review' USING ERRCODE='23514'; END IF;
+ IF a.result_id IS NOT NULL THEN
+  SELECT * INTO r FROM result WHERE id=a.result_id AND workspace_id=a.workspace_id;
+  SELECT practice_version_id INTO pinned FROM review_practice WHERE review_id=a.review_id
+    AND practice_id=a.practice_id AND workspace_id=a.workspace_id;
+  IF (r.item_version IS DISTINCT FROM a.item_version AND NOT (
+       a.state='REUSED' AND v.kind='ITEM' AND EXISTS(
+         SELECT 1 FROM review prior WHERE prior.id=r.review_id
+           AND prior.workspace_id=a.workspace_id AND prior.kind='ITEM')))
+    OR r.practice_version_id IS DISTINCT FROM pinned
+    OR (a.state='JUDGED' AND r.review_id<>a.review_id) THEN
+   RAISE EXCEPTION 'assignment result differs from frozen work/practice' USING ERRCODE='23514'; END IF;
+ END IF;
+END $$;
+]]></sql>
+  </changeSet>
+</databaseChangeLog>

@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.TransportException;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
@@ -47,7 +48,8 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
     }
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
+        Git.init().setDirectory(stagingDir.toFile()).call().close();
         source = new RepositoryTreeContentSource(
                 gitRepositoryManager, preparer, Mockito.mock(PersonDataCopyRecorder.class));
     }

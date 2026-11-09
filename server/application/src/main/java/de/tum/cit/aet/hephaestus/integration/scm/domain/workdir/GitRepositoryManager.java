@@ -2,8 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 
 import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
 
+import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails.FileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
@@ -25,7 +27,9 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Semaphore;
@@ -50,6 +54,7 @@ import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.lib.RefUpdate;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.StoredConfig;
 import org.eclipse.jgit.revwalk.RevCommit;
@@ -100,10 +105,8 @@ public class GitRepositoryManager {
             List.of(new RefSpec("+refs/heads/*:refs/heads/*"), new RefSpec("+refs/tags/*:refs/tags/*"));
 
     /** The mirror's heads become the checkout's remote branches, as in any developer's clone. */
-    private static final List<RefSpec> SNAPSHOT_REFSPECS = List.of(
-            new RefSpec("+refs/heads/*:refs/remotes/origin/*"),
-            new RefSpec("+refs/tags/*:refs/tags/*"),
-            new RefSpec("+" + REVIEW_REFS + "*:" + REVIEW_REFS + "*"));
+    private static final List<RefSpec> SNAPSHOT_REFSPECS =
+            List.of(new RefSpec("+refs/heads/*:refs/remotes/origin/*"), new RefSpec("+refs/tags/*:refs/tags/*"));
 
     private final GitRepositoryProperties properties;
     private final GitRepositoryLockManager locks;
@@ -111,17 +114,24 @@ public class GitRepositoryManager {
     private final Semaphore ingestionPermits;
 
     private final GuardedGitTransport transports;
+    private final RepositoryRefState refs;
 
     public GitRepositoryManager(
             GitRepositoryProperties properties,
             GitRepositoryLockManager locks,
             FabricLayout layout,
-            GuardedGitTransport transports) {
+            GuardedGitTransport transports,
+            RepositoryRefState refs) {
+        this.refs = refs;
         this.transports = transports;
         this.properties = properties;
         this.locks = locks;
         this.layout = layout;
         this.ingestionPermits = new Semaphore(properties.maxConcurrentIngestions());
+    }
+
+    public void invalidateRefs(long nativeId, long providerId) {
+        refs.invalidate(nativeId, providerId);
     }
 
     public boolean isEnabled() {
@@ -282,6 +292,7 @@ public class GitRepositoryManager {
         requireEnabled();
         locks.withWriteLock(repository, abandoned, () -> {
             if (abandoned.getAsBoolean()) throw new CancellationException("The reader stopped waiting for the mirror");
+            var readId = refs.begin(repository.workspaceId(), repository.repositoryId());
             Path mirror = mirror(repository);
             try {
                 if (!isRepositoryCloned(repository) || !hasOrigin(mirror, cloneUrl)) {
@@ -315,6 +326,11 @@ public class GitRepositoryManager {
                             .setTransportConfigCallback(transports.callback(cloneUrl))
                             .setTimeout(timeoutSeconds)
                             .call();
+                    refs.record(
+                            repository.workspaceId(),
+                            repository.repositoryId(),
+                            readId,
+                            SourceFingerprint.refs(readableRefs(git.getRepository(), true)));
                 }
                 // A fetch that brings nothing new changes no file, and eviction reads the last use from here.
                 Files.setLastModifiedTime(mirror, FileTime.from(Instant.now()));
@@ -817,6 +833,15 @@ public class GitRepositoryManager {
                         }
                     }
                     git.checkout().setName(sha).call();
+                    // Private pins retain objects in the mirror. The checkout exposes provider refs and detached HEAD
+                    // only.
+                    for (var ref : git.getRepository().getRefDatabase().getRefsByPrefix(REVIEW_REFS)) {
+                        var removal = git.getRepository().updateRef(ref.getName());
+                        removal.setForceUpdate(true);
+                        if (removal.delete() != RefUpdate.Result.FORCED)
+                            throw new GitOperationException(
+                                    "Could not remove a private checkout ref", new IOException());
+                    }
                     for (String path : excluded) Files.deleteIfExists(staging.resolve(path));
                     if (originals.isEmpty()) writeCapturedRefs(git.getRepository());
                 }
@@ -830,6 +855,35 @@ public class GitRepositoryManager {
                 throw new GitOperationException(failure, e);
             }
         });
+    }
+
+    /** The identity of the captured checkout includes all its readable refs, including annotated tag objects. */
+    public static String treeIdentity(GitTreeSnapshot snapshot) {
+        try (Git git = Git.open(snapshot.stagingDir().toFile())) {
+            return treeIdentity(snapshot.commitSha(), readableRefs(git.getRepository(), false));
+        } catch (IOException failure) {
+            throw new GitOperationException("Could not read captured Git refs", failure);
+        }
+    }
+
+    private static String treeIdentity(String head, Map<String, String> refs) {
+        return head + ":" + SourceFingerprint.refs(refs);
+    }
+
+    private static Map<String, String> readableRefs(Repository repo, boolean mirror) throws IOException {
+        var refs = new TreeMap<String, String>();
+        for (var ref : repo.getRefDatabase().getRefsByPrefix(Constants.R_REFS)) {
+            String name = ref.getName();
+            if (mirror) {
+                if (name.startsWith(Constants.R_HEADS))
+                    name = Constants.R_REMOTES + "origin/" + name.substring(Constants.R_HEADS.length());
+                else if (!name.startsWith(Constants.R_TAGS)) continue;
+            }
+            if (name.startsWith(REVIEW_REFS)) continue;
+            var id = ref.getObjectId();
+            if (id != null) refs.put(name, id.name());
+        }
+        return refs;
     }
 
     /** Tags are peeled and every line carries its type, so a tag on a tree or blob is witnessed, not walked. */

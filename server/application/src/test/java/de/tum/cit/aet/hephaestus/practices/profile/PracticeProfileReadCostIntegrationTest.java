@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -13,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.item.Item;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemSourceAccess;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmSourceFingerprints;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackService;
@@ -65,7 +67,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * The reads behind the Practice profile page cost a fixed number of statements, however many results and how
  * much Practice page feedback the developer's work has. Every row passes custody and source checks, so the whole
- * authorization path runs for it.
+ * authorization path runs with explicit provider fingerprints for the synthetic work.
  */
 class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
     @Autowired
@@ -133,9 +135,15 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
 
     int seeded;
 
+    @MockitoBean
+    ScmSourceFingerprints sourceFingerprints;
+
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
+        when(sourceFingerprints.supports(any())).thenReturn(true);
+        when(sourceFingerprints.fingerprints(any(), any(), any()))
+                .thenReturn(Map.of(new SourceKind("scm.pull-request.diff"), "a".repeat(64)));
         scenario = data.scenario();
         works = List.of(scenario, onNewWork(), onNewWork());
         signInIdentity();

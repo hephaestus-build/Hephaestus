@@ -1,12 +1,20 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedResultFixtures;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.response.FeedbackResponseRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Problem;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
+import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
@@ -31,12 +39,19 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 public abstract class AbstractFeedbackIntegrationTest extends AbstractWorkspaceIntegrationTest {
+    @MockitoSpyBean
+    protected ProductItemQuery productItems;
+
+    protected static final SourceKind CORE = new SourceKind("scm.pull-request.core");
+    protected static final Map<SourceKind, String> CURRENT_SOURCES = Map.of(CORE, "a".repeat(64));
+
     @Autowired
     protected FeedbackRepository feedback;
 
@@ -148,6 +163,11 @@ public abstract class AbstractFeedbackIntegrationTest extends AbstractWorkspaceI
     }
 
     private Result result(ResultOutcome outcome, @Nullable String dimension, @Nullable String value) {
+        doReturn(CURRENT_SOURCES)
+                .when(productItems)
+                .fingerprints(
+                        eq(new ItemRef(workspace.getId(), itemId, new ItemKind("scm.pull_request"), 42L, null, null)),
+                        any());
         var slots = List.of(
                 new BoundModelSlot("chat", ModelKind.CHAT, null),
                 new BoundModelSlot("decision", ModelKind.DECISION, null),
@@ -194,13 +214,14 @@ public abstract class AbstractFeedbackIntegrationTest extends AbstractWorkspaceI
                                                     + mapper.writeValueAsString(value) + "]}"));
             jdbc.update(
                     "INSERT INTO"
-                            + " review_practice(review_id,practice_id,workspace_id,practice_version_id,status,method)"
-                            + " VALUES (?,?,?,?,'READY',?::jsonb)",
+                            + " review_practice(review_id,practice_id,workspace_id,practice_version_id,status,method,capture_decision)"
+                            + " VALUES (?,?,?,?,'READY',?::jsonb,?::jsonb)",
                     reviewId,
                     practiceId,
                     workspace.getId(),
                     versionId,
-                    method);
+                    method,
+                    mapper.writeValueAsString(Map.of("sourceFingerprints", Map.of(CORE.value(), "a".repeat(64)))));
             jdbc.update(
                     "INSERT INTO"
                             + " review_item(review_id,practice_id,item_id,workspace_id,item_version,state)"

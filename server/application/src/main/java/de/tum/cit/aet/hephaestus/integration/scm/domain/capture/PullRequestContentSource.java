@@ -180,6 +180,8 @@ public class PullRequestContentSource {
                                             : "CHECK_RUNS_NOT_OBSERVED"));
             }
             if (selectedKinds.contains(CORE)) {
+                if (metadata.base() != null && metadata.head() != null)
+                    identities.put(CORE, metadata.base() + ":" + metadata.head());
                 ObjectNode staged = PullRequestChecksRecord.core(observed);
                 storeMetadata(files, staged);
                 // The words of the verified pinned version, read at capture. A body known to be absent

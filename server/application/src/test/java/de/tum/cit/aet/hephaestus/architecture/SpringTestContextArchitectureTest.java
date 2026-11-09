@@ -46,7 +46,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("workspace.WorkspacePurgeIntegrationTest", "gitlab-workspace-creation"),
             assignment("StartupBudgetIntegrationTest", "startup"),
             assignment("core.privacy.PersonDataRecoveryStartupIntegrationTest", "erasure-recovery"),
-            assignment("agent.mentor.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence"),
+            assignment("agent.mentor.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence-freshness"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
             assignment("core.auth.clientsession.ClientSessionConcurrencyIntegrationTest", "dev-login"),
             assignment("core.auth.clientsession.ClientSessionIntegrationTest", "dev-login"),
@@ -84,6 +84,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("notification.AccountSecurityEmailIntegrationTest", "email-capture"),
             assignment("notification.email.EmailAdminControllerIntegrationTest", "email-capture"),
             assignment("practices.acrossworkspace.PracticesAcrossWorkspaceIntegrationTest", "review-standing"),
+            assignment("practices.feedback.AbstractFeedbackIntegrationTest", "feedback-source-facts"),
             assignment("practices.feedback.AbstractFeedbackDeliveryIntegrationTest", "review-feedbackdelivery"),
             assignment("agent.adapter.EvidenceDeliveryAuthorizationIntegrationTest", "review-delivery-authorization"),
             assignment("practices.feedback.FeedbackGateIntegrationTest", "review-feedbackgate"),
@@ -99,11 +100,11 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("practices.review.AbstractResultAdmissionIntegrationTest", "review-resultadmission"),
             assignment("practices.result.OwnWithdrawnFeedbackIntegrationTest", "review-evidence"),
             assignment("practices.result.MigratedHistoryReadIntegrationTest", "review-migrated-history"),
-            assignment("practices.profile.PracticeProfileReadCostIntegrationTest", "review-migrated-history"),
+            assignment("practices.profile.PracticeProfileReadCostIntegrationTest", "review-migrated-history-freshness"),
             assignment("practices.profile.PracticeProfileOverviewIntegrationTest", "review-migrated-history"),
             assignment("practices.result.ResultHistoryIntegrationTest", "review-resulthistory"),
             assignment("practices.review.DisabledIntegrationHistoryIntegrationTest", "review-disabled-integrations"),
-            assignment("practices.review.RequestedReviewReuseIntegrationTest", "review-scanreport"),
+            assignment("practices.review.RequestedReviewReuseIntegrationTest", "requested-source-reuse"),
             assignment("practices.review.ReviewOperationalViewsIntegrationTest", "review-reviewoperationalviews"),
             assignment("practices.review.ReviewTimingFactsIntegrationTest", "review-reviewtimingfacts"),
             assignment("practices.review.feedbackmode.FeedbackModeReviewIntegrationTest", "review-feedbackmodereview"),
@@ -191,6 +192,13 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "shared review fixture with the neutral evidence authorization boundary"
                             + " controlled for exact visibility assertions"),
             Map.entry(
+                    "review-evidence-freshness",
+                    "weekly digest visibility with evidence authorization and explicit current source fingerprints"
+                            + " for synthetic work"),
+            Map.entry(
+                    "review-migrated-history-freshness",
+                    "profile read costs with source access and explicit current source fingerprints for synthetic work"),
+            Map.entry(
                     "review-feedbackgate",
                     "real feedback eligibility with only source capture and evidence"
                             + " authorization boundaries controlled"),
@@ -230,6 +238,10 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "review-reviewtimingfacts",
                     "real retained product timing and bounded percentile queries with"
                             + " provider merge facts controlled"),
+            Map.entry("feedback-source-facts", "real feedback rows and delivery with controlled current source facts"),
+            Map.entry(
+                    "requested-source-reuse",
+                    "real requested-review reuse with runtime, custody and current source facts controlled"),
             Map.entry(
                     "review-scanreport",
                     "real scan report membership, marks and visibility with runtime/person" + " boundaries controlled"),

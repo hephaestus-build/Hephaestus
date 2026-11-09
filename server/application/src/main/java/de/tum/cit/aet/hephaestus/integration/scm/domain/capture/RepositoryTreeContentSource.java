@@ -64,7 +64,9 @@ public class RepositoryTreeContentSource {
         SourceCompleteness completeness =
                 snapshot.complete() ? SourceCompleteness.COMPLETE : SourceCompleteness.PARTIAL;
         List<CitableText> citable;
+        String identity;
         try {
+            identity = GitRepositoryManager.treeIdentity(snapshot);
             citable = ScmCitableTexts.tree(snapshot.stagingDir(), snapshot.commitSha());
         } catch (RuntimeException failure) {
             snapshot.close();
@@ -73,7 +75,7 @@ public class RepositoryTreeContentSource {
         return new CaptureContribution(
                 Map.of(),
                 Map.of(KIND, completeness),
-                Map.of(KIND, snapshot.commitSha() + ":" + snapshot.treeSha()),
+                Map.of(KIND, identity),
                 Map.of(),
                 Map.of(),
                 Map.of(),

@@ -35,7 +35,9 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanMembershipQueries;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
+import de.tum.cit.aet.hephaestus.practices.scan.dto.JudgedScanReportItemDTO;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.ReusedScanReportItemDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
@@ -268,6 +270,38 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
                 .isEmpty();
         assertThat(query.detail(scan.getWorkspaceId(), scan.getId()).summary().status())
                 .isEqualTo(ReviewStatus.QUEUED);
+    }
+
+    @Test
+    void shouldKeepFrozenScanSourcesCurrentUntilTheItemIsRemoved() {
+        var scan = data.scan(scenario, ReviewStatus.COMPLETE, Instant.now());
+        var result = data.result(scenario, scan);
+        var first = reportItems.items(
+                scan.getWorkspaceId(),
+                scan.getId(),
+                null,
+                20,
+                new ScanMembershipQueries.ItemFilter(null, null, null, null, null));
+        assertThat(first.content())
+                .singleElement()
+                .isInstanceOfSatisfying(
+                        JudgedScanReportItemDTO.class,
+                        row -> assertThat(row.currentness()).isEqualTo(Currentness.CURRENT));
+        jdbc.sql("UPDATE item SET removed_at=now() WHERE workspace_id=:ws AND id=:item")
+                .param("ws", scan.getWorkspaceId())
+                .param("item", result.getItemId())
+                .update();
+        var removed = reportItems.items(
+                scan.getWorkspaceId(),
+                scan.getId(),
+                null,
+                20,
+                new ScanMembershipQueries.ItemFilter(null, null, null, null, null));
+        assertThat(removed.content())
+                .singleElement()
+                .isInstanceOfSatisfying(
+                        JudgedScanReportItemDTO.class,
+                        row -> assertThat(row.currentness()).isEqualTo(Currentness.STALE));
     }
 
     @Test

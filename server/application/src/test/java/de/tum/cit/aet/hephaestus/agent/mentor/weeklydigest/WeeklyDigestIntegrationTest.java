@@ -16,12 +16,14 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.item.Item;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmSourceFingerprints;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
@@ -181,6 +183,9 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    @MockitoBean
+    ScmSourceFingerprints sourceFingerprints;
+
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
@@ -188,6 +193,9 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 .thenAnswer(invocation -> sameWorkspace(invocation.getArgument(0), invocation.getArgument(1)));
         when(evidenceAuthorization.permitsForNewDelivery(anyLong(), anyCollection(), any()))
                 .thenAnswer(invocation -> sameWorkspace(invocation.getArgument(0), invocation.getArgument(1)));
+        when(sourceFingerprints.supports(any())).thenReturn(true);
+        when(sourceFingerprints.fingerprints(any(), any(), any()))
+                .thenReturn(Map.of(new SourceKind("scm.pull-request.diff"), "a".repeat(64)));
         scenario = data.scenario();
         workspaceId = scenario.workspace().getId();
         accountId = Objects.requireNonNull(scenario.account().getId());

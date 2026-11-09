@@ -21,8 +21,6 @@ public interface PracticeStagingStore {
 
     List<StagedPractice> staged(long workspaceId, UUID reviewId, UUID jobId);
 
-    boolean workChanged(long workspaceId, UUID reviewId, UUID jobId);
-
     int discardUnusable(Instant now, int limit);
 
     void refuseCopy(long workspaceId, UUID jobId, int attempt, ReviewAssignmentId assignment);

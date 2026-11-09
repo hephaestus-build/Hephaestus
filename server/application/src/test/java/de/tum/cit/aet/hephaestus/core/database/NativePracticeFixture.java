@@ -31,6 +31,12 @@ final class NativePracticeFixture {
         return database;
     }
 
+    static TestDatabase resultParentAfterUpgrade(String context) throws Exception {
+        var database = PracticeMigrationFixture.migratedDatabase(context);
+        seed(database, "result-parent.sql");
+        return database;
+    }
+
     static TestDatabase feedbackParent(String context) {
         var database = resultParent(context);
         seed(database, "feedback-parent.sql");

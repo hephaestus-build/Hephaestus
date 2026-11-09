@@ -220,7 +220,7 @@ public class DocumentItemSource implements ItemSource, ItemSourceAccess {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ItemCaptureException.class)
     public CaptureContribution capture(ItemSnapshot pinned, CaptureRequest request) {
         if (!DocumentEvents.DOCUMENT.equals(pinned.item().kind())
                 || pinned.integration().kind() != IntegrationKind.OUTLINE

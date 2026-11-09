@@ -7,6 +7,7 @@ import {
 	isAdmissionServerError,
 	admit,
 	stagePractice,
+	startPractice,
 	parseAdmission,
 } from "../../../main/resources/agent/pi-admitted-results.ts";
 
@@ -159,4 +160,25 @@ void test("staging refuses another practice's acknowledgement and never retries 
 		}),
 	);
 	assert.equal(calls, 1);
+});
+
+void test("a replaced practice skips measurement only after the gateway identifies it", async () => {
+	assert.equal(
+		await startPractice("names", async () =>
+			Response.json({ practiceSlug: "names", current: false }),
+		),
+		false,
+	);
+	assert.equal(
+		await startPractice("names", async () =>
+			Response.json({ practiceSlug: "names", current: true }),
+		),
+		true,
+	);
+	await assert.rejects(
+		startPractice("names", async () => Response.json({ practiceSlug: "other", current: false })),
+	);
+	await assert.rejects(
+		startPractice("names", async () => Response.json({ practiceSlug: "names", current: "false" })),
+	);
 });

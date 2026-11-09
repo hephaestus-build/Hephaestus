@@ -135,11 +135,6 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
         }
         String safeProjectPath = Objects.requireNonNullElse(sanitizeForLog(projectPath), "<unknown>");
 
-        if (event.isBranchDeletion()) {
-            log.debug("Skipped push event: reason=branchDeletion, projectPath={}", safeProjectPath);
-            return;
-        }
-
         String safeRef = sanitizeForLog(event.ref());
         log.debug(
                 "Received push event: projectPath={}, ref={}, commits={}",
@@ -173,6 +168,9 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
             GitLabProjectAdmission.ProjectRead read = preparedPush.read();
             log.debug(
                     "Upserted project from push event: projectPath={}, repoId={}", safeProjectPath, repository.getId());
+
+            gitRepositoryManager.invalidateRefs(repository.getNativeId(), admitted.providerId());
+            if (event.isBranchDeletion()) return;
 
             long scopeId = read.connection().workspaceId();
 
