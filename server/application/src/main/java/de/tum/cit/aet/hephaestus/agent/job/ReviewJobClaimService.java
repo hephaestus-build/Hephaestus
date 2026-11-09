@@ -44,6 +44,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -55,6 +57,9 @@ public class ReviewJobClaimService {
     private static final Logger log = LoggerFactory.getLogger(ReviewJobClaimService.class);
     private static final Duration BUDGET_HOLD_INTERVAL = Duration.ofHours(1);
     private static final Duration BUDGET_HOLD_MAX_JOB_AGE = Duration.ofDays(7);
+    /** How long a run waits when a lifecycle write or its model pool held its claim. */
+    private static final Duration LOCKED_RETRY = Duration.ofSeconds(2);
+
     private final ReviewJobRepository jobRepository;
     private final ReviewMemberAiPolicy memberAiPolicy;
     private final ReviewMethodVerifier methods;
@@ -121,7 +126,7 @@ public class ReviewJobClaimService {
      * @param withholdOnly for an admitted review handed on to compose, the cause a claim check met: the attempt makes no
      *     model call and withholds what is still open with it
      */
-    record ClaimResult(
+    public record ClaimResult(
             ReviewJob job,
             AgentRunFence fence,
             ConfigSnapshot snapshot,
@@ -163,26 +168,7 @@ public class ReviewJobClaimService {
             try {
                 claimed = claimLocked(job, fence, reviewRoom);
             } catch (JobPreparationException failure) {
-                PreparationFailure preparation = PreparationFailure.of(PreparationFailure.Stage.INPUTS, failure);
-                job.setStatus(ReviewJobStatus.FAILED);
-                job.setCompletedAt(Instant.now());
-                job.setErrorMessage(preparation.message());
-                jobRepository.save(job);
-                var diagnosis = objectMapper
-                        .createObjectNode()
-                        .put("attempt", job.getAttempt())
-                        .put("stage", preparation.stage().name())
-                        .put("kind", preparation.kind().name())
-                        .put("reason", preparation.reason().name());
-                runs.end(fence);
-                jobRepository.recordPreparationFailure(
-                        job.getId(),
-                        job.getWorkspaceId(),
-                        job.getAttempt(),
-                        job.getRunId(),
-                        objectMapper.writeValueAsString(diagnosis));
-                jobTelemetry.preparationFailed(job, preparation, "FAILED");
-                return new TerminalClaim(job, ReviewJobStatus.FAILED);
+                return failPreparation(job, fence, failure);
             }
             switch (claimed) {
                 case TerminalClaim ended -> runs.end(fence);
@@ -206,6 +192,55 @@ public class ReviewJobClaimService {
     }
 
     /**
+     * Starts the job of a run that its sandbox just leased, in the caller's transaction: the same checks as a claim of
+     * the worker's, but no room or quota check, since the sandbox already exists. A claim that cannot start now leaves
+     * nothing leased: a refused job ends with its run, and one that must wait goes back to the queue with its run,
+     * spending no attempt.
+     *
+     * @return the started attempt; empty when its run was ended or requeued instead
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ClaimResult> claimLeased(AgentRunLease lease) {
+        AgentRunFence fence = lease.fence();
+        Optional<ReviewJob> locked =
+                jobRepository.lockParentForQueuedClaim(lease.runId()).isEmpty()
+                        ? Optional.empty()
+                        : jobRepository.lockQueuedByRun(lease.runId());
+        if (locked.isEmpty()) {
+            // A lifecycle write holds the review or its job; the run waits for the next pull.
+            runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY);
+            return Optional.empty();
+        }
+        ReviewJob job = locked.get();
+        ClaimAttempt claimed;
+        try {
+            claimed = claimLocked(job, fence, null);
+        } catch (JobPreparationException failure) {
+            failPreparation(job, fence, failure);
+            return Optional.empty();
+        }
+        return switch (claimed) {
+            case ClaimResult started -> Optional.of(started);
+            case TerminalClaim ended -> {
+                runs.end(fence);
+                yield Optional.empty();
+            }
+            case PoolWait waiting -> {
+                runs.requeue(fence, AgentRuns.Charge.FREE, LOCKED_RETRY);
+                yield Optional.empty();
+            }
+            case ClaimOutcome.BUDGET_HELD -> {
+                job.setHoldReason(ReviewJob.HOLD_REASON_BUDGET);
+                jobRepository.save(job);
+                runs.requeue(fence, AgentRuns.Charge.FREE, BUDGET_HOLD_INTERVAL);
+                yield Optional.empty();
+            }
+            case ClaimOutcome other -> throw new IllegalStateException("A sandbox's claim cannot be " + other);
+            case Declined declined -> throw new IllegalStateException("A sandbox's claim is never declined");
+        };
+    }
+
+    /**
      * Marks the queued job of {@code run} as held by the budget, so raising the cap can release it at once, and offers
      * the run again after {@link #BUDGET_HOLD_INTERVAL}. A lifecycle write that holds the job meanwhile wins; the next
      * claim checks the budget again.
@@ -216,7 +251,32 @@ public class ReviewJobClaimService {
                 .ifPresent(job -> runs.hold(run, AgentRunHold.BUDGET, BUDGET_HOLD_INTERVAL)));
     }
 
-    private ClaimAttempt claimLocked(ReviewJob job, AgentRunFence fence, BooleanSupplier reviewRoom) {
+    /** Fails a job whose inputs could not be prepared, and ends its run, in the caller's transaction. */
+    private TerminalClaim failPreparation(ReviewJob job, AgentRunFence fence, JobPreparationException failure) {
+        PreparationFailure preparation = PreparationFailure.of(PreparationFailure.Stage.INPUTS, failure);
+        job.setStatus(ReviewJobStatus.FAILED);
+        job.setCompletedAt(Instant.now());
+        job.setErrorMessage(preparation.message());
+        jobRepository.save(job);
+        var diagnosis = objectMapper
+                .createObjectNode()
+                .put("attempt", job.getAttempt())
+                .put("stage", preparation.stage().name())
+                .put("kind", preparation.kind().name())
+                .put("reason", preparation.reason().name());
+        runs.end(fence);
+        jobRepository.recordPreparationFailure(
+                job.getId(),
+                job.getWorkspaceId(),
+                job.getAttempt(),
+                job.getRunId(),
+                objectMapper.writeValueAsString(diagnosis));
+        jobTelemetry.preparationFailed(job, preparation, "FAILED");
+        return new TerminalClaim(job, ReviewJobStatus.FAILED);
+    }
+
+    /** @param reviewRoom whether a worker has room for one more review sandbox; null where the sandbox exists */
+    private ClaimAttempt claimLocked(ReviewJob job, AgentRunFence fence, @Nullable BooleanSupplier reviewRoom) {
         int maxRetries = runs.capacity().reviewRetries();
 
         if (memberAiPolicy.isProcessingSuppressed(job)) {
@@ -306,7 +366,7 @@ public class ReviewJobClaimService {
                     : refuseUnavailableModel(job);
         String itemKind = assigned.getFirst().item().kind().value();
         if (!composing) {
-            if (!reviewRoom.getAsBoolean()) return ClaimOutcome.QUOTA_FULL;
+            if (reviewRoom != null && !reviewRoom.getAsBoolean()) return ClaimOutcome.QUOTA_FULL;
             long poolId = callPermits.poolFor(snapshot.model().connectionRef());
             if (callPermits.hasBackgroundWaiters(poolId)) return new PoolWait(fence.runId(), poolId);
         }

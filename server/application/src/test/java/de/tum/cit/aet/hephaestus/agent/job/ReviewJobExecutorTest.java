@@ -96,6 +96,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -213,6 +214,9 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(jobs.lockQueuedByRun(job.getRunId())).thenReturn(Optional.empty());
     }
 
+    /** The inputs that a composition keeps, which the next executor's terminal writes forget. */
+    private @Nullable ReviewCompositionContinuation keptInputs;
+
     private ReviewJobExecutor executor(AsyncTaskExecutor pool) {
         lenient().when(jobs.lockParentForQueuedClaim(any())).thenReturn(Optional.of(UUID.randomUUID()));
         lenient()
@@ -250,7 +254,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 telemetry,
                 attemptUsage,
                 practiceScriptRuns,
-                null,
                 capacity,
                 new ReviewJobClaimService(
                         jobs,
@@ -268,7 +271,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         reviewRuns),
                 reviewRuns,
                 runs,
-                mock(AgentRunNotifications.class));
+                mock(AgentRunNotifications.class),
+                new ReviewJobTerminal(jobs, runs, attemptUsage, new JsonMapper(), null, keptInputs));
     }
 
     @Test
@@ -782,8 +786,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         var parsed = new AgentResult(success, Map.of("rawOutput", ADMITTED_RESULT), RETURNED_USAGE);
         when(sandbox.execute(any())).thenReturn(result);
         when(practiceAgent.parseResult(result)).thenReturn(parsed);
+        keptInputs = kept;
         var executor = executor(mock(AsyncTaskExecutor.class));
-        executor.setCompositionContinuation(kept);
         return executor;
     }
 
@@ -802,8 +806,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(sandbox.execute(any())).thenReturn(measured);
         when(practiceAgent.parseResult(measured))
                 .thenReturn(new AgentResult(false, Map.of("rawOutput", ADMITTED_RESULT), RETURNED_USAGE));
+        keptInputs = kept;
         var executor = executor(mock(AsyncTaskExecutor.class));
-        executor.setCompositionContinuation(kept);
         return executor;
     }
 
@@ -1439,9 +1443,9 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .execute(any(Runnable.class));
         var composer = mock(WorkerFeedbackComposer.class);
         var kept = mock(ReviewCompositionContinuation.class);
+        keptInputs = kept;
         var executor = executor(pool);
         executor.setFeedbackComposer(composer);
-        executor.setCompositionContinuation(kept);
 
         assertThat(executor.processNext()).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
 
