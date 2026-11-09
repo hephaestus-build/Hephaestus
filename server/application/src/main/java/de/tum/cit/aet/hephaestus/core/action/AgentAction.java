@@ -32,7 +32,8 @@ import tools.jackson.databind.JsonNode;
                 @UniqueConstraint(name = "uk_agent_action_idempotency_key", columnNames = "idempotency_key"),
         indexes = {
             @Index(name = "idx_agent_action_lane", columnList = "lane_key, id"),
-            @Index(name = "idx_agent_action_subject_account", columnList = "subject_account_id")
+            @Index(name = "idx_agent_action_subject_account", columnList = "subject_account_id"),
+            @Index(name = "idx_agent_action_workspace", columnList = "workspace_id")
         })
 @Getter
 @NoArgsConstructor
