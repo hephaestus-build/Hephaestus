@@ -2,11 +2,13 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.nats.client.Message;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -53,6 +55,10 @@ public class IntegrationMessageMeters {
     public IntegrationMessageMeters(MeterRegistry registry, Clock clock) {
         this.registry = registry;
         this.clock = clock;
+        // A series that a timeout creates starts at 1, and increase() reads that first sample as no increase.
+        for (IntegrationKind kind : IntegrationKind.values()) {
+            processTimer(kind.name().toLowerCase(Locale.ROOT), Outcome.TIMED_OUT);
+        }
     }
 
     /**
@@ -76,18 +82,35 @@ public class IntegrationMessageMeters {
         }
     }
 
-    void handled(Message message, boolean completed, long nanos) {
+    /** How the handling of one delivery ended. */
+    enum Outcome {
+        COMPLETED("completed"),
+        FAILED("failed"),
+        /** The handler outlived the handler timeout, and its event returned to the stream. */
+        TIMED_OUT("timed_out");
+
+        private final String tag;
+
+        Outcome(String tag) {
+            this.tag = tag;
+        }
+    }
+
+    void handled(Message message, Outcome outcome, long nanos) {
         try {
-            Timer.builder(IntegrationCoreMetrics.INTEGRATION_MESSAGE_PROCESS_DURATION)
-                    .description("How long the handling of one delivery took")
-                    .tag("kind", IntegrationPoisonHandler.kindTag(message))
-                    .tag("outcome", completed ? "completed" : "failed")
-                    .serviceLevelObjectives(PROCESS_BOUNDS)
-                    .register(registry)
-                    .record(Duration.ofNanos(nanos));
+            processTimer(IntegrationPoisonHandler.kindTag(message), outcome).record(Duration.ofNanos(nanos));
         } catch (RuntimeException failure) {
             log.debug(
                     "Skipped a handling time: error.type={}", failure.getClass().getName());
         }
+    }
+
+    private Timer processTimer(String kind, Outcome outcome) {
+        return Timer.builder(IntegrationCoreMetrics.INTEGRATION_MESSAGE_PROCESS_DURATION)
+                .description("How long the handling of one delivery took")
+                .tag("kind", kind)
+                .tag("outcome", outcome.tag)
+                .serviceLevelObjectives(PROCESS_BOUNDS)
+                .register(registry);
     }
 }

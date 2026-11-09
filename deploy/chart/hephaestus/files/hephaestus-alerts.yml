@@ -52,6 +52,14 @@ groups:
         annotations:
           summary: An integration event was stored for administrator replay
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A handler that outlived the handler timeout gave its event back to the stream; it retries like a failure.
+      - alert: HephaestusConsumerHandlerTimedOut
+        expr: sum by (kind) (increase(integration_message_process_duration_seconds_count{job="hephaestus",outcome="timed_out"}[10m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: An integration event outlived the handler timeout and returned to its stream
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # The gauge exists only while the job is enabled. A queue that does not shrink means provider answers stopped.
       - alert: HephaestusCommitIdentityResolutionStalled
         expr: commit_identity_pending{job="hephaestus"} > 0 and delta(commit_identity_pending{job="hephaestus"}[6h]) >= 0

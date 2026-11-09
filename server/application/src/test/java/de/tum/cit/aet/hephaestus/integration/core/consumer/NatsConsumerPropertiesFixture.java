@@ -10,6 +10,8 @@ final class NatsConsumerPropertiesFixture {
     /** The shipped default, so a test built on {@link #defaults()} sees what a deployment sees. */
     static final Duration SHIPPED_INACTIVE_THRESHOLD = Duration.ofDays(30);
 
+    static final Duration SHIPPED_HANDLER_TIMEOUT = Duration.ofMinutes(30);
+
     static NatsConsumerProperties defaults() {
         return withInactiveThreshold(SHIPPED_INACTIVE_THRESHOLD);
     }
@@ -27,8 +29,20 @@ final class NatsConsumerPropertiesFixture {
                 new NatsConsumerProperties.PoisonProperties(10, Duration.ofMillis(1), Duration.ofSeconds(1)));
     }
 
+    /** The shipped defaults with a handler timeout that a unit test can wait out. */
+    static NatsConsumerProperties withHandlerTimeout(Duration handlerTimeout) {
+        var defaults = defaults();
+        return new NatsConsumerProperties(
+                defaults.ackWait(),
+                handlerTimeout,
+                defaults.reconnectDelay(),
+                defaults.inactiveThreshold(),
+                defaults.poison());
+    }
+
     private static NatsConsumerProperties build(
             Duration inactiveThreshold, NatsConsumerProperties.PoisonProperties poison) {
-        return new NatsConsumerProperties(Duration.ofMinutes(5), Duration.ofSeconds(2), inactiveThreshold, poison);
+        return new NatsConsumerProperties(
+                Duration.ofMinutes(5), SHIPPED_HANDLER_TIMEOUT, Duration.ofSeconds(2), inactiveThreshold, poison);
     }
 }

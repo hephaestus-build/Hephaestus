@@ -144,6 +144,27 @@ tests:
               summary: An integration event was stored for administrator replay
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: a timed-out handler fires, completed and failed handling does not
+    interval: 1m
+    input_series:
+      - series: 'integration_message_process_duration_seconds_count{job="hephaestus",instance="server:9090",kind="github",outcome="timed_out"}'
+        values: "0 0 1 1 1"
+      - series: 'integration_message_process_duration_seconds_count{job="hephaestus",instance="server:9090",kind="gitlab",outcome="failed"}'
+        values: "0 1 2 3 4"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusConsumerHandlerTimedOut
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: HephaestusConsumerHandlerTimedOut
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: github
+            exp_annotations:
+              summary: An integration event outlived the handler timeout and returned to its stream
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: sustained retries fire while a brief failure stays quiet
     interval: 1m
     input_series:

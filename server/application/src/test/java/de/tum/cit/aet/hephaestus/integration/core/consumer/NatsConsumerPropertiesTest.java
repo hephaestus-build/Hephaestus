@@ -28,8 +28,14 @@ class NatsConsumerPropertiesTest extends BaseUnitTest {
                             Duration.class,
                             Duration.class,
                             Duration.class,
+                            Duration.class,
                             NatsConsumerProperties.PoisonProperties.class)
-                    .newInstance(Duration.ofMinutes(5), Duration.ofSeconds(2), Duration.ofDays(30), null);
+                    .newInstance(
+                            Duration.ofMinutes(5),
+                            Duration.ofMinutes(30),
+                            Duration.ofSeconds(2),
+                            Duration.ofDays(30),
+                            null);
 
             assertThat(props.poison()).isNotNull();
             assertThat(props.poison().baseDelay()).isEqualTo(Duration.ofSeconds(2));
@@ -41,7 +47,7 @@ class NatsConsumerPropertiesTest extends BaseUnitTest {
             NatsConsumerProperties.PoisonProperties custom =
                     new NatsConsumerProperties.PoisonProperties(10, Duration.ofSeconds(5), Duration.ofMinutes(1));
             NatsConsumerProperties props = new NatsConsumerProperties(
-                    Duration.ofMinutes(5), Duration.ofSeconds(2), Duration.ofDays(30), custom);
+                    Duration.ofMinutes(5), Duration.ofMinutes(30), Duration.ofSeconds(2), Duration.ofDays(30), custom);
 
             assertThat(props.poison()).isSameAs(custom);
         }
